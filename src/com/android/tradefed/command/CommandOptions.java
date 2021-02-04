@@ -230,6 +230,12 @@ public class CommandOptions implements ICommandOptions {
     private boolean mEnableEarlyDeviceRelease = true;
 
     @Option(
+            name = "delegated-early-device-release",
+            description =
+                    "Feature flag to enable early device release when running in delegated mode.")
+    private boolean mEnableDelegatedEarlyDeviceRelease = false;
+
+    @Option(
             name = "dynamic-download-args",
             description =
                     "Extra args passed to the IRemoteFileResolver interface for dynamic download "
@@ -606,6 +612,18 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public boolean earlyDeviceRelease() {
         return mEnableEarlyDeviceRelease;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean delegatedEarlyDeviceRelease() {
+        return mEnableDelegatedEarlyDeviceRelease;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setDelegatedEarlyDeviceRelease(boolean earlyRelease) {
+        mEnableDelegatedEarlyDeviceRelease = earlyRelease;
     }
 
     /** {@inheritDoc} */
