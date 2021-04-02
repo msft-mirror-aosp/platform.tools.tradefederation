@@ -16,10 +16,12 @@
 package com.android.tradefed.service;
 
 import com.android.annotations.VisibleForTesting;
+import com.android.tradefed.command.ICommandScheduler.IScheduledInvocationListener;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.service.internal.IRemoteScheduledListenersFeature;
 import com.android.tradefed.testtype.ITestInformationReceiver;
 import com.android.tradefed.util.StreamUtil;
 
@@ -30,6 +32,7 @@ import com.proto.tradefed.feature.TradefedInformationGrpc.TradefedInformationImp
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.UUID;
@@ -50,6 +53,8 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
     private Server mServer;
 
     private Map<String, IConfiguration> mRegisteredInvocation = new HashMap<>();
+    private Map<String, List<IScheduledInvocationListener>>
+            mRegisteredScheduledInvocationListeners = new HashMap<>();
 
     /** Returns the port used by the server. */
     public static int getPort() {
@@ -105,9 +110,11 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
     }
 
     /** Register an invocation with a unique reference that can be queried */
-    public String registerInvocation(IConfiguration config) {
+    public String registerInvocation(
+            IConfiguration config, List<IScheduledInvocationListener> listeners) {
         String referenceId = UUID.randomUUID().toString();
         mRegisteredInvocation.put(referenceId, config);
+        mRegisteredScheduledInvocationListeners.put(referenceId, listeners);
         config.getConfigurationDescription().addMetadata(SERVER_REFERENCE, referenceId);
         return referenceId;
     }
@@ -139,6 +146,13 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
                                             .getConfigurationObject(TEST_INFORMATION_OBJECT));
                     }
                 }
+                if (feature instanceof IRemoteScheduledListenersFeature) {
+                    List<IScheduledInvocationListener> listeners =
+                            mRegisteredScheduledInvocationListeners.get(request.getReferenceId());
+                    if (listeners != null) {
+                        ((IRemoteScheduledListenersFeature) feature).setListeners(listeners);
+                    }
+                }
                 try {
                     FeatureResponse rep = feature.execute(request);
                     if (rep == null) {
@@ -147,7 +161,8 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
                                         ErrorInfo.newBuilder()
                                                 .setErrorTrace(
                                                         String.format(
-                                                                "Feature '%s' returned null response.",
+                                                                "Feature '%s' returned null"
+                                                                        + " response.",
                                                                 request.getName())))
                                 .build();
                     }
