@@ -36,6 +36,7 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -70,9 +71,10 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
     }
 
     @Override
-    public void preInvocationSetup(IBuildInfo info, List<IBuildInfo> testResourceBuildInfos)
+    public void preInvocationSetup(IBuildInfo info, List<IBuildInfo> testResourceBuildInfos,
+                                   MultiMap<String, String> attributes)
             throws TargetSetupError, DeviceNotAvailableException {
-        super.preInvocationSetup(info, testResourceBuildInfos);
+        super.preInvocationSetup(info, testResourceBuildInfos, attributes);
         mGceAvd = null;
         // First get the options
         TestDeviceOptions options = getOptions();

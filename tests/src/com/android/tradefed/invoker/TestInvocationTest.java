@@ -87,6 +87,7 @@ import com.android.tradefed.testtype.IResumableTest;
 import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.StubTest;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.SystemUtil.EnvVariable;
 import com.android.tradefed.util.keystore.StubKeyStoreFactory;
 
@@ -164,6 +165,7 @@ public class TestInvocationTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Before
     public void setUp() throws Exception {
         mStubConfiguration = new Configuration("foo", "bar");
@@ -218,7 +220,8 @@ public class TestInvocationTest {
         EasyMock.expect(mMockDevice.getBattery()).andStubReturn(null);
         mMockDevice.setRecovery(mMockRecovery);
         mMockDevice.preInvocationSetup(
-                (IBuildInfo) EasyMock.anyObject(), EasyMock.<List<IBuildInfo>>anyObject());
+                (IBuildInfo) EasyMock.anyObject(), EasyMock.<List<IBuildInfo>>anyObject(),
+                (MultiMap<String, String>) EasyMock.anyObject());
         EasyMock.expectLastCall().anyTimes();
         mFakeDescriptor =
                 new DeviceDescriptor(
