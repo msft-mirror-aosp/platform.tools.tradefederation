@@ -34,6 +34,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GoogleApiClientUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.api.client.auth.oauth2.Credential;
@@ -113,13 +114,20 @@ public class GceManager {
         mGceHost = gceHost;
     }
 
+    public GceAvdInfo startGce() throws TargetSetupError {
+        return startGce(null);
+    }
+
     /**
      * Attempt to start a gce instance
      *
+     * @param attributes attributes associated with current invocation, used for passing applicable
+     *     information down to the GCE instance to be added as VM metadata
      * @return a {@link GceAvdInfo} describing the GCE instance. Could be a BOOT_FAIL instance.
      * @throws TargetSetupError
      */
-    public GceAvdInfo startGce() throws TargetSetupError {
+    public GceAvdInfo startGce(MultiMap<String, String> attributes)
+            throws TargetSetupError {
         mGceAvdInfo = null;
         // For debugging purposes bypass.
         if (mGceHost != null && mGceInstanceName != null) {
@@ -134,7 +142,9 @@ public class GceManager {
         File reportFile = null;
         try {
             reportFile = FileUtil.createTempFile("gce_avd_driver", ".json");
-            List<String> gceArgs = buildGceCmd(reportFile, mBuildInfo);
+            List<String> gceArgs = buildGceCmd(reportFile, mBuildInfo, attributes);
+
+            long driverTimeoutMs = getTestDeviceOptions().getGceCmdTimeout();
 
             CLog.i("Launching GCE with %s", gceArgs.toString());
             CommandResult cmd =
@@ -209,9 +219,20 @@ public class GceManager {
     }
 
     /** Build and return the command to launch GCE. Exposed for testing. */
-    protected List<String> buildGceCmd(File reportFile, IBuildInfo b) {
-        List<String> gceArgs =
-                ArrayUtil.list(getTestDeviceOptions().getAvdDriverBinary().getAbsolutePath());
+    protected List<String> buildGceCmd(File reportFile, IBuildInfo b,
+                                       MultiMap<String, String> attributes) {
+        File avdDriverFile = getTestDeviceOptions().getAvdDriverBinary();
+        if (!avdDriverFile.exists()) {
+            throw new RuntimeException(
+                    String.format(
+                            "Could not find the Acloud driver at %s",
+                            avdDriverFile.getAbsolutePath()));
+        }
+        if (!avdDriverFile.canExecute()) {
+            // Set the executable bit if needed
+            FileUtil.chmodGroupRWX(avdDriverFile);
+        }
+        List<String> gceArgs = ArrayUtil.list(avdDriverFile.getAbsolutePath());
         gceArgs.add(
                 TestDeviceOptions.getCreateCommandByInstanceType(
                         getTestDeviceOptions().getInstanceType()));
@@ -239,6 +260,18 @@ public class GceManager {
             gceArgs.add("--build_id");
             gceArgs.add(b.getBuildId());
         }
+
+        // process any info in the invocation context that should be passed onto GCE driver
+        // as meta data to be associated with the VM instance
+        if (attributes != null) {
+            for (String key : getTestDeviceOptions().getInvocationAttributeToMetadata()) {
+                for (String value : attributes.get(key)) {
+                    gceArgs.add("--gce-metadata");
+                    gceArgs.add(String.format("%s:%s", key, value));
+                }
+            }
+        }
+
         // Add additional args passed by gce-driver-param.
         gceArgs.addAll(gceDriverParams);
         // Get extra params by instance type

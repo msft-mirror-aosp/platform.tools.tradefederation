@@ -250,7 +250,8 @@ public class InvocationExecution implements IInvocationExecution {
                         context.getBuildInfos()
                                 .stream()
                                 .filter(buildInfo -> buildInfo.isTestResourceBuild())
-                                .collect(Collectors.toList()));
+                                .collect(Collectors.toList()),
+                        context.getAttributes());
             }
         }
     }
