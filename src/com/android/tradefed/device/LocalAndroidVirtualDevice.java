@@ -32,6 +32,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.ZipUtil;
@@ -77,10 +78,11 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
 
     /** Execute common setup procedure and launch the virtual device. */
     @Override
-    public void preInvocationSetup(IBuildInfo info)
+    public synchronized void preInvocationSetup(
+            IBuildInfo info, MultiMap<String, String> attributes)
             throws TargetSetupError, DeviceNotAvailableException {
         // The setup method in super class does not require the device to be online.
-        super.preInvocationSetup(info);
+        super.preInvocationSetup(info, attributes);
 
         createTempDirs(info);
 

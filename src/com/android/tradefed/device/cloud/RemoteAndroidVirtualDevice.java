@@ -38,6 +38,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -85,9 +86,9 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
     /** {@inheritDoc} */
     @Override
-    public void preInvocationSetup(IBuildInfo info)
+    public void preInvocationSetup(IBuildInfo info, MultiMap<String, String> attributes)
             throws TargetSetupError, DeviceNotAvailableException {
-        super.preInvocationSetup(info);
+        super.preInvocationSetup(info, attributes);
         try {
             mGceAvd = null;
             mGceSshMonitor = null;
@@ -98,7 +99,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
             // Launch GCE helper script.
             long startTime = getCurrentTime();
-            launchGce(info);
+            launchGce(info, attributes);
             long remainingTime = getOptions().getGceCmdTimeout() - (getCurrentTime() - startTime);
             if (remainingTime < 0) {
                 throw new DeviceNotAvailableException(
@@ -247,11 +248,12 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     }
 
     /** Launch the actual gce device based on the build info. */
-    protected void launchGce(IBuildInfo buildInfo) throws TargetSetupError {
+    protected void launchGce(IBuildInfo buildInfo, MultiMap<String, String> attributes)
+            throws TargetSetupError {
         TargetSetupError exception = null;
         for (int attempt = 0; attempt < getOptions().getGceMaxAttempt(); attempt++) {
             try {
-                mGceAvd = getGceHandler().startGce(getInitialIp());
+                mGceAvd = getGceHandler().startGce(getInitialIp(), attributes);
                 if (mGceAvd != null) break;
             } catch (TargetSetupError tse) {
                 CLog.w(

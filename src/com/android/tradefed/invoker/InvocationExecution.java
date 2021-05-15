@@ -345,7 +345,7 @@ public class InvocationExecution implements IInvocationExecution {
             if (device instanceof ITestLoggerReceiver) {
                 ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
             }
-            device.preInvocationSetup(context.getBuildInfo(deviceName));
+            device.preInvocationSetup(context.getBuildInfo(deviceName), context.getAttributes());
         }
     }
 
