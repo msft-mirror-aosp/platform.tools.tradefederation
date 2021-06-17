@@ -220,6 +220,11 @@ public class TestDeviceOptions {
     private boolean mSkipTearDown = false;
 
     @Option(
+            name = "use-oxygen",
+            description = "Whether or not to use virtual devices created by Oxygen.")
+    private boolean mUseOxygen = false;
+
+    @Option(
             name = "wait-gce-teardown",
             description = "Whether or not to block on gce teardown before proceeding.")
     private boolean mWaitForGceTearDown = false;
@@ -259,6 +264,15 @@ public class TestDeviceOptions {
                         + "is specified."
     )
     private String mCrosPassword = null;
+
+    @Option(
+            name = "invocation-attribute-to-metadata",
+            description =
+                    "Pass the named attribute found in invocation context to GCE driver (acloud)"
+                            + " as metadata to be associated with the GCE VM. e.g. if invocation"
+                            + " context has form_factor=phone, it'll be added to GCE VM as metadata"
+                            + " form_factor=phone.")
+    private List<String> mInvocationAttributeToMetadata = new ArrayList<>();
 
     // END ====================== Options Related to Virtual Devices ======================
 
@@ -626,6 +640,11 @@ public class TestDeviceOptions {
         return mWaitForGceTearDown;
     }
 
+    /** Returns true if use Oxygen to create virtual devices. False otherwise. */
+    public boolean useOxygen() {
+        return mUseOxygen;
+    }
+
     /** Returns the instance type of GCE virtual device that should be created */
     public String getInstanceUser() {
         return mInstanceUser;
@@ -686,5 +705,9 @@ public class TestDeviceOptions {
             return params;
         }
         return Collections.emptyList();
+    }
+
+    public List<String> getInvocationAttributeToMetadata() {
+        return mInvocationAttributeToMetadata;
     }
 }

@@ -25,6 +25,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.IDeviceMonitor;
+import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.monitoring.collector.IResourceMetricCollector;
 
@@ -51,6 +52,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -94,13 +96,6 @@ public class LabResourceDeviceMonitor extends LabResourceServiceGrpc.LabResource
     private ExecutorService mCollectionExecutor;
 
     @Option(
-            name = "metricize-op-timeout",
-            description =
-                    "The maximum wait time in milliseconds for every resource metric collector to"
-                            + " get metrics.")
-    private long mMetricizeTimeoutMs = 1000;
-
-    @Option(
             name = "metricize-cycle-sec",
             description = "The time in seconds between for each metricize cycle.")
     private long mMetricizeCycleSec = 300;
@@ -136,6 +131,10 @@ public class LabResourceDeviceMonitor extends LabResourceServiceGrpc.LabResource
     /** {@inheritDoc} */
     @Override
     public void run() {
+        if (getClusterOptions().isDeviceMonitorDisabled()) {
+            CLog.i("LabResourceDeviceMonitor is disabled.");
+            return;
+        }
         if (mServer == null) {
             mServer =
                     // Because dockerized TF use bridge network driver now, so we remove the
@@ -144,7 +143,20 @@ public class LabResourceDeviceMonitor extends LabResourceServiceGrpc.LabResource
                     // For example: adding docker run argument "-p 127.0.0.1:8887:8887".
                     ServerBuilder.forPort(DEFAULT_PORT)
                             .addService(this)
-                            .executor(Executors.newFixedThreadPool(DEFAULT_THREAD_COUNT))
+                            .executor(
+                                    Executors.newFixedThreadPool(
+                                            DEFAULT_THREAD_COUNT,
+                                            new ThreadFactory() {
+                                                @Override
+                                                public Thread newThread(Runnable r) {
+                                                    Thread t =
+                                                            Executors.defaultThreadFactory()
+                                                                    .newThread(r);
+                                                    t.setDaemon(true);
+                                                    t.setName("lab-resource-server");
+                                                    return t;
+                                                }
+                                            }))
                             .build();
         }
         try {
@@ -162,8 +174,28 @@ public class LabResourceDeviceMonitor extends LabResourceServiceGrpc.LabResource
     void startExecutors() {
         mMetricizeExecutor =
                 MoreExecutors.getExitingScheduledExecutorService(
-                        new ScheduledThreadPoolExecutor(1));
-        mCollectionExecutor = Executors.newSingleThreadExecutor();
+                        new ScheduledThreadPoolExecutor(
+                                1,
+                                new ThreadFactory() {
+                                    @Override
+                                    public Thread newThread(Runnable r) {
+                                        Thread t = Executors.defaultThreadFactory().newThread(r);
+                                        t.setDaemon(true);
+                                        t.setName("lab-resource-metricize-executor");
+                                        return t;
+                                    }
+                                }));
+        mCollectionExecutor =
+                Executors.newSingleThreadExecutor(
+                        new ThreadFactory() {
+                            @Override
+                            public Thread newThread(Runnable r) {
+                                Thread t = Executors.defaultThreadFactory().newThread(r);
+                                t.setDaemon(true);
+                                t.setName("lab-resource-collection-executor");
+                                return t;
+                            }
+                        });
     }
 
     @VisibleForTesting
@@ -193,7 +225,7 @@ public class LabResourceDeviceMonitor extends LabResourceServiceGrpc.LabResource
         }
     }
 
-    private LabResource getCachedLabResource() {
+    protected LabResource getCachedLabResource() {
         mLabResourceLock.readLock().lock();
         try {
             return mLabResource;
@@ -289,7 +321,8 @@ public class LabResourceDeviceMonitor extends LabResourceServiceGrpc.LabResource
             Future<Collection<Resource>> future = null;
             try {
                 future = mCollectionExecutor.submit(collector::getHostResourceMetrics);
-                builder.addAllResource(future.get(mMetricizeTimeoutMs, TimeUnit.MILLISECONDS));
+                builder.addAllResource(
+                        future.get(collector.getHostMetricizeTimeoutMs(), TimeUnit.MILLISECONDS));
             } catch (InterruptedException
                     | ExecutionException
                     | TimeoutException
@@ -334,6 +367,10 @@ public class LabResourceDeviceMonitor extends LabResourceServiceGrpc.LabResource
                                                 Metric.newBuilder()
                                                         .setTag(descriptor.getState().name())
                                                         .setValue(FIXED_METRIC_VALUE)));
+        // Continue to collect resource metrics if the device is a full stack android device.
+        if (!descriptor.getDeviceClass().equals(TestDevice.class.getSimpleName())) {
+            return builder.build();
+        }
         for (IResourceMetricCollector collector : collectors) {
             Future<Collection<Resource>> future = null;
             try {
@@ -343,7 +380,8 @@ public class LabResourceDeviceMonitor extends LabResourceServiceGrpc.LabResource
                                         collector.getDeviceResourceMetrics(
                                                 descriptor,
                                                 GlobalConfiguration.getDeviceManagerInstance()));
-                builder.addAllResource(future.get(mMetricizeTimeoutMs, TimeUnit.MILLISECONDS));
+                builder.addAllResource(
+                        future.get(collector.getDeviceMetricizeTimeoutMs(), TimeUnit.MILLISECONDS));
             } catch (InterruptedException
                     | ExecutionException
                     | TimeoutException
