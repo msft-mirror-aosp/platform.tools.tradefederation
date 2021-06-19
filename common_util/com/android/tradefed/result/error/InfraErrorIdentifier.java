@@ -39,6 +39,7 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     HOST_BINARY_FAILURE(500_011, FailureStatus.DEPENDENCY_ISSUE),
     MISMATCHED_BUILD_DEVICE(500_012, FailureStatus.CUSTOMER_ISSUE),
     LAB_HOST_FILESYSTEM_ERROR(500_013, FailureStatus.INFRA_FAILURE),
+    TRADEFED_SHUTTING_DOWN(500_014, FailureStatus.INFRA_FAILURE),
 
     // 500_501 - 501_000: Build, Artifacts download related errors
     ARTIFACT_REMOTE_PATH_NULL(500_501, FailureStatus.INFRA_FAILURE),
@@ -70,6 +71,8 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     INTERNAL_CONFIG_ERROR(505_251, FailureStatus.INFRA_FAILURE),
     CLASS_NOT_FOUND(505_252, FailureStatus.CUSTOMER_ISSUE),
     CONFIGURATION_NOT_FOUND(505_253, FailureStatus.CUSTOMER_ISSUE),
+    UNEXPECTED_DEVICE_CONFIGURED(505_254, FailureStatus.CUSTOMER_ISSUE),
+    KEYSTORE_CONFIG_ERROR(505_255, FailureStatus.DEPENDENCY_ISSUE),
 
     UNDETERMINED(510_000, FailureStatus.UNSET);
 

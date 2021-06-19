@@ -185,11 +185,6 @@ public class TradefedSandbox implements ISandbox {
             if (mProtoReceiver != null) {
                 mProtoReceiver.completeModuleEvents();
             }
-            // Log the configuration used to run
-            try (InputStreamSource configFile =
-                    new FileInputStreamSource(mSerializedConfiguration)) {
-                logger.testLog("sandbox-config", LogDataType.HARNESS_CONFIG, configFile);
-            }
             try (InputStreamSource contextFile = new FileInputStreamSource(mSerializedContext)) {
                 logger.testLog("sandbox-context", LogDataType.PB, contextFile);
             }
@@ -233,7 +228,7 @@ public class TradefedSandbox implements ISandbox {
         try {
             mStdoutFile = FileUtil.createTempFile("stdout_subprocess_", ".log", getWorkFolder());
             mStderrFile = FileUtil.createTempFile("stderr_subprocess_", ".log", getWorkFolder());
-            mSandboxTmpFolder = FileUtil.createTempDir("tradefed-container", getWorkFolder());
+            mSandboxTmpFolder = FileUtil.createTempDir("tf-container", getWorkFolder());
         } catch (IOException e) {
             return e;
         }
@@ -557,12 +552,19 @@ public class TradefedSandbox implements ISandbox {
 
     private void logAndCleanHeapDump(File heapDumpDir, ITestLogger logger) {
         try {
-            if (heapDumpDir != null && heapDumpDir.listFiles().length != 0) {
-                for (File f : heapDumpDir.listFiles()) {
-                    FileInputStreamSource fileInput = new FileInputStreamSource(f);
-                    logger.testLog(f.getName(), LogDataType.HPROF, fileInput);
-                    StreamUtil.cancel(fileInput);
-                }
+            if (heapDumpDir == null) {
+                return;
+            }
+            if (!heapDumpDir.isDirectory()) {
+                return;
+            }
+            if (heapDumpDir.listFiles().length == 0) {
+                return;
+            }
+            for (File f : heapDumpDir.listFiles()) {
+                FileInputStreamSource fileInput = new FileInputStreamSource(f);
+                logger.testLog(f.getName(), LogDataType.HPROF, fileInput);
+                StreamUtil.cancel(fileInput);
             }
         } finally {
             FileUtil.recursiveDelete(heapDumpDir);

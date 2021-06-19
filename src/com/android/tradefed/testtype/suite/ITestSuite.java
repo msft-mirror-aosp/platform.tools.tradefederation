@@ -43,6 +43,7 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.invoker.shard.token.ITokenRequest;
 import com.android.tradefed.invoker.shard.token.TokenProperty;
 import com.android.tradefed.log.ITestLogger;
@@ -57,6 +58,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryStrategy;
+import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.suite.checker.ISystemStatusCheckerReceiver;
 import com.android.tradefed.suite.checker.StatusCheckerResult;
@@ -72,15 +74,18 @@ import com.android.tradefed.testtype.IReportNotExecuted;
 import com.android.tradefed.testtype.IRuntimeHintProvider;
 import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.ITestCollector;
+import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.util.AbiFormatter;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
+import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -334,6 +339,11 @@ public abstract class ITestSuite
     private boolean mMergeAttempts = true;
     // end [Options relate to module retry and intra-module retry]
 
+    @Option(
+            name = "filter-previous-passed",
+            description = "Feature flag to test filtering previously passed tests.")
+    private boolean mTestFilterPassed = false;
+
     private ITestDevice mDevice;
     private IBuildInfo mBuildInfo;
     private List<ISystemStatusChecker> mSystemStatusCheckers;
@@ -346,6 +356,9 @@ public abstract class ITestSuite
     private boolean mIsSharded = false;
     private ModuleDefinition mDirectModule = null;
     private boolean mShouldMakeDynamicModule = true;
+
+    // Store the previous attempts passed tests
+    private List<SuiteTestFilter> mPreviousPassedFilters = null;
 
     // Guice object
     private Injector mInjector;
@@ -702,10 +715,16 @@ public abstract class ITestSuite
                     mRunModules);
         }
 
+        List<SuiteTestFilter> previousPassedFilters = getPreviousPassedFilters();
+
         /** Run all the module, make sure to reduce the list to release resources as we go. */
         try {
             while (!mRunModules.isEmpty()) {
                 ModuleDefinition module = mRunModules.remove(0);
+
+                if (!shouldModuleRun(module, previousPassedFilters)) {
+                    continue;
+                }
                 // Before running the module we ensure it has tests at this point or skip completely
                 // to avoid running SystemCheckers and preparation for nothing.
                 if (module.hasTests()) {
@@ -867,6 +886,8 @@ public abstract class ITestSuite
         Map<String, String> failures = new LinkedHashMap<>();
         boolean bugreportNeeded = false;
         for (ISystemStatusChecker checker : checkers) {
+            // Track usage of the checker
+            TfObjectTracker.countWithParents(checker.getClass());
             // Check if the status checker should be skipped.
             if (mSystemStatusCheckBlacklist.contains(checker.getClass().getName())) {
                 CLog.d(
@@ -1028,6 +1049,7 @@ public abstract class ITestSuite
             // to carry these extra data.
             cleanUpSuiteSetup();
 
+            List<SuiteTestFilter> filters = getPreviousPassedFilters();
             // create an association of one ITestSuite <=> one ModuleDefinition as the smallest
             // execution unit supported.
             List<IRemoteTest> splitTests = new ArrayList<>();
@@ -1036,6 +1058,7 @@ public abstract class ITestSuite
                 OptionCopier.copyOptionsNoThrow(this, suite);
                 suite.mIsSharded = true;
                 suite.mDirectModule = m;
+                suite.mPreviousPassedFilters = filters;
                 splitTests.add(suite);
             }
             // return the list of ITestSuite with their ModuleDefinition assigned
@@ -1496,5 +1519,88 @@ public abstract class ITestSuite
 
     public final void setAbis(Set<IAbi> abis) {
         mAbis.addAll(abis);
+    }
+
+    @VisibleForTesting
+    FeatureResponse triggerFeature(TradefedFeatureClient client, Map<String, String> args) {
+        return client.triggerFeature("getPreviousPassed", args);
+    }
+
+    private void convertResponseToFilter(
+            FeatureResponse previousPassed, List<SuiteTestFilter> previousPassedFilters) {
+        if (previousPassed.hasErrorInfo()) {
+            return;
+        }
+        if (Strings.isNullOrEmpty(previousPassed.getResponse())) {
+            return;
+        }
+        for (String line : previousPassed.getResponse().split("\n")) {
+            if (line.isEmpty()) {
+                continue;
+            }
+            previousPassedFilters.add(SuiteTestFilter.createFrom(line));
+        }
+    }
+
+    private boolean shouldModuleRun(
+            ModuleDefinition module, List<SuiteTestFilter> previousPassedFilter) {
+        if (previousPassedFilter.isEmpty()) {
+            return true;
+        }
+        String moduleId = module.getId();
+        for (SuiteTestFilter filter : previousPassedFilter) {
+            String name = filter.getName();
+            if (filter.getAbi() != null) {
+                name = filter.getAbi() + " " + name;
+            }
+            if (!name.equals(moduleId)) {
+                continue;
+            }
+            if (filter.getTest() == null) {
+                CLog.d("Skipping %s, it previously passed.", moduleId);
+                return false;
+            }
+            for (IRemoteTest test : module.getTests()) {
+                if (test instanceof ITestFilterReceiver) {
+                    ((ITestFilterReceiver) test).addExcludeFilter(filter.getTest());
+                }
+            }
+        }
+        return true;
+    }
+
+    private List<SuiteTestFilter> getPreviousPassedFilters() {
+        List<SuiteTestFilter> previousPassedFilters = new ArrayList<>();
+        if (!mTestFilterPassed) {
+            return previousPassedFilters;
+        }
+        if (mPreviousPassedFilters != null) {
+            return mPreviousPassedFilters;
+        }
+        mPreviousPassedFilters = new ArrayList<>();
+        // Test the query of previous passed test
+        Map<String, String> args = new HashMap<>();
+        String invocationId =
+                mMainConfiguration
+                        .getCommandOptions()
+                        .getInvocationData()
+                        .getUniqueMap()
+                        .get("invocation_id");
+        if (!Strings.isNullOrEmpty(invocationId)) {
+            args.put("invocation_id", invocationId);
+        }
+        // TODO: Only do this if it's not the first attempt
+        if (args.isEmpty()) {
+            return mPreviousPassedFilters;
+        }
+        try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+            FeatureResponse previousPassed = triggerFeature(client, args);
+            CLog.d("FeatureResponse: %s", previousPassed);
+            convertResponseToFilter(previousPassed, previousPassedFilters);
+        } catch (RuntimeException e) {
+            CLog.e(e);
+        }
+        mPreviousPassedFilters.addAll(previousPassedFilters);
+        return mPreviousPassedFilters;
     }
 }
