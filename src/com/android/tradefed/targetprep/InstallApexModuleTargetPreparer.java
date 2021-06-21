@@ -59,14 +59,14 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private static final String APEX_DATA_DIR = "/data/apex/active/";
     private static final String STAGING_DATA_DIR = "/data/app-staging/";
     private static final String SESSION_DATA_DIR = "/data/apex/sessions/";
-    private static final String APEX_SUFFIX = ".apex";
-    private static final String APK_SUFFIX = ".apk";
-    private static final String SPLIT_APKS_SUFFIX = ".apks";
     private static final String TRAIN_WITH_APEX_INSTALL_OPTION = "install-multi-package";
     private static final String ACTIVATED_APEX_SOURCEDIR_PREFIX = "data";
     private static final int R_SDK_INT = 30;
     // Pattern used to identify the package names from adb shell pm path.
     private static final Pattern PACKAGE_REGEX = Pattern.compile("package:(.*)");
+    protected static final String APEX_SUFFIX = ".apex";
+    protected static final String APK_SUFFIX = ".apk";
+    protected static final String SPLIT_APKS_SUFFIX = ".apks";
 
     private List<ApexInfo> mTestApexInfoList = new ArrayList<>();
     private List<String> mApexModulesToUninstall = new ArrayList<>();
@@ -192,7 +192,8 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     String.format(
                             "Failed to retrieve activated apex on device %s. Empty set returned.",
                             device.getSerialNumber()),
-                    device.getDeviceDescriptor());
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
         } else {
             CLog.i("Activated apex packages list after module/train installation:");
             for (ApexInfo info : activatedApexes) {
@@ -382,12 +383,14 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * @param testInfo the {@link TestInformation} for the invocation.
      * @throws TargetSetupError if bundletool cannot be found.
      */
-    private void initBundletoolUtil(TestInformation testInfo) throws TargetSetupError {
+    protected void initBundletoolUtil(TestInformation testInfo) throws TargetSetupError {
         if (mBundletoolUtil != null) {
             return;
         }
+
         File bundletoolJar;
         File f = new File(getBundletoolFileName());
+
         if (!f.isAbsolute()) {
             bundletoolJar = getLocalPathForFilename(testInfo, getBundletoolFileName());
         } else {
@@ -431,10 +434,11 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * @return a File[] containing the splits.
      * @throws TargetSetupError if bundletool cannot be found or device spec file fails to generate.
      */
-    private List<File> getSplitsForApks(TestInformation testInfo, File moduleFile)
+    protected List<File> getSplitsForApks(TestInformation testInfo, File moduleFile)
             throws TargetSetupError {
         initBundletoolUtil(testInfo);
         initDeviceSpecFilePath(testInfo.getDevice());
+
         File splitsDir =
                 getBundletoolUtil()
                         .extractSplitsFromApks(
@@ -709,7 +713,8 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     String.format(
                             "Failed to stage train on device %s. Cmd is: %s. Error log: %s.",
                             device.getSerialNumber(), installCmd.toString(), log),
-                    device.getDeviceDescriptor());
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.FAIL_ACTIVATE_APEX);
         }
     }
 
@@ -934,7 +939,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         return failToActivateApex;
     }
 
-    private void addApksToTestFiles() {
+    protected void addApksToTestFiles() {
         File[] filesUnderTrainFolder = mTrainFolderPath.listFiles();
         Arrays.sort(filesUnderTrainFolder, (a, b) -> a.getName().compareTo(b.getName()));
         for (File f : filesUnderTrainFolder) {

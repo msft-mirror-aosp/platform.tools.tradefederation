@@ -183,13 +183,16 @@ public interface ICommandScheduler {
      */
     public void completeHandover();
 
+    /** Attempt to forcefully shutdown the command scheduler. Same as shutdownHard(true). */
+    public void shutdownHard();
+
     /**
      * Attempt to forcefully shutdown the command scheduler.
-     * <p/>
-     * Similar to {@link #shutdown()}, but will also forcefully kill the adb connection, in an
+     *
+     * <p>Similar to {@link #shutdown()}, but will also optionally kill the adb connection, in an
      * attempt to 'inspire' invocations in progress to complete quicker.
      */
-    public void shutdownHard();
+    public void shutdownHard(boolean killAdb);
 
     /**
      * Start the {@link ICommandScheduler}.
@@ -313,12 +316,6 @@ public interface ICommandScheduler {
      * Return null, if no throwable is available.
      */
     public Throwable getLastInvocationThrowable();
-
-    /**
-     * Helper method, when running inside a {@link CommandRunner} context, set an exit error code
-     * and a stack trace that can be returned.
-     */
-    public void setLastInvocationExitCode(ExitCode code, Throwable stack);
 
     /** Returns the number of Commands in ready state in the queue. */
     public int getReadyCommandCount();

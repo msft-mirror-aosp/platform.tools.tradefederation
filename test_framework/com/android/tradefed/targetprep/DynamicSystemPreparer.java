@@ -23,6 +23,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -35,6 +36,8 @@ import org.apache.commons.compress.archivers.zip.ZipFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * An {@link ITargetPreparer} that sets up a system image on top of a device build with the Dynamic
@@ -44,6 +47,7 @@ import java.io.IOException;
 public class DynamicSystemPreparer extends BaseTargetPreparer {
     static final int DSU_MAX_WAIT_SEC = 10 * 60;
 
+    private static final String SYSTEM_IMAGE_NAME = "system.img";
     private static final String DEST_PATH = "/sdcard/system.raw.gz";
 
     @Option(
@@ -55,6 +59,11 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
             name = "user-data-size-in-gb",
             description = "Number of GB to be allocated for DSU user-data.")
     private long mUserDataSizeInGb = 16L; // 16GB
+
+    @Option(
+            name = "wait-for-device-online",
+            description = "whether to wait for device online after install DSU.")
+    private boolean mWaitForDeviceOnline = true;
 
     private boolean isDSURunning(ITestDevice device) throws DeviceNotAvailableException {
         CollectingOutputReceiver receiver = new CollectingOutputReceiver();
@@ -75,21 +84,39 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
                     InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
 
-        ZipFile zipFile = null;
+        List<File> tempFiles = new ArrayList<File>();
         File systemImage = null;
         File rawSystemImage = null;
         File systemImageGZ = null;
         try {
-            zipFile = new ZipFile(systemImageZipFile);
-            systemImage = ZipUtil2.extractFileFromZip(zipFile, "system.img");
+            if (systemImageZipFile.isDirectory()) {
+                systemImage = new File(systemImageZipFile, SYSTEM_IMAGE_NAME);
+            } else {
+                try (ZipFile zipFile = new ZipFile(systemImageZipFile)) {
+                    systemImage = ZipUtil2.extractFileFromZip(zipFile, SYSTEM_IMAGE_NAME);
+                }
+                if (systemImage != null) {
+                    tempFiles.add(systemImage);
+                }
+            }
+            if (systemImage == null || !systemImage.isFile()) {
+                throw new BuildError(
+                        String.format(
+                                "Cannot find %s in %s.", SYSTEM_IMAGE_NAME, mSystemImageZipName),
+                        device.getDeviceDescriptor(),
+                        InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+            }
+
             if (SparseImageUtil.isSparse(systemImage)) {
                 rawSystemImage = FileUtil.createTempFile("system", ".raw");
+                tempFiles.add(rawSystemImage);
                 SparseImageUtil.unsparse(systemImage, rawSystemImage);
             } else {
                 // system.img is already non-sparse
                 rawSystemImage = systemImage;
             }
             systemImageGZ = FileUtil.createTempFile("system", ".raw.gz");
+            tempFiles.add(systemImageGZ);
             long rawSize = rawSystemImage.length();
             ZipUtil.gzipFile(rawSystemImage, systemImageGZ);
             CLog.i("Pushing %s to %s", systemImageGZ.getAbsolutePath(), DEST_PATH);
@@ -97,7 +124,8 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
                 throw new TargetSetupError(
                         String.format(
                                 "Failed to push %s to %s", systemImageGZ.getName(), DEST_PATH),
-                        device.getDeviceDescriptor());
+                        device.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.FAIL_PUSH_FILE);
             }
             device.setProperty("persist.sys.fflag.override.settings_dynamic_system", "true");
 
@@ -119,8 +147,16 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
             if (!device.waitForDeviceNotAvailable(DSU_MAX_WAIT_SEC * 1000)) {
                 throw new TargetSetupError(
                         "Timed out waiting for DSU installation to complete and reboot",
-                        device.getDeviceDescriptor());
+                        device.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
+
+            // If installing user build by DSU, the device will boot up without user debug mode.
+            // The adb command can not be executed immediately after upgrade to a user build by DSU.
+            if (!mWaitForDeviceOnline) {
+                return;
+            }
+
             try {
                 // waitForDeviceOnline() throws DeviceNotAvailableException if device does not
                 // become online within timeout.
@@ -144,10 +180,9 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
             throw new TargetSetupError(
                     "fail to install the DynamicSystemUpdate", e, device.getDeviceDescriptor());
         } finally {
-            FileUtil.deleteFile(systemImage);
-            FileUtil.deleteFile(rawSystemImage);
-            FileUtil.deleteFile(systemImageGZ);
-            ZipUtil2.closeZip(zipFile);
+            for (File tempFile : tempFiles) {
+                FileUtil.deleteFile(tempFile);
+            }
         }
     }
 

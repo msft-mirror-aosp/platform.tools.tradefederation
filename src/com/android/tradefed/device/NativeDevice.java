@@ -37,6 +37,8 @@ import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.contentprovider.ContentProviderHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -58,6 +60,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.KeyguardControllerState;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.ProcessInfo;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
@@ -66,8 +69,13 @@ import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.StringEscapeUtils;
 import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
+import com.google.errorprone.annotations.FormatMethod;
+
+import org.apache.commons.compress.archivers.zip.ZipFile;
+
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
@@ -94,9 +102,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
-import org.apache.commons.compress.archivers.zip.ZipFile;
 
 /**
  * Default implementation of a {@link ITestDevice}
@@ -154,7 +162,7 @@ public class NativeDevice implements IManagedTestDevice {
     private static final long ENCRYPTION_WIPE_TIMEOUT_MIN = 20;
 
     /** The maximum system_server start delay in seconds after device boot up */
-    private static final int MAX_SYSTEM_SERVER_DELAY_AFTER_BOOT_UP_SEC = 10;
+    private static final int MAX_SYSTEM_SERVER_DELAY_AFTER_BOOT_UP_SEC = 25;
 
     /** The time in ms to wait before starting logcat for a device */
     private int mLogStartDelay = 5*1000;
@@ -504,9 +512,15 @@ public class NativeDevice implements IManagedTestDevice {
             CLog.e(
                     "Failed to run '%s' returning null. stdout: %s\nstderr: %s\nexit code: %s",
                     cmd, result.getStdout(), result.getStderr(), result.getExitCode());
-            if (recovery && result.getStderr().contains("device offline")) {
-                recoverDevice();
-                // TODO: Should we retry ?
+            if (result.getStderr().contains("device offline")) {
+                if (recovery) {
+                    recoverDevice();
+                    return getPropertyWithRecovery(name, false);
+                }
+                throw new DeviceNotAvailableException(
+                        String.format("Device went offline when querying property: %s", name),
+                        getSerialNumber(),
+                        DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
             }
             return null;
         }
@@ -1109,45 +1123,70 @@ public class NativeDevice implements IManagedTestDevice {
         throw new UnsupportedOperationException("No support for Package Manager's features");
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public String uninstallPackageForUser(final String packageName, int userId)
+            throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for Package Manager's features");
+    }
+
     /**
      * {@inheritDoc}
      */
     @Override
     public boolean pullFile(final String remoteFilePath, final File localFile)
             throws DeviceNotAvailableException {
+        long startTime = System.currentTimeMillis();
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PULL_FILE_COUNT, 1);
 
-        if (isSdcardOrEmulated(remoteFilePath)) {
-            ContentProviderHandler handler = getContentProvider();
-            if (handler != null) {
-                return handler.pullFile(remoteFilePath, localFile);
-            }
-        }
-
-        DeviceAction pullAction = new DeviceAction() {
-            @Override
-            public boolean run() throws TimeoutException, IOException, AdbCommandRejectedException,
-                    SyncException {
-                SyncService syncService = null;
-                boolean status = false;
-                try {
-                    syncService = getIDevice().getSyncService();
-                    syncService.pullFile(interpolatePathVariables(remoteFilePath),
-                            localFile.getAbsolutePath(), SyncService.getNullProgressMonitor());
-                    status = true;
-                } catch (SyncException e) {
-                    CLog.w("Failed to pull %s from %s to %s. Message %s", remoteFilePath,
-                            getSerialNumber(), localFile.getAbsolutePath(), e.getMessage());
-                    throw e;
-                } finally {
-                    if (syncService != null) {
-                        syncService.close();
-                    }
+        try {
+            if (isSdcardOrEmulated(remoteFilePath)) {
+                ContentProviderHandler handler = getContentProvider();
+                if (handler != null) {
+                    return handler.pullFile(remoteFilePath, localFile);
                 }
-                return status;
             }
-        };
-        return performDeviceAction(String.format("pull %s to %s", remoteFilePath,
-                localFile.getAbsolutePath()), pullAction, MAX_RETRY_ATTEMPTS);
+
+            DeviceAction pullAction =
+                    new DeviceAction() {
+                        @Override
+                        public boolean run()
+                                throws TimeoutException, IOException, AdbCommandRejectedException,
+                                        SyncException {
+                            SyncService syncService = null;
+                            boolean status = false;
+                            try {
+                                syncService = getIDevice().getSyncService();
+                                syncService.pullFile(
+                                        interpolatePathVariables(remoteFilePath),
+                                        localFile.getAbsolutePath(),
+                                        SyncService.getNullProgressMonitor());
+                                status = true;
+                            } catch (SyncException e) {
+                                CLog.w(
+                                        "Failed to pull %s from %s to %s. Message %s",
+                                        remoteFilePath,
+                                        getSerialNumber(),
+                                        localFile.getAbsolutePath(),
+                                        e.getMessage());
+                                throw e;
+                            } finally {
+                                if (syncService != null) {
+                                    syncService.close();
+                                }
+                            }
+                            return status;
+                        }
+                    };
+            return performDeviceAction(
+                    String.format("pull %s to %s", remoteFilePath, localFile.getAbsolutePath()),
+                    pullAction,
+                    MAX_RETRY_ATTEMPTS);
+        } finally {
+            long totalTime = System.currentTimeMillis() - startTime;
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PULL_FILE_TIME, totalTime);
+        }
     }
 
     /**
@@ -1224,57 +1263,67 @@ public class NativeDevice implements IManagedTestDevice {
     @Override
     public boolean pushFile(final File localFile, final String remoteFilePath)
             throws DeviceNotAvailableException {
-        if (isSdcardOrEmulated(remoteFilePath)) {
-            ContentProviderHandler handler = getContentProvider();
-            if (handler != null) {
-                return handler.pushFile(localFile, remoteFilePath);
+        long startTime = System.currentTimeMillis();
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PUSH_FILE_COUNT, 1);
+        try {
+            if (isSdcardOrEmulated(remoteFilePath)) {
+                ContentProviderHandler handler = getContentProvider();
+                if (handler != null) {
+                    return handler.pushFile(localFile, remoteFilePath);
+                }
             }
-        }
 
-        DeviceAction pushAction =
-                new DeviceAction() {
-                    @Override
-                    public boolean run()
-                            throws TimeoutException, IOException, AdbCommandRejectedException,
-                                    SyncException {
-                        SyncService syncService = null;
-                        boolean status = false;
-                        try {
-                            syncService = getIDevice().getSyncService();
-                            if (syncService == null) {
-                                throw new IOException("SyncService returned null.");
-                            }
-                            syncService.pushFile(
-                                    localFile.getAbsolutePath(),
-                                    interpolatePathVariables(remoteFilePath),
-                                    SyncService.getNullProgressMonitor());
-                            status = true;
-                        } catch (SyncException e) {
-                            CLog.w(
-                                    "Failed to push %s to %s on device %s. Message: '%s'. "
-                                            + "Error code: %s",
-                                    localFile.getAbsolutePath(),
-                                    remoteFilePath,
-                                    getSerialNumber(),
-                                    e.getMessage(),
-                                    e.getErrorCode());
-                            // TODO: check if ddmlib can report a better error
-                            if (SyncError.TRANSFER_PROTOCOL_ERROR.equals(e.getErrorCode())) {
-                                if (e.getMessage().contains("Permission denied")) {
-                                    return false;
+            DeviceAction pushAction =
+                    new DeviceAction() {
+                        @Override
+                        public boolean run()
+                                throws TimeoutException, IOException, AdbCommandRejectedException,
+                                        SyncException {
+                            SyncService syncService = null;
+                            boolean status = false;
+                            try {
+                                syncService = getIDevice().getSyncService();
+                                if (syncService == null) {
+                                    throw new IOException("SyncService returned null.");
+                                }
+                                syncService.pushFile(
+                                        localFile.getAbsolutePath(),
+                                        interpolatePathVariables(remoteFilePath),
+                                        SyncService.getNullProgressMonitor());
+                                status = true;
+                            } catch (SyncException e) {
+                                CLog.w(
+                                        "Failed to push %s to %s on device %s. Message: '%s'. "
+                                                + "Error code: %s",
+                                        localFile.getAbsolutePath(),
+                                        remoteFilePath,
+                                        getSerialNumber(),
+                                        e.getMessage(),
+                                        e.getErrorCode());
+                                // TODO: check if ddmlib can report a better error
+                                if (SyncError.TRANSFER_PROTOCOL_ERROR.equals(e.getErrorCode())) {
+                                    if (e.getMessage().contains("Permission denied")) {
+                                        return false;
+                                    }
+                                }
+                                throw e;
+                            } finally {
+                                if (syncService != null) {
+                                    syncService.close();
                                 }
                             }
-                            throw e;
-                        } finally {
-                            if (syncService != null) {
-                                syncService.close();
-                            }
+                            return status;
                         }
-                        return status;
-                    }
-                };
-        return performDeviceAction(String.format("push %s to %s", localFile.getAbsolutePath(),
-                remoteFilePath), pushAction, MAX_RETRY_ATTEMPTS);
+                    };
+            return performDeviceAction(
+                    String.format("push %s to %s", localFile.getAbsolutePath(), remoteFilePath),
+                    pushAction,
+                    MAX_RETRY_ATTEMPTS);
+        } finally {
+            long totalTime = System.currentTimeMillis() - startTime;
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PUSH_FILE_TIME, totalTime);
+        }
     }
 
     /**
@@ -2110,8 +2159,8 @@ public class NativeDevice implements IManagedTestDevice {
      */
     protected boolean performDeviceAction(String actionDescription, final DeviceAction action,
             int retryAttempts) throws DeviceNotAvailableException {
-
         for (int i = 0; i < retryAttempts + 1; i++) {
+            boolean shouldRecover = true;
             try {
                 return action.run();
             } catch (TimeoutException e) {
@@ -2141,12 +2190,16 @@ public class NativeDevice implements IManagedTestDevice {
                 }
                 logDeviceActionException(actionDescription, e);
             } catch (ShellCommandUnresponsiveException e) {
-                CLog.w("Device %s stopped responding when attempting %s", getSerialNumber(),
-                        actionDescription);
+                // ShellCommandUnresponsiveException is thrown when no output occurs within the
+                // timeout. It doesn't necessarily mean the device is offline.
+                shouldRecover = false;
+                CLog.w(
+                        "Command: '%s' on '%s' went over its timeout for outputing a response.",
+                        actionDescription, getSerialNumber());
             }
-            // TODO: currently treat all exceptions the same. In future consider different recovery
-            // mechanisms for time out's vs IOExceptions
-            recoverDevice();
+            if (shouldRecover) {
+                recoverDevice();
+            }
         }
         if (retryAttempts > 0) {
             throw new DeviceUnresponsiveException(
@@ -2198,7 +2251,7 @@ public class NativeDevice implements IManagedTestDevice {
     /**
      * Attempts to recover device communication.
      *
-     * @throws DeviceNotAvailableException if device is not longer available
+     * @throws DeviceNotAvailableException if device is no longer available
      */
     @Override
     public void recoverDevice() throws DeviceNotAvailableException {
@@ -2208,40 +2261,49 @@ public class NativeDevice implements IManagedTestDevice {
             return;
         }
         CLog.i("Attempting recovery on %s", getSerialNumber());
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.RECOVERY_ROUTINE_COUNT, 1);
+        long startTime = System.currentTimeMillis();
         try {
-            mRecovery.recoverDevice(mStateMonitor, mRecoveryMode.equals(RecoveryMode.ONLINE));
-        } catch (DeviceUnresponsiveException due) {
-            RecoveryMode previousRecoveryMode = mRecoveryMode;
-            mRecoveryMode = RecoveryMode.NONE;
             try {
-                boolean enabled = enableAdbRoot();
-                CLog.d("Device Unresponsive during recovery, is root still enabled: %s", enabled);
-            } catch (DeviceUnresponsiveException e) {
-                // Ignore exception thrown here to rethrow original exception.
-                CLog.e("Exception occurred during recovery adb root:");
-                CLog.e(e);
+                mRecovery.recoverDevice(mStateMonitor, mRecoveryMode.equals(RecoveryMode.ONLINE));
+            } catch (DeviceUnresponsiveException due) {
+                RecoveryMode previousRecoveryMode = mRecoveryMode;
+                mRecoveryMode = RecoveryMode.NONE;
+                try {
+                    boolean enabled = enableAdbRoot();
+                    CLog.d(
+                            "Device Unresponsive during recovery, is root still enabled: %s",
+                            enabled);
+                } catch (DeviceUnresponsiveException e) {
+                    // Ignore exception thrown here to rethrow original exception.
+                    CLog.e("Exception occurred during recovery adb root:");
+                    CLog.e(e);
+                }
+                mRecoveryMode = previousRecoveryMode;
+                throw due;
             }
-            mRecoveryMode = previousRecoveryMode;
-            throw due;
-        }
-        if (mRecoveryMode.equals(RecoveryMode.AVAILABLE)) {
-            // turn off recovery mode to prevent reentrant recovery
-            // TODO: look for a better way to handle this, such as doing postBootUp steps in
-            // recovery itself
-            mRecoveryMode = RecoveryMode.NONE;
-            // this might be a runtime reset - still need to run post boot setup steps
-            if (isEncryptionSupported() && isDeviceEncrypted()) {
-                unlockDevice();
+            if (mRecoveryMode.equals(RecoveryMode.AVAILABLE)) {
+                // turn off recovery mode to prevent reentrant recovery
+                // TODO: look for a better way to handle this, such as doing postBootUp steps in
+                // recovery itself
+                mRecoveryMode = RecoveryMode.NONE;
+                // this might be a runtime reset - still need to run post boot setup steps
+                if (isEncryptionSupported() && isDeviceEncrypted()) {
+                    unlockDevice();
+                }
+                postBootSetup();
+                mRecoveryMode = RecoveryMode.AVAILABLE;
+            } else if (mRecoveryMode.equals(RecoveryMode.ONLINE)) {
+                // turn off recovery mode to prevent reentrant recovery
+                // TODO: look for a better way to handle this, such as doing postBootUp steps in
+                // recovery itself
+                mRecoveryMode = RecoveryMode.NONE;
+                enableAdbRoot();
+                mRecoveryMode = RecoveryMode.ONLINE;
             }
-            postBootSetup();
-            mRecoveryMode = RecoveryMode.AVAILABLE;
-        } else if (mRecoveryMode.equals(RecoveryMode.ONLINE)) {
-            // turn off recovery mode to prevent reentrant recovery
-            // TODO: look for a better way to handle this, such as doing postBootUp steps in
-            // recovery itself
-            mRecoveryMode = RecoveryMode.NONE;
-            enableAdbRoot();
-            mRecoveryMode = RecoveryMode.ONLINE;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.RECOVERY_TIME, System.currentTimeMillis() - startTime);
         }
         CLog.i("Recovery successful for %s", getSerialNumber());
     }
@@ -2297,9 +2359,13 @@ public class NativeDevice implements IManagedTestDevice {
     @SuppressWarnings("MustBeClosedChecker")
     public InputStreamSource getLogcat() {
         if (mLogcatReceiver == null) {
-            CLog.w("Not capturing logcat for %s in background, returning a logcat dump",
-                    getSerialNumber());
-            return getLogcatDump();
+            if (!(getIDevice() instanceof StubDevice)) {
+                CLog.w(
+                        "Not capturing logcat for %s in background, returning a logcat dump",
+                        getSerialNumber());
+                return getLogcatDump();
+            }
+            return new ByteArrayInputStreamSource(new byte[0]);
         } else {
             return mLogcatReceiver.getLogcatData();
         }
@@ -2529,7 +2595,7 @@ public class NativeDevice implements IManagedTestDevice {
                 type = LogDataType.BUGREPORT;
             }
             // log what we managed to capture.
-            if (bugreport != null) {
+            if (bugreport != null && bugreport.size() > 0L) {
                 listener.testLog(dataName, type, bugreport);
                 return true;
             }
@@ -3351,25 +3417,33 @@ public class NativeDevice implements IManagedTestDevice {
             CLog.i("\"enable-root\" set to false; ignoring 'adb root' request");
             return false;
         }
-        CLog.i("adb root on device %s", getSerialNumber());
-        int attempts = MAX_RETRY_ATTEMPTS + 1;
-        for (int i=1; i <= attempts; i++) {
-            String output = executeAdbCommand("root");
-            // wait for device to disappear from adb
-            waitForDeviceNotAvailable("root", 20 * 1000);
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.ADB_ROOT_ROUTINE_COUNT, 1);
+        long startTime = System.currentTimeMillis();
+        try {
+            CLog.i("adb root on device %s", getSerialNumber());
+            int attempts = MAX_RETRY_ATTEMPTS + 1;
+            for (int i = 1; i <= attempts; i++) {
+                String output = executeAdbCommand("root");
+                // wait for device to disappear from adb
+                waitForDeviceNotAvailable("root", 20 * 1000);
 
-            postAdbRootAction();
+                postAdbRootAction();
 
-            // wait for device to be back online
-            waitForDeviceOnline();
+                // wait for device to be back online
+                waitForDeviceOnline();
 
-            if (isAdbRoot()) {
-                return true;
+                if (isAdbRoot()) {
+                    return true;
+                }
+                CLog.w(
+                        "'adb root' on %s unsuccessful on attempt %d of %d. Output: '%s'",
+                        getSerialNumber(), i, attempts, output);
             }
-            CLog.w("'adb root' on %s unsuccessful on attempt %d of %d. Output: '%s'",
-                    getSerialNumber(), i, attempts, output);
+            return false;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.ADB_ROOT_TIME, System.currentTimeMillis() - startTime);
         }
-        return false;
     }
 
     /**
@@ -4200,13 +4274,12 @@ public class NativeDevice implements IManagedTestDevice {
     @Override
     public long getDeviceTimeOffset(Date date) throws DeviceNotAvailableException {
         Long deviceTime = getDeviceDate();
-        long offset = 0;
 
         if (date == null) {
             date = new Date();
         }
 
-        offset = date.getTime() - deviceTime;
+        long offset = date.getTime() - deviceTime;
         CLog.d("Time offset = %d ms", offset);
         return offset;
     }
@@ -4578,7 +4651,7 @@ public class NativeDevice implements IManagedTestDevice {
 
     /** {@inheritDoc} */
     @Override
-    public void preInvocationSetup(IBuildInfo info)
+    public void preInvocationSetup(IBuildInfo info, MultiMap<String, String> attributes)
             throws TargetSetupError, DeviceNotAvailableException {
         // Default implementation
         mContentProvider = null;
@@ -4640,8 +4713,11 @@ public class NativeDevice implements IManagedTestDevice {
     protected void checkApiLevelAgainst(String feature, int strictMinLevel) {
         try {
             if (getApiLevel() < strictMinLevel){
-                throw new IllegalArgumentException(String.format("%s not supported on %s. "
-                        + "Must be API %d.", feature, getSerialNumber(), strictMinLevel));
+                throw new HarnessRuntimeException(
+                        String.format(
+                                "%s not supported on %s. " + "Must be API %d.",
+                                feature, getSerialNumber(), strictMinLevel),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
         } catch (DeviceNotAvailableException e) {
             throw new HarnessRuntimeException(
@@ -5065,6 +5141,7 @@ public class NativeDevice implements IManagedTestDevice {
 
     /** {@inheritDoc} */
     @Override
+    @FormatMethod
     public void logOnDevice(String tag, LogLevel level, String format, Object... args) {
         String message = String.format(format, args);
         try {

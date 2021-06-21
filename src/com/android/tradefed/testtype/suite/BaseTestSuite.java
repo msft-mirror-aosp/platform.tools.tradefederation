@@ -42,7 +42,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,6 +61,7 @@ public class BaseTestSuite extends ITestSuite {
     public static final char TEST_OPTION_SHORT_NAME = 't';
     public static final String CONFIG_PATTERNS_OPTION = "config-patterns";
     private static final String MODULE_ARG_OPTION = "module-arg";
+    private static final String REVERSE_EXCLUDE_FILTERS = "reverse-exclude-filters";
     private static final int MAX_FILTER_DISPLAY = 20;
 
     @Option(
@@ -81,6 +81,13 @@ public class BaseTestSuite extends ITestSuite {
                         + "https://source.android.com/devices/tech/test_infra/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
     private Set<String> mExcludeFilters = new HashSet<>();
+
+    @Option(
+            name = REVERSE_EXCLUDE_FILTERS,
+            description =
+                    "Flip exclude-filters into include-filters, in order to run only the excluded "
+                            + "set.")
+    private boolean mReverseExcludeFilters = false;
 
     @Option(
         name = MODULE_OPTION,
@@ -208,8 +215,8 @@ public class BaseTestSuite extends ITestSuite {
     private boolean mIgnoreNonPreloadedMainlineModule = false;
 
     private SuiteModuleLoader mModuleRepo;
-    private Map<String, List<SuiteTestFilter>> mIncludeFiltersParsed = new HashMap<>();
-    private Map<String, List<SuiteTestFilter>> mExcludeFiltersParsed = new HashMap<>();
+    private Map<String, List<SuiteTestFilter>> mIncludeFiltersParsed = new LinkedHashMap<>();
+    private Map<String, List<SuiteTestFilter>> mExcludeFiltersParsed = new LinkedHashMap<>();
     private List<File> mConfigPaths = new ArrayList<>();
 
     /** {@inheritDoc} */
@@ -219,6 +226,15 @@ public class BaseTestSuite extends ITestSuite {
             File testsDir = getTestsDir();
             setupFilters(testsDir);
             Set<IAbi> abis = getAbis(getDevice());
+
+            if (mReverseExcludeFilters) {
+                if (mExcludeFilters.isEmpty()) {
+                    return new LinkedHashMap<String, IConfiguration>();
+                }
+                mIncludeFilters.clear();
+                mIncludeFilters.addAll(mExcludeFilters);
+                mExcludeFilters.clear();
+            }
 
             // Create and populate the filters here
             SuiteModuleLoader.addFilters(mIncludeFilters, mIncludeFiltersParsed, abis);

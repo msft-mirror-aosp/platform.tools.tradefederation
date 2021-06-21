@@ -213,4 +213,25 @@ public interface ICommandOptions {
 
     /** Returns the map of args to pass to the dynamic download query. */
     public Map<String, String> getDynamicDownloadArgs();
+
+    /** Whether or not to report the number of test cases per test types. */
+    public boolean reportTestCaseCount();
+
+    /** Set whether or not to report test cases count per test types. */
+    public void setReportTestCaseCount(boolean report);
+
+    /** Whether or not to report passed test cases. */
+    public boolean reportPassedTests();
+
+    /** whether or not to report the logs until invocationComplete. */
+    public boolean reportInvocationComplete();
+
+    /** Set whether or not to report the logs until invocationComplete */
+    public void setReportInvocationComplete(boolean reportInvocationCompleteLogs);
+
+    /**
+     * Returns the maximum number of times to scheduled the command. Has no effect if isLoopMode is
+     * false.
+     */
+    public long getMaxLoopCount();
 }

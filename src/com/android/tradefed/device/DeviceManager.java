@@ -18,10 +18,10 @@ package com.android.tradefed.device;
 
 import com.android.ddmlib.AndroidDebugBridge.IDeviceChangeListener;
 import com.android.ddmlib.DdmPreferences;
-import com.android.ddmlib.EmulatorConsole;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.IDevice.DeviceState;
 import com.android.ddmlib.Log.LogLevel;
+import com.android.ddmlib.PropertyFetcher;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IGlobalConfiguration;
@@ -48,7 +48,6 @@ import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.hostmetric.IHostMonitor;
 
 import com.google.common.annotations.VisibleForTesting;
-
 
 import java.io.File;
 import java.io.IOException;
@@ -93,8 +92,6 @@ public class DeviceManager implements IDeviceManager {
     /* the emulator output log name */
     private static final String EMULATOR_OUTPUT = "emulator_log";
 
-    /** the available device timeout to total command timeout ratio. */
-    private static final double AVAILABLE_DEV_TIMEOUT_RATIO = 0.9;
     /** the max timeout for available device executing command. */
     private static final long AVAILABLE_DEV_TIMEOUT_MAX_MS = 1000;
 
@@ -193,7 +190,7 @@ public class DeviceManager implements IDeviceManager {
             description =
                     "Whether or not to check the file system type as part of device storage "
                             + "readiness")
-    private boolean mMountFileSystemCheckEnabled = false;
+    private boolean mMountFileSystemCheckEnabled = true;
 
     private File mUnpackedFastbootDir = null;
     private File mUnpackedFastboot = null;
@@ -301,6 +298,9 @@ public class DeviceManager implements IDeviceManager {
 
         // don't start adding devices until fastboot support has been established
         startAdbBridgeAndDependentServices();
+        // We change the state of some mutable properties quite often so we can't keep this caching
+        // for our invocations.
+        PropertyFetcher.enableCachingMutableProps(false);
     }
 
     /** Initialize adb connection and services depending on adb connection. */
@@ -496,7 +496,8 @@ public class DeviceManager implements IDeviceManager {
      */
     private void addNullDevices() {
         for (int i = 0; i < mNumNullDevicesSupported; i++) {
-            addAvailableDevice(new NullDevice(String.format("%s-%d", NULL_DEVICE_SERIAL_PREFIX, i)));
+            addAvailableDevice(
+                    new NullDevice(String.format("%s-%d", NULL_DEVICE_SERIAL_PREFIX, i)));
         }
     }
 
@@ -505,10 +506,10 @@ public class DeviceManager implements IDeviceManager {
      */
     private void addEmulators() {
         // TODO currently this means 'additional emulators not already running'
-        int port = 5554;
+        // start at a high port to limit chances of potential port conflicts with existing emulators
+        int port = 5586;
         for (int i = 0; i < mNumEmulatorSupported; i++) {
-            addAvailableDevice(new StubDevice(String.format("%s-%d", EMULATOR_SERIAL_PREFIX, port),
-                    true));
+            addAvailableDevice(new EmulatorDevice(port));
             port += 2;
         }
     }
@@ -598,6 +599,22 @@ public class DeviceManager implements IDeviceManager {
 
         public boolean isFastbootD() {
             return mIsFastbootd;
+        }
+    }
+
+    /** Represents a 'stub' unlaunched emulator */
+    private static class EmulatorDevice extends StubDevice {
+
+        private final int mPort;
+
+        public EmulatorDevice(int port) {
+            super(String.format("emulator-%d", port), true);
+            mPort = port;
+        }
+
+        public EmulatorDevice(String serial) {
+            super(serial, true);
+            mPort = Integer.valueOf(serial.substring("emulator-".length()));
         }
     }
 
@@ -696,11 +713,8 @@ public class DeviceManager implements IDeviceManager {
                 // stop emulator output log
                 device.stopEmulatorOutput();
                 // emulator killed - return a stub device
-                // TODO: this is a bit of a hack. Consider having DeviceManager inject a StubDevice
-                // when deviceDisconnected event is received
-                ideviceToReturn = new StubDevice(ideviceToReturn.getSerialNumber(), true);
+                ideviceToReturn = device.getIDevice();
                 deviceState = FreeDeviceState.AVAILABLE;
-                managedDevice.setIDevice(ideviceToReturn);
             } catch (DeviceNotAvailableException e) {
                 CLog.e(e);
                 deviceState = FreeDeviceState.UNAVAILABLE;
@@ -797,9 +811,10 @@ public class DeviceManager implements IDeviceManager {
     public void launchEmulator(ITestDevice device, long bootTimeout, IRunUtil runUtil,
             List<String> emulatorArgs)
             throws DeviceNotAvailableException {
-        if (!device.getIDevice().isEmulator()) {
-            throw new IllegalStateException(String.format("Device %s is not an emulator",
-                    device.getSerialNumber()));
+        if (!(device.getIDevice() instanceof EmulatorDevice)) {
+            throw new IllegalStateException(
+                    String.format(
+                            "Device %s is not stub emulator device", device.getSerialNumber()));
         }
         if (!device.getDeviceState().equals(TestDeviceState.NOT_AVAILABLE)) {
             throw new IllegalStateException(String.format(
@@ -807,6 +822,9 @@ public class DeviceManager implements IDeviceManager {
                     device.getDeviceState(), TestDeviceState.NOT_AVAILABLE));
         }
         List<String> fullArgs = new ArrayList<String>(emulatorArgs);
+        EmulatorDevice emulatorDevice = (EmulatorDevice) device.getIDevice();
+        fullArgs.add("-port");
+        fullArgs.add(Integer.toString(emulatorDevice.mPort));
 
         try {
             CLog.i("launching emulator with %s", fullArgs.toString());
@@ -848,28 +866,33 @@ public class DeviceManager implements IDeviceManager {
      */
     @Override
     public void killEmulator(ITestDevice device) throws DeviceNotAvailableException {
-        EmulatorConsole console = EmulatorConsole.getConsole(device.getIDevice());
-        if (console != null) {
-            console.kill();
+        try {
+            device.executeAdbCommand("emu", "kill");
+
             // check and wait for device to become not avail
-            device.waitForDeviceNotAvailable(5 * 1000);
+            device.waitForDeviceNotAvailable(10 * 1000);
             // lets ensure process is killed too - fall through
-        } else {
-            CLog.w("Could not get emulator console for %s", device.getSerialNumber());
-        }
-        // lets try killing the process
-        Process emulatorProcess = ((IManagedTestDevice) device).getEmulatorProcess();
-        if (emulatorProcess != null) {
-            emulatorProcess.destroy();
-            if (emulatorProcess.isAlive()) {
-                CLog.w("Emulator process still running after destroy for %s",
-                        device.getSerialNumber());
-                forceKillProcess(emulatorProcess, device.getSerialNumber());
+
+            // lets try killing the process
+            Process emulatorProcess = ((IManagedTestDevice) device).getEmulatorProcess();
+            if (emulatorProcess != null) {
+                emulatorProcess.destroy();
+                if (emulatorProcess.isAlive()) {
+                    CLog.w(
+                            "Emulator process still running after destroy for %s",
+                            device.getSerialNumber());
+                    forceKillProcess(emulatorProcess, device.getSerialNumber());
+                }
             }
-        }
-        if (!device.waitForDeviceNotAvailable(20 * 1000)) {
-            throw new DeviceNotAvailableException(String.format("Failed to kill emulator %s",
-                    device.getSerialNumber()), device.getSerialNumber());
+            if (!device.waitForDeviceNotAvailable(20 * 1000)) {
+                throw new DeviceNotAvailableException(
+                        String.format("Failed to kill emulator %s", device.getSerialNumber()),
+                        device.getSerialNumber());
+            }
+        } finally {
+            // TODO: a more robust solution might be to have the DeviceManager
+            //  do this when deviceDisconnected event is received
+            ((IManagedTestDevice) device).setIDevice(new EmulatorDevice(device.getSerialNumber()));
         }
     }
 
@@ -1046,15 +1069,22 @@ public class DeviceManager implements IDeviceManager {
     @Override
     public synchronized void terminateDeviceMonitor() {
         mDvcMon.stop();
+        mDvcMonRunning = false;
     }
 
     /** {@inheritDoc} */
     @Override
     public synchronized void terminateHard() {
+        terminateHard("No reason given.");
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void terminateHard(String reason) {
         checkInit();
         if (!mIsTerminated ) {
             for (IManagedTestDevice device : mManagedDeviceList) {
-                device.setRecovery(new AbortRecovery());
+                device.setRecovery(new AbortRecovery(reason));
             }
             mAdbBridge.disconnectBridge();
             terminate();
@@ -1063,6 +1093,12 @@ public class DeviceManager implements IDeviceManager {
 
     private static class AbortRecovery implements IDeviceRecovery {
 
+        private String mMessage;
+
+        AbortRecovery(String reason) {
+            mMessage = "aborted test session: " + reason;
+        }
+
         /**
          * {@inheritDoc}
          */
@@ -1070,9 +1106,7 @@ public class DeviceManager implements IDeviceManager {
         public void recoverDevice(IDeviceStateMonitor monitor, boolean recoverUntilOnline)
                 throws DeviceNotAvailableException {
             throw new DeviceNotAvailableException(
-                    "aborted test session",
-                    monitor.getSerialNumber(),
-                    InfraErrorIdentifier.INVOCATION_CANCELLED);
+                    mMessage, monitor.getSerialNumber(), InfraErrorIdentifier.INVOCATION_CANCELLED);
         }
 
         /**
@@ -1082,9 +1116,7 @@ public class DeviceManager implements IDeviceManager {
         public void recoverDeviceBootloader(IDeviceStateMonitor monitor)
                 throws DeviceNotAvailableException {
             throw new DeviceNotAvailableException(
-                    "aborted test session",
-                    monitor.getSerialNumber(),
-                    InfraErrorIdentifier.INVOCATION_CANCELLED);
+                    mMessage, monitor.getSerialNumber(), InfraErrorIdentifier.INVOCATION_CANCELLED);
         }
 
         /**
@@ -1094,9 +1126,7 @@ public class DeviceManager implements IDeviceManager {
         public void recoverDeviceRecovery(IDeviceStateMonitor monitor)
                 throws DeviceNotAvailableException {
             throw new DeviceNotAvailableException(
-                    "aborted test session",
-                    monitor.getSerialNumber(),
-                    InfraErrorIdentifier.INVOCATION_CANCELLED);
+                    mMessage, monitor.getSerialNumber(), InfraErrorIdentifier.INVOCATION_CANCELLED);
         }
 
         /** {@inheritDoc} */
@@ -1104,9 +1134,7 @@ public class DeviceManager implements IDeviceManager {
         public void recoverDeviceFastbootd(IDeviceStateMonitor monitor)
                 throws DeviceNotAvailableException {
             throw new DeviceNotAvailableException(
-                    "aborted test session",
-                    monitor.getSerialNumber(),
-                    InfraErrorIdentifier.INVOCATION_CANCELLED);
+                    mMessage, monitor.getSerialNumber(), InfraErrorIdentifier.INVOCATION_CANCELLED);
         }
     }
 

@@ -25,6 +25,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.LocalAndroidVirtualDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -47,9 +48,10 @@ import com.android.tradefed.util.SubprocessTestResultsParser;
 import com.android.tradefed.util.SystemUtil;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -58,6 +60,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A {@link IRemoteTest} class to launch a command from TFC via a subprocess TF. FIXME: this needs
@@ -70,8 +74,9 @@ public class ClusterCommandLauncher
     public static final String TF_JAR_DIR = "TF_JAR_DIR";
     public static final String TF_PATH = "TF_PATH";
     public static final String TEST_WORK_DIR = "TEST_WORK_DIR";
+    public static final String ANDROID_SERIALS = "ANDROID_SERIALS";
 
-    private static final Duration MAX_EVENT_RECEIVER_WAIT_TIME = Duration.ofMinutes(10);
+    private static final Duration MAX_EVENT_RECEIVER_WAIT_TIME = Duration.ofMinutes(30);
 
     @Option(name = "root-dir", description = "A root directory", mandatory = true)
     private File mRootDir;
@@ -146,6 +151,8 @@ public class ClusterCommandLauncher
         for (final String key : mEnvVars.keySet()) {
             runUtil.setEnvVariable(key, getEnvVar(key));
         }
+        // Add device serials to env var.
+        runUtil.setEnvVariable(ANDROID_SERIALS, String.join(",", mInvocationContext.getSerials()));
 
         final File testWorkDir = new File(getEnvVar(TEST_WORK_DIR, mRootDir.getAbsolutePath()));
         final File logDir = new File(mRootDir, "logs");
@@ -158,9 +165,7 @@ public class ClusterCommandLauncher
 
         FileIdleMonitor monitor = createFileMonitor(stdoutFile, stderrFile);
         SubprocessTestResultsParser subprocessEventParser = null;
-        try (FileOutputStream stdout = new FileOutputStream(stdoutFile);
-                FileOutputStream stderr = new FileOutputStream(stderrFile)) {
-
+        try {
             String classpath = buildJavaClasspath();
 
             // TODO(b/129111645): use proto reporting if a test suite supports it.
@@ -186,10 +191,11 @@ public class ClusterCommandLauncher
             monitor.start();
             runUtil.setWorkingDir(testWorkDir);
             CommandResult result =
-                    runUtil.runTimedCmd(
+                    runUtil.runTimedCmdWithInput(
                             mConfiguration.getCommandOptions().getInvocationTimeout(),
-                            stdout,
-                            stderr,
+                            null,
+                            stdoutFile,
+                            stderrFile,
                             javaCommandArgs.toArray(new String[javaCommandArgs.size()]));
             if (!result.getStatus().equals(CommandStatus.SUCCESS)) {
                 String error = null;
@@ -230,19 +236,23 @@ public class ClusterCommandLauncher
 
     private void runSetupScripts(
             final IRunUtil runUtil, final File stdoutFile, final File stderrFile) {
-        try (FileOutputStream stdout = new FileOutputStream(stdoutFile);
-                FileOutputStream stderr = new FileOutputStream(stderrFile)) {
+        try {
             long timeout = mScriptTimeout;
             long startTime = System.currentTimeMillis();
             for (String script : mSetupScripts) {
                 script = StringUtil.expand(script, mEnvVars);
                 CLog.i("Running a setup script: %s", script);
+                File scriptFile = new File(QuotationAwareTokenizer.tokenizeLine(script)[0]);
+                if (scriptFile.isFile()) {
+                    scriptFile.setExecutable(true);
+                }
                 // FIXME: Refactor command execution into a helper function.
                 CommandResult result =
-                        runUtil.runTimedCmd(
+                        runUtil.runTimedCmdWithInput(
                                 timeout,
-                                stdout,
-                                stderr,
+                                null,
+                                stdoutFile,
+                                stderrFile,
                                 QuotationAwareTokenizer.tokenizeLine(script));
                 if (!result.getStatus().equals(CommandStatus.SUCCESS)) {
                     String error = null;
@@ -286,9 +296,16 @@ public class ClusterCommandLauncher
             if (jarFile.isFile()) {
                 jars.add(jarFile.getAbsolutePath());
             } else {
-                // Add a folder path to the classpath to handle class file directories.
-                jars.add(jarFile.getAbsolutePath() + "/");
-                jars.add(new File(path, "*").getAbsolutePath());
+                try (Stream<Path> walk = Files.walk(jarFile.toPath())) {
+                    List<String> result =
+                            walk.map(p -> p.toString())
+                                    .filter(f -> f.toLowerCase().endsWith(".jar"))
+                                    .collect(Collectors.toList());
+                    jars.addAll(result);
+                } catch (IOException e) {
+                    throw new RuntimeException(
+                            String.format("failed to find jars from %s", jarFile), e);
+                }
             }
         }
         if (jars.isEmpty()) {
@@ -343,23 +360,34 @@ public class ClusterCommandLauncher
         long timeout = mOutputIdleTimeout > 0 ? mOutputIdleTimeout : Long.MAX_VALUE;
         // reset USB ports if files are idle for too long
         // TODO(peykov): consider making the callback customizable
-        return new FileIdleMonitor(Duration.ofMillis(timeout), this::resetUsbPorts, files);
+        return new FileIdleMonitor(Duration.ofMillis(timeout), this::resetDevices, files);
     }
 
-    /** Performs a USB port reset on all devices. */
-    private void resetUsbPorts() {
-        CLog.i("Subprocess output idle for %d ms, attempting USB port reset.", mOutputIdleTimeout);
+    /** Performs reset on all devices. */
+    private void resetDevices() {
+        CLog.i("Subprocess output idle for %d ms, attempting device reset.", mOutputIdleTimeout);
         try (UsbHelper usb = new UsbHelper()) {
-            for (String serial : mInvocationContext.getSerials()) {
-                try (UsbDevice device = usb.getDevice(serial)) {
-                    if (device == null) {
-                        CLog.w("Device '%s' not found during USB reset.", serial);
-                        continue;
-                    }
-                    CLog.d("Resetting USB port for device '%s'", serial);
-                    device.reset();
+            List<ITestDevice> devices = mInvocationContext.getDevices();
+            for (ITestDevice device : devices) {
+                if (device instanceof LocalAndroidVirtualDevice) {
+                    CLog.d("Shutting down local virtual device '%s'", device.getSerialNumber());
+                    ((LocalAndroidVirtualDevice) device).shutdown();
+                } else {
+                    resetUsbPort(usb, device.getSerialNumber());
                 }
             }
+        }
+    }
+
+    /** Performs a USB port reset on a device. */
+    private void resetUsbPort(UsbHelper usb, String serial) {
+        try (UsbDevice device = usb.getDevice(serial)) {
+            if (device == null) {
+                CLog.w("Device '%s' not found during USB reset.", serial);
+                return;
+            }
+            CLog.d("Resetting USB port for device '%s'", serial);
+            device.reset();
         }
     }
 

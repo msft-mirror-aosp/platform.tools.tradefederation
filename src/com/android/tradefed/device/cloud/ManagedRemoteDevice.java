@@ -37,8 +37,10 @@ import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -72,15 +74,14 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
     }
 
     @Override
-    public void preInvocationSetup(IBuildInfo info)
+    public void preInvocationSetup(IBuildInfo info, MultiMap<String, String> attributes)
             throws TargetSetupError, DeviceNotAvailableException {
-        super.preInvocationSetup(info);
+        super.preInvocationSetup(info, attributes);
         mGceAvd = null;
         // First get the options
         TestDeviceOptions options = getOptions();
         // We create a brand new GceManager each time to ensure clean state.
         mGceHandler = new GceManager(getDeviceDescriptor(), options, info);
-        getGceHandler().logStableHostImageInfos(info);
         setFastbootEnabled(false);
 
         // Launch GCE helper script.
@@ -175,10 +176,12 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
         } else {
             CLog.i("GCE AVD has been started: %s", mGceAvd);
             if (GceAvdInfo.GceStatus.BOOT_FAIL.equals(mGceAvd.getStatus())) {
+                ErrorIdentifier errorIdentifier =
+                        (mGceAvd.getErrorType() != null)
+                                ? mGceAvd.getErrorType()
+                                : DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE;
                 throw new TargetSetupError(
-                        mGceAvd.getErrors(),
-                        getDeviceDescriptor(),
-                        DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE);
+                        mGceAvd.getErrors(), getDeviceDescriptor(), errorIdentifier);
             }
         }
     }

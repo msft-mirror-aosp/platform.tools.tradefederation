@@ -52,7 +52,7 @@ final class IsolationResultForwarder extends RunListener {
                 .setTestEvent(
                         JUnitEvent.newBuilder()
                                 .setTopic(Topic.TOPIC_FAILURE)
-                                .setMessage(failure.getMessage())
+                                .setMessage(failure.getTrace())
                                 .setMethodName(desc.getMethodName())
                                 .setClassName(desc.getClassName())
                                 .setEndTime(System.currentTimeMillis())
@@ -78,7 +78,7 @@ final class IsolationResultForwarder extends RunListener {
                     .build()
                     .writeDelimitedTo(mOutput);
         } catch (Exception e) {
-
+            System.out.println(e);
         }
     }
 

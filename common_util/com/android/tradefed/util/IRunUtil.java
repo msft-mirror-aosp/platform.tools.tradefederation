@@ -17,6 +17,7 @@
 package com.android.tradefed.util;
 
 import com.android.annotations.Nullable;
+import com.android.tradefed.result.error.ErrorIdentifier;
 
 import java.io.File;
 import java.io.IOException;
@@ -181,6 +182,20 @@ public interface IRunUtil {
     CommandResult runTimedCmdWithInput(long timeout, String input, List<String> command);
 
     /**
+     * Helper method to execute a system command, abort if it takes longer than a specified time,
+     * and redirect output to files if specified.
+     *
+     * @param timeout timeout maximum time to wait in ms. 0 means no timeout.
+     * @param input the stdin input to pass to process
+     * @param command the specified system command and optionally arguments to exec
+     * @param stdoutFile {@link File} where the std output will be redirected. Can be null.
+     * @param stderrFile {@link File} where the error output will be redirected. Can be null.
+     * @return a {@link CommandResult} containing result from command run
+     */
+    public CommandResult runTimedCmdWithInput(
+            long timeout, String input, File stdoutFile, File stderrFile, final String... command);
+
+    /**
      * Helper method to execute a system command that requires redirecting Stdin from a file, and
      * aborting if it takes longer than a specified time.
      *
@@ -342,6 +357,16 @@ public interface IRunUtil {
      * @param message the message for {@link RunInterruptedException}.
      */
     public void interrupt(Thread thread, String message);
+
+    /**
+     * Interrupts the ongoing/forthcoming run operations on the given thread. The run operations on
+     * the given thread will throw {@link RunInterruptedException}.
+     *
+     * @param thread
+     * @param message the message for {@link RunInterruptedException}.
+     * @param errorId Representing the cause of the interruption when known.
+     */
+    public void interrupt(Thread thread, String message, ErrorIdentifier errorId);
 
     /**
      * Decide whether or not when creating a process, unsetting environment variable is higher

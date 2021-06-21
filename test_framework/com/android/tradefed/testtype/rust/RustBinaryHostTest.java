@@ -16,6 +16,7 @@
 package com.android.tradefed.testtype.rust;
 
 import com.android.annotations.VisibleForTesting;
+import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.Option;
@@ -28,6 +29,7 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.util.CommandResult;
@@ -49,6 +51,7 @@ import java.util.Set;
 public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     static final String RUST_LOG_STDERR_FORMAT = "%s-stderr";
+    static final String RUST_LOG_STDOUT_FORMAT = "%s-stdout";
 
     @Option(name = "test-file", description = "The test file name or file path.")
     private Set<String> mBinaryNames = new HashSet<>();
@@ -136,32 +139,49 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         // Duplicated test cases selected by different include filters should not be counted.
         Set<String> foundTests = new HashSet<>();
         for (String filter : includeFilters) {
-            countTests(file, filter, foundTests);
+            boolean success = countTests(file, filter, foundTests);
+            if (!success) {
+                FailureDescription failure =
+                        FailureDescription.create(
+                                "Could not count the number of tests", FailureStatus.TEST_FAILURE);
+                listener.testRunStarted(file.getName(), 0);
+                listener.testRunFailed(failure);
+                listener.testRunEnded(0, new HashMap<String, Metric>());
+                CLog.e(failure.getErrorMessage());
+                return;
+            }
         }
         int testCount = foundTests.size();
         CLog.d("Total test count: %d", testCount);
         long startTimeMs = System.currentTimeMillis();
         listener.testRunStarted(file.getName(), testCount, 0, startTimeMs);
-        for (String filter : includeFilters) {
-            try {
-                runTestWithFilter(listener, file, filter);
-            } catch (IOException e) {
-                listener.testRunFailed(e.getMessage());
-                long testTimeMs = System.currentTimeMillis() - startTimeMs;
-                listener.testRunEnded(testTimeMs, new HashMap<String, Metric>());
-                throw new RuntimeException(e);
+        if (testCount > 0) {
+            for (String filter : includeFilters) {
+                try {
+                    runTestWithFilter(listener, file, filter);
+                } catch (IOException e) {
+                    listener.testRunFailed(e.getMessage());
+                    long testTimeMs = System.currentTimeMillis() - startTimeMs;
+                    listener.testRunEnded(testTimeMs, new HashMap<String, Metric>());
+                    throw new RuntimeException(e);
+                }
             }
         }
         long testTimeMs = System.currentTimeMillis() - startTimeMs;
         listener.testRunEnded(testTimeMs, new HashMap<String, Metric>());
     }
 
-    private void countTests(File file, String filter, Set<String> foundTests) {
+    private boolean countTests(File file, String filter, Set<String> foundTests) {
         CLog.d("Count with filter '%s' for Rust File: %s", filter, file.getAbsolutePath());
         List<String> commandLine = new ArrayList<>();
         commandLine.add(file.getAbsolutePath());
         commandLine.addAll(mTestOptions);
         addFiltersToArgs(commandLine, filter);
+
+        // Pass parameter to criterion so it performs the benchmarking.
+        if (mIsBenchmark) {
+            commandLine.add("--bench");
+        }
 
         List<String> listCommandLine = new ArrayList<>(commandLine);
         listCommandLine.add("--list");
@@ -173,11 +193,13 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         // overall failure, but we don't know how to parse arbitrary test
         // harness results.
         if (listResult.getStatus() == CommandStatus.SUCCESS) {
-            collectTestLines(listResult.getStdout().split("\n"), foundTests);
+            collectTestLines(listResult.getStdout().split("\n"), foundTests, mIsBenchmark);
+            return true;
         } else {
             CLog.w(
                     "Could not run command '%s' to get test list.",
                     String.join(" ", listCommandLine));
+            return false;
         }
     }
 
@@ -188,6 +210,14 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         commandLine.add(file.getAbsolutePath());
         commandLine.addAll(mTestOptions);
         addFiltersToArgs(commandLine, filter);
+
+        // Pass parameter to criterion so it performs the benchmarking.
+        if (mIsBenchmark) {
+            commandLine.add("--bench");
+            commandLine.add("--color");
+            commandLine.add("never");
+        }
+
         CLog.d("Running test with filter '%s'", filter);
         CommandResult result =
                 getRunUtil().runTimedCmd(mTestTimeout, commandLine.toArray(new String[0]));
@@ -198,7 +228,8 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                                     + "\nstdout: %s\nstderr: %s",
                             result.getExitCode(), result.getStdout(), result.getStderr());
             FailureDescription failure =
-                    FailureDescription.create(message, FailureStatus.TEST_FAILURE);
+                    FailureDescription.create(message, FailureStatus.TEST_FAILURE)
+                            .setErrorIdentifier(TestErrorIdentifier.TEST_BINARY_EXIT_CODE_ERROR);
             listener.testRunFailed(failure);
             CLog.e(message);
         }
@@ -206,15 +237,23 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         File resultFile = null;
         try {
             resultFile = FileUtil.createTempFile("rust-res", ".txt");
-            FileUtil.writeToFile(result.getStderr(), resultFile);
-            try (FileInputStreamSource data = new FileInputStreamSource(resultFile)) {
-                listener.testLog(
-                        String.format(RUST_LOG_STDERR_FORMAT, runName), LogDataType.TEXT, data);
+            if (result.getStderr().length() > 0) {
+                FileUtil.writeToFile(result.getStderr(), resultFile);
+                try (FileInputStreamSource data = new FileInputStreamSource(resultFile)) {
+                    listener.testLog(
+                            String.format(RUST_LOG_STDERR_FORMAT, runName), LogDataType.TEXT, data);
+                }
             }
-            String[] lines = result.getStdout().split("\n");
-            RustTestResultParser parser = new RustTestResultParser(listener, runName);
-            parser.processNewLines(lines);
-            parser.done();
+            if (result.getStdout().length() > 0) {
+                FileUtil.writeToFile(result.getStdout(), resultFile);
+                try (FileInputStreamSource data = new FileInputStreamSource(resultFile)) {
+                    listener.testLog(
+                            String.format(RUST_LOG_STDOUT_FORMAT, runName), LogDataType.TEXT, data);
+                }
+            }
+            IShellOutputReceiver parser = createParser(listener, runName, mIsBenchmark);
+            parser.addOutput(result.getStdout().getBytes(), 0, result.getStdout().length());
+            parser.flush();
         } catch (RuntimeException e) {
             listener.testRunFailed(
                     String.format("Failed to parse the rust test output: %s", e.getMessage()));
