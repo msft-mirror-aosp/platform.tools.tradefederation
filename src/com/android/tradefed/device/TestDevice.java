@@ -362,17 +362,34 @@ public class TestDevice extends NativeDevice {
     @Override
     public String uninstallPackage(final String packageName) throws DeviceNotAvailableException {
         // use array to store response, so it can be returned to caller
+        return uninstallPackage(packageName, /* extraArgs= */ null);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String uninstallPackageForUser(final String packageName, int userId)
+            throws DeviceNotAvailableException {
+        return uninstallPackage(packageName, "--user " + userId);
+    }
+
+    private String uninstallPackage(String packageName, @Nullable String extraArgs)
+            throws DeviceNotAvailableException {
+        final String finalExtraArgs = (extraArgs == null) ? "" : extraArgs;
+
+        // use array to store response, so it can be returned to caller
         final String[] response = new String[1];
-        DeviceAction uninstallAction = new DeviceAction() {
-            @Override
-            public boolean run() throws InstallException {
-                CLog.d("Uninstalling %s", packageName);
-                String result = getIDevice().uninstallPackage(packageName);
-                response[0] = result;
-                return result == null;
-            }
-        };
-        performDeviceAction(String.format("uninstall %s", packageName), uninstallAction,
+        DeviceAction uninstallAction =
+                () -> {
+                    CLog.d("Uninstalling %s with extra args %s", packageName, finalExtraArgs);
+
+                    String result = getIDevice().uninstallApp(packageName, finalExtraArgs);
+                    response[0] = result;
+                    return result == null;
+                };
+
+        performDeviceAction(
+                String.format("uninstall %s with extra args %s", packageName, finalExtraArgs),
+                uninstallAction,
                 MAX_RETRY_ATTEMPTS);
         return response[0];
     }
@@ -829,7 +846,8 @@ public class TestDevice extends NativeDevice {
         Pattern anrPattern = Pattern.compile(".*notResponding=true.*AppNotRespondingDialog.*");
         String systemStatusOutput =
                 executeShellCommand(
-                        "dumpsys activity processes | grep -e .*crashing=true.*AppErrorDialog.* -e .*notResponding=true.*AppNotRespondingDialog.*");
+                        "dumpsys activity processes | grep -e .*crashing=true.*AppErrorDialog.* -e"
+                                + " .*notResponding=true.*AppNotRespondingDialog.*");
         Matcher crashMatcher = crashPattern.matcher(systemStatusOutput);
         while (crashMatcher.find()) {
             errorDialogCount++;
@@ -1576,10 +1594,15 @@ public class TestDevice extends NativeDevice {
         if (!feature.startsWith("feature:")) {
             feature = "feature:" + feature;
         }
+        final String versionedFeature = feature + "=";
         String commandOutput = executeShellCommand("pm list features");
         for (String line: commandOutput.split("\\s+")) {
-            // Each line in the output of the command has the format "feature:{FEATURE_VALUE}".
-            if (feature.equals(line)) {
+            // Each line in the output of the command has the format
+            // "feature:{FEATURE_VALUE}[={FEATURE_VERSION}]".
+            if (line.equals(feature)) {
+                return true;
+            }
+            if (line.startsWith(versionedFeature)) {
                 return true;
             }
         }
@@ -1904,8 +1927,6 @@ public class TestDevice extends NativeDevice {
     @Override
     public Set<Long> listDisplayIds() throws DeviceNotAvailableException {
         Set<Long> displays = new HashSet<>();
-        // Zero is the default display
-        displays.add(0L);
         CommandResult res = executeShellV2Command("dumpsys SurfaceFlinger | grep 'color modes:'");
         if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
             CLog.e("Something went wrong while listing displays: %s", res.getStderr());
@@ -1919,6 +1940,15 @@ public class TestDevice extends NativeDevice {
                 displays.add(Long.parseLong(m.group("id")));
             }
         }
+
+        // If the device is older and did not report any displays
+        // then add the default.
+        // Note: this assumption breaks down if the device also has multiple displays
+        if (displays.isEmpty()) {
+            // Zero is the default display
+            displays.add(0L);
+        }
+
         return displays;
     }
 }
