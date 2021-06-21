@@ -31,7 +31,6 @@ import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
@@ -224,6 +223,7 @@ public class InvocationExecution implements IInvocationExecution {
     public void doSetup(TestInformation testInfo, IConfiguration config, final ITestLogger listener)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         long start = System.currentTimeMillis();
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_START, start);
         try {
             // Before all the individual setup, make the multi-pre-target-preparer devices setup
             runMultiTargetPreparers(
@@ -290,7 +290,9 @@ public class InvocationExecution implements IInvocationExecution {
         } finally {
             // Note: These metrics are handled in a try in case of a kernel reset or device issue.
             // Setup timing metric. It does not include flashing time on boot tests.
-            long setupDuration = System.currentTimeMillis() - start;
+            long end = System.currentTimeMillis();
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_END, end);
+            long setupDuration = end - start;
             InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP, setupDuration);
             CLog.d("Setup duration: %s'", TimeUtil.formatElapsedTime(setupDuration));
             // Upload the setup logcat after setup is complete.
@@ -339,7 +341,7 @@ public class InvocationExecution implements IInvocationExecution {
 
     /** {@inheritDoc} */
     @Override
-    public final void runDevicePreInvocationSetup(
+    public void runDevicePreInvocationSetup(
             IInvocationContext context, IConfiguration config, ITestLogger logger)
             throws DeviceNotAvailableException, TargetSetupError {
         customizeDevicePreInvocation(config, context);
@@ -350,7 +352,7 @@ public class InvocationExecution implements IInvocationExecution {
             if (device instanceof ITestLoggerReceiver) {
                 ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
             }
-            device.preInvocationSetup(context.getBuildInfo(deviceName));
+            device.preInvocationSetup(context.getBuildInfo(deviceName), context.getAttributes());
         }
     }
 
@@ -366,7 +368,7 @@ public class InvocationExecution implements IInvocationExecution {
 
     /** {@inheritDoc} */
     @Override
-    public final void runDevicePostInvocationTearDown(
+    public void runDevicePostInvocationTearDown(
             IInvocationContext context, IConfiguration config, Throwable exception) {
         // Extra tear down step for the device
         for (String deviceName : context.getDeviceConfigNames()) {
@@ -453,7 +455,10 @@ public class InvocationExecution implements IInvocationExecution {
             Throwable exception)
             throws Throwable {
         IInvocationContext context = testInfo.getContext();
-        Throwable deferredThrowable = null;
+        Throwable deferredThrowable;
+
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.TEARDOWN_START, System.currentTimeMillis());
 
         List<IMultiTargetPreparer> multiPreparers = config.getMultiTargetPreparers();
         deferredThrowable =
@@ -531,7 +536,10 @@ public class InvocationExecution implements IInvocationExecution {
         }
 
         // Collect adb logs.
-        logHostAdb(logger);
+        logHostAdb(config, logger);
+
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.TEARDOWN_END, System.currentTimeMillis());
 
         if (deferredThrowable != null) {
             throw deferredThrowable;
@@ -660,10 +668,9 @@ public class InvocationExecution implements IInvocationExecution {
             return;
         }
         IDevice idevice = device.getIDevice();
-        // non stub device
-        if (!(idevice instanceof StubDevice)) {
-            try (InputStreamSource logcatSource = device.getLogcat()) {
-                device.clearLogcat();
+        try (InputStreamSource logcatSource = device.getLogcat()) {
+            device.clearLogcat();
+            if (logcatSource != null && logcatSource.size() > 0L) {
                 String name =
                         String.format(
                                 "%s_%s",
@@ -671,7 +678,7 @@ public class InvocationExecution implements IInvocationExecution {
                 listener.testLog(name, LogDataType.LOGCAT, logcatSource);
             }
         }
-        // emulator logs
+        // Emulator logs
         if (idevice != null && idevice.isEmulator()) {
             try (InputStreamSource emulatorOutput = device.getEmulatorOutput()) {
                 // TODO: Clear the emulator log
@@ -901,7 +908,11 @@ public class InvocationExecution implements IInvocationExecution {
 
     /** Collect the logs from $TMPDIR/adb.$UID.log. */
     @VisibleForTesting
-    void logHostAdb(ITestLogger logger) {
+    protected void logHostAdb(IConfiguration config, ITestLogger logger) {
+        if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
+            // Avoid relogging the adb log in a subprocess
+            return;
+        }
         String tmpDir = "/tmp";
         if (System.getenv("TMPDIR") != null) {
             tmpDir = System.getenv("TMPDIR");

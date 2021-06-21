@@ -31,6 +31,7 @@ import com.android.ddmlib.TimeoutException;
 import com.android.ddmlib.log.LogReceiver;
 import com.android.sdklib.AndroidVersion;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
 import java.io.File;
@@ -269,6 +270,12 @@ public class StubDevice implements IDevice, Serializable {
     @Override
     public void installPackages(List<File> apkFilePaths, boolean reinstall, List<String> extraArgs,
             long timeOutInMs, TimeUnit timeunit) throws InstallException {
+        throw new InstallException(new IOException("stub"));
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String uninstallApp(String applicationID, String... extraArgs) throws InstallException {
         throw new InstallException(new IOException("stub"));
     }
 
@@ -544,11 +551,9 @@ public class StubDevice implements IDevice, Serializable {
         return true;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public Future<String> getSystemProperty(String name) {
+    public ListenableFuture<String> getSystemProperty(String name) {
         SettableFuture<String> f = SettableFuture.create();
         f.set(null);
         return f;

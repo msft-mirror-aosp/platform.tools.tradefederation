@@ -81,6 +81,9 @@ public class CommandOptions implements ICommandOptions {
             importance = Importance.ALWAYS)
     private boolean mLoopMode = false;
 
+    @Option(name = "max-loops", description = "the maximum number of loops.")
+    private long mMaxLoopCount = Long.MAX_VALUE;
+
     @Option(name = "all-devices", description =
             "fork this command to run on all connected devices.")
     private boolean mAllDevices = false;
@@ -236,6 +239,16 @@ public class CommandOptions implements ICommandOptions {
             description = "Whether or not to report the number of test cases per test types.")
     private boolean mCountTestCases = true;
 
+    @Option(
+            name = "report-passed-tests",
+            description = "Whether or not to report the passed tests in a file.")
+    private boolean mReportPassedTests = true;
+
+    @Option(
+            name = "report-invocation-complete-logs",
+            description = "Whether or not to attempt to report the logs until invocationComplete.")
+    private boolean mReportInvocationCompleteLogs = false;
+
     /**
      * Set the help mode for the config.
      * <p/>
@@ -319,6 +332,10 @@ public class CommandOptions implements ICommandOptions {
         return mMinLoopTime;
     }
 
+    @Override
+    public long getMaxLoopCount() {
+        return mMaxLoopCount;
+    }
 
     @Override
     public ICommandOptions clone() {
@@ -595,5 +612,23 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public void setReportTestCaseCount(boolean report) {
         mCountTestCases = report;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean reportPassedTests() {
+        return mReportPassedTests;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean reportInvocationComplete() {
+        return mReportInvocationCompleteLogs;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setReportInvocationComplete(boolean reportInvocationCompleteLogs) {
+        mReportInvocationCompleteLogs = reportInvocationCompleteLogs;
     }
 }

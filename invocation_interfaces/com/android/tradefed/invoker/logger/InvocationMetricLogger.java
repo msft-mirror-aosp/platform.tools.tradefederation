@@ -38,13 +38,33 @@ public class InvocationMetricLogger {
         // -- Disk memory usage --
         // Approximate peak disk space usage of the invocation
         // Represent files that would usually live for the full invocation (min usage)
-        TEAR_DOWN_DISK_USAGE("teardown_disk_usage", false),
+        TEAR_DOWN_DISK_USAGE("teardown_disk_usage_bytes", false),
         // Represents the time we spend attempting to recover a device.
         RECOVERY_TIME("recovery_time", true),
         // Represents how often we enter the recover device routine.
         RECOVERY_ROUTINE_COUNT("recovery_routine_count", true),
+        // Represents the time we spend attempting to "adb root" a device.
+        ADB_ROOT_TIME("adb_root_time", true),
+        // Represents how often we enter the "adb root" device routine.
+        ADB_ROOT_ROUTINE_COUNT("adb_root_routine_count", true),
+        // Represents the time we spend pulling file from device.
+        PULL_FILE_TIME("pull_file_time_ms", true),
+        // Represents how many times we pulled file from the device.
+        PULL_FILE_COUNT("pull_file_count", true),
+        // Represents the time we spend pushing file from device.
+        PUSH_FILE_TIME("push_file_time_ms", true),
+        // Represents how many times we pushed file from the device.
+        PUSH_FILE_COUNT("push_file_count", true),
+        // Track if soft restart is occurring after test module
+        SOFT_RESTART_AFTER_MODULE("soft_restart_after_module", true),
+        CLOUD_DEVICE_PROJECT("cloud_device_project", false),
+        CLOUD_DEVICE_MACHINE_TYPE("cloud_device_machine_type", false),
+        CLOUD_DEVICE_ZONE("cloud_device_zone", false),
+        CLOUD_DEVICE_STABLE_HOST_IMAGE("stable_host_image_name", false),
+        CLOUD_DEVICE_STABLE_HOST_IMAGE_PROJECT("stable_host_image_project", false),
 
         SHUTDOWN_HARD_LATENCY("shutdown_hard_latency_ms", false),
+        DEVICE_COUNT("device_count", false),
         DEVICE_DONE_TIMESTAMP("device_done_timestamp", false),
         DEVICE_RELEASE_STATE("device_release_state", false),
         DEVICE_LOST_DETECTED("device_lost_detected", false),
@@ -65,7 +85,15 @@ public class InvocationMetricLogger {
         DEVICE_RESET_COUNT("device_reset_count", true),
         DEVICE_RESET_MODULES("device_reset_modules", true),
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
-        PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true);
+        PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
+        INVOCATION_START("tf_invocation_start_timestamp", false),
+        FETCH_BUILD_START("tf_fetch_build_start_timestamp", false),
+        FETCH_BUILD_END("tf_fetch_build_end_timestamp", false),
+        SETUP_START("tf_setup_start_timestamp", false),
+        SETUP_END("tf_setup_end_timestamp", false),
+        TEARDOWN_START("tf_teardown_start_timestamp", false),
+        TEARDOWN_END("tf_teardown_end_timestamp", false),
+        INVOCATION_END("tf_invocation_end_timestamp", false);
 
         private final String mKeyName;
         // Whether or not to add the value when the key is added again.
