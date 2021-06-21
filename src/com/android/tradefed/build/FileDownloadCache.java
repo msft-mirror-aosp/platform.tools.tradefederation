@@ -414,7 +414,7 @@ public class FileDownloadCache {
                     "Creating hardlink '%s' to '%s'",
                     hardlinkFile.getAbsolutePath(), cachedFile.getAbsolutePath());
             if (cachedFile.isDirectory()) {
-                FileUtil.recursiveHardlink(cachedFile, hardlinkFile);
+                FileUtil.recursiveHardlink(cachedFile, hardlinkFile, false);
             } else {
                 FileUtil.hardlinkFile(cachedFile, hardlinkFile);
             }

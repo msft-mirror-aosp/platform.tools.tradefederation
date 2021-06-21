@@ -224,7 +224,7 @@ public class BuildInfo implements IBuildInfo {
             File copyFile;
             if (origFile.isDirectory()) {
                 copyFile = FileUtil.createTempDir(fileEntry.getKey());
-                FileUtil.recursiveHardlink(origFile, copyFile);
+                FileUtil.recursiveHardlink(origFile, copyFile, false);
             } else {
                 // Only using createTempFile to create a unique dest filename
                 copyFile = FileUtil.createTempFile(fileEntry.getKey(),
@@ -630,8 +630,10 @@ public class BuildInfo implements IBuildInfo {
             // Restore the original type of build info.
             try {
                 buildInfo =
-                        (BuildInfo)
-                                Class.forName(buildClass).getDeclaredConstructor().newInstance();
+                        Class.forName(buildClass)
+                                .asSubclass(BuildInfo.class)
+                                .getDeclaredConstructor()
+                                .newInstance();
             } catch (InstantiationException
                     | IllegalAccessException
                     | ClassNotFoundException
@@ -653,8 +655,8 @@ public class BuildInfo implements IBuildInfo {
             buildInfo.setBuildBranch(protoBuild.getBranch());
         }
         // Attributes
-        for (String key : protoBuild.getAttributes().keySet()) {
-            buildInfo.addBuildAttribute(key, protoBuild.getAttributes().get(key));
+        for (String key : protoBuild.getAttributesMap().keySet()) {
+            buildInfo.addBuildAttribute(key, protoBuild.getAttributesMap().get(key));
         }
         // Versioned File
         for (KeyBuildFilePair filePair : protoBuild.getVersionedFileList()) {
