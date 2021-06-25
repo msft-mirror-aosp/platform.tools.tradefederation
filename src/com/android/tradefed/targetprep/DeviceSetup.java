@@ -1109,6 +1109,10 @@ public class DeviceSetup extends BaseTargetPreparer {
         mForceSkipSystemProps = force;
     }
 
+    public boolean isForceSkipSystemProps() {
+        return mForceSkipSystemProps;
+    }
+
     /**
      * Exposed for unit testing
      */
