@@ -273,6 +273,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     IRunUtil getRunUtil() {
         if (mRunUtil == null) {
             mRunUtil = new RunUtil();
+            mRunUtil.setEnvVariable("RUST_BACKTRACE", "full");
         }
         return mRunUtil;
     }
