@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.device;
 
+import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain;
+
 import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.FileListingService;
 import com.android.ddmlib.FileListingService.FileEntry;
@@ -34,6 +36,8 @@ import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.GlobalConfiguration;
+import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.device.contentprovider.ContentProviderHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
@@ -106,11 +110,8 @@ import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
-/**
- * Default implementation of a {@link ITestDevice}
- * Non-full stack android devices.
- */
-public class NativeDevice implements IManagedTestDevice {
+/** Default implementation of a {@link ITestDevice} Non-full stack android devices. */
+public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver {
 
     protected static final String SD_CARD = "/sdcard/";
     protected static final String STORAGE_EMULATED = "/storage/emulated/";
@@ -201,6 +202,7 @@ public class NativeDevice implements IManagedTestDevice {
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
+    private IConfiguration mConfiguration;
     private IDevice mIDevice;
     private IDeviceRecovery mRecovery = new WaitDeviceRecovery();
     protected final IDeviceStateMonitor mStateMonitor;
@@ -419,6 +421,12 @@ public class NativeDevice implements IManagedTestDevice {
      */
     protected void setLogStartDelay(int delay) {
         mLogStartDelay = delay;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setConfiguration(IConfiguration configuration) {
+        mConfiguration = configuration;
     }
 
     /**
@@ -932,6 +940,15 @@ public class NativeDevice implements IManagedTestDevice {
         List<ITestRunListener> runListeners = new ArrayList<>();
         runListeners.add(failureListener);
         runListeners.add(new TestRunToTestInvocationForwarder(listeners));
+
+        if ((mConfiguration != null)
+                && mConfiguration.getCoverageOptions().isCoverageEnabled()
+                && mConfiguration
+                        .getCoverageOptions()
+                        .getCoverageToolchains()
+                        .contains(Toolchain.JACOCO)) {
+            runner.setCoverage(true);
+        }
 
         DeviceAction runTestsAction =
                 new DeviceAction() {
