@@ -20,6 +20,7 @@ import com.android.incfs.install.adb.ddmlib.DeviceConnection;
 import com.android.incfs.install.adb.ddmlib.DeviceLogger;
 import com.android.incfs.install.IncrementalInstallSession;
 import com.android.incfs.install.IncrementalInstallSession.Builder;
+import com.android.incfs.install.PendingBlock;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
@@ -51,13 +52,16 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -80,8 +84,6 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
         FULL,
         INSTANT,
     }
-
-    private static final int INCREMENTAL_INSTALL_TIMEOUT_SECONDS = 1800;
 
     public static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
@@ -192,6 +194,20 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
                             + " results of previous or future invocations.")
     @VisibleForTesting
     protected boolean mIncrementalInstallation = false;
+
+    @Option(
+            name = "incremental-block-filter",
+            description =
+                    "Decimal representation of the percentage of data blocks"
+                            + " to be filtered out during an incremental"
+                            + " installation.")
+    protected double mBlockFilterPercentage = 0.0;
+
+    @Option(
+            name = "incremental-install-timeout-secs",
+            description =
+                    "Specifies the maximum permitted duration of" + " an incremental installation.")
+    protected int mIncrementalInstallTimeout = 1800;
 
     private IAbi mAbi = null;
     private Integer mUserId = null;
@@ -746,7 +762,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
                     DeviceConnection.getFactory(deviceSerialNumber);
             incrementalInstallSession.start(Executors.newCachedThreadPool(), deviceConnection);
             incrementalInstallSession.waitForInstallCompleted(
-                    INCREMENTAL_INSTALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                    mIncrementalInstallTimeout, TimeUnit.SECONDS);
         } catch (InterruptedException | IOException e) {
             throw new TargetSetupError(
                     String.format("Failed to start incremental install session."),
@@ -772,6 +788,36 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
                 new Builder()
                         .setLogger(new DeviceLogger(new StdLogger(StdLogger.Level.ERROR)))
                         .addExtraArgs(mInstallArgs.toArray(new String[] {}));
+
+        // Add block filter to installation if a block filter percentage is specified.
+        if (mBlockFilterPercentage > 0) {
+            long randomSeed = new SecureRandom().nextLong();
+            Random randomBlock = new Random(randomSeed);
+            Map<Path, Set<Integer>> apkBlockMappings = new HashMap<>();
+
+            CLog.i("Block filter seed: %d.", randomSeed);
+
+            incrementalInstallSessionBuilder.setBlockFilter(
+                    (PendingBlock b) -> {
+                        Path apkPath = b.getPath();
+                        synchronized (apkBlockMappings) {
+                            // Generate block indexs to filter for APK installation.
+                            if (!apkBlockMappings.containsKey(apkPath)) {
+                                int blockCount = b.getFileBlockCount();
+                                int numBlocks = (int) (blockCount * mBlockFilterPercentage);
+                                Set<Integer> blocksToFilter = new HashSet<Integer>(numBlocks);
+                                while (blocksToFilter.size() < numBlocks) {
+                                    int blockIndex = randomBlock.nextInt(blockCount);
+                                    blocksToFilter.add(blockIndex);
+                                }
+                                apkBlockMappings.put(apkPath, blocksToFilter);
+                            }
+
+                            return !apkBlockMappings.get(apkPath).contains(b.getBlockIndex());
+                        }
+                    });
+        }
+
         return incrementalInstallSessionBuilder;
     }
 }
