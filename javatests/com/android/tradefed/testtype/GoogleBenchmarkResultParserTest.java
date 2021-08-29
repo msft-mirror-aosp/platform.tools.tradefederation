@@ -17,22 +17,25 @@ package com.android.tradefed.testtype;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.device.CollectingOutputReceiver;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
-import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 
-import org.easymock.Capture;
-import org.easymock.EasyMock;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -68,8 +71,10 @@ public class GoogleBenchmarkResultParserTest {
         CollectingOutputReceiver output = null;
         try {
             output = new CollectingOutputReceiver();
-            InputStream gtestResultStream1 = getClass().getResourceAsStream(File.separator +
-                    TEST_TYPE_DIR + File.separator + filename);
+            InputStream gtestResultStream1 =
+                    getClass()
+                            .getResourceAsStream(
+                                    File.separator + TEST_TYPE_DIR + File.separator + filename);
             BufferedReader reader = new BufferedReader(new InputStreamReader(gtestResultStream1));
             String line = null;
             byte[] lineReturn = "\n".getBytes();
@@ -77,11 +82,9 @@ public class GoogleBenchmarkResultParserTest {
                 output.addOutput(line.getBytes(), 0, line.length());
                 output.addOutput(lineReturn, 0, 1); // '\n' is not included in line.
             }
-        }
-        catch (NullPointerException e) {
+        } catch (NullPointerException e) {
             CLog.e("GTest output file does not exist: " + filename);
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             CLog.e("Unable to read contents of gtest output file: " + filename);
         }
         return output;
@@ -90,21 +93,11 @@ public class GoogleBenchmarkResultParserTest {
     /** Tests the parser for a simple test output for 2 tests. */
     @Test
     public void testParseSimpleFile() throws Exception {
-        ITestInvocationListener mMockInvocationListener =
-                EasyMock.createMock(ITestInvocationListener.class);
-        mMockInvocationListener.testStarted((TestDescription) EasyMock.anyObject());
-        EasyMock.expectLastCall().times(3);
-        Capture<HashMap<String, Metric>> capture1 = new Capture<>();
-        Capture<HashMap<String, Metric>> capture2 = new Capture<>();
-        Capture<HashMap<String, Metric>> capture3 = new Capture<>();
-        mMockInvocationListener.testEnded(
-                (TestDescription) EasyMock.anyObject(), EasyMock.capture(capture1));
-        mMockInvocationListener.testEnded(
-                (TestDescription) EasyMock.anyObject(), EasyMock.capture(capture2));
-        mMockInvocationListener.testEnded(
-                (TestDescription) EasyMock.anyObject(), EasyMock.capture(capture3));
-        EasyMock.replay(mMockInvocationListener);
-        CollectingOutputReceiver contents =  readInFile(GBENCH_OUTPUT_FILE_1);
+        ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
+
+        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
+
+        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_1);
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
         Map<String, String> results = resultParser.parse(contents);
@@ -117,10 +110,12 @@ public class GoogleBenchmarkResultParserTest {
 
         expectedRes.put("Pass", "3");
         assertEquals(expectedRes, results);
-        EasyMock.verify(mMockInvocationListener);
+        verify(mMockInvocationListener, times(3)).testStarted((TestDescription) Mockito.any());
+        verify(mMockInvocationListener, times(3))
+                .testEnded((TestDescription) Mockito.any(), capture.capture());
 
         // Test 1
-        HashMap<String, Metric> resultTest1 = capture1.getValue();
+        HashMap<String, Metric> resultTest1 = capture.getAllValues().get(0);
         assertEquals(4, resultTest1.size());
         assertEquals("5", resultTest1.get("cpu_time").getMeasurements().getSingleString());
         assertEquals("5", resultTest1.get("real_time").getMeasurements().getSingleString());
@@ -129,7 +124,7 @@ public class GoogleBenchmarkResultParserTest {
                 "109451958", resultTest1.get("iterations").getMeasurements().getSingleString());
 
         // Test 2
-        HashMap<String, Metric> resultTest2 = capture2.getValue();
+        HashMap<String, Metric> resultTest2 = capture.getAllValues().get(1);
         assertEquals(4, resultTest2.size());
         assertEquals("11", resultTest2.get("cpu_time").getMeasurements().getSingleString());
         assertEquals("1", resultTest2.get("real_time").getMeasurements().getSingleString());
@@ -137,7 +132,7 @@ public class GoogleBenchmarkResultParserTest {
         assertEquals("50906784", resultTest2.get("iterations").getMeasurements().getSingleString());
 
         // Test 3
-        HashMap<String, Metric> resultTest3 = capture3.getValue();
+        HashMap<String, Metric> resultTest3 = capture.getAllValues().get(2);
         assertEquals(5, resultTest3.size());
         assertEquals("60", resultTest3.get("cpu_time").getMeasurements().getSingleString());
         assertEquals("60", resultTest3.get("real_time").getMeasurements().getSingleString());
@@ -152,23 +147,19 @@ public class GoogleBenchmarkResultParserTest {
     /** Tests the parser for a two simple test with different keys on the second test. */
     @Test
     public void testParseSimpleFile_twoTests() throws Exception {
-        ITestInvocationListener mMockInvocationListener =
-                EasyMock.createMock(ITestInvocationListener.class);
-        mMockInvocationListener.testStarted((TestDescription) EasyMock.anyObject());
-        EasyMock.expectLastCall().times(2);
-        Capture<HashMap<String, Metric>> capture = new Capture<>();
-        mMockInvocationListener.testEnded(
-                (TestDescription) EasyMock.anyObject(), EasyMock.capture(capture));
-        mMockInvocationListener.testEnded(
-                EasyMock.anyObject(), EasyMock.<HashMap<String, Metric>>anyObject());
-        EasyMock.replay(mMockInvocationListener);
-        CollectingOutputReceiver contents =  readInFile(GBENCH_OUTPUT_FILE_2);
+        ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
+
+        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
+
+        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_2);
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
         resultParser.parse(contents);
-        EasyMock.verify(mMockInvocationListener);
+        verify(mMockInvocationListener, times(2)).testStarted((TestDescription) Mockito.any());
+        verify(mMockInvocationListener, times(2))
+                .testEnded((TestDescription) Mockito.any(), capture.capture());
 
-        HashMap<String, Metric> results = capture.getValue();
+        HashMap<String, Metric> results = capture.getAllValues().get(0);
         assertEquals(4, results.size());
         assertEquals("5", results.get("cpu_time").getMeasurements().getSingleString());
         assertEquals("5", results.get("real_time").getMeasurements().getSingleString());
@@ -182,53 +173,45 @@ public class GoogleBenchmarkResultParserTest {
      */
     @Test
     public void testParse_contextError() throws Exception {
-        ITestInvocationListener mMockInvocationListener =
-                EasyMock.createMock(ITestInvocationListener.class);
-        mMockInvocationListener.testRunFailed((FailureDescription) EasyMock.anyObject());
-        EasyMock.replay(mMockInvocationListener);
-        CollectingOutputReceiver contents =  readInFile(GBENCH_OUTPUT_FILE_3);
+        ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
+
+        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_3);
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
         resultParser.parse(contents);
-        EasyMock.verify(mMockInvocationListener);
+
+        verify(mMockInvocationListener).testRunFailed((FailureDescription) Mockito.any());
     }
 
     /** Tests the parser with an error: context is fine but no benchmark results */
     @Test
     public void testParse_noBenchmarkResults() throws Exception {
-        ITestInvocationListener mMockInvocationListener =
-                EasyMock.createMock(ITestInvocationListener.class);
-        mMockInvocationListener.testRunFailed((String)EasyMock.anyObject());
-        EasyMock.replay(mMockInvocationListener);
-        CollectingOutputReceiver contents =  readInFile(GBENCH_OUTPUT_FILE_4);
+        ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
+
+        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_4);
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
         resultParser.parse(contents);
-        EasyMock.verify(mMockInvocationListener);
+
+        verify(mMockInvocationListener).testRunFailed((String) Mockito.any());
     }
 
     /** Tests that errors reported in JSON are parsed and appropriately reported */
     @Test
     public void testParse_benchmarkError() throws Exception {
-        ITestInvocationListener mMockInvocationListener =
-                EasyMock.createMock(ITestInvocationListener.class);
+        ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
 
-        mMockInvocationListener.testStarted((TestDescription) EasyMock.anyObject());
-        EasyMock.expectLastCall().times(4);
-        mMockInvocationListener.testEnded(
-                EasyMock.anyObject(), EasyMock.<HashMap<String, Metric>>anyObject());
-        EasyMock.expectLastCall().times(4);
-        Capture<String> capture = new Capture<>();
-        mMockInvocationListener.testFailed(
-                (TestDescription) EasyMock.anyObject(), EasyMock.capture(capture));
-        EasyMock.expectLastCall().times(1);
+        ArgumentCaptor<String> capture = ArgumentCaptor.forClass(String.class);
 
-        EasyMock.replay(mMockInvocationListener);
         CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_7);
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
         resultParser.parse(contents);
-        EasyMock.verify(mMockInvocationListener);
+        verify(mMockInvocationListener, times(4)).testStarted((TestDescription) Mockito.any());
+        verify(mMockInvocationListener, times(4))
+                .testEnded(Mockito.any(), Mockito.<HashMap<String, Metric>>any());
+        verify(mMockInvocationListener, times(1))
+                .testFailed((TestDescription) Mockito.any(), capture.capture());
         assertEquals(
                 "Benchmark reported an error: synchronizeKernelRCU() failed with errno=13",
                 capture.getValue());
@@ -237,8 +220,7 @@ public class GoogleBenchmarkResultParserTest {
     /** Test for {@link GoogleBenchmarkResultParser#parseJsonToMap(JSONObject)} */
     @Test
     public void testJsonParse() throws JSONException {
-        ITestInvocationListener mMockInvocationListener =
-                EasyMock.createMock(ITestInvocationListener.class);
+        ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
         String jsonTest = "{ \"key1\": \"value1\", \"key2\": 2, \"key3\": [\"one\", \"two\"]}";
         JSONObject test = new JSONObject(jsonTest);
         GoogleBenchmarkResultParser resultParser =
@@ -255,18 +237,18 @@ public class GoogleBenchmarkResultParserTest {
      */
     @Test
     public void testParseSimpleFile_withWarning() throws Exception {
-        ITestInvocationListener mMockInvocationListener =
-                EasyMock.createMock(ITestInvocationListener.class);
-        mMockInvocationListener.testStarted((TestDescription) EasyMock.anyObject());
-        Capture<HashMap<String, Metric>> capture = new Capture<>();
-        mMockInvocationListener.testEnded(
-                (TestDescription) EasyMock.anyObject(), EasyMock.capture(capture));
-        EasyMock.replay(mMockInvocationListener);
+        ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
+
+        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
+
         CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_5);
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
         resultParser.parse(contents);
-        EasyMock.verify(mMockInvocationListener);
+
+        verify(mMockInvocationListener).testStarted((TestDescription) Mockito.any());
+        verify(mMockInvocationListener)
+                .testEnded((TestDescription) Mockito.any(), capture.capture());
 
         HashMap<String, Metric> results = capture.getValue();
         assertEquals(5, results.size());
@@ -280,19 +262,19 @@ public class GoogleBenchmarkResultParserTest {
     /** When iterations is 0 it means the test was skipped. */
     @Test
     public void testParse_ignore() throws Exception {
-        ITestInvocationListener mMockInvocationListener =
-                EasyMock.createMock(ITestInvocationListener.class);
-        mMockInvocationListener.testStarted((TestDescription) EasyMock.anyObject());
-        mMockInvocationListener.testIgnored(EasyMock.anyObject());
-        Capture<HashMap<String, Metric>> capture = new Capture<>();
-        mMockInvocationListener.testEnded(
-                (TestDescription) EasyMock.anyObject(), EasyMock.capture(capture));
-        EasyMock.replay(mMockInvocationListener);
+        ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
+
+        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
+
         CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_6);
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
         resultParser.parse(contents);
-        EasyMock.verify(mMockInvocationListener);
+
+        verify(mMockInvocationListener).testStarted((TestDescription) Mockito.any());
+        verify(mMockInvocationListener).testIgnored(Mockito.any());
+        verify(mMockInvocationListener)
+                .testEnded((TestDescription) Mockito.any(), capture.capture());
 
         HashMap<String, Metric> results = capture.getValue();
         assertEquals(5, results.size());
@@ -310,16 +292,16 @@ public class GoogleBenchmarkResultParserTest {
         String errorMessage =
                 "Test aborted with the error: 'FontFamily must contain at least one font.'";
 
-        ITestInvocationListener mMockInvocationListener =
-                EasyMock.createMock(ITestInvocationListener.class);
-        Capture<FailureDescription> capture = new Capture<>();
-        mMockInvocationListener.testRunFailed(EasyMock.capture(capture));
-        EasyMock.replay(mMockInvocationListener);
+        ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
+        ArgumentCaptor<FailureDescription> capture =
+                ArgumentCaptor.forClass(FailureDescription.class);
+
         CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_8);
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
         resultParser.parse(contents);
-        EasyMock.verify(mMockInvocationListener);
+
+        verify(mMockInvocationListener).testRunFailed(capture.capture());
         FailureDescription failure = capture.getValue();
         assertTrue(FailureStatus.TEST_FAILURE.equals(failure.getFailureStatus()));
         assertEquals(failure.getErrorMessage(), errorMessage);
