@@ -17,6 +17,7 @@ package com.android.tradefed.testtype.rust;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.IShellOutputReceiver;
+import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.Option;
@@ -79,8 +80,8 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     }
 
     private List<File> findFiles() {
-        File testsDir = null;
-        if (mBuildInfo instanceof IDeviceBuildInfo) {
+        File testsDir = mBuildInfo.getFile(BuildInfoFileKey.HOST_LINKED_DIR);
+        if (testsDir == null && mBuildInfo instanceof IDeviceBuildInfo) {
             testsDir = ((IDeviceBuildInfo) mBuildInfo).getTestsDir();
         }
         List<File> files = new ArrayList<>();
