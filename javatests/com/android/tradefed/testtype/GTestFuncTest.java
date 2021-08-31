@@ -16,28 +16,35 @@
 
 package com.android.tradefed.testtype;
 
+import static org.mockito.Mockito.verify;
+
 import com.android.ddmlib.Log;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 
-import org.easymock.EasyMock;
+import org.junit.Before;
+import org.junit.runner.RunWith;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
 import java.util.HashMap;
 
-
-/**
- * Functional tests for {@link InstrumentationTest}.
- */
-public class GTestFuncTest extends DeviceTestCase {
+/** Functional tests for {@link InstrumentationTest}. */
+@RunWith(DeviceJUnit4ClassRunner.class)
+public class GTestFuncTest implements IDeviceTest {
 
     private static final String LOG_TAG = "GTestFuncTest";
     private GTest mGTest = null;
-    private ITestInvocationListener mMockListener = null;
+    @Mock ITestInvocationListener mMockListener;
     private TestInformation mTestInfo;
+    private ITestDevice mDevice;
 
     // Native test app constants
     public static final String NATIVE_TESTAPP_GTEST_CLASSNAME = "TradeFedNativeAppTest";
@@ -49,50 +56,63 @@ public class GTestFuncTest extends DeviceTestCase {
     private static final String NATIVE_SAMPLETEST_MODULE_NAME = "tfnativetestsamplelibtests";
 
     @Override
-    protected void setUp() throws Exception {
-        super.setUp();
+    public void setDevice(ITestDevice device) {
+        mDevice = device;
+    }
+
+    @Override
+    public ITestDevice getDevice() {
+        return mDevice;
+    }
+
+    @Before
+    public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
+        mDevice.waitForDeviceAvailable();
+
         mGTest = new GTest();
         mGTest.setDevice(getDevice());
-        mMockListener = EasyMock.createMock(ITestInvocationListener.class);
+
         mTestInfo = TestInformation.newBuilder().build();
     }
 
-    /**
-     * Test normal run of the sample native test project (7 tests, one of which is a failure).
-     */
+    /** Test normal run of the sample native test project (7 tests, one of which is a failure). */
     @SuppressWarnings("unchecked")
+    @Test
     public void testRun() throws DeviceNotAvailableException {
         HashMap<String, Metric> emptyMap = new HashMap<>();
         mGTest.setModuleName(NATIVE_SAMPLETEST_MODULE_NAME);
         Log.i(LOG_TAG, "testRun");
-        mMockListener.testRunStarted(NATIVE_SAMPLETEST_MODULE_NAME, 7);
+
         String[][] allTests = {
-                {"FibonacciTest", "testRecursive_One"},
-                {"FibonacciTest", "testRecursive_Ten"},
-                {"FibonacciTest", "testIterative_Ten"},
-                {"CelciusToFarenheitTest", "testNegative"},
-                {"CelciusToFarenheitTest", "testPositive"},
-                {"FarenheitToCelciusTest", "testExactFail"},
-                {"FarenheitToCelciusTest", "testApproximatePass"},
+            {"FibonacciTest", "testRecursive_One"},
+            {"FibonacciTest", "testRecursive_Ten"},
+            {"FibonacciTest", "testIterative_Ten"},
+            {"CelsiusToFahrenheitTest", "testNegative"},
+            {"CelsiusToFahrenheitTest", "testPositive"},
+            {"FahrenheitToCelsiusTest", "testExactFail"},
+            {"FahrenheitToCelsiusTest", "testApproximatePass"},
         };
+
+        mGTest.run(mTestInfo, mMockListener);
+
+        verify(mMockListener).testRunStarted(NATIVE_SAMPLETEST_MODULE_NAME, 7);
+
         for (String[] test : allTests) {
             String testClass = test[0];
             String testName = test[1];
             TestDescription id = new TestDescription(testClass, testName);
-            mMockListener.testStarted(id);
 
+            verify(mMockListener).testStarted(id);
             if (testName.endsWith("Fail")) {
-              mMockListener.testFailed(
-                      EasyMock.eq(id),
-                      EasyMock.isA(String.class));
+                verify(mMockListener).testFailed(Mockito.eq(id), Mockito.isA(String.class));
             }
-            mMockListener.testEnded(id, emptyMap);
+            verify(mMockListener).testEnded(id, emptyMap);
         }
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), (HashMap<String, Metric>) EasyMock.anyObject());
-        EasyMock.replay(mMockListener);
-        mGTest.run(mTestInfo, mMockListener);
-        EasyMock.verify(mMockListener);
+
+        verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
     }
 
     /**
@@ -100,24 +120,28 @@ public class GTestFuncTest extends DeviceTestCase {
      *
      * @param testId the {%link TestDescription} of the test to run
      */
-    @SuppressWarnings("unchecked")
     private void doNativeTestAppRunSingleTestFailure(TestDescription testId) {
-        HashMap<String, Metric> emptyMap = new HashMap<>();
         mGTest.setModuleName(NATIVE_TESTAPP_MODULE_NAME);
-        mMockListener.testRunStarted(NATIVE_TESTAPP_MODULE_NAME, 1);
-        mMockListener.testStarted(EasyMock.eq(testId));
-        mMockListener.testFailed(EasyMock.eq(testId),
-                EasyMock.isA(String.class));
-        mMockListener.testEnded(EasyMock.eq(testId), EasyMock.eq(emptyMap));
-        mMockListener.testRunFailed((String)EasyMock.anyObject());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), (HashMap<String, Metric>) EasyMock.anyObject());
-        EasyMock.replay(mMockListener);
     }
 
     /**
-     * Test run scenario where test process crashes while trying to access NULL ptr.
+     * Helper to run tests in the Native Test App.
+     *
+     * @param testId the {%link TestDescription} of the test to run
      */
+    private void verifyNativeTestAppRunSingleTestFailure(TestDescription testId) {
+        HashMap<String, Metric> emptyMap = new HashMap<>();
+        verify(mMockListener).testRunStarted(NATIVE_TESTAPP_MODULE_NAME, 1);
+        verify(mMockListener).testStarted(Mockito.eq(testId));
+        verify(mMockListener).testFailed(Mockito.eq(testId), Mockito.isA(String.class));
+        verify(mMockListener).testEnded(Mockito.eq(testId), Mockito.eq(emptyMap));
+        verify(mMockListener).testRunFailed(Mockito.<String>anyObject());
+        verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>anyObject());
+    }
+
+    /** Test run scenario where test process crashes while trying to access NULL ptr. */
+    @Test
     public void testRun_testCrash() throws DeviceNotAvailableException {
         Log.i(LOG_TAG, "testRun_testCrash");
         TestDescription testId =
@@ -128,12 +152,12 @@ public class GTestFuncTest extends DeviceTestCase {
         mGTest.addIncludeFilter(NATIVE_TESTAPP_GTEST_CRASH_METHOD);
 
         mGTest.run(mTestInfo, mMockListener);
-        EasyMock.verify(mMockListener);
+
+        verifyNativeTestAppRunSingleTestFailure(testId);
     }
 
-    /**
-     * Test run scenario where device reboots during test run.
-     */
+    /** Test run scenario where device reboots during test run. */
+    @Test
     public void testRun_deviceReboot() throws Exception {
         Log.i(LOG_TAG, "testRun_deviceReboot");
 
@@ -147,31 +171,33 @@ public class GTestFuncTest extends DeviceTestCase {
         mGTest.addIncludeFilter(NATIVE_TESTAPP_GTEST_TIMEOUT_METHOD);
 
         // fork off a thread to do the reboot
-        Thread rebootThread = new Thread() {
-            @Override
-            public void run() {
-                // wait for test run to begin
-                try {
-                    Thread.sleep(500);
-                    Runtime.getRuntime().exec(
-                            String.format("adb -s %s reboot", getDevice().getIDevice()
-                                    .getSerialNumber()));
-                } catch (InterruptedException e) {
-                    Log.w(LOG_TAG, "interrupted");
-                } catch (IOException e) {
-                    Log.w(LOG_TAG, "IOException when rebooting");
-                }
-            }
-        };
+        Thread rebootThread =
+                new Thread() {
+                    @Override
+                    public void run() {
+                        // wait for test run to begin
+                        try {
+                            Thread.sleep(500);
+                            Runtime.getRuntime()
+                                    .exec(
+                                            String.format(
+                                                    "adb -s %s reboot",
+                                                    getDevice().getIDevice().getSerialNumber()));
+                        } catch (InterruptedException e) {
+                            Log.w(LOG_TAG, "interrupted");
+                        } catch (IOException e) {
+                            Log.w(LOG_TAG, "IOException when rebooting");
+                        }
+                    }
+                };
         rebootThread.start();
         mGTest.run(mTestInfo, mMockListener);
         getDevice().waitForDeviceAvailable();
-        EasyMock.verify(mMockListener);
+        verifyNativeTestAppRunSingleTestFailure(testId);
     }
 
-    /**
-     * Test run scenario where test timesout.
-     */
+    /** Test run scenario where test timesout. */
+    @Test
     public void testRun_timeout() throws Exception {
         Log.i(LOG_TAG, "testRun_timeout");
 
@@ -187,6 +213,6 @@ public class GTestFuncTest extends DeviceTestCase {
 
         mGTest.run(mTestInfo, mMockListener);
         getDevice().waitForDeviceAvailable();
-        EasyMock.verify(mMockListener);
+        verifyNativeTestAppRunSingleTestFailure(testId);
     }
 }
