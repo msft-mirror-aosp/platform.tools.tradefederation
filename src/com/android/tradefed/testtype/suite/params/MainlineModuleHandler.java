@@ -25,6 +25,8 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.InstallApexModuleTargetPreparer;
 import com.android.tradefed.testtype.IAbi;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
+import com.android.tradefed.testtype.suite.module.MainlineTestModuleController;
 import com.android.tradefed.util.AbiUtils;
 
 import java.util.Arrays;
@@ -102,6 +104,17 @@ public final class MainlineModuleHandler {
 
     /** Apply to the module {@link IConfiguration} the parameter specific mainline module setup. */
     public void applySetup(IConfiguration moduleConfiguration) {
+        // MainlineTestModuleController is a module controller to run tests when the mainline
+        // module is preloaded on device, and it’s disabled by default.(b/181724969#comment12)
+        List<?> ctrlObjectList =
+                moduleConfiguration.getConfigurationObjectList(ModuleDefinition.MODULE_CONTROLLER);
+        if (ctrlObjectList != null) {
+            for (Object ctrlObject : ctrlObjectList) {
+                if (ctrlObject instanceof MainlineTestModuleController) {
+                    ((MainlineTestModuleController) ctrlObject).enableModuleController(true);
+                }
+            }
+        }
         for (IDeviceConfiguration deviceConfig : moduleConfiguration.getDeviceConfig()) {
             List<ITargetPreparer> preparers = deviceConfig.getTargetPreparers();
             preparers.add(0, createMainlineModuleInstaller());

@@ -85,4 +85,9 @@ public class MainlineTestModuleController extends BaseModuleController {
         }
         return RunStrategy.RUN;
     }
+
+    public void enableModuleController(boolean enabled) {
+        CLog.i("Enabling Mainline Test Module Controller");
+        mControllerEnabled = enabled;
+    }
 }
