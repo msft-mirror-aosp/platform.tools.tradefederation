@@ -55,7 +55,7 @@ public class FilePullerLogCollector extends FilePullerDeviceMetricCollector {
                 } else if (LogDataType.UIX.getFileExt().equals(ext)) {
                     type = LogDataType.UIX;
                 }
-                testLog(metricFile.getName(), type, source);
+                testLog(FileUtil.getBaseName(metricFile.getName()), type, source);
             }
         }
     }
