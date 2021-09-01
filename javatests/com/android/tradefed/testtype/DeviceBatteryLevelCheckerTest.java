@@ -16,6 +16,11 @@
 
 package com.android.tradefed.testtype;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -35,11 +40,13 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.IRunUtil;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
@@ -51,15 +58,15 @@ public class DeviceBatteryLevelCheckerTest {
     private DeviceBatteryLevelChecker mChecker = null;
     private ITestDevice mDevice = null;
     private TestInformation mTestInfo = null;
-    private ITestDevice mFakeTestDevice = null;
+    @Mock ITestDevice mFakeTestDevice;
     public Integer mBatteryLevel = 10;
     private TestDescription mTestDescription = new TestDescription("BatteryCharging", "charge");
     private TestDescription mTestDescription2 = new TestDescription("BatteryCharging", "speed");
 
-    private IDevice mMockIDevice;
-    private IDeviceStateMonitor mMockStateMonitor;
-    private IDeviceMonitor mMockDvcMonitor;
-    private ITestInvocationListener mMockListener;
+    @Mock IDevice mMockIDevice;
+    @Mock IDeviceStateMonitor mMockStateMonitor;
+    @Mock IDeviceMonitor mMockDvcMonitor;
+    @Mock ITestInvocationListener mMockListener;
 
     private boolean mFirstCall = true;
 
@@ -111,18 +118,14 @@ public class DeviceBatteryLevelCheckerTest {
 
     @Before
     public void setUp() throws Exception {
-        mMockIDevice = EasyMock.createMock(IDevice.class);
-        mMockStateMonitor = EasyMock.createMock(IDeviceStateMonitor.class);
-        mMockDvcMonitor = EasyMock.createMock(IDeviceMonitor.class);
-        mFakeTestDevice = EasyMock.createMock(ITestDevice.class);
-        mMockListener = EasyMock.createMock(ITestInvocationListener.class);
+        MockitoAnnotations.initMocks(this);
 
         mDevice = new TestableTestDevice();
         mChecker =
                 new DeviceBatteryLevelChecker() {
                     @Override
                     IRunUtil getRunUtil() {
-                        return EasyMock.createNiceMock(IRunUtil.class);
+                        return mock(IRunUtil.class);
                     }
 
                     @Override
@@ -137,134 +140,113 @@ public class DeviceBatteryLevelCheckerTest {
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mDevice);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
-        EasyMock.expect(mFakeTestDevice.getSerialNumber()).andStubReturn("SERIAL");
+        when(mFakeTestDevice.getSerialNumber()).thenReturn("SERIAL");
     }
 
     @Test
     public void testNull() throws Exception {
         expectBattLevel(null);
-        mMockListener.testRunStarted("BatteryCharging", 2);
-        mMockListener.testStarted(mTestDescription);
-        mMockListener.testFailed(
-                mTestDescription, FailureDescription.create("Failed to determine battery level"));
-        mMockListener.testEnded(mTestDescription, new HashMap<String, Metric>());
-        mMockListener.testStarted(mTestDescription2);
-        FailureDescription failure = FailureDescription.create("No battery charge information");
-        failure.setFailureStatus(FailureStatus.NOT_EXECUTED);
-        mMockListener.testFailed(mTestDescription2, failure);
-        mMockListener.testEnded(mTestDescription2, new HashMap<String, Metric>());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        replayDevices();
 
         mChecker.run(mTestInfo, mMockListener);
         // expect this to return immediately without throwing an exception.  Should log a warning.
-        verifyDevices();
+        verify(mMockListener).testRunStarted("BatteryCharging", 2);
+        verify(mMockListener).testStarted(mTestDescription);
+        verify(mMockListener)
+                .testFailed(
+                        mTestDescription,
+                        FailureDescription.create("Failed to determine battery level"));
+        verify(mMockListener).testEnded(mTestDescription, new HashMap<String, Metric>());
+        verify(mMockListener).testStarted(mTestDescription2);
+        FailureDescription failure = FailureDescription.create("No battery charge information");
+        failure.setFailureStatus(FailureStatus.NOT_EXECUTED);
+        verify(mMockListener).testFailed(mTestDescription2, failure);
+        verify(mMockListener).testEnded(mTestDescription2, new HashMap<String, Metric>());
+        verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
     public void testNormal() throws Exception {
         expectBattLevel(45);
-        mMockListener.testRunStarted("BatteryCharging", 2);
-        mMockListener.testStarted(mTestDescription);
-        mMockListener.testEnded(mTestDescription, new HashMap<String, Metric>());
-        mMockListener.testStarted(mTestDescription2);
-        mMockListener.testIgnored(mTestDescription2);
-        mMockListener.testEnded(mTestDescription2, new HashMap<String, Metric>());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        replayDevices();
 
         mChecker.run(mTestInfo, mMockListener);
-        verifyDevices();
+
+        verify(mMockListener).testRunStarted("BatteryCharging", 2);
+        verify(mMockListener).testStarted(mTestDescription);
+        verify(mMockListener).testEnded(mTestDescription, new HashMap<String, Metric>());
+        verify(mMockListener).testStarted(mTestDescription2);
+        verify(mMockListener).testIgnored(mTestDescription2);
+        verify(mMockListener).testEnded(mTestDescription2, new HashMap<String, Metric>());
+        verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     /** Low battery with a resume level very low to check a resume if some level are reached. */
     @Test
     public void testLow() throws Exception {
-        mFakeTestDevice.stopLogcat();
-        EasyMock.expectLastCall();
         expectBattLevel(5);
-        EasyMock.expect(mFakeTestDevice.executeShellCommand("svc power stayon false"))
-                .andStubReturn("");
-        EasyMock.expect(mFakeTestDevice.executeShellCommand(
-                "settings put system screen_off_timeout 1000")).andStubReturn("");
-        EasyMock.expect(
-                        mFakeTestDevice.logBugreport(
-                                EasyMock.eq("low-charging-speed-bugreport"), EasyMock.anyObject()))
-                .andReturn(true);
-        mMockListener.testRunStarted("BatteryCharging", 2);
-        mMockListener.testStarted(mTestDescription);
-        mMockListener.testEnded(mTestDescription, new HashMap<String, Metric>());
-        mMockListener.testStarted(mTestDescription2);
-        mMockListener.testFailed(
-                EasyMock.eq(mTestDescription2), EasyMock.<FailureDescription>anyObject());
-        mMockListener.testEnded(mTestDescription2, new HashMap<String, Metric>());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        replayDevices();
+        when(mFakeTestDevice.executeShellCommand("svc power stayon false")).thenReturn("");
+        when(mFakeTestDevice.executeShellCommand("settings put system screen_off_timeout 1000"))
+                .thenReturn("");
+        when(mFakeTestDevice.logBugreport(
+                        Mockito.eq("low-charging-speed-bugreport"), Mockito.any()))
+                .thenReturn(true);
+
         mChecker.setResumeLevel(5);
         mChecker.run(mTestInfo, mMockListener);
-        verifyDevices();
+
+        verify(mMockListener).testRunStarted("BatteryCharging", 2);
+        verify(mMockListener).testStarted(mTestDescription);
+        verify(mMockListener).testEnded(mTestDescription, new HashMap<String, Metric>());
+        verify(mMockListener).testStarted(mTestDescription2);
+        verify(mMockListener)
+                .testFailed(Mockito.eq(mTestDescription2), Mockito.<FailureDescription>any());
+        verify(mMockListener).testEnded(mTestDescription2, new HashMap<String, Metric>());
+        verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        verify(mFakeTestDevice, times(1)).stopLogcat();
     }
 
     /** Battery is low, device idles and battery gets high again. */
     @Test
     public void testLow_becomeHigh() throws Exception {
-        mFakeTestDevice.stopLogcat();
-        EasyMock.expectLastCall();
         expectBattLevel(5);
-        EasyMock.expect(mFakeTestDevice.executeShellCommand("svc power stayon false"))
-                .andStubReturn("");
-        EasyMock.expect(mFakeTestDevice.executeShellCommand(
-                "settings put system screen_off_timeout 1000")).andStubReturn("");
-        mMockListener.testRunStarted("BatteryCharging", 2);
-        mMockListener.testStarted(mTestDescription);
-        mMockListener.testEnded(mTestDescription, new HashMap<String, Metric>());
-        mMockListener.testStarted(mTestDescription2);
-        mMockListener.testEnded(mTestDescription2, new HashMap<String, Metric>());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        replayDevices();
-        Thread raise = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Thread.sleep(100);
-                    expectBattLevel(85);
-                } catch (Exception e) {
-                    CLog.e(e);
-                }
-            }
-        });
+        when(mFakeTestDevice.executeShellCommand("svc power stayon false")).thenReturn("");
+        when(mFakeTestDevice.executeShellCommand("settings put system screen_off_timeout 1000"))
+                .thenReturn("");
+        Thread raise =
+                new Thread(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    Thread.sleep(100);
+                                    expectBattLevel(85);
+                                } catch (Exception e) {
+                                    CLog.e(e);
+                                }
+                            }
+                        });
         raise.start();
         mChecker.run(mTestInfo, mMockListener);
-        verifyDevices();
+
+        verify(mMockListener).testRunStarted("BatteryCharging", 2);
+        verify(mMockListener).testStarted(mTestDescription);
+        verify(mMockListener).testEnded(mTestDescription, new HashMap<String, Metric>());
+        verify(mMockListener).testStarted(mTestDescription2);
+        verify(mMockListener).testEnded(mTestDescription2, new HashMap<String, Metric>());
+        verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        verify(mFakeTestDevice, times(1)).stopLogcat();
     }
 
     /** Battery is low, device idles and battery gets null, break the loop. */
     @Test
     public void testLow_becomeNull() throws Exception {
-        mFakeTestDevice.stopLogcat();
-        EasyMock.expectLastCall();
         expectBattLevel(5);
-        EasyMock.expect(mFakeTestDevice.executeShellCommand("svc power stayon false"))
-                .andStubReturn("");
-        EasyMock.expect(mFakeTestDevice.executeShellCommand(
-                "settings put system screen_off_timeout 1000")).andStubReturn("");
-        mMockListener.testRunStarted("BatteryCharging", 2);
-        mMockListener.testStarted(mTestDescription);
-        mMockListener.testFailed(
-                mTestDescription, FailureDescription.create("Failed to read battery level"));
-        mMockListener.testEnded(mTestDescription, new HashMap<String, Metric>());
-        mMockListener.testStarted(mTestDescription2);
-        FailureDescription failure = FailureDescription.create("No battery charge information");
-        failure.setFailureStatus(FailureStatus.NOT_EXECUTED);
-        mMockListener.testFailed(mTestDescription2, failure);
-        mMockListener.testEnded(mTestDescription2, new HashMap<String, Metric>());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        replayDevices();
+        when(mFakeTestDevice.executeShellCommand("svc power stayon false")).thenReturn("");
+        when(mFakeTestDevice.executeShellCommand("settings put system screen_off_timeout 1000"))
+                .thenReturn("");
         Thread raise =
                 new Thread(
                         new Runnable() {
@@ -280,19 +262,25 @@ public class DeviceBatteryLevelCheckerTest {
                         });
         raise.start();
         mChecker.run(mTestInfo, mMockListener);
-        verifyDevices();
+
+        verify(mMockListener).testRunStarted("BatteryCharging", 2);
+        verify(mMockListener).testStarted(mTestDescription);
+        verify(mMockListener)
+                .testFailed(
+                        mTestDescription,
+                        FailureDescription.create("Failed to read battery level"));
+        verify(mMockListener).testEnded(mTestDescription, new HashMap<String, Metric>());
+        verify(mMockListener).testStarted(mTestDescription2);
+        FailureDescription failure = FailureDescription.create("No battery charge information");
+        failure.setFailureStatus(FailureStatus.NOT_EXECUTED);
+        verify(mMockListener).testFailed(mTestDescription2, failure);
+        verify(mMockListener).testEnded(mTestDescription2, new HashMap<String, Metric>());
+        verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        verify(mFakeTestDevice, times(1)).stopLogcat();
     }
 
     private void expectBattLevel(Integer level) throws Exception {
         mBatteryLevel = level;
     }
-
-    private void replayDevices() {
-        EasyMock.replay(mFakeTestDevice, mMockListener);
-    }
-
-    private void verifyDevices() {
-        EasyMock.verify(mFakeTestDevice, mMockListener);
-    }
 }
-
