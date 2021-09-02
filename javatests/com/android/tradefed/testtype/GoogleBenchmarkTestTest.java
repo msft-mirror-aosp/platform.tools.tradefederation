@@ -15,21 +15,35 @@
  */
 package com.android.tradefed.testtype;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.CollectingOutputReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.MockFileUtil;
+import com.android.tradefed.device.MockitoFileUtil;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.util.StringEscapeUtils;
 
-import junit.framework.TestCase;
-
-import org.easymock.EasyMock;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.AdditionalMatchers;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -39,30 +53,27 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Unit tests for {@link GoogleBenchmarkTest}.
- */
-public class GoogleBenchmarkTestTest extends TestCase {
+/** Unit tests for {@link GoogleBenchmarkTest}. */
+@RunWith(JUnit4.class)
+public class GoogleBenchmarkTestTest {
 
-    private ITestInvocationListener mMockInvocationListener = null;
+    @Mock ITestInvocationListener mMockInvocationListener;
     private CollectingOutputReceiver mMockReceiver = null;
-    private ITestDevice mMockITestDevice = null;
+    @Mock ITestDevice mMockITestDevice;
     private GoogleBenchmarkTest mGoogleBenchmarkTest;
     private TestInformation mTestInfo;
     private TestDescription mDummyTest;
     private OptionSetter mSetter;
 
-    /**
-     * Helper to initialize the various EasyMocks we'll need.
-     */
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-        mMockInvocationListener = EasyMock.createMock(ITestInvocationListener.class);
+    /** Helper to initialize the various EasyMocks we'll need. */
+    @Before
+    public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mMockReceiver = new CollectingOutputReceiver();
-        mMockITestDevice = EasyMock.createMock(ITestDevice.class);
+
         mDummyTest = new TestDescription("Class", "method");
-        EasyMock.expect(mMockITestDevice.getSerialNumber()).andStubReturn("serial");
+        when(mMockITestDevice.getSerialNumber()).thenReturn("serial");
         mGoogleBenchmarkTest =
                 new GoogleBenchmarkTest() {
                     @Override
@@ -87,72 +98,57 @@ public class GoogleBenchmarkTestTest extends TestCase {
         mTestInfo = TestInformation.newBuilder().build();
     }
 
-    /**
-     * Helper that replays all mocks.
-     */
-    private void replayMocks() {
-      EasyMock.replay(mMockInvocationListener, mMockITestDevice);
-    }
-
-    /**
-     * Helper that verifies all mocks.
-     */
-    private void verifyMocks() {
-      EasyMock.verify(mMockInvocationListener, mMockITestDevice);
-    }
-
-    /**
-     * Test the run method for a couple tests
-     */
+    /** Test the run method for a couple tests */
+    @Test
     public void testRun() throws DeviceNotAvailableException {
         final String nativeTestPath = GoogleBenchmarkTest.DEFAULT_TEST_PATH;
         final String test1 = "test1";
         final String test2 = "test2";
-        MockFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
-        EasyMock.expect(mMockITestDevice.doesFileExist(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).andReturn(false);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath + "/test2")).andReturn(false);
+        MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
+        when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).thenReturn(false);
+        when(mMockITestDevice.isDirectory(nativeTestPath + "/test2")).thenReturn(false);
         String[] files = new String[] {"test1", "test2"};
-        EasyMock.expect(mMockITestDevice.getChildren(nativeTestPath)).andReturn(files);
-        EasyMock.expect(mMockITestDevice.executeShellCommand(EasyMock.contains("chmod")))
-                .andReturn("").times(2);
-        mMockITestDevice.executeShellCommand(EasyMock.contains(test1), EasyMock.same(mMockReceiver),
-                EasyMock.anyLong(), (TimeUnit)EasyMock.anyObject(), EasyMock.anyInt());
-        mMockITestDevice.executeShellCommand(EasyMock.contains(test2), EasyMock.same(mMockReceiver),
-                EasyMock.anyLong(), (TimeUnit)EasyMock.anyObject(), EasyMock.anyInt());
+        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+        when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
 
-        EasyMock.expect(
-                        mMockITestDevice.executeShellCommand(
-                                String.format(
-                                        "%s/test1 --benchmark_list_tests=true", nativeTestPath)))
-                .andReturn("method1\nmethod2\nmethod3");
+        when(mMockITestDevice.executeShellCommand(
+                        String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)))
+                .thenReturn("method1\nmethod2\nmethod3");
 
-        EasyMock.expect(
-                        mMockITestDevice.executeShellCommand(
-                                String.format(
-                                        "%s/test2 --benchmark_list_tests=true", nativeTestPath)))
-                .andReturn("method1\nmethod2\n");
-        mMockInvocationListener.testRunStarted(test1, 3);
-        mMockInvocationListener.testStarted(mDummyTest);
-        mMockInvocationListener.testEnded(
-                EasyMock.eq(mDummyTest), EasyMock.<HashMap<String, String>>anyObject());
-        mMockInvocationListener.testRunStarted(test2, 2);
-        mMockInvocationListener.testStarted(mDummyTest);
-        mMockInvocationListener.testEnded(
-                EasyMock.eq(mDummyTest), EasyMock.<HashMap<String, String>>anyObject());
-        mMockInvocationListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        EasyMock.expectLastCall().times(2);
-        replayMocks();
+        when(mMockITestDevice.executeShellCommand(
+                        String.format("%s/test2 --benchmark_list_tests=true", nativeTestPath)))
+                .thenReturn("method1\nmethod2\n");
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
-        verifyMocks();
+
+        verify(mMockITestDevice)
+                .executeShellCommand(
+                        Mockito.contains(test1),
+                        Mockito.same(mMockReceiver),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
+        verify(mMockITestDevice)
+                .executeShellCommand(
+                        Mockito.contains(test2),
+                        Mockito.same(mMockReceiver),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
+        verify(mMockInvocationListener).testRunStarted(test1, 3);
+        verify(mMockInvocationListener, times(2)).testStarted(mDummyTest);
+        verify(mMockInvocationListener, times(2))
+                .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+        verify(mMockInvocationListener).testRunStarted(test2, 2);
+        verify(mMockITestDevice, times(2)).executeShellCommand(Mockito.contains("chmod"));
+        verify(mMockInvocationListener, times(2))
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
-    /**
-     * Test the run method when no device is set.
-     */
+    /** Test the run method when no device is set. */
+    @Test
     public void testRun_noDevice() throws DeviceNotAvailableException {
         mGoogleBenchmarkTest.setDevice(null);
         try {
@@ -164,25 +160,22 @@ public class GoogleBenchmarkTestTest extends TestCase {
         fail();
     }
 
-    /**
-     * Test the run method for a couple tests
-     */
+    /** Test the run method for a couple tests */
+    @Test
     public void testRun_noBenchmarkDir() throws DeviceNotAvailableException {
-        EasyMock.expect(mMockITestDevice.doesFileExist(GoogleBenchmarkTest.DEFAULT_TEST_PATH))
-                .andReturn(false);
-        replayMocks();
+        when(mMockITestDevice.doesFileExist(GoogleBenchmarkTest.DEFAULT_TEST_PATH))
+                .thenReturn(false);
+
         try {
             mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
             fail("Should have thrown an exception.");
         } catch (RuntimeException e) {
             // expected
         }
-        verifyMocks();
     }
 
-    /**
-     * Test the run method for a couple tests with a module name
-     */
+    /** Test the run method for a couple tests with a module name */
+    @Test
     public void testRun_withModuleName() throws DeviceNotAvailableException {
         final String moduleName = "module";
         final String nativeTestPath =
@@ -190,125 +183,123 @@ public class GoogleBenchmarkTestTest extends TestCase {
         mGoogleBenchmarkTest.setModuleName(moduleName);
         final String test1 = "test1";
         final String test2 = "test2";
-        MockFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
-        EasyMock.expect(mMockITestDevice.doesFileExist(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).andReturn(false);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath + "/test2")).andReturn(false);
+        MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
+        when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).thenReturn(false);
+        when(mMockITestDevice.isDirectory(nativeTestPath + "/test2")).thenReturn(false);
         String[] files = new String[] {"test1", "test2"};
-        EasyMock.expect(mMockITestDevice.getChildren(nativeTestPath)).andReturn(files);
-        EasyMock.expect(mMockITestDevice.executeShellCommand(EasyMock.contains("chmod")))
-                .andReturn("").times(2);
-        mMockITestDevice.executeShellCommand(EasyMock.contains(test1), EasyMock.same(mMockReceiver),
-                EasyMock.anyLong(), (TimeUnit)EasyMock.anyObject(), EasyMock.anyInt());
-        mMockITestDevice.executeShellCommand(EasyMock.contains(test2), EasyMock.same(mMockReceiver),
-                EasyMock.anyLong(), (TimeUnit)EasyMock.anyObject(), EasyMock.anyInt());
-        EasyMock.expect(
-                        mMockITestDevice.executeShellCommand(
-                                String.format(
-                                        "%s/test1 --benchmark_list_tests=true", nativeTestPath)))
-                .andReturn("\nmethod1\nmethod2\nmethod3\n\n");
-        EasyMock.expect(
-                        mMockITestDevice.executeShellCommand(
-                                String.format(
-                                        "%s/test2 --benchmark_list_tests=true", nativeTestPath)))
-                .andReturn("method1\nmethod2\n");
-        mMockInvocationListener.testRunStarted(test1, 3);
-        mMockInvocationListener.testStarted(mDummyTest);
-        mMockInvocationListener.testEnded(
-                EasyMock.eq(mDummyTest), EasyMock.<HashMap<String, String>>anyObject());
-        mMockInvocationListener.testRunStarted(test2, 2);
-        mMockInvocationListener.testStarted(mDummyTest);
-        mMockInvocationListener.testEnded(
-                EasyMock.eq(mDummyTest), EasyMock.<HashMap<String, String>>anyObject());
-        mMockInvocationListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        EasyMock.expectLastCall().times(2);
-        replayMocks();
+        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+        when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
+        when(mMockITestDevice.executeShellCommand(
+                        String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)))
+                .thenReturn("\nmethod1\nmethod2\nmethod3\n\n");
+        when(mMockITestDevice.executeShellCommand(
+                        String.format("%s/test2 --benchmark_list_tests=true", nativeTestPath)))
+                .thenReturn("method1\nmethod2\n");
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
-        verifyMocks();
+
+        verify(mMockInvocationListener).testRunStarted(test1, 3);
+        verify(mMockInvocationListener, times(2)).testStarted(mDummyTest);
+        verify(mMockInvocationListener, times(2))
+                .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+        verify(mMockInvocationListener).testRunStarted(test2, 2);
+        verify(mMockITestDevice)
+                .executeShellCommand(
+                        Mockito.contains(test1),
+                        Mockito.same(mMockReceiver),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
+        verify(mMockITestDevice)
+                .executeShellCommand(
+                        Mockito.contains(test2),
+                        Mockito.same(mMockReceiver),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
+        verify(mMockITestDevice, times(2)).executeShellCommand(Mockito.contains("chmod"));
+        verify(mMockInvocationListener, times(2))
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
-    /**
-     * Test the run method for a couple tests with a module name
-     */
+    /** Test the run method for a couple tests with a module name */
+    @Test
     public void testRun_withRunReportName() throws DeviceNotAvailableException {
         final String nativeTestPath = GoogleBenchmarkTest.DEFAULT_TEST_PATH;
         final String test1 = "test1";
         final String reportName = "reportName";
         mGoogleBenchmarkTest.setReportRunName(reportName);
-        MockFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1);
-        EasyMock.expect(mMockITestDevice.doesFileExist(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).andReturn(false);
+        MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1);
+        when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).thenReturn(false);
         String[] files = new String[] {"test1"};
-        EasyMock.expect(mMockITestDevice.getChildren(nativeTestPath)).andReturn(files);
-        EasyMock.expect(mMockITestDevice.executeShellCommand(EasyMock.contains("chmod")))
-                .andReturn("");
-        mMockITestDevice.executeShellCommand(EasyMock.contains(test1), EasyMock.same(mMockReceiver),
-                EasyMock.anyLong(), (TimeUnit)EasyMock.anyObject(), EasyMock.anyInt());
-        EasyMock.expect(
-                        mMockITestDevice.executeShellCommand(
-                                String.format(
-                                        "%s/test1 --benchmark_list_tests=true", nativeTestPath)))
-                .andReturn("method1\nmethod2\nmethod3");
-        // Expect reportName instead of test name
-        mMockInvocationListener.testRunStarted(reportName, 3);
-        mMockInvocationListener.testStarted(mDummyTest);
-        mMockInvocationListener.testEnded(
-                EasyMock.eq(mDummyTest), EasyMock.<HashMap<String, String>>anyObject());
-        mMockInvocationListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        EasyMock.expectLastCall();
-        replayMocks();
+        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+        when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
+        when(mMockITestDevice.executeShellCommand(
+                        String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)))
+                .thenReturn("method1\nmethod2\nmethod3");
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
-        verifyMocks();
+
+        verify(mMockITestDevice)
+                .executeShellCommand(
+                        Mockito.contains(test1),
+                        Mockito.same(mMockReceiver),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
+
+        // Expect reportName instead of test name
+        verify(mMockInvocationListener).testRunStarted(reportName, 3);
+        verify(mMockInvocationListener).testStarted(mDummyTest);
+        verify(mMockInvocationListener)
+                .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+        verify(mMockInvocationListener, times(1))
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
-    /**
-     * Test the run method when exec shell throw exeception.
-     */
+    /** Test the run method when exec shell throw exeception. */
+    @Test
     public void testRun_exceptionDuringExecShell() throws DeviceNotAvailableException {
         final String nativeTestPath = GoogleBenchmarkTest.DEFAULT_TEST_PATH;
         final String test1 = "test1";
-        MockFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1);
-        EasyMock.expect(mMockITestDevice.doesFileExist(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).andReturn(false);
+        MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1);
+        when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).thenReturn(false);
         String[] files = new String[] {"test1"};
-        EasyMock.expect(mMockITestDevice.getChildren(nativeTestPath)).andReturn(files);
-        EasyMock.expect(mMockITestDevice.executeShellCommand(EasyMock.contains("chmod")))
-                .andReturn("");
-        mMockITestDevice.executeShellCommand(EasyMock.contains(test1), EasyMock.same(mMockReceiver),
-                EasyMock.anyLong(), (TimeUnit)EasyMock.anyObject(), EasyMock.anyInt());
-        EasyMock.expectLastCall().andThrow(new DeviceNotAvailableException("dnae", "serial"));
-        EasyMock.expect(
-                        mMockITestDevice.executeShellCommand(
-                                String.format(
-                                        "%s/test1 --benchmark_list_tests=true", nativeTestPath)))
-                .andReturn("method1\nmethod2\nmethod3");
-        mMockInvocationListener.testRunStarted(test1, 3);
-        mMockInvocationListener.testRunFailed((String) EasyMock.anyObject());
-        // Even with exception testrunEnded is expected.
-        mMockInvocationListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        EasyMock.expectLastCall();
-        replayMocks();
+        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+        when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
+        doThrow(new DeviceNotAvailableException("dnae", "serial"))
+                .when(mMockITestDevice)
+                .executeShellCommand(
+                        Mockito.contains(test1),
+                        Mockito.same(mMockReceiver),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
+        when(mMockITestDevice.executeShellCommand(
+                        String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)))
+                .thenReturn("method1\nmethod2\nmethod3");
 
         try {
             mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
             fail();
         } catch (DeviceNotAvailableException e) {
             // expected
+            verify(mMockInvocationListener).testRunStarted(test1, 3);
+            verify(mMockInvocationListener).testRunFailed((String) Mockito.any());
+            // Even with exception testrunEnded is expected.
+            verify(mMockInvocationListener, times(1))
+                    .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         }
-        verifyMocks();
     }
 
-    /**
-     * File exclusion regex filter should skip matched filepaths.
-     */
+    /** File exclusion regex filter should skip matched filepaths. */
+    @Test
     public void testFileExclusionRegexFilter_skipMatched() {
         // Skip files ending in .txt
         mGoogleBenchmarkTest.addFileExclusionFilterRegex(".*\\.txt");
@@ -319,9 +310,8 @@ public class GoogleBenchmarkTestTest extends TestCase {
         assertTrue(mGoogleBenchmarkTest.shouldSkipFile("/some/path/file/random.config"));
     }
 
-    /**
-     * File exclusion regex filter for multi filters.
-     */
+    /** File exclusion regex filter for multi filters. */
+    @Test
     public void testFileExclusionRegexFilter_skipMultiMatched() {
         // Skip files ending in .txt
         mGoogleBenchmarkTest.addFileExclusionFilterRegex(".*\\.txt");
@@ -335,6 +325,7 @@ public class GoogleBenchmarkTestTest extends TestCase {
     }
 
     /** File exclusion regex filter should always skip .config file. */
+    @Test
     public void testFileExclusionRegexFilter_skipDefaultMatched() {
         // Always skip files ending in .config
         assertTrue(mGoogleBenchmarkTest.shouldSkipFile("/some/path/file/random.config"));
@@ -343,10 +334,10 @@ public class GoogleBenchmarkTestTest extends TestCase {
         assertFalse(mGoogleBenchmarkTest.shouldSkipFile("/some/path/file/binary"));
         assertFalse(mGoogleBenchmarkTest.shouldSkipFile("/some/path/file/random.dat"));
         assertFalse(mGoogleBenchmarkTest.shouldSkipFile("/some/path/file/test.txt"));
-
     }
 
     /** Test getFilterFlagForFilters. */
+    @Test
     public void testGetFilterFlagForFilters() {
         Set<String> filters = new LinkedHashSet<>(Arrays.asList("filter1", "filter2"));
         String filterFlag = mGoogleBenchmarkTest.getFilterFlagForFilters(filters);
@@ -357,6 +348,7 @@ public class GoogleBenchmarkTestTest extends TestCase {
     }
 
     /** Test getFilterFlagForFilters - no filters. */
+    @Test
     public void testGetFilterFlagForFilters_noFilters() {
         Set<String> filters = new LinkedHashSet<>();
         String filterFlag = mGoogleBenchmarkTest.getFilterFlagForFilters(filters);
@@ -364,6 +356,7 @@ public class GoogleBenchmarkTestTest extends TestCase {
     }
 
     /** Test getFilterFlagForTests. */
+    @Test
     public void testGetFilterFlagForTests() {
         Set<String> tests = new LinkedHashSet<>(Arrays.asList("test1", "test2"));
         String filterFlag = mGoogleBenchmarkTest.getFilterFlagForTests(tests);
@@ -374,6 +367,7 @@ public class GoogleBenchmarkTestTest extends TestCase {
     }
 
     /** Test getFilterFlagForTests - no tests. */
+    @Test
     public void testGetFilterFlagForTests_noFilters() {
         Set<String> tests = new LinkedHashSet<>();
         String filterFlag = mGoogleBenchmarkTest.getFilterFlagForTests(tests);
@@ -395,68 +389,62 @@ public class GoogleBenchmarkTestTest extends TestCase {
         String nativeTestPath = GoogleBenchmarkTest.DEFAULT_TEST_PATH;
         String testPath = nativeTestPath + "/test1";
         // configure the mock file system to have a single test
-        MockFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, "test1");
-        EasyMock.expect(mMockITestDevice.doesFileExist(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(testPath)).andReturn(false);
-        EasyMock.expect(mMockITestDevice.executeShellCommand(EasyMock.contains("chmod")))
-                .andReturn("");
+        MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, "test1");
+        when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(testPath)).thenReturn(false);
+        when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
         String[] files = new String[] {"test1"};
-        EasyMock.expect(mMockITestDevice.getChildren(nativeTestPath)).andReturn(files);
+        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
 
         // List tests to include
         if (mGoogleBenchmarkTest.getIncludeFilters().size() > 0) {
             String incFilterFlag =
                     mGoogleBenchmarkTest.getFilterFlagForFilters(
                             mGoogleBenchmarkTest.getIncludeFilters());
-            EasyMock.expect(
-                            mMockITestDevice.executeShellCommand(
-                                    EasyMock.contains(
-                                            StringEscapeUtils.escapeShell(incFilterFlag))))
-                    .andReturn(incTests);
+            when(mMockITestDevice.executeShellCommand(
+                            Mockito.contains(StringEscapeUtils.escapeShell(incFilterFlag))))
+                    .thenReturn(incTests);
         } else {
-            EasyMock.expect(
-                            mMockITestDevice.executeShellCommand(
-                                    EasyMock.not(
-                                            EasyMock.contains(
-                                                    GoogleBenchmarkTest.GBENCHMARK_FILTER_OPTION))))
-                    .andReturn(incTests);
+            when(mMockITestDevice.executeShellCommand(
+                            AdditionalMatchers.not(
+                                    Mockito.contains(
+                                            GoogleBenchmarkTest.GBENCHMARK_FILTER_OPTION))))
+                    .thenReturn(incTests);
         }
         if (mGoogleBenchmarkTest.getExcludeFilters().size() > 0) {
             // List tests to exclude
             String excFilterFlag =
                     mGoogleBenchmarkTest.getFilterFlagForFilters(
                             mGoogleBenchmarkTest.getExcludeFilters());
-            EasyMock.expect(
-                            mMockITestDevice.executeShellCommand(
-                                    EasyMock.contains(
-                                            StringEscapeUtils.escapeShell(excFilterFlag))))
-                    .andReturn(excTests);
+            when(mMockITestDevice.executeShellCommand(
+                            Mockito.contains(StringEscapeUtils.escapeShell(excFilterFlag))))
+                    .thenReturn(excTests);
         }
-        if (filteredTests != null && filteredTests.size() > 0) {
-            // Runningt filtered tests
-            String testFilterFlag = mGoogleBenchmarkTest.getFilterFlagForTests(filteredTests);
-            mMockITestDevice.executeShellCommand(
-                    EasyMock.contains(StringEscapeUtils.escapeShell(testFilterFlag)),
-                    EasyMock.same(mMockReceiver),
-                    EasyMock.anyLong(),
-                    (TimeUnit) EasyMock.anyObject(),
-                    EasyMock.anyInt());
-            mMockInvocationListener.testRunStarted("test1", filteredTests.size());
-            mMockInvocationListener.testStarted(mDummyTest);
-            mMockInvocationListener.testEnded(
-                    EasyMock.eq(mDummyTest), EasyMock.<HashMap<String, String>>anyObject());
-            mMockInvocationListener.testRunEnded(
-                    EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-            EasyMock.expectLastCall();
-        }
-        replayMocks();
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
-        verifyMocks();
+        if (filteredTests != null && filteredTests.size() > 0) {
+            // Running filtered tests
+            String testFilterFlag = mGoogleBenchmarkTest.getFilterFlagForTests(filteredTests);
+            verify(mMockITestDevice)
+                    .executeShellCommand(
+                            Mockito.contains(StringEscapeUtils.escapeShell(testFilterFlag)),
+                            Mockito.same(mMockReceiver),
+                            Mockito.anyLong(),
+                            (TimeUnit) Mockito.any(),
+                            Mockito.anyInt());
+            verify(mMockInvocationListener).testRunStarted("test1", filteredTests.size());
+            verify(mMockInvocationListener).testStarted(mDummyTest);
+            verify(mMockInvocationListener)
+                    .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+            // Running filtered tests
+            verify(mMockInvocationListener, times(1))
+                    .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        }
     }
 
     /** Test no matching tests for the filters. */
+    @Test
     public void testNoMatchingTests() throws DeviceNotAvailableException {
         Set<String> incFilters = new LinkedHashSet<>(Arrays.asList("X", "Y"));
         String incTests = "Failed to match any benchmarks against regex: X|Y";
@@ -466,6 +454,7 @@ public class GoogleBenchmarkTestTest extends TestCase {
     }
 
     /** Test the include filtering of test methods. */
+    @Test
     public void testIncludeFilter() throws DeviceNotAvailableException {
         Set<String> incFilters = new LinkedHashSet<>(Arrays.asList("A", "B"));
         String incTests = "A\nAa\nB\nBb";
@@ -476,6 +465,7 @@ public class GoogleBenchmarkTestTest extends TestCase {
     }
 
     /** Test the exclude filtering of test methods. */
+    @Test
     public void testExcludeFilter() throws DeviceNotAvailableException {
         String incTests = "A\nAa\nB\nBb\nC\nCc";
         Set<String> excFilters = new LinkedHashSet<>(Arrays.asList("Bb", "C"));
@@ -487,6 +477,7 @@ public class GoogleBenchmarkTestTest extends TestCase {
     }
 
     /** Test the include & exclude filtering of test methods. */
+    @Test
     public void testIncludeAndExcludeFilter() throws DeviceNotAvailableException {
         Set<String> incFilters = new LinkedHashSet<>(Arrays.asList("A", "B"));
         String incTests = "A\nAa\nB\nBb";
@@ -500,6 +491,7 @@ public class GoogleBenchmarkTestTest extends TestCase {
     }
 
     /** Test the ITestDescription filter format "class#method". */
+    @Test
     public void testClearFilter() throws DeviceNotAvailableException {
         Set<String> incFilters = new LinkedHashSet<>(Arrays.asList("X#A", "X#B"));
         Set<String> expectedIncFilters = new LinkedHashSet<>(Arrays.asList("A", "B"));
@@ -508,6 +500,7 @@ public class GoogleBenchmarkTestTest extends TestCase {
     }
 
     /** Test behavior for command lines too long to be run by ADB */
+    @Test
     public void testCommandTooLong() throws DeviceNotAvailableException {
         String deviceScriptPath = "/data/local/tmp/gbenchmarktest_script.sh";
         StringBuilder testNameBuilder = new StringBuilder();
@@ -520,89 +513,78 @@ public class GoogleBenchmarkTestTest extends TestCase {
         String nativeTestPath = GoogleBenchmarkTest.DEFAULT_TEST_PATH;
         String testPath = nativeTestPath + "/" + testName;
         // configure the mock file system to have a single test
-        MockFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, "test1");
-        EasyMock.expect(mMockITestDevice.doesFileExist(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(testPath)).andReturn(false);
-        EasyMock.expect(mMockITestDevice.executeShellCommand(EasyMock.contains("chmod")))
-                .andReturn("");
+        MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, "test1");
+        when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(testPath)).thenReturn(false);
+        when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
         String[] files = new String[] {testName};
-        EasyMock.expect(mMockITestDevice.getChildren(nativeTestPath)).andReturn(files);
+        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
         // List tests
-        EasyMock.expect(
-                        mMockITestDevice.pushString(
-                                EasyMock.<String>anyObject(), EasyMock.eq(deviceScriptPath)))
-                .andReturn(Boolean.TRUE);
-        EasyMock.expect(
-                        mMockITestDevice.executeShellCommand(
-                                EasyMock.eq(String.format("sh %s", deviceScriptPath))))
-                .andReturn("test");
-        mMockITestDevice.deleteFile(deviceScriptPath);
+        when(mMockITestDevice.pushString(Mockito.<String>any(), Mockito.eq(deviceScriptPath)))
+                .thenReturn(Boolean.TRUE);
+        when(mMockITestDevice.executeShellCommand(
+                        Mockito.eq(String.format("sh %s", deviceScriptPath))))
+                .thenReturn("test");
         // Run tests
-        EasyMock.expect(
-                        mMockITestDevice.pushString(
-                                EasyMock.<String>anyObject(), EasyMock.eq(deviceScriptPath)))
-                .andReturn(Boolean.TRUE);
-        mMockITestDevice.executeShellCommand(
-                EasyMock.eq(String.format("sh %s", deviceScriptPath)),
-                EasyMock.same(mMockReceiver),
-                EasyMock.anyLong(),
-                (TimeUnit) EasyMock.anyObject(),
-                EasyMock.anyInt());
-        mMockITestDevice.deleteFile(deviceScriptPath);
-        mMockInvocationListener.testRunStarted(testName, 1);
-        mMockInvocationListener.testStarted(mDummyTest);
-        mMockInvocationListener.testEnded(
-                EasyMock.eq(mDummyTest), EasyMock.<HashMap<String, String>>anyObject());
-        mMockInvocationListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        EasyMock.expectLastCall();
-        replayMocks();
+        when(mMockITestDevice.pushString(Mockito.<String>any(), Mockito.eq(deviceScriptPath)))
+                .thenReturn(Boolean.TRUE);
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
-        verifyMocks();
+
+        verify(mMockITestDevice)
+                .executeShellCommand(
+                        Mockito.eq(String.format("sh %s", deviceScriptPath)),
+                        Mockito.same(mMockReceiver),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
+        verify(mMockITestDevice, times(2)).deleteFile(deviceScriptPath);
+        verify(mMockInvocationListener).testRunStarted(testName, 1);
+        verify(mMockInvocationListener).testStarted(mDummyTest);
+        verify(mMockInvocationListener)
+                .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+        verify(mMockInvocationListener, times(1))
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     /** Test the run method for a couple tests which set ld-library-path */
+    @Test
     public void testRun_withLDLibPath() throws ConfigurationException, DeviceNotAvailableException {
         final String nativeTestPath = GoogleBenchmarkTest.DEFAULT_TEST_PATH;
         final String test1 = "test1";
         mSetter = new OptionSetter(mGoogleBenchmarkTest);
         mSetter.setOptionValue("ld-library-path", "my/ld/path");
-        MockFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1);
-        EasyMock.expect(mMockITestDevice.doesFileExist(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath)).andReturn(true);
-        EasyMock.expect(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).andReturn(false);
+        MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1);
+        when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).thenReturn(false);
         String[] files = new String[] {"test1"};
-        EasyMock.expect(mMockITestDevice.getChildren(nativeTestPath)).andReturn(files);
-        EasyMock.expect(mMockITestDevice.executeShellCommand(EasyMock.contains("chmod")))
-                .andReturn("")
-                .times(1);
-        mMockITestDevice.executeShellCommand(
-                EasyMock.contains(test1),
-                EasyMock.same(mMockReceiver),
-                EasyMock.anyLong(),
-                (TimeUnit) EasyMock.anyObject(),
-                EasyMock.anyInt());
-
-        EasyMock.expect(
-                        mMockITestDevice.executeShellCommand(
-                                String.format(
-                                        "LD_LIBRARY_PATH=my/ld/path %s/test1"
-                                                + " --benchmark_list_tests=true",
-                                        nativeTestPath)))
-                .andReturn("method1\nmethod2\nmethod3");
-
-        mMockInvocationListener.testRunStarted(test1, 3);
-        mMockInvocationListener.testStarted(mDummyTest);
-        mMockInvocationListener.testEnded(
-                EasyMock.eq(mDummyTest), EasyMock.<HashMap<String, String>>anyObject());
-        mMockInvocationListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        EasyMock.expectLastCall().times(1);
-        replayMocks();
+        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+        when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
+        when(mMockITestDevice.executeShellCommand(
+                        String.format(
+                                "LD_LIBRARY_PATH=my/ld/path %s/test1"
+                                        + " --benchmark_list_tests=true",
+                                nativeTestPath)))
+                .thenReturn("method1\nmethod2\nmethod3");
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
-        verifyMocks();
+
+        verify(mMockITestDevice)
+                .executeShellCommand(
+                        Mockito.contains(test1),
+                        Mockito.same(mMockReceiver),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
+        verify(mMockInvocationListener).testRunStarted(test1, 3);
+        verify(mMockInvocationListener).testStarted(mDummyTest);
+        verify(mMockInvocationListener)
+                .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+
+        verify(mMockITestDevice, times(1)).executeShellCommand(Mockito.contains("chmod"));
+        verify(mMockInvocationListener, times(1))
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 }
