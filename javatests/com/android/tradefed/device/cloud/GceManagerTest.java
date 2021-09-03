@@ -300,10 +300,8 @@ public class GceManagerTest {
 
         try {
             OptionSetter setter = new OptionSetter(mOptions);
-            setter.setOptionValue("gce-driver-param", "--cvd-host-package");
-            setter.setOptionValue("gce-driver-param", "gs://cvd-host-package.tar.gz");
-            setter.setOptionValue("gce-driver-param", "--local-image");
-            setter.setOptionValue("gce-driver-param", "gs://cvd-cuttlefish-android-os.tar.gz");
+            setter.setOptionValue("gce-cvd-host-package-path", "gs://cvd-host-package.tar.gz");
+            setter.setOptionValue("gce-local-image-path", "gs://cvd-cuttlefish-android-os.tar.gz");
             mGceManager =
                     new GceManager(mMockDeviceDesc, mOptions, mMockBuildInfo) {
                         @Override
@@ -318,9 +316,9 @@ public class GceManagerTest {
                             mOptions.getAvdDriverBinary().getAbsolutePath(),
                             "create",
                             "--cvd-host-package",
-                            "gs://cvd-host-package.tar.gz",
+                            mOptions.getAvdCuttlefishHostPkg().getAbsolutePath(),
                             "--local-image",
-                            "gs://cvd-cuttlefish-android-os.tar.gz",
+                            mOptions.getAvdLocalImage().getAbsolutePath(),
                             "--config_file",
                             mGceManager.getAvdConfigFile().getAbsolutePath(),
                             "--report_file",
