@@ -274,6 +274,16 @@ public class TestDeviceOptions {
                             + " form_factor=phone.")
     private List<String> mInvocationAttributeToMetadata = new ArrayList<>();
 
+    @Option(
+            name = "gce-local-image-path",
+            description = "path of the prebuilt cuttlefish local image.")
+    private File mAvdLocalImage = null;
+
+    @Option(
+            name = "gce-cvd-host-package-path",
+            description = "path of the prebuilt cuttlefish host package.")
+    private File mAvdCuttlefishHostPkg = null;
+
     // END ====================== Options Related to Virtual Devices ======================
 
     // Option related to Remote Device only
@@ -678,6 +688,16 @@ public class TestDeviceOptions {
     /** The file pointing to the directory of the Tradefed version to be pushed to the remote. */
     public File getRemoteTf() {
         return mRemoteTFVersion;
+    }
+
+    /** Return the path to the cuttlefish local image. */
+    public File getAvdLocalImage() {
+        return mAvdLocalImage;
+    }
+
+    /** Return the path to the cuttlefish host package. */
+    public File getAvdCuttlefishHostPkg() {
+        return mAvdCuttlefishHostPkg;
     }
 
     public static String getCreateCommandByInstanceType(InstanceType type) {
