@@ -133,9 +133,7 @@ public class ArtChrootPreparer extends BaseTargetPreparer {
             throws TargetSetupError, DeviceNotAvailableException {
         CommandResult result = device.executeShellV2Command(cmd);
         if (result.getStatus() != CommandStatus.SUCCESS) {
-            throw new TargetSetupError(
-                    String.format(
-                            "adb shell command failed: '%s': %s".format(cmd, result.getStderr())));
+            throw new TargetSetupError(String.format("adb shell %s\n%s", cmd, result.toString()));
         }
         return result.getStdout();
     }
