@@ -34,6 +34,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -44,7 +45,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -230,7 +230,10 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
             throws TargetSetupError {
         for (final String command : commands) {
             final CommandResult result =
-                    getRunUtil().runTimedCmd(mTimeout.toMillis(), command.split("\\s+"));
+                    getRunUtil()
+                            .runTimedCmd(
+                                    mTimeout.toMillis(),
+                                    QuotationAwareTokenizer.tokenizeLine(command));
             switch (result.getStatus()) {
                 case SUCCESS:
                     CLog.i(
@@ -273,7 +276,7 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
             Process process =
                     getRunUtil()
                             .runCmdInBackground(
-                                    Arrays.asList(command.split("\\s+")),
+                                    List.of(QuotationAwareTokenizer.tokenizeLine(command)),
                                     bgCommandLogs.get(i).getOutputStream());
             if (process == null) {
                 CLog.e("Failed to run command: %s", command);

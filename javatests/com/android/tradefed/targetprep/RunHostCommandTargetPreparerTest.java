@@ -33,12 +33,12 @@ import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
-import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Answers;
@@ -58,10 +58,10 @@ import java.util.List;
 public final class RunHostCommandTargetPreparerTest {
 
     private static final String DEVICE_SERIAL = "123456";
-    private static final String FULL_COMMAND = "command    \t\t\t  \t  argument $SERIAL";
-    private static final String FULL_COMMAND_EXTRA_FILE = "command argument $EXTRA_FILE(test1) $EXTRA_FILE(test2)";
+    private static final String FULL_COMMAND = "command  argument $SERIAL";
 
     @Rule public final MockitoRule mockito = MockitoJUnit.rule();
+    @Rule public final TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private TestInformation mTestInfo;
@@ -91,6 +91,9 @@ public final class RunHostCommandTargetPreparerTest {
                     }
                 };
         when(mTestInfo.getDevice().getSerialNumber()).thenReturn(DEVICE_SERIAL);
+        // Default to successful execution.
+        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+        when(mRunUtil.runTimedCmd(anyLong(), any())).thenReturn(result);
     }
 
     @Test
@@ -98,9 +101,6 @@ public final class RunHostCommandTargetPreparerTest {
         OptionSetter optionSetter = new OptionSetter(mPreparer);
         optionSetter.setOptionValue("host-setup-command", FULL_COMMAND);
         optionSetter.setOptionValue("host-cmd-timeout", "10");
-
-        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        when(mRunUtil.runTimedCmd(anyLong(), any())).thenReturn(result);
 
         // Verify timeout and command (split, removed whitespace, and device serial)
         mPreparer.setUp(mTestInfo);
@@ -117,9 +117,6 @@ public final class RunHostCommandTargetPreparerTest {
         optionSetter.setOptionValue("work-dir", "/working/directory");
         optionSetter.setOptionValue("host-setup-command", "command");
         optionSetter.setOptionValue("host-cmd-timeout", "10");
-
-        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        when(mRunUtil.runTimedCmd(anyLong(), any())).thenReturn(result);
 
         // Verify working directory and command execution
         mPreparer.setUp(mTestInfo);
@@ -145,9 +142,6 @@ public final class RunHostCommandTargetPreparerTest {
         optionSetter.setOptionValue("host-setup-command", FULL_COMMAND);
         optionSetter.setOptionValue("use-flashing-permit", "true");
 
-        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        when(mRunUtil.runTimedCmd(anyLong(), any())).thenReturn(result);
-
         // Verify command ran with flashing permit
         mPreparer.setUp(mTestInfo);
         InOrder inOrder = inOrder(mRunUtil, mHostOptions);
@@ -158,13 +152,20 @@ public final class RunHostCommandTargetPreparerTest {
     }
 
     @Test
+    public void testSetUp_quotationMarks() throws Exception {
+        OptionSetter optionSetter = new OptionSetter(mPreparer);
+        optionSetter.setOptionValue("host-setup-command", "command \"group of arguments\"");
+
+        // Verify that arguments surrounded by quotation marks are not split.
+        mPreparer.setUp(mTestInfo);
+        verify(mRunUtil).runTimedCmd(anyLong(), eq("command"), eq("group of arguments"));
+    }
+
+    @Test
     public void testTearDown() throws Exception {
         OptionSetter optionSetter = new OptionSetter(mPreparer);
         optionSetter.setOptionValue("host-teardown-command", FULL_COMMAND);
         optionSetter.setOptionValue("host-cmd-timeout", "10");
-
-        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        when(mRunUtil.runTimedCmd(anyLong(), any())).thenReturn(result);
 
         // Verify timeout and command (split, removed whitespace, and device serial)
         mPreparer.tearDown(mTestInfo, null);
@@ -192,9 +193,6 @@ public final class RunHostCommandTargetPreparerTest {
         OptionSetter optionSetter = new OptionSetter(mPreparer);
         optionSetter.setOptionValue("host-teardown-command", FULL_COMMAND);
         optionSetter.setOptionValue("use-flashing-permit", "true");
-
-        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        when(mRunUtil.runTimedCmd(anyLong(), any())).thenReturn(result);
 
         // Verify command ran with flashing permit
         mPreparer.tearDown(mTestInfo, null);
@@ -224,52 +222,21 @@ public final class RunHostCommandTargetPreparerTest {
     @Test
     public void testSetUp_extraFile() throws Exception {
         BuildInfo stubBuild = new BuildInfo("stub", "stub");
-        File tmpDir = FileUtil.createTempDir("tmp");
-        File file1 = new File(tmpDir, "test1");
-        File file2 = new File(tmpDir, "test2");
-        FileUtil.writeToFile("ddd", file1);
-        FileUtil.writeToFile("ddd", file2);
-        stubBuild.setFile("test1", file1, "0");
-        stubBuild.setFile("test2", file2, "0");
-
-        OptionSetter optionSetter = new OptionSetter(mPreparer);
-        optionSetter.setOptionValue("host-setup-command", FULL_COMMAND_EXTRA_FILE);
-        optionSetter.setOptionValue("host-cmd-timeout", "10");
-
-        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        when(mRunUtil.runTimedCmd(anyLong(), any())).thenReturn(result);
+        File test1 = tmpDir.newFile("test1");
+        stubBuild.setFile("test1", test1, "0");
         when(mTestInfo.getBuildInfo()).thenReturn(stubBuild);
 
-        // Verify timeout and command (split, removed whitespace, and device serial)
-        mPreparer.setUp(mTestInfo);
-        verify(mRunUtil).runTimedCmd(eq(10L), eq("command"), eq("argument"),
-                eq(file1.getAbsolutePath()), eq(file2.getAbsolutePath()));
-
-        // No flashing permit taken/returned by default
-        verify(mHostOptions, never()).takePermit(PermitLimitType.CONCURRENT_FLASHER);
-        verify(mHostOptions, never()).returnPermit(PermitLimitType.CONCURRENT_FLASHER);
-
-        FileUtil.recursiveDelete(tmpDir);
-    }
-    @Test
-    public void testSetUp_extraFileNotExist() throws Exception {
-        BuildInfo stubBuild = new BuildInfo("stub", "stub");
-
         OptionSetter optionSetter = new OptionSetter(mPreparer);
-        optionSetter.setOptionValue("host-setup-command", FULL_COMMAND_EXTRA_FILE);
-        optionSetter.setOptionValue("host-cmd-timeout", "10");
+        optionSetter.setOptionValue(
+                "host-setup-command", "command $EXTRA_FILE(test1) $EXTRA_FILE(test2)");
 
-        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        when(mRunUtil.runTimedCmd(anyLong(), any())).thenReturn(result);
-        when(mTestInfo.getBuildInfo()).thenReturn(stubBuild);
-
-        // Verify timeout and command (split, removed whitespace, and device serial)
+        // Absolute paths are used for existing files and $EXTRA_FILE for missing files.
         mPreparer.setUp(mTestInfo);
-        verify(mRunUtil).runTimedCmd(eq(10L), eq("command"), eq("argument"),
-                eq("$EXTRA_FILE(test1)"), eq("$EXTRA_FILE(test2)"));
-
-        // No flashing permit taken/returned by default
-        verify(mHostOptions, never()).takePermit(PermitLimitType.CONCURRENT_FLASHER);
-        verify(mHostOptions, never()).returnPermit(PermitLimitType.CONCURRENT_FLASHER);
+        verify(mRunUtil)
+                .runTimedCmd(
+                        anyLong(),
+                        eq("command"),
+                        eq(test1.getAbsolutePath()),
+                        eq("$EXTRA_FILE(test2)"));
     }
 }
