@@ -148,14 +148,13 @@ public class ClusterCommandLauncher
         runUtil.setWorkingDir(mRootDir);
         // clear the TF_GLOBAL_CONFIG env, so another tradefed will not reuse the global config file
         runUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
+        // Add device count to env var.
+        mEnvVars.put(TF_DEVICE_COUNT, String.valueOf(mInvocationContext.getDevices().size()));
         for (final String key : mEnvVars.keySet()) {
             runUtil.setEnvVariable(key, getEnvVar(key));
         }
         // Add device serials to env var.
         runUtil.setEnvVariable(ANDROID_SERIALS, String.join(",", mInvocationContext.getSerials()));
-        // Add device count to env var.
-        runUtil.setEnvVariable(
-                TF_DEVICE_COUNT, String.valueOf(mInvocationContext.getDevices().size()));
 
         final File testWorkDir = new File(getEnvVar(TEST_WORK_DIR, mRootDir.getAbsolutePath()));
         final File logDir = new File(mRootDir, "logs");
