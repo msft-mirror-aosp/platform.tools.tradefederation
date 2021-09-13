@@ -19,6 +19,9 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.LocalAndroidVirtualDevice;
+import com.android.tradefed.device.cloud.NestedRemoteDevice;
+import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -82,12 +85,19 @@ public class WifiPreparer extends BaseTargetPreparer {
 
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.WIFI_AP_NAME, mWifiNetwork);
         if (!device.connectToWifiNetworkIfNeeded(mWifiNetwork, mWifiPsk)) {
+            InfraErrorIdentifier errorIdentifier = InfraErrorIdentifier.WIFI_FAILED_CONNECT;
+            if (device instanceof RemoteAndroidVirtualDevice
+                    || device instanceof NestedRemoteDevice
+                    || device instanceof LocalAndroidVirtualDevice) {
+                // Error identifier for virtual devices.
+                errorIdentifier = InfraErrorIdentifier.VIRTUAL_WIFI_FAILED_CONNECT;
+            }
             throw new TargetSetupError(
                     String.format(
                             "Failed to connect to wifi network %s on %s",
                             mWifiNetwork, device.getSerialNumber()),
                     device.getDeviceDescriptor(),
-                    InfraErrorIdentifier.WIFI_FAILED_CONNECT);
+                    errorIdentifier);
         }
         if (mMonitorNetwork) {
             device.enableNetworkMonitor();
