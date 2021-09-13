@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package com.android.tradefed.device;
-
 import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.Client;
 import com.android.ddmlib.FileListingService;
@@ -30,10 +29,8 @@ import com.android.ddmlib.SyncService;
 import com.android.ddmlib.TimeoutException;
 import com.android.ddmlib.log.LogReceiver;
 import com.android.sdklib.AndroidVersion;
-
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
@@ -42,117 +39,85 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
 /** Stub placeholder implementation of a {@link IDevice}. */
 public class StubDevice implements IDevice, Serializable {
-
     private static final long serialVersionUID = 1L;
-
     private String mSerial;
     private final boolean mIsEmulator;
-
     public StubDevice(String serial) {
         this(serial, false);
     }
-
     public StubDevice(String serial, boolean isEmulator) {
         mSerial = serial;
         mIsEmulator = isEmulator;
     }
-
     public void setSerial(String serial) {
         mSerial = serial;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void createForward(int localPort, int remotePort) throws TimeoutException,
-            AdbCommandRejectedException, IOException {
+    public void createForward(int localPort, int remotePort)
+            throws TimeoutException, AdbCommandRejectedException, IOException {
         throw new IOException("stub");
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public void executeShellCommand(String command, IShellOutputReceiver receiver)
-            throws TimeoutException, AdbCommandRejectedException,
-            ShellCommandUnresponsiveException, IOException {
+            throws TimeoutException, AdbCommandRejectedException, ShellCommandUnresponsiveException,
+                    IOException {
         throw new IOException("stub");
     }
-
     /**
      * {@inheritDoc}
+     *
      * @deprecated use {@link #executeShellCommand(String, IShellOutputReceiver, long, TimeUnit)}.
      */
     @Deprecated
     @Override
-    public void executeShellCommand(String command, IShellOutputReceiver receiver,
-            int maxTimeToOutputResponse) throws TimeoutException, AdbCommandRejectedException,
-            ShellCommandUnresponsiveException, IOException {
+    public void executeShellCommand(
+            String command, IShellOutputReceiver receiver, int maxTimeToOutputResponse)
+            throws TimeoutException, AdbCommandRejectedException, ShellCommandUnresponsiveException,
+                    IOException {
         throw new IOException("stub");
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public String getAvdName() {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public String getAvdPath() {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public Client getClient(String applicationName) {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public String getClientName(int pid) {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public Client[] getClients() {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public FileListingService getFileListingService() {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public String getMountPoint(String name) {
         return null;
     }
-
     /**
      * {@inheritDoc}
+     *
      * @deprecated use {@link #getSystemProperty(String)} instead.
      */
     @Override
@@ -160,17 +125,14 @@ public class StubDevice implements IDevice, Serializable {
     public Map<String, String> getProperties() {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public String getProperty(String name) {
         return null;
     }
-
     /**
      * {@inheritDoc}
+     *
      * @deprecated deprecated in ddmlib with "implementation detail" as reason.
      */
     @Override
@@ -178,16 +140,12 @@ public class StubDevice implements IDevice, Serializable {
     public int getPropertyCount() {
         return 0;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public RawImage getScreenshot() throws TimeoutException, AdbCommandRejectedException,
-            IOException {
+    public RawImage getScreenshot()
+            throws TimeoutException, AdbCommandRejectedException, IOException {
         throw new IOException("stub");
     }
-
     /* (not javadoc)
      * The parent method has no javadoc, so it's invalid for us to attempt to inherit
      */
@@ -196,49 +154,33 @@ public class StubDevice implements IDevice, Serializable {
             throws TimeoutException, AdbCommandRejectedException, IOException {
         throw new IOException("stub");
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public String getSerialNumber() {
         return mSerial;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public DeviceState getState() {
         return DeviceState.OFFLINE;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public SyncService getSyncService() throws TimeoutException, AdbCommandRejectedException,
-            IOException {
+    public SyncService getSyncService()
+            throws TimeoutException, AdbCommandRejectedException, IOException {
         throw new IOException("stub");
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean hasClients() {
         return false;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public void installPackage(String packageFilePath, boolean reinstall, String... extraArgs)
             throws InstallException {
         throw new InstallException(new IOException("stub"));
     }
-
     /** {@inheritDoc} */
     @Override
     public void installPackage(
@@ -249,7 +191,6 @@ public class StubDevice implements IDevice, Serializable {
             throws InstallException {
         throw new InstallException(new IOException("stub"));
     }
-
     /** {@inheritDoc} */
     @Override
     public void installPackage(
@@ -263,31 +204,28 @@ public class StubDevice implements IDevice, Serializable {
             throws InstallException {
         throw new InstallException(new IOException("stub"));
     }
-
-    /**
-     * {@inheritDoc}
-     **/
+    /** {@inheritDoc} */
     @Override
-    public void installPackages(List<File> apkFilePaths, boolean reinstall, List<String> extraArgs,
-            long timeOutInMs, TimeUnit timeunit) throws InstallException {
+    public void installPackages(
+            List<File> apkFilePaths,
+            boolean reinstall,
+            List<String> extraArgs,
+            long timeOutInMs,
+            TimeUnit timeunit)
+            throws InstallException {
         throw new InstallException(new IOException("stub"));
     }
-
     /** {@inheritDoc} */
     @Override
     public String uninstallApp(String applicationID, String... extraArgs) throws InstallException {
         throw new InstallException(new IOException("stub"));
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void installRemotePackage(String remoteFilePath, boolean reinstall,
-            String... extraArgs) throws InstallException {
+    public void installRemotePackage(String remoteFilePath, boolean reinstall, String... extraArgs)
+            throws InstallException {
         throw new InstallException(new IOException("stub"));
     }
-
     /** {@inheritDoc} */
     @Override
     public void installRemotePackage(
@@ -295,7 +233,6 @@ public class StubDevice implements IDevice, Serializable {
             throws InstallException {
         throw new InstallException(new IOException("stub"));
     }
-
     /** {@inheritDoc} */
     @Override
     public void installRemotePackage(
@@ -309,209 +246,166 @@ public class StubDevice implements IDevice, Serializable {
             throws InstallException {
         throw new InstallException(new IOException("stub"));
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean isBootLoader() {
         return false;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean isEmulator() {
         return mIsEmulator;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean isOffline() {
         return true;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean isOnline() {
         return false;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void reboot(String into) throws TimeoutException, AdbCommandRejectedException,
-            IOException {
+    public void reboot(String into)
+            throws TimeoutException, AdbCommandRejectedException, IOException {
         throw new IOException("stub");
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void removeForward(int localPort, int remotePort) throws TimeoutException,
-            AdbCommandRejectedException, IOException {
+    public void removeForward(int localPort)
+            throws TimeoutException, AdbCommandRejectedException, IOException {
         throw new IOException("stub");
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
+    @Override
+    public void createReverse(int remotePort, int localPort)
+            throws TimeoutException, AdbCommandRejectedException, IOException {
+        throw new IOException("stub");
+    }
+    /** {@inheritDoc} */
+    @Override
+    public void removeReverse(int remotePort)
+            throws TimeoutException, AdbCommandRejectedException, IOException {
+        throw new IOException("stub");
+    }
+    /** {@inheritDoc} */
     @Override
     public void removeRemotePackage(String remoteFilePath) throws InstallException {
         throw new InstallException(new IOException("stub"));
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void runEventLogService(LogReceiver receiver) throws TimeoutException,
-            AdbCommandRejectedException, IOException {
+    public void runEventLogService(LogReceiver receiver)
+            throws TimeoutException, AdbCommandRejectedException, IOException {
         throw new IOException("stub");
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void runLogService(String logname, LogReceiver receiver) throws TimeoutException,
-            AdbCommandRejectedException, IOException {
+    public void runLogService(String logname, LogReceiver receiver)
+            throws TimeoutException, AdbCommandRejectedException, IOException {
         throw new IOException("stub");
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public String syncPackageToDevice(String localFilePath) throws TimeoutException,
-            AdbCommandRejectedException, IOException, SyncException {
+    public String syncPackageToDevice(String localFilePath)
+            throws TimeoutException, AdbCommandRejectedException, IOException, SyncException {
         throw new IOException("stub");
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public String uninstallPackage(String packageName) throws InstallException {
         throw new InstallException(new IOException("stub"));
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void pushFile(String local, String remote) throws IOException,
-            AdbCommandRejectedException, TimeoutException, SyncException {
+    public void pushFile(String local, String remote)
+            throws IOException, AdbCommandRejectedException, TimeoutException, SyncException {
         // ignore
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void pullFile(String remote, String local) throws IOException,
-            AdbCommandRejectedException, TimeoutException, SyncException {
+    public void pullFile(String remote, String local)
+            throws IOException, AdbCommandRejectedException, TimeoutException, SyncException {
         // ignore
     }
-
     /**
      * {@inheritDoc}
+     *
      * @deprecated use {@link #getProperty(String)} instead.
      */
     @Override
     @Deprecated
-    public String getPropertySync(String name) throws TimeoutException,
-            AdbCommandRejectedException, ShellCommandUnresponsiveException, IOException {
+    public String getPropertySync(String name)
+            throws TimeoutException, AdbCommandRejectedException, ShellCommandUnresponsiveException,
+                    IOException {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean arePropertiesSet() {
         return false;
     }
-
     /**
      * {@inheritDoc}
+     *
      * @deprecated use {@link #getProperty(String)} instead.
      */
     @Override
     @Deprecated
-    public String getPropertyCacheOrSync(String name) throws TimeoutException,
-            AdbCommandRejectedException, ShellCommandUnresponsiveException, IOException {
+    public String getPropertyCacheOrSync(String name)
+            throws TimeoutException, AdbCommandRejectedException, ShellCommandUnresponsiveException,
+                    IOException {
         return null;
     }
-
     /**
      * {@inheritDoc}
+     *
      * @deprecated use {@link #getBattery()} instead.
      */
     @Override
     @Deprecated
-    public Integer getBatteryLevel() throws TimeoutException, AdbCommandRejectedException,
-            IOException, ShellCommandUnresponsiveException {
+    public Integer getBatteryLevel()
+            throws TimeoutException, AdbCommandRejectedException, IOException,
+                    ShellCommandUnresponsiveException {
         return null;
     }
-
     /**
      * {@inheritDoc}
+     *
      * @deprecated use {@link #getBattery(long, TimeUnit)} instead.
      */
     @Override
     @Deprecated
-    public Integer getBatteryLevel(long freshnessMs) throws TimeoutException,
-            AdbCommandRejectedException, IOException, ShellCommandUnresponsiveException {
+    public Integer getBatteryLevel(long freshnessMs)
+            throws TimeoutException, AdbCommandRejectedException, IOException,
+                    ShellCommandUnresponsiveException {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void createForward(int localPort, String remoteSocketName,
-            DeviceUnixSocketNamespace namespace) throws TimeoutException,
-            AdbCommandRejectedException, IOException {
+    public void createForward(
+            int localPort, String remoteSocketName, DeviceUnixSocketNamespace namespace)
+            throws TimeoutException, AdbCommandRejectedException, IOException {
         // ignore
     }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void removeForward(int localPort, String remoteSocketName,
-            DeviceUnixSocketNamespace namespace) throws TimeoutException,
-            AdbCommandRejectedException, IOException {
-        // ignore
-    }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public String getName() {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void executeShellCommand(String command, IShellOutputReceiver receiver,
-            long maxTimeToOutputResponse, TimeUnit maxTimeUnits)
-            throws TimeoutException, AdbCommandRejectedException,
-            ShellCommandUnresponsiveException, IOException {
+    public void executeShellCommand(
+            String command,
+            IShellOutputReceiver receiver,
+            long maxTimeToOutputResponse,
+            TimeUnit maxTimeUnits)
+            throws TimeoutException, AdbCommandRejectedException, ShellCommandUnresponsiveException,
+                    IOException {
         throw new IOException("stub");
     }
-
     /** {@inheritDoc} */
     @Override
     public void executeShellCommand(
@@ -524,25 +418,19 @@ public class StubDevice implements IDevice, Serializable {
                     IOException {
         throw new IOException("stub");
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean supportsFeature(Feature feature) {
         return false;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void startScreenRecorder(String remoteFilePath, ScreenRecorderOptions options,
-            IShellOutputReceiver receiver) throws TimeoutException, AdbCommandRejectedException,
-            IOException, ShellCommandUnresponsiveException {
+    public void startScreenRecorder(
+            String remoteFilePath, ScreenRecorderOptions options, IShellOutputReceiver receiver)
+            throws TimeoutException, AdbCommandRejectedException, IOException,
+                    ShellCommandUnresponsiveException {
         // no-op
     }
-
     /* (non-Javadoc)
      * @see com.android.ddmlib.IDevice#supportsFeature(com.android.ddmlib.IDevice.HardwareFeature)
      */
@@ -550,7 +438,6 @@ public class StubDevice implements IDevice, Serializable {
     public boolean supportsFeature(HardwareFeature arg0) {
         return true;
     }
-
     /** {@inheritDoc} */
     @Override
     public ListenableFuture<String> getSystemProperty(String name) {
@@ -558,82 +445,55 @@ public class StubDevice implements IDevice, Serializable {
         f.set(null);
         return f;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public Future<Integer> getBattery() {
         SettableFuture<Integer> f = SettableFuture.create();
         f.set(0);
         return f;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public Future<Integer> getBattery(long freshnessTime, TimeUnit timeUnit) {
         return getBattery();
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public List<String> getAbis() {
         return Collections.emptyList();
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public int getDensity() {
         return 0;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public String getLanguage() {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public String getRegion() {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public AndroidVersion getVersion() {
         return null;
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean isRoot()
             throws TimeoutException, AdbCommandRejectedException, IOException,
-            ShellCommandUnresponsiveException {
+                    ShellCommandUnresponsiveException {
         throw new IOException("stub");
     }
-
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean root()
             throws TimeoutException, AdbCommandRejectedException, IOException,
-            ShellCommandUnresponsiveException {
+                    ShellCommandUnresponsiveException {
         throw new IOException("stub");
     }
 }
