@@ -15,8 +15,6 @@
  */
 package com.android.helper.aoa;
 
-import com.android.ddmlib.Log;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableSet;
@@ -117,12 +115,12 @@ public class AoaDevice implements AutoCloseable {
                 return;
             }
             if (attempt >= ACCESSORY_START_MAX_RETRIES) {
-                Log.w(
-                        LOG_TAG,
-                        String.format(
-                                "Failed to start accessory mode after %d attempts; "
-                                        + "proceeding anyway",
-                                attempt));
+                // Log.w(
+                //        LOG_TAG,
+                //        String.format(
+                //                "Failed to start accessory mode after %d attempts; "
+                //                        + "proceeding anyway",
+                //                attempt));
                 registerHIDs();
                 return;
             }
@@ -311,7 +309,7 @@ public class AoaDevice implements AutoCloseable {
     private void send(AoaHID hid, byte[] data, Duration pause) {
         int result = transfer(ACCESSORY_SEND_HID_EVENT, hid.getId(), 0, data);
         if (result == DEVICE_NOT_FOUND) {
-            Log.w(LOG_TAG, "Device not found while sending HID event; resetting connection");
+            // Log.w(LOG_TAG, "Device not found while sending HID event; resetting connection");
             resetConnection();
             result = transfer(ACCESSORY_SEND_HID_EVENT, hid.getId(), 0, data);
         }
