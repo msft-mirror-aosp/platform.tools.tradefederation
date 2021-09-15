@@ -613,6 +613,152 @@ public class TestMappingTest {
         assertEquals(TestMapping.removeComments(jsonString), goldenString);
     }
 
+    /**
+     * Test for {@link TestMapping#listTestMappingFiles()} for list TEST_MAPPING files, include
+     * import TEST_MAPPING files.
+     */
+    @Test
+    public void testIncludeImports() throws Exception {
+        // Test directory structure:
+        // ├── disabled-presubmit-tests
+        // ├── path1
+        // │   └── TEST_MAPPING
+        // ├── path2
+        // │   ├── path3
+        // │   │  └── TEST_MAPPING
+        // │   └── TEST_MAPPING
+        // └── test_mappings.zip
+        File tempDir = null;
+        IBuildInfo mockBuildInfo = mock(IBuildInfo.class);
+        try {
+            tempDir = FileUtil.createTempDir("test_mapping");
+            File path1 = new File(tempDir.getAbsolutePath() + "/path1");
+            path1.mkdir();
+            String srcFile =
+                    File.separator + TEST_DATA_DIR + File.separator + "test_mapping_with_import_1";
+            InputStream resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, path1, TEST_MAPPING);
+
+            File path2 = new File(tempDir.getAbsolutePath() + "/path2");
+            path2.mkdir();
+            srcFile =
+                    File.separator + TEST_DATA_DIR + File.separator + "test_mapping_with_import_2";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, path2, TEST_MAPPING);
+
+            File path3 = new File(path2.getAbsolutePath() + "/path3");
+            path3.mkdir();
+            srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_1";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, path3, TEST_MAPPING);
+
+            srcFile = File.separator + TEST_DATA_DIR + File.separator + DISABLED_PRESUBMIT_TESTS;
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, tempDir, DISABLED_PRESUBMIT_TESTS);
+            List<File> filesToZip =
+                    Arrays.asList(path1, path2, new File(tempDir, DISABLED_PRESUBMIT_TESTS));
+
+            File zipFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPINGS_ZIP).toFile();
+            ZipUtil.createZip(filesToZip, zipFile);
+            when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
+
+            TestMapping.setIgnoreTestMappingImports(false);
+
+            Set<String> names = new HashSet<String>();
+            Set<TestInfo> testInfos =
+                    new TestMapping(path3.toPath().resolve(TEST_MAPPING), tempDir.toPath())
+                            .getTests("presubmit", null, true, null);
+            assertEquals(3, testInfos.size());
+            for (TestInfo test : testInfos) {
+                names.add(test.getName());
+            }
+            assertTrue(names.contains("import-test1"));
+            assertTrue(names.contains("import-test2"));
+            assertTrue(names.contains("test1"));
+
+            testInfos =
+                    new TestMapping(path3.toPath().resolve(TEST_MAPPING), tempDir.toPath())
+                            .getTests("presubmit", null, false, null);
+            names.clear();
+            for (TestInfo test : testInfos) {
+                names.add(test.getName());
+            }
+            assertTrue(names.contains("suite/stub1"));
+            assertTrue(names.contains("import-test3"));
+            assertEquals(2, testInfos.size());
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+            TestMapping.setIgnoreTestMappingImports(true);
+        }
+    }
+
+    /**
+     * Test for {@link TestMapping#listTestMappingFiles()} for list TEST_MAPPING files, ignore
+     * import TEST_MAPPING files.
+     */
+    @Test
+    public void testExcludeImports() throws Exception {
+        // Test directory structure:
+        // ├── disabled-presubmit-tests
+        // ├── path1
+        // │   └── TEST_MAPPING
+        // ├── path2
+        // │   ├── path3
+        // │   │  └── TEST_MAPPING
+        // │   └── TEST_MAPPING
+        // └── test_mappings.zip
+        File tempDir = null;
+        IBuildInfo mockBuildInfo = mock(IBuildInfo.class);
+        try {
+            tempDir = FileUtil.createTempDir("test_mapping");
+            File path1 = new File(tempDir.getAbsolutePath() + "/path1");
+            path1.mkdir();
+            String srcFile =
+                    File.separator + TEST_DATA_DIR + File.separator + "test_mapping_with_import_1";
+            InputStream resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, path1, TEST_MAPPING);
+
+            File path2 = new File(tempDir.getAbsolutePath() + "/path2");
+            path2.mkdir();
+            srcFile =
+                    File.separator + TEST_DATA_DIR + File.separator + "test_mapping_with_import_2";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, path2, TEST_MAPPING);
+
+            File path3 = new File(path2.getAbsolutePath() + "/path3");
+            path3.mkdir();
+            srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_1";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, path3, TEST_MAPPING);
+
+            srcFile = File.separator + TEST_DATA_DIR + File.separator + DISABLED_PRESUBMIT_TESTS;
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, tempDir, DISABLED_PRESUBMIT_TESTS);
+            List<File> filesToZip =
+                    Arrays.asList(path1, path2, new File(tempDir, DISABLED_PRESUBMIT_TESTS));
+
+            File zipFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPINGS_ZIP).toFile();
+            ZipUtil.createZip(filesToZip, zipFile);
+            when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
+
+            TestMapping.setIgnoreTestMappingImports(true);
+            Set<String> names = new HashSet<String>();
+            Set<TestInfo> testInfos =
+                    new TestMapping(path3.toPath().resolve(TEST_MAPPING), tempDir.toPath())
+                            .getTests("presubmit", null, true, null);
+            assertEquals(1, testInfos.size());
+            for (TestInfo test : testInfos) {
+                names.add(test.getName());
+            }
+
+            assertFalse(names.contains("import-test1"));
+            assertFalse(names.contains("import-test2"));
+            assertTrue(names.contains("test1"));
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+        }
+    }
+
     private String getJsonStringByName(String fileName) throws Exception {
         File tempDir = null;
         try {
