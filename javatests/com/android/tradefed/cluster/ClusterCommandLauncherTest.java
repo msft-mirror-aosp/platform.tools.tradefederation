@@ -205,7 +205,7 @@ public class ClusterCommandLauncherTest {
         final String classpath = ArrayUtil.join(":", jars);
         mOptionSetter.setOptionValue("cluster:env-var", "TF_PATH", tfPathValue);
         mOptionSetter.setOptionValue("cluster:java-property", "FOO", "${TF_WORK_DIR}/foo");
-        mOptionSetter.setOptionValue("cluster:command-line", COMMAND);
+        mOptionSetter.setOptionValue("cluster:command-line", "--shard-count ${TF_DEVICE_COUNT}");
         final CommandResult mockCommandResult = new CommandResult(CommandStatus.SUCCESS);
         when(mMockRunUtil.runTimedCmdWithInput(
                         Mockito.anyLong(),
@@ -232,7 +232,8 @@ public class ClusterCommandLauncherTest {
                                     classpath,
                                     "-DFOO=" + mRootDir.getAbsolutePath() + "/foo",
                                     "com.android.tradefed.command.CommandRunner",
-                                    COMMAND,
+                                    "--shard-count",
+                                    "2",
                                     "--serial",
                                     DEVICE_SERIAL,
                                     "--serial",
