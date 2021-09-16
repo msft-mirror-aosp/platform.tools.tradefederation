@@ -60,6 +60,10 @@ public class CommonLogRemoteFileUtil {
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.CUTTLEFISH,
                 new KnownLogFileEntry(
+                        "/home/%s/fetcher_config.json", null, LogDataType.TEXT));
+        KNOWN_FILES_TO_FETCH.put(
+                InstanceType.CUTTLEFISH,
+                new KnownLogFileEntry(
                         NESTED_REMOTE_LOG_DIR + "kernel.log", null, LogDataType.TEXT));
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.CUTTLEFISH,

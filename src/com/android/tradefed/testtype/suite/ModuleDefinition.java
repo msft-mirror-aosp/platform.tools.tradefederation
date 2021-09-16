@@ -464,6 +464,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 if (test instanceof IConfigurationReceiver) {
                     ((IConfigurationReceiver) test).setConfiguration(mModuleConfiguration);
                 }
+                if (mDevice instanceof IConfigurationReceiver) {
+                    ((IConfigurationReceiver) mDevice).setConfiguration(mModuleConfiguration);
+                }
                 if (test instanceof ISystemStatusCheckerReceiver) {
                     // We do not pass down Status checker because they are already running at the
                     // top level suite.

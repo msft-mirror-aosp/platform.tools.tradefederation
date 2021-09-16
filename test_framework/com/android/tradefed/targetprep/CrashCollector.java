@@ -16,7 +16,6 @@
 package com.android.tradefed.targetprep;
 
 import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.BackgroundDeviceAction;
@@ -56,30 +55,13 @@ public class CrashCollector extends TestFilePushSetup implements ITestLoggerRece
     @Option(name = "max-crash-log-size", description = "Max size to retain for crash logs.")
     private long mMaxCrashLogSize = 10 * 1024 * 1024;
 
-    boolean shouldDisable(ITestDevice device, IBuildInfo buildInfo)
-            throws DeviceNotAvailableException {
-        if (isDisabled()) {
-            return true;
-        }
-        if (!device.checkApiLevelAgainstNextRelease(24)) {
-            CLog.i("API Level too low: %s.", device.getApiLevel());
-            return true;
-        }
-        if (!(buildInfo instanceof IDeviceBuildInfo)) {
-            CLog.w("Unsupported build info type: %s, cannot install crashcollector binary",
-                    buildInfo.getClass().getSimpleName());
-            return true;
-        }
-        return false;
-    }
-
     /** {@inheritDoc} */
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         ITestDevice device = testInfo.getDevice();
         IBuildInfo buildInfo = testInfo.getBuildInfo();
-        boolean shouldDisable = shouldDisable(device, buildInfo);
+        boolean shouldDisable = true;
         if (shouldDisable) {
             CLog.i("Crash collector disabled.");
             return;
