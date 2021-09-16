@@ -15,6 +15,21 @@
  */
 package com.android.tradefed.testtype.suite;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.junit.Assert.assertEquals;
@@ -45,7 +60,6 @@ import com.android.tradefed.testtype.suite.params.ModuleParameters;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -65,14 +79,15 @@ import java.util.Set;
 public class BaseTestSuiteTest {
     private BaseTestSuite mRunner;
     private IDeviceBuildInfo mBuildInfo;
-    private ITestDevice mMockDevice;
+    @Mock ITestDevice mMockDevice;
     private TestInformation mTestInfo;
 
     private static final String TEST_MODULE = "test-module";
 
     @Before
     public void setUp() throws Exception {
-        mMockDevice = EasyMock.createMock(ITestDevice.class);
+        MockitoAnnotations.initMocks(this);
+
         mBuildInfo = new DeviceBuildInfo();
         mRunner = new AbiBaseTestSuite();
         mRunner.setBuild(mBuildInfo);
@@ -83,11 +98,10 @@ public class BaseTestSuiteTest {
         context.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, mBuildInfo);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
 
-        EasyMock.expect(mMockDevice.getProperty(EasyMock.anyObject())).andReturn("arm64-v8a");
-        EasyMock.expect(mMockDevice.getProperty(EasyMock.anyObject())).andReturn("armeabi-v7a");
-        EasyMock.expect(mMockDevice.getIDevice()).andStubReturn(EasyMock.createMock(IDevice.class));
-        EasyMock.expect(mMockDevice.getFoldableStates()).andStubReturn(new HashSet<>());
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getProperty(Mockito.any())).thenReturn("arm64-v8a");
+        when(mMockDevice.getProperty(Mockito.any())).thenReturn("armeabi-v7a");
+        when(mMockDevice.getIDevice()).thenReturn(mock(IDevice.class));
+        when(mMockDevice.getFoldableStates()).thenReturn(new HashSet<>());
     }
 
     /**
@@ -379,16 +393,14 @@ public class BaseTestSuiteTest {
             excludeModule.add("arm64-v8a suite/load-filter-test" + i);
         }
         mRunner.setExcludeFilter(excludeModule);
-        ITestLogger logger = EasyMock.createMock(ITestLogger.class);
+        ITestLogger logger = mock(ITestLogger.class);
         mRunner.setTestLogger(logger);
 
-        EasyMock.replay(logger);
         Collection<IRemoteTest> tests = mRunner.split(2, mTestInfo);
         assertEquals(4, tests.size());
         for (IRemoteTest test : tests) {
             assertTrue(test instanceof BaseTestSuite);
         }
-        EasyMock.verify(logger);
     }
 
     /**
