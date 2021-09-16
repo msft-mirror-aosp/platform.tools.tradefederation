@@ -17,6 +17,7 @@ package com.android.tradefed.testtype.suite.retry;
 
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.command.ICommandOptions;
@@ -38,12 +39,14 @@ import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 
-import org.easymock.EasyMock;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -57,34 +60,29 @@ public class RetryReschedulerTest {
 
     private RetryRescheduler mTest;
     private IConfiguration mTopConfiguration;
-    private IConfiguration mRescheduledConfiguration;
-    private ICommandOptions mMockCommandOptions;
-    private IDeviceSelection mMockRequirements;
+    @Mock IConfiguration mRescheduledConfiguration;
+    @Mock ICommandOptions mMockCommandOptions;
+    @Mock IDeviceSelection mMockRequirements;
 
-    private ITestSuiteResultLoader mMockLoader;
-    private IRescheduler mMockRescheduler;
-    private IConfigurationFactory mMockFactory;
+    @Mock ITestSuiteResultLoader mMockLoader;
+    @Mock IRescheduler mMockRescheduler;
+    @Mock IConfigurationFactory mMockFactory;
     private BaseTestSuite mSuite;
 
     private CollectingTestListener mFakeRecord;
 
     @Before
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mTest = new RetryRescheduler();
         mTopConfiguration = new Configuration("test", "test");
-        mMockCommandOptions = EasyMock.createMock(ICommandOptions.class);
-        mMockRequirements = EasyMock.createMock(IDeviceSelection.class);
-        mRescheduledConfiguration = EasyMock.createMock(IConfiguration.class);
-        EasyMock.expect(mRescheduledConfiguration.getCommandOptions())
-                .andStubReturn(mMockCommandOptions);
-        EasyMock.expect(mRescheduledConfiguration.getDeviceRequirements())
-                .andStubReturn(mMockRequirements);
-        mRescheduledConfiguration.setDeviceRequirements(EasyMock.anyObject());
-        EasyMock.expectLastCall();
-        EasyMock.expect(mRescheduledConfiguration.getLogOutput()).andStubReturn(new FileLogger());
-        mMockLoader = EasyMock.createMock(ITestSuiteResultLoader.class);
-        mMockRescheduler = EasyMock.createMock(IRescheduler.class);
-        mMockFactory = EasyMock.createMock(IConfigurationFactory.class);
+
+        when(mRescheduledConfiguration.getCommandOptions()).thenReturn(mMockCommandOptions);
+        when(mRescheduledConfiguration.getDeviceRequirements()).thenReturn(mMockRequirements);
+
+        when(mRescheduledConfiguration.getLogOutput()).thenReturn(new FileLogger());
+
         mTopConfiguration.setConfigurationObject(
                 RetryRescheduler.PREVIOUS_LOADER_NAME, mMockLoader);
         mTest.setConfiguration(mTopConfiguration);
@@ -92,47 +90,34 @@ public class RetryReschedulerTest {
         mTest.setConfigurationFactory(mMockFactory);
 
         mSuite = Mockito.mock(BaseTestSuite.class);
-        EasyMock.expect(mRescheduledConfiguration.getTests()).andStubReturn(Arrays.asList(mSuite));
-
-        mMockLoader.cleanUp();
-        EasyMock.expectLastCall();
-
-        mMockLoader.customizeConfiguration(EasyMock.anyObject());
-        EasyMock.expectLastCall();
+        when(mRescheduledConfiguration.getTests()).thenReturn(Arrays.asList(mSuite));
 
         mMockCommandOptions.setShardCount(null);
         mMockCommandOptions.setShardIndex(null);
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        verify(mRescheduledConfiguration, times(1)).setDeviceRequirements(Mockito.any());
+        verify(mMockLoader, times(1)).cleanUp();
+        verify(mMockLoader, times(1)).customizeConfiguration(Mockito.any());
     }
 
     /** Test rescheduling a tests that only had pass tests in the first run. */
     @Test
     public void testReschedule_onlyPassTests() throws Exception {
         populateFakeResults(2, 2, 0, 0, 0, false);
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("previous_command");
-        EasyMock.expect(mMockFactory.createConfigurationFromArgs(EasyMock.anyObject()))
-                .andReturn(mRescheduledConfiguration);
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
 
-        mRescheduledConfiguration.setTests(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        EasyMock.expect(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).andReturn(true);
-        EasyMock.replay(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions,
-                mMockRequirements);
+        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
+
         mTest.run(null, null);
-        EasyMock.verify(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions,
-                mMockRequirements);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
 
         Set<String> excludeRun0 = new HashSet<>();
         excludeRun0.add("run0");
@@ -148,35 +133,21 @@ public class RetryReschedulerTest {
         mTopConfiguration.getCommandOptions().setShardCount(2);
         mTopConfiguration.getDeviceRequirements().setSerial("serial1", "serial2");
         populateFakeResults(2, 2, 0, 0, 0, false);
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("previous_command");
-        EasyMock.expect(mMockFactory.createConfigurationFromArgs(EasyMock.anyObject()))
-                .andReturn(mRescheduledConfiguration);
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
+
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
         // Shard count is carried from retry attempt
-        EasyMock.reset(mMockCommandOptions);
-        mMockCommandOptions.setShardCount(2);
-        mMockCommandOptions.setShardIndex(null);
+        Mockito.reset(mMockCommandOptions);
 
-        mRescheduledConfiguration.setTests(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
-        EasyMock.expect(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).andReturn(true);
-        EasyMock.replay(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions,
-                mMockRequirements);
         mTest.run(null, null);
-        EasyMock.verify(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions,
-                mMockRequirements);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
+        verify(mMockCommandOptions).setShardCount(2);
+        verify(mMockCommandOptions).setShardIndex(null);
 
         Set<String> excludeRun0 = new HashSet<>();
         excludeRun0.add("run0");
@@ -190,29 +161,17 @@ public class RetryReschedulerTest {
     @Test
     public void testReschedule_someFailedTests() throws Exception {
         populateFakeResults(2, 2, 1, 0, 0, false);
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("previous_command");
-        EasyMock.expect(mMockFactory.createConfigurationFromArgs(EasyMock.anyObject()))
-                .andReturn(mRescheduledConfiguration);
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
 
-        mRescheduledConfiguration.setTests(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        EasyMock.expect(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).andReturn(true);
-        EasyMock.replay(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
+
         mTest.run(null, null);
-        EasyMock.verify(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
         // Only the passing tests are excluded since we don't want to re-run them
         Set<String> excludeRun0 = new HashSet<>();
         excludeRun0.add("run0 test.class#testPass0");
@@ -229,29 +188,17 @@ public class RetryReschedulerTest {
     @Test
     public void testReschedule_someAssumptionFailures() throws Exception {
         populateFakeResults(2, 2, 0, 1, 0, false);
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("previous_command");
-        EasyMock.expect(mMockFactory.createConfigurationFromArgs(EasyMock.anyObject()))
-                .andReturn(mRescheduledConfiguration);
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
 
-        mRescheduledConfiguration.setTests(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        EasyMock.expect(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).andReturn(true);
-        EasyMock.replay(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
+
         mTest.run(null, null);
-        EasyMock.verify(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
         // Only the passing tests are excluded since we don't want to re-run them
         Set<String> excludeRun0 = new HashSet<>();
         excludeRun0.add("run0");
@@ -268,29 +215,17 @@ public class RetryReschedulerTest {
     @Test
     public void testReschedule_mixedFailedAssumptionFailures() throws Exception {
         populateFakeResults(2, 3, 1, 1, 0, false);
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("previous_command");
-        EasyMock.expect(mMockFactory.createConfigurationFromArgs(EasyMock.anyObject()))
-                .andReturn(mRescheduledConfiguration);
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
 
-        mRescheduledConfiguration.setTests(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        EasyMock.expect(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).andReturn(true);
-        EasyMock.replay(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
+
         mTest.run(null, null);
-        EasyMock.verify(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
         // Only the passing and assumption failures are excluded
         Set<String> excludeRun0 = new HashSet<>();
         excludeRun0.add("run0 test.class#testPass0");
@@ -298,7 +233,6 @@ public class RetryReschedulerTest {
         Set<String> excludeRun0_assume = new HashSet<>();
         excludeRun0_assume.add("run0 test.class#testAssume0");
         verify(mSuite).setExcludeFilter(excludeRun0_assume);
-
         Set<String> excludeRun1 = new HashSet<>();
         excludeRun1.add("run1 test.class#testPass0");
         verify(mSuite).setExcludeFilter(excludeRun1);
@@ -313,29 +247,17 @@ public class RetryReschedulerTest {
         OptionSetter setter = new OptionSetter(mTest);
         setter.setOptionValue(BaseTestSuite.EXCLUDE_FILTER_OPTION, "run1");
         populateFakeResults(2, 2, 1, 0, 0, false);
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("previous_command");
-        EasyMock.expect(mMockFactory.createConfigurationFromArgs(EasyMock.anyObject()))
-                .andReturn(mRescheduledConfiguration);
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
 
-        mRescheduledConfiguration.setTests(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        EasyMock.expect(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).andReturn(true);
-        EasyMock.replay(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
+
         mTest.run(null, null);
-        EasyMock.verify(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
 
         Set<String> excludeRun0 = new HashSet<>();
         excludeRun0.add("run0 test.class#testPass0");
@@ -352,29 +274,17 @@ public class RetryReschedulerTest {
         OptionSetter setter = new OptionSetter(mTest);
         setter.setOptionValue(BaseTestSuite.MODULE_OPTION, "run0");
         populateFakeResults(2, 2, 1, 0, 0, false);
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("previous_command");
-        EasyMock.expect(mMockFactory.createConfigurationFromArgs(EasyMock.anyObject()))
-                .andReturn(mRescheduledConfiguration);
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
 
-        mRescheduledConfiguration.setTests(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        EasyMock.expect(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).andReturn(true);
-        EasyMock.replay(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
+
         mTest.run(null, null);
-        EasyMock.verify(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
 
         Set<String> excludeRun0 = new HashSet<>();
         excludeRun0.add("run0 test.class#testPass0");
@@ -395,29 +305,17 @@ public class RetryReschedulerTest {
         // We specify to exclude "run1"
         setter.setOptionValue(BaseTestSuite.EXCLUDE_FILTER_OPTION, "run1");
         populateFakeResults(2, 2, 1, 0, 0, false, new Abi("armeabi-v7a", "32"));
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("previous_command");
-        EasyMock.expect(mMockFactory.createConfigurationFromArgs(EasyMock.anyObject()))
-                .andReturn(mRescheduledConfiguration);
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
 
-        mRescheduledConfiguration.setTests(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        EasyMock.expect(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).andReturn(true);
-        EasyMock.replay(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
+
         mTest.run(null, null);
-        EasyMock.verify(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
 
         Set<String> excludeRun0 = new HashSet<>();
         // Run with the abi are excluded
@@ -436,29 +334,17 @@ public class RetryReschedulerTest {
         // We specify to exclude "run1"
         setter.setOptionValue(BaseTestSuite.MODULE_OPTION, "run0");
         populateFakeResults(2, 2, 1, 0, 0, false, new Abi("armeabi-v7a", "32"));
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("previous_command");
-        EasyMock.expect(mMockFactory.createConfigurationFromArgs(EasyMock.anyObject()))
-                .andReturn(mRescheduledConfiguration);
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
 
-        mRescheduledConfiguration.setTests(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        EasyMock.expect(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).andReturn(true);
-        EasyMock.replay(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
+
         mTest.run(null, null);
-        EasyMock.verify(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
 
         Set<String> excludeRun0 = new HashSet<>();
         // Run with the abi are excluded
@@ -474,29 +360,17 @@ public class RetryReschedulerTest {
     @Test
     public void testReschedule_parameterized_nofail() throws Exception {
         populateFakeResults(2, 4, 1, 0, 2, false);
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("previous_command");
-        EasyMock.expect(mMockFactory.createConfigurationFromArgs(EasyMock.anyObject()))
-                .andReturn(mRescheduledConfiguration);
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
 
-        mRescheduledConfiguration.setTests(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        EasyMock.expect(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).andReturn(true);
-        EasyMock.replay(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
+
         mTest.run(null, null);
-        EasyMock.verify(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
         // Only the passing tests are excluded since we don't want to re-run them
         Set<String> excludeRun0_pass = new LinkedHashSet<>();
         excludeRun0_pass.add("run0 test.class#testPass0");
@@ -507,7 +381,6 @@ public class RetryReschedulerTest {
         Set<String> excludeRun0_1 = new LinkedHashSet<>();
         excludeRun0_1.add("run0 test.class#parameterized1");
         verify(mSuite, times(1)).setExcludeFilter(excludeRun0_1);
-
         Set<String> excludeRun1_pass = new LinkedHashSet<>();
         excludeRun1_pass.add("run1 test.class#testPass0");
         verify(mSuite).setExcludeFilter(excludeRun1_pass);
@@ -523,29 +396,17 @@ public class RetryReschedulerTest {
     @Test
     public void testReschedule_parameterized_failed() throws Exception {
         populateFakeResults(2, 4, 1, 0, 2, true);
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("previous_command");
-        EasyMock.expect(mMockFactory.createConfigurationFromArgs(EasyMock.anyObject()))
-                .andReturn(mRescheduledConfiguration);
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
 
-        mRescheduledConfiguration.setTests(EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        EasyMock.expect(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).andReturn(true);
-        EasyMock.replay(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
+
         mTest.run(null, null);
-        EasyMock.verify(
-                mMockRescheduler,
-                mMockLoader,
-                mMockFactory,
-                mRescheduledConfiguration,
-                mMockCommandOptions);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
         // Only the passing tests are excluded since we don't want to re-run them
         Set<String> excludeRun0_pass = new LinkedHashSet<>();
         excludeRun0_pass.add("run0 test.class#testPass0");
@@ -557,11 +418,9 @@ public class RetryReschedulerTest {
         Set<String> excludeRun0_1 = new LinkedHashSet<>();
         excludeRun0_1.add("run0 test.class#parameterized1[1]");
         verify(mSuite, times(0)).setExcludeFilter(excludeRun0_1);
-
         Set<String> excludeRun1_pass = new LinkedHashSet<>();
         excludeRun1_pass.add("run1 test.class#testPass0");
         verify(mSuite).setExcludeFilter(excludeRun1_pass);
-
         Set<String> excludeRun1_0 = new LinkedHashSet<>();
         excludeRun1_0.add("run1 test.class#parameterized0[1]");
         verify(mSuite, times(0)).setExcludeFilter(excludeRun1_0);
