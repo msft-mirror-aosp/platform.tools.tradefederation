@@ -16,73 +16,80 @@
 
 package com.android.tradefed.log;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import com.android.ddmlib.Log;
 import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.log.LogUtil.CLog;
-
-import junit.framework.TestCase;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * A set of functional testcases for {@link LogUtil}
- */
-public class LogUtilFuncTest extends TestCase {
+/** A set of functional testcases for {@link LogUtil} */
+@RunWith(JUnit4.class)
+public class LogUtilFuncTest {
     private static final String CLASS_NAME = "LogUtilFuncTest";
     private static final String STRING = "hallo!";
 
+    @Test
     public void testCLog_v() {
         Log.v(CLASS_NAME, "this is the real Log.v");
         CLog.v("this is CLog.v");
         CLog.v("this is CLog.v with a format string: %s has length %d", STRING, STRING.length());
     }
 
+    @Test
     public void testCLog_d() {
         Log.d(CLASS_NAME, "this is the real Log.d");
         CLog.d("this is CLog.d");
         CLog.d("this is CLog.d with a format string: %s has length %d", STRING, STRING.length());
     }
 
+    @Test
     public void testCLog_i() {
         Log.i(CLASS_NAME, "this is the real Log.i");
         CLog.i("this is CLog.i");
         CLog.i("this is CLog.i with a format string: %s has length %d", STRING, STRING.length());
     }
 
+    @Test
     public void testCLog_w() {
         Log.w(CLASS_NAME, "this is the real Log.w");
         CLog.w("this is CLog.w");
         CLog.w("this is CLog.w with a format string: %s has length %d", STRING, STRING.length());
     }
 
+    @Test
     public void testCLog_e() {
         Log.e(CLASS_NAME, "this is the real Log.e");
         CLog.e("this is CLog.e");
         CLog.e("this is CLog.e with a format string: %s has length %d", STRING, STRING.length());
     }
 
-    /**
-     * Verify that getClassName can get the desired class name from the stack trace.
-     */
+    /** Verify that getClassName can get the desired class name from the stack trace. */
+    @Test
     public void testCLog_getClassName() {
         String klass = CLog.getClassName(1);
         assertTrue(CLASS_NAME.equals(klass));
     }
 
-    /**
-     * Verify that findCallerClassName is able to find this class's name from the stack trace.
-     */
+    /** Verify that findCallerClassName is able to find this class's name from the stack trace. */
+    @Test
     public void testCLog_findCallerClassName() {
         String klass = CLog.findCallerClassName();
         assertEquals(CLASS_NAME, klass);
     }
 
     /**
-     * Verify that findCallerClassName() is able to find the calling class even if it is
-     * deeper in the stack trace.
+     * Verify that findCallerClassName() is able to find the calling class even if it is deeper in
+     * the stack trace.
      */
+    @Test
     public void testCLog_findCallerClassName_callerDeeperInStackTrace() {
         Throwable t = new Throwable();
 
@@ -99,9 +106,8 @@ public class LogUtilFuncTest extends TestCase {
         assertEquals(CLASS_NAME, klass);
     }
 
-    /**
-     * Verify that findCallerClassName() returns "Unknown" when there's an empty stack trace
-     */
+    /** Verify that findCallerClassName() returns "Unknown" when there's an empty stack trace */
+    @Test
     public void testCLog_findCallerClassName_emptyStackTrace() {
         Throwable t = new Throwable();
 
@@ -116,6 +122,7 @@ public class LogUtilFuncTest extends TestCase {
      * Verify that parseClassName() is able to parse the class name out of different formats of
      * stack trace frames
      */
+    @Test
     public void testCLog_parseClassName() {
         assertEquals("OuterClass", CLog.parseClassName(
                 "com.android.tradefed.log.OuterClass$InnerClass"));
@@ -123,6 +130,7 @@ public class LogUtilFuncTest extends TestCase {
         assertEquals("SimpleClassNameOnly", CLog.parseClassName("SimpleClassNameOnly"));
     }
 
+    @Test
     public void testLogAndDisplay_specialSerial() {
         CLog.logAndDisplay(LogLevel.VERBOSE, "[fe80::ba27:ebff:feb3:e8%em1]:5555");
     }

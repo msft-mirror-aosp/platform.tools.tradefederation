@@ -16,31 +16,37 @@
 
 package com.android.tradefed.util;
 
-import com.android.tradefed.util.FakeTestsZipFolder.ItemType;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-import junit.framework.TestCase;
+import com.android.tradefed.util.FakeTestsZipFolder.ItemType;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Test {@link FakeTestsZipFolder}
- */
-public class FakeTestsZipFolderTest extends TestCase {
+/** Test {@link FakeTestsZipFolder} */
+@RunWith(JUnit4.class)
+public class FakeTestsZipFolderTest {
 
     private Map<String, ItemType> mFiles;
 
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
+    @Before
+    public void setUp() throws Exception {
+
         mFiles = new HashMap<String, ItemType>();
         mFiles.put("app/AndroidCommonTests.apk", ItemType.FILE);
         mFiles.put("app/GalleryTests.apk", ItemType.FILE);
         mFiles.put("testinfo", ItemType.DIRECTORY);
     }
 
+    @Test
     public void testFakeTestsZipFolder() throws IOException {
         FakeTestsZipFolder fakeStuff = new FakeTestsZipFolder(mFiles);
         assertTrue(fakeStuff.createItems());
