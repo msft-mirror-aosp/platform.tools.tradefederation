@@ -15,19 +15,23 @@
  */
 package com.android.tradefed.util.hostmetric;
 
+import static org.junit.Assert.assertTrue;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import com.android.tradefed.util.hostmetric.IHostMonitor.HostDataPoint;
 import com.android.tradefed.util.hostmetric.IHostMonitor.HostMetricType;
 
-import junit.framework.TestCase;
-
 /** Unit tests for {@link AbstractHostMonitor}. */
-public class AbstractHostMonitorTest extends TestCase {
+@RunWith(JUnit4.class)
+public class AbstractHostMonitorTest {
 
     AbstractHostMonitor mHostMonitor;
 
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
+    @Before
+    public void setUp() throws Exception {
 
         mHostMonitor =
                 new AbstractHostMonitor() {
@@ -42,6 +46,7 @@ public class AbstractHostMonitorTest extends TestCase {
      * Test {@link AbstractHostMonitor#addHostEvent(HostMetricType, HostDataPoint)} when the event
      * is properly added.
      */
+    @Test
     public void testaddHostEvent() {
         assertTrue(mHostMonitor.getQueueSize() == 0);
         HostDataPoint fakeDataPoint = new HostDataPoint("test", 5);
@@ -55,6 +60,7 @@ public class AbstractHostMonitorTest extends TestCase {
      * Test {@link AbstractHostMonitor#addHostEvent(HostMetricType, HostDataPoint)} when the event
      * has a different tag than the Monitor, it should not be added.
      */
+    @Test
     public void testaddHostEvent_differentTag() {
         assertTrue(mHostMonitor.getQueueSize() == 0);
         HostDataPoint fakeDataPoint = new HostDataPoint("test", 5);

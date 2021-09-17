@@ -16,12 +16,19 @@
 
 package com.android.tradefed.targetprep;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import com.android.tradefed.targetprep.FlashingResourcesParser.AndroidInfo;
 import com.android.tradefed.targetprep.FlashingResourcesParser.Constraint;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
-
-import junit.framework.TestCase;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -32,10 +39,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Unit tests for {@link FlashingResourcesParser}.
- */
-public class FlashingResourcesParserTest extends TestCase {
+/** Unit tests for {@link FlashingResourcesParser}. */
+@RunWith(JUnit4.class)
+public class FlashingResourcesParserTest {
 
     private static class Under3Chars implements Constraint {
         @Override
@@ -48,6 +54,7 @@ public class FlashingResourcesParserTest extends TestCase {
      * Test that {@link FlashingResourcesParser#parseAndroidInfo(BufferedReader, Map)} parses valid
      * data correctly.
      */
+    @Test
     public void testParseAndroidInfo() throws IOException {
         final String validInfoData = "require board=board1|board2\n" + // valid
                 "require version-bootloader=1.0.1\n" + // valid
@@ -70,6 +77,7 @@ public class FlashingResourcesParserTest extends TestCase {
      * Test that {@link FlashingResourcesParser#parseAndroidInfo(BufferedReader, Map)} parses valid
      * data correctly.
      */
+    @Test
     public void testParseAndroidInfo_withConstraint() throws IOException {
         final String validInfoData = "require board=board1|board2\n" +
                 "require version-bootloader=1.0.1\n" +
@@ -98,9 +106,10 @@ public class FlashingResourcesParserTest extends TestCase {
      * Test that {@link FlashingResourcesParser#parseAndroidInfo(BufferedReader, Map)} parses valid
      * data correctly.
      *
-     * When both 'require board=foo' and 'require product=bar' lines are present, the board line
+     * <p>When both 'require board=foo' and 'require product=bar' lines are present, the board line
      * should supercede the product line
      */
+    @Test
     public void testParseAndroidInfo_boardAndProduct() throws Exception {
         final String validInfoData = "require product=alpha|beta\n" +
                 "require board=gamma|delta";
@@ -117,6 +126,7 @@ public class FlashingResourcesParserTest extends TestCase {
      * Test that {@link FlashingResourcesParser#parseAndroidInfo(BufferedReader, Map)} parses valid
      * data correctly.
      */
+    @Test
     public void testParseAndroidInfo_onlyBoard() throws Exception {
         final String validInfoData = "require board=gamma|delta";
         BufferedReader reader = new BufferedReader(new StringReader(validInfoData));
@@ -132,9 +142,10 @@ public class FlashingResourcesParserTest extends TestCase {
      * Test that {@link FlashingResourcesParser#parseAndroidInfo(BufferedReader, Map)} parses valid
      * data correctly.
      *
-     * When only 'require product=bar' line is present, it should be passed out in lieu of the
+     * <p>When only 'require product=bar' line is present, it should be passed out in lieu of the
      * (missing) board line.
      */
+    @Test
     public void testParseAndroidInfo_onlyProduct() throws Exception {
         final String validInfoData = "require product=alpha|beta";
         BufferedReader reader = new BufferedReader(new StringReader(validInfoData));
@@ -150,9 +161,10 @@ public class FlashingResourcesParserTest extends TestCase {
      * Test that {@link FlashingResourcesParser#parseAndroidInfo(BufferedReader, Map)} parses valid
      * data correctly.
      *
-     * In particular, this tests that the "require-for-product:(productName)" requirement is parsed
-     * properly and causes the expected internal state.
+     * <p>In particular, this tests that the "require-for-product:(productName)" requirement is
+     * parsed properly and causes the expected internal state.
      */
+    @Test
     public void testRequireForProduct_internalState() throws Exception {
         final String validInfoData =
                 "require product=alpha|beta|gamma\n" +
@@ -189,9 +201,10 @@ public class FlashingResourcesParserTest extends TestCase {
      * Test that {@link FlashingResourcesParser#parseAndroidInfo(BufferedReader, Map)} parses valid
      * data correctly.
      *
-     * In particular, this tests that the "require-for-product:(productName)" requirement is parsed
-     * properly and causes the expected internal state.
+     * <p>In particular, this tests that the "require-for-product:(productName)" requirement is
+     * parsed properly and causes the expected internal state.
      */
+    @Test
     public void testRequireForProduct_api() throws Exception {
         final String validInfoData =
                 "require product=alpha|beta|gamma\n" +
@@ -207,9 +220,10 @@ public class FlashingResourcesParserTest extends TestCase {
     }
 
     /**
-     * Test {@link FlashingResourcesParser#getBuildRequirements(File, Map)} when passed a
-     * file that is not a zip.
+     * Test {@link FlashingResourcesParser#getBuildRequirements(File, Map)} when passed a file that
+     * is not a zip.
      */
+    @Test
     public void testGetBuildRequirements_notAZip() throws IOException {
         File badFile = FileUtil.createTempFile("foo", ".zip");
         try {
@@ -223,9 +237,10 @@ public class FlashingResourcesParserTest extends TestCase {
     }
 
     /**
-     * Test {@link FlashingResourcesParser#getRequiredImageVersion(String, String)} to make sure
-     * the latest version is returned when multiple valid version exist.
+     * Test {@link FlashingResourcesParser#getRequiredImageVersion(String, String)} to make sure the
+     * latest version is returned when multiple valid version exist.
      */
+    @Test
     public void testGetRequiredImageVersion() throws Exception {
         final String validInfoData =
             "require product=alpha|beta|gamma\n" +
@@ -248,6 +263,7 @@ public class FlashingResourcesParserTest extends TestCase {
      * Test {@link FlashingResourcesParser#getRequiredImageVersion(String, String)} to make sure it
      * returns null when the AndroidInfo file is empty.
      */
+    @Test
     public void testGetRequiredImageVersion_emptyAndroidInfo() throws Exception {
         final String validInfoData = "";
         BufferedReader reader = new BufferedReader(new StringReader(validInfoData));
