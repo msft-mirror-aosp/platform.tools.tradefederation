@@ -15,7 +15,11 @@
  */
 package com.android.tradefed.command.console;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import org.jline.reader.Candidate;
 import org.jline.reader.LineReader;
@@ -29,15 +33,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Unit tests for {@link ConfigCompleter} */
-public class ConfigCompleterTest extends TestCase {
+@RunWith(JUnit4.class)
+public class ConfigCompleterTest {
     private ConfigCompleter mConfigCompleter;
     private List<Candidate> mCandidates;
     private LineReader reader = createLineReader();
     private Parser parser = new DefaultParser();
 
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
+    @Before
+    public void setUp() throws Exception {
+
         List<String> fakeConfigs = new ArrayList<String>();
         fakeConfigs.add("util/timewaster");
         fakeConfigs.add("util/wifi");
@@ -47,6 +52,7 @@ public class ConfigCompleterTest extends TestCase {
     }
 
     /** Test that it returns "run" when the command starts with part of "run". */
+    @Test
     public void testCommandCompletion() {
         ParsedLine parsedLine = parser.parse("r", 1);
         mConfigCompleter.complete(reader, parsedLine, mCandidates);
@@ -55,6 +61,7 @@ public class ConfigCompleterTest extends TestCase {
     }
 
     /** Test that it returns all the candidates config completion. */
+    @Test
     public void testConfigCompletion() {
         ParsedLine parsedLine = parser.parse("run util/wi", 11);
         mConfigCompleter.complete(reader, parsedLine, mCandidates);
