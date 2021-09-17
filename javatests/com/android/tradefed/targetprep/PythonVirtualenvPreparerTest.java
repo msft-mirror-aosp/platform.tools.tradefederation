@@ -16,11 +16,22 @@
 
 package com.android.tradefed.targetprep;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.when;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfo;
@@ -32,19 +43,18 @@ import com.android.tradefed.util.IRunUtil;
 
 import com.google.common.base.Throwables;
 
-import junit.framework.TestCase;
-
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 
-public class PythonVirtualenvPreparerTest extends TestCase {
+@RunWith(JUnit4.class)
+public class PythonVirtualenvPreparerTest {
     private PythonVirtualenvPreparer mPreparer;
     @Mock IRunUtil mMockRunUtil;
     @Mock ITestDevice mMockDevice;
 
-    @Override
+    @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
@@ -53,6 +63,7 @@ public class PythonVirtualenvPreparerTest extends TestCase {
         mPreparer.mRunUtil = mMockRunUtil;
     }
 
+    @Test
     public void testInstallDeps_reqFile_success() throws Exception {
         mPreparer.setRequirementsFile(new File("foobar"));
         when(mMockRunUtil.runTimedCmd(
@@ -64,6 +75,7 @@ public class PythonVirtualenvPreparerTest extends TestCase {
         assertTrue(buildInfo.getFile("PYTHONPATH") != null);
     }
 
+    @Test
     public void testInstallDeps_depModule_success() throws Exception {
         mPreparer.addDepModule("blahblah");
         when(mMockRunUtil.runTimedCmd(anyLong(), (String) any(), (String) any(), (String) any()))
@@ -74,6 +86,7 @@ public class PythonVirtualenvPreparerTest extends TestCase {
         assertTrue(buildInfo.getFile("PYTHONPATH") != null);
     }
 
+    @Test
     public void testInstallDeps_reqFile_failure() throws Exception {
         mPreparer.setRequirementsFile(new File("foobar"));
         when(mMockRunUtil.runTimedCmd(
@@ -89,6 +102,7 @@ public class PythonVirtualenvPreparerTest extends TestCase {
         }
     }
 
+    @Test
     public void testInstallDeps_depModule_failure() throws Exception {
         mPreparer.addDepModule("blahblah");
         when(mMockRunUtil.runTimedCmd(anyLong(), (String) any(), (String) any(), (String) any()))
@@ -103,16 +117,18 @@ public class PythonVirtualenvPreparerTest extends TestCase {
         }
     }
 
+    @Test
     public void testInstallDeps_noDeps() throws Exception {
         BuildInfo buildInfo = new BuildInfo();
         mPreparer.installDeps(buildInfo, mMockDevice);
         assertTrue(buildInfo.getFile("PYTHONPATH") == null);
     }
 
+    @Test
     public void testStartVirtualenv_throwTSE_whenVirtualenvNotFound() throws Exception {
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
         result.setStdout("bash: virtualenv: command not found");
-        when(mMockRunUtil.runTimedCmd(anyLong(), eq("virtualenv"), eq("--version")))
+        when(mMockRunUtil.runTimedCmd(anyLong(), Mockito.eq("virtualenv"), Mockito.eq("--version")))
                 .thenReturn(result);
 
         try {
@@ -128,10 +144,11 @@ public class PythonVirtualenvPreparerTest extends TestCase {
         }
     }
 
+    @Test
     public void testStartVirtualenv_throwTSE_whenVirtualenvIsTooOld() throws Exception {
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
         result.setStdout("virtualenv 16.7.10 from /path/to/site-packages/virtualenv/__init__.py");
-        when(mMockRunUtil.runTimedCmd(anyLong(), eq("virtualenv"), eq("--version")))
+        when(mMockRunUtil.runTimedCmd(anyLong(), Mockito.eq("virtualenv"), Mockito.eq("--version")))
                 .thenReturn(result);
 
         try {

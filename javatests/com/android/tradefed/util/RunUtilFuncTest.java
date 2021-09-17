@@ -15,10 +15,15 @@
  */
 package com.android.tradefed.util;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.IRunUtil.IRunnableResult;
-
-import junit.framework.TestCase;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -27,10 +32,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 
-/**
- * Longer running tests for {@link RunUtilFuncTest}
- */
-public class RunUtilFuncTest extends TestCase {
+/** Longer running tests for {@link RunUtilFuncTest} */
+@RunWith(JUnit4.class)
+public class RunUtilFuncTest {
 
     private static final long VERY_SHORT_TIMEOUT_MS = 10L;
     private static final long SHORT_TIMEOUT_MS = 500L;
@@ -45,9 +49,8 @@ public class RunUtilFuncTest extends TestCase {
         }
     }
 
-    /**
-     * Test timeout case for {@link RunUtil#runTimed(long, IRunnableResult, boolean)}.
-     */
+    /** Test timeout case for {@link RunUtil#runTimed(long, IRunnableResult, boolean)}. */
+    @Test
     public void testRunTimed_timeout() {
         MyRunnable mockRunnable = new MyRunnable() {
             @Override
@@ -66,9 +69,10 @@ public class RunUtilFuncTest extends TestCase {
     }
 
     /**
-     * Test method for {@link RunUtil#runTimedRetry(long, long, int, IRunnableResult)}.
-     * Verify that multiple attempts are made.
+     * Test method for {@link RunUtil#runTimedRetry(long, long, int, IRunnableResult)}. Verify that
+     * multiple attempts are made.
      */
+    @Test
     public void testRunTimedRetry() {
         final int maxAttempts = 5;
         IRunUtil.IRunnableResult mockRunnable = new IRunUtil.IRunnableResult() {
@@ -94,9 +98,10 @@ public class RunUtilFuncTest extends TestCase {
     }
 
     /**
-     * Test timeout case for {@link RunUtil#runTimedCmd(long, String...)} and ensure we
-     * consistently get the right stdout for a fast running command.
+     * Test timeout case for {@link RunUtil#runTimedCmd(long, String...)} and ensure we consistently
+     * get the right stdout for a fast running command.
      */
+    @Test
     public void testRunTimedCmd_repeatedOutput() {
         for (int i = 0; i < 1000; i++) {
             CommandResult result =
@@ -111,6 +116,7 @@ public class RunUtilFuncTest extends TestCase {
     /**
      * Test that that running a command with a 0 timeout results in no timeout being applied to it.
      */
+    @Test
     public void testRunTimedCmd_noTimeout() {
         // When there is no timeout, max_poll interval will be 30sec so we need a test with more
         // than 30sec
@@ -120,10 +126,12 @@ public class RunUtilFuncTest extends TestCase {
     }
 
     /**
-     * Test case for {@link RunUtil#runTimedCmd(long, String...)} for a command that produces
-     * a large amount of output
+     * Test case for {@link RunUtil#runTimedCmd(long, String...)} for a command that produces a
+     * large amount of output
+     *
      * @throws IOException
      */
+    @Test
     public void testRunTimedCmd_largeOutput() throws IOException {
         // 1M  chars
         int dataSize = 1000000;
@@ -154,9 +162,8 @@ public class RunUtilFuncTest extends TestCase {
         }
     }
 
-    /**
-     * Test case for {@link RunUtil#unsetEnvVariable(String key)}
-     */
+    /** Test case for {@link RunUtil#unsetEnvVariable(String key)} */
+    @Test
     public void testUnsetEnvVariable() {
         RunUtil runUtil = new RunUtil();
         runUtil.setEnvVariable("bar", "foo");
@@ -184,6 +191,7 @@ public class RunUtilFuncTest extends TestCase {
      * Test that {@link RunUtil#runTimedCmd(long, String[])} returns timeout when the command is too
      * short and also clean up all its thread.
      */
+    @Test
     public void testRunTimedCmd_timeout() throws InterruptedException {
         RunUtil runUtil = new RunUtil();
         String[] command = {"sleep", "10000"};
@@ -212,6 +220,7 @@ public class RunUtilFuncTest extends TestCase {
     }
 
     /** Test running a command with redirecting input from a file. */
+    @Test
     public void testRunTimedCmd_WithInputRedirect() throws IOException {
         File inputRedirect = FileUtil.createTempFile("input_redirect", ".txt");
 
@@ -223,18 +232,17 @@ public class RunUtilFuncTest extends TestCase {
                             .runTimedCmdWithInputRedirect(SHORT_TIMEOUT_MS, inputRedirect, "cat");
             assertTrue(CommandStatus.SUCCESS.equals(result.getStatus()));
             assertEquals("TEST_INPUT", result.getStdout());
-
         } finally {
             FileUtil.deleteFile(inputRedirect);
         }
     }
 
     /** Test running a command with redirecting output to a file. */
+    @Test
     public void testRunTimedCmd_WithOutputRedirect() throws IOException {
         File outputRedirect = FileUtil.createTempFile("output_redirect", ".txt");
         FileOutputStream outputStream = new FileOutputStream(outputRedirect);
         try {
-
             CommandResult result =
                     RunUtil.getDefault()
                             .runTimedCmd(
@@ -245,7 +253,6 @@ public class RunUtilFuncTest extends TestCase {
                                     "TEST_OUTPUT");
             assertTrue(CommandStatus.SUCCESS.equals(result.getStatus()));
             assertEquals("TEST_OUTPUT\n", FileUtil.readStringFromFile(outputRedirect));
-
         } finally {
             FileUtil.deleteFile(outputRedirect);
             outputStream.close();
