@@ -15,25 +15,27 @@
  */
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-/**
- * Unit tests for {@link SimpleStats}
- */
-public class SimpleStatsTest extends TestCase {
+/** Unit tests for {@link SimpleStats} */
+@RunWith(JUnit4.class)
+public class SimpleStatsTest {
     private SimpleStats mStats = null;
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
+    /** {@inheritDoc} */
+    @Before
     public void setUp() throws Exception {
         mStats = new SimpleStats();
     }
 
-    /**
-     * Make sure that the class behaves as expected when the dataset is empty
-     */
+    /** Make sure that the class behaves as expected when the dataset is empty */
+    @Test
     public void testStats_empty() {
         assertTrue(mStats.isEmpty());
         assertEquals(0, mStats.size());
@@ -47,10 +49,11 @@ public class SimpleStatsTest extends TestCase {
     /**
      * Make sure that the class behaves as expected with an even count of uniformly-distributed
      * measurements.
-     * <p />
-     * The even/odd distinction applies mainly to the median (which uses a different calculation
+     *
+     * <p>The even/odd distinction applies mainly to the median (which uses a different calculation
      * depending on whether the "center" element is unique or not).
      */
+    @Test
     public void testStats_evenCount() {
         // [1, 10]
         for (int i = 1; i <= 10; ++i) {
@@ -67,10 +70,11 @@ public class SimpleStatsTest extends TestCase {
     /**
      * Make sure that the class behaves as expected with an even count of uniformly-distributed
      * measurements.
-     * <p />
-     * The even/odd distinction applies mainly to the median (which uses a different calculation
+     *
+     * <p>The even/odd distinction applies mainly to the median (which uses a different calculation
      * depending on whether the "center" element is unique or not).
      */
+    @Test
     public void testStats_oddCount() {
         // [0, 10]
         for (int i = 0; i <= 10; ++i) {
@@ -84,9 +88,8 @@ public class SimpleStatsTest extends TestCase {
         assertEquals(3.162278, mStats.stdev(), 0.000001);
     }
 
-    /**
-     * The skewed distribution will cause mean and median to diverge
-     */
+    /** The skewed distribution will cause mean and median to diverge */
+    @Test
     public void testStats_skewedMedian() {
         for (int i = 1; i <= 5; ++i) {
             for (int j = 1; j <= i; ++j) {
