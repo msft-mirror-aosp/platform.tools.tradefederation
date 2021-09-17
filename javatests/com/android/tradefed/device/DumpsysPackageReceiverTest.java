@@ -16,16 +16,20 @@
 
 package com.android.tradefed.device;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-/**
- * Unit tests for {@link DumpsysPackageReceiver}.
- */
-public class DumpsysPackageReceiverTest extends TestCase {
+/** Unit tests for {@link DumpsysPackageReceiver}. */
+@RunWith(JUnit4.class)
+public class DumpsysPackageReceiverTest {
 
-    /**
-     * Verifies parse correctly handles 'dumpsys package p' output from 4.2 and below.
-     */
+    /** Verifies parse correctly handles 'dumpsys package p' output from 4.2 and below. */
+    @Test
     public void testParse_classic() throws Exception {
         final String[] froyoPkgTxt = new String[] {"Packages:",
                 "Package [com.android.soundrecorder] (462f6b38):",
@@ -46,6 +50,7 @@ public class DumpsysPackageReceiverTest extends TestCase {
     /**
      * Verifies parse correctly handles new textual 'dumpsys package p' output from newer releases.
      */
+    @Test
     public void testParse_future() throws Exception {
         final String[] pkgTxt = new String[] {"Packages:",
         "Package [com.android.soundrecorder] (462f6b38):",
@@ -66,6 +71,7 @@ public class DumpsysPackageReceiverTest extends TestCase {
     /**
      * Verifies parse correctly handles 'dumpsys package p' output with hidden system package info
      */
+    @Test
     public void testParse_hidden() throws Exception {
         final String[] pkgsTxt = new String[] {"Packages:",
                 "Package [com.android.soundrecorder] (462f6b38):",
@@ -84,9 +90,8 @@ public class DumpsysPackageReceiverTest extends TestCase {
         assertTrue(pkg.isUpdatedSystemApp());
     }
 
-    /**
-     * Verifies parse handles empty input
-     */
+    /** Verifies parse handles empty input */
+    @Test
     public void testParse_empty() {
         DumpsysPackageReceiver parser = new DumpsysPackageReceiver();
         assertEquals(0,  parser.getPackages().size());

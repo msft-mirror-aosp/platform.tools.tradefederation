@@ -16,12 +16,18 @@
 
 package com.android.tradefed.command;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import com.android.tradefed.command.CommandFileParser.CommandLine;
 import com.android.tradefed.config.ConfigurationException;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-
-import junit.framework.TestCase;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -32,10 +38,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Unit tests for {@link CommandFileParser}
- */
-public class CommandFileParserTest extends TestCase {
+/** Unit tests for {@link CommandFileParser} */
+@RunWith(JUnit4.class)
+public class CommandFileParserTest {
     /**
      * Uses a <File, String> map to provide {@link CommandFileParser} with mock data
      * for the mapped Files.
@@ -59,9 +64,9 @@ public class CommandFileParserTest extends TestCase {
     private static final File MOCK_FILE_PATH = new File("/path/to/");
     private File mMockFile = new File(MOCK_FILE_PATH, "original.txt");
 
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
+    @Before
+    public void setUp() throws Exception {
+
         mCommandFile = new CommandFileParser() {
             @Override
             BufferedReader createCommandFileReader(File file) {
@@ -70,9 +75,8 @@ public class CommandFileParserTest extends TestCase {
         };
     }
 
-    /**
-     * Test parsing a command file with a comment and a single config.
-     */
+    /** Test parsing a command file with a comment and a single config. */
+    @Test
     public void testParse_singleConfig() throws Exception {
         // inject mock file data
         mMockFileData = "  #Comment followed by blank line\n \n--foo  config";
@@ -110,11 +114,12 @@ public class CommandFileParserTest extends TestCase {
 
     /**
      * Make sure that a config with a quoted argument is parsed properly.
-     * <p/>
-     * Whitespace inside of the quoted section should be preserved. Also, embedded escaped quotation
-     * marks should be ignored.
+     *
+     * <p>Whitespace inside of the quoted section should be preserved. Also, embedded escaped
+     * quotation marks should be ignored.
      */
-    public void testParseFile_quotedConfig() throws IOException, ConfigurationException  {
+    @Test
+    public void testParseFile_quotedConfig() throws IOException, ConfigurationException {
         // inject mock file data
         mMockFileData = "--foo \"this is a config\" --bar \"escap\\\\ed \\\" quotation\"";
         List<String> expectedArgs = Arrays.asList(
@@ -124,9 +129,8 @@ public class CommandFileParserTest extends TestCase {
         assertParsedData(expectedArgs);
     }
 
-    /**
-     * Test the data where the configuration ends inside a quotation.
-     */
+    /** Test the data where the configuration ends inside a quotation. */
+    @Test
     public void testParseFile_endOnQuote() throws IOException {
         // inject mock file data
         mMockFileData = "--foo \"this is truncated";
@@ -139,9 +143,8 @@ public class CommandFileParserTest extends TestCase {
         }
     }
 
-    /**
-     * Test the scenario where the configuration ends inside a quotation.
-     */
+    /** Test the scenario where the configuration ends inside a quotation. */
+    @Test
     public void testRun_endWithEscape() throws IOException {
         // inject mock file data
         mMockFileData = "--foo escape\\";
@@ -154,6 +157,7 @@ public class CommandFileParserTest extends TestCase {
     }
 
     // Macro-related tests
+    @Test
     public void testSimpleMacro() throws IOException, ConfigurationException {
         mMockFileData = "MACRO TeSt = verify\nTeSt()";
         List<String> expectedArgs = Arrays.asList("verify");
@@ -163,9 +167,10 @@ public class CommandFileParserTest extends TestCase {
 
     /**
      * Ensure that when a macro is overwritten, the most recent value should be used.
-     * <p />
-     * Note that a message should also be logged; no good way to verify that currently
+     *
+     * <p>Note that a message should also be logged; no good way to verify that currently
      */
+    @Test
     public void testOverwriteMacro() throws IOException, ConfigurationException {
         mMockFileData = "MACRO test = value 1\nMACRO test = value 2\ntest()";
         List<String> expectedArgs = Arrays.asList("value", "2");
@@ -173,9 +178,8 @@ public class CommandFileParserTest extends TestCase {
         assertParsedData(expectedArgs);
     }
 
-    /**
-     * Ensure that parsing of quoted tokens continues to work
-     */
+    /** Ensure that parsing of quoted tokens continues to work */
+    @Test
     public void testSimpleMacro_quotedTokens() throws IOException, ConfigurationException {
         mMockFileData = "MACRO test = \"verify varify vorify\"\ntest()";
         List<String> expectedArgs = Arrays.asList("verify varify vorify");
@@ -183,9 +187,8 @@ public class CommandFileParserTest extends TestCase {
         assertParsedData(expectedArgs);
     }
 
-    /**
-     * Ensure that parsing of names with embedded underscores works properly.
-     */
+    /** Ensure that parsing of names with embedded underscores works properly. */
+    @Test
     public void testSimpleMacro_underscoreName() throws IOException, ConfigurationException {
         mMockFileData = "MACRO under_score = verify\nunder_score()";
         List<String> expectedArgs = Arrays.asList("verify");
@@ -193,9 +196,8 @@ public class CommandFileParserTest extends TestCase {
         assertParsedData(expectedArgs);
     }
 
-    /**
-     * Ensure that parsing of names with embedded hyphens works properly.
-     */
+    /** Ensure that parsing of names with embedded hyphens works properly. */
+    @Test
     public void testSimpleMacro_hyphenName() throws IOException, ConfigurationException {
         mMockFileData = "MACRO hyphen-nated = verify\nhyphen-nated()";
         List<String> expectedArgs = Arrays.asList("verify");
@@ -203,9 +205,8 @@ public class CommandFileParserTest extends TestCase {
         assertParsedData(expectedArgs);
     }
 
-    /**
-     * Test the scenario where a macro call doesn't resolve.
-     */
+    /** Test the scenario where a macro call doesn't resolve. */
+    @Test
     public void testUndefinedMacro() throws IOException {
         mMockFileData = "test()";
         try {
@@ -216,9 +217,8 @@ public class CommandFileParserTest extends TestCase {
         }
     }
 
-    /**
-     * Test the scenario where a syntax problem causes a macro call to not resolve.
-     */
+    /** Test the scenario where a syntax problem causes a macro call to not resolve. */
+    @Test
     public void testUndefinedMacro_defSyntaxError() throws IOException {
         mMockFileData = "MACRO test = \n" +
                 "test()";
@@ -230,9 +230,8 @@ public class CommandFileParserTest extends TestCase {
         }
     }
 
-    /**
-     * Simple test for LONG MACRO parsing
-     */
+    /** Simple test for LONG MACRO parsing */
+    @Test
     public void testSimpleLongMacro() throws IOException, ConfigurationException {
         mMockFileData = "LONG MACRO test\n" +
                 "verify\n" +
@@ -245,14 +244,12 @@ public class CommandFileParserTest extends TestCase {
 
     /**
      * Ensure that when a long macro is overwritten, the most recent value should be used.
-     * <p />
-     * Note that a message should also be logged; no good way to verify that currently
+     *
+     * <p>Note that a message should also be logged; no good way to verify that currently
      */
 
-
-    /**
-     * Simple test for LONG MACRO parsing with multi-line expansion
-     */
+    /** Simple test for LONG MACRO parsing with multi-line expansion */
+    @Test
     public void testSimpleLongMacro_multiline() throws IOException, ConfigurationException {
         mMockFileData = "LONG MACRO test\n" +
                 "one two three\n" +
@@ -264,12 +261,10 @@ public class CommandFileParserTest extends TestCase {
         List<String>  expectedArgs2 = Arrays.asList("a", "b", "c");
         List<String>  expectedArgs3 = Arrays.asList("do", "re", "mi");
         assertParsedData(expectedArgs1, expectedArgs2, expectedArgs3);
-
     }
 
-    /**
-     * Simple test for LONG MACRO parsing with multi-line expansion
-     */
+    /** Simple test for LONG MACRO parsing with multi-line expansion */
+    @Test
     public void testLongMacro_withComment() throws IOException, ConfigurationException {
         mMockFileData = "LONG MACRO test\n" +
                 "\n" +  // blank line
@@ -283,9 +278,8 @@ public class CommandFileParserTest extends TestCase {
         assertParsedData(expectedArgs1, expectedArgs2);
     }
 
-    /**
-     * Test the scenario where the configuration ends inside of a LONG MACRO definition.
-     */
+    /** Test the scenario where the configuration ends inside of a LONG MACRO definition. */
+    @Test
     public void testLongMacroSyntaxError_eof() throws IOException {
         mMockFileData = "LONG MACRO test\n" +
                 "verify\n" +
@@ -300,9 +294,8 @@ public class CommandFileParserTest extends TestCase {
         }
     }
 
-    /**
-     * Verifies that the line location data in CommandLine (file, line number) is accurate.
-     */
+    /** Verifies that the line location data in CommandLine (file, line number) is accurate. */
+    @Test
     public void testCommandLineLocation() throws IOException, ConfigurationException {
         mMockFileData = "# This is a comment\n" +
                 "# This is another comment\n" +
@@ -317,7 +310,6 @@ public class CommandFileParserTest extends TestCase {
                 .add(new CommandLine(Arrays.asList("two", "--final-command"), mMockFile, 6))
                 .build();
 
-
         Set<CommandLine> parsedSet = ImmutableSet.<CommandLine>builder()
                 .addAll(mCommandFile.parseFile(mMockFile))
                 .build();
@@ -329,6 +321,7 @@ public class CommandFileParserTest extends TestCase {
      * Verifies that the line location data in CommandLine (file, line number) is accurate for
      * commands defined in included files.
      */
+    @Test
     public void testCommandLineLocation_withInclude() throws IOException, ConfigurationException {
         final File mockFile = new File(MOCK_FILE_PATH, "file.txt");
         final String mockFileData = "# This is a comment\n" +
@@ -351,7 +344,6 @@ public class CommandFileParserTest extends TestCase {
                 .add(new CommandLine(Arrays.asList("inc", "--final-cmd"), mockIncludedFile, 5))
                 .build();
 
-
         CommandFileParser commandFileParser = new MockCommandFileParser(
                 ImmutableMap.<File, String>builder()
                 .put(mockFile, mockFileData)
@@ -365,9 +357,8 @@ public class CommandFileParserTest extends TestCase {
         assertEquals(expectedSet, parsedSet);
     }
 
-    /**
-     * Verify that the INCLUDE directive is behaving properly
-     */
+    /** Verify that the INCLUDE directive is behaving properly */
+    @Test
     public void testMacroParserInclude() throws Exception {
         final String mockFileData = "INCLUDE somefile.txt\n";
         final String mockIncludedFileData = "--foo bar\n";
@@ -391,9 +382,8 @@ public class CommandFileParserTest extends TestCase {
         assertTrue(commandFile.getIncludedFiles().iterator().next().endsWith("somefile.txt"));
     }
 
-    /**
-     * Verify that the INCLUDE directive works when used for two files
-     */
+    /** Verify that the INCLUDE directive works when used for two files */
+    @Test
     public void testMacroParserInclude_twice() throws Exception {
         final String mockFileData = "INCLUDE somefile.txt\n" +
                 "INCLUDE otherfile.txt\n";
@@ -424,6 +414,7 @@ public class CommandFileParserTest extends TestCase {
      * Verify that a file is only ever included once, regardless of how many INCLUDE directives for
      * that file show up
      */
+    @Test
     public void testMacroParserInclude_repeat() throws Exception {
         final String mockFileData = "INCLUDE somefile.txt\n" +
                 "INCLUDE somefile.txt\n";
@@ -449,6 +440,7 @@ public class CommandFileParserTest extends TestCase {
      * Verify that the path of the file referenced by an INCLUDE directive is considered relative to
      * the location of the referencing file.
      */
+    @Test
     public void testMacroParserInclude_parentDir() throws Exception {
         // When we pass an unqualified filename, expect it to be taken relative to mMockFile's
         // parent directory
@@ -479,11 +471,12 @@ public class CommandFileParserTest extends TestCase {
 
     /**
      * Verify that INCLUDEing an absolute path works, even if a parent directory is specified.
-     * <p />
-     * This verifies the fix for a bug that existed because {@code File("/tmp", "/usr/bin")} creates
-     * the path {@code /tmp/usr/bin}, rather than {@code /usr/bin} (which might be expected since
-     * the child is actually an absolute path on its own.
+     *
+     * <p>This verifies the fix for a bug that existed because {@code File("/tmp", "/usr/bin")}
+     * creates the path {@code /tmp/usr/bin}, rather than {@code /usr/bin} (which might be expected
+     * since the child is actually an absolute path on its own.
      */
+    @Test
     public void testMacroParserInclude_absoluteInclude() throws Exception {
         // When we pass an unqualified filename, expect it to be taken relative to mMockFile's
         // parent directory
@@ -516,6 +509,7 @@ public class CommandFileParserTest extends TestCase {
      * Verify that if the original file is relative to no directory (aka ./), that the referenced
      * file is also relative to no directory.
      */
+    @Test
     public void testMacroParserInclude_noParentDir() throws Exception {
         final File mockFile = new File("original.txt");
         final String includeFileName = "somefile.txt";
@@ -547,13 +541,13 @@ public class CommandFileParserTest extends TestCase {
 
     /**
      * A testcase to make sure that the internal bitmask and mLines stay in sync
-     * <p>
-     * This tickles a bug in the current implementation (before I fix it).  The problem is here,
+     *
+     * <p>This tickles a bug in the current implementation (before I fix it). The problem is here,
      * where the inputBitmask is only set to false conditionally, but inputBitmaskCount is
-     * decremented unconditionally:
-     * <code>inputBitmask.set(inputIdx, sawMacro);
+     * decremented unconditionally: <code>inputBitmask.set(inputIdx, sawMacro);
      * --inputBitmaskCount;</code>
      */
+    @Test
     public void testMacroParserSync_suffix() throws IOException, ConfigurationException {
         mMockFileData = "MACRO alpha = one beta()\n" +
                 "MACRO beta = two\n" +
@@ -566,9 +560,10 @@ public class CommandFileParserTest extends TestCase {
 
     /**
      * A testcase to make sure that the internal bitmask and mLines stay in sync
-     * <p>
-     * This tests a case related to the _suffix test above.
+     *
+     * <p>This tests a case related to the _suffix test above.
      */
+    @Test
     public void testMacroParserSync_prefix() throws IOException, ConfigurationException {
         mMockFileData = "MACRO alpha = beta() two\n" +
                 "MACRO beta = one\n" +
@@ -579,16 +574,17 @@ public class CommandFileParserTest extends TestCase {
     }
 
     /**
-     * Another test to verify a bugfix.  Long Macro expansion can cause the inputBitmask and its
+     * Another test to verify a bugfix. Long Macro expansion can cause the inputBitmask and its
      * cached form, inputBitmaskCount, to get out of sync.
-     * <p />
-     * The bug is that the cached value isn't incremented when a long macro is expanded (which means
-     * that it may not account for the extra lines that it needs to process).  This manifests as a
-     * partially-completed long macro expansion.
-     * <p />
-     * In this test, when the bug manifests, the first Command to be added will be
-     * {@code ["one", "hbar()", "z", "x"} instead of the correct {@code ["one", "quux", "z", "x"]}.
+     *
+     * <p>The bug is that the cached value isn't incremented when a long macro is expanded (which
+     * means that it may not account for the extra lines that it needs to process). This manifests
+     * as a partially-completed long macro expansion.
+     *
+     * <p>In this test, when the bug manifests, the first Command to be added will be {@code ["one",
+     * "hbar()", "z", "x"} instead of the correct {@code ["one", "quux", "z", "x"]}.
      */
+    @Test
     public void testLongMacroSync() throws IOException, ConfigurationException {
         mMockFileData =
                 "MACRO hbar = quux\n" +
