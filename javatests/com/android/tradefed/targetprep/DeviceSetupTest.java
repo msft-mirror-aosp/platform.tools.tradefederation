@@ -16,6 +16,7 @@
 
 package com.android.tradefed.targetprep;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -35,9 +36,11 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TcpDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceState;
+import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.BinaryState;
 import com.android.tradefed.util.FileUtil;
 
@@ -1071,6 +1074,60 @@ public class DeviceSetupTest {
             fail("DeviceNotAvailableException not thrown");
         } catch (DeviceNotAvailableException e) {
             // expected
+        }
+    }
+
+    /** Test {@link DeviceSetup#setUp(TestInformation)} when connect to wifi fails. */
+    @Test
+    public void testSetup_connectToWifiFailed() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+        doSettingExpectations("global", "wifi_on", "1");
+        doCommandsExpectations("svc wifi enable");
+        when(mMockDevice.connectToWifiNetwork("wifi_network", "psk")).thenReturn(false);
+
+        mDeviceSetup.setWifiNetwork("wifi_network");
+        mDeviceSetup.setWifiPsk("psk");
+        mDeviceSetup.setWifi(BinaryState.ON);
+
+        try {
+            mDeviceSetup.setUp(mTestInfo);
+            fail("TargetSetupError not thrown");
+        } catch (TargetSetupError e) {
+            // expected identifier
+            assertEquals(e.getErrorId(), InfraErrorIdentifier.WIFI_FAILED_CONNECT);
+        }
+    }
+
+    /**
+     * Test {@link DeviceSetup#setUp(TestInformation)} when connect to wifi fails for virtual
+     * device.
+     */
+    @Test
+    public void testSetup_connectToWifiFailedVirtualDevice() throws Exception {
+        // setup virtual device
+        mMockDevice = mock(RemoteAndroidVirtualDevice.class);
+        IInvocationContext context = new InvocationContext();
+        context.addAllocatedDevice("device", mMockDevice);
+        context.addDeviceBuildInfo("device", mMockBuildInfo);
+
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+        doSettingExpectations("global", "wifi_on", "1");
+        doCommandsExpectations("svc wifi enable");
+
+        when(mMockDevice.connectToWifiNetwork("wifi_network", "psk")).thenReturn(false);
+        mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
+        mDeviceSetup.setWifiNetwork("wifi_network");
+        mDeviceSetup.setWifiPsk("psk");
+        mDeviceSetup.setWifi(BinaryState.ON);
+
+        try {
+            mDeviceSetup.setUp(mTestInfo);
+            fail("TargetSetupError not thrown");
+        } catch (TargetSetupError e) {
+            // expected identifier
+            assertEquals(e.getErrorId(), InfraErrorIdentifier.VIRTUAL_WIFI_FAILED_CONNECT);
         }
     }
 
