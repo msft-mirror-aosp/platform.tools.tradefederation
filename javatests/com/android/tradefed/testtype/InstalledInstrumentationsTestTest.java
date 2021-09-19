@@ -18,6 +18,10 @@ package com.android.tradefed.testtype;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.ArgsOptionParser;
 import com.android.tradefed.config.Configuration;
@@ -35,12 +39,15 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
 
-import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -56,10 +63,10 @@ public class InstalledInstrumentationsTestTest {
     private static final String TEST_RUNNER = "android.support.runner.AndroidJUnitRunner";
     private static final String ABI = "forceMyAbiSettingPlease";
     private static final String INSTR_OUTPUT_FORMAT = "instrumentation:%s/%s (target=%s)\r\n";
-    private static final String PM_LIST_ERROR_OUTPUT = "Error: Could not access the Package "
-            + "Manager.  Is the system running?";
-    private ITestDevice mMockTestDevice;
-    private ITestInvocationListener mMockListener;
+    private static final String PM_LIST_ERROR_OUTPUT =
+            "Error: Could not access the Package " + "Manager.  Is the system running?";
+    @Mock ITestDevice mMockTestDevice;
+    @Mock ITestInvocationListener mMockListener;
     private List<MockInstrumentationTest> mMockInstrumentationTests;
     private InstalledInstrumentationsTest mInstalledInstrTest;
     private TestInformation mTestInfo;
@@ -67,10 +74,12 @@ public class InstalledInstrumentationsTestTest {
 
     @Before
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mConfiguration = new Configuration("name", "description");
-        mMockTestDevice = EasyMock.createMock(ITestDevice.class);
-        EasyMock.expect(mMockTestDevice.getSerialNumber()).andStubReturn("foo");
-        mMockListener = EasyMock.createMock(ITestInvocationListener.class);
+
+        when(mMockTestDevice.getSerialNumber()).thenReturn("foo");
+
         mMockInstrumentationTests = new ArrayList<MockInstrumentationTest>();
         mInstalledInstrTest = createInstalledInstrumentationsTest();
         mInstalledInstrTest.setDevice(mMockTestDevice);
@@ -82,12 +91,12 @@ public class InstalledInstrumentationsTestTest {
     /** Test the run normal case. Simple verification that expected data is passed along, etc. */
     @Test
     public void testRun() throws Exception {
-        injectShellResponse(String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER,
-                TEST_COVERAGE_TARGET), 1);
+        injectShellResponse(
+                String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
 
         ArgsOptionParser p = new ArgsOptionParser(mInstalledInstrTest);
         p.parse("--size", "small", "--force-abi", ABI);
-        EasyMock.replay(mMockTestDevice, mMockListener);
+
         mInstalledInstrTest.run(mTestInfo, mMockListener);
         assertEquals(1, mMockInstrumentationTests.size());
         MockInstrumentationTest mockInstrumentationTest = mMockInstrumentationTests.get(0);
@@ -96,8 +105,8 @@ public class InstalledInstrumentationsTestTest {
         assertEquals(TEST_RUNNER, mockInstrumentationTest.getRunnerName());
         assertEquals("small", mockInstrumentationTest.getTestSize());
         assertEquals(ABI, mockInstrumentationTest.getForceAbi());
-
-        EasyMock.verify(mMockListener, mMockTestDevice);
+        verifyShellResponse(
+                String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
     }
 
     @Test
@@ -116,7 +125,7 @@ public class InstalledInstrumentationsTestTest {
         result.testEnded(testDesc, new HashMap<String, Metric>());
         result.testRunEnded(5L, new HashMap<String, Metric>());
         previousResults.add(result);
-        EasyMock.replay(mMockTestDevice, mMockListener);
+
         assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults));
         mInstalledInstrTest.run(mTestInfo, mMockListener);
         assertEquals(1, mMockInstrumentationTests.size());
@@ -128,7 +137,8 @@ public class InstalledInstrumentationsTestTest {
         assertEquals(ABI, mockInstrumentationTest.getForceAbi());
         assertEquals(1, mockInstrumentationTest.getIncludeFilters().size());
         assertTrue(mockInstrumentationTest.getIncludeFilters().contains(testDesc.toString()));
-        EasyMock.verify(mMockListener, mMockTestDevice);
+        verifyShellResponse(
+                String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
     }
 
     @Test
@@ -148,7 +158,7 @@ public class InstalledInstrumentationsTestTest {
         result.testRunFailed(FailureDescription.create("instru crash"));
         result.testRunEnded(5L, new HashMap<String, Metric>());
         previousResults.add(result);
-        EasyMock.replay(mMockTestDevice, mMockListener);
+
         assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults));
         mInstalledInstrTest.run(mTestInfo, mMockListener);
         assertEquals(1, mMockInstrumentationTests.size());
@@ -160,7 +170,8 @@ public class InstalledInstrumentationsTestTest {
         assertEquals(ABI, mockInstrumentationTest.getForceAbi());
         // No filter will be set, we retry everything
         assertEquals(0, mockInstrumentationTest.getIncludeFilters().size());
-        EasyMock.verify(mMockListener, mMockTestDevice);
+        verifyShellResponse(
+                String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
     }
 
     @Test
@@ -185,7 +196,7 @@ public class InstalledInstrumentationsTestTest {
         result.testEnded(testDesc, new HashMap<String, Metric>());
         result.testRunEnded(5L, new HashMap<String, Metric>());
         previousResults.add(result);
-        EasyMock.replay(mMockTestDevice, mMockListener);
+
         assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults));
         mInstalledInstrTest.run(mTestInfo, mMockListener);
         assertEquals(2, mMockInstrumentationTests.size());
@@ -205,8 +216,7 @@ public class InstalledInstrumentationsTestTest {
         assertEquals("small", mockInstrumentationTest2.getTestSize());
         assertEquals(ABI, mockInstrumentationTest2.getForceAbi());
         assertEquals(0, mockInstrumentationTest2.getIncludeFilters().size());
-
-        EasyMock.verify(mMockListener, mMockTestDevice);
+        verifyShellResponse(shellResponse, 1);
     }
 
     /** Tests the run of sharded InstalledInstrumentationsTests. */
@@ -219,19 +229,30 @@ public class InstalledInstrumentationsTestTest {
         final String nonshardableTestPkg1 = "com.example.nonshardabletest1";
         final String nonshardableTestPkg2 = "com.example.nonshardabletest2";
 
+        String shardableInstr =
+                String.format(
+                        INSTR_OUTPUT_FORMAT,
+                        shardableTestPkg,
+                        shardableRunner,
+                        TEST_COVERAGE_TARGET);
+        String nonshardableInstr1 =
+                String.format(
+                        INSTR_OUTPUT_FORMAT,
+                        nonshardableTestPkg1,
+                        nonshardableRunner,
+                        TEST_COVERAGE_TARGET);
+        String nonshardableInstr2 =
+                String.format(
+                        INSTR_OUTPUT_FORMAT,
+                        nonshardableTestPkg2,
+                        nonshardableRunner,
+                        TEST_COVERAGE_TARGET);
 
-        String shardableInstr = String.format(INSTR_OUTPUT_FORMAT, shardableTestPkg,
-                shardableRunner, TEST_COVERAGE_TARGET);
-        String nonshardableInstr1 = String.format(INSTR_OUTPUT_FORMAT, nonshardableTestPkg1,
-                nonshardableRunner, TEST_COVERAGE_TARGET);
-        String nonshardableInstr2 = String.format(INSTR_OUTPUT_FORMAT, nonshardableTestPkg2,
-                nonshardableRunner, TEST_COVERAGE_TARGET);
-
-        injectShellResponse(String.format("%s%s%s", shardableInstr,
-                nonshardableInstr1, nonshardableInstr2), 2);
+        injectShellResponse(
+                String.format("%s%s%s", shardableInstr, nonshardableInstr1, nonshardableInstr2), 2);
 
         // Instantiate InstalledInstrumentationTest shards
-        EasyMock.replay(mMockTestDevice, mMockListener);
+
         InstalledInstrumentationsTest shard0 = createInstalledInstrumentationsTest();
         shard0.setDevice(mMockTestDevice);
         shard0.setShardIndex(0);
@@ -262,7 +283,8 @@ public class InstalledInstrumentationsTestTest {
         assertEquals("1", mMockInstrumentationTests.get(1).getInstrumentationArg("shardIndex"));
         assertEquals("2", mMockInstrumentationTests.get(1).getInstrumentationArg("numShards"));
 
-        EasyMock.verify(mMockListener, mMockTestDevice);
+        verifyShellResponse(
+                String.format("%s%s%s", shardableInstr, nonshardableInstr1, nonshardableInstr2), 2);
     }
 
     @Test
@@ -275,7 +297,7 @@ public class InstalledInstrumentationsTestTest {
         List<IMetricCollector> collectors = new ArrayList<>();
         collectors.add(new BaseDeviceMetricCollector());
         mInstalledInstrTest.setMetricCollectors(collectors);
-        EasyMock.replay(mMockTestDevice, mMockListener);
+
         mInstalledInstrTest.run(mTestInfo, mMockListener);
         assertEquals(1, mMockInstrumentationTests.size());
         MockInstrumentationTest mockInstrumentationTest = mMockInstrumentationTests.get(0);
@@ -285,8 +307,8 @@ public class InstalledInstrumentationsTestTest {
         assertEquals("small", mockInstrumentationTest.getTestSize());
         assertEquals(ABI, mockInstrumentationTest.getForceAbi());
         assertEquals(1, mockInstrumentationTest.getCollectors().size());
-
-        EasyMock.verify(mMockListener, mMockTestDevice);
+        verifyShellResponse(
+                String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
     }
 
     /**
@@ -298,31 +320,51 @@ public class InstalledInstrumentationsTestTest {
      */
     private void injectShellResponse(final String shellResponse, int numExpectedCalls)
             throws DeviceNotAvailableException {
-        IAnswer<Object> shellAnswer = new IAnswer<Object>() {
-            @Override
-            public String answer() throws Throwable {
-                return shellResponse;
-            }
-        };
-        mMockTestDevice.executeShellCommand(EasyMock.<String> anyObject());
-        EasyMock.expectLastCall().andAnswer(shellAnswer).times(numExpectedCalls);
+        Answer<Object> shellAnswer =
+                new Answer<Object>() {
+                    @Override
+                    public String answer(InvocationOnMock invocation) throws Throwable {
+                        return shellResponse;
+                    }
+                };
+        doAnswer(shellAnswer).when(mMockTestDevice).executeShellCommand(Mockito.<String>any());
+    }
+
+    /**
+     * Method to mock the executeShellCommand response
+     *
+     * @param shellResponse value to be returned by executeShellCommand
+     * @param numExpectedCalls number of invocation expected
+     * @throws DeviceNotAvailableException
+     */
+    private void verifyShellResponse(final String shellResponse, int numExpectedCalls)
+            throws DeviceNotAvailableException {
+        Answer<Object> shellAnswer =
+                new Answer<Object>() {
+                    @Override
+                    public String answer(InvocationOnMock invocation) throws Throwable {
+                        return shellResponse;
+                    }
+                };
+        verify(mMockTestDevice, times(numExpectedCalls)).executeShellCommand(Mockito.<String>any());
     }
 
     /**
      * Utility method for creating an InstalledInstrumentationsTest for testing.
      *
-     * InstalledInstrumentationsTests need to create a MockInstrumentationTest, and we need to be
+     * <p>InstalledInstrumentationsTests need to create a MockInstrumentationTest, and we need to be
      * able to keep track of all mocks created in this manner.
      */
     private InstalledInstrumentationsTest createInstalledInstrumentationsTest() {
-        InstalledInstrumentationsTest test = new InstalledInstrumentationsTest() {
-            @Override
-            InstrumentationTest createInstrumentationTest() {
-                MockInstrumentationTest test = new MockInstrumentationTest();
-                mMockInstrumentationTests.add(test);
-                return test;
-            }
-        };
+        InstalledInstrumentationsTest test =
+                new InstalledInstrumentationsTest() {
+                    @Override
+                    InstrumentationTest createInstrumentationTest() {
+                        MockInstrumentationTest test = new MockInstrumentationTest();
+                        mMockInstrumentationTests.add(test);
+                        return test;
+                    }
+                };
         return test;
     }
 
@@ -345,7 +387,7 @@ public class InstalledInstrumentationsTestTest {
     @Test
     public void testRun_noInstr() throws Exception {
         injectShellResponse(PM_LIST_ERROR_OUTPUT, 1);
-        EasyMock.replay(mMockTestDevice, mMockListener);
+
         try {
             mInstalledInstrTest.run(mTestInfo, mMockListener);
             fail("IllegalArgumentException not thrown");

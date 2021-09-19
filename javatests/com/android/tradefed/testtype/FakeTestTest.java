@@ -26,13 +26,16 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.util.HashMap;
@@ -42,7 +45,7 @@ import java.util.Map;
 public class FakeTestTest {
 
     private FakeTest mTest = null;
-    private ITestInvocationListener mListener = null;
+    @Mock ITestInvocationListener mListener;
     private OptionSetter mOption = null;
     private TestInformation mTestInfo;
 
@@ -50,9 +53,11 @@ public class FakeTestTest {
 
     @Before
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mTest = new FakeTest();
         mOption = new OptionSetter(mTest);
-        mListener = EasyMock.createStrictMock(ITestInvocationListener.class);
+
         mTestInfo = TestInformation.newBuilder().build();
     }
 
@@ -123,16 +128,20 @@ public class FakeTestTest {
                 assertEquals(output, mTest.decode(input));
             } catch (IllegalArgumentException e) {
                 // Add input to error message to make debugging easier
-                final Exception cause = new IllegalArgumentException(String.format(
-                        "Encountered exception for input \"%s\" with expected output \"%s\"",
-                        input, output));
+                final Exception cause =
+                        new IllegalArgumentException(
+                                String.format(
+                                        "Encountered exception for input \"%s\" with expected"
+                                                + " output \"%s\"",
+                                        input, output));
                 throw new IllegalArgumentException(e.getMessage(), cause);
             }
         }
 
         final String[] errors = {
-                "X", "X1", "P0", "P2F1E0", "2PF", "2PF1", " ",  // common decodeRle errors
-                "(", "(PFE()", "(PFE))", "2(PFE)", "2(PFE)2", "(PF))((FE)", "(PFE)0"};
+            "X", "X1", "P0", "P2F1E0", "2PF", "2PF1", " ", // common decodeRle errors
+            "(", "(PFE()", "(PFE))", "2(PFE)", "2(PFE)2", "(PF))((FE)", "(PFE)0"
+        };
         for (String error : errors) {
             try {
                 mTest.decode(error);
@@ -146,57 +155,60 @@ public class FakeTestTest {
     @Test
     public void testRun_empty() throws Exception {
         final String name = "com.moo.cow";
-        mListener.testRunStarted(EasyMock.eq(name), EasyMock.eq(0));
-        mListener.testRunEnded(EasyMock.eq(0L), EasyMock.<HashMap<String, Metric>>anyObject());
 
-        EasyMock.replay(mListener);
         mOption.setOptionValue("run", name, "");
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
+        InOrder inOrder = Mockito.inOrder(mListener);
+        inOrder.verify(mListener).testRunStarted(Mockito.eq(name), Mockito.eq(0));
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.eq(0L), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
     public void testRun_simplePass() throws Exception {
         final String name = "com.moo.cow";
-        mListener.testRunStarted(EasyMock.eq(name), EasyMock.eq(1));
-        testPassExpectations(mListener, name, 1);
-        mListener.testRunEnded(EasyMock.eq(0L), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mListener);
         mOption.setOptionValue("run", name, "P");
+
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
+
+        InOrder inOrder = Mockito.inOrder(mListener);
+        inOrder.verify(mListener).testRunStarted(Mockito.eq(name), Mockito.eq(1));
+        testPassExpectations(mListener, name, 1, inOrder);
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.eq(0L), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
     public void testRun_simpleFail() throws Exception {
         final String name = "com.moo.cow";
-        mListener.testRunStarted(EasyMock.eq(name), EasyMock.eq(1));
-        testFailExpectations(mListener, name, 1);
-        mListener.testRunEnded(EasyMock.eq(0L), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mListener);
         mOption.setOptionValue("run", name, "F");
+
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
+
+        InOrder inOrder = Mockito.inOrder(mListener);
+        inOrder.verify(mListener).testRunStarted(Mockito.eq(name), Mockito.eq(1));
+        testFailExpectations(mListener, name, 1, inOrder);
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.eq(0L), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
     public void testRun_basicSequence() throws Exception {
         final String name = "com.moo.cow";
-        int i = 1;
-        mListener.testRunStarted(EasyMock.eq(name), EasyMock.eq(5));
-        testPassExpectations(mListener, name, i++);
-        testFailExpectations(mListener, name, i++);
-        testPassExpectations(mListener, name, i++);
-        testAssumptionExpectations(mListener, name, i++);
-        testIgnoredExpectations(mListener, name, i++);
-        mListener.testRunEnded(EasyMock.eq(0L), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mListener);
         mOption.setOptionValue("run", name, "PFPAI");
+
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
+
+        InOrder inOrder = Mockito.inOrder(mListener);
+        inOrder.verify(mListener).testRunStarted(Mockito.eq(name), Mockito.eq(5));
+        int i = 1;
+        testPassExpectations(mListener, name, i++, inOrder);
+        testFailExpectations(mListener, name, i++, inOrder);
+        testPassExpectations(mListener, name, i++, inOrder);
+        testAssumptionExpectations(mListener, name, i++, inOrder);
+        testIgnoredExpectations(mListener, name, i++, inOrder);
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.eq(0L), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
@@ -206,140 +218,147 @@ public class FakeTestTest {
         File invocationLog = mTempFolder.newFile("invocation.log");
 
         final String name = "com.moo.cow";
-        mListener.testRunStarted(EasyMock.eq(name), EasyMock.eq(1));
-        testPassExpectations(mListener, name, 1, testLog.getName());
-        mListener.testLog(
-                EasyMock.eq(testRunLog.getName()),
-                EasyMock.eq(LogDataType.UNKNOWN),
-                EasyMock.anyObject());
-        mListener.testRunEnded(EasyMock.eq(0L), EasyMock.<HashMap<String, Metric>>anyObject());
-        mListener.testLog(
-                EasyMock.eq(invocationLog.getName()),
-                EasyMock.eq(LogDataType.UNKNOWN),
-                EasyMock.anyObject());
-
-        EasyMock.replay(mListener);
 
         mOption.setOptionValue("run", name, "P");
         mOption.setOptionValue("test-log", testLog.getAbsolutePath());
         mOption.setOptionValue("test-run-log", testRunLog.getAbsolutePath());
         mOption.setOptionValue("test-invocation-log", invocationLog.getAbsolutePath());
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
+        InOrder inOrder = Mockito.inOrder(mListener);
+        inOrder.verify(mListener).testRunStarted(Mockito.eq(name), Mockito.eq(1));
+        testPassExpectations(mListener, name, 1, testLog.getName(), inOrder);
+        inOrder.verify(mListener)
+                .testLog(
+                        Mockito.eq(testRunLog.getName()),
+                        Mockito.eq(LogDataType.UNKNOWN),
+                        Mockito.any());
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.eq(0L), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mListener)
+                .testLog(
+                        Mockito.eq(invocationLog.getName()),
+                        Mockito.eq(LogDataType.UNKNOWN),
+                        Mockito.any());
     }
 
     @Test
     public void testRun_basicParens() throws Exception {
         final String name = "com.moo.cow";
-        int i = 1;
-        mListener.testRunStarted(EasyMock.eq(name), EasyMock.eq(4));
-        testPassExpectations(mListener, name, i++);
-        testFailExpectations(mListener, name, i++);
-        testPassExpectations(mListener, name, i++);
-        testFailExpectations(mListener, name, i++);
-        mListener.testRunEnded(EasyMock.eq(0L), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mListener);
         mOption.setOptionValue("run", name, "(PF)2");
+
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
+
+        InOrder inOrder = Mockito.inOrder(mListener);
+        inOrder.verify(mListener).testRunStarted(Mockito.eq(name), Mockito.eq(4));
+        int i = 1;
+        testPassExpectations(mListener, name, i++, inOrder);
+        testFailExpectations(mListener, name, i++, inOrder);
+        testPassExpectations(mListener, name, i++, inOrder);
+        testFailExpectations(mListener, name, i++, inOrder);
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.eq(0L), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
     public void testRun_recursiveParens() throws Exception {
         final String name = "com.moo.cow";
-        int i = 1;
-        mListener.testRunStarted(EasyMock.eq(name), EasyMock.eq(8));
-        testPassExpectations(mListener, name, i++);
-        testFailExpectations(mListener, name, i++);
-
-        testPassExpectations(mListener, name, i++);
-        testFailExpectations(mListener, name, i++);
-
-        testPassExpectations(mListener, name, i++);
-        testFailExpectations(mListener, name, i++);
-
-        testPassExpectations(mListener, name, i++);
-        testFailExpectations(mListener, name, i++);
-
-        mListener.testRunEnded(EasyMock.eq(0L), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mListener);
         mOption.setOptionValue("run", name, "((PF)2)2");
+
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
+
+        InOrder inOrder = Mockito.inOrder(mListener);
+        inOrder.verify(mListener).testRunStarted(Mockito.eq(name), Mockito.eq(8));
+        int i = 1;
+        testPassExpectations(mListener, name, i++, inOrder);
+        testFailExpectations(mListener, name, i++, inOrder);
+
+        testPassExpectations(mListener, name, i++, inOrder);
+        testFailExpectations(mListener, name, i++, inOrder);
+
+        testPassExpectations(mListener, name, i++, inOrder);
+        testFailExpectations(mListener, name, i++, inOrder);
+
+        testPassExpectations(mListener, name, i++, inOrder);
+        testFailExpectations(mListener, name, i++, inOrder);
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.eq(0L), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
     public void testMultiRun() throws Exception {
         final String name1 = "com.moo.cow";
-        int i = 1;
-        mListener.testRunStarted(EasyMock.eq(name1), EasyMock.eq(2));
-        testPassExpectations(mListener, name1, i++);
-        testFailExpectations(mListener, name1, i++);
-        mListener.testRunEnded(EasyMock.eq(0L), EasyMock.<HashMap<String, Metric>>anyObject());
-
         final String name2 = "com.quack.duck";
-        i = 1;
-        mListener.testRunStarted(EasyMock.eq(name2), EasyMock.eq(2));
-        testFailExpectations(mListener, name2, i++);
-        testPassExpectations(mListener, name2, i++);
-        mListener.testRunEnded(EasyMock.eq(0L), EasyMock.<HashMap<String, Metric>>anyObject());
-
         final String name3 = "com.oink.pig";
-        i = 1;
-        mListener.testRunStarted(EasyMock.eq(name3), EasyMock.eq(0));
-        // empty run
-        mListener.testRunEnded(EasyMock.eq(0L), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mListener);
         mOption.setOptionValue("run", name1, "PF");
         mOption.setOptionValue("run", name2, "FP");
         mOption.setOptionValue("run", name3, "");
-        mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
-    }
 
-    private void testPassExpectations(ITestInvocationListener l, String klass,
-            int idx) {
-        final String name = String.format("testMethod%d", idx);
-        final TestDescription test = new TestDescription(klass, name);
-        l.testStarted(test);
-        l.testEnded(EasyMock.eq(test), EasyMock.<HashMap<String, Metric>>anyObject());
+        mTest.run(mTestInfo, mListener);
+
+        InOrder inOrder = Mockito.inOrder(mListener);
+
+        inOrder.verify(mListener).testRunStarted(Mockito.eq(name1), Mockito.eq(2));
+        int i = 1;
+        testPassExpectations(mListener, name1, i++, inOrder);
+        testFailExpectations(mListener, name1, i++, inOrder);
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.eq(0L), Mockito.<HashMap<String, Metric>>any());
+
+        inOrder.verify(mListener).testRunStarted(Mockito.eq(name2), Mockito.eq(2));
+        i = 1;
+        testFailExpectations(mListener, name2, i++, inOrder);
+        testPassExpectations(mListener, name2, i++, inOrder);
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.eq(0L), Mockito.<HashMap<String, Metric>>any());
+
+        inOrder.verify(mListener).testRunStarted(Mockito.eq(name3), Mockito.eq(0));
+        i = 1;
+        // empty run
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.eq(0L), Mockito.<HashMap<String, Metric>>any());
     }
 
     private void testPassExpectations(
-            ITestInvocationListener l, String klass, int idx, String log) {
+            ITestInvocationListener l, String klass, int idx, InOrder io) {
         final String name = String.format("testMethod%d", idx);
         final TestDescription test = new TestDescription(klass, name);
-        l.testStarted(test);
-        l.testLog(EasyMock.eq(log), EasyMock.eq(LogDataType.UNKNOWN), EasyMock.anyObject());
-        l.testEnded(EasyMock.eq(test), EasyMock.<HashMap<String, Metric>>anyObject());
+        io.verify(l).testStarted(test);
+        io.verify(l).testEnded(Mockito.eq(test), Mockito.<HashMap<String, Metric>>any());
     }
 
-    private void testFailExpectations(ITestInvocationListener l, String klass,
-            int idx) {
+    private void testPassExpectations(
+            ITestInvocationListener l, String klass, int idx, String log, InOrder io) {
         final String name = String.format("testMethod%d", idx);
         final TestDescription test = new TestDescription(klass, name);
-        l.testStarted(test);
-        l.testFailed(EasyMock.eq(test), EasyMock.<String>anyObject());
-        l.testEnded(EasyMock.eq(test), EasyMock.<HashMap<String, Metric>>anyObject());
+        io.verify(l).testStarted(test);
+        io.verify(l).testLog(Mockito.eq(log), Mockito.eq(LogDataType.UNKNOWN), Mockito.any());
+        io.verify(l).testEnded(Mockito.eq(test), Mockito.<HashMap<String, Metric>>any());
     }
 
-    private void testAssumptionExpectations(ITestInvocationListener l, String klass, int idx) {
+    private void testFailExpectations(
+            ITestInvocationListener l, String klass, int idx, InOrder io) {
         final String name = String.format("testMethod%d", idx);
         final TestDescription test = new TestDescription(klass, name);
-        l.testStarted(test);
-        l.testAssumptionFailure(EasyMock.eq(test), EasyMock.<String>anyObject());
-        l.testEnded(EasyMock.eq(test), EasyMock.<HashMap<String, Metric>>anyObject());
+        io.verify(l).testStarted(test);
+        io.verify(l).testFailed(Mockito.eq(test), Mockito.<String>any());
+        io.verify(l).testEnded(Mockito.eq(test), Mockito.<HashMap<String, Metric>>any());
     }
 
-    private void testIgnoredExpectations(ITestInvocationListener l, String klass, int idx) {
+    private void testAssumptionExpectations(
+            ITestInvocationListener l, String klass, int idx, InOrder io) {
         final String name = String.format("testMethod%d", idx);
         final TestDescription test = new TestDescription(klass, name);
-        l.testStarted(test);
-        l.testIgnored(EasyMock.eq(test));
-        l.testEnded(EasyMock.eq(test), EasyMock.<HashMap<String, Metric>>anyObject());
+        io.verify(l).testStarted(test);
+        io.verify(l).testAssumptionFailure(Mockito.eq(test), Mockito.<String>any());
+        io.verify(l).testEnded(Mockito.eq(test), Mockito.<HashMap<String, Metric>>any());
+    }
+
+    private void testIgnoredExpectations(
+            ITestInvocationListener l, String klass, int idx, InOrder io) {
+        final String name = String.format("testMethod%d", idx);
+        final TestDescription test = new TestDescription(klass, name);
+        io.verify(l).testStarted(test);
+        io.verify(l).testIgnored(Mockito.eq(test));
+        io.verify(l).testEnded(Mockito.eq(test), Mockito.<HashMap<String, Metric>>any());
     }
 }
-
