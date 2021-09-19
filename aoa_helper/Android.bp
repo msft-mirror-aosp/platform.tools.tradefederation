@@ -27,7 +27,6 @@ java_library_host {
         "guava",
     ],
     static_libs: [
-        "ddmlib-prebuilt",
         "jna-prebuilt",
     ],
 }

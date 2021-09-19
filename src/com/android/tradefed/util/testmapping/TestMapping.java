@@ -22,6 +22,7 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -59,6 +60,7 @@ public class TestMapping {
 
     private static final String PRESUBMIT = "presubmit";
     private static final String IMPORTS = "imports";
+    private static final String KEY_IMPORT_PATH = "path";
     private static final String KEY_HOST = "host";
     private static final String KEY_KEYWORDS = "keywords";
     private static final String KEY_NAME = "name";
@@ -76,6 +78,9 @@ public class TestMapping {
 
     private static List<String> mTestMappingRelativePaths = new ArrayList<>();
 
+    // TODO: refactor the flag out of statics.
+    private static boolean mIgnoreTestMappingImports = true;
+
     /**
      * Set the TEST_MAPPING paths inside of TEST_MAPPINGS_ZIP to limit loading the TEST_MAPPING.
      *
@@ -87,6 +92,14 @@ public class TestMapping {
         mTestMappingRelativePaths.addAll(relativePaths);
     }
 
+    /**
+     * Set the mIgnoreTestMappingImports inside TestMapping.
+     *
+     * @param ignoreTestMappingImports A boolean of whether to ignore imports in test mapping.
+     */
+    public static void setIgnoreTestMappingImports(boolean ignoreTestMappingImports) {
+        mIgnoreTestMappingImports = ignoreTestMappingImports;
+    }
 
     /**
      * Constructor to create a {@link TestMapping} object from a path to TEST_MAPPING file.
@@ -98,54 +111,89 @@ public class TestMapping {
         mTestCollection = new LinkedHashMap<>();
         String relativePath = testMappingsDir.relativize(path.getParent()).toString();
         String errorMessage = null;
+        if (Files.notExists(path)) {
+            CLog.d("TEST_MAPPING path not found: %s.", path);
+            return;
+        }
         try {
             String content = removeComments(
                     String.join("\n", Files.readAllLines(path, StandardCharsets.UTF_8)));
-            if (content != null) {
-                JSONTokener tokener = new JSONTokener(content);
-                JSONObject root = new JSONObject(tokener);
-                Iterator<String> testGroups = (Iterator<String>) root.keys();
-                while (testGroups.hasNext()) {
-                    String group = testGroups.next();
-                    if (group.equals(IMPORTS)) {
-                        // TF runs tests in all TEST_MAPPING files in a build, so imports do not
-                        // need to be considered.
-                        continue;
+            if (Strings.isNullOrEmpty(content)) {
+                return;
+            }
+            JSONTokener tokener = new JSONTokener(content);
+            JSONObject root = new JSONObject(tokener);
+            Iterator<String> testGroups = (Iterator<String>) root.keys();
+
+            Set<Path> filePaths = new HashSet<>();
+            if (!mIgnoreTestMappingImports) {
+                listTestMappingFiles(path.getParent(), testMappingsDir, filePaths);
+            }
+
+            while (testGroups.hasNext()) {
+                String group = testGroups.next();
+                if (group.equals(IMPORTS)) {
+                    continue;
+                }
+                Set<TestInfo> testsForGroup = new HashSet<>();
+                mTestCollection.put(group, testsForGroup);
+                JSONArray arr = root.getJSONArray(group);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject testObject = arr.getJSONObject(i);
+                    boolean hostOnly = testObject.has(KEY_HOST) && testObject.getBoolean(KEY_HOST);
+                    Set<String> keywords = new HashSet<>();
+                    if (testObject.has(KEY_KEYWORDS)) {
+                        JSONArray keywordArray = testObject.getJSONArray(KEY_KEYWORDS);
+                        for (int j = 0; j < keywordArray.length(); j++) {
+                            keywords.add(keywordArray.getString(j));
+                        }
                     }
-                    Set<TestInfo> testsForGroup = new HashSet<>();
-                    mTestCollection.put(group, testsForGroup);
-                    JSONArray arr = root.getJSONArray(group);
-                    for (int i = 0; i < arr.length(); i++) {
-                        JSONObject testObject = arr.getJSONObject(i);
-                        boolean hostOnly =
-                                testObject.has(KEY_HOST) && testObject.getBoolean(KEY_HOST);
-                        Set<String> keywords = new HashSet<>();
-                        if (testObject.has(KEY_KEYWORDS)) {
-                            JSONArray keywordArray = testObject.getJSONArray(KEY_KEYWORDS);
-                            for (int j = 0; j < keywordArray.length(); j++) {
-                                keywords.add(keywordArray.getString(j));
+                    TestInfo test =
+                            new TestInfo(
+                                    testObject.getString(KEY_NAME),
+                                    relativePath,
+                                    hostOnly,
+                                    keywords);
+                    if (testObject.has(KEY_OPTIONS)) {
+                        JSONArray optionObjects = testObject.getJSONArray(KEY_OPTIONS);
+                        for (int j = 0; j < optionObjects.length(); j++) {
+                            JSONObject optionObject = optionObjects.getJSONObject(j);
+                            for (int k = 0; k < optionObject.names().length(); k++) {
+                                String name = optionObject.names().getString(k);
+                                String value = optionObject.getString(name);
+                                TestOption option = new TestOption(name, value);
+                                test.addOption(option);
                             }
                         }
-                        TestInfo test =
-                                new TestInfo(
-                                        testObject.getString(KEY_NAME),
-                                        relativePath,
-                                        hostOnly,
-                                        keywords);
-                        if (testObject.has(KEY_OPTIONS)) {
-                            JSONArray optionObjects = testObject.getJSONArray(KEY_OPTIONS);
-                            for (int j = 0; j < optionObjects.length(); j++) {
-                                JSONObject optionObject = optionObjects.getJSONObject(j);
-                                for (int k = 0; k < optionObject.names().length(); k++) {
-                                    String name = optionObject.names().getString(k);
-                                    String value = optionObject.getString(name);
-                                    TestOption option = new TestOption(name, value);
-                                    test.addOption(option);
+                    }
+                    testsForGroup.add(test);
+                }
+            }
+
+            if (!mIgnoreTestMappingImports) {
+                try {
+                    // No longer need to include import paths, filePaths includes all related paths.
+                    mIgnoreTestMappingImports = true;
+                    for (Path filePath : filePaths) {
+                        Map<String, Set<TestInfo>> filePathImportedTestCollection =
+                                new TestMapping(filePath, testMappingsDir).getTestCollection();
+                        for (String group : filePathImportedTestCollection.keySet()) {
+                            // Add all imported TestInfo to mTestCollection.
+                            if (filePathImportedTestCollection.get(group) != null) {
+                                if (mTestCollection.get(group) == null) {
+                                    mTestCollection.put(
+                                            group, filePathImportedTestCollection.get(group));
+                                } else {
+                                    mTestCollection
+                                            .get(group)
+                                            .addAll(filePathImportedTestCollection.get(group));
                                 }
                             }
                         }
-                        testsForGroup.add(test);
                     }
+                } finally {
+                    // Restore the flag.
+                    mIgnoreTestMappingImports = false;
                 }
             }
         } catch (IOException e) {
@@ -181,6 +229,95 @@ public class TestMapping {
         }
         matcher.appendTail(out);
         return out.toString();
+    }
+
+    /**
+     * Helper to list all test mapping files, look for all parent directories and related import
+     * paths.
+     *
+     * @param testMappingDir The {@link Path} to a TEST_MAPPING file parent directory.
+     * @param testMappingsRootDir The {@link Path} to the folder of all TEST_MAPPING files for a
+     *     build.
+     * @param filePaths A {@link Set<Path>} to store all TEST_MAPPING paths.
+     */
+    public static void listTestMappingFiles(
+            Path testMappingDir, Path testMappingsRootDir, Set<Path> filePaths) {
+        String errorMessage = null;
+
+        if (!testMappingDir.toAbsolutePath().startsWith(testMappingsRootDir.toAbsolutePath())) {
+            CLog.d(
+                    "SKIPPED: Path %s is not under test mapping directory %s.",
+                    testMappingDir, testMappingsRootDir);
+            return;
+        }
+
+        if (Files.notExists(testMappingDir)) {
+            CLog.d("TEST_MAPPING path not found: %s.", testMappingDir);
+            return;
+        }
+
+        try {
+            Path testMappingPath = testMappingDir.resolve(TEST_MAPPING);
+            filePaths.add(testMappingPath);
+            String content =
+                    removeComments(
+                            String.join(
+                                    "\n",
+                                    Files.readAllLines(testMappingPath, StandardCharsets.UTF_8)));
+            if (Strings.isNullOrEmpty(content)) {
+                return;
+            }
+            JSONTokener tokener = new JSONTokener(content);
+            JSONObject root = new JSONObject(tokener);
+            if (root.has(IMPORTS) && !mIgnoreTestMappingImports) {
+                JSONArray arr = root.getJSONArray(IMPORTS);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject testObject = arr.getJSONObject(i);
+                    Path importPath = Paths.get(testObject.getString(KEY_IMPORT_PATH));
+                    Path normImportPath =
+                            Paths.get(testMappingsRootDir.toString(), importPath.toString());
+
+                    Path importPathTestMappingPath = normImportPath.resolve(TEST_MAPPING);
+                    if (!filePaths.contains(importPathTestMappingPath)) {
+                        if (Files.exists(importPathTestMappingPath)) {
+                            filePaths.add(importPathTestMappingPath);
+                        }
+                        listTestMappingFiles(importPath, testMappingsRootDir, filePaths);
+                    }
+                }
+            }
+
+            while (testMappingDir
+                    .toAbsolutePath()
+                    .startsWith(testMappingsRootDir.toAbsolutePath())) {
+                if (testMappingDir.toAbsolutePath().equals(testMappingsRootDir.toAbsolutePath())) {
+                    break;
+                }
+                Path upperDirectory = testMappingDir.getParent();
+                Path upperDirectoryTestMappingPath = upperDirectory.resolve(TEST_MAPPING);
+                if (Files.exists(upperDirectoryTestMappingPath)
+                        && !filePaths.contains(upperDirectoryTestMappingPath)) {
+                    filePaths.add(upperDirectoryTestMappingPath);
+                    listTestMappingFiles(upperDirectory, testMappingsRootDir, filePaths);
+                }
+                testMappingDir = upperDirectory;
+            }
+
+        } catch (IOException e) {
+            errorMessage =
+                    String.format(
+                            "Error reading TEST_MAPPING file: %s.", testMappingDir.toString());
+        } catch (JSONException e) {
+            errorMessage =
+                    String.format(
+                            "Error parsing TEST_MAPPING file: %s. Error: %s",
+                            testMappingDir.toString(), e);
+        }
+
+        if (errorMessage != null) {
+            CLog.e(errorMessage);
+            throw new RuntimeException(errorMessage);
+        }
     }
 
     /**

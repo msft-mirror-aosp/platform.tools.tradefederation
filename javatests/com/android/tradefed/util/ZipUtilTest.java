@@ -15,11 +15,19 @@
  */
 package com.android.tradefed.util;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.After;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import com.android.tradefed.util.zip.CentralDirectoryInfo;
 import com.android.tradefed.util.zip.EndCentralDirectoryInfo;
 import com.android.tradefed.util.zip.LocalFileHeader;
-
-import junit.framework.TestCase;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -36,15 +44,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.zip.ZipFile;
 
-/**
- * Unit tests for {@link ZipUtil}
- */
-public class ZipUtilTest extends TestCase {
+/** Unit tests for {@link ZipUtil} */
+@RunWith(JUnit4.class)
+public class ZipUtilTest {
     private Set<File> mTempFiles = new HashSet<File>();
 
-    @Override
-    protected void tearDown() throws Exception {
-        super.tearDown();
+    @After
+    public void tearDown() throws Exception {
+
         for (File file : mTempFiles) {
             if (file != null && file.exists()) {
                 if (file.isDirectory()) {
@@ -65,9 +72,10 @@ public class ZipUtilTest extends TestCase {
     }
 
     /**
-     * Test that our _simple_ corrupt zip detection heuristics work properly.  It is expected
-     * that this check will _fail_ to detect a corrupt but well-formed Zip archive.
+     * Test that our _simple_ corrupt zip detection heuristics work properly. It is expected that
+     * this check will _fail_ to detect a corrupt but well-formed Zip archive.
      */
+    @Test
     public void testSimpleCorruptZipCheck() throws Exception {
         assertTrue("Falsely detected 'normal.zip' test file as corrupt!",
                 ZipUtil.isZipFileValid(getTestDataFile("normal"), false));
@@ -77,9 +85,8 @@ public class ZipUtilTest extends TestCase {
                 ZipUtil.isZipFileValid(getTestDataFile("corrupt"), false));
     }
 
-    /**
-     * Test that our _thorough_ corrupt zip detection heuristics work properly.
-     */
+    /** Test that our _thorough_ corrupt zip detection heuristics work properly. */
+    @Test
     public void testThoroughCorruptZipCheck() throws Exception {
         assertTrue("Falsely detected 'normal.zip' test file as corrupt with thorough check!",
                 ZipUtil.isZipFileValid(getTestDataFile("normal"), true));
@@ -94,6 +101,7 @@ public class ZipUtilTest extends TestCase {
      *
      * @throws IOException
      */
+    @Test
     public void testCreateAndExtractZip() throws IOException {
         File tmpParentDir = createTempDir("foo");
         File zipFile = null;
@@ -124,6 +132,7 @@ public class ZipUtilTest extends TestCase {
      *
      * @throws IOException
      */
+    @Test
     public void testCreateAndExtractZip_fromFiles() throws IOException {
         File tmpParentDir = createTempDir("foo");
         File zipFile = null;
@@ -148,12 +157,12 @@ public class ZipUtilTest extends TestCase {
         }
     }
 
-
     /**
      * Test that isZipFileValid returns false if calling with a file that does not exist.
      *
      * @throws IOException
      */
+    @Test
     public void testZipFileDoesNotExist() throws IOException {
         File file = new File("/tmp/this-file-does-not-exist.zip");
         assertFalse(ZipUtil.isZipFileValid(file, true));
@@ -165,6 +174,7 @@ public class ZipUtilTest extends TestCase {
      *
      * @throws IOException
      */
+    @Test
     public void testCreateAndExtractFileFromZip() throws IOException {
         File tmpParentDir = createTempDir("foo");
         File zipFile = null;
@@ -190,6 +200,7 @@ public class ZipUtilTest extends TestCase {
      * Test that {@link ZipUtil#extractZipToTemp(File, String)} properly throws when an incorrect
      * zip is presented.
      */
+    @Test
     public void testExtractZipToTemp() throws Exception {
         File tmpFile = FileUtil.createTempFile("ziputiltest", ".zip");
         try {
@@ -202,6 +213,7 @@ public class ZipUtilTest extends TestCase {
         }
     }
 
+    @Test
     public void testPartipUnzip() throws Exception {
         File partialZipFile = null;
         File tmpDir = null;
@@ -362,6 +374,7 @@ public class ZipUtilTest extends TestCase {
      *
      * @throws IOException
      */
+    @Test
     public void testPartialUnzipWithUseZip64() throws Exception {
         File partialZipFile = null;
         File tmpDir = null;

@@ -21,6 +21,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
@@ -55,7 +58,6 @@ import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -151,8 +153,7 @@ public class GranularRetriableTestWrapperTest {
             }
             if (mRunFailure != null) {
                 listener.testRunFailed(mRunFailure);
-                if (mClearRunFailureAttempt != null
-                        && mClearRunFailureAttempt == mAttempts + 1) {
+                if (mClearRunFailureAttempt != null && mClearRunFailureAttempt == mAttempts + 1) {
                     mRunFailure = null;
                 }
             }
@@ -906,9 +907,7 @@ public class GranularRetriableTestWrapperTest {
         assertEquals(0, stats.mRetryFailure);
     }
 
-    /**
-     * Test to reboot device at the last intra-module retry.
-     */
+    /** Test to reboot device at the last intra-module retry. */
     @Test
     public void testIntraModuleRun_rebootAtLastIntraModuleRetry() throws Exception {
         IRetryDecision decision = new BaseRetryDecision();
@@ -919,21 +918,19 @@ public class GranularRetriableTestWrapperTest {
         decision.setInvocationContext(mModuleInvocationContext);
         FakeTest test = new FakeTest();
         test.setRunFailure("I failed!");
-        ITestDevice mMockDevice = EasyMock.createMock(ITestDevice.class);
+        ITestDevice mMockDevice = mock(ITestDevice.class);
         test.setDevice(mMockDevice);
         mModuleInvocationContext.addAllocatedDevice("default-device1", mMockDevice);
         GranularRetriableTestWrapper granularTestWrapper = createGranularTestWrapper(test, 2);
         granularTestWrapper.setRetryDecision(decision);
-        EasyMock.expect(mMockDevice.getIDevice()).andStubReturn(EasyMock.createMock(IDevice.class));
-        mMockDevice.reboot();
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getIDevice()).thenReturn(mock(IDevice.class));
+
         granularTestWrapper.run(mModuleInfo, new CollectingTestListener());
-        EasyMock.verify(mMockDevice);
+
+        verify(mMockDevice).reboot();
     }
 
-    /**
-     * Test to reboot multi-devices at the last intra-module retry.
-     */
+    /** Test to reboot multi-devices at the last intra-module retry. */
     @Test
     public void testIntraModuleRun_rebootMultiDevicesAtLastIntraModuleRetry() throws Exception {
         IRetryDecision decision = new BaseRetryDecision();
@@ -944,32 +941,33 @@ public class GranularRetriableTestWrapperTest {
         decision.setInvocationContext(mModuleInvocationContext);
         FakeTest test = new FakeTest();
         test.setRunFailure("I failed!");
-        ITestDevice mMockDevice = EasyMock.createMock(ITestDevice.class);
-        ITestDevice mMockDevice2 = EasyMock.createMock(ITestDevice.class);
+        ITestDevice mMockDevice = mock(ITestDevice.class);
+        ITestDevice mMockDevice2 = mock(ITestDevice.class);
         test.setDevice(mMockDevice);
         mModuleInvocationContext.addAllocatedDevice("default-device1", mMockDevice);
         mModuleInvocationContext.addAllocatedDevice("default-device2", mMockDevice2);
         GranularRetriableTestWrapper granularTestWrapper = createGranularTestWrapper(test, 3);
         granularTestWrapper.setRetryDecision(decision);
-        EasyMock.expect(mMockDevice.getIDevice()).andStubReturn(EasyMock.createMock(IDevice.class));
-        EasyMock.expect(mMockDevice2.getIDevice()).andStubReturn(EasyMock.createMock(IDevice.class));
-        mMockDevice.reboot();
-        mMockDevice2.reboot();
-        EasyMock.replay(mMockDevice, mMockDevice2);
+        when(mMockDevice.getIDevice()).thenReturn(mock(IDevice.class));
+        when(mMockDevice2.getIDevice()).thenReturn(mock(IDevice.class));
+
         granularTestWrapper.run(mModuleInfo, new CollectingTestListener());
-        EasyMock.verify(mMockDevice, mMockDevice2);
+
+        verify(mMockDevice).reboot();
+        verify(mMockDevice2).reboot();
     }
 
     /** Test to reset multi-devices at the last intra-module retry. */
     @Test
     public void testIntraModuleRun_resetMultiDevicesAtLastIntraModuleRetry() throws Exception {
-        BaseRetryDecision decision = new BaseRetryDecision() {
-            @Override
-            protected void isolateRetry(List<ITestDevice> devices)
-                    throws DeviceNotAvailableException {
-                // Do nothing to fake success
-            }
-        };
+        BaseRetryDecision decision =
+                new BaseRetryDecision() {
+                    @Override
+                    protected void isolateRetry(List<ITestDevice> devices)
+                            throws DeviceNotAvailableException {
+                        // Do nothing to fake success
+                    }
+                };
         OptionSetter setter = new OptionSetter(decision);
         setter.setOptionValue("reset-at-last-retry", "true");
         setter.setOptionValue("retry-strategy", "RETRY_ANY_FAILURE");
@@ -980,7 +978,7 @@ public class GranularRetriableTestWrapperTest {
         decision.setConfiguration(configuration);
         FakeTest test = new FakeTest();
         test.setRunFailure("I failed!");
-        ITestDevice noneAVDDevice = EasyMock.createMock(ITestDevice.class);
+        ITestDevice noneAVDDevice = mock(ITestDevice.class);
 
         RemoteAndroidVirtualDevice avdDevice = Mockito.mock(RemoteAndroidVirtualDevice.class);
 
@@ -994,27 +992,26 @@ public class GranularRetriableTestWrapperTest {
         GranularRetriableTestWrapper granularTestWrapper =
                 createGranularTestWrapper(test, 3, new ArrayList<>(), module);
         granularTestWrapper.setRetryDecision(decision);
-        EasyMock.expect(noneAVDDevice.getIDevice())
-                .andStubReturn(EasyMock.createMock(IDevice.class));
-        EasyMock.expect(noneAVDDevice.getSerialNumber()).andStubReturn("device-1");
+        when(noneAVDDevice.getIDevice()).thenReturn(mock(IDevice.class));
+        when(noneAVDDevice.getSerialNumber()).thenReturn("device-1");
 
-        EasyMock.replay(noneAVDDevice);
         granularTestWrapper.run(mModuleInfo, new CollectingTestListener());
-        EasyMock.verify(noneAVDDevice);
     }
 
     /** Test to reset device at the last intra-module retry failed due to preparer failure. */
     @Test
     public void testIntraModuleRun_resetFailed_preparerFailure() throws Exception {
-        BaseRetryDecision decision = new BaseRetryDecision() {
-            @Override
-            protected void isolateRetry(List<ITestDevice> devices)
-                    throws DeviceNotAvailableException {
-                throw new DeviceNotAvailableException(
-                        "Reset failure", "device1",
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
-            }
-        };
+        BaseRetryDecision decision =
+                new BaseRetryDecision() {
+                    @Override
+                    protected void isolateRetry(List<ITestDevice> devices)
+                            throws DeviceNotAvailableException {
+                        throw new DeviceNotAvailableException(
+                                "Reset failure",
+                                "device1",
+                                DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
+                    }
+                };
         OptionSetter setter = new OptionSetter(decision);
         setter.setOptionValue("reset-at-last-retry", "true");
         setter.setOptionValue("retry-strategy", "RETRY_ANY_FAILURE");
@@ -1052,15 +1049,17 @@ public class GranularRetriableTestWrapperTest {
     public void testIntraModuleRun_resetFailed_powerwashFailure() throws Exception {
         ModuleDefinition module = Mockito.mock(ModuleDefinition.class);
         Mockito.when(module.getModuleInvocationContext()).thenReturn(mModuleInvocationContext);
-        BaseRetryDecision decision = new BaseRetryDecision() {
-            @Override
-            protected void isolateRetry(List<ITestDevice> devices)
-                    throws DeviceNotAvailableException {
-                throw new DeviceNotAvailableException(
-                        "Failed to powerwash device: device1", "device1",
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
-            }
-        };
+        BaseRetryDecision decision =
+                new BaseRetryDecision() {
+                    @Override
+                    protected void isolateRetry(List<ITestDevice> devices)
+                            throws DeviceNotAvailableException {
+                        throw new DeviceNotAvailableException(
+                                "Failed to powerwash device: device1",
+                                "device1",
+                                DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
+                    }
+                };
         OptionSetter setter = new OptionSetter(decision);
         setter.setOptionValue("reset-at-last-retry", "true");
         setter.setOptionValue("retry-strategy", "RETRY_ANY_FAILURE");
@@ -1113,17 +1112,13 @@ public class GranularRetriableTestWrapperTest {
                 createGranularTestWrapper(mIRemoteTest, 3, new ArrayList<>(), module);
         granularTestWrapper.run(mModuleInfo, new CollectingTestListener());
         ModuleListener listener = granularTestWrapper.getResultListener();
-        String errorMsg = listener.getCurrentRunResults().getRunFailureDescription().
-                getErrorMessage();
+        String errorMsg =
+                listener.getCurrentRunResults().getRunFailureDescription().getErrorMessage();
         assertTrue(
                 errorMsg.contains(
                         String.format(
                                 "%s defined in [%s] took 100 seconds while timeout is %s seconds",
-                                mModuleName,
-                                mTestMappingPath,
-                                mTimeout.getSeconds())
-                )
-        );
+                                mModuleName, mTestMappingPath, mTimeout.getSeconds())));
         assertFalse(listener.getCurrentRunResults().getRunFailureDescription().isRetriable());
     }
 
