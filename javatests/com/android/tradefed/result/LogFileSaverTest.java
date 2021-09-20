@@ -18,13 +18,14 @@ package com.android.tradefed.result;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.StreamUtil;
 
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -47,9 +48,7 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-/**
- * Unit tests for {@link LogFileSaver}.
- */
+/** Unit tests for {@link LogFileSaver}. */
 @RunWith(JUnit4.class)
 public class LogFileSaverTest {
 
@@ -65,19 +64,17 @@ public class LogFileSaverTest {
         FileUtil.recursiveDelete(mRootDir);
     }
 
-    /**
-     * Test that a unique directory is created
-     */
+    /** Test that a unique directory is created */
     @Test
     public void testGetFileDir() {
         final String buildId = "88888";
         final String branch = "somebranch";
         final String testtag = "sometest";
-        IBuildInfo mockBuild = EasyMock.createMock(IBuildInfo.class);
-        EasyMock.expect(mockBuild.getBuildBranch()).andReturn(branch).anyTimes();
-        EasyMock.expect(mockBuild.getBuildId()).andReturn(buildId).anyTimes();
-        EasyMock.expect(mockBuild.getTestTag()).andReturn(testtag).anyTimes();
-        EasyMock.replay(mockBuild);
+        IBuildInfo mockBuild = mock(IBuildInfo.class);
+        when(mockBuild.getBuildBranch()).thenReturn(branch);
+        when(mockBuild.getBuildId()).thenReturn(buildId);
+        when(mockBuild.getTestTag()).thenReturn(testtag);
+
         LogFileSaver saver = new LogFileSaver(mockBuild, mRootDir);
         File generatedDir = saver.getFileDir();
         File tagDir = generatedDir.getParentFile();
@@ -102,18 +99,16 @@ public class LogFileSaverTest {
         assertEquals(0, tagDir.compareTo(newTagDir));
     }
 
-    /**
-     * Test that a unique directory is created when no branch is specified
-     */
+    /** Test that a unique directory is created when no branch is specified */
     @Test
     public void testGetFileDir_nobranch() {
         final String buildId = "88888";
         final String testtag = "sometest";
-        IBuildInfo mockBuild = EasyMock.createMock(IBuildInfo.class);
-        EasyMock.expect(mockBuild.getBuildBranch()).andReturn(null).anyTimes();
-        EasyMock.expect(mockBuild.getBuildId()).andReturn(buildId).anyTimes();
-        EasyMock.expect(mockBuild.getTestTag()).andReturn(testtag).anyTimes();
-        EasyMock.replay(mockBuild);
+        IBuildInfo mockBuild = mock(IBuildInfo.class);
+        when(mockBuild.getBuildBranch()).thenReturn(null);
+        when(mockBuild.getBuildId()).thenReturn(buildId);
+        when(mockBuild.getTestTag()).thenReturn(testtag);
+
         LogFileSaver saver = new LogFileSaver(mockBuild, mRootDir);
         File generatedDir = saver.getFileDir();
         File tagDir = generatedDir.getParentFile();
@@ -126,20 +121,18 @@ public class LogFileSaverTest {
         assertEquals(0, mRootDir.compareTo(buildDir.getParentFile()));
     }
 
-    /**
-     * Test that retention file creation
-     */
+    /** Test that retention file creation */
     @Test
     @SuppressWarnings("deprecation")
     public void testGetFileDir_retention() throws IOException, ParseException {
         final String buildId = "88888";
         final String branch = "somebranch";
         final String testtag = "sometest";
-        IBuildInfo mockBuild = EasyMock.createMock(IBuildInfo.class);
-        EasyMock.expect(mockBuild.getBuildBranch()).andReturn(branch).anyTimes();
-        EasyMock.expect(mockBuild.getBuildId()).andReturn(buildId).anyTimes();
-        EasyMock.expect(mockBuild.getTestTag()).andReturn(testtag).anyTimes();
-        EasyMock.replay(mockBuild);
+        IBuildInfo mockBuild = mock(IBuildInfo.class);
+        when(mockBuild.getBuildBranch()).thenReturn(branch);
+        when(mockBuild.getBuildId()).thenReturn(buildId);
+        when(mockBuild.getTestTag()).thenReturn(testtag);
+
         LogFileSaver saver = new LogFileSaver(mockBuild, mRootDir, 1);
         File retentionFile = new File(saver.getFileDir(), RetentionFileSaver.RETENTION_FILE_NAME);
         assertTrue(retentionFile.isFile());
@@ -152,8 +145,8 @@ public class LogFileSaverTest {
     }
 
     /**
-     * Simple normal case test for
-     * {@link LogFileSaver#saveLogData(String, LogDataType, InputStream)}.
+     * Simple normal case test for {@link LogFileSaver#saveLogData(String, LogDataType,
+     * InputStream)}.
      */
     @Test
     public void testSaveLogData() throws IOException {
@@ -180,9 +173,7 @@ public class LogFileSaverTest {
         }
     }
 
-    /**
-     * Simple normal case test for {@link LogFileSaver#saveAndGZipLogData}.
-     */
+    /** Simple normal case test for {@link LogFileSaver#saveAndGZipLogData}. */
     @Test
     public void testSaveAndGZipLogData() throws IOException {
         File logFile = null;
@@ -205,9 +196,7 @@ public class LogFileSaverTest {
         }
     }
 
-    /**
-     * Simple normal case test for {@link LogFileSaver#saveAndZipLogData}.
-     */
+    /** Simple normal case test for {@link LogFileSaver#saveAndZipLogData}. */
     @Test
     public void testSaveAndZipLogData() throws IOException {
         File logFile = null;
@@ -223,8 +212,9 @@ public class LogFileSaverTest {
             // Verify test data was written to file
             zipFile = new ZipFile(logFile);
 
-            String actualLogString = StreamUtil.getStringFromStream(zipFile.getInputStream(
-                    new ZipEntry("testSaveLogData.txt")));
+            String actualLogString =
+                    StreamUtil.getStringFromStream(
+                            zipFile.getInputStream(new ZipEntry("testSaveLogData.txt")));
             assertTrue(actualLogString.equals(testData));
         } finally {
             if (zipFile != null) {
@@ -235,8 +225,8 @@ public class LogFileSaverTest {
     }
 
     /**
-     * Simple normal case test for {@link LogFileSaver#createCompressedLogFile} and
-     * {@link LogFileSaver#createGZipLogStream(File)}
+     * Simple normal case test for {@link LogFileSaver#createCompressedLogFile} and {@link
+     * LogFileSaver#createGZipLogStream(File)}
      */
     @Test
     public void testCreateAndGZipLogData() throws IOException {
@@ -247,8 +237,12 @@ public class LogFileSaverTest {
             // TODO: would be nice to create a mock file output to make this test not use disk I/O
             LogFileSaver saver = new LogFileSaver(new BuildInfo(), mRootDir);
             logFile = saver.createCompressedLogFile("testSaveAndGZipLogData", LogDataType.TEXT);
-            assertTrue(logFile.getName().endsWith(LogDataType.TEXT.getFileExt() + "." +
-                    LogDataType.GZIP.getFileExt()));
+            assertTrue(
+                    logFile.getName()
+                            .endsWith(
+                                    LogDataType.TEXT.getFileExt()
+                                            + "."
+                                            + LogDataType.GZIP.getFileExt()));
             assertTrue(logFile.exists());
 
             // write data
@@ -258,8 +252,8 @@ public class LogFileSaverTest {
             StreamUtil.copyStreams(mockInput, gzipOutStream);
             StreamUtil.close(gzipOutStream);
             // Verify test data was written to file
-            gzipInputStream = new GZIPInputStream(new BufferedInputStream(
-                    new FileInputStream(logFile)));
+            gzipInputStream =
+                    new GZIPInputStream(new BufferedInputStream(new FileInputStream(logFile)));
 
             String actualLogString = StreamUtil.getStringFromStream(gzipInputStream);
             assertTrue(actualLogString.equals(testData));
@@ -278,15 +272,16 @@ public class LogFileSaverTest {
             LogFileSaver saver = new LogFileSaver(new BuildInfo(), mRootDir);
             final String testData = "Here's some test data, blah";
             ByteArrayInputStream mockInput = new ByteArrayInputStream(testData.getBytes());
-            logFile = saver.saveLogDataRaw(
-                    "testSaveLogData", LogDataType.TEXT.getFileExt(), mockInput);
+            logFile =
+                    saver.saveLogDataRaw(
+                            "testSaveLogData", LogDataType.TEXT.getFileExt(), mockInput);
 
             // Verify test data was written to file
             logFileReader = new BufferedReader(new FileReader(logFile));
             String actualLogString = logFileReader.readLine().trim();
             assertEquals(actualLogString, testData);
-            assertEquals(".txt", FileUtil.getExtension(
-                    new File(logFile.getAbsolutePath()).getName()));
+            assertEquals(
+                    ".txt", FileUtil.getExtension(new File(logFile.getAbsolutePath()).getName()));
         } finally {
             StreamUtil.close(logFileReader);
             FileUtil.deleteFile(logFile);
@@ -301,11 +296,12 @@ public class LogFileSaverTest {
             LogFileSaver saver = new LogFileSaver(new BuildInfo(), mRootDir);
             final String testData = "screenshot";
             ByteArrayInputStream mockInput = new ByteArrayInputStream(testData.getBytes());
-            logFile = saver.saveLogDataRaw(
-                    "screenshot-on-failure", LogDataType.PNG.getFileExt(), mockInput);
+            logFile =
+                    saver.saveLogDataRaw(
+                            "screenshot-on-failure", LogDataType.PNG.getFileExt(), mockInput);
 
-            assertEquals(".png", FileUtil.getExtension(
-                    new File(logFile.getAbsolutePath()).getName()));
+            assertEquals(
+                    ".png", FileUtil.getExtension(new File(logFile.getAbsolutePath()).getName()));
         } finally {
             StreamUtil.close(logFileReader);
             FileUtil.deleteFile(logFile);
