@@ -16,16 +16,21 @@
 package com.android.tradefed.suite.checker;
 
 import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.suite.checker.StatusCheckerResult.CheckStatus;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mockito;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,7 +45,7 @@ public class DeviceSettingCheckerTest {
 
     @Before
     public void setup() throws Exception {
-        mMockDevice = EasyMock.createMock(ITestDevice.class);
+        mMockDevice = mock(ITestDevice.class);
         mChecker = new DeviceSettingChecker();
         mOptionSetter = new OptionSetter(mChecker);
     }
@@ -55,19 +60,15 @@ public class DeviceSettingCheckerTest {
         mapSecure.put("bluetooth_on", "1");
         Map<String, String> mapSystem = new HashMap<>();
         mapSystem.put("alarm_alert", "1");
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("global")))
-                .andReturn(mapGlobal)
-                .times(2);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("secure")))
-                .andReturn(mapSecure)
-                .times(2);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("system")))
-                .andReturn(mapSystem)
-                .times(2);
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getAllSettings(Mockito.eq("global"))).thenReturn(mapGlobal);
+        when(mMockDevice.getAllSettings(Mockito.eq("secure"))).thenReturn(mapSecure);
+        when(mMockDevice.getAllSettings(Mockito.eq("system"))).thenReturn(mapSystem);
+
         assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
         assertEquals(CheckStatus.SUCCESS, mChecker.postExecutionCheck(mMockDevice).getStatus());
-        EasyMock.verify(mMockDevice);
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("global"));
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("secure"));
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("system"));
     }
 
     /** Test that device checker fails if the settings does change. */
@@ -80,21 +81,19 @@ public class DeviceSettingCheckerTest {
         mapPreSecure.put("bluetooth_on", "1");
         Map<String, String> mapPreSystem = new HashMap<>();
         mapPreSystem.put("alarm_alert", "1");
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("global"))).andReturn(mapPreGlobal);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("secure")))
-                .andReturn(mapPreSecure)
-                .times(2);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("system")))
-                .andReturn(mapPreSystem)
-                .times(2);
+        when(mMockDevice.getAllSettings(Mockito.eq("secure"))).thenReturn(mapPreSecure);
+        when(mMockDevice.getAllSettings(Mockito.eq("system"))).thenReturn(mapPreSystem);
         Map<String, String> mapPostGlobal = new HashMap<>();
         mapPostGlobal.put("wifi_on", "0");
         mapPostGlobal.put("adb_enabled", "1");
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("global"))).andReturn(mapPostGlobal);
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getAllSettings(Mockito.eq("global")))
+                .thenReturn(mapPreGlobal)
+                .thenReturn(mapPostGlobal);
+
         assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
         assertEquals(CheckStatus.FAILED, mChecker.postExecutionCheck(mMockDevice).getStatus());
-        EasyMock.verify(mMockDevice);
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("secure"));
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("system"));
     }
 
     /** Test that ignored setting won't be checked. */
@@ -108,21 +107,18 @@ public class DeviceSettingCheckerTest {
         mapPreSecure.put("bluetooth_on", "1");
         Map<String, String> mapPreSystem = new HashMap<>();
         mapPreSystem.put("alarm_alert", "1");
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("global"))).andReturn(mapPreGlobal);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("secure")))
-                .andReturn(mapPreSecure)
-                .times(2);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("system")))
-                .andReturn(mapPreSystem)
-                .times(2);
+        when(mMockDevice.getAllSettings(Mockito.eq("global"))).thenReturn(mapPreGlobal);
+        when(mMockDevice.getAllSettings(Mockito.eq("secure"))).thenReturn(mapPreSecure);
+        when(mMockDevice.getAllSettings(Mockito.eq("system"))).thenReturn(mapPreSystem);
         Map<String, String> mapPostGlobal = new HashMap<>();
         mapPostGlobal.put("wifi_on", "0");
         mapPostGlobal.put("adb_enabled", "1");
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("global"))).andReturn(mapPostGlobal);
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getAllSettings(Mockito.eq("global"))).thenReturn(mapPostGlobal);
+
         assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
         assertEquals(CheckStatus.SUCCESS, mChecker.postExecutionCheck(mMockDevice).getStatus());
-        EasyMock.verify(mMockDevice);
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("secure"));
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("system"));
     }
 
     /** Test that device checker fails if some settings can't be detected in post execution. */
@@ -135,19 +131,17 @@ public class DeviceSettingCheckerTest {
         mapPreSecure.put("bluetooth_on", "1");
         Map<String, String> mapPreSystem = new HashMap<>();
         mapPreSystem.put("alarm_alert", "1");
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("global"))).andReturn(mapPreGlobal);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("secure")))
-                .andReturn(mapPreSecure)
-                .times(2);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("system")))
-                .andReturn(mapPreSystem)
-                .times(2);
+        when(mMockDevice.getAllSettings(Mockito.eq("secure"))).thenReturn(mapPreSecure);
+        when(mMockDevice.getAllSettings(Mockito.eq("system"))).thenReturn(mapPreSystem);
         Map<String, String> mapPostGlobal = new HashMap<>();
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("global"))).andReturn(mapPostGlobal);
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getAllSettings(Mockito.eq("global")))
+                .thenReturn(mapPreGlobal)
+                .thenReturn(mapPostGlobal);
+
         assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
         assertEquals(CheckStatus.FAILED, mChecker.postExecutionCheck(mMockDevice).getStatus());
-        EasyMock.verify(mMockDevice);
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("secure"));
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("system"));
     }
 
     /** Test that device checker fails if new settings are detected in post execution. */
@@ -160,22 +154,20 @@ public class DeviceSettingCheckerTest {
         mapPreSecure.put("bluetooth_on", "1");
         Map<String, String> mapPreSystem = new HashMap<>();
         mapPreSystem.put("alarm_alert", "1");
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("global"))).andReturn(mapPreGlobal);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("secure")))
-                .andReturn(mapPreSecure)
-                .times(2);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("system")))
-                .andReturn(mapPreSystem)
-                .times(2);
+        when(mMockDevice.getAllSettings(Mockito.eq("secure"))).thenReturn(mapPreSecure);
+        when(mMockDevice.getAllSettings(Mockito.eq("system"))).thenReturn(mapPreSystem);
         Map<String, String> mapPostGlobal = new HashMap<>();
         mapPostGlobal.put("wifi_on", "1");
         mapPostGlobal.put("adb_enabled", "1");
         mapPostGlobal.put("boot_count", "1");
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("global"))).andReturn(mapPostGlobal);
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getAllSettings(Mockito.eq("global")))
+                .thenReturn(mapPreGlobal)
+                .thenReturn(mapPostGlobal);
+
         assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
         assertEquals(CheckStatus.FAILED, mChecker.postExecutionCheck(mMockDevice).getStatus());
-        EasyMock.verify(mMockDevice);
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("secure"));
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("system"));
     }
 
     /** Test that device checker fails if no settings can be detected in pre execution. */
@@ -187,18 +179,14 @@ public class DeviceSettingCheckerTest {
         Map<String, String> mapPreSecure = new HashMap<>();
         mapPreSecure.put("bluetooth_on", "1");
         Map<String, String> mapPreSystem = new HashMap<>();
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("global")))
-                .andReturn(mapPreGlobal)
-                .times(2);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("secure")))
-                .andReturn(mapPreSecure)
-                .times(2);
-        EasyMock.expect(mMockDevice.getAllSettings(EasyMock.eq("system")))
-                .andReturn(mapPreSystem)
-                .times(2);
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getAllSettings(Mockito.eq("global"))).thenReturn(mapPreGlobal);
+        when(mMockDevice.getAllSettings(Mockito.eq("secure"))).thenReturn(mapPreSecure);
+        when(mMockDevice.getAllSettings(Mockito.eq("system"))).thenReturn(mapPreSystem);
+
         assertEquals(CheckStatus.FAILED, mChecker.preExecutionCheck(mMockDevice).getStatus());
         assertEquals(CheckStatus.SUCCESS, mChecker.postExecutionCheck(mMockDevice).getStatus());
-        EasyMock.verify(mMockDevice);
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("global"));
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("secure"));
+        verify(mMockDevice, times(2)).getAllSettings(Mockito.eq("system"));
     }
 }
