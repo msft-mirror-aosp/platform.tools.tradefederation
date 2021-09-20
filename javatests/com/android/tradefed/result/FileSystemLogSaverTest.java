@@ -16,6 +16,10 @@
 package com.android.tradefed.result;
 
 import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.OptionSetter;
@@ -25,12 +29,13 @@ import com.android.tradefed.invoker.ShardMainResultForwarder;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.StreamUtil;
 
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -58,18 +63,19 @@ public class FileSystemLogSaverTest {
     private static final String TEST_TAG = "sometest";
 
     private File mReportDir;
-    private IBuildInfo mMockBuild;
+    @Mock IBuildInfo mMockBuild;
     private IInvocationContext mContext;
 
     @Before
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mReportDir = FileUtil.createTempDir("tmpdir");
 
-        mMockBuild = EasyMock.createMock(IBuildInfo.class);
-        EasyMock.expect(mMockBuild.getBuildBranch()).andReturn(BRANCH).anyTimes();
-        EasyMock.expect(mMockBuild.getBuildId()).andReturn(BUILD_ID).anyTimes();
-        EasyMock.expect(mMockBuild.getTestTag()).andReturn(TEST_TAG).anyTimes();
-        EasyMock.replay(mMockBuild);
+        when(mMockBuild.getBuildBranch()).thenReturn(BRANCH);
+        when(mMockBuild.getBuildId()).thenReturn(BUILD_ID);
+        when(mMockBuild.getTestTag()).thenReturn(TEST_TAG);
+
         mContext = new InvocationContext();
         mContext.addDeviceBuildInfo("fakeDevice", mMockBuild);
         mContext.setTestTag(TEST_TAG);
@@ -116,11 +122,11 @@ public class FileSystemLogSaverTest {
     /** Test that a unique directory is created when no branch is specified */
     @Test
     public void testGetFileDir_nobranch() {
-        IBuildInfo mockBuild = EasyMock.createMock(IBuildInfo.class);
-        EasyMock.expect(mockBuild.getBuildBranch()).andReturn(null).anyTimes();
-        EasyMock.expect(mockBuild.getBuildId()).andReturn(BUILD_ID).anyTimes();
-        EasyMock.expect(mockBuild.getTestTag()).andReturn(TEST_TAG).anyTimes();
-        EasyMock.replay(mockBuild);
+        IBuildInfo mockBuild = mock(IBuildInfo.class);
+        when(mockBuild.getBuildBranch()).thenReturn(null);
+        when(mockBuild.getBuildId()).thenReturn(BUILD_ID);
+        when(mockBuild.getTestTag()).thenReturn(TEST_TAG);
+
         IInvocationContext context = new InvocationContext();
         context.addDeviceBuildInfo("fakeDevice", mockBuild);
         FileSystemLogSaver saver = new FileSystemLogSaver();
@@ -147,8 +153,10 @@ public class FileSystemLogSaverTest {
         saver.setLogRetentionDays(1);
         saver.invocationStarted(mContext);
 
-        File retentionFile = new File(new File(saver.getLogReportDir().getPath()),
-                RetentionFileSaver.RETENTION_FILE_NAME);
+        File retentionFile =
+                new File(
+                        new File(saver.getLogReportDir().getPath()),
+                        RetentionFileSaver.RETENTION_FILE_NAME);
         assertTrue(retentionFile.isFile());
         String timestamp = StreamUtil.getStringFromStream(new FileInputStream(retentionFile));
         SimpleDateFormat formatter = new SimpleDateFormat(RetentionFileSaver.RETENTION_DATE_FORMAT);
@@ -181,8 +189,9 @@ public class FileSystemLogSaverTest {
             // Verify test data was written to file
             zipFile = new ZipFile(new File(logFile.getPath()));
 
-            String actualLogString = StreamUtil.getStringFromStream(zipFile.getInputStream(
-                    new ZipEntry("testSaveLogData.txt")));
+            String actualLogString =
+                    StreamUtil.getStringFromStream(
+                            zipFile.getInputStream(new ZipEntry("testSaveLogData.txt")));
             assertTrue(actualLogString.equals(testData));
         } finally {
             StreamUtil.close(logFileReader);
