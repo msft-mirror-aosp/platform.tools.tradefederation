@@ -90,6 +90,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     )
     private boolean mUseTestMappingPath = false;
 
+    @Option(
+            name = "ignore-test-mapping-imports",
+            description = "Whether or not to ignore test mapping import paths.")
+    private boolean mIgnoreTestMappingImports = true;
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
@@ -142,6 +147,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         }
 
         if (mTestGroup != null) {
+            TestMapping.setIgnoreTestMappingImports(mIgnoreTestMappingImports);
             if (!mTestMappingPaths.isEmpty()) {
                 TestMapping.setTestMappingPaths(mTestMappingPaths);
             }
