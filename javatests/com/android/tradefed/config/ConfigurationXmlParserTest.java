@@ -18,12 +18,16 @@ package com.android.tradefed.config;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -36,11 +40,12 @@ import java.util.Map;
 public class ConfigurationXmlParserTest {
 
     private ConfigurationXmlParser xmlParser;
-    private IConfigDefLoader mMockLoader;
+    @Mock IConfigDefLoader mMockLoader;
 
     @Before
     public void setUp() throws Exception {
-        mMockLoader = EasyMock.createMock(IConfigDefLoader.class);
+        MockitoAnnotations.initMocks(this);
+
         xmlParser = new ConfigurationXmlParser(mMockLoader, null);
     }
 
@@ -51,11 +56,11 @@ public class ConfigurationXmlParserTest {
     @Test
     public void testParse() throws ConfigurationException {
         final String normalConfig =
-            "<configuration description=\"desc\" >\n" +
-            "  <test class=\"junit.framework.TestCase\">\n" +
-            "    <option name=\"opName\" value=\"val\" />\n" +
-            "  </test>\n" +
-            "</configuration>";
+                "<configuration description=\"desc\" >\n"
+                        + "  <test class=\"junit.framework.TestCase\">\n"
+                        + "    <option name=\"opName\" value=\"val\" />\n"
+                        + "  </test>\n"
+                        + "</configuration>";
         final String configName = "config";
         ConfigurationDef configDef = new ConfigurationDef(configName);
         xmlParser.parse(configDef, configName, getStringAsStream(normalConfig), null);
@@ -96,11 +101,11 @@ public class ConfigurationXmlParserTest {
     @Test
     public void testParse_globalOption() throws ConfigurationException {
         final String normalConfig =
-            "<configuration description=\"desc\" >\n" +
-            "  <option name=\"opName\" value=\"val\" />\n" +
-            "  <test class=\"junit.framework.TestCase\">\n" +
-            "  </test>\n" +
-            "</configuration>";
+                "<configuration description=\"desc\" >\n"
+                        + "  <option name=\"opName\" value=\"val\" />\n"
+                        + "  <test class=\"junit.framework.TestCase\">\n"
+                        + "  </test>\n"
+                        + "</configuration>";
         final String configName = "config";
         ConfigurationDef configDef = new ConfigurationDef(configName);
         xmlParser.parse(configDef, configName, getStringAsStream(normalConfig), null);
@@ -118,14 +123,14 @@ public class ConfigurationXmlParserTest {
     @Test
     public void testParse_multiple() throws ConfigurationException {
         final String normalConfig =
-            "<configuration description=\"desc\" >\n" +
-            "  <test class=\"com.android.tradefed.testtype.HostTest\">\n" +
-            "    <option name=\"class\" value=\"val1\" />\n" +
-            "  </test>\n" +
-            "  <test class=\"com.android.tradefed.testtype.HostTest\">\n" +
-            "    <option name=\"class\" value=\"val2\" />\n" +
-            "  </test>\n" +
-            "</configuration>";
+                "<configuration description=\"desc\" >\n"
+                        + "  <test class=\"com.android.tradefed.testtype.HostTest\">\n"
+                        + "    <option name=\"class\" value=\"val1\" />\n"
+                        + "  </test>\n"
+                        + "  <test class=\"com.android.tradefed.testtype.HostTest\">\n"
+                        + "    <option name=\"class\" value=\"val2\" />\n"
+                        + "  </test>\n"
+                        + "</configuration>";
         final String configName = "config";
         ConfigurationDef configDef = new ConfigurationDef(configName);
         xmlParser.parse(configDef, configName, getStringAsStream(normalConfig), null);
@@ -136,21 +141,24 @@ public class ConfigurationXmlParserTest {
         assertEquals(
                 "com.android.tradefed.testtype.HostTest",
                 configDef.getObjectClassMap().get("test").get(0).mClassName);
-        assertEquals("com.android.tradefed.testtype.HostTest:1:class", configDef.getOptionList().get(0).name);
+        assertEquals(
+                "com.android.tradefed.testtype.HostTest:1:class",
+                configDef.getOptionList().get(0).name);
         assertEquals("val1", configDef.getOptionList().get(0).value);
 
         assertEquals(
                 "com.android.tradefed.testtype.HostTest",
                 configDef.getObjectClassMap().get("test").get(1).mClassName);
-        assertEquals("com.android.tradefed.testtype.HostTest:2:class", configDef.getOptionList().get(1).name);
+        assertEquals(
+                "com.android.tradefed.testtype.HostTest:2:class",
+                configDef.getOptionList().get(1).name);
         assertEquals("val2", configDef.getOptionList().get(1).value);
     }
 
     /** Test parsing a object tag missing a attribute. */
     @Test
     public void testParse_objectMissingAttr() {
-        final String config =
-            "<object name=\"foo\" />";
+        final String config = "<object name=\"foo\" />";
         try {
             xmlParser.parse(new ConfigurationDef("foo"), "foo", getStringAsStream(config), null);
             fail("ConfigurationException not thrown");
@@ -162,8 +170,7 @@ public class ConfigurationXmlParserTest {
     /** Test parsing a option tag missing a attribute. */
     @Test
     public void testParse_optionMissingAttr() {
-        final String config =
-            "<option name=\"foo\" />";
+        final String config = "<option name=\"foo\" />";
         try {
             xmlParser.parse(new ConfigurationDef("name"), "name", getStringAsStream(config), null);
             fail("ConfigurationException not thrown");
@@ -175,8 +182,7 @@ public class ConfigurationXmlParserTest {
     /** Test parsing a object tag. */
     @Test
     public void testParse_object() throws ConfigurationException {
-        final String config =
-            "<object type=\"foo\" class=\"junit.framework.TestCase\" />";
+        final String config = "<object type=\"foo\" class=\"junit.framework.TestCase\" />";
         ConfigurationDef configDef = new ConfigurationDef("name");
         xmlParser.parse(configDef, "name", getStringAsStream(config), null);
         assertEquals(
@@ -189,14 +195,18 @@ public class ConfigurationXmlParserTest {
     public void testParse_include() throws ConfigurationException {
         String includedName = "includeme";
         ConfigurationDef configDef = new ConfigurationDef("foo");
-        mMockLoader.loadIncludedConfiguration(
-                EasyMock.eq(configDef),
-                EasyMock.eq("foo"),
-                EasyMock.eq(includedName),
-                EasyMock.anyObject(),
-                EasyMock.anyObject(),
-                EasyMock.anyObject());
-        EasyMock.replay(mMockLoader);
+        // This is just here to show that we expect this void method to be
+        // called and not throw.
+        doNothing()
+                .when(mMockLoader)
+                .loadIncludedConfiguration(
+                        Mockito.eq(configDef),
+                        Mockito.eq("foo"),
+                        Mockito.eq(includedName),
+                        Mockito.anyObject(),
+                        Mockito.anyObject(),
+                        Mockito.anyObject());
+
         final String config = "<include name=\"includeme\" />";
         xmlParser.parse(configDef, "foo", getStringAsStream(config), null);
     }
@@ -207,15 +217,16 @@ public class ConfigurationXmlParserTest {
         String includedName = "non-existent";
         ConfigurationDef parent = new ConfigurationDef("name");
         ConfigurationException exception = new ConfigurationException("I don't exist");
-        mMockLoader.loadIncludedConfiguration(
-                parent,
-                "name",
-                includedName,
-                null,
-                Collections.<String, String>emptyMap(),
-                new HashSet<>());
-        EasyMock.expectLastCall().andThrow(exception);
-        EasyMock.replay(mMockLoader);
+        doThrow(exception)
+                .when(mMockLoader)
+                .loadIncludedConfiguration(
+                        parent,
+                        "name",
+                        includedName,
+                        null,
+                        Collections.<String, String>emptyMap(),
+                        new HashSet<>());
+
         final String config = String.format("<include name=\"%s\" />", includedName);
         try {
             xmlParser.parse(parent, "name", getStringAsStream(config), null);
@@ -260,11 +271,11 @@ public class ConfigurationXmlParserTest {
     @Test
     public void testParse_deviceTag() throws ConfigurationException {
         final String normalConfig =
-            "<configuration description=\"desc\" >\n" +
-            "  <device name=\"device1\">\n" +
-            "    <option name=\"opName\" value=\"val\" />\n" +
-            "  </device>\n" +
-            "</configuration>";
+                "<configuration description=\"desc\" >\n"
+                        + "  <device name=\"device1\">\n"
+                        + "    <option name=\"opName\" value=\"val\" />\n"
+                        + "  </device>\n"
+                        + "</configuration>";
         final String configName = "config";
         ConfigurationDef configDef = new ConfigurationDef(configName);
         xmlParser.parse(configDef, configName, getStringAsStream(normalConfig), null);
@@ -282,11 +293,11 @@ public class ConfigurationXmlParserTest {
     @Test
     public void testParse_deviceTagNoName() {
         final String normalConfig =
-            "<configuration description=\"desc\" >\n" +
-            "  <device>\n" +
-            "    <option name=\"opName\" value=\"val\" />\n" +
-            "  </device>\n" +
-            "</configuration>";
+                "<configuration description=\"desc\" >\n"
+                        + "  <device>\n"
+                        + "    <option name=\"opName\" value=\"val\" />\n"
+                        + "  </device>\n"
+                        + "</configuration>";
         final String configName = "config";
         ConfigurationDef configDef = new ConfigurationDef(configName);
         String expectedException = "device tag requires a name value";
@@ -305,17 +316,17 @@ public class ConfigurationXmlParserTest {
     @Test
     public void testParse_deviceTagSameName() throws Exception {
         final String normalConfig =
-            "<configuration description=\"desc\" >\n" +
-            "  <device name=\"device1\">\n" +
-            "    <option name=\"opName\" value=\"val\" />\n" +
-            "  </device>\n" +
-            "  <device name=\"device2\">\n" +
-            "    <option name=\"opName3\" value=\"val3\" />\n" +
-            "  </device>\n" +
-            "  <device name=\"device1\">\n" +
-            "    <option name=\"opName2\" value=\"val2\" />\n" +
-            "  </device>\n" +
-            "</configuration>";
+                "<configuration description=\"desc\" >\n"
+                        + "  <device name=\"device1\">\n"
+                        + "    <option name=\"opName\" value=\"val\" />\n"
+                        + "  </device>\n"
+                        + "  <device name=\"device2\">\n"
+                        + "    <option name=\"opName3\" value=\"val3\" />\n"
+                        + "  </device>\n"
+                        + "  <device name=\"device1\">\n"
+                        + "    <option name=\"opName2\" value=\"val2\" />\n"
+                        + "  </device>\n"
+                        + "</configuration>";
         final String configName = "config";
         ConfigurationDef configDef = new ConfigurationDef(configName);
         xmlParser.parse(configDef, configName, getStringAsStream(normalConfig), null);
@@ -332,14 +343,14 @@ public class ConfigurationXmlParserTest {
     @Test
     public void testParse_deviceTagAndObjectOutside() {
         final String normalConfig =
-            "<configuration description=\"desc\" >\n" +
-            "  <device name=\"device1\">\n" +
-            "    <option name=\"opName\" value=\"val\" />\n" +
-            "  </device>\n" +
-            "  <target_preparer class=\"com.targetprep.class\">\n" +
-            "    <option name=\"opName2\" value=\"val2\" />\n" +
-            "  </target_preparer>\n" +
-            "</configuration>";
+                "<configuration description=\"desc\" >\n"
+                        + "  <device name=\"device1\">\n"
+                        + "    <option name=\"opName\" value=\"val\" />\n"
+                        + "  </device>\n"
+                        + "  <target_preparer class=\"com.targetprep.class\">\n"
+                        + "    <option name=\"opName2\" value=\"val2\" />\n"
+                        + "  </target_preparer>\n"
+                        + "</configuration>";
         final String configName = "config";
         ConfigurationDef configDef = new ConfigurationDef(configName);
         String expectedException =
@@ -348,7 +359,7 @@ public class ConfigurationXmlParserTest {
         try {
             xmlParser.parse(configDef, configName, getStringAsStream(normalConfig), null);
             fail("An exception should have been thrown.");
-        } catch(ConfigurationException expected) {
+        } catch (ConfigurationException expected) {
             assertEquals(expectedException, expected.getMessage());
         }
     }
@@ -360,19 +371,19 @@ public class ConfigurationXmlParserTest {
     @Test
     public void testParse_withDeviceTag() {
         final String normalConfig =
-            "<configuration description=\"desc\" >\n" +
-            "  <device name=\"device1\">\n" +
-            "    <option name=\"deviceOp\" value=\"val2\" />\n" +
-            "    <test class=\"junit.framework.TestCase\">\n" +
-            "        <option name=\"opName\" value=\"val\" />\n" +
-            "    </test>\n" +
-            "  </device>\n" +
-            "</configuration>";
+                "<configuration description=\"desc\" >\n"
+                        + "  <device name=\"device1\">\n"
+                        + "    <option name=\"deviceOp\" value=\"val2\" />\n"
+                        + "    <test class=\"junit.framework.TestCase\">\n"
+                        + "        <option name=\"opName\" value=\"val\" />\n"
+                        + "    </test>\n"
+                        + "  </device>\n"
+                        + "</configuration>";
         final String configName = "config";
         ConfigurationDef configDef = new ConfigurationDef(configName);
         try {
             xmlParser.parse(configDef, configName, getStringAsStream(normalConfig), null);
-        } catch(ConfigurationException expected) {
+        } catch (ConfigurationException expected) {
             return;
         }
         fail("An exception should have been thrown.");
@@ -386,16 +397,16 @@ public class ConfigurationXmlParserTest {
     public void testParse_withDeviceInvalidName() {
         String expectedException = "device name cannot contain reserved character: ':'";
         final String normalConfig =
-            "<configuration description=\"desc\" >\n" +
-            "  <device name=\"device:1\">\n" +
-            "  </device>\n" +
-            "</configuration>";
+                "<configuration description=\"desc\" >\n"
+                        + "  <device name=\"device:1\">\n"
+                        + "  </device>\n"
+                        + "</configuration>";
         final String configName = "config";
         ConfigurationDef configDef = new ConfigurationDef(configName);
         try {
             xmlParser.parse(configDef, configName, getStringAsStream(normalConfig), null);
             fail("An exception should have been thrown.");
-        } catch(ConfigurationException expected) {
+        } catch (ConfigurationException expected) {
             assertEquals(expectedException, expected.getMessage());
         }
     }
@@ -406,19 +417,23 @@ public class ConfigurationXmlParserTest {
      */
     @Test
     public void testParse_withDeviceReservedName() {
-        String expectedException = "device name cannot be reserved name: '" +
-                ConfigurationDef.DEFAULT_DEVICE_NAME + "'";
+        String expectedException =
+                "device name cannot be reserved name: '"
+                        + ConfigurationDef.DEFAULT_DEVICE_NAME
+                        + "'";
         final String normalConfig =
-            "<configuration description=\"desc\" >\n" +
-            "  <device name=\"" + ConfigurationDef.DEFAULT_DEVICE_NAME + "\">\n" +
-            "  </device>\n" +
-            "</configuration>";
+                "<configuration description=\"desc\" >\n"
+                        + "  <device name=\""
+                        + ConfigurationDef.DEFAULT_DEVICE_NAME
+                        + "\">\n"
+                        + "  </device>\n"
+                        + "</configuration>";
         final String configName = "config";
         ConfigurationDef configDef = new ConfigurationDef(configName);
         try {
             xmlParser.parse(configDef, configName, getStringAsStream(normalConfig), null);
             fail("An exception should have been thrown.");
-        } catch(ConfigurationException expected) {
+        } catch (ConfigurationException expected) {
             assertEquals(expectedException, expected.getMessage());
         }
     }
