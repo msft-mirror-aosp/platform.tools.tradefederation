@@ -1356,6 +1356,8 @@ public class TestInvocation implements ITestInvocation {
                 continue;
             }
             try {
+                // We need root to access the recovery logs so attempt to set it
+                device.enableAdbRoot();
                 File recovery_log = device.pullFile(RECOVERY_LOG_DEVICE_PATH);
                 if (recovery_log == null) {
                     return;
