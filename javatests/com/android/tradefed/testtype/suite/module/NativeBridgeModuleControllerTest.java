@@ -16,6 +16,7 @@
 package com.android.tradefed.testtype.suite.module;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.config.ConfigurationDef;
@@ -26,49 +27,49 @@ import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.testtype.suite.module.IModuleController.RunStrategy;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 /** Unit tests for {@link NativeBridgeModuleController}. */
 @RunWith(JUnit4.class)
 public class NativeBridgeModuleControllerTest {
     private NativeBridgeModuleController mController;
     private IInvocationContext mContext;
-    private ITestDevice mMockDevice;
-    private IDevice mMockIDevice;
+    @Mock ITestDevice mMockDevice;
+    @Mock IDevice mMockIDevice;
 
     @Before
     public void setUp() {
+        MockitoAnnotations.initMocks(this);
+
         mController = new NativeBridgeModuleController();
-        mMockDevice = EasyMock.createMock(ITestDevice.class);
+
         mContext = new InvocationContext();
         mContext.addAllocatedDevice(ConfigurationDef.DEFAULT_DEVICE_NAME, mMockDevice);
         mContext.addInvocationAttribute(ModuleDefinition.MODULE_ABI, "arm64-v8a");
         mContext.addInvocationAttribute(ModuleDefinition.MODULE_NAME, "module1");
-        mMockIDevice = EasyMock.createMock(IDevice.class);
     }
 
     /** Test that a StubDevice is ignored by the check. */
     @Test
     public void testStubDevice() {
-        EasyMock.expect(mMockDevice.getIDevice()).andReturn(new StubDevice("serial"));
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getIDevice()).thenReturn(new StubDevice("serial"));
+
         assertEquals(RunStrategy.RUN, mController.shouldRunModule(mContext));
-        EasyMock.verify(mMockDevice);
     }
 
     /** Test the check when the device does not support native bridge. */
     @Test
     public void testNoBridgeSupport() throws Exception {
-        EasyMock.expect(mMockDevice.getIDevice()).andReturn(mMockIDevice);
-        EasyMock.expect(mMockDevice.getProperty(NativeBridgeModuleController.NATIVE_BRIDGE_PROP))
-                .andReturn("0\n");
-        EasyMock.replay(mMockDevice, mMockIDevice);
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.getProperty(NativeBridgeModuleController.NATIVE_BRIDGE_PROP))
+                .thenReturn("0\n");
+
         assertEquals(RunStrategy.RUN, mController.shouldRunModule(mContext));
-        EasyMock.verify(mMockDevice, mMockIDevice);
     }
 
     /**
@@ -77,14 +78,13 @@ public class NativeBridgeModuleControllerTest {
      */
     @Test
     public void testBridgeSupport() throws Exception {
-        EasyMock.expect(mMockDevice.getIDevice()).andReturn(mMockIDevice);
-        EasyMock.expect(mMockDevice.getProperty(NativeBridgeModuleController.NATIVE_BRIDGE_PROP))
-                .andReturn("1\n");
-        EasyMock.expect(mMockDevice.getProperty("ro.product.cpu.abilist"))
-                .andReturn("arm64-v8a,armeabi-v7a,armeabi\n");
-        EasyMock.replay(mMockDevice, mMockIDevice);
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.getProperty(NativeBridgeModuleController.NATIVE_BRIDGE_PROP))
+                .thenReturn("1\n");
+        when(mMockDevice.getProperty("ro.product.cpu.abilist"))
+                .thenReturn("arm64-v8a,armeabi-v7a,armeabi\n");
+
         assertEquals(RunStrategy.RUN, mController.shouldRunModule(mContext));
-        EasyMock.verify(mMockDevice, mMockIDevice);
     }
 
     /**
@@ -93,14 +93,12 @@ public class NativeBridgeModuleControllerTest {
      */
     @Test
     public void testBridgeSupport_differentBitness() throws Exception {
-        EasyMock.expect(mMockDevice.getIDevice()).andReturn(mMockIDevice);
-        EasyMock.expect(mMockDevice.getProperty(NativeBridgeModuleController.NATIVE_BRIDGE_PROP))
-                .andReturn("1\n");
-        EasyMock.expect(mMockDevice.getProperty("ro.product.cpu.abilist"))
-                .andReturn("armeabi-v7a,armeabi\n");
-        EasyMock.replay(mMockDevice, mMockIDevice);
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.getProperty(NativeBridgeModuleController.NATIVE_BRIDGE_PROP))
+                .thenReturn("1\n");
+        when(mMockDevice.getProperty("ro.product.cpu.abilist")).thenReturn("armeabi-v7a,armeabi\n");
+
         assertEquals(RunStrategy.RUN, mController.shouldRunModule(mContext));
-        EasyMock.verify(mMockDevice, mMockIDevice);
     }
 
     /**
@@ -109,13 +107,11 @@ public class NativeBridgeModuleControllerTest {
      */
     @Test
     public void testBridgeSupport_differentArch() throws Exception {
-        EasyMock.expect(mMockDevice.getIDevice()).andReturn(mMockIDevice);
-        EasyMock.expect(mMockDevice.getProperty(NativeBridgeModuleController.NATIVE_BRIDGE_PROP))
-                .andReturn("1\n");
-        EasyMock.expect(mMockDevice.getProperty("ro.product.cpu.abilist"))
-                .andReturn("x86_64,x86\n");
-        EasyMock.replay(mMockDevice, mMockIDevice);
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.getProperty(NativeBridgeModuleController.NATIVE_BRIDGE_PROP))
+                .thenReturn("1\n");
+        when(mMockDevice.getProperty("ro.product.cpu.abilist")).thenReturn("x86_64,x86\n");
+
         assertEquals(RunStrategy.FULL_MODULE_BYPASS, mController.shouldRunModule(mContext));
-        EasyMock.verify(mMockDevice, mMockIDevice);
     }
 }
