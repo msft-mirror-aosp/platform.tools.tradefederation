@@ -20,28 +20,33 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 /** Unit tests for {@link RemoteAndroidDevice}. */
 @RunWith(JUnit4.class)
 public class RemoteAndroidDeviceTest {
 
     private static final String MOCK_DEVICE_SERIAL = "localhost:1234";
-    private IDevice mMockIDevice;
-    private IDeviceStateMonitor mMockStateMonitor;
-    private IRunUtil mMockRunUtil;
-    private IDeviceMonitor mMockDvcMonitor;
-    private IDeviceRecovery mMockRecovery;
+    @Mock IDevice mMockIDevice;
+    @Mock IDeviceStateMonitor mMockStateMonitor;
+    @Mock IRunUtil mMockRunUtil;
+    @Mock IDeviceMonitor mMockDvcMonitor;
+    @Mock IDeviceRecovery mMockRecovery;
     private RemoteAndroidDevice mTestDevice;
 
     /**
@@ -65,12 +70,9 @@ public class RemoteAndroidDeviceTest {
 
     @Before
     public void setUp() throws Exception {
-        mMockIDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockIDevice.getSerialNumber()).andReturn(MOCK_DEVICE_SERIAL).anyTimes();
-        mMockRecovery = EasyMock.createMock(IDeviceRecovery.class);
-        mMockStateMonitor = EasyMock.createMock(IDeviceStateMonitor.class);
-        mMockDvcMonitor = EasyMock.createMock(IDeviceMonitor.class);
-        mMockRunUtil = EasyMock.createMock(IRunUtil.class);
+        MockitoAnnotations.initMocks(this);
+
+        when(mMockIDevice.getSerialNumber()).thenReturn(MOCK_DEVICE_SERIAL);
 
         // A TestDevice with a no-op recoverDevice() implementation
         mTestDevice = new TestableRemoteAndroidDevice();
@@ -86,13 +88,19 @@ public class RemoteAndroidDeviceTest {
         CommandResult adbResultConfirmation = new CommandResult();
         adbResultConfirmation.setStatus(CommandStatus.SUCCESS);
         adbResultConfirmation.setStdout("already connected to localhost:1234");
-        EasyMock.expect(mMockRunUtil.runTimedCmd(EasyMock.anyLong(),
-                EasyMock.eq("adb"), EasyMock.eq("connect"), EasyMock.eq(MOCK_DEVICE_SERIAL)))
-                .andReturn(adbResult);
-        EasyMock.expect(mMockRunUtil.runTimedCmd(EasyMock.anyLong(),
-                EasyMock.eq("adb"), EasyMock.eq("connect"), EasyMock.eq(MOCK_DEVICE_SERIAL)))
-                .andReturn(adbResultConfirmation);
-        EasyMock.replay(mMockRunUtil);
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("adb"),
+                        Mockito.eq("connect"),
+                        Mockito.eq(MOCK_DEVICE_SERIAL)))
+                .thenReturn(adbResult);
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("adb"),
+                        Mockito.eq("connect"),
+                        Mockito.eq(MOCK_DEVICE_SERIAL)))
+                .thenReturn(adbResultConfirmation);
+
         assertTrue(mTestDevice.adbTcpConnect("localhost", "1234"));
     }
 
@@ -102,13 +110,21 @@ public class RemoteAndroidDeviceTest {
         CommandResult adbResult = new CommandResult();
         adbResult.setStatus(CommandStatus.SUCCESS);
         adbResult.setStdout("cannot connect");
-        EasyMock.expect(mMockRunUtil.runTimedCmd(EasyMock.anyLong(),
-                EasyMock.eq("adb"), EasyMock.eq("connect"), EasyMock.eq(MOCK_DEVICE_SERIAL)))
-                .andReturn(adbResult).times(RemoteAndroidDevice.MAX_RETRIES);
-        mMockRunUtil.sleep(EasyMock.anyLong());
-        EasyMock.expectLastCall().times(RemoteAndroidDevice.MAX_RETRIES);
-        EasyMock.replay(mMockRunUtil);
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("adb"),
+                        Mockito.eq("connect"),
+                        Mockito.eq(MOCK_DEVICE_SERIAL)))
+                .thenReturn(adbResult);
+
         assertFalse(mTestDevice.adbTcpConnect("localhost", "1234"));
+        verify(mMockRunUtil, times(RemoteAndroidDevice.MAX_RETRIES))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("adb"),
+                        Mockito.eq("connect"),
+                        Mockito.eq(MOCK_DEVICE_SERIAL));
+        verify(mMockRunUtil, times(RemoteAndroidDevice.MAX_RETRIES)).sleep(Mockito.anyLong());
     }
 
     /**
@@ -121,13 +137,21 @@ public class RemoteAndroidDeviceTest {
         CommandResult adbResult = new CommandResult();
         adbResult.setStatus(CommandStatus.SUCCESS);
         adbResult.setStdout("connected to");
-        EasyMock.expect(mMockRunUtil.runTimedCmd(EasyMock.anyLong(),
-                EasyMock.eq("adb"), EasyMock.eq("connect"), EasyMock.eq(MOCK_DEVICE_SERIAL)))
-                .andReturn(adbResult).times(RemoteAndroidDevice.MAX_RETRIES * 2);
-        mMockRunUtil.sleep(EasyMock.anyLong());
-        EasyMock.expectLastCall().times(RemoteAndroidDevice.MAX_RETRIES);
-        EasyMock.replay(mMockRunUtil);
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("adb"),
+                        Mockito.eq("connect"),
+                        Mockito.eq(MOCK_DEVICE_SERIAL)))
+                .thenReturn(adbResult);
+
         assertFalse(mTestDevice.adbTcpConnect("localhost", "1234"));
+        verify(mMockRunUtil, times(RemoteAndroidDevice.MAX_RETRIES * 2))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("adb"),
+                        Mockito.eq("connect"),
+                        Mockito.eq(MOCK_DEVICE_SERIAL));
+        verify(mMockRunUtil, times(RemoteAndroidDevice.MAX_RETRIES)).sleep(Mockito.anyLong());
     }
 
     /** Test {@link RemoteAndroidDevice#adbTcpDisconnect(String, String)}. */
@@ -135,10 +159,13 @@ public class RemoteAndroidDeviceTest {
     public void testAdbDisconnect() {
         CommandResult adbResult = new CommandResult();
         adbResult.setStatus(CommandStatus.SUCCESS);
-        EasyMock.expect(mMockRunUtil.runTimedCmd(EasyMock.anyLong(),
-                EasyMock.eq("adb"), EasyMock.eq("disconnect"), EasyMock.eq(MOCK_DEVICE_SERIAL)))
-                .andReturn(adbResult);
-        EasyMock.replay(mMockRunUtil);
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("adb"),
+                        Mockito.eq("disconnect"),
+                        Mockito.eq(MOCK_DEVICE_SERIAL)))
+                .thenReturn(adbResult);
+
         assertTrue(mTestDevice.adbTcpDisconnect("localhost", "1234"));
     }
 
@@ -147,16 +174,19 @@ public class RemoteAndroidDeviceTest {
     public void testAdbDisconnect_fails() {
         CommandResult adbResult = new CommandResult();
         adbResult.setStatus(CommandStatus.FAILED);
-        EasyMock.expect(mMockRunUtil.runTimedCmd(EasyMock.anyLong(),
-                EasyMock.eq("adb"), EasyMock.eq("disconnect"), EasyMock.eq(MOCK_DEVICE_SERIAL)))
-                .andReturn(adbResult);
-        EasyMock.replay(mMockRunUtil);
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("adb"),
+                        Mockito.eq("disconnect"),
+                        Mockito.eq(MOCK_DEVICE_SERIAL)))
+                .thenReturn(adbResult);
+
         assertFalse(mTestDevice.adbTcpDisconnect("localhost", "1234"));
     }
 
     @Test
     public void testCheckSerial() {
-        EasyMock.replay(mMockIDevice);
+
         assertEquals("localhost", mTestDevice.getHostName());
         assertEquals("1234", mTestDevice.getPortNum());
     }
