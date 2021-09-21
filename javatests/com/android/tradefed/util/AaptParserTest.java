@@ -137,6 +137,67 @@ public class AaptParserTest {
     }
 
     @Test
+    public void testParseNativeCode_multi_4() {
+        AaptParser p = new AaptParser();
+        p.parse(
+                "package: name='com.android.foo' versionCode='217173' versionName='1.7173' "
+                        + "platformBuildVersionName=''\n"
+                        + "install-location:'preferExternal'\n"
+                        + "sdkVersion:'notavalidsdk'\n"
+                        + "targetSdkVersion:'21'\n"
+                        + "uses-permission: name='android.permission.INTERNET'\n"
+                        + "uses-permission: name='android.permission.ACCESS_NETWORK_STATE'\n"
+                        + "densities: '160'\n"
+                        + "native-code: 'arm64-v8a' 'armeabi-v7a' 'x86' 'x86_64'");
+        assertEquals(4, p.getNativeCode().size());
+        assertEquals("arm64-v8a", p.getNativeCode().get(0));
+        assertEquals("armeabi-v7a", p.getNativeCode().get(1));
+        assertEquals("x86", p.getNativeCode().get(2));
+        assertEquals("x86_64", p.getNativeCode().get(3));
+    }
+
+    @Test
+    public void testParseNativeCode_multi_10() {
+        AaptParser p = new AaptParser();
+        p.parse(
+                "package: name='com.android.foo' versionCode='217173' versionName='1.7173' "
+                        + "platformBuildVersionName=''\n"
+                        + "install-location:'preferExternal'\n"
+                        + "sdkVersion:'notavalidsdk'\n"
+                        + "targetSdkVersion:'21'\n"
+                        + "uses-permission: name='android.permission.INTERNET'\n"
+                        + "uses-permission: name='android.permission.ACCESS_NETWORK_STATE'\n"
+                        + "densities: '160'\n"
+                        + "native-code: 'nc0' 'nc1' 'nc2' 'nc3' 'nc4' 'nc5' 'nc6' 'nc7' "
+                        + "'nc8' 'nc9'");
+        assertEquals(10, p.getNativeCode().size());
+        for (int i = 0; i < 10; ++i) {
+            assertEquals("nc" + i, p.getNativeCode().get(i));
+        }
+    }
+
+    // only parse out the first 10 native-codes if there are more than 10
+    @Test
+    public void testParseNativeCode_multi_11() {
+        AaptParser p = new AaptParser();
+        p.parse(
+                "package: name='com.android.foo' versionCode='217173' versionName='1.7173' "
+                        + "platformBuildVersionName=''\n"
+                        + "install-location:'preferExternal'\n"
+                        + "sdkVersion:'notavalidsdk'\n"
+                        + "targetSdkVersion:'21'\n"
+                        + "uses-permission: name='android.permission.INTERNET'\n"
+                        + "uses-permission: name='android.permission.ACCESS_NETWORK_STATE'\n"
+                        + "densities: '160'\n"
+                        + "native-code: 'nc0' 'nc1' 'nc2' 'nc3' 'nc4' 'nc5' 'nc6' 'nc7' "
+                        + "'nc8' 'nc9' 'nc10'");
+        assertEquals(10, p.getNativeCode().size());
+        for (int i = 0; i < 10; ++i) {
+            assertEquals("nc" + i, p.getNativeCode().get(i));
+        }
+    }
+
+    @Test
     public void testParseNativeCode_alt() {
         AaptParser p = new AaptParser();
         p.parse(
