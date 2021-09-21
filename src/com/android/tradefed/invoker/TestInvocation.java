@@ -575,7 +575,7 @@ public class TestInvocation implements ITestInvocation {
             return;
         }
         if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
-            CLog.d("Skipping bugreportz on %s. Device is offline.");
+            CLog.d("Skipping bugreportz on %s. Device is offline.", device.getSerialNumber());
             return;
         }
         // logBugreport will report a regular bugreport if bugreportz is not supported.
