@@ -16,6 +16,7 @@
 package com.android.tradefed.lite;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.verify;
 
 import org.junit.Test;
 import org.junit.runner.Description;
@@ -47,11 +48,9 @@ public final class DryRunnerTest {
         runner.run(notifier);
 
         assertEquals("Test count should be 3", 3, desc.testCount());
-        Mockito.verify(list, Mockito.times(1)).testRunStarted((Description) Mockito.anyObject());
-        Mockito.verify(list, Mockito.times(desc.testCount()))
-                .testStarted((Description) Mockito.anyObject());
-        Mockito.verify(list, Mockito.times(desc.testCount()))
-                .testFinished((Description) Mockito.anyObject());
-        Mockito.verify(list, Mockito.times(1)).testRunFinished((Result) Mockito.anyObject());
+        verify(list, Mockito.times(1)).testRunStarted((Description) Mockito.any());
+        verify(list, Mockito.times(desc.testCount())).testStarted((Description) Mockito.any());
+        verify(list, Mockito.times(desc.testCount())).testFinished((Description) Mockito.any());
+        verify(list, Mockito.times(1)).testRunFinished((Result) Mockito.any());
     }
 }
