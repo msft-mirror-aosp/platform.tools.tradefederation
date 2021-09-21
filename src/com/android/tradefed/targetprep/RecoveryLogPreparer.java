@@ -50,7 +50,7 @@ public class RecoveryLogPreparer extends BaseTargetPreparer implements ITestLogg
         ITestDevice device = testInformation.getDevice();
 
         if (TestDeviceState.RECOVERY.equals(device.getDeviceState())) {
-            // Track we entered the recovery mode handling
+            // Track when we entered the recovery mode handling
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.AUTO_RECOVERY_MODE_COUNT, 1);
             device.enableAdbRoot();
