@@ -1798,6 +1798,30 @@ public class ConfigurationFactoryTest {
         }
     }
 
+    @Test
+    public void testParse_labPreparer() throws Exception {
+        String normalConfig =
+                "<configuration description=\"desc\" >\n"
+                        + "  <lab_preparer class=\""
+                        + StubTargetPreparer.class.getName()
+                        + "\">\n"
+                        + "     <option name=\"test-boolean-option\" value=\"false\"/>"
+                        + "  </lab_preparer>\n"
+                        + "</configuration>";
+        File tmpConfig = FileUtil.createTempFile("tmp-config-tests", ".xml");
+        try {
+            FileUtil.writeToFile(normalConfig, tmpConfig);
+            IConfiguration config =
+                    mFactory.createConfigurationFromArgs(
+                            new String[] {tmpConfig.getAbsolutePath()});
+            assertEquals(1, config.getLabPreparers().size());
+            assertFalse(
+                    ((StubTargetPreparer) config.getLabPreparers().get(0)).getTestBooleanOption());
+        } finally {
+            FileUtil.deleteFile(tmpConfig);
+        }
+    }
+
     /**
      * Test that even if multi_pre_target_prep and multi_target_prep share the same type, we do not
      * mix the objects internally.
