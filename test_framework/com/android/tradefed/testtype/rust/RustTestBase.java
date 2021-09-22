@@ -36,7 +36,7 @@ import java.util.Set;
 public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
 
     @Option(
-            name = "test-options",
+            name = "native-test-flag",
             description = "Option string to be passed to the binary when running")
     protected List<String> mTestOptions = new ArrayList<>();
 
