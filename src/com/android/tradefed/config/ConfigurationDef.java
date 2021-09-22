@@ -69,7 +69,7 @@ public class ConfigurationDef {
     private boolean mMultiDeviceMode = false;
     private boolean mFilteredObjects = false;
     private Map<String, Boolean> mExpectedDevices = new LinkedHashMap<>();
-    private static final Pattern MULTI_PATTERN = Pattern.compile("(.*)(:)(.*)");
+    private static final Pattern MULTI_PATTERN = Pattern.compile("(.*):(.*)");
     public static final String DEFAULT_DEVICE_NAME = "DEFAULT_DEVICE";
 
     /** the unique name of the configuration definition */
@@ -300,7 +300,7 @@ public class ConfigurationDef {
                         deviceObjectList.add(multiDev);
                     }
                     // We reference the original object to the device and not to the flat list.
-                    multiDev.addSpecificConfig(configObject);
+                    multiDev.addSpecificConfig(configObject, matcher.group(2));
                     multiDev.addFrequency(configObject, configDef.mAppearanceNum);
                 } else {
                     if (Configuration.doesBuiltInObjSupportMultiDevice(entryName)) {
@@ -321,11 +321,11 @@ public class ConfigurationDef {
                                                         + "device while expecting one only.",
                                                 realDevice.size()));
                             }
-                            realDevice.get(0).addSpecificConfig(configObject);
+                            realDevice.get(0).addSpecificConfig(configObject, entryName);
                             realDevice.get(0).addFrequency(configObject, configDef.mAppearanceNum);
                         } else {
                             // Regular handling of object for single device situation.
-                            defaultDeviceConfig.addSpecificConfig(configObject);
+                            defaultDeviceConfig.addSpecificConfig(configObject, entryName);
                             defaultDeviceConfig.addFrequency(
                                     configObject, configDef.mAppearanceNum);
                         }
