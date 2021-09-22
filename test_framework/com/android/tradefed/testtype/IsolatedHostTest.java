@@ -156,7 +156,7 @@ public class IsolatedHostTest
             description =
                     "The android-all resource jar to be used, e.g."
                             + " 'android-all-R-robolectric-r0.jar'")
-    private String mAndroidAllName = "android-all-T-robolectric-r0.jar";
+    private String mAndroidAllName = "android-all-current-robolectric-r0.jar";
 
     @Option(
             name = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_OPTION,
