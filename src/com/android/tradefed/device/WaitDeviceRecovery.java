@@ -501,7 +501,9 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
     private boolean attemptDeviceUnavailableRecovery(
             IDeviceStateMonitor monitor, boolean recoverTillOnline) {
         TestDeviceState state = monitor.getDeviceState();
-        if (TestDeviceState.FASTBOOT.equals(state) || TestDeviceState.FASTBOOTD.equals(state)) {
+        if (TestDeviceState.FASTBOOT.equals(state)
+                || TestDeviceState.FASTBOOTD.equals(state)
+                || TestDeviceState.RECOVERY.equals(state)) {
             CLog.d("Device is in '%s' state skipping USB reset attempt.", state);
             return false;
         }

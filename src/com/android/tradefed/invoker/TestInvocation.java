@@ -575,7 +575,7 @@ public class TestInvocation implements ITestInvocation {
             return;
         }
         if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
-            CLog.d("Skipping bugreportz on %s. Device is offline.");
+            CLog.d("Skipping bugreportz on %s. Device is offline.", device.getSerialNumber());
             return;
         }
         // logBugreport will report a regular bugreport if bugreportz is not supported.
@@ -1356,6 +1356,8 @@ public class TestInvocation implements ITestInvocation {
                 continue;
             }
             try {
+                // We need root to access the recovery logs so attempt to set it
+                device.enableAdbRoot();
                 File recovery_log = device.pullFile(RECOVERY_LOG_DEVICE_PATH);
                 if (recovery_log == null) {
                     return;
