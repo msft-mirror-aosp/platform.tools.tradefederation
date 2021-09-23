@@ -29,9 +29,8 @@ import com.proto.tradefed.feature.TradefedInformationGrpc.TradefedInformationBlo
 import java.util.Map;
 
 import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
-import io.grpc.internal.DnsNameResolverProvider;
-import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 
 /** A grpc client to request feature execution from the server. */
 public class TradefedFeatureClient implements AutoCloseable {
@@ -41,8 +40,7 @@ public class TradefedFeatureClient implements AutoCloseable {
 
     public TradefedFeatureClient() {
         mChannel =
-                NettyChannelBuilder.forAddress("localhost", TradefedFeatureServer.getPort())
-                        .nameResolverFactory(new DnsNameResolverProvider())
+                ManagedChannelBuilder.forAddress("localhost", TradefedFeatureServer.getPort())
                         .usePlaintext()
                         .build();
         mBlockingStub = TradefedInformationGrpc.newBlockingStub(mChannel);
