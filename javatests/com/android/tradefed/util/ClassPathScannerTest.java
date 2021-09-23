@@ -15,22 +15,25 @@
  */
 package com.android.tradefed.util;
 
+import static org.junit.Assert.assertTrue;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import com.android.tradefed.util.ClassPathScanner.ClassNameFilter;
 import com.android.tradefed.util.ClassPathScanner.IClassPathFilter;
 
-import junit.framework.TestCase;
-
 import java.util.Set;
 
-/**
- * Unit tests for {@link ClassPathScanner}
- */
-public class ClassPathScannerTest extends TestCase {
+/** Unit tests for {@link ClassPathScanner} */
+@RunWith(JUnit4.class)
+public class ClassPathScannerTest {
 
     /**
-     * Simple test to ensure this class can be found via
-     * {@link ClassPathScanner#getClassPathEntries(IClassPathFilter)}
+     * Simple test to ensure this class can be found via {@link
+     * ClassPathScanner#getClassPathEntries(IClassPathFilter)}
      */
+    @Test
     public void testGetClassPathEntries() {
         ClassPathScanner cpScanner = new ClassPathScanner();
         Set<String> classEntries = cpScanner.getClassPathEntries(new ClassNameFilter());

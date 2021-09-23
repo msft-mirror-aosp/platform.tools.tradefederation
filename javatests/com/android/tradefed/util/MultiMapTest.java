@@ -15,7 +15,12 @@
  */
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -24,14 +29,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Unit tests for {@link MultiMap}.
- */
-public class MultiMapTest extends TestCase {
+/** Unit tests for {@link MultiMap}. */
+@RunWith(JUnit4.class)
+public class MultiMapTest {
 
-    /**
-     * Test for {@link MultiMap#getUniqueMap()}.
-     */
+    /** Test for {@link MultiMap#getUniqueMap()}. */
+    @Test
     public void testGetUniqueMap() {
         MultiMap<String, String> multiMap = new MultiMap<String, String>();
         multiMap.put("key", "value1");
@@ -68,11 +71,13 @@ public class MultiMapTest extends TestCase {
     }
 
     /** Test for {@link MultiMap#entries()}. */
+    @Test
     public void testEmptyMapEntries() {
         MultiMap<String, String> multiMap = new MultiMap<>();
         assertEquals(0, multiMap.entries().size());
     }
 
+    @Test
     public void testEntries() {
         MultiMap<String, String> multiMap = new MultiMap<>();
         multiMap.put("a", "1");

@@ -33,14 +33,19 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 
 /** Test class for {@link TarUtil}. */
 public class TarUtilTest {
 
+    // This archive contains TEST.log and TEST2.log.
     private static final String EMMA_METADATA_RESOURCE_PATH = "/testdata/LOG.tar.gz";
+    // This archive contains TEST.log and LINK.log.
+    private static final String SYMLINK_TAR_PATH = "/testdata/symlink.tar";
     private static final String TAR_ENTRY_NAME = "TEST.log";
+    private static final String SYMLINK_ENTRY_NAME = "LINK.log";
     private File mWorkDir;
 
     @Before
@@ -103,6 +108,24 @@ public class TarUtilTest {
             Assert.assertEquals(2, untaredList.size());
         } finally {
             FileUtil.deleteFile(logTarGzFile);
+        }
+    }
+
+    /** Test that {TarUtil#unTar(File, File)} can untar a symbolic link from a tar file. */
+    @Test
+    public void testUnTar_symlink() throws IOException {
+        InputStream tarStream = getClass().getResourceAsStream(SYMLINK_TAR_PATH);
+        File tarFile = FileUtil.createTempFile("symlink", ".tar");
+        try {
+            FileUtil.writeToFile(tarStream, tarFile);
+            List<File> untaredList = TarUtil.unTar(tarFile, mWorkDir);
+            Assert.assertEquals(2, untaredList.size());
+            Assert.assertTrue(new File(mWorkDir, TAR_ENTRY_NAME).isFile());
+            File linkFile = new File(mWorkDir, SYMLINK_ENTRY_NAME);
+            Assert.assertTrue(linkFile.exists());
+            Assert.assertTrue(Files.isSymbolicLink(linkFile.toPath()));
+        } finally {
+            FileUtil.deleteFile(tarFile);
         }
     }
 

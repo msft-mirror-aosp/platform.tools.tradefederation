@@ -16,55 +16,63 @@
 
 package com.android.tradefed.util;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import com.android.tradefed.util.ListInstrumentationParser.InstrumentationTarget;
 import com.google.common.collect.Lists;
-
-import junit.framework.TestCase;
 
 import java.util.List;
 import java.util.Objects;
 
 /** Simple unit test for {@link ListInstrumentationParser}. */
-public class ListInstrumentationParserTest extends TestCase {
+@RunWith(JUnit4.class)
+public class ListInstrumentationParserTest {
 
     // Example instrumentation test values
     private static final String EXAMPLE_TEST_PACKAGE_1 = "com.example.test";
     private static final String EXAMPLE_TARGET_1 = "com.example";
     private static final String EXAMPLE_RUNNER_1 = "android.test.InstrumentationTestRunner";
     private static final String LIST_INSTRUMENTATION_OUTPUT_1 =
-            "instrumentation:com.example.test/android.test.InstrumentationTestRunner (target=com.example)";
+            "instrumentation:com.example.test/android.test.InstrumentationTestRunner"
+                    + " (target=com.example)";
 
     private static final String EXAMPLE_TEST_PACKAGE_2 = "com.foobar.test";
     private static final String EXAMPLE_TARGET_2 = "com.example2";
     private static final String EXAMPLE_RUNNER_2 = "android.support.test.runner.AndroidJUnitRunner";
     private static final String LIST_INSTRUMENTATION_OUTPUT_2 =
-            "instrumentation:com.foobar.test/android.support.test.runner.AndroidJUnitRunner (target=com.example2)";
+            "instrumentation:com.foobar.test/android.support.test.runner.AndroidJUnitRunner"
+                    + " (target=com.example2)";
 
     private static final String EXAMPLE_TEST_PACKAGE_3 = "com.example.test";
     private static final String EXAMPLE_TARGET_3 = "com.example";
     private static final String EXAMPLE_RUNNER_3 = "android.support.test.runner.AndroidJUnitRunner";
     private static final String LIST_INSTRUMENTATION_OUTPUT_3 =
-            "instrumentation:com.example.test/android.support.test.runner.AndroidJUnitRunner (target=com.example)";
-
+            "instrumentation:com.example.test/android.support.test.runner.AndroidJUnitRunner"
+                    + " (target=com.example)";
 
     private ListInstrumentationParser mParser;
 
-    @Override
+    @Before
     public void setUp() {
         mParser = new ListInstrumentationParser();
     }
 
-    /**
-     * Test behavior when there are no lines to parse
-     */
+    /** Test behavior when there are no lines to parse */
+    @Test
     public void testEmptyParse() {
         List<InstrumentationTarget> targets = mParser.getInstrumentationTargets();
         assertTrue("getInstrumentationTargets() not empty", targets.isEmpty());
     }
 
-    /**
-     * Simple test case for list instrumentation parsing
-     */
+    /** Simple test case for list instrumentation parsing */
+    @Test
     public void testSimpleParse() {
         // Build example `pm list instrumentation` output and send it to the parser
         String[] pmListOutput = {
@@ -99,7 +107,6 @@ public class ListInstrumentationParserTest extends TestCase {
      */
     private void validateInstrumentationTargets(List<InstrumentationTarget> expectedTargets,
             List<InstrumentationTarget> actualTargets) {
-
         // Lists must be the same size
         assertEquals("Unexpected number of parsed targets",
                 expectedTargets.size(), actualTargets.size());
@@ -126,7 +133,6 @@ public class ListInstrumentationParserTest extends TestCase {
      */
     private static boolean areTargetsEqual(InstrumentationTarget expected,
             InstrumentationTarget actual) {
-
         return Objects.equals(expected.packageName, actual.packageName) &&
                 Objects.equals(expected.runnerName, actual.runnerName) &&
                 Objects.equals(expected.targetName, actual.targetName);

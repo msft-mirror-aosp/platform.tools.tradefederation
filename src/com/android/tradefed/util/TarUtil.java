@@ -151,7 +151,6 @@ public class TarUtil {
                         }
                     }
                 } else {
-                    CLog.i(String.format("Creating output file %s.", outputFile.getAbsolutePath()));
                     final File parent = outputFile.getParentFile();
                     if (parent != null && !parent.exists()) {
                         if (!parent.mkdirs()) {
@@ -161,9 +160,18 @@ public class TarUtil {
                                             parent.getAbsolutePath()));
                         }
                     }
-                    final OutputStream outputFileStream = new FileOutputStream(outputFile);
-                    IOUtils.copy(debInputStream, outputFileStream);
-                    StreamUtil.close(outputFileStream);
+                    if (entry.isSymbolicLink()) {
+                        CLog.i(
+                                String.format(
+                                        "Creating symbolic link %s -> %s.",
+                                        outputFile.getAbsolutePath(), entry.getLinkName()));
+                        FileUtil.symlinkFile(new File(entry.getLinkName()), outputFile);
+                    } else {
+                        CLog.i(String.format("Creating file %s.", outputFile.getAbsolutePath()));
+                        try (OutputStream outputFileStream = new FileOutputStream(outputFile)) {
+                            IOUtils.copy(debInputStream, outputFileStream);
+                        }
+                    }
                 }
                 untaredFiles.add(outputFile);
             }

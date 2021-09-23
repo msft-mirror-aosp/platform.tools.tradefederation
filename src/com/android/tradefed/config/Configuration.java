@@ -220,6 +220,7 @@ public class Configuration implements IConfiguration {
             sMultiDeviceSupportedTag = new HashSet<String>();
             sMultiDeviceSupportedTag.add(BUILD_PROVIDER_TYPE_NAME);
             sMultiDeviceSupportedTag.add(TARGET_PREPARER_TYPE_NAME);
+            sMultiDeviceSupportedTag.add(LAB_PREPARER_TYPE_NAME);
             sMultiDeviceSupportedTag.add(DEVICE_RECOVERY_TYPE_NAME);
             sMultiDeviceSupportedTag.add(DEVICE_REQUIREMENTS_TYPE_NAME);
             sMultiDeviceSupportedTag.add(DEVICE_OPTIONS_TYPE_NAME);
@@ -807,15 +808,6 @@ public class Configuration implements IConfiguration {
         }
     }
 
-    private void addToDefaultDeviceConfig(Object obj) {
-        try {
-            getDeviceConfigByName(ConfigurationDef.DEFAULT_DEVICE_NAME).addSpecificConfig(obj);
-        } catch (ConfigurationException e) {
-            // should never happen
-            throw new IllegalArgumentException(e);
-        }
-    }
-
     private void addToDefaultDeviceConfig(Object obj, String type) {
         try {
             getDeviceConfigByName(ConfigurationDef.DEFAULT_DEVICE_NAME)
@@ -832,7 +824,7 @@ public class Configuration implements IConfiguration {
     @Override
     public void setBuildProvider(IBuildProvider provider) {
         notAllowedInMultiMode("setBuildProvider");
-        addToDefaultDeviceConfig(provider);
+        addToDefaultDeviceConfig(provider, BUILD_PROVIDER_TYPE_NAME);
     }
 
     /**
@@ -972,7 +964,7 @@ public class Configuration implements IConfiguration {
     @Override
     public void setDeviceRecovery(IDeviceRecovery recovery) {
         notAllowedInMultiMode("setDeviceRecovery");
-        addToDefaultDeviceConfig(recovery);
+        addToDefaultDeviceConfig(recovery, DEVICE_RECOVERY_TYPE_NAME);
     }
 
     /**
@@ -1025,7 +1017,7 @@ public class Configuration implements IConfiguration {
     @Override
     public void setDeviceRequirements(IDeviceSelection devRequirements) {
         notAllowedInMultiMode("setDeviceRequirements");
-        addToDefaultDeviceConfig(devRequirements);
+        addToDefaultDeviceConfig(devRequirements, DEVICE_REQUIREMENTS_TYPE_NAME);
     }
 
     /**
@@ -1034,7 +1026,7 @@ public class Configuration implements IConfiguration {
     @Override
     public void setDeviceOptions(TestDeviceOptions devOptions) {
         notAllowedInMultiMode("setDeviceOptions");
-        addToDefaultDeviceConfig(devOptions);
+        addToDefaultDeviceConfig(devOptions, DEVICE_OPTIONS_TYPE_NAME);
     }
 
     /**

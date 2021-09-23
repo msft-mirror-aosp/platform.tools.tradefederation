@@ -333,6 +333,18 @@ public class HostTestTest {
     }
 
     @RunWith(DeviceJUnit4ClassRunner.class)
+    public static class JUnit4TestClassAssumeInStatic {
+
+        @BeforeClass
+        public static void setupClass() {
+            Assume.assumeTrue(false);
+        }
+
+        @org.junit.Test
+        public void testPass5() {}
+    }
+
+    @RunWith(DeviceJUnit4ClassRunner.class)
     public static class JUnit4TestClassMultiException {
 
         @org.junit.Test
@@ -1328,6 +1340,25 @@ public class HostTestTest {
         verify(mListener).testAssumptionFailure(Mockito.eq(test1), (String) Mockito.any());
         verify(mListener).testEnded(Mockito.eq(test1), (HashMap<String, Metric>) Mockito.any());
         verify(mListener).testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
+    }
+
+    @org.junit.Test
+    public void testRun_junit4style_assumeFailure_static() throws Exception {
+        mHostTest.setClassName(JUnit4TestClassAssumeInStatic.class.getName());
+
+        mHostTest.run(mTestInfo, mListener);
+
+        InOrder inOrder = Mockito.inOrder(mListener);
+        inOrder.verify(mListener).testRunStarted((String) Mockito.any(), Mockito.eq(1));
+        TestDescription test1 =
+                new TestDescription(JUnit4TestClassAssumeInStatic.class.getName(), "testPass5");
+        inOrder.verify(mListener).testStarted(Mockito.eq(test1));
+        inOrder.verify(mListener).testAssumptionFailure(Mockito.eq(test1), (String) Mockito.any());
+        inOrder.verify(mListener)
+                .testEnded(Mockito.eq(test1), (HashMap<String, Metric>) Mockito.any());
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
+        inOrder.verifyNoMoreInteractions();
     }
 
     /**
