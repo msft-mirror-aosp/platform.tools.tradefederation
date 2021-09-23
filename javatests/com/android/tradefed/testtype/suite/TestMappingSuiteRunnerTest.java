@@ -975,6 +975,67 @@ public class TestMappingSuiteRunnerTest {
         assertEquals(1, mRunner2.getExcludeFilter().size());
     }
 
+    /**
+     * Test for {@link TestMappingSuiteRunner#loadTests()} for loading tests from test_mappings.zip
+     * with ignore-test-mapping-imports flag.
+     */
+    @Test
+    public void testLoadTests_testMappingsIncludeImports() throws Exception {
+        File tempDir = null;
+        try {
+            mOptionSetter.setOptionValue("ignore-test-mapping-imports", "false");
+            mOptionSetter.setOptionValue("test-mapping-test-group", "presubmit");
+            mOptionSetter.setOptionValue("test-mapping-path", "path2/path3");
+
+            tempDir = FileUtil.createTempDir("test_mapping");
+            File path1 = new File(tempDir.getAbsolutePath() + "/path1");
+            path1.mkdir();
+            String srcFile =
+                    File.separator + TEST_DATA_DIR + File.separator + "test_mapping_with_import_1";
+            InputStream resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, path1, TEST_MAPPING);
+
+            File path2 = new File(tempDir.getAbsolutePath() + "/path2");
+            path2.mkdir();
+            srcFile =
+                    File.separator + TEST_DATA_DIR + File.separator + "test_mapping_with_import_2";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, path2, TEST_MAPPING);
+
+            File path3 = new File(path2.getAbsolutePath() + "/path3");
+            path3.mkdir();
+            srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_1";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, path3, TEST_MAPPING);
+
+            srcFile = File.separator + TEST_DATA_DIR + File.separator + DISABLED_PRESUBMIT_TESTS;
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, tempDir, DISABLED_PRESUBMIT_TESTS);
+            List<File> filesToZip =
+                    Arrays.asList(path1, path2, new File(tempDir, DISABLED_PRESUBMIT_TESTS));
+
+            File zipFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPINGS_ZIP).toFile();
+            ZipUtil.createZip(filesToZip, zipFile);
+
+            IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
+            when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
+            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
+            mRunner.setBuild(mockBuildInfo);
+            mRunner.setPrioritizeHostConfig(true);
+
+            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
+            assertEquals(3, mRunner.getIncludeFilter().size());
+            assertTrue(mRunner.getIncludeFilter().contains("import-test1"));
+            assertTrue(mRunner.getIncludeFilter().contains("import-test2"));
+            assertTrue(mRunner.getIncludeFilter().contains("test1"));
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+            TestMapping.setIgnoreTestMappingImports(true);
+            TestMapping.setTestMappingPaths(new ArrayList<String>());
+        }
+    }
+
     /** Helper to create specific test infos. */
     private TestInfo createTestInfo(String name, String source) {
         TestInfo info = new TestInfo(name, source, false);

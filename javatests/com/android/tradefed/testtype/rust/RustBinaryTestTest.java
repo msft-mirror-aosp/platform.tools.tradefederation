@@ -402,7 +402,7 @@ public class RustBinaryTestTest {
     @Test
     public void testOptions() throws Exception {
         OptionSetter setter = new OptionSetter(mRustBinaryTest);
-        setter.setOptionValue("test-options", "--option");
+        setter.setOptionValue("native-test-flag", "--option");
 
         final String testPath = RustBinaryTest.DEFAULT_TEST_PATH;
         final String test1 = "test1";

@@ -21,6 +21,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.ConfigurationDef;
@@ -46,12 +47,13 @@ import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.suite.params.ModuleParameters;
 import com.android.tradefed.util.FileUtil;
 
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.io.IOException;
@@ -71,50 +73,63 @@ public class SuiteModuleLoaderTest {
 
     private static final String TEST_CONFIG =
             "<configuration description=\"Runs a stub tests part of some suite\">\n"
-                    + "    <target_preparer class=\"com.android.tradefed.testtype.suite.SuiteModuleLoaderTest$PreparerInject\" />\n"
-                    + "    <test class=\"com.android.tradefed.testtype.suite.SuiteModuleLoaderTest"
-                    + "$TestInject\" />\n"
-                    + "</configuration>";
+                + "    <target_preparer"
+                + " class=\"com.android.tradefed.testtype.suite.SuiteModuleLoaderTest$PreparerInject\""
+                + " />\n"
+                + "    <test"
+                + " class=\"com.android.tradefed.testtype.suite.SuiteModuleLoaderTest$TestInject\""
+                + " />\n"
+                + "</configuration>";
 
     private static final String TEST_NOT_MULTI_ABI_CONFIG =
             "<configuration description=\"Runs a stub tests part of some suite\">\n"
-                    + "    <option name=\"config-descriptor:metadata\" key=\"parameter\" value=\"not_multi_abi\" />\n"
+                    + "    <option name=\"config-descriptor:metadata\" key=\"parameter\""
+                    + " value=\"not_multi_abi\" />\n"
                     + "    <test class=\"com.android.tradefed.testtype.suite.TestSuiteStub\" />\n"
                     + "</configuration>";
 
     private static final String TEST_INSTANT_CONFIG =
             "<configuration description=\"Runs a stub tests part of some suite\">\n"
-                    + "    <option name=\"config-descriptor:metadata\" key=\"parameter\" value=\"instant_app\" />"
+                    + "    <option name=\"config-descriptor:metadata\" key=\"parameter\""
+                    + " value=\"instant_app\" />"
                     // Duplicate parameter should not have impact
-                    + "    <option name=\"config-descriptor:metadata\" key=\"parameter\" value=\"instant_app\" />"
-                    + "    <test class=\"com.android.tradefed.testtype.suite.TestSuiteStub\" />\n"
+                    + "    <option name=\"config-descriptor:metadata\" key=\"parameter\""
+                    + " value=\"instant_app\" />    <test"
+                    + " class=\"com.android.tradefed.testtype.suite.TestSuiteStub\" />\n"
                     + "</configuration>";
 
     private static final String TEST_FOLDABLE_CONFIG =
             "<configuration description=\"Runs a stub tests part of some suite\">\n"
-                    + "    <option name=\"config-descriptor:metadata\" key=\"parameter\" value=\"all_foldable_states\" />"
-                    + "    <test class=\"com.android.tradefed.testtype.suite.TestSuiteStub\" />\n"
+                    + "    <option name=\"config-descriptor:metadata\" key=\"parameter\""
+                    + " value=\"all_foldable_states\" />    <test"
+                    + " class=\"com.android.tradefed.testtype.suite.TestSuiteStub\" />\n"
                     + "</configuration>";
 
     private static final String TEST_MAINLINE_CONFIG =
             "<configuration description=\"Runs a stub tests part of some suite\">\n"
-                    + "    <option name=\"config-descriptor:metadata\" key=\"mainline-param\" value=\"mod1.apk\" />"
+                    + "    <option name=\"config-descriptor:metadata\" key=\"mainline-param\""
+                    + " value=\"mod1.apk\" />"
                     // Duplicate parameter should not have impact
-                    + "    <option name=\"config-descriptor:metadata\" key=\"mainline-param\" value=\"mod2.apk\" />"
-                    + "    <option name=\"config-descriptor:metadata\" key=\"mainline-param\" value=\"mod1.apk+mod2.apk\" />"
-                    + "    <option name=\"config-descriptor:metadata\" key=\"mainline-param\" value=\"mod1.apk+mod2.apk\" />"
-                    + "    <option name=\"config-descriptor:metadata\" key=\"mainline-param\" value=\"mod1.apk\" />"
-                    + "    <test class=\"com.android.tradefed.testtype.suite.TestSuiteStub\" />\n"
+                    + "    <option name=\"config-descriptor:metadata\" key=\"mainline-param\""
+                    + " value=\"mod2.apk\" />    <option name=\"config-descriptor:metadata\""
+                    + " key=\"mainline-param\" value=\"mod1.apk+mod2.apk\" />    <option"
+                    + " name=\"config-descriptor:metadata\" key=\"mainline-param\""
+                    + " value=\"mod1.apk+mod2.apk\" />    <option"
+                    + " name=\"config-descriptor:metadata\" key=\"mainline-param\""
+                    + " value=\"mod1.apk\" />    <test"
+                    + " class=\"com.android.tradefed.testtype.suite.TestSuiteStub\" />\n"
                     + "</configuration>";
 
     private SuiteModuleLoader mRepo;
     private File mTestsDir;
     private Set<IAbi> mAbis;
     private IInvocationContext mContext;
-    private IBuildInfo mMockBuildInfo;
+    @Mock IBuildInfo mMockBuildInfo;
 
     @Before
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mRepo =
                 new SuiteModuleLoader(
                         new LinkedHashMap<String, LinkedHashSet<SuiteTestFilter>>(),
@@ -125,11 +140,11 @@ public class SuiteModuleLoaderTest {
         mAbis = new LinkedHashSet<>();
         mAbis.add(new Abi("armeabi-v7a", "32"));
         mContext = new InvocationContext();
-        mMockBuildInfo = EasyMock.createMock(IBuildInfo.class);
-        EasyMock.expect(mMockBuildInfo.getBuildBranch()).andStubReturn("branch");
-        EasyMock.expect(mMockBuildInfo.getBuildFlavor()).andStubReturn("flavor");
-        EasyMock.expect(mMockBuildInfo.getBuildId()).andStubReturn("id");
-        EasyMock.replay(mMockBuildInfo);
+
+        when(mMockBuildInfo.getBuildBranch()).thenReturn("branch");
+        when(mMockBuildInfo.getBuildFlavor()).thenReturn("flavor");
+        when(mMockBuildInfo.getBuildId()).thenReturn("id");
+
         mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, mMockBuildInfo);
     }
 
@@ -617,8 +632,8 @@ public class SuiteModuleLoaderTest {
         patterns.add(".*.config");
         patterns.add(".*.xml");
         LinkedHashMap<String, IConfiguration> res =
-            mRepo.loadConfigsFromDirectory(
-                Arrays.asList(mTestsDir), mAbis, null, null, patterns);
+                mRepo.loadConfigsFromDirectory(
+                        Arrays.asList(mTestsDir), mAbis, null, null, patterns);
         assertEquals(1, res.size());
         // Full module was excluded completely
         IConfiguration instantModule = res.get("armeabi-v7a basemodule[instant]");
@@ -713,9 +728,7 @@ public class SuiteModuleLoaderTest {
         assertTrue(stubTest.getExcludeAnnotations().containsAll(expected));
     }
 
-    /**
-     * Test that the configuration can be found if specifying specific path.
-     */
+    /** Test that the configuration can be found if specifying specific path. */
     @Test
     public void testLoadConfigsFromSpecifiedPaths_OneModule() throws Exception {
         createModuleConfig("module1");
@@ -729,15 +742,12 @@ public class SuiteModuleLoaderTest {
                         new ArrayList<>());
 
         LinkedHashMap<String, IConfiguration> res =
-            mRepo.loadConfigsFromSpecifiedPaths(
-                Arrays.asList(module1), mAbis, null);
+                mRepo.loadConfigsFromSpecifiedPaths(Arrays.asList(module1), mAbis, null);
         assertEquals(1, res.size());
         assertNotNull(res.get("armeabi-v7a module1"));
     }
 
-    /**
-     * Test that multiple configurations can be found if specifying specific paths.
-     */
+    /** Test that multiple configurations can be found if specifying specific paths. */
     @Test
     public void testLoadConfigsFromSpecifiedPaths_MultipleModules() throws Exception {
         createModuleConfig("module1");
@@ -753,8 +763,7 @@ public class SuiteModuleLoaderTest {
                         new ArrayList<>());
 
         LinkedHashMap<String, IConfiguration> res =
-            mRepo.loadConfigsFromSpecifiedPaths(
-                Arrays.asList(module1, module2), mAbis, null);
+                mRepo.loadConfigsFromSpecifiedPaths(Arrays.asList(module1, module2), mAbis, null);
         assertEquals(2, res.size());
         assertNotNull(res.get("armeabi-v7a module1"));
         assertNotNull(res.get("armeabi-v7a module2"));
@@ -772,31 +781,26 @@ public class SuiteModuleLoaderTest {
         File module2 = new File(mTestsDir, "module2" + SuiteModuleLoader.CONFIG_EXT);
 
         Map<String, LinkedHashSet<SuiteTestFilter>> excludeFilters = new LinkedHashMap<>();
-        SuiteTestFilter filter =
-            SuiteTestFilter.createFrom(
-                "armeabi-v7a module2");
+        SuiteTestFilter filter = SuiteTestFilter.createFrom("armeabi-v7a module2");
         LinkedHashSet<SuiteTestFilter> mapFilter = new LinkedHashSet<>();
         mapFilter.add(filter);
         excludeFilters.put("armeabi-v7a module2", mapFilter);
 
         mRepo =
-            new SuiteModuleLoader(
-                new LinkedHashMap<String, LinkedHashSet<SuiteTestFilter>>(),
-                excludeFilters,
-                new ArrayList<>(),
-                new ArrayList<>());
+                new SuiteModuleLoader(
+                        new LinkedHashMap<String, LinkedHashSet<SuiteTestFilter>>(),
+                        excludeFilters,
+                        new ArrayList<>(),
+                        new ArrayList<>());
 
         LinkedHashMap<String, IConfiguration> res =
-            mRepo.loadConfigsFromSpecifiedPaths(
-                Arrays.asList(module1, module2), mAbis, null);
+                mRepo.loadConfigsFromSpecifiedPaths(Arrays.asList(module1, module2), mAbis, null);
         assertEquals(1, res.size());
         assertNotNull(res.get("armeabi-v7a module1"));
         assertNull(res.get("armeabi-v7a module2"));
     }
 
-    /**
-     * Test deduplicate the given mainline parameters.
-     */
+    /** Test deduplicate the given mainline parameters. */
     @Test
     public void testDedupMainlineParameters() throws Exception {
         List<String> parameters = new ArrayList<>();
@@ -816,9 +820,7 @@ public class SuiteModuleLoaderTest {
         assertTrue(IsEqual);
     }
 
-    /**
-     * Test deduplicate the given mainline parameters with invalid spaces configured.
-     */
+    /** Test deduplicate the given mainline parameters with invalid spaces configured. */
     @Test
     public void testDedupMainlineParameters_WithSpaces() throws Exception {
         List<String> parameters = new ArrayList<>();
@@ -834,9 +836,7 @@ public class SuiteModuleLoaderTest {
         }
     }
 
-    /**
-     * Test deduplicate the given mainline parameters end with invalid extension.
-     */
+    /** Test deduplicate the given mainline parameters end with invalid extension. */
     @Test
     public void testDedupMainlineParameters_WithInvalidExtension() throws Exception {
         List<String> parameters = new ArrayList<>();
@@ -851,9 +851,7 @@ public class SuiteModuleLoaderTest {
         }
     }
 
-    /**
-     * Test deduplicate the given mainline parameters end with invalid format.
-     */
+    /** Test deduplicate the given mainline parameters end with invalid format. */
     @Test
     public void testDedupMainlineParameters_WithInvalidFormat() throws Exception {
         List<String> parameters = new ArrayList<>();
@@ -868,9 +866,7 @@ public class SuiteModuleLoaderTest {
         }
     }
 
-    /**
-     * Test deduplicate the given mainline parameter with duplicated modules configured.
-     */
+    /** Test deduplicate the given mainline parameter with duplicated modules configured. */
     @Test
     public void testDedupMainlineParameters_WithDuplicatedMainlineModules() throws Exception {
         List<String> parameters = new ArrayList<>();
@@ -884,9 +880,7 @@ public class SuiteModuleLoaderTest {
         }
     }
 
-    /**
-     * Test deduplicate the given mainline parameters are not configured in alphabetical order.
-     */
+    /** Test deduplicate the given mainline parameters are not configured in alphabetical order. */
     @Test
     public void testDedupMainlineParameters_ParameterNotInAlphabeticalOrder() throws Exception {
         List<String> parameters = new ArrayList<>();
@@ -901,24 +895,25 @@ public class SuiteModuleLoaderTest {
         }
     }
 
-    /**
-     * Test get the mainline parameters defined in the test config.
-     */
+    /** Test get the mainline parameters defined in the test config. */
     @Test
     public void testGetMainlineModuleParameters() throws Exception {
         createMainlineModuleConfig("mainline_module");
         IConfiguration config =
-                ConfigurationFactory.getInstance().createConfigurationFromArgs(
-                        new String[] {mTestsDir.getAbsolutePath() + "/mainline_module.config"});
+                ConfigurationFactory.getInstance()
+                        .createConfigurationFromArgs(
+                                new String[] {
+                                    mTestsDir.getAbsolutePath() + "/mainline_module.config"
+                                });
 
         List<String> results = mRepo.getMainlineModuleParameters(config);
         assertEquals(3, results.size());
 
         boolean IsEqual = true;
         for (String id : results) {
-            if (!(id.equals("mod1.apk") ||
-                  id.equals("mod2.apk") ||
-                  id.equals("mod1.apk+mod2.apk"))) {
+            if (!(id.equals("mod1.apk")
+                    || id.equals("mod2.apk")
+                    || id.equals("mod1.apk+mod2.apk"))) {
                 IsEqual = false;
             }
         }
@@ -949,9 +944,7 @@ public class SuiteModuleLoaderTest {
         assertEquals(3, res.size());
         IConfiguration module1 = res.get("armeabi-v7a basemodule[mod1.apk]");
         assertNotNull(module1);
-        assertTrue(
-                module1.getTargetPreparers().get(0) instanceof InstallApexModuleTargetPreparer);
-        EasyMock.verify(mMockBuildInfo);
+        assertTrue(module1.getTargetPreparers().get(0) instanceof InstallApexModuleTargetPreparer);
     }
 
     /**
@@ -968,8 +961,7 @@ public class SuiteModuleLoaderTest {
         excludeFilters.put("armeabi-v7a basemodule", mapFilter);
 
         SuiteTestFilter filter =
-                SuiteTestFilter.createFrom(
-                        "armeabi-v7a basemodule[mod1.apk] class#method");
+                SuiteTestFilter.createFrom("armeabi-v7a basemodule[mod1.apk] class#method");
         LinkedHashSet<SuiteTestFilter> mainlineFilter = new LinkedHashSet<>();
         mainlineFilter.add(filter);
         excludeFilters.put("armeabi-v7a basemodule[mod1.apk]", mainlineFilter);
@@ -995,7 +987,6 @@ public class SuiteModuleLoaderTest {
         TestSuiteStub stubTest = (TestSuiteStub) module1.getTests().get(0);
         assertEquals(1, stubTest.getExcludeFilters().size());
         assertEquals("class#method", stubTest.getExcludeFilters().iterator().next());
-        EasyMock.verify(mMockBuildInfo);
     }
 
     /**
@@ -1029,7 +1020,6 @@ public class SuiteModuleLoaderTest {
         TestSuiteStub stubTest = (TestSuiteStub) module1.getTests().get(0);
         assertEquals(1, stubTest.getExcludeAnnotations().size());
         assertEquals("test-annotation", stubTest.getExcludeAnnotations().iterator().next());
-        EasyMock.verify(mMockBuildInfo);
     }
 
     /**
@@ -1053,10 +1043,7 @@ public class SuiteModuleLoaderTest {
 
         mRepo =
                 new SuiteModuleLoader(
-                        includeFilters,
-                        excludeFilters,
-                        new ArrayList<>(),
-                        new ArrayList<>());
+                        includeFilters, excludeFilters, new ArrayList<>(), new ArrayList<>());
         mRepo.setInvocationContext(mContext);
         mRepo.setMainlineParameterizedModules(true);
 
@@ -1076,12 +1063,9 @@ public class SuiteModuleLoaderTest {
 
         module1 = res.get("armeabi-v7a basemodule[mod1.apk+mod2.apk]");
         assertNull(module1);
-        EasyMock.verify(mMockBuildInfo);
     }
 
-    /**
-     * Test that the mainline parameter configured in the test config is valid.
-     */
+    /** Test that the mainline parameter configured in the test config is valid. */
     @Test
     public void testIsValidMainlineParam() throws Exception {
         assertTrue(mRepo.isValidMainlineParam("mod1.apk"));
@@ -1093,20 +1077,18 @@ public class SuiteModuleLoaderTest {
         assertFalse(mRepo.isValidMainlineParam("mod1.apk+mod2.apex "));
     }
 
-    /**
-     * Test that the mainline parameter configured in the test config is in alphabetical order.
-     */
+    /** Test that the mainline parameter configured in the test config is in alphabetical order. */
     @Test
     public void testIsInAlphabeticalOrder() throws Exception {
         assertTrue(mRepo.isInAlphabeticalOrder("mod1.apk"));
         assertTrue(mRepo.isInAlphabeticalOrder("mod1.apk+mod2.apex"));
         assertFalse(mRepo.isInAlphabeticalOrder("mod2.apk+mod1.apex"));
         assertFalse(mRepo.isInAlphabeticalOrder("mod1.apk+mod1.apk"));
-        assertTrue(mRepo.isInAlphabeticalOrder(
-                "com.android.cellbroadcast.apex+com.android.ipsec.apex+com.android.permission.apex")
-        );
-        assertFalse(mRepo.isInAlphabeticalOrder(
-                "com.android.permission.apex+com.android.ipsec.apex+com.android.cellbroadcast.apex")
-        );
+        assertTrue(
+                mRepo.isInAlphabeticalOrder(
+                        "com.android.cellbroadcast.apex+com.android.ipsec.apex+com.android.permission.apex"));
+        assertFalse(
+                mRepo.isInAlphabeticalOrder(
+                        "com.android.permission.apex+com.android.ipsec.apex+com.android.cellbroadcast.apex"));
     }
 }

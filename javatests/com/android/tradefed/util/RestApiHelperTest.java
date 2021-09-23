@@ -15,33 +15,37 @@
  */
 package com.android.tradefed.util;
 
+import static org.junit.Assert.assertEquals;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpRequestFactory;
 import com.google.api.client.http.javanet.NetHttpTransport;
 
-import junit.framework.TestCase;
-
 import java.util.Collections;
 
 /** Unit tests for {@link RestApiHelper}. */
-public class RestApiHelperTest extends TestCase {
+@RunWith(JUnit4.class)
+public class RestApiHelperTest {
     private static final String BASE_URI = "https://www.googleapis.com/test/";
 
     private RestApiHelper mHelper = null;
 
-    @Override
+    @Before
     public void setUp() throws Exception {
-        super.setUp();
 
         HttpRequestFactory requestFactory = new NetHttpTransport().createRequestFactory();
         mHelper = new RestApiHelper(requestFactory, BASE_URI);
     }
 
-    @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
-    }
+    @After
+    public void tearDown() throws Exception {}
 
+    @Test
     public void testBuildQueryUri() {
         String[] uriParts = {"add", "new", "fox"};
         GenericUrl uri = new GenericUrl(BASE_URI + "add/new/fox");

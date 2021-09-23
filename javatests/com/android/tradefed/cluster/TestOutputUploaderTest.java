@@ -17,18 +17,22 @@ package com.android.tradefed.cluster;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import com.android.tradefed.util.FileUtil;
-import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IRunUtil;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import static org.mockito.Mockito.*;
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
@@ -45,7 +49,8 @@ public class TestOutputUploaderTest {
     @Before
     public void setUp() throws IOException {
         mMockRunUtil = mock(IRunUtil.class);
-        when(mMockRunUtil.runTimedCmdRetry(anyLong(), anyLong(), anyInt(), anyVararg()))
+        when(mMockRunUtil.runTimedCmdRetry(
+                        Mockito.anyLong(), Mockito.anyLong(), Mockito.anyInt(), any()))
                 .thenReturn(new CommandResult(CommandStatus.SUCCESS));
         mTestOutputUploader =
                 new TestOutputUploader() {
@@ -90,7 +95,7 @@ public class TestOutputUploaderTest {
             destRootFolder = FileUtil.createTempDir(this.getClass().getName());
             final String uploadUrl = "file://" + destRootFolder.getAbsolutePath();
             mTestOutputUploader.setUploadUrl(uploadUrl);
-            
+
             final String outputFileUrl = mTestOutputUploader.uploadFile(mOutputFile, "sub_dir");
 
             assertEquals(uploadUrl + "/" + "sub_dir" + "/" + mOutputFile.getName(), outputFileUrl);

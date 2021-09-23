@@ -23,7 +23,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 import com.android.helper.aoa.AoaDevice;
@@ -37,6 +36,7 @@ import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.google.common.collect.ImmutableList;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -47,7 +47,6 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 import java.awt.Point;
 import java.time.Duration;
-import java.util.List;
 
 /** Unit tests for {@link AoaTargetPreparer} */
 @RunWith(MockitoJUnitRunner.class)
@@ -93,9 +92,9 @@ public class AoaTargetPreparerTest {
     public void testSetUp_noActions() throws Exception {
         mPreparer.setUp(mTestInfo);
         // no-op if no actions provided
-        verifyZeroInteractions(mUsb);
+        verifyNoMoreInteractions(mUsb);
         verify(mPreparer, never()).execute(eq(mDevice), any());
-        verifyZeroInteractions(mTestDevice);
+        verifyNoMoreInteractions(mTestDevice);
     }
 
     @Test(expected = DeviceNotAvailableException.class)
@@ -145,10 +144,17 @@ public class AoaTargetPreparerTest {
     public void testWrite() {
         mPreparer.execute(mDevice, "write Abc 0123");
 
-        verify(mDevice).pressKeys(List.of(
-                new AoaKey(0x04, AoaKey.Modifier.SHIFT), new AoaKey(0x05), new AoaKey(0x06),
-                new AoaKey(0x2C),
-                new AoaKey(0x27), new AoaKey(0x1E), new AoaKey(0x1F), new AoaKey(0x20)));
+        verify(mDevice)
+                .pressKeys(
+                        ImmutableList.of(
+                                new AoaKey(0x04, AoaKey.Modifier.SHIFT),
+                                new AoaKey(0x05),
+                                new AoaKey(0x06),
+                                new AoaKey(0x2C),
+                                new AoaKey(0x27),
+                                new AoaKey(0x1E),
+                                new AoaKey(0x1F),
+                                new AoaKey(0x20)));
         verifyNoMoreInteractions(ignoreStubs(mDevice));
     }
 
@@ -158,7 +164,7 @@ public class AoaTargetPreparerTest {
         mPreparer.execute(mDevice, "key 0x2B"); // accepts hexadecimal values
         mPreparer.execute(mDevice, "key tab"); // accepts key descriptions
 
-        verify(mDevice, times(3)).pressKeys(List.of(new AoaKey(0x2B)));
+        verify(mDevice, times(3)).pressKeys(ImmutableList.of(new AoaKey(0x2B)));
         verifyNoMoreInteractions(ignoreStubs(mDevice));
     }
 
@@ -166,10 +172,16 @@ public class AoaTargetPreparerTest {
     public void testKeys_combination() {
         mPreparer.execute(mDevice, "key 2*A 3*down 2*0x2B");
 
-        verify(mDevice).pressKeys(List.of(
-                new AoaKey(0x04, AoaKey.Modifier.SHIFT), new AoaKey(0x04, AoaKey.Modifier.SHIFT),
-                new AoaKey(0x51), new AoaKey(0x51), new AoaKey(0x51),
-                new AoaKey(0x2B), new AoaKey(0x2B)));
+        verify(mDevice)
+                .pressKeys(
+                        ImmutableList.of(
+                                new AoaKey(0x04, AoaKey.Modifier.SHIFT),
+                                new AoaKey(0x04, AoaKey.Modifier.SHIFT),
+                                new AoaKey(0x51),
+                                new AoaKey(0x51),
+                                new AoaKey(0x51),
+                                new AoaKey(0x2B),
+                                new AoaKey(0x2B)));
         verifyNoMoreInteractions(ignoreStubs(mDevice));
     }
 
