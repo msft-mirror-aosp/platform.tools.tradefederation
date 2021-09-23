@@ -509,14 +509,17 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (getIDevice() instanceof StubDevice) {
             return null;
         }
-        if (!TestDeviceState.ONLINE.equals(getDeviceState())) {
+        TestDeviceState state = getDeviceState();
+        if (!TestDeviceState.ONLINE.equals(state) && !TestDeviceState.RECOVERY.equals(state)) {
             if (recovery) {
                 // Only query property for online device so trigger recovery before getting
                 // property.
                 recoverDevice();
             } else {
                 // Only query property for online device
-                CLog.d("Device %s is not online cannot get property %s.", getSerialNumber(), name);
+                CLog.d(
+                        "Device %s is in state '%s' cannot get property %s.",
+                        getSerialNumber(), state, name);
                 return null;
             }
         }
