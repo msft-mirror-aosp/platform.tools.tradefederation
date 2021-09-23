@@ -15,48 +15,55 @@
  */
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import org.junit.Assert;
 
 import java.util.List;
 import java.util.Map;
 
-/**
- * Unit test class for {@link SimplePerfStatResultParser}
- */
-public class SimplePerfStatResultParserTest extends TestCase {
+/** Unit test class for {@link SimplePerfStatResultParser} */
+@RunWith(JUnit4.class)
+public class SimplePerfStatResultParserTest {
 
+    @Test
     public void testParseSingleLineWithEmptyString() {
         String emptyString = "";
         List<String> result = SimplePerfStatResultParser.parseSingleLine(emptyString);
         Assert.assertTrue(result.size() == 0);
     }
 
+    @Test
     public void testParseSingleLineWithNullString() {
         String nullString = null;
         List<String> result = SimplePerfStatResultParser.parseSingleLine(nullString);
         Assert.assertTrue(result.size() == 0);
     }
 
+    @Test
     public void testParseSingleLineWithHeaderString() {
         String headerString = "Performance counter statistics:SomeRandomData";
         List<String> result = SimplePerfStatResultParser.parseSingleLine(headerString);
         Assert.assertTrue(result.size() == 0);
     }
 
+    @Test
     public void testParseSingleLineWithReturnString() {
         String returnString = "\n";
         List<String> result = SimplePerfStatResultParser.parseSingleLine(returnString);
         Assert.assertTrue(result.size() == 0);
     }
 
+    @Test
     public void testParseSingleLineWithRandomString() {
         String randomString = "  lkweknqwq(#@?>S@$Q  \r\n";
         List<String> result = SimplePerfStatResultParser.parseSingleLine(randomString);
         Assert.assertTrue(result.size() == 0);
     }
 
+    @Test
     public void testParseSingleLineWithValidMetricString() {
         String validMetricString = "  37,037,350  cpu-cycles   # 0.126492 GHz   (100%)";
         List<String> result = SimplePerfStatResultParser.parseSingleLine(validMetricString);
@@ -66,6 +73,7 @@ public class SimplePerfStatResultParserTest extends TestCase {
         Assert.assertTrue(result.get(2).equals("0.126492 GHz   (100%)"));
     }
 
+    @Test
     public void testParseSingleLineWithValidTotalTimeString() {
         String validTotalTimeString = "Total test time: 0.292803 seconds.";
         List<String> result = SimplePerfStatResultParser.parseSingleLine(validTotalTimeString);
@@ -73,30 +81,35 @@ public class SimplePerfStatResultParserTest extends TestCase {
         Assert.assertTrue(result.get(0).equals("0.292803"));
     }
 
+    @Test
     public void testParseSingleLineWithMultiplePoundString() {
         String multiplePoundString = "  37,037,350  cpu-cycles   # 0.126492 # GHz   (100%)";
         List<String> result = SimplePerfStatResultParser.parseSingleLine(multiplePoundString);
         Assert.assertTrue(result.size() == 0);
     }
 
+    @Test
     public void testParseSingleLineWithMultipleSpaceString() {
         String multiplePoundString = "  37,037,350 3735 cpu-cycles   # 0.126492 GHz   (100%)";
         List<String> result = SimplePerfStatResultParser.parseSingleLine(multiplePoundString);
         Assert.assertTrue(result.size() == 0);
     }
 
+    @Test
     public void testParseRawOutputWithNullString() {
         String nullString = null;
         SimplePerfResult result = SimplePerfStatResultParser.parseRawOutput(nullString);
         Assert.assertNull(result);
     }
 
+    @Test
     public void testParseRawOutputWithEmptyString() {
         String emptyString = "\n\n\n\n\n\n";
         SimplePerfResult result = SimplePerfStatResultParser.parseRawOutput(emptyString);
         Assert.assertNull(result);
     }
 
+    @Test
     public void testParseRawOutputWithValidString() {
         String validString =
                 "USER      PID   PPID  VSIZE  RSS   WCHAN            PC  NAME\n"

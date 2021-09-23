@@ -144,38 +144,9 @@ public class WaitDeviceRecoveryTest {
     }
 
     @Test
-    public void testRecoverDevice_unavailable_recovery() throws Exception {
-        doReturn(TestDeviceState.RECOVERY).when(mMockMonitor).getDeviceState();
-
-        UsbDevice mockDevice = Mockito.mock(UsbDevice.class);
-        doReturn(mockDevice).when(mMockUsbHelper).getDevice("serial");
-
-        doReturn(null, mMockDevice).when(mMockMonitor).waitForDeviceAvailable();
-        doReturn(null, mMockDevice).when(mMockMonitor).waitForDeviceOnline(Mockito.anyLong());
-        doReturn(mMockDevice).when(mMockMonitor).waitForDeviceInRecovery();
-
-        // Device recovers successfully
-        mRecovery.recoverDevice(mMockMonitor, false);
-
-        verify(mMockRunUtil).sleep(Mockito.anyLong());
-        verify(mMockMonitor).waitForDeviceBootloaderStateUpdate();
-        verify(mMockDevice).reboot(null);
-
-        verify(mockDevice).reset();
-    }
-
-    @Test
     public void testRecoverDevice_unavailable_recovery_fail() throws Exception {
-        // expect initial sleep
-
         when(mMockMonitor.getDeviceState()).thenReturn(TestDeviceState.RECOVERY);
         when(mMockMonitor.waitForDeviceOnline(Mockito.anyLong())).thenReturn(null);
-
-        UsbDevice mockDevice = Mockito.mock(UsbDevice.class);
-        doReturn(mockDevice).when(mMockUsbHelper).getDevice("serial");
-        when(mMockMonitor.waitForDeviceAvailable()).thenReturn(null);
-
-        when(mMockMonitor.waitForDeviceInRecovery()).thenReturn(null);
 
         try {
             mRecovery.recoverDevice(mMockMonitor, false);
@@ -183,11 +154,9 @@ public class WaitDeviceRecoveryTest {
         } catch (DeviceNotAvailableException e) {
             // expected
         }
-        verify(mMockMonitor, times(3)).getDeviceState();
+        verify(mMockMonitor, times(2)).getDeviceState();
         verify(mMockRunUtil).sleep(Mockito.anyLong());
         verify(mMockMonitor).waitForDeviceBootloaderStateUpdate();
-
-        verify(mockDevice).reset();
     }
 
     @Test

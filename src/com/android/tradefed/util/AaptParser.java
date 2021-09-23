@@ -39,9 +39,16 @@ public class AaptParser {
             "^sdkVersion:'(\\d+)'", Pattern.MULTILINE);
     private static final Pattern TARGET_SDK_PATTERN =
             Pattern.compile("^targetSdkVersion:'(\\d+)'", Pattern.MULTILINE);
-    /** Patterns for native code are not always present, so the list may stay empty. */
+    /**
+     * 1. Patterns for native code are not always present, so the list may stay empty; 2. There may
+     * be more than two native-codes for APKs built by Soong; 3. Java regular expressions cannot be
+     * captured for each group in a repeated group, so hard-code it for now to handle up to ten
+     * native-codes.
+     */
+    private static final int MAX_NUM_NATIVE_CODE = 10;
+
     private static final Pattern NATIVE_CODE_PATTERN =
-            Pattern.compile("native-code: '(.*?)'( '.*?')*");
+            Pattern.compile("native-code: '(.*?)'" + "( '.*?')?".repeat(MAX_NUM_NATIVE_CODE - 1));
 
     private static final Pattern REQUEST_LEGACY_STORAGE_PATTERN =
             Pattern.compile("requestLegacyExternalStorage.*=\\(.*\\)(.*)", Pattern.MULTILINE);

@@ -21,7 +21,7 @@ import static org.mockito.ArgumentMatchers.longThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import org.junit.Before;
@@ -57,7 +57,7 @@ public class FileIdleMonitorTest {
         monitor.start();
 
         // callback not executed, and new idle check scheduled after TIMEOUT
-        verifyZeroInteractions(mCallback);
+        verifyNoMoreInteractions(mCallback);
         verify(mExecutor, times(1))
                 .schedule(any(Runnable.class), eq(TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS));
     }
@@ -72,7 +72,7 @@ public class FileIdleMonitorTest {
 
         // callback not executed, and new idle check scheduled after approx. TIMEOUT - 3s
         long maxDelay = TIMEOUT.minusSeconds(3L).toMillis();
-        verifyZeroInteractions(mCallback);
+        verifyNoMoreInteractions(mCallback);
         verify(mExecutor, times(1))
                 .schedule(
                         any(Runnable.class),

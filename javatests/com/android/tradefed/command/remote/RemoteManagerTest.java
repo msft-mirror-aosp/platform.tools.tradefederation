@@ -95,7 +95,7 @@ public class RemoteManagerTest {
      */
     @Test
     public void testProcessClientOperations_initHandover() throws IOException {
-        String buf = "{version=\"8\", type=\"START_HANDOVER\", port=\"5555\"}";
+        String buf = "{version:\"8\", type:\"START_HANDOVER\", port:\"5555\"}";
         InputStream data = new ByteArrayInputStream(buf.getBytes());
         BufferedReader in = new BufferedReader(new InputStreamReader(data));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -114,7 +114,7 @@ public class RemoteManagerTest {
     @Test
     public void testProcessClientOperations_addCommand() throws Exception {
         doReturn(true).when(mMockScheduler).addCommand(Mockito.any());
-        String buf = "{version=\"8\", type=\"ADD_COMMAND\", time=\"5\", commandArgs=[\"empty\"]}";
+        String buf = "{version:\"8\", type:\"ADD_COMMAND\", time:\"5\", commandArgs:[\"empty\"]}";
         InputStream data = new ByteArrayInputStream(buf.getBytes());
         BufferedReader in = new BufferedReader(new InputStreamReader(data));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -130,7 +130,7 @@ public class RemoteManagerTest {
     @Test
     public void testProcessClientOperations_addCommand_fail() throws Exception {
         doReturn(false).when(mMockScheduler).addCommand(Mockito.any());
-        String buf = "{version=\"8\", type=\"ADD_COMMAND\", time=\"5\", commandArgs=[\"empty\"]}";
+        String buf = "{version:\"8\", type:\"ADD_COMMAND\", time:\"5\", commandArgs:[\"empty\"]}";
         InputStream data = new ByteArrayInputStream(buf.getBytes());
         BufferedReader in = new BufferedReader(new InputStreamReader(data));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -148,7 +148,7 @@ public class RemoteManagerTest {
         doThrow(new ConfigurationException("NOT_GOOD"))
                 .when(mMockScheduler)
                 .addCommand(Mockito.any());
-        String buf = "{version=\"8\", type=\"ADD_COMMAND\", time=\"5\", commandArgs=[\"empty\"]}";
+        String buf = "{version:\"8\", type:\"ADD_COMMAND\", time:\"5\", commandArgs:[\"empty\"]}";
         InputStream data = new ByteArrayInputStream(buf.getBytes());
         BufferedReader in = new BufferedReader(new InputStreamReader(data));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -166,7 +166,7 @@ public class RemoteManagerTest {
     /** Test when sending a ALLOCATE_DEVICE that fails to allocate the serial requested. */
     @Test
     public void testProcessClientOperations_allocateDevice_fail() throws Exception {
-        String buf = "{version=\"8\", type=\"ALLOCATE_DEVICE\", serial=\"testserial\"}";
+        String buf = "{version:\"8\", type:\"ALLOCATE_DEVICE\", serial:\"testserial\"}";
         InputStream data = new ByteArrayInputStream(buf.getBytes());
         BufferedReader in = new BufferedReader(new InputStreamReader(data));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -183,7 +183,7 @@ public class RemoteManagerTest {
         doReturn(Mockito.mock(ITestDevice.class))
                 .when(mMockDeviceManager)
                 .forceAllocateDevice(Mockito.eq("testserial"));
-        String buf = "{version=\"8\", type=\"ALLOCATE_DEVICE\", serial=\"testserial\"}";
+        String buf = "{version:\"8\", type:\"ALLOCATE_DEVICE\", serial:\"testserial\"}";
         InputStream data = new ByteArrayInputStream(buf.getBytes());
         BufferedReader in = new BufferedReader(new InputStreamReader(data));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -200,7 +200,7 @@ public class RemoteManagerTest {
      */
     @Test
     public void testProcessClientOperations_processFree_notFound() throws Exception {
-        String buf = "{version=\"8\", type=\"FREE_DEVICE\", serial=\"testserial\"}";
+        String buf = "{version:\"8\", type:\"FREE_DEVICE\", serial:\"testserial\"}";
         InputStream data = new ByteArrayInputStream(buf.getBytes());
         BufferedReader in = new BufferedReader(new InputStreamReader(data));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -221,7 +221,7 @@ public class RemoteManagerTest {
     public void testProcessClientOperations_processFree() throws Exception {
         ITestDevice stub = Mockito.mock(ITestDevice.class);
         doReturn(stub).when(mMockDeviceTracker).freeDevice(Mockito.eq("testserial"));
-        String buf = "{version=\"8\", type=\"FREE_DEVICE\", serial=\"testserial\"}";
+        String buf = "{version:\"8\", type:\"FREE_DEVICE\", serial:\"testserial\"}";
         InputStream data = new ByteArrayInputStream(buf.getBytes());
         BufferedReader in = new BufferedReader(new InputStreamReader(data));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -245,7 +245,7 @@ public class RemoteManagerTest {
         listAllocated.add(Mockito.mock(ITestDevice.class));
         doReturn(listAllocated).when(mMockDeviceTracker).freeAll();
 
-        String buf = "{version=\"8\", type=\"FREE_DEVICE\", serial=\"*\"}";
+        String buf = "{version:\"8\", type:\"FREE_DEVICE\", serial:\"*\"}";
         InputStream data = new ByteArrayInputStream(buf.getBytes());
         BufferedReader in = new BufferedReader(new InputStreamReader(data));
         ByteArrayOutputStream out = new ByteArrayOutputStream();

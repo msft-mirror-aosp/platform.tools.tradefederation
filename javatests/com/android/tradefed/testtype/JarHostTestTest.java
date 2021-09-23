@@ -17,6 +17,8 @@ package com.android.tradefed.testtype;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.android.compatibility.common.tradefed.testtype.JarHostTest;
 import com.android.tradefed.build.BuildInfo;
@@ -37,14 +39,16 @@ import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
-import org.easymock.Capture;
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.io.IOException;
@@ -69,13 +73,15 @@ public class JarHostTestTest {
     private DeviceBuildInfo mStubBuildInfo;
     private TestInformation mTestInfo;
     private File mTestDir = null;
-    private ITestInvocationListener mListener;
+    @Mock ITestInvocationListener mListener;
 
     @Before
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mTest = new HostTest();
         mTestDir = FileUtil.createTempDir("jarhostest");
-        mListener = EasyMock.createMock(ITestInvocationListener.class);
+
         OptionSetter setter = new OptionSetter(mTest);
         setter.setOptionValue("enable-pretty-logs", "false");
         mStubBuildInfo = new DeviceBuildInfo();
@@ -140,7 +146,7 @@ public class JarHostTestTest {
         File testJar = getJarResource(TEST_JAR1, mTestDir);
         mTest = new HostTestLoader(testJar);
         mTest.setBuild(mStubBuildInfo);
-        ITestDevice device = EasyMock.createNiceMock(ITestDevice.class);
+        ITestDevice device = mock(ITestDevice.class);
         mTest.setDevice(device);
         OptionSetter setter = new OptionSetter(mTest);
         setter.setOptionValue("enable-pretty-logs", "false");
@@ -188,7 +194,7 @@ public class JarHostTestTest {
         File testJar = getJarResource(TEST_JAR1, mTestDir);
         mTest = new HostTestLoader(testJar);
         mTest.setBuild(mStubBuildInfo);
-        ITestDevice device = EasyMock.createNiceMock(ITestDevice.class);
+        ITestDevice device = mock(ITestDevice.class);
         mTest.setDevice(device);
         OptionSetter setter = new OptionSetter(mTest);
         setter.setOptionValue("enable-pretty-logs", "false");
@@ -238,14 +244,14 @@ public class JarHostTestTest {
         setter.setOptionValue("jar", "thisjardoesnotexistatall.jar");
         mTest.setBuild(new BuildInfo());
 
-        mListener.testRunStarted(HostTest.class.getName(), 0);
-        Capture<FailureDescription> captured = new Capture<>();
-        mListener.testRunFailed(EasyMock.capture(captured));
-        mListener.testRunEnded(0L, new HashMap<String, Metric>());
+        ArgumentCaptor<FailureDescription> captured =
+                ArgumentCaptor.forClass(FailureDescription.class);
 
-        EasyMock.replay(mListener);
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
+
+        verify(mListener).testRunStarted(HostTest.class.getName(), 0);
+        verify(mListener).testRunFailed(captured.capture());
+        verify(mListener).testRunEnded(0L, new HashMap<String, Metric>());
         assertTrue(
                 captured.getValue()
                         .getErrorMessage()
@@ -260,17 +266,19 @@ public class JarHostTestTest {
     public void testJarHostMetrics() throws Exception {
         OptionSetter setter = new OptionSetter(mTest);
         setter.setOptionValue("class", Junit4TestClass2.class.getName());
-        mListener.testRunStarted(EasyMock.anyObject(), EasyMock.eq(1));
+
         TestDescription tid = new TestDescription(Junit4TestClass2.class.getName(), "testPass2");
-        mListener.testStarted(EasyMock.eq(tid));
+
         Map<String, String> metrics = new HashMap<>();
         metrics.put("key", "value");
-        mListener.testEnded(
-                EasyMock.eq(tid), EasyMock.eq(TfMetricProtoUtil.upgradeConvert(metrics)));
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        EasyMock.replay(mListener);
+
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
+
+        verify(mListener).testRunStarted(Mockito.any(), Mockito.eq(1));
+        verify(mListener).testStarted(Mockito.eq(tid));
+        verify(mListener)
+                .testEnded(Mockito.eq(tid), Mockito.eq(TfMetricProtoUtil.upgradeConvert(metrics)));
+        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
@@ -278,7 +286,7 @@ public class JarHostTestTest {
         File testJar = getJarResource(TEST_JAR2, mTestDir);
         mTest = new HostTest();
         mTest.setBuild(mStubBuildInfo);
-        ITestDevice device = EasyMock.createNiceMock(ITestDevice.class);
+        ITestDevice device = mock(ITestDevice.class);
         mTest.setDevice(device);
         OptionSetter setter = new OptionSetter(mTest);
         setter.setOptionValue("enable-pretty-logs", "false");
@@ -287,7 +295,6 @@ public class JarHostTestTest {
         mTest.setTestInformation(mTestInfo);
         assertEquals(2, mTest.countTestCases());
 
-        mListener.testRunStarted("com.android.tradefed.referencetests.OnePassingOneFailingTest", 2);
         TestDescription testOne =
                 new TestDescription(
                         "com.android.tradefed.referencetests.OnePassingOneFailingTest",
@@ -296,16 +303,17 @@ public class JarHostTestTest {
                 new TestDescription(
                         "com.android.tradefed.referencetests.OnePassingOneFailingTest",
                         "test2Failing");
-        mListener.testStarted(testOne);
-        mListener.testEnded(EasyMock.eq(testOne), EasyMock.<HashMap<String, Metric>>anyObject());
-        mListener.testStarted(testTwo);
-        mListener.testFailed(EasyMock.eq(testTwo), (String) EasyMock.anyObject());
-        mListener.testEnded(EasyMock.eq(testTwo), EasyMock.<HashMap<String, Metric>>anyObject());
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
 
-        EasyMock.replay(mListener);
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
+
+        verify(mListener)
+                .testRunStarted("com.android.tradefed.referencetests.OnePassingOneFailingTest", 2);
+        verify(mListener).testStarted(testOne);
+        verify(mListener).testEnded(Mockito.eq(testOne), Mockito.<HashMap<String, Metric>>any());
+        verify(mListener).testStarted(testTwo);
+        verify(mListener).testFailed(Mockito.eq(testTwo), (String) Mockito.any());
+        verify(mListener).testEnded(Mockito.eq(testTwo), Mockito.<HashMap<String, Metric>>any());
+        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
@@ -317,7 +325,7 @@ public class JarHostTestTest {
                         ModuleDefinition.MODULE_NAME, FileUtil.getBaseName(testJar.getName()));
         mTest = new HostTest();
         mTest.setBuild(mStubBuildInfo);
-        ITestDevice device = EasyMock.createNiceMock(ITestDevice.class);
+        ITestDevice device = mock(ITestDevice.class);
         mTest.setDevice(device);
         OptionSetter setter = new OptionSetter(mTest);
         setter.setOptionValue("enable-pretty-logs", "false");
@@ -327,7 +335,6 @@ public class JarHostTestTest {
         mTest.setTestInformation(mTestInfo);
         assertEquals(2, mTest.countTestCases());
 
-        mListener.testRunStarted("com.android.tradefed.referencetests.OnePassingOneFailingTest", 2);
         TestDescription testOne =
                 new TestDescription(
                         "com.android.tradefed.referencetests.OnePassingOneFailingTest",
@@ -336,16 +343,17 @@ public class JarHostTestTest {
                 new TestDescription(
                         "com.android.tradefed.referencetests.OnePassingOneFailingTest",
                         "test2Failing");
-        mListener.testStarted(testOne);
-        mListener.testEnded(EasyMock.eq(testOne), EasyMock.<HashMap<String, Metric>>anyObject());
-        mListener.testStarted(testTwo);
-        mListener.testFailed(EasyMock.eq(testTwo), (String) EasyMock.anyObject());
-        mListener.testEnded(EasyMock.eq(testTwo), EasyMock.<HashMap<String, Metric>>anyObject());
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
 
-        EasyMock.replay(mListener);
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener);
+
+        verify(mListener)
+                .testRunStarted("com.android.tradefed.referencetests.OnePassingOneFailingTest", 2);
+        verify(mListener).testStarted(testOne);
+        verify(mListener).testEnded(Mockito.eq(testOne), Mockito.<HashMap<String, Metric>>any());
+        verify(mListener).testStarted(testTwo);
+        verify(mListener).testFailed(Mockito.eq(testTwo), (String) Mockito.any());
+        verify(mListener).testEnded(Mockito.eq(testTwo), Mockito.<HashMap<String, Metric>>any());
+        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     /** Test that {@link JarHostTest#split()} inherited from {@link HostTest} is still good. */

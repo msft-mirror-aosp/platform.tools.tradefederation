@@ -324,14 +324,18 @@ public class GceManager {
         }
 
         /* If args passed by gce-driver-param contain build-target or build_target, or
-        gce-driver-param includes local-image and cvd-host-package to side load prebuilt virtual
+        test device options include local-image and cvd-host-package to side load prebuilt virtual
         device images, there is no need to pass the build info from device BuildInfo to gce
         arguments. Otherwise, generate gce args from device BuildInfo. Please refer to acloud
         arguments for the supported format:
         https://android.googlesource.com/platform/tools/acloud/+/refs/heads/master/create/create_args.py  */
-        if (gceDriverParams.contains("--cvd-host-package")
-                && gceDriverParams.contains("--local-image")) {
+        if (getTestDeviceOptions().getAvdLocalImage() != null
+                && getTestDeviceOptions().getAvdCuttlefishHostPkg() != null) {
             CLog.i("Virtual device is created by specified prebuilt image files.");
+            gceArgs.add("--cvd-host-package");
+            gceArgs.add(getTestDeviceOptions().getAvdCuttlefishHostPkg().getAbsolutePath());
+            gceArgs.add("--local-image");
+            gceArgs.add(getTestDeviceOptions().getAvdLocalImage().getAbsolutePath());
         } else if (!gceDriverParams.contains("--build-target")
                 && !gceDriverParams.contains("--build_target")) {
             gceArgs.add("--build-target");

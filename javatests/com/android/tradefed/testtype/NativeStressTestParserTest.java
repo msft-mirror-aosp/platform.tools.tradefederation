@@ -15,30 +15,32 @@
  */
 package com.android.tradefed.testtype;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-/**
- * Unit tests for {@link NativeStressTestParser}.
- */
-public class NativeStressTestParserTest extends TestCase {
+/** Unit tests for {@link NativeStressTestParser}. */
+@RunWith(JUnit4.class)
+public class NativeStressTestParserTest {
 
     private static final String RUN_NAME = "run-name";
     private NativeStressTestParser mParser;
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
+    /** {@inheritDoc} */
+    @Before
+    public void setUp() throws Exception {
+
         mParser = new NativeStressTestParser(RUN_NAME);
     }
 
     /**
      * Test a run with no content.
-     * <p/>
-     * Expect 0 iterations to be reported
+     *
+     * <p>Expect 0 iterations to be reported
      */
+    @Test
     public void testParse_empty() {
         mParser.processNewLines(new String[] {});
         mParser.done();
@@ -47,9 +49,10 @@ public class NativeStressTestParserTest extends TestCase {
 
     /**
      * Test a run with garbage content.
-     * <p/>
-     * Expect 0 iterations to be reported
+     *
+     * <p>Expect 0 iterations to be reported
      */
+    @Test
     public void testParse_garbage() {
         mParser.processNewLines(new String[] {"blah blah", "more blah"});
         mParser.done();
@@ -58,9 +61,10 @@ public class NativeStressTestParserTest extends TestCase {
 
     /**
      * Test a run with valid one iteration.
-     * <p/>
-     * Expect 1 iterations to be reported
+     *
+     * <p>Expect 1 iterations to be reported
      */
+    @Test
     public void testParse_oneIteration() {
         mParser.processNewLines(new String[] {"==== Completed pass: 0"});
         mParser.done();
@@ -69,9 +73,10 @@ public class NativeStressTestParserTest extends TestCase {
 
     /**
      * Test that iteration data with varying whitespace is parsed successfully.
-     * <p/>
-     * Expect 2 iterations to be reported
+     *
+     * <p>Expect 2 iterations to be reported
      */
+    @Test
     public void testParse_whitespace() {
         mParser.processNewLines(new String[] {"====Completedpass:0succeeded",
                 "====  Completed  pass:   1  "});
@@ -79,9 +84,8 @@ public class NativeStressTestParserTest extends TestCase {
         verifyExpectedIterations(2);
     }
 
-    /**
-     * Test that an invalid iteration value is ignored
-     */
+    /** Test that an invalid iteration value is ignored */
+    @Test
     public void testParse_invalidIterationValue() {
         mParser.processNewLines(new String[] {"==== Completed pass: 0", "==== Completed pass: 1",
                 "==== Completed pass: b", "Successfully completed 3 passes"});
@@ -89,9 +93,8 @@ public class NativeStressTestParserTest extends TestCase {
         verifyExpectedIterations(2);
     }
 
-    /**
-     * Test that failed iterations are ignored
-     */
+    /** Test that failed iterations are ignored */
+    @Test
     public void testParse_failedIteration() {
         mParser.processNewLines(new String[] {"==== Completed pass: 0", "==== pass: 1 failed"});
         mParser.done();

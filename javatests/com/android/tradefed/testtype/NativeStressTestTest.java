@@ -15,6 +15,11 @@
  */
 package com.android.tradefed.testtype;
 
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IFileEntry;
@@ -23,56 +28,58 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 
-import junit.framework.TestCase;
-
-import org.easymock.Capture;
-import org.easymock.EasyMock;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Unit tests for {@link NativeStressTest}.
- */
-public class NativeStressTestTest extends TestCase {
+/** Unit tests for {@link NativeStressTest}. */
+@RunWith(JUnit4.class)
+public class NativeStressTestTest {
 
     private static final String RUN_NAME = "run-name";
-    private ITestInvocationListener mMockListener;
-    private Capture<HashMap<String, Metric>> mCapturedMetricMap;
+    @Mock ITestInvocationListener mMockListener;
+    private ArgumentCaptor<HashMap<String, Metric>> mCapturedMetricMap;
     private NativeStressTest mNativeTest;
-    private ITestDevice mMockDevice;
-    private IFileEntry mMockStressFile;
+    @Mock ITestDevice mMockDevice;
+    @Mock IFileEntry mMockStressFile;
     private TestInformation mTestInfo;
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
+    /** {@inheritDoc} */
+    @Before
+    public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mNativeTest = new NativeStressTest();
-        mMockListener = EasyMock.createMock(ITestInvocationListener.class);
-        mCapturedMetricMap = new Capture<HashMap<String, Metric>>();
-        // expect this call
-        mMockListener.testRunStarted(RUN_NAME, 0);
-        mMockListener.testRunEnded(EasyMock.anyLong(), EasyMock.capture(mCapturedMetricMap));
-        mMockDevice = EasyMock.createMock(ITestDevice.class);
-        mMockStressFile = EasyMock.createNiceMock(IFileEntry.class);
-        EasyMock.expect(mMockDevice.getFileEntry((String)EasyMock.anyObject())).andReturn(
-                mMockStressFile);
-        EasyMock.expect(mMockStressFile.isDirectory()).andReturn(Boolean.FALSE);
-        EasyMock.expect(mMockStressFile.getName()).andStubReturn(RUN_NAME);
-        EasyMock.expect(mMockStressFile.getFullEscapedPath()).andStubReturn(RUN_NAME);
+
+        mCapturedMetricMap = ArgumentCaptor.forClass(HashMap.class);
+
+        when(mMockDevice.getFileEntry((String) Mockito.any())).thenReturn(mMockStressFile);
+        when(mMockStressFile.isDirectory()).thenReturn(Boolean.FALSE);
+        when(mMockStressFile.getName()).thenReturn(RUN_NAME);
+        when(mMockStressFile.getFullEscapedPath()).thenReturn(RUN_NAME);
 
         mNativeTest.setDevice(mMockDevice);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andStubReturn("serial");
-        EasyMock.expect(mMockDevice.executeShellCommand(EasyMock.contains("chmod"))).andReturn("");
+        when(mMockDevice.getSerialNumber()).thenReturn("serial");
+        when(mMockDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
         mTestInfo = TestInformation.newBuilder().build();
     }
 
-    /**
-     * Test a run where --iterations has not been specified.
-     */
+    private void verifyMocks() {
+        // expect this call
+        verify(mMockListener).testRunStarted(RUN_NAME, 0);
+        verify(mMockListener).testRunEnded(Mockito.anyLong(), mCapturedMetricMap.capture());
+    }
+
+    /** Test a run where --iterations has not been specified. */
+    @Test
     public void testRun_missingIterations() throws DeviceNotAvailableException {
         try {
             mNativeTest.run(mTestInfo, mMockListener);
@@ -82,62 +89,68 @@ public class NativeStressTestTest extends TestCase {
         }
     }
 
-    /**
-     * Test a run with default values.
-     */
+    /** Test a run with default values. */
+    @Test
     public void testRun() throws DeviceNotAvailableException {
         mNativeTest.setNumIterations(100);
-        mMockDevice.executeShellCommand(EasyMock.contains("-s 0 -e 99"), (IShellOutputReceiver)
-                EasyMock.anyObject(), EasyMock.anyLong(), (TimeUnit)EasyMock.anyObject(),
-                EasyMock.anyInt());
-        replayMocks();
+
         mNativeTest.run(mTestInfo, mMockListener);
+
+        verify(mMockDevice)
+                .executeShellCommand(
+                        Mockito.contains("-s 0 -e 99"),
+                        (IShellOutputReceiver) Mockito.any(),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
         verifyMocks();
     }
 
-    /**
-     * Test a stress test execution with two runs.
-     */
+    /** Test a stress test execution with two runs. */
+    @Test
     public void testRun_twoRuns() throws DeviceNotAvailableException {
         mNativeTest.setNumIterations(100);
         mNativeTest.setNumRuns(2);
-        mMockDevice.executeShellCommand(EasyMock.contains("-s 0 -e 99"), (IShellOutputReceiver)
-                EasyMock.anyObject(), EasyMock.anyLong(), (TimeUnit)EasyMock.anyObject(),
-                EasyMock.anyInt());
-        mMockDevice.executeShellCommand(EasyMock.contains("-s 100 -e 199"), (IShellOutputReceiver)
-                EasyMock.anyObject(), EasyMock.anyLong(), (TimeUnit)EasyMock.anyObject(),
-                EasyMock.anyInt());
 
-        replayMocks();
         mNativeTest.run(mTestInfo, mMockListener);
+
+        verify(mMockDevice)
+                .executeShellCommand(
+                        Mockito.contains("-s 0 -e 99"),
+                        (IShellOutputReceiver) Mockito.any(),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
+        verify(mMockDevice)
+                .executeShellCommand(
+                        Mockito.contains("-s 100 -e 199"),
+                        (IShellOutputReceiver) Mockito.any(),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
         verifyMocks();
     }
 
-    /**
-     * Test that stress test results are still reported even if device becomes not available
-     */
+    /** Test that stress test results are still reported even if device becomes not available */
+    @Test
     public void testRun_deviceNotAvailable() throws DeviceNotAvailableException {
         mNativeTest.setNumIterations(100);
-        mMockDevice.executeShellCommand(EasyMock.contains("-s 0 -e 99"), (IShellOutputReceiver)
-                EasyMock.anyObject(), EasyMock.anyLong(), (TimeUnit)EasyMock.anyObject(),
-                EasyMock.anyInt());
-        EasyMock.expectLastCall().andThrow(new DeviceNotAvailableException("test", "serial"));
+        doThrow(new DeviceNotAvailableException("test", "serial"))
+                .when(mMockDevice)
+                .executeShellCommand(
+                        Mockito.contains("-s 0 -e 99"),
+                        (IShellOutputReceiver) Mockito.any(),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
 
-        replayMocks();
         try {
             mNativeTest.run(mTestInfo, mMockListener);
             fail("DeviceNotAvailableException not thrown");
         } catch (DeviceNotAvailableException e) {
             // expected
         }
+
         verifyMocks();
-    }
-
-    private void replayMocks() {
-        EasyMock.replay(mMockListener, mMockDevice, mMockStressFile);
-    }
-
-    private void verifyMocks() {
-        EasyMock.verify(mMockListener, mMockDevice);
     }
 }
