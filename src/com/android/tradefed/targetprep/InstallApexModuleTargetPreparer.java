@@ -368,16 +368,6 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         } else {
             if (mTestApexInfoList.isEmpty() && getApkInstalled().isEmpty()) {
                 super.tearDown(testInfo, e);
-            } else if (getBundletoolUtil() != null) {
-                for (String apkPkgName : getApkInstalled()) {
-                    uninstallPackage(device, apkPkgName);
-                }
-                if (!mTestApexInfoList.isEmpty()) {
-                    for (ApexInfo apex : mTestApexInfoList) {
-                        uninstallPackage(device, apex.name);
-                    }
-                    device.reboot();
-                }
             } else {
                 if (mTestApexInfoList.isEmpty()) {
                     for (String apkPkgName : getApkInstalled()) {
@@ -732,6 +722,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         List<String> installCmd = new ArrayList<>();
 
         installCmd.add(TRAIN_WITH_APEX_INSTALL_OPTION);
+        installCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
         for (String arg : mSplitsInstallArgs) {
             installCmd.add(arg);
         }
