@@ -16,8 +16,6 @@
 
 package com.android.tradefed.device.metric;
 
-import static com.android.tradefed.device.metric.JavaCodeCoverageCollector.MERGE_COVERAGE_MEASUREMENTS_TEST_NAME;
-
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.fail;
@@ -87,8 +85,6 @@ public class JavaCodeCoverageCollectorTest {
     private static final long ELAPSED_TIME = 1000;
 
     private static final String DEVICE_PATH = "/some/path/on/the/device.ec";
-    private static final ByteString COVERAGE_MEASUREMENT =
-            ByteString.copyFromUtf8("Mi estas kovrado mezurado");
 
     @Rule public TemporaryFolder folder = new TemporaryFolder();
 
@@ -123,6 +119,7 @@ public class JavaCodeCoverageCollectorTest {
 
         mCodeCoverageCollector = new JavaCodeCoverageCollector();
         mCodeCoverageCollector.setConfiguration(mMockConfiguration);
+        mCodeCoverageCollector.setMergeMeasurements(false);
     }
 
     @Test
@@ -137,7 +134,7 @@ public class JavaCodeCoverageCollectorTest {
 
         // Verify testLog(..) was not called.
         verify(mFakeListener, never())
-                .testLog(anyString(), eq(LogDataType.COVERAGE), eq(COVERAGE_MEASUREMENT));
+                .testLog(anyString(), eq(LogDataType.COVERAGE), any(ByteString.class));
     }
 
     @Test
@@ -145,8 +142,9 @@ public class JavaCodeCoverageCollectorTest {
         enableJavaCoverage();
 
         // Setup mocks.
+        ByteString measurement = measurement(partiallyCovered(JavaCodeCoverageCollector.class));
         HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
-        mockCoverageFileOnDevice(DEVICE_PATH);
+        mockCoverageFileOnDevice(DEVICE_PATH, measurement);
         when(mMockDevice.isAdbRoot()).thenReturn(true);
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
 
@@ -156,8 +154,7 @@ public class JavaCodeCoverageCollectorTest {
         mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, runMetrics);
 
         // Verify testLog(..) was called with the coverage file.
-        verify(mFakeListener)
-                .testLog(anyString(), eq(LogDataType.COVERAGE), eq(COVERAGE_MEASUREMENT));
+        verify(mFakeListener).testLog(anyString(), eq(LogDataType.COVERAGE), eq(measurement));
 
         // Verify the device coverage file was deleted.
         verify(mMockDevice).deleteFile(anyString());
@@ -183,7 +180,8 @@ public class JavaCodeCoverageCollectorTest {
     public void testRunEnded_rootDisabled_enablesRootBeforePullingFiles() throws Exception {
         enableJavaCoverage();
         HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
-        mockCoverageFileOnDevice(DEVICE_PATH);
+        mockCoverageFileOnDevice(
+                DEVICE_PATH, measurement(fullyCovered(JavaCodeCoverageCollector.class)));
         when(mMockDevice.isAdbRoot()).thenReturn(false);
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
 
@@ -202,7 +200,8 @@ public class JavaCodeCoverageCollectorTest {
     public void testRunEnded_rootDisabled_noLogIfCannotEnableRoot() throws Exception {
         enableJavaCoverage();
         HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
-        mockCoverageFileOnDevice(DEVICE_PATH);
+        mockCoverageFileOnDevice(
+                DEVICE_PATH, measurement(partiallyCovered(JavaCodeCoverageCollector.class)));
         when(mMockDevice.isAdbRoot()).thenReturn(false);
         when(mMockDevice.enableAdbRoot()).thenReturn(false);
 
@@ -222,7 +221,8 @@ public class JavaCodeCoverageCollectorTest {
     public void testRunEnded_rootDisabled_disablesRootAfterPullingFiles() throws Exception {
         enableJavaCoverage();
         HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
-        mockCoverageFileOnDevice(DEVICE_PATH);
+        mockCoverageFileOnDevice(
+                DEVICE_PATH, measurement(partiallyCovered(JavaCodeCoverageCollector.class)));
         when(mMockDevice.isAdbRoot()).thenReturn(false);
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
 
@@ -263,16 +263,14 @@ public class JavaCodeCoverageCollectorTest {
         metric.put("coverageFilePath", DEVICE_PATH);
 
         // Simulate a test run.
-        doReturn("").when(mMockDevice).executeShellCommand(anyString());
-        doReturn(coverageFile1).doReturn(coverageFile2).when(mMockDevice).pullFile(DEVICE_PATH);
+        doReturn("/data/misc/trace/jacoco-1.mm.ec")
+                .when(mMockDevice)
+                .executeShellCommand(anyString());
+        doReturn(coverageFile1).doReturn(coverageFile2).when(mMockDevice).pullFile(anyString());
 
         mCodeCoverageCollector.init(mMockContext, mFakeListener);
         mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
         mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, TfMetricProtoUtil.upgradeConvert(metric));
-        mCodeCoverageCollector.testRunStarted(RUN_NAME + "2", TEST_COUNT);
-        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, TfMetricProtoUtil.upgradeConvert(metric));
-        mCodeCoverageCollector.testRunStarted(MERGE_COVERAGE_MEASUREMENTS_TEST_NAME, TEST_COUNT);
-        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, new HashMap<String, Metric>());
 
         // Capture the merged coverage measurements that were passed to the fake listener.
         ArgumentCaptor<ByteString> stream = ArgumentCaptor.forClass(ByteString.class);
@@ -309,10 +307,11 @@ public class JavaCodeCoverageCollectorTest {
         mCoverageOptionsSetter.setOptionValue("coverage-flush", "true");
 
         // Setup mocks.
-        mockCoverageFileOnDevice(DEVICE_PATH);
+        ByteString measurement = measurement(fullyCovered(JavaCodeCoverageCollector.class));
+        mockCoverageFileOnDevice(DEVICE_PATH, measurement);
 
         for (String additionalFile : coverageFileList) {
-            mockCoverageFileOnDevice(additionalFile);
+            mockCoverageFileOnDevice(additionalFile, measurement);
         }
 
         doReturn(coverageFileList).when(mMockFlusher).forceCoverageFlush();
@@ -342,15 +341,17 @@ public class JavaCodeCoverageCollectorTest {
                         "/data/misc/trace/jacoco-456.mm.ec");
         String psOutput =
                 "USER       PID   PPID  VSZ   RSS   WCHAN       PC  S NAME\n"
-                        + "bluetooth   123  1366  123    456   SyS_epoll+   0  S com.android.bluetooth\n"
-                        + "radio       890     1 7890   123   binder_io+   0  S com.android.phone\n"
-                        + "root         11  1234  567   890   binder_io+   0  S not.a.java.package\n";
+                    + "bluetooth   123  1366  123    456   SyS_epoll+   0  S"
+                    + " com.android.bluetooth\n"
+                    + "radio       890     1 7890   123   binder_io+   0  S com.android.phone\n"
+                    + "root         11  1234  567   890   binder_io+   0  S not.a.java.package\n";
 
         // Setup mocks.
-        mockCoverageFileOnDevice(DEVICE_PATH);
+        ByteString measurement = measurement(fullyCovered(JavaCodeCoverageCollector.class));
+        mockCoverageFileOnDevice(DEVICE_PATH, measurement);
 
         for (String additionalFile : coverageFileList) {
-            mockCoverageFileOnDevice(additionalFile);
+            mockCoverageFileOnDevice(additionalFile, measurement);
         }
 
         doReturn("").when(mMockDevice).executeShellCommand("pm list packages -a");
@@ -367,18 +368,19 @@ public class JavaCodeCoverageCollectorTest {
         mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, TfMetricProtoUtil.upgradeConvert(metric));
 
         // Verify the correct files were deleted and some files were not deleted.
+        verify(mMockDevice).deleteFile(DEVICE_PATH);
         verify(mMockDevice).deleteFile(coverageFileList.get(0));
         verify(mMockDevice).deleteFile(coverageFileList.get(1));
         verify(mMockDevice, never()).deleteFile(coverageFileList.get(2));
         verify(mMockDevice).deleteFile(coverageFileList.get(3));
     }
 
-    private void mockCoverageFileOnDevice(String devicePath)
+    private void mockCoverageFileOnDevice(String devicePath, ByteString measurement)
             throws IOException, DeviceNotAvailableException {
         File coverageFile = folder.newFile(new File(devicePath).getName());
 
         try (OutputStream out = new FileOutputStream(coverageFile)) {
-            COVERAGE_MEASUREMENT.writeTo(out);
+            measurement.writeTo(out);
         }
 
         doReturn(coverageFile).when(mMockDevice).pullFile(devicePath);
