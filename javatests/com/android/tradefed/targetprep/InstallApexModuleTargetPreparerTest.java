@@ -1325,6 +1325,7 @@ public class InstallApexModuleTargetPreparerTest {
 
             List<String> trainInstallCmd = new ArrayList<>();
             trainInstallCmd.add("install-multi-package");
+            trainInstallCmd.add("--enable-rollback");
             trainInstallCmd.add(mFakeApk.getAbsolutePath());
             String cmd = "";
             for (File f : fakeSplitApkApks.listFiles()) {
@@ -1534,6 +1535,7 @@ public class InstallApexModuleTargetPreparerTest {
 
             List<String> trainInstallCmd = new ArrayList<>();
             trainInstallCmd.add("install-multi-package");
+            trainInstallCmd.add("--enable-rollback");
             trainInstallCmd.add(splitApex.getAbsolutePath());
             String cmd = "";
             for (File f : fakeSplitApkApks.listFiles()) {
@@ -1554,8 +1556,8 @@ public class InstallApexModuleTargetPreparerTest {
                             1,
                             "/data/apex/active/com.android.FAKE_APEX_PACKAGE_NAME@1.apex"));
             when(mMockDevice.getActiveApexes()).thenReturn(activatedApex);
-            when(mMockDevice.uninstallPackage(SPLIT_APK_PACKAGE_NAME)).thenReturn(null);
-            when(mMockDevice.uninstallPackage(SPLIT_APEX_PACKAGE_NAME)).thenReturn(null);
+            when(mMockDevice.executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME))
+                    .thenReturn("Success");
 
             Set<String> installableModules = new HashSet<>();
             installableModules.add(APEX_PACKAGE_NAME);
@@ -1583,10 +1585,10 @@ public class InstallApexModuleTargetPreparerTest {
                             Mockito.any(IBuildInfo.class));
             verify(mMockDevice, times(3)).reboot();
             verify(mMockDevice, times(1)).executeAdbCommand(trainInstallCmd.toArray(new String[0]));
+            verify(mMockDevice, times(1))
+                    .executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME);
             verify(mMockDevice, times(3)).getActiveApexes();
-            verify(mMockDevice, times(1)).uninstallPackage(SPLIT_APK_PACKAGE_NAME);
-            verify(mMockDevice, times(1)).uninstallPackage(SPLIT_APEX_PACKAGE_NAME);
-            verify(mMockDevice).waitForDeviceAvailable();
+            verify(mMockDevice, times(2)).waitForDeviceAvailable();
         } finally {
             FileUtil.deleteFile(mFakeApexApks);
             FileUtil.deleteFile(mFakeApkApks);
@@ -1645,6 +1647,7 @@ public class InstallApexModuleTargetPreparerTest {
 
             List<String> trainInstallCmd = new ArrayList<>();
             trainInstallCmd.add("install-multi-package");
+            trainInstallCmd.add("--enable-rollback");
             trainInstallCmd.add(splitApex.getAbsolutePath());
             String cmd = "";
             for (File f : fakeSplitApkApks.listFiles()) {
@@ -1665,8 +1668,8 @@ public class InstallApexModuleTargetPreparerTest {
                             1,
                             "/data/apex/active/com.android.FAKE_APEX_PACKAGE_NAME@1.apex"));
             when(mMockDevice.getActiveApexes()).thenReturn(activatedApex);
-            when(mMockDevice.uninstallPackage(SPLIT_APK_PACKAGE_NAME)).thenReturn(null);
-            when(mMockDevice.uninstallPackage(SPLIT_APEX_PACKAGE_NAME)).thenReturn(null);
+            when(mMockDevice.executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME))
+                    .thenReturn("Success");
 
             Set<String> installableModules = new HashSet<>();
             installableModules.add(APEX_PACKAGE_NAME);
@@ -1695,9 +1698,9 @@ public class InstallApexModuleTargetPreparerTest {
             verify(mMockDevice, times(3)).reboot();
             verify(mMockDevice, times(1)).executeAdbCommand(trainInstallCmd.toArray(new String[0]));
             verify(mMockDevice, times(3)).getActiveApexes();
-            verify(mMockDevice, times(1)).uninstallPackage(SPLIT_APK_PACKAGE_NAME);
-            verify(mMockDevice, times(1)).uninstallPackage(SPLIT_APEX_PACKAGE_NAME);
-            verify(mMockDevice).waitForDeviceAvailable();
+            verify(mMockDevice, times(1))
+                    .executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME);
+            verify(mMockDevice, times(2)).waitForDeviceAvailable();
         } finally {
             FileUtil.deleteFile(mFakeApexApks);
             FileUtil.deleteFile(mFakeApkApks);
@@ -1758,6 +1761,7 @@ public class InstallApexModuleTargetPreparerTest {
 
             List<String> trainInstallCmd = new ArrayList<>();
             trainInstallCmd.add("install-multi-package");
+            trainInstallCmd.add("--enable-rollback");
             trainInstallCmd.add(splitApex.getAbsolutePath());
             String cmd = "";
             for (File f : fakeSplitApkApks.listFiles()) {
@@ -1778,8 +1782,8 @@ public class InstallApexModuleTargetPreparerTest {
                             1,
                             "/data/apex/active/com.android.FAKE_APEX_PACKAGE_NAME@1.apex"));
             when(mMockDevice.getActiveApexes()).thenReturn(activatedApex);
-            when(mMockDevice.uninstallPackage(SPLIT_APK_PACKAGE_NAME)).thenReturn(null);
-            when(mMockDevice.uninstallPackage(SPLIT_APEX_PACKAGE_NAME)).thenReturn(null);
+            when(mMockDevice.executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME))
+                    .thenReturn("Success");
 
             Set<String> installableModules = new HashSet<>();
             installableModules.add(APEX_PACKAGE_NAME);
@@ -1808,9 +1812,9 @@ public class InstallApexModuleTargetPreparerTest {
             verify(mMockDevice, times(3)).reboot();
             verify(mMockDevice, times(1)).executeAdbCommand(trainInstallCmd.toArray(new String[0]));
             verify(mMockDevice, times(3)).getActiveApexes();
-            verify(mMockDevice, times(1)).uninstallPackage(SPLIT_APK_PACKAGE_NAME);
-            verify(mMockDevice, times(1)).uninstallPackage(SPLIT_APEX_PACKAGE_NAME);
-            verify(mMockDevice).waitForDeviceAvailable();
+            verify(mMockDevice, times(1))
+                    .executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME);
+            verify(mMockDevice, times(2)).waitForDeviceAvailable();
         } finally {
             FileUtil.recursiveDelete(trainFolder);
             FileUtil.deleteFile(trainFolder);
@@ -1871,6 +1875,7 @@ public class InstallApexModuleTargetPreparerTest {
 
             List<String> trainInstallCmd = new ArrayList<>();
             trainInstallCmd.add("install-multi-package");
+            trainInstallCmd.add("--enable-rollback");
             trainInstallCmd.add(splitApex.getAbsolutePath());
             String cmd = "";
             for (File f : fakeSplitApkApks.listFiles()) {
@@ -1891,8 +1896,8 @@ public class InstallApexModuleTargetPreparerTest {
                             1,
                             "/data/apex/active/com.android.FAKE_APEX_PACKAGE_NAME@1.apex"));
             when(mMockDevice.getActiveApexes()).thenReturn(activatedApex);
-            when(mMockDevice.uninstallPackage(SPLIT_APK_PACKAGE_NAME)).thenReturn(null);
-            when(mMockDevice.uninstallPackage(SPLIT_APEX_PACKAGE_NAME)).thenReturn(null);
+            when(mMockDevice.executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME))
+                    .thenReturn("Success");
 
             Set<String> installableModules = new HashSet<>();
             installableModules.add(APEX_PACKAGE_NAME);
@@ -1921,9 +1926,9 @@ public class InstallApexModuleTargetPreparerTest {
             verify(mMockDevice, times(3)).reboot();
             verify(mMockDevice, times(1)).executeAdbCommand(trainInstallCmd.toArray(new String[0]));
             verify(mMockDevice, times(3)).getActiveApexes();
-            verify(mMockDevice, times(1)).uninstallPackage(SPLIT_APK_PACKAGE_NAME);
-            verify(mMockDevice, times(1)).uninstallPackage(SPLIT_APEX_PACKAGE_NAME);
-            verify(mMockDevice).waitForDeviceAvailable();
+            verify(mMockDevice, times(1))
+                    .executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME);
+            verify(mMockDevice, times(2)).waitForDeviceAvailable();
         } finally {
             FileUtil.deleteFile(mFakeApexApks);
             FileUtil.deleteFile(mFakeApkApks);
