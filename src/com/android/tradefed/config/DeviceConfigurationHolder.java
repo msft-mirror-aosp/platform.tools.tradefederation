@@ -132,8 +132,8 @@ public class DeviceConfigurationHolder implements IDeviceConfiguration {
         } else {
             throw new ConfigurationException(
                     String.format(
-                            "Cannot add %s class " + "to a device specific definition",
-                            config.getClass()));
+                            "Cannot add %s class type '%s' to a device specific definition",
+                            config.getClass(), type));
         }
     }
 
@@ -175,6 +175,7 @@ public class DeviceConfigurationHolder implements IDeviceConfiguration {
         List<Object> allObject = new ArrayList<Object>();
         allObject.add(mBuildProvider);
         allObject.addAll(mListTargetPreparer);
+        allObject.addAll(mListLabPreparer);
         allObject.add(mDeviceRecovery);
         allObject.add(mDeviceSelection);
         allObject.add(mTestDeviceOption);

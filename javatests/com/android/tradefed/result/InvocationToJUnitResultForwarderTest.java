@@ -17,32 +17,32 @@ package com.android.tradefed.result;
 
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 
-import junit.framework.Test;
-import junit.framework.TestCase;
 import junit.framework.TestListener;
 
-import org.easymock.EasyMock;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.util.HashMap;
 
-/**
- * Unit tests for {@link InvocationToJUnitResultForwarder}.
- */
-public class InvocationToJUnitResultForwarderTest extends TestCase {
+/** Unit tests for {@link InvocationToJUnitResultForwarder}. */
+@RunWith(JUnit4.class)
+public class InvocationToJUnitResultForwarderTest {
 
     private static final String TEST_NAME = "testName";
     private static final String CLASS_NAME = "className";
-    private TestListener mJUnitListener;
+    @Mock TestListener mJUnitListener;
     private InvocationToJUnitResultForwarder mTestForwarder;
     private TestDescription mTestIdentifier;
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-        mJUnitListener = EasyMock.createMock(TestListener.class);
+    /** {@inheritDoc} */
+    @Before
+    public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mTestForwarder = new InvocationToJUnitResultForwarder(mJUnitListener);
         mTestIdentifier = new TestDescription(CLASS_NAME, TEST_NAME);
     }
@@ -52,9 +52,9 @@ public class InvocationToJUnitResultForwarderTest extends TestCase {
      *
      * <p>Verifies that data put into TestIdentifier is forwarded in correct format
      */
+    @Test
     public void testTestEnded() {
-        mJUnitListener.endTest((Test) EasyMock.anyObject());
-        EasyMock.replay(mJUnitListener);
+
         mTestForwarder.testEnded(mTestIdentifier, new HashMap<String, Metric>());
         // TODO: check format
     }

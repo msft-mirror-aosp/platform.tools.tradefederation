@@ -46,6 +46,7 @@ public class InvocationMetricLogger {
         TEAR_DOWN_DISK_USAGE("teardown_disk_usage_bytes", false),
         // Recovery Mode
         AUTO_RECOVERY_MODE_COUNT("recovery_mode_count", true),
+        ATTEMPT_RECOVERY_LOG_COUNT("attempt_pull_recovery_log", true),
         // Represents the time we spend attempting to recover a device.
         RECOVERY_TIME("recovery_time", true),
         // Represents how often we enter the recover device routine.
