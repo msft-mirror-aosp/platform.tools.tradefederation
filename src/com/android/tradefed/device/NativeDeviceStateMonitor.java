@@ -26,6 +26,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunInterruptedException;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.TimeUtil;
 
 import com.google.common.base.Strings;
 
@@ -504,8 +505,8 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
             return true;
         }
         CLog.i(
-                "Waiting for device %s to be in %s mode; it is currently in %s mode...",
-                deviceSerial, state, getDeviceState());
+                "Waiting for device %s to be in %s mode for '%s'; it is currently in %s mode...",
+                deviceSerial, state, TimeUtil.formatElapsedTime(time), getDeviceState());
         DeviceStateListener listener = new DeviceStateListener(state);
         addDeviceStateListener(listener);
         synchronized (listener) {
