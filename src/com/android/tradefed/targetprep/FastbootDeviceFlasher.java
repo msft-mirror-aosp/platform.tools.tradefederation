@@ -239,7 +239,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
      */
     protected void flashPartition(ITestDevice device, File imgFile, String partition)
             throws DeviceNotAvailableException, TargetSetupError {
-        CLog.d("fastboot flash %s %s", partition, imgFile.getAbsolutePath());
+        CLog.d(
+                "fastboot flash %s %s [md5=%s]",
+                partition, imgFile.getAbsolutePath(), FileUtil.calculateMd5(imgFile));
         executeLongFastbootCmd(
                 device,
                 buildFastbootCommand(
