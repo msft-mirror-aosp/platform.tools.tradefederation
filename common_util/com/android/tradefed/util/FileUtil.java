@@ -1133,11 +1133,14 @@ public class FileUtil {
      *
      * @param file
      * @return md5 of the file
-     * @throws IOException
      */
-    public static String calculateMd5(File file) throws IOException {
-        FileInputStream inputSource = new FileInputStream(file);
-        return StreamUtil.calculateMd5(inputSource);
+    public static String calculateMd5(File file) {
+        try (FileInputStream inputSource = new FileInputStream(file)) {
+            return StreamUtil.calculateMd5(inputSource);
+        } catch (IOException e) {
+            CLog.e(e);
+        }
+        return "-1";
     }
 
     /**
@@ -1145,11 +1148,14 @@ public class FileUtil {
      *
      * @param file
      * @return md5 of the file
-     * @throws IOException
      */
-    public static String calculateBase64Md5(File file) throws IOException {
-        FileInputStream inputSource = new FileInputStream(file);
-        return StreamUtil.calculateBase64Md5(inputSource);
+    public static String calculateBase64Md5(File file) {
+        try (FileInputStream inputSource = new FileInputStream(file)) {
+            return StreamUtil.calculateBase64Md5(inputSource);
+        } catch (IOException e) {
+            CLog.e(e);
+        }
+        return "-1";
     }
 
     /**
