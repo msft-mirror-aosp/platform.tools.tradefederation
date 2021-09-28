@@ -16,6 +16,7 @@
 package com.android.tradefed.util;
 
 import com.android.tradefed.log.LogUtil.CLog;
+import com.google.common.base.Strings;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -48,7 +49,7 @@ public class AaptParser {
     private static final int MAX_NUM_NATIVE_CODE = 10;
 
     private static final Pattern NATIVE_CODE_PATTERN =
-            Pattern.compile("native-code: '(.*?)'" + "( '.*?')?".repeat(MAX_NUM_NATIVE_CODE - 1));
+            Pattern.compile("native-code: '(.*?)'" + Strings.repeat("( '.*?')?", MAX_NUM_NATIVE_CODE - 1));
 
     private static final Pattern REQUEST_LEGACY_STORAGE_PATTERN =
             Pattern.compile("requestLegacyExternalStorage.*=\\(.*\\)(.*)", Pattern.MULTILINE);
