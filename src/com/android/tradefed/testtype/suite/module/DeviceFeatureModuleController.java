@@ -22,11 +22,19 @@ import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /** A module controller to not run tests when it doesn't support certain feature. */
 public class DeviceFeatureModuleController extends BaseModuleController {
 
     @Option(name = "required-feature", description = "Required feature for the test to run.")
-    private String mRequiredFeature;
+    private Set<String> mRequiredFeatures = new HashSet<>();
+
+    @Option(
+            name = "forbidden-feature",
+            description = "Forbidden feature which will cause the test to be skipped.")
+    private Set<String> mForbiddenFeatures = new HashSet<>();
 
     @Override
     public RunStrategy shouldRun(IInvocationContext context) {
@@ -35,11 +43,21 @@ public class DeviceFeatureModuleController extends BaseModuleController {
                 continue;
             }
             try {
-                if (!device.hasFeature(mRequiredFeature)) {
-                    CLog.d(
-                            "Skipping module %s because the device does not have feature %s.",
-                            getModuleName(), mRequiredFeature);
-                    return RunStrategy.FULL_MODULE_BYPASS;
+                for (String feature : mRequiredFeatures) {
+                    if (!device.hasFeature(feature)) {
+                        CLog.d(
+                                "Skipping module %s because the device does not have feature %s.",
+                                getModuleName(), feature);
+                        return RunStrategy.FULL_MODULE_BYPASS;
+                    }
+                }
+                for (String feature : mForbiddenFeatures) {
+                    if (device.hasFeature(feature)) {
+                        CLog.d(
+                                "Skipping module %s because the device has forbidden feature %s.",
+                                getModuleName(), feature);
+                        return RunStrategy.FULL_MODULE_BYPASS;
+                    }
                 }
             } catch (DeviceNotAvailableException e) {
                 CLog.e("Couldn't get device features on %s", device.getSerialNumber());
