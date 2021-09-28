@@ -205,7 +205,6 @@ droiddoc_host {
     libs: [
         "loganalysis",
         "tradefed",
-        "kotlin-annotations",
     ],
     custom_template: "droiddoc-templates-sdk",
     hdf: [
