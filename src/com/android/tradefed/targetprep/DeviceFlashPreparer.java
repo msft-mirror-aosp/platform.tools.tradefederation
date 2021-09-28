@@ -198,6 +198,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                     "ramdisk flashing enabled but no ramdisk file was found in build info",
                     InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
+        // For debugging: log the original build from the device
+        buildInfo.addBuildAttribute(
+                "original_build_fingerprint", device.getProperty("ro.product.build.fingerprint"));
+
         // don't allow interruptions during flashing operations.
         getRunUtil().allowInterrupt(false);
         long queueTime = -1;
