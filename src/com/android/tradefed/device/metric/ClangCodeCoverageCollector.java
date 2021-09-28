@@ -119,6 +119,9 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
     @VisibleForTesting
     public void setRunUtil(IRunUtil runUtil) {
         mRunUtil = runUtil;
+        if (mFlusher != null) {
+            mFlusher.setRunUtil(runUtil);
+        }
     }
 
     @Override
@@ -241,6 +244,7 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
                     new NativeCodeCoverageFlusher(
                             getDevices().get(0),
                             mConfiguration.getCoverageOptions().getCoverageProcesses());
+            mFlusher.setRunUtil(mRunUtil);
         }
         return mFlusher;
     }

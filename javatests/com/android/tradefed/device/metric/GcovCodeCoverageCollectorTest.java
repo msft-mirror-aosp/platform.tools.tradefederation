@@ -36,6 +36,7 @@ import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.IRunUtil;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -87,6 +88,7 @@ public class GcovCodeCoverageCollectorTest {
     @Mock IConfiguration mMockConfiguration;
     @Mock IInvocationContext mMockContext;
     @Mock ITestDevice mMockDevice;
+    @Mock IRunUtil mMockRunUtil;
 
     LogFileReader mFakeListener = new LogFileReader();
 
@@ -117,6 +119,7 @@ public class GcovCodeCoverageCollectorTest {
 
         mCodeCoverageListener = new GcovCodeCoverageCollector();
         mCodeCoverageListener.setConfiguration(mMockConfiguration);
+        mCodeCoverageListener.setRunUtil(mMockRunUtil);
     }
 
     @Test
