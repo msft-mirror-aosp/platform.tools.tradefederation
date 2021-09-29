@@ -357,7 +357,7 @@ public class RemoteAndroidVirtualDeviceTest {
         verify(mMockStateMonitor).setIDevice(Mockito.any());
         verify(mMockIDevice)
                 .executeShellCommand(
-                        Mockito.eq("logcat -v threadtime -d"), Mockito.any(),
+                        Mockito.eq("logcat -v threadtime,uid -d"), Mockito.any(),
                         Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS));
         verify(mTestLogger)
                 .testLog(
@@ -463,7 +463,7 @@ public class RemoteAndroidVirtualDeviceTest {
 
         verify(mMockIDevice)
                 .executeShellCommand(
-                        Mockito.eq("logcat -v threadtime -d"), Mockito.any(),
+                        Mockito.eq("logcat -v threadtime,uid -d"), Mockito.any(),
                         Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS));
         verify(mMockStateMonitor).setIDevice(Mockito.any());
         verify(mTestLogger)
@@ -561,7 +561,7 @@ public class RemoteAndroidVirtualDeviceTest {
             verify(mMockStateMonitor, times(2)).setIDevice(Mockito.any());
             verify(mMockIDevice, times(2))
                     .executeShellCommand(
-                            Mockito.eq("logcat -v threadtime -d"), Mockito.any(),
+                            Mockito.eq("logcat -v threadtime,uid -d"), Mockito.any(),
                             Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS));
             verify(mTestLogger, times(2))
                     .testLog(
@@ -652,7 +652,7 @@ public class RemoteAndroidVirtualDeviceTest {
             verify(mMockStateMonitor).setIDevice(Mockito.any());
             verify(mMockIDevice)
                     .executeShellCommand(
-                            Mockito.eq("logcat -v threadtime -d"), Mockito.any(),
+                            Mockito.eq("logcat -v threadtime,uid -d"), Mockito.any(),
                             Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS));
             verify(mTestLogger)
                     .testLog(
@@ -760,7 +760,7 @@ public class RemoteAndroidVirtualDeviceTest {
                             Mockito.any());
             verify(mMockIDevice)
                     .executeShellCommand(
-                            Mockito.eq("logcat -v threadtime -d"), Mockito.any(),
+                            Mockito.eq("logcat -v threadtime,uid -d"), Mockito.any(),
                             Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS));
             verify(mTestLogger)
                     .testLog(

@@ -205,20 +205,24 @@ public class GTestTest {
     /** Test the run method when module name is specified */
     @Test
     public void testRun_moduleName() throws DeviceNotAvailableException {
+        final String nativeTestPath = GTest.DEFAULT_NATIVETEST_PATH;
         final String module = "test1";
-        final String modulePath =
-                String.format(
-                        "%s%s%s",
-                        GTest.DEFAULT_NATIVETEST_PATH, FileListingService.FILE_SEPARATOR, module);
-        MockitoFileUtil.setMockDirContents(mMockITestDevice, modulePath, new String[] {});
+        final String notModule = "not_a_test";
+        final String modulePath = String.format("%s/%s", nativeTestPath, module);
+        final String notModulePath = String.format("%s/%s", nativeTestPath, notModule);
+
+        MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, module, "not_a_test");
 
         mGTest.setModuleName(module);
 
         when(mMockITestDevice.doesFileExist(modulePath)).thenReturn(true);
         when(mMockITestDevice.isDirectory(modulePath)).thenReturn(false);
+        when(mMockITestDevice.doesFileExist(notModulePath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(notModulePath)).thenReturn(false);
 
         // report the file as executable
         when(mMockITestDevice.isExecutable(modulePath)).thenReturn(true);
+        when(mMockITestDevice.isExecutable(notModulePath)).thenReturn(true);
 
         mGTest.run(mTestInfo, mMockInvocationListener);
 
@@ -407,14 +411,14 @@ public class GTestTest {
         when(mockDevice.isExecutable("/test_file")).thenReturn(true);
 
         mGTest.setDevice(mockDevice);
-        assertFalse(mGTest.shouldSkipFile("/test_file"));
+        assertTrue(mGTest.shouldRunFile("/test_file"));
     }
 
     /** File exclusion regex filter should skip invalid filepath. */
     @Test
     public void testFileExclusionRegexFilter_invalidInputString() throws Exception {
-        assertTrue(mGTest.shouldSkipFile(null));
-        assertTrue(mGTest.shouldSkipFile(""));
+        assertFalse(mGTest.shouldRunFile(null));
+        assertFalse(mGTest.shouldRunFile(""));
     }
 
     /** File exclusion regex filter should skip matched filepaths. */
@@ -430,11 +434,11 @@ public class GTestTest {
         mGTest.setDevice(mockDevice);
         // Skip files ending in .not
         mGTest.addFileExclusionFilterRegex(".*\\.not");
-        assertFalse(mGTest.shouldSkipFile("/some/path/file/run_me"));
-        assertFalse(mGTest.shouldSkipFile("/some/path/file/run_me2"));
-        assertTrue(mGTest.shouldSkipFile("/some/path/file/run_me.not"));
+        assertTrue(mGTest.shouldRunFile("/some/path/file/run_me"));
+        assertTrue(mGTest.shouldRunFile("/some/path/file/run_me2"));
+        assertFalse(mGTest.shouldRunFile("/some/path/file/run_me.not"));
         // Ensure that the default .so filter is present.
-        assertTrue(mGTest.shouldSkipFile("/some/path/file/run_me.so"));
+        assertFalse(mGTest.shouldRunFile("/some/path/file/run_me.so"));
     }
 
     /** File exclusion regex filter for multi filters. */
@@ -451,9 +455,9 @@ public class GTestTest {
         mGTest.addFileExclusionFilterRegex(".*\\.not");
         // Also skip files ending in .not2
         mGTest.addFileExclusionFilterRegex(".*\\.not2");
-        assertFalse(mGTest.shouldSkipFile("/some/path/file/run_me"));
-        assertTrue(mGTest.shouldSkipFile("/some/path/file/run_me.not"));
-        assertTrue(mGTest.shouldSkipFile("/some/path/file/run_me.not2"));
+        assertTrue(mGTest.shouldRunFile("/some/path/file/run_me"));
+        assertFalse(mGTest.shouldRunFile("/some/path/file/run_me.not"));
+        assertFalse(mGTest.shouldRunFile("/some/path/file/run_me.not2"));
     }
 
     /** Test the run method for a couple tests */
