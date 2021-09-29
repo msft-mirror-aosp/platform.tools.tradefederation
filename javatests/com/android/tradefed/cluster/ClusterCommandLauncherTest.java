@@ -49,7 +49,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/** Unit tests for {@link ClusterCommandLauncherTest}. */
+/** Unit tests for {@link ClusterCommandLauncher}. */
 @RunWith(JUnit4.class)
 public class ClusterCommandLauncherTest {
 
