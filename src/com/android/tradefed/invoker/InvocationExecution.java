@@ -1089,7 +1089,7 @@ public class InvocationExecution implements IInvocationExecution {
             return;
         }
         ITestDevice device = info.getDevice();
-        if (device instanceof StubDevice) {
+        if (device.getIDevice() instanceof StubDevice) {
             return;
         }
         CommandResult kernelInfoResult = device.executeShellV2Command("uname -a");
