@@ -33,6 +33,9 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.RunUtil;
 
+import difflib.DiffUtils;
+import difflib.Patch;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -51,9 +54,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-
-import difflib.DiffUtils;
-import difflib.Patch;
 
 /** A test runner to run ART run-tests. */
 public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceiver {
@@ -474,8 +474,8 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
      */
     protected Optional<String> runChecker(String[] checkerCommandLine) {
         CLog.d("About to run Checker command: %s", String.join(" ", checkerCommandLine));
-        CommandResult result = RunUtil.getDefault().runTimedCmd(CHECKER_TIMEOUT_MS,
-                checkerCommandLine);
+        CommandResult result =
+                RunUtil.getDefault().runTimedCmd(CHECKER_TIMEOUT_MS, checkerCommandLine);
         if (result.getStatus() != CommandStatus.SUCCESS) {
             String errorMessage;
             if (result.getStatus() == CommandStatus.TIMED_OUT) {
@@ -501,9 +501,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         return Optional.empty();
     }
 
-    /**
-     * Extract src directory from given jar file to given directory
-     */
+    /** Extract src directory from given jar file to given directory */
     protected void extractSourcesFromJar(File runTestDir, File jar) throws IOException {
         try (ZipFile archive = new ZipFile(jar)) {
             File srcFile = new File(runTestDir, "src");
@@ -562,14 +560,25 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             String expected, String actual, String expectedFileName, String actualFileName) {
         List<String> expectedLines = Arrays.asList(expected.split("\\r?\\n"));
         List<String> actualLines = Arrays.asList(actual.split("\\r?\\n"));
-        Patch<String> diff = DiffUtils.diff(expectedLines, actualLines);
-        List<String> unifiedDiff =
-                DiffUtils.generateUnifiedDiff(
-                        expectedFileName, actualFileName, expectedLines, diff, 3);
-        StringBuilder diffOutput = new StringBuilder();
-        for (String delta : unifiedDiff) {
-            diffOutput.append(delta).append('\n');
+
+        // This try block is necessary to be compatible with a more recent
+        // version of diffutil that declares a checked exception on the `diff`
+        // method.  This transforms any exceptions in this block into
+        // runtime exceptions which as there are no checked exceptions in here
+        // at present, doesn't actually change anything.
+        // TODO: properly handle DiffException when we can do so.
+        try {
+            Patch<String> diff = DiffUtils.diff(expectedLines, actualLines);
+            List<String> unifiedDiff =
+                    DiffUtils.generateUnifiedDiff(
+                            expectedFileName, actualFileName, expectedLines, diff, 3);
+            StringBuilder diffOutput = new StringBuilder();
+            for (String delta : unifiedDiff) {
+                diffOutput.append(delta).append('\n');
+            }
+            return diffOutput.toString();
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
         }
-        return diffOutput.toString();
     }
 }

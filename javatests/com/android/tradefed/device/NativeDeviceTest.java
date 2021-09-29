@@ -2998,7 +2998,8 @@ public class NativeDeviceTest {
 
         verify(mMockIDevice)
                 .executeShellCommand(
-                        Mockito.eq(String.format("logcat -v threadtime -t '%s'", dateFormatted)),
+                        Mockito.eq(
+                                String.format("logcat -v threadtime,uid -t '%s'", dateFormatted)),
                         Mockito.any());
     }
 
