@@ -25,9 +25,11 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
@@ -177,7 +179,7 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
                 return;
             }
 
-            CLog.i("Received %n Clang code coverage measurements.", rawProfileFiles.size());
+            CLog.i("Received %d Clang code coverage measurements.", rawProfileFiles.size());
 
             // Get the llvm-profdata tool from the build. This tool must match the same one used to
             // compile the build, otherwise this action will fail.
@@ -211,7 +213,15 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
 
             CommandResult result = mRunUtil.runTimedCmd(0, command.toArray(new String[0]));
             if (result.getStatus() != CommandStatus.SUCCESS) {
-                throw new IOException("Failed to merge Clang profile data:\n" + result.toString());
+                // Retry with -failure-mode=all to still be able to report some coverage.
+                command.add("-failure-mode=all");
+                result = mRunUtil.runTimedCmd(0, command.toArray(new String[0]));
+
+                if (result.getStatus() != CommandStatus.SUCCESS) {
+                    throw new HarnessRuntimeException(
+                            "Failed to merge Clang profile data:\n" + result.toString(),
+                            InfraErrorIdentifier.CODE_COVERAGE_ERROR);
+                }
             }
 
             try (FileInputStreamSource source =
