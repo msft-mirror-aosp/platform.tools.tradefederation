@@ -322,7 +322,7 @@ public class ClusterCommandLauncher
         final List<String> cmdArgs = new ArrayList<>();
         final String javaHome = getEnvVar("JAVA_HOME", System.getProperty("java.home"));
         final String javaPath = String.format("%s/bin/java", javaHome);
-        cmdArgs.add(javaPath);
+        cmdArgs.add(new File(javaPath).getAbsolutePath());
         cmdArgs.add("-cp");
         cmdArgs.add(classpath);
         cmdArgs.addAll(mJvmOptions);
