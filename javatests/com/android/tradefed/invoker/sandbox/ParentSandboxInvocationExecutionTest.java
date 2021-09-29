@@ -39,7 +39,6 @@ import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.ITestInvocationListener;
-import com.android.tradefed.sandbox.SandboxOptions;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -63,8 +62,6 @@ public class ParentSandboxInvocationExecutionTest {
     private TestInformation mTestInfo;
     private IInvocationContext mContext;
     private IConfigurationFactory mMockFactory;
-    private SandboxOptions mOptions;
-    private ITargetPreparer mMockPreparer;
     private ITargetPreparer mMockLabPreparer;
     private ITestDevice mMockDevice;
     private ITestLogger mMockLogger;
@@ -73,7 +70,6 @@ public class ParentSandboxInvocationExecutionTest {
     @Before
     public void setUp() {
         mMockFactory = Mockito.mock(IConfigurationFactory.class);
-        mMockPreparer = Mockito.mock(ITargetPreparer.class);
         mMockDevice = Mockito.mock(ITestDevice.class);
         mMockLogger = Mockito.mock(ITestLogger.class);
         mMockRunUtil = Mockito.mock(IRunUtil.class);
@@ -115,7 +111,6 @@ public class ParentSandboxInvocationExecutionTest {
         mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
         mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
         mConfig = new Configuration("test", "test");
-        mOptions = new SandboxOptions();
     }
 
     @Test
@@ -125,7 +120,7 @@ public class ParentSandboxInvocationExecutionTest {
         mParentSandbox.doCleanUp(mContext, mConfig, null);
 
         verify(mMockFactory, times(0)).createConfigurationFromArgs(Mockito.any());
-        verify(mMockDevice, times(0)).getIDevice();
+        verify(mMockDevice, times(1)).getIDevice();
     }
 
     /**
@@ -208,6 +203,6 @@ public class ParentSandboxInvocationExecutionTest {
 
         verify(mMockLabPreparer, times(1)).setUp(Mockito.any());
         verify(mMockLabPreparer, times(1)).tearDown(Mockito.any(), Mockito.any());
-        verify(mMockDevice, times(0)).getIDevice();
+        verify(mMockDevice, times(1)).getIDevice();
     }
 }
