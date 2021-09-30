@@ -174,11 +174,10 @@ public class GTest extends GTestBase implements IDeviceTest {
                 doRunAllTestsInSubdirectory(root + "/" + child, testDevice, listener);
             }
         } else {
-            // assume every file is a valid gtest binary.
-            IShellOutputReceiver resultParser = createResultParser(getFileName(root), listener);
-            if (shouldSkipFile(root)) {
+            if (!shouldRunFile(root)) {
                 return;
             }
+            IShellOutputReceiver resultParser = createResultParser(getFileName(root), listener);
             String flags = getAllGTestFlags(root);
             CLog.i("Running gtest %s %s on %s", root, flags, testDevice.getSerialNumber());
             if (isEnableXmlOutput()) {
@@ -223,30 +222,38 @@ public class GTest extends GTestBase implements IDeviceTest {
     }
 
     /**
-     * Helper method to determine if we should skip the execution of a given file.
+     * Helper method to determine if we should execute a given file.
      *
      * @param fullPath the full path of the file in question
-     * @return true if we should skip the said file.
+     * @return true if we should execute the said file.
      */
-    protected boolean shouldSkipFile(String fullPath) throws DeviceNotAvailableException {
+    protected boolean shouldRunFile(String fullPath) throws DeviceNotAvailableException {
         if (fullPath == null || fullPath.isEmpty()) {
-            return true;
-        }
-        // skip any file that's not executable
-        if (!mDevice.isExecutable(fullPath)) {
-            return true;
-        }
-        List<String> fileExclusionFilterRegex = getFileExclusionFilterRegex();
-        if (fileExclusionFilterRegex == null || fileExclusionFilterRegex.isEmpty()) {
             return false;
         }
+
+        // look for files that start with the module name if it is set
+        String moduleName = getTestModule();
+        String fileName = getFileName(fullPath);
+        if (moduleName != null && !fileName.startsWith(moduleName)) {
+            return false;
+        }
+
+        // skip any file that's not executable
+        if (!mDevice.isExecutable(fullPath)) {
+            return false;
+        }
+
+        // filter out files excluded by the exclusion regex, for example .so files
+        List<String> fileExclusionFilterRegex = getFileExclusionFilterRegex();
         for (String regex : fileExclusionFilterRegex) {
             if (fullPath.matches(regex)) {
                 CLog.i("File %s matches exclusion file regex %s, skipping", fullPath, regex);
-                return true;
+                return false;
             }
         }
-        return false;
+
+        return true;
     }
 
     /**

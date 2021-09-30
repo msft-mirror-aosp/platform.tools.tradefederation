@@ -1355,6 +1355,8 @@ public class TestInvocation implements ITestInvocation {
             if (device.getDeviceState() != TestDeviceState.RECOVERY) {
                 continue;
             }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.ATTEMPT_RECOVERY_LOG_COUNT, 1);
             try {
                 // We need root to access the recovery logs so attempt to set it
                 device.enableAdbRoot();
@@ -1365,7 +1367,7 @@ public class TestInvocation implements ITestInvocation {
                 try (FileInputStreamSource fis = new FileInputStreamSource(recovery_log)) {
                     listener.testLog(
                             String.format("recovery_log_%s.txt", device.getSerialNumber()),
-                            LogDataType.TEXT,
+                            LogDataType.RECOVERY_MODE_LOG,
                             fis);
                 }
             } catch (DeviceNotAvailableException e) {
