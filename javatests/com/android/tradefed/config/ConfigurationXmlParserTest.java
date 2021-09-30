@@ -203,9 +203,9 @@ public class ConfigurationXmlParserTest {
                         Mockito.eq(configDef),
                         Mockito.eq("foo"),
                         Mockito.eq(includedName),
-                        Mockito.anyObject(),
-                        Mockito.anyObject(),
-                        Mockito.anyObject());
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any());
 
         final String config = "<include name=\"includeme\" />";
         xmlParser.parse(configDef, "foo", getStringAsStream(config), null);
