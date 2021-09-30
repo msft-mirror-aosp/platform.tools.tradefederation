@@ -299,11 +299,13 @@ public abstract class ProtoResultReporter
         debugBuilder.setErrorMessage(errorMessage);
         if (TestStatus.UNKNOWN.equals(current.getStatus())) {
             current.setDebugInfo(debugBuilder.build());
+            current.setStatus(TestStatus.FAIL);
         } else {
             // We are in a test case and we need the run parent.
             TestRecord.Builder test = mLatestChild.pop();
             TestRecord.Builder run = mLatestChild.peek();
             run.setDebugInfo(debugBuilder.build());
+            run.setStatus(TestStatus.FAIL);
             // Re-add the test
             mLatestChild.add(test);
         }
@@ -337,11 +339,13 @@ public abstract class ProtoResultReporter
 
         if (TestStatus.UNKNOWN.equals(current.getStatus())) {
             current.setDebugInfo(debugBuilder.build());
+            current.setStatus(TestStatus.FAIL);
         } else {
             // We are in a test case and we need the run parent.
             TestRecord.Builder test = mLatestChild.pop();
             TestRecord.Builder run = mLatestChild.peek();
             run.setDebugInfo(debugBuilder.build());
+            run.setStatus(TestStatus.FAIL);
             // Re-add the test
             mLatestChild.add(test);
         }
