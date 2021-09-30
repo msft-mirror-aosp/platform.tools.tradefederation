@@ -3188,7 +3188,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 "Rebooting device %s in state %s into %s",
                 getSerialNumber(), getDeviceState(), mode);
         if (isStateBootloaderOrFastbootd()) {
-            CLog.i("device %s already in fastboot. Rebooting anyway", getSerialNumber());
+            CLog.i(
+                    "device %s already in %s. Rebooting anyway",
+                    getSerialNumber(), getDeviceState());
             executeFastbootCommand(String.format("reboot-%s", mode));
         } else {
             CLog.i("Booting device %s into %s", getSerialNumber(), mode);
