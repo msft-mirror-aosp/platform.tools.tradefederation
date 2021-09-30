@@ -359,6 +359,10 @@ public abstract class ProtoResultReporter
         runBuilder.putAllMetrics(runMetrics);
         TestRecord.Builder parentBuilder = mLatestChild.peek();
 
+        if (!runBuilder.hasDebugInfo()) {
+            runBuilder.setStatus(TestStatus.PASS);
+        }
+
         // Finalize the run and track it in the child
         TestRecord runRecord = runBuilder.build();
         parentBuilder.addChildren(createChildReference(runRecord));
