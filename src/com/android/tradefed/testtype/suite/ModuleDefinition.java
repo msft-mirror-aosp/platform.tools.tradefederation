@@ -58,6 +58,7 @@ import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
@@ -991,6 +992,18 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             if (device.getIDevice() instanceof StubDevice) {
                 continue;
             }
+            // First check device is still online
+            try {
+                device.waitForDeviceAvailable();
+            } catch (DeviceNotAvailableException e) {
+                // Wrap exception for better message
+                throw new DeviceNotAvailableException(
+                        String.format("Device went offline after running module '%s'", mId),
+                        e,
+                        e.getSerial(),
+                        DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+            }
+            // Second check device didn't crash
             long deviceDate = device.getDeviceDate();
             if (deviceDate == 0L) {
                 continue;
@@ -1001,7 +1014,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 CLog.e("Detected a soft-restart after module %s", mId);
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.SOFT_RESTART_AFTER_MODULE, 1);
-                device.waitForDeviceAvailable();
                 // TODO: Enable actually failing module for reporting
                 /*throw new HarnessRuntimeException(
                 String.format("Device '%s' crashed after running %s.", device.getSerialNumber(), mId),
