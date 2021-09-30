@@ -879,18 +879,17 @@ public class BasePostProcessorTest {
         verify(mMockListener, times(3))
                 .testLog(
                         Mockito.startsWith(TestablePostProcessor.DATA_NAME_PREFIX),
-                        Mockito.anyObject(),
-                        Mockito.anyObject());
+                        Mockito.any(),
+                        Mockito.any());
         verify(mMockListener, times(3))
                 .logAssociation(
-                        Mockito.startsWith(TestablePostProcessor.DATA_NAME_PREFIX),
-                        Mockito.anyObject());
+                        Mockito.startsWith(TestablePostProcessor.DATA_NAME_PREFIX), Mockito.any());
         verify(mMockListener, times(3))
                 .testLogSaved(
                         Mockito.startsWith(TestablePostProcessor.DATA_NAME_PREFIX),
-                        Mockito.anyObject(),
-                        Mockito.anyObject(),
-                        Mockito.anyObject());
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any());
     }
 
     @Test
@@ -906,18 +905,17 @@ public class BasePostProcessorTest {
         verify(mMockListener, times(3))
                 .testLog(
                         Mockito.startsWith(TestablePostProcessor.DATA_NAME_PREFIX),
-                        Mockito.anyObject(),
-                        Mockito.anyObject());
+                        Mockito.any(),
+                        Mockito.any());
         verify(mMockListener, times(0))
                 .logAssociation(
-                        Mockito.startsWith(TestablePostProcessor.DATA_NAME_PREFIX),
-                        Mockito.anyObject());
+                        Mockito.startsWith(TestablePostProcessor.DATA_NAME_PREFIX), Mockito.any());
         verify(mMockListener, times(0))
                 .testLogSaved(
                         Mockito.startsWith(TestablePostProcessor.DATA_NAME_PREFIX),
-                        Mockito.anyObject(),
-                        Mockito.anyObject(),
-                        Mockito.anyObject());
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any());
     }
 
     @Test
@@ -940,18 +938,18 @@ public class BasePostProcessorTest {
         verify(mMockListener, times(2))
                 .testLog(
                         Mockito.startsWith(FileLoggingMetricCollector.DATA_NAME_PREFIX),
-                        Mockito.anyObject(),
-                        Mockito.anyObject());
+                        Mockito.any(),
+                        Mockito.any());
         verify(mMockListener, times(2))
                 .logAssociation(
                         Mockito.startsWith(FileLoggingMetricCollector.DATA_NAME_PREFIX),
-                        Mockito.anyObject());
+                        Mockito.any());
         verify(mMockListener, times(2))
                 .testLogSaved(
                         Mockito.startsWith(FileLoggingMetricCollector.DATA_NAME_PREFIX),
-                        Mockito.anyObject(),
-                        Mockito.anyObject(),
-                        Mockito.anyObject());
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any());
     }
 
     private void expectAnyFiles(ILogSaver mockSaver) throws IOException {
