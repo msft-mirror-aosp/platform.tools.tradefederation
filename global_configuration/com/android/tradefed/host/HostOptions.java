@@ -67,7 +67,7 @@ public class HostOptions implements IHostOptions {
     @Option(
             name = "enable-fastbootd-mode",
             description = "Feature flag to enable the support for fastbootd.")
-    private boolean mEnableFastbootdMode = false;
+    private boolean mEnableFastbootdMode = true;
 
     @Option(name = "download-cache-dir", description = "the directory for caching downloaded "
             + "flashing files. Should be on the same filesystem as java.io.tmpdir.  Consider "
