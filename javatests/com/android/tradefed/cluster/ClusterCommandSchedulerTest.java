@@ -55,18 +55,14 @@ import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ConsoleResultReporter;
-import com.android.tradefed.result.FileInputStreamSource;
-import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestSummary;
 import com.android.tradefed.targetprep.ITargetPreparer;
-import com.android.tradefed.testtype.DeviceJUnit4ClassRunner.TestLogData;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRestApiHelper;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
-import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
 import com.android.tradefed.util.keystore.StubKeyStoreClient;
 
@@ -85,7 +81,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -164,8 +159,6 @@ public class ClusterCommandSchedulerTest {
             return eventMatches(event, ClusterCommandEvent.Type.InvocationCompleted);
         }
     }
-
-    @Rule public TestLogData mTestLog = new TestLogData();
 
     @Mock IDeviceManager mMockDeviceManager;
     @Mock IHostOptions mMockHostOptions;
@@ -1069,10 +1062,6 @@ public class ClusterCommandSchedulerTest {
             assertNotNull(device);
         } finally {
             scheduler.shutdown();
-            File zipLog = ZipUtil.createZip(tmpLogDir);
-            try (FileInputStreamSource source = new FileInputStreamSource(zipLog, true)) {
-                mTestLog.addTestLog("testExecCommands_nullBuild", LogDataType.ZIP, source);
-            }
             FileUtil.recursiveDelete(tmpLogDir);
         }
     }
