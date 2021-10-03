@@ -1367,7 +1367,7 @@ public class TestInvocation implements ITestInvocation {
                 try (FileInputStreamSource fis = new FileInputStreamSource(recovery_log)) {
                     listener.testLog(
                             String.format("recovery_log_%s.txt", device.getSerialNumber()),
-                            LogDataType.TEXT,
+                            LogDataType.RECOVERY_MODE_LOG,
                             fis);
                 }
             } catch (DeviceNotAvailableException e) {

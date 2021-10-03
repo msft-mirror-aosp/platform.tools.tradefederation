@@ -194,6 +194,8 @@ public class BaseRetryDecision implements IRetryDecision, IConfigurationReceiver
                 // Return directly if we are not considering retry at all.
                 return false;
             case ITERATIONS:
+                // Still support isolating the iterations if that's configured
+                recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
                 // For iterations, retry directly, we have nothing to setup
                 return true;
             case RERUN_UNTIL_FAILURE:

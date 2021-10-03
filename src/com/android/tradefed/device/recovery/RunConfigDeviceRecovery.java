@@ -100,6 +100,7 @@ public class RunConfigDeviceRecovery implements IMultiDeviceRecovery {
                 CLog.e("Fail to force allocate '%s'", serial);
                 continue;
             }
+            CLog.d("Triggering recovery invocation on '%s' with '%s'", serial, argList);
             try {
                 getCommandScheduler()
                         .execCommand(
