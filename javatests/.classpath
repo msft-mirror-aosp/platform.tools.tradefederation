@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
-	<classpathentry excluding="**/Android.bp|OnePassingOneFailingTest/|easymock/|mockito/|objenesis/|res/|test_jar/" kind="src" path=""/>
+	<classpathentry excluding="**/Android.bp|OnePassingOneFailingTest/|mockito/|objenesis/|res/|test_jar/" kind="src" path=""/>
 	<classpathentry kind="src" path="OnePassingOneFailingTest"/>
 	<classpathentry kind="src" path="test_jar"/>
 	<classpathentry kind="src" path="res"/>
-	<classpathentry kind="src" path="easymock"/>
 	<classpathentry kind="src" path="mockito"/>
 	<classpathentry kind="src" path="objenesis"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/ddmlib"/>
@@ -32,7 +31,6 @@
 	<classpathentry kind="var" path="TRADEFED_ROOT/prebuilts/tools/common/google-api-services-storage/1.24.1/google-api-services-storage-v1-rev155-1.24.1.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/perfetto/perfetto_metrics-full/linux_glibc_common/combined/perfetto_metrics-full.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/jline/jline-1.0/linux_glibc_common/combined/jline-1.0.jar"/>
-	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/easymock/easymock/linux_glibc_common/javac/easymock.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/prebuilts/tools/common/m2/repository/org/mockito/mockito-all/1.9.5/mockito-all-1.9.5.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/grpc-grpc-java/grpc-java/linux_glibc_common/combined/grpc-java.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/tools/tradefederation/core/tradefed-lib-core/linux_glibc_common/javac/tradefed-lib-core.jar"/>

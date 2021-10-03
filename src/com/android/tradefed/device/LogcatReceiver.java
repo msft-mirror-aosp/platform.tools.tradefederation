@@ -27,7 +27,7 @@ public class LogcatReceiver implements ILogcatReceiver {
     private BackgroundDeviceAction mDeviceAction;
     private LargeOutputReceiver mReceiver;
 
-    static final String LOGCAT_CMD = "logcat -v threadtime";
+    static final String LOGCAT_CMD = "logcat -v threadtime,uid";
     private static final String LOGCAT_DESC = "logcat";
 
     /**

@@ -1783,7 +1783,8 @@ public class NativeDeviceTest {
                 };
         String into = "fastboot";
 
-        when(mMockStateMonitor.waitForDeviceBootloader(Mockito.anyLong())).thenReturn(true);
+        when(mMockStateMonitor.waitForDeviceFastbootd(Mockito.any(), Mockito.anyLong()))
+                .thenReturn(true);
 
         testDevice.rebootIntoFastbootd();
         verify(mMockIDevice, times(1)).reboot(into);
@@ -1818,7 +1819,8 @@ public class NativeDeviceTest {
                     }
                 };
 
-        when(mMockStateMonitor.waitForDeviceBootloader(Mockito.anyLong())).thenReturn(true);
+        when(mMockStateMonitor.waitForDeviceFastbootd(Mockito.any(), Mockito.anyLong()))
+                .thenReturn(true);
 
         testDevice.rebootIntoFastbootd();
         assertTrue(testDevice.wasCalled);
@@ -2998,7 +3000,8 @@ public class NativeDeviceTest {
 
         verify(mMockIDevice)
                 .executeShellCommand(
-                        Mockito.eq(String.format("logcat -v threadtime -t '%s'", dateFormatted)),
+                        Mockito.eq(
+                                String.format("logcat -v threadtime,uid -t '%s'", dateFormatted)),
                         Mockito.any());
     }
 
