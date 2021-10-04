@@ -30,9 +30,13 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.AdbRootElevator;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.NativeCodeCoverageFlusher;
+import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.ZipUtil;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
 import java.io.IOException;
@@ -64,6 +68,7 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
     private NativeCodeCoverageFlusher mFlusher;
     private boolean mCollectCoverageOnTestEnd = true;
     private IConfiguration mConfiguration;
+    private IRunUtil mRunUtil = RunUtil.getDefault();
 
     @Override
     public ITestInvocationListener init(
@@ -80,6 +85,14 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
         }
 
         return this;
+    }
+
+    @VisibleForTesting
+    void setRunUtil(IRunUtil runUtil) {
+        mRunUtil = runUtil;
+        if (mFlusher != null) {
+            mFlusher.setRunUtil(runUtil);
+        }
     }
 
     @Override
@@ -99,6 +112,7 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
                     new NativeCodeCoverageFlusher(
                             getDevices().get(0),
                             mConfiguration.getCoverageOptions().getCoverageProcesses());
+            mFlusher.setRunUtil(mRunUtil);
         }
         return mFlusher;
     }
