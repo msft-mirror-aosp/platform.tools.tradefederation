@@ -428,8 +428,6 @@ public class ITestSuiteTest {
     /** Test for {@link ITestSuite#run(TestInformation, ITestInvocationListener)}. */
     @Test
     public void testRun() throws Exception {
-        OptionSetter setter = new OptionSetter(mTestSuite);
-        setter.setOptionValue("reboot-before-test", "true");
         mContext.addAllocatedDevice(ConfigurationDef.DEFAULT_DEVICE_NAME, mMockDevice);
         // Since we set the option, expect a reboot to occur.
         when(mMockDevice.getIDevice()).thenReturn(mock(IDevice.class));
@@ -445,7 +443,6 @@ public class ITestSuiteTest {
 
         mTestSuite.run(mTestInfo, mMockListener);
 
-        verify(mMockDevice).reboot();
         // Setup should have been called.
         Mockito.verify(mMockPreparer).setUp(Mockito.any());
     }
@@ -454,7 +451,6 @@ public class ITestSuiteTest {
     @Test
     public void testRun_whiteListPreparer() throws Exception {
         OptionSetter setter = new OptionSetter(mTestSuite);
-        setter.setOptionValue("reboot-before-test", "true");
         setter.setOptionValue(
                 ITestSuite.PREPARER_WHITELIST, StubTargetPreparer.class.getCanonicalName());
         mContext.addAllocatedDevice(ConfigurationDef.DEFAULT_DEVICE_NAME, mMockDevice);
@@ -472,7 +468,6 @@ public class ITestSuiteTest {
 
         mTestSuite.run(mTestInfo, mMockListener);
 
-        verify(mMockDevice).reboot();
         // Setup should have been called.
         Mockito.verify(mMockPreparer, Mockito.times(0)).setUp(Mockito.any());
     }
