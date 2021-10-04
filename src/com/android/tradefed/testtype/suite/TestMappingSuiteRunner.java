@@ -95,6 +95,14 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             description = "Whether or not to ignore test mapping import paths.")
     private boolean mIgnoreTestMappingImports = true;
 
+    @Option(
+            name = "test-mapping-allowed-tests-list",
+            description =
+                    "A list of artifacts that contains allowed tests. Only tests in the lists "
+                            + "will be run. If no list is specified, the tests will not be "
+                            + "filtered by allowed tests.")
+    private Set<String> mAllowedTestLists = new HashSet<>();
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
