@@ -104,7 +104,7 @@ public class ModuleSplitterTest {
         StubTest test = new StubTest();
         OptionSetter setterTest = new OptionSetter(test);
         // allow StubTest to shard in 6 sub tests
-        setterTest.setOptionValue("num-shards", "6");
+        setterTest.setOptionValue("num-shards", "9");
         config.setTest(test);
 
         OptionSetter setter = new OptionSetter(config.getConfigurationDescription());
@@ -114,7 +114,7 @@ public class ModuleSplitterTest {
                 ModuleSplitter.splitConfiguration(
                         mTestInfo, runConfig, mSuitePreparersPerDevice, 5, true, true);
         // We are sharding since even if we are not-strict-shardable, we are in dynamic context
-        assertEquals(10, res.size());
+        assertEquals(9, res.size());
         // The original target preparer is changed since we split multiple <test> tags.
         assertNotSame(
                 initialPreparers.get(0),
@@ -293,8 +293,8 @@ public class ModuleSplitterTest {
         List<ModuleDefinition> res =
                 ModuleSplitter.splitConfiguration(
                         mTestInfo, runConfig, suitePreparers, 5, true, true);
-        // matching 1 for 10 since tests sharding in 5 units times 2.
-        assertEquals(10, res.size());
+        // matching 6 as the max number of shards since it can only create 6 shards.
+        assertEquals(6, res.size());
         // The original IRemoteTest does not exists anymore, new IRemoteTests have been created.
         for (ModuleDefinition m : res) {
             assertNotSame(test, m.getTests().get(0));
