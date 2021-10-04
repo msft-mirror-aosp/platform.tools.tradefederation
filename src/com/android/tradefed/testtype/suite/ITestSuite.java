@@ -140,7 +140,6 @@ public abstract class ITestSuite
     public static final String MODULE_METADATA_INCLUDE_FILTER = "module-metadata-include-filter";
     public static final String MODULE_METADATA_EXCLUDE_FILTER = "module-metadata-exclude-filter";
     public static final String RANDOM_SEED = "random-seed";
-    public static final String REBOOT_BEFORE_TEST = "reboot-before-test";
 
     private static final String PRODUCT_CPU_ABI_KEY = "ro.product.cpu.abi";
 
@@ -185,12 +184,6 @@ public abstract class ITestSuite
     // Options for suite runner behavior
     @Option(name = "reboot-per-module", description = "Reboot the device before every module run.")
     private boolean mRebootPerModule = false;
-
-    @Option(
-        name = REBOOT_BEFORE_TEST,
-        description = "Reboot the device before the test suite starts."
-    )
-    private boolean mRebootBeforeTest = false;
 
     @Option(name = "skip-all-system-status-check",
             description = "Whether all system status check between modules should be skipped")
@@ -663,18 +656,6 @@ public abstract class ITestSuite
         for (ISystemStatusChecker checker : mSystemStatusCheckers) {
             if (checker instanceof ITestLoggerReceiver) {
                 ((ITestLoggerReceiver) checker).setTestLogger(listener);
-            }
-        }
-
-        // If requested reboot each device before the testing starts.
-        if (mRebootBeforeTest) {
-            for (ITestDevice device : mContext.getDevices()) {
-                if (!(device.getIDevice() instanceof StubDevice)) {
-                    CLog.d(
-                            "Rebooting device '%s' before test starts as requested.",
-                            device.getSerialNumber());
-                    mDevice.reboot();
-                }
             }
         }
 
@@ -1385,11 +1366,6 @@ public abstract class ITestSuite
     @VisibleForTesting
     final Injector getInjector() {
         return mInjector;
-    }
-
-    /** Sets reboot-before-test to true. */
-    public final void enableRebootBeforeTest() {
-        mRebootBeforeTest = true;
     }
 
     /**
