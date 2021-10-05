@@ -39,7 +39,7 @@ import org.mockito.MockitoAnnotations;
 /** Unit tests for {@link DeviceFeatureModuleController}. */
 @RunWith(JUnit4.class)
 public class DeviceFeatureModuleControllerTest {
-    private static final String REQUIRED_FEATURE = "required.feature";
+    private static final String FEATURE = "required.feature";
     private DeviceFeatureModuleController mController;
     private IInvocationContext mContext;
     @Mock ITestDevice mMockDevice;
@@ -62,10 +62,10 @@ public class DeviceFeatureModuleControllerTest {
     public void testDeviceHasRequiredFeature()
             throws DeviceNotAvailableException, ConfigurationException {
         when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
-        when(mMockDevice.hasFeature(REQUIRED_FEATURE)).thenReturn(true);
+        when(mMockDevice.hasFeature(FEATURE)).thenReturn(true);
 
         OptionSetter setter = new OptionSetter(mController);
-        setter.setOptionValue("required-feature", REQUIRED_FEATURE);
+        setter.setOptionValue("required-feature", FEATURE);
         assertEquals(RunStrategy.RUN, mController.shouldRunModule(mContext));
     }
 
@@ -74,10 +74,34 @@ public class DeviceFeatureModuleControllerTest {
     public void testDeviceHasNoRequiredFeature()
             throws DeviceNotAvailableException, ConfigurationException {
         when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
-        when(mMockDevice.hasFeature(REQUIRED_FEATURE)).thenReturn(false);
+        when(mMockDevice.hasFeature(FEATURE)).thenReturn(false);
 
         OptionSetter setter = new OptionSetter(mController);
-        setter.setOptionValue("required-feature", REQUIRED_FEATURE);
+        setter.setOptionValue("required-feature", FEATURE);
         assertEquals(RunStrategy.FULL_MODULE_BYPASS, mController.shouldRunModule(mContext));
+    }
+
+    /** Test device has the forbidden feature. */
+    @Test
+    public void testDeviceHasForbiddenFeature()
+            throws DeviceNotAvailableException, ConfigurationException {
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.hasFeature(FEATURE)).thenReturn(true);
+
+        OptionSetter setter = new OptionSetter(mController);
+        setter.setOptionValue("forbidden-feature", FEATURE);
+        assertEquals(RunStrategy.FULL_MODULE_BYPASS, mController.shouldRunModule(mContext));
+    }
+
+    /** Test device does not have the forbidden feature. */
+    @Test
+    public void testDeviceHasNoForbiddenFeature()
+            throws DeviceNotAvailableException, ConfigurationException {
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.hasFeature(FEATURE)).thenReturn(false);
+
+        OptionSetter setter = new OptionSetter(mController);
+        setter.setOptionValue("forbidden-feature", FEATURE);
+        assertEquals(RunStrategy.RUN, mController.shouldRunModule(mContext));
     }
 }
