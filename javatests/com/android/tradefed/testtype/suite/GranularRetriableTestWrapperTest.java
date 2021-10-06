@@ -969,7 +969,7 @@ public class GranularRetriableTestWrapperTest {
                     }
                 };
         OptionSetter setter = new OptionSetter(decision);
-        setter.setOptionValue("reset-at-last-retry", "true");
+        setter.setOptionValue("retry-isolation-grade", "FULLY_ISOLATED");
         setter.setOptionValue("retry-strategy", "RETRY_ANY_FAILURE");
         setter.setOptionValue("max-testcase-run-count", Integer.toString(3));
         decision.setInvocationContext(mModuleInvocationContext);
@@ -1013,7 +1013,7 @@ public class GranularRetriableTestWrapperTest {
                     }
                 };
         OptionSetter setter = new OptionSetter(decision);
-        setter.setOptionValue("reset-at-last-retry", "true");
+        setter.setOptionValue("retry-isolation-grade", "FULLY_ISOLATED");
         setter.setOptionValue("retry-strategy", "RETRY_ANY_FAILURE");
         setter.setOptionValue("max-testcase-run-count", Integer.toString(3));
         decision.setInvocationContext(mModuleInvocationContext);
@@ -1061,7 +1061,7 @@ public class GranularRetriableTestWrapperTest {
                     }
                 };
         OptionSetter setter = new OptionSetter(decision);
-        setter.setOptionValue("reset-at-last-retry", "true");
+        setter.setOptionValue("retry-isolation-grade", "FULLY_ISOLATED");
         setter.setOptionValue("retry-strategy", "RETRY_ANY_FAILURE");
         setter.setOptionValue("max-testcase-run-count", Integer.toString(3));
         decision.setInvocationContext(mModuleInvocationContext);
