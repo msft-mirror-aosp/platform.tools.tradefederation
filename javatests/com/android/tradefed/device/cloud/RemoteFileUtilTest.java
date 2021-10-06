@@ -56,20 +56,21 @@ public class RemoteFileUtilTest {
         GceAvdInfo fakeInfo = new GceAvdInfo("ins-gce", HostAndPort.fromHost("127.0.0.1"));
         String remotePath = "/home/vsoc-01/cuttlefish_runtime/kernel.log";
         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-        when(
-                        mMockRunUtil.runTimedCmd(
-                                Mockito.anyLong(),
-                                Mockito.eq("scp"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("UserKnownHostsFile=/dev/null"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("StrictHostKeyChecking=no"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("ServerAliveInterval=10"),
-                                Mockito.eq("-i"),
-                                Mockito.any(),
-                                Mockito.eq("root@127.0.0.1:" + remotePath),
-                                Mockito.any()))
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("scp"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("LogLevel=ERROR"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("UserKnownHostsFile=/dev/null"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("StrictHostKeyChecking=no"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("ServerAliveInterval=10"),
+                        Mockito.eq("-i"),
+                        Mockito.any(),
+                        Mockito.eq("root@127.0.0.1:" + remotePath),
+                        Mockito.any()))
                 .thenReturn(res);
 
         File resFile = null;
@@ -91,20 +92,21 @@ public class RemoteFileUtilTest {
         String remotePath = "/home/vsoc-01/cuttlefish_runtime/kernel.log";
         CommandResult res = new CommandResult(CommandStatus.FAILED);
         res.setStderr("Failed to fetch file.");
-        when(
-                        mMockRunUtil.runTimedCmd(
-                                Mockito.anyLong(),
-                                Mockito.eq("scp"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("UserKnownHostsFile=/dev/null"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("StrictHostKeyChecking=no"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("ServerAliveInterval=10"),
-                                Mockito.eq("-i"),
-                                Mockito.any(),
-                                Mockito.eq("root@127.0.0.1:" + remotePath),
-                                Mockito.any()))
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("scp"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("LogLevel=ERROR"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("UserKnownHostsFile=/dev/null"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("StrictHostKeyChecking=no"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("ServerAliveInterval=10"),
+                        Mockito.eq("-i"),
+                        Mockito.any(),
+                        Mockito.eq("root@127.0.0.1:" + remotePath),
+                        Mockito.any()))
                 .thenReturn(res);
 
         File resFile =
@@ -118,21 +120,22 @@ public class RemoteFileUtilTest {
         GceAvdInfo fakeInfo = new GceAvdInfo("ins-gce", HostAndPort.fromHost("127.0.0.1"));
         String remotePath = "/home/vsoc-01/cuttlefish_runtime/tombstones";
         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-        when(
-                        mMockRunUtil.runTimedCmd(
-                                Mockito.anyLong(),
-                                Mockito.eq("scp"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("UserKnownHostsFile=/dev/null"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("StrictHostKeyChecking=no"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("ServerAliveInterval=10"),
-                                Mockito.eq("-i"),
-                                Mockito.any(),
-                                Mockito.eq("-r"),
-                                Mockito.eq("root@127.0.0.1:" + remotePath),
-                                Mockito.any()))
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("scp"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("LogLevel=ERROR"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("UserKnownHostsFile=/dev/null"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("StrictHostKeyChecking=no"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("ServerAliveInterval=10"),
+                        Mockito.eq("-i"),
+                        Mockito.any(),
+                        Mockito.eq("-r"),
+                        Mockito.eq("root@127.0.0.1:" + remotePath),
+                        Mockito.any()))
                 .thenReturn(res);
         File resDir = null;
         try {
@@ -153,21 +156,22 @@ public class RemoteFileUtilTest {
         String remotePath = "/home/vsoc-01/cuttlefish_runtime/kernel.log";
         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
         File localFile = FileUtil.createTempDir("test-remote-push-dir");
-        when(
-                        mMockRunUtil.runTimedCmd(
-                                Mockito.anyLong(),
-                                Mockito.eq("scp"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("UserKnownHostsFile=/dev/null"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("StrictHostKeyChecking=no"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("ServerAliveInterval=10"),
-                                Mockito.eq("-i"),
-                                Mockito.any(),
-                                Mockito.eq("-R"),
-                                Mockito.eq(localFile.getAbsolutePath()),
-                                Mockito.eq("root@127.0.0.1:" + remotePath)))
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("scp"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("LogLevel=ERROR"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("UserKnownHostsFile=/dev/null"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("StrictHostKeyChecking=no"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("ServerAliveInterval=10"),
+                        Mockito.eq("-i"),
+                        Mockito.any(),
+                        Mockito.eq("-R"),
+                        Mockito.eq(localFile.getAbsolutePath()),
+                        Mockito.eq("root@127.0.0.1:" + remotePath)))
                 .thenReturn(res);
 
         try {
@@ -194,21 +198,22 @@ public class RemoteFileUtilTest {
         CommandResult res = new CommandResult(CommandStatus.FAILED);
         res.setStderr("failed to push to remote.");
         File localFile = FileUtil.createTempDir("test-remote-push-dir");
-        when(
-                        mMockRunUtil.runTimedCmd(
-                                Mockito.anyLong(),
-                                Mockito.eq("scp"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("UserKnownHostsFile=/dev/null"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("StrictHostKeyChecking=no"),
-                                Mockito.eq("-o"),
-                                Mockito.eq("ServerAliveInterval=10"),
-                                Mockito.eq("-i"),
-                                Mockito.any(),
-                                Mockito.eq("-R"),
-                                Mockito.eq(localFile.getAbsolutePath()),
-                                Mockito.eq("root@127.0.0.1:" + remotePath)))
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("scp"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("LogLevel=ERROR"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("UserKnownHostsFile=/dev/null"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("StrictHostKeyChecking=no"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("ServerAliveInterval=10"),
+                        Mockito.eq("-i"),
+                        Mockito.any(),
+                        Mockito.eq("-R"),
+                        Mockito.eq(localFile.getAbsolutePath()),
+                        Mockito.eq("root@127.0.0.1:" + remotePath)))
                 .thenReturn(res);
 
         try {
