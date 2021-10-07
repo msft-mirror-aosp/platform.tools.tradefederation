@@ -1036,6 +1036,45 @@ public class TestMappingSuiteRunnerTest {
         }
     }
 
+    /**
+     * Test for {@link TestMappingSuiteRunner#filterByAllowedTestLists()} for filtering tests from a
+     * list of allowed test lists.
+     */
+    @Test
+    public void testFilterByAllowedTestLists() throws Exception {
+        File tempDir = null;
+        try {
+            mOptionSetter.setOptionValue("test-mapping-allowed-tests-list", "test-list.zip");
+
+            tempDir = FileUtil.createTempDir("test_lists");
+            File listFile = Paths.get(tempDir.getAbsolutePath(), "test-list").toFile();
+            FileUtil.writeToFile("test1.config\n", listFile);
+            FileUtil.writeToFile("dir/test2.config", listFile, true);
+
+            List<File> filesToZip = Arrays.asList(listFile);
+            File zipFile = Paths.get(tempDir.getAbsolutePath(), "test-list.zip").toFile();
+            ZipUtil.createZip(filesToZip, zipFile);
+
+            IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
+            when(mockBuildInfo.getFile("test-list.zip")).thenReturn(zipFile);
+            mRunner.setBuild(mockBuildInfo);
+
+            Set<TestInfo> testInfos = new HashSet<>();
+            TestInfo test1 = createTestInfo("test1", "path");
+            testInfos.add(test1);
+            TestInfo test2 = createTestInfo("test2", "path");
+            testInfos.add(test2);
+            testInfos.add(createTestInfo("test3", "path"));
+
+            testInfos = mRunner.filterByAllowedTestLists(testInfos);
+            assertEquals(2, testInfos.size());
+            assertTrue(testInfos.contains(test1));
+            assertTrue(testInfos.contains(test2));
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+        }
+    }
+
     /** Helper to create specific test infos. */
     private TestInfo createTestInfo(String name, String source) {
         TestInfo info = new TestInfo(name, source, false);
