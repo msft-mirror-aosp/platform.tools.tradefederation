@@ -127,10 +127,10 @@ public class TradefedSandboxTest {
                         Mockito.endsWith("/java"),
                         Mockito.contains("-Djava.io.tmpdir="),
                         Mockito.eq("-cp"),
-                        Mockito.anyObject(),
+                        Mockito.any(),
                         Mockito.eq(SandboxConfigDump.class.getCanonicalName()),
                         Mockito.eq("RUN_CONFIG"),
-                        Mockito.anyObject(),
+                        Mockito.any(),
                         Mockito.eq("empty"),
                         Mockito.eq("--arg"),
                         Mockito.eq("1"),
@@ -144,14 +144,13 @@ public class TradefedSandboxTest {
         verify(mMockRunUtil, times(2)).unsetEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT);
         verify(mMockRunUtil)
                 .setEnvVariable(
-                        Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE),
-                        Mockito.anyObject());
+                        Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE), Mockito.any());
         verify(mMockRunUtil).setEnvVariablePriority(EnvPriority.SET);
         verify(mMockListener)
                 .testLog(
                         Mockito.eq("sandbox-global-config"),
                         Mockito.eq(LogDataType.HARNESS_CONFIG),
-                        Mockito.anyObject());
+                        Mockito.any());
         verifyPrepareConfigurationExpectations();
         assertNull(res);
     }
@@ -173,10 +172,10 @@ public class TradefedSandboxTest {
                         Mockito.endsWith("/java"),
                         Mockito.contains("-Djava.io.tmpdir="),
                         Mockito.eq("-cp"),
-                        Mockito.anyObject(),
+                        Mockito.any(),
                         Mockito.eq(SandboxConfigDump.class.getCanonicalName()),
                         Mockito.eq("RUN_CONFIG"),
-                        Mockito.anyObject(),
+                        Mockito.any(),
                         Mockito.eq("empty"),
                         Mockito.eq("--arg"),
                         Mockito.eq("1"),
@@ -192,14 +191,13 @@ public class TradefedSandboxTest {
         verify(mMockRunUtil, times(2)).unsetEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT);
         verify(mMockRunUtil)
                 .setEnvVariable(
-                        Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE),
-                        Mockito.anyObject());
+                        Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE), Mockito.any());
         verify(mMockRunUtil).setEnvVariablePriority(EnvPriority.SET);
         verify(mMockListener)
                 .testLog(
                         Mockito.eq("sandbox-global-config"),
                         Mockito.eq(LogDataType.HARNESS_CONFIG),
-                        Mockito.anyObject());
+                        Mockito.any());
         verifyPrepareConfigurationExpectations();
 
         assertNotNull(res);
@@ -218,10 +216,10 @@ public class TradefedSandboxTest {
                         Mockito.endsWith("/java"),
                         Mockito.contains("-Djava.io.tmpdir="),
                         Mockito.eq("-cp"),
-                        Mockito.anyObject(),
+                        Mockito.any(),
                         Mockito.eq(SandboxConfigDump.class.getCanonicalName()),
                         Mockito.eq("RUN_CONFIG"),
-                        Mockito.anyObject(),
+                        Mockito.any(),
                         Mockito.eq("empty"),
                         Mockito.eq("--arg"),
                         Mockito.eq("1"),
@@ -237,14 +235,13 @@ public class TradefedSandboxTest {
         verify(mMockRunUtil, times(2)).unsetEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT);
         verify(mMockRunUtil)
                 .setEnvVariable(
-                        Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE),
-                        Mockito.anyObject());
+                        Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE), Mockito.any());
         verify(mMockRunUtil).setEnvVariablePriority(EnvPriority.SET);
         verify(mMockListener)
                 .testLog(
                         Mockito.eq("sandbox-global-config"),
                         Mockito.eq(LogDataType.HARNESS_CONFIG),
-                        Mockito.anyObject());
+                        Mockito.any());
         verifyPrepareConfigurationExpectations();
 
         assertNotNull(res);
