@@ -29,6 +29,7 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.ProcessInfo;
 import com.android.tradefed.util.TimeUtil;
 
@@ -1251,16 +1252,19 @@ public interface INativeDevice {
      * Extra steps for device specific required setup that will be executed on the device prior
      * to the invocation flow.
      */
-    public void preInvocationSetup(IBuildInfo info)
-            throws TargetSetupError, DeviceNotAvailableException;
+    public default void preInvocationSetup(IBuildInfo info)
+            throws TargetSetupError, DeviceNotAvailableException {
+        preInvocationSetup(info, null, null);
+    }
 
     /**
      * Extra steps for device specific required setup that will be executed on the device prior to
      * the invocation flow.
      */
-    public default void preInvocationSetup(IBuildInfo info, List<IBuildInfo> testResourceBuildInfos)
+    public default void preInvocationSetup(IBuildInfo info, List<IBuildInfo> testResourceBuildInfos,
+                                           MultiMap<String, String> attributes)
             throws TargetSetupError, DeviceNotAvailableException {
-        preInvocationSetup(info);
+        // Empty default implementation.
     }
 
     /**

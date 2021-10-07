@@ -87,6 +87,7 @@ import com.android.tradefed.testtype.IRetriableTest;
 import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.StubTest;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.SystemUtil.EnvVariable;
 import com.android.tradefed.util.keystore.StubKeyStoreFactory;
 
@@ -210,7 +211,8 @@ public class TestInvocationTest {
         EasyMock.expect(mMockDevice.getBattery()).andStubReturn(null);
         mMockDevice.setRecovery(mMockRecovery);
         mMockDevice.preInvocationSetup(
-                (IBuildInfo) EasyMock.anyObject(), EasyMock.<List<IBuildInfo>>anyObject());
+                (IBuildInfo) EasyMock.anyObject(), EasyMock.<List<IBuildInfo>>anyObject(),
+                (MultiMap<String, String>) EasyMock.anyObject());
         EasyMock.expectLastCall().anyTimes();
         mMockDevice.postInvocationTearDown();
         EasyMock.expectLastCall().anyTimes();
@@ -1506,7 +1508,8 @@ public class TestInvocationTest {
         EasyMock.expect(device1.getIDevice()).andReturn(idevice).anyTimes();
 
         device1.preInvocationSetup(
-                (IBuildInfo) EasyMock.anyObject(), EasyMock.eq(testResourceBuildInfos));
+                (IBuildInfo) EasyMock.anyObject(), EasyMock.eq(testResourceBuildInfos),
+                (MultiMap<String, String>) EasyMock.anyObject());
         EasyMock.expectLastCall().once();
 
         CommandOptions commandOption = new CommandOptions();
