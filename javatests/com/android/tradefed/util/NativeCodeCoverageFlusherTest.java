@@ -47,6 +47,7 @@ public final class NativeCodeCoverageFlusherTest {
                     + "root        234     1 7890   123   binder_io+   0  S logcat\n"
                     + "root        456  1234  567   890   binder_io+   0  S media.swcodec\n";
     @Mock ITestDevice mMockDevice;
+    @Mock IRunUtil mMockRunUtil;
 
     // Object under test
     NativeCodeCoverageFlusher mFlusher;
@@ -68,6 +69,7 @@ public final class NativeCodeCoverageFlusherTest {
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
         mFlusher = new NativeCodeCoverageFlusher(mMockDevice, ImmutableList.of());
+        mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.resetCoverage();
 
         // Verify that the coverage clear commands were executed.
@@ -81,6 +83,7 @@ public final class NativeCodeCoverageFlusherTest {
 
         try {
             mFlusher = new NativeCodeCoverageFlusher(mMockDevice, ImmutableList.of());
+            mFlusher.setRunUtil(mMockRunUtil);
             mFlusher.resetCoverage();
             fail("Should have thrown an exception");
         } catch (IllegalStateException e) {
@@ -103,6 +106,7 @@ public final class NativeCodeCoverageFlusherTest {
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
         mFlusher = new NativeCodeCoverageFlusher(mMockDevice, ImmutableList.of());
+        mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
         // Verify that the flush command for all individual processes was called.
@@ -123,6 +127,7 @@ public final class NativeCodeCoverageFlusherTest {
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
         mFlusher = new NativeCodeCoverageFlusher(mMockDevice, processes);
+        mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
         // Verify that the flush command for the specific processes was called.
@@ -142,6 +147,7 @@ public final class NativeCodeCoverageFlusherTest {
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
         mFlusher = new NativeCodeCoverageFlusher(mMockDevice, processes);
+        mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
         // Verify that the flush command was not called.
@@ -160,6 +166,7 @@ public final class NativeCodeCoverageFlusherTest {
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
         mFlusher = new NativeCodeCoverageFlusher(mMockDevice, processes);
+        mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
         // Verify that the flush command was not called.
@@ -179,6 +186,7 @@ public final class NativeCodeCoverageFlusherTest {
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
         mFlusher = new NativeCodeCoverageFlusher(mMockDevice, processes);
+        mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
         // Verify that the flush command was not called.
@@ -206,6 +214,7 @@ public final class NativeCodeCoverageFlusherTest {
         when(mMockDevice.executeShellV2Command(contains("456"))).thenReturn(resultEmpty);
 
         mFlusher = new NativeCodeCoverageFlusher(mMockDevice, ImmutableList.of());
+        mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
         // Verify that the flush command was only called for pid 234.
@@ -218,6 +227,7 @@ public final class NativeCodeCoverageFlusherTest {
 
         try {
             mFlusher = new NativeCodeCoverageFlusher(mMockDevice, ImmutableList.of("mediaserver"));
+            mFlusher.setRunUtil(mMockRunUtil);
             mFlusher.forceCoverageFlush();
             fail("Should have thrown an exception");
         } catch (IllegalStateException e) {
