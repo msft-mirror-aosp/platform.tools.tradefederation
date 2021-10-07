@@ -80,7 +80,7 @@ public class ClearcutClientTest {
         ClearcutClient c =
                 new ClearcutClient("url", "test") {
                     @Override
-                    boolean isClearcutDisabled() {
+                    public boolean isClearcutDisabled() {
                         return true;
                     }
 
