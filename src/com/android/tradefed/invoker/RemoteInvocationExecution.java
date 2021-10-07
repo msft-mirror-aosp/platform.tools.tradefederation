@@ -452,24 +452,24 @@ public class RemoteInvocationExecution extends InvocationExecution {
         long currentTimeOnProto = 0L;
         while (stillRunning) {
             if (config.getCommandOptions().shouldReportModuleProgression()) {
-                File resultFile =
-                        RemoteFileUtil.fetchRemoteFile(
-                                info,
-                                options,
-                                runUtil,
-                                PULL_RESULT_TIMEOUT,
-                                mRemoteTradefedDir + PROTO_RESULT_NAME + currentIndex);
-                if (resultFile != null) {
-                    currentIndex++;
-                    currentTimeOnProto = System.currentTimeMillis();
-                    try {
-                        mProtoParser.processFileProto(resultFile);
-                    } finally {
-                        FileUtil.deleteFile(resultFile);
+                String remoteFilePath = mRemoteTradefedDir + PROTO_RESULT_NAME + currentIndex;
+                if (RemoteFileUtil.doesRemoteFileExist(
+                        info, options, runUtil, PULL_RESULT_TIMEOUT, remoteFilePath)) {
+                    File resultFile =
+                            RemoteFileUtil.fetchRemoteFile(
+                                    info, options, runUtil, PULL_RESULT_TIMEOUT, remoteFilePath);
+                    if (resultFile != null) {
+                        currentIndex++;
+                        currentTimeOnProto = System.currentTimeMillis();
+                        try {
+                            mProtoParser.processFileProto(resultFile);
+                        } finally {
+                            FileUtil.deleteFile(resultFile);
+                        }
+                        // Don't sleep in that case since we might have more file to process, this
+                        // will sleep next time we don't find a file to process on the remote.
+                        continue;
                     }
-                    // Don't sleep in that case since we might have more file to process, this will
-                    // sleep next time we don't find a file to process on the remote.
-                    continue;
                 }
             }
             if (System.currentTimeMillis() - currentTimeOnProto > 7200000) { // 2 hours
