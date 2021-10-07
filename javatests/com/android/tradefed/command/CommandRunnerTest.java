@@ -22,6 +22,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.clearcut.ClearcutClient;
 import com.android.tradefed.command.CommandRunner.ExitCode;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
@@ -137,6 +138,18 @@ public class CommandRunnerTest {
             e.printStackTrace(pw);
             pw.flush();
             mStackTraceOutput = out.toString();
+        }
+
+        @Override
+        protected ClearcutClient createClient() {
+            ClearcutClient client =
+                    new ClearcutClient("test") {
+                        @Override
+                        public boolean isClearcutDisabled() {
+                            return true;
+                        }
+                    };
+            return client;
         }
     }
 
