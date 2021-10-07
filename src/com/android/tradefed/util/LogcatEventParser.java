@@ -133,8 +133,7 @@ class GenericLogcatEventParser<LogcatEventType> implements Closeable {
         mEventTriggerMap.put(tag, msg, response);
         if (mLogcatTags.add(tag)) {
             // Pattern regex is null because we will rely on EventTriggerMap to parse events.
-            // Logcat messages must all be of INFO level TODO: generalize this for all levels
-            mInternalParser.addPattern(null, "I", tag, CUSTOM_CATEGORY);
+            mInternalParser.addPattern(null, null, tag, CUSTOM_CATEGORY);
         }
     }
 
