@@ -31,7 +31,7 @@ import com.android.tradefed.device.FastbootHelper;
 import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.StubDevice;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 
 import org.junit.Before;
@@ -134,7 +134,8 @@ public class UsbResetMultiDeviceRecoveryTest {
     @Test
     public void testRecover_fastboot_unallocated() throws DeviceNotAvailableException {
         // non-allocated fastboot device
-        when(mFastboot.getDevices()).thenReturn(ImmutableSet.of(SERIAL));
+        when(mFastboot.getBootloaderAndFastbootdDevices())
+                .thenReturn(ImmutableMap.of(SERIAL, true));
         when(mDevice.getIDevice()).thenReturn(new FastbootDevice(SERIAL));
         when(mDevice.getAllocationState()).thenReturn(DeviceAllocationState.Ignored);
 
