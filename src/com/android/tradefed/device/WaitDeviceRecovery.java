@@ -87,6 +87,11 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
             "fastboot or is expected to be in fastboot.")
     protected boolean mDisableUnresponsiveReboot = false;
 
+    @Option(
+            name = "disable-usb-reset",
+            description = "Do not attempt reset via USB in order to recover devices.")
+    protected boolean mDisableUsbReset = false;
+
     private String mFastbootPath = "fastboot";
 
     /**
@@ -509,21 +514,26 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
         }
         String serial = monitor.getSerialNumber();
         boolean recoveryAttempted = false;
-        // First try to do a USB reset to get the device back
-        try (UsbHelper usb = getUsbHelper()) {
-            try (UsbDevice usbDevice = usb.getDevice(serial)) {
-                if (usbDevice != null) {
-                    CLog.d("Resetting USB port for device '%s'", serial);
-                    usbDevice.reset();
-                    recoveryAttempted = true;
-                    if (waitForDevice(monitor, recoverTillOnline)) {
-                        // Success
-                        CLog.d("Device recovered from USB reset and is online.");
-                        InvocationMetricLogger.addInvocationMetrics(
-                                InvocationMetricKey.DEVICE_RECOVERY, 1);
-                        return true;
+        if (!mDisableUsbReset) {
+            // First try to do a USB reset to get the device back
+            try (UsbHelper usb = getUsbHelper()) {
+                try (UsbDevice usbDevice = usb.getDevice(serial)) {
+                    if (usbDevice != null) {
+                        CLog.d("Resetting USB port for device '%s'", serial);
+                        usbDevice.reset();
+                        recoveryAttempted = true;
+                        if (waitForDevice(monitor, recoverTillOnline)) {
+                            // Success
+                            CLog.d("Device recovered from USB reset and is online.");
+                            InvocationMetricLogger.addInvocationMetrics(
+                                    InvocationMetricKey.DEVICE_RECOVERY, 1);
+                            return true;
+                        }
                     }
                 }
+            } catch (UnsatisfiedLinkError ule) {
+                CLog.w("Problem loading JNI library for USB helper, skipping USB reset.");
+                CLog.w(ule);
             }
         }
         if (recoveryAttempted) {
