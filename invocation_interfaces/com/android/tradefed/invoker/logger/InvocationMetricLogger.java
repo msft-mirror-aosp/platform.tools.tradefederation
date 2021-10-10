@@ -307,8 +307,8 @@ public class InvocationMetricLogger {
             if (mPerGroupMetrics.get(group) == null) {
                 mPerGroupMetrics.put(group, new HashMap<>());
             }
-        }
         return new HashMap<>(mPerGroupMetrics.get(group));
+        }
     }
 
     /** Clear the invocation metrics for an invocation. */
