@@ -31,6 +31,17 @@ import java.util.Properties;
 /** Utility for reading configuration resources. */
 public class ResourceUtil {
 
+    /** Extracts a given resource to an output file. Returns false if it fails. */
+    public static boolean extractResourceAsFile(String resource, File output) {
+        try (InputStream resStream = ResourceUtil.class.getResourceAsStream(resource)) {
+            FileUtil.writeToFile(resStream, output);
+            return true;
+        } catch (IOException | RuntimeException e) {
+            CLog.e(e);
+        }
+        return false;
+    }
+
     /**
      * Read a property configuration from the resources. Configuration must follow a "key=value" or
      * "key:value" format. Method is safe and will return an empty map in case of error.
