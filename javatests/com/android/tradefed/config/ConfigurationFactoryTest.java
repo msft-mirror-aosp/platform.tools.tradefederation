@@ -115,11 +115,23 @@ public class ConfigurationFactoryTest {
         for (Entry<ConfigId, ConfigurationDef> entry : spyFactory.getMapConfig().entrySet()) {
             String configName = entry.getKey().name;
             String jarName = configAndJar.get(configName);
+            ConfigurationDef cDef = entry.getValue();
             if (JAR_TO_CHECK.contains(jarName)) {
+                if (cDef.getObjectClassMap().containsKey(Configuration.LAB_PREPARER_TYPE_NAME)) {
+                    // Work around the one exception we will clean.
+                    if (!configName.equals("google/template/preparers/cros-artifacts-lab")) {
+                        exceptionConfigJar.add(
+                                String.format(
+                                        "%s config contains a lab_preparer ('%s') which is"
+                                                + " reserved for core.",
+                                        configName,
+                                        cDef.getObjectClassMap()
+                                                .get(Configuration.LAB_PREPARER_TYPE_NAME)));
+                    }
+                }
                 continue;
             }
 
-            ConfigurationDef cDef = entry.getValue();
             for (List<ConfigObjectDef> cObjects : cDef.getObjectClassMap().values()) {
                 for (ConfigObjectDef o : cObjects) {
                     for (String contribJar : classInContribJars.keySet()) {
