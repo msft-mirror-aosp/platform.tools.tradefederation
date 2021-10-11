@@ -76,6 +76,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.UUID;
 
 /** Implementation of {@link InvocationExecution} that drives a remote execution. */
 public class RemoteInvocationExecution extends InvocationExecution {
@@ -165,14 +166,19 @@ public class RemoteInvocationExecution extends InvocationExecution {
             return;
         }
 
-        mRemoteTradefedDir = mainRemoteDir + "tradefed/";
-        CommandResult createRemoteDir =
+        String invocationWorkDir =
+                String.format("%stf-invocation-%s/", mainRemoteDir, UUID.randomUUID().toString());
+        CLog.d("Remote invocation work directory is at %s", invocationWorkDir);
+
+        CommandResult cr =
                 GceManager.remoteSshCommandExecution(
-                        gceInfo, options, runUtil, 120000L, "mkdir", "-p", mRemoteTradefedDir);
-        if (!CommandStatus.SUCCESS.equals(createRemoteDir.getStatus())) {
+                        gceInfo, options, runUtil, 120000L, "mkdir", "-p", invocationWorkDir);
+        if (!CommandStatus.SUCCESS.equals(cr.getStatus())) {
+            CLog.e("Creation of %s failed.", invocationWorkDir);
+            CLog.e("Command stdout: %s, stderr: %s", cr.getStdout(), cr.getStderr());
             listener.invocationFailed(
                     createInvocationFailure(
-                            "Failed to create remote dir.", FailureStatus.INFRA_FAILURE));
+                            "Failed to create remote tradefed dir.", FailureStatus.INFRA_FAILURE));
             return;
         }
 
@@ -187,7 +193,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
                             Arrays.asList("-r"),
                             runUtil,
                             PUSH_TF_TIMEOUT,
-                            mRemoteTradefedDir,
+                            invocationWorkDir,
                             tfToPush);
             attempt++;
         }
@@ -199,7 +205,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
             return;
         }
 
-        mRemoteTradefedDir = mRemoteTradefedDir + tfToPush.getName() + "/";
+        mRemoteTradefedDir = invocationWorkDir + tfToPush.getName() + "/";
         CommandResult listRemoteDir =
                 GceManager.remoteSshCommandExecution(
                         gceInfo, options, runUtil, 120000L, "ls", "-l", mRemoteTradefedDir);
@@ -278,6 +284,13 @@ public class RemoteInvocationExecution extends InvocationExecution {
         } finally {
             FileUtil.recursiveDelete(configFile);
             FileUtil.recursiveDelete(globalConfig);
+            cr =
+                    GceManager.remoteSshCommandExecution(
+                            gceInfo, options, runUtil, 120000L, "rm", "-rf", invocationWorkDir);
+            if (!CommandStatus.SUCCESS.equals(cr.getStatus())) {
+                CLog.w("Clean up of %s failed.", invocationWorkDir);
+                CLog.w("Command stdout: %s, stderr: %s", cr.getStdout(), cr.getStderr());
+            }
         }
     }
 
@@ -294,7 +307,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
             ITestLogger logger,
             Throwable exception)
             throws Throwable {
-            super.runDevicePostInvocationTearDown(testInfo.getContext(), config, exception);
+        super.runDevicePostInvocationTearDown(testInfo.getContext(), config, exception);
     }
 
     @Override
@@ -528,20 +541,22 @@ public class RemoteInvocationExecution extends InvocationExecution {
         if (config.getCommandOptions().shouldReportModuleProgression()) {
             // Process all remaining proto files available
             do {
-                resultFile =
-                        RemoteFileUtil.fetchRemoteFile(
-                                info,
-                                options,
-                                runUtil,
-                                PULL_RESULT_TIMEOUT,
-                                mRemoteTradefedDir + PROTO_RESULT_NAME + currentIndex);
-                if (resultFile != null) {
-                    currentIndex++;
-                    try {
-                        mProtoParser.processFileProto(resultFile);
-                    } finally {
-                        FileUtil.deleteFile(resultFile);
+                String remoteFilePath = mRemoteTradefedDir + PROTO_RESULT_NAME + currentIndex;
+                if (RemoteFileUtil.doesRemoteFileExist(
+                        info, options, runUtil, PULL_RESULT_TIMEOUT, remoteFilePath)) {
+                    resultFile =
+                            RemoteFileUtil.fetchRemoteFile(
+                                    info, options, runUtil, PULL_RESULT_TIMEOUT, remoteFilePath);
+                    if (resultFile != null) {
+                        currentIndex++;
+                        try {
+                            mProtoParser.processFileProto(resultFile);
+                        } finally {
+                            FileUtil.deleteFile(resultFile);
+                        }
                     }
+                } else {
+                    break;
                 }
             } while (resultFile != null);
         }
