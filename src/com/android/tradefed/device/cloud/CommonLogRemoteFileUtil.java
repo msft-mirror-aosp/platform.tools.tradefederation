@@ -109,6 +109,8 @@ public class CommonLogRemoteFileUtil {
         OXYGEN_LOG_FILES.add(
                 new KnownLogFileEntry(
                         OXYGEN_RUNTIME_LOG_DIR + "kernel.log", null, LogDataType.TEXT));
+        OXYGEN_LOG_FILES.add(
+                new KnownLogFileEntry(OXYGEN_RUNTIME_LOG_DIR + "logcat", null, LogDataType.TEXT));
     }
 
     /** A representation of a known log entry for remote devices. */
