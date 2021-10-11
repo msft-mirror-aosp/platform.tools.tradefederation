@@ -26,6 +26,7 @@ import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
+import com.android.tradefed.device.IConfigurableIp;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
@@ -162,7 +163,10 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
         TargetSetupError exception = null;
         for (int attempt = 0; attempt < getOptions().getGceMaxAttempt(); attempt++) {
             try {
-                mGceAvd = getGceHandler().startGce();
+                mGceAvd =
+                        getGceHandler()
+                                .startGce(
+                                        ((IConfigurableIp) getIDevice()).getKnownDeviceIp(), null);
                 if (mGceAvd != null) break;
             } catch (TargetSetupError tse) {
                 CLog.w(
