@@ -304,6 +304,12 @@ public class DeviceJUnit4ClassRunner extends BlockJUnit4ClassRunner
             return super.apply(base, description);
         }
 
+        @Override
+        protected void before() throws Throwable {
+            super.before();
+            mLogs = new ArrayList<>();
+        }
+
         public final void addTestLog(
                 String dataName, LogDataType dataType, InputStreamSource dataStream) {
             mLogs.add(new LogHolder(dataName, dataType, dataStream));
@@ -314,8 +320,11 @@ public class DeviceJUnit4ClassRunner extends BlockJUnit4ClassRunner
             // we inject a Description with an annotation carrying metrics.
             // We have to go around, since Description cannot be extended and RunNotifier
             // does not give us a lot of flexibility to find our metrics back.
-            mDescription.addChild(
-                    Description.createTestDescription("LOGS", "LOGS", new LogAnnotation(mLogs)));
+            if (!mLogs.isEmpty()) {
+                mDescription.addChild(
+                        Description.createTestDescription(
+                                "LOGS", "LOGS", new LogAnnotation(mLogs)));
+            }
         }
     }
 

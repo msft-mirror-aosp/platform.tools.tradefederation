@@ -448,4 +448,8 @@ public class GTest extends GTestBase implements IDeviceTest {
             }
         }
     }
+
+    public boolean isRebootBeforeTestEnabled() {
+        return mRebootBeforeTest;
+    }
 }

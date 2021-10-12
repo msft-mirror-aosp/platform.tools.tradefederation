@@ -17,14 +17,12 @@ package com.android.tradefed.retry;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
-import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
-import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.device.internal.DeviceResetHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -38,8 +36,6 @@ import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
-import com.android.tradefed.sandbox.SandboxOptions;
-import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFileFilterReceiver;
 import com.android.tradefed.testtype.ITestFilterReceiver;
@@ -74,13 +70,6 @@ public class BaseRetryDecision implements IRetryDecision, IConfigurationReceiver
         description = "Reboot the device at the last retry attempt."
     )
     private boolean mRebootAtLastRetry = false;
-
-    @Option(
-            name = "reset-at-last-retry",
-            description =
-                    "Reset or powerwash the device at the last retry attempt. If this option is "
-                            + "set, option `reboot-at-last-retry` will be ignored.")
-    private boolean mResetAtLastRetry = false;
 
     @Option(
             name = "retry-isolation-grade",
@@ -194,6 +183,8 @@ public class BaseRetryDecision implements IRetryDecision, IConfigurationReceiver
                 // Return directly if we are not considering retry at all.
                 return false;
             case ITERATIONS:
+                // Still support isolating the iterations if that's configured
+                recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
                 // For iterations, retry directly, we have nothing to setup
                 return true;
             case RERUN_UNTIL_FAILURE:
@@ -512,9 +503,7 @@ public class BaseRetryDecision implements IRetryDecision, IConfigurationReceiver
             resetIsolation(module, devices);
         } else if (lastAttempt == (mMaxRetryAttempts - 2)) {
             // Reset only works for suite right now
-            if (mResetAtLastRetry && module != null) {
-                compatibleReset(mConfiguration, module, devices);
-            } else if (mRebootAtLastRetry) {
+            if (mRebootAtLastRetry) {
                 for (ITestDevice device : devices) {
                     device.reboot();
                 }
@@ -538,64 +527,6 @@ public class BaseRetryDecision implements IRetryDecision, IConfigurationReceiver
                     InvocationMetricKey.RESET_RETRY_ISOLATION_PAIR,
                     start, System.currentTimeMillis());
         }
-    }
-
-    private void compatibleReset(
-            IConfiguration config, ModuleDefinition module, List<ITestDevice> devices)
-                    throws DeviceNotAvailableException {
-        SandboxOptions options = (SandboxOptions)
-                config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME);
-        if (config.getConfigurationDescription().shouldUseSandbox()) {
-            if (options.startAvdInParent()) {
-                resetIsolation(module, devices);
-            } else {
-                // TODO: When sandbox has been switched to start device in parent, remove the
-                // compatible handling.
-                resetDevice(module, devices);
-            }
-        } else {
-            CLog.d("Not a sandboxed run, reset-at-last-retry is ignored.");
-        }
-        // TODO: Add support for non-sandbox
-    }
-
-    private void resetDevice(ModuleDefinition module, List<ITestDevice> devices)
-            throws DeviceNotAvailableException {
-        CLog.d("Reset devices...");
-        for (ITestDevice device : devices) {
-            if (!(device instanceof RemoteAndroidVirtualDevice)) {
-                CLog.i(
-                        "Device %s of type %s does not support powerwash.",
-                        device.getSerialNumber(), device.getClass());
-                continue;
-            }
-            boolean success = false;
-            try {
-                success = ((RemoteAndroidVirtualDevice) device).powerwashGce();
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.DEVICE_RESET_COUNT, 1);
-                CurrentInvocation.setModuleIsolation(IsolationGrade.FULLY_ISOLATED);
-                CurrentInvocation.setRunIsolation(IsolationGrade.FULLY_ISOLATED);
-            } catch (TargetSetupError e) {
-                CLog.e(e);
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to powerwash device: %s\nError: %s",
-                                device.getSerialNumber(), e.toString()),
-                        e,
-                        device.getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
-            }
-
-            if (!success) {
-                throw new DeviceNotAvailableException(
-                        String.format("Failed to powerwash device: %s", device.getSerialNumber()),
-                        device.getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
-            }
-        }
-
-        reSetupModule(module, true);
     }
 
     @VisibleForTesting

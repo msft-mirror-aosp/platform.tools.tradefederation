@@ -24,11 +24,9 @@ import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
-import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -58,6 +56,7 @@ import java.util.List;
 public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
         implements IConfigurationReceiver {
 
+    public static final String MERGE_COVERAGE_MEASUREMENTS_TEST_NAME = "mergeCoverageMeasurements";
     public static final String COVERAGE_MEASUREMENT_KEY = "coverageFilePath";
     public static final String COVERAGE_DIRECTORY = "/data/misc/trace";
     public static final String FIND_COVERAGE_FILES =
@@ -66,9 +65,10 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
     @Option(
             name = "merge-coverage-measurements",
             description =
-                    "Merge coverage measurements after a test rather than logging"
-                            + " individual measurements.")
-    private boolean mMergeCoverageMeasurements = true;
+                    "Merge coverage measurements after all tests are complete rather than logging individual measurements.")
+    private boolean mMergeCoverageMeasurements = false;
+
+    private final ExecFileLoader mExecFileLoader = new ExecFileLoader();
 
     private JavaCodeCoverageFlusher mFlusher;
     private IConfiguration mConfiguration;
@@ -82,7 +82,7 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
             try (AdbRootElevator adbRoot = new AdbRootElevator(getDevices().get(0))) {
                 getCoverageFlusher().resetCoverage();
             } catch (DeviceNotAvailableException e) {
-                throw new HarnessRuntimeException("Failed to reset coverage.", e);
+                throw new RuntimeException(e);
             }
         }
 
@@ -119,42 +119,56 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
         if (!isJavaCoverageEnabled()) {
             return;
         }
-        ImmutableList.Builder<String> devicePaths = ImmutableList.builder();
+        if (MERGE_COVERAGE_MEASUREMENTS_TEST_NAME.equals(getRunName())) {
+            // Log the merged runtime coverage measurement.
+            try {
+                File mergedMeasurements =
+                        FileUtil.createTempFile(
+                                "merged_runtime_coverage_",
+                                "." + LogDataType.COVERAGE.getFileExt());
 
-        // Get the path of the coverage measurement on the device.
-        Metric devicePathMetric = runMetrics.get(COVERAGE_MEASUREMENT_KEY);
-        if (devicePathMetric == null) {
-            CLog.d("No Java code coverage measurement.");
+                mExecFileLoader.save(mergedMeasurements, false);
+
+                // Save the merged measurement as a test log.
+                logCoverageMeasurement("merged_runtime_coverage", mergedMeasurements);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         } else {
-            String testCoveragePath = devicePathMetric.getMeasurements().getSingleString();
-            if (testCoveragePath == null) {
+            ImmutableList.Builder<String> devicePaths = ImmutableList.builder();
+
+            // Get the path of the coverage measurement on the device.
+            Metric devicePathMetric = runMetrics.get(COVERAGE_MEASUREMENT_KEY);
+            if (devicePathMetric == null) {
                 CLog.d("No Java code coverage measurement.");
             } else {
-                devicePaths.add(testCoveragePath);
-            }
-        }
-
-        ITestDevice device = getRealDevices().get(0);
-
-        try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-            if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
-                getCoverageFlusher().forceCoverageFlush();
+                String testCoveragePath = devicePathMetric.getMeasurements().getSingleString();
+                if (testCoveragePath == null) {
+                    CLog.d("No Java code coverage measurement.");
+                } else {
+                    devicePaths.add(testCoveragePath);
+                }
             }
 
-            // Find all .ec files in /data/misc/trace and pull them from the device as well.
-            String fileList = device.executeShellCommand(FIND_COVERAGE_FILES);
-            devicePaths.addAll(Splitter.on('\n').omitEmptyStrings().split(fileList));
+            ITestDevice device = getRealDevices().get(0);
 
-            collectAndLogCoverageMeasurements(device, devicePaths.build());
-        } catch (DeviceNotAvailableException | IOException e) {
-            throw new HarnessRuntimeException(
-                    "Failed to log Java coverage measurements.",
-                    e,
-                    InfraErrorIdentifier.CODE_COVERAGE_ERROR);
+            try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
+                if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
+                    getCoverageFlusher().forceCoverageFlush();
+                }
+
+                // Find all .ec files in /data/misc/trace and pull them from the device as well.
+                String fileList = device.executeShellCommand(FIND_COVERAGE_FILES);
+                devicePaths.addAll(Splitter.on('\n').omitEmptyStrings().split(fileList));
+
+                collectAndLogCoverageMeasurements(device, devicePaths.build());
+            } catch (DeviceNotAvailableException | IOException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
-    private void logCoverageMeasurement(String name, File coverageFile) throws IOException {
+    private void logCoverageMeasurement(String name, File coverageFile) {
         try (FileInputStreamSource source = new FileInputStreamSource(coverageFile, true)) {
             testLog(name, LogDataType.COVERAGE, source);
         }
@@ -163,8 +177,6 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
     private void collectAndLogCoverageMeasurements(ITestDevice device, List<String> devicePaths)
             throws IOException, DeviceNotAvailableException {
         List<Integer> activePids = getRunningProcessIds(device);
-
-        ExecFileLoader loader = new ExecFileLoader();
 
         for (String devicePath : devicePaths) {
             File coverageFile = device.pullFile(devicePath);
@@ -188,8 +200,9 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
             // When merging, load the measurement data. Otherwise log the measurement
             // immediately.
             try {
-                loader.load(coverageFile);
-                if (!mMergeCoverageMeasurements) {
+                if (mMergeCoverageMeasurements) {
+                    mExecFileLoader.load(coverageFile);
+                } else {
                     logCoverageMeasurement(
                             getRunName()
                                     + "_"
@@ -199,19 +212,6 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                 }
             } finally {
                 FileUtil.deleteFile(coverageFile);
-            }
-        }
-
-        if (mMergeCoverageMeasurements) {
-            File mergedData = null;
-
-            try {
-                mergedData = FileUtil.createTempFile(getRunName(), ".ec");
-                loader.save(mergedData, false);
-
-                logCoverageMeasurement(getRunName() + "_runtime_coverage", mergedData);
-            } finally {
-                FileUtil.deleteFile(mergedData);
             }
         }
     }

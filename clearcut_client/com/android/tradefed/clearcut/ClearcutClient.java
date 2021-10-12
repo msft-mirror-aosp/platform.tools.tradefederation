@@ -225,7 +225,7 @@ public class ClearcutClient {
 
     /** Returns True if clearcut is disabled, False otherwise. */
     @VisibleForTesting
-    boolean isClearcutDisabled() {
+    public boolean isClearcutDisabled() {
         return "1".equals(System.getenv(DISABLE_CLEARCUT_KEY));
     }
 

@@ -67,7 +67,7 @@ public class HostOptions implements IHostOptions {
     @Option(
             name = "enable-fastbootd-mode",
             description = "Feature flag to enable the support for fastbootd.")
-    private boolean mEnableFastbootdMode = false;
+    private boolean mEnableFastbootdMode = true;
 
     @Option(name = "download-cache-dir", description = "the directory for caching downloaded "
             + "flashing files. Should be on the same filesystem as java.io.tmpdir.  Consider "
@@ -101,6 +101,13 @@ public class HostOptions implements IHostOptions {
                     "known remote device available via ip associated with the "
                             + "gce-device placeholder.")
     private Set<String> mKnownGceDeviceIpPool = new HashSet<>();
+
+    @Option(
+            name = "known-remote-device-ip-pool",
+            description =
+                    "known remote device available via ip associated with the "
+                            + "remote-device placeholder.")
+    private Set<String> mKnownRemoteDeviceIpPool = new HashSet<>();
 
     @Option(
             name = "use-zip64-in-partial-download",
@@ -178,6 +185,12 @@ public class HostOptions implements IHostOptions {
     @Override
     public Set<String> getKnownGceDeviceIpPool() {
         return new HashSet<>(mKnownGceDeviceIpPool);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Set<String> getKnownRemoteDeviceIpPool() {
+        return new HashSet<>(mKnownRemoteDeviceIpPool);
     }
 
     /** {@inheritDoc} */

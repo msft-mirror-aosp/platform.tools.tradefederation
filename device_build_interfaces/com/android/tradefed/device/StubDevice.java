@@ -274,6 +274,19 @@ public class StubDevice implements IDevice, Serializable {
     }
     /** {@inheritDoc} */
     @Override
+    public void removeForward(int localPort, int remotePort)
+            throws TimeoutException, AdbCommandRejectedException, IOException {
+        throw new IOException("stub");
+    }
+    /** {@inheritDoc} */
+    @Override
+    public void removeForward(
+            int localPort, String remoteSocketName, DeviceUnixSocketNamespace namespace)
+            throws TimeoutException, AdbCommandRejectedException, IOException {
+        throw new IOException("stub");
+    }
+    /** {@inheritDoc} */
+    @Override
     public void removeForward(int localPort)
             throws TimeoutException, AdbCommandRejectedException, IOException {
         throw new IOException("stub");

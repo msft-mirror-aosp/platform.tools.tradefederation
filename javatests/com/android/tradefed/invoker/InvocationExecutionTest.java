@@ -213,6 +213,7 @@ public class InvocationExecutionTest {
         testStubSetter.setOptionValue("log-fake-files", "true");
         tests.add(stubTest);
         mConfig.setTests(tests);
+        mConfig.getRetryDecision().setInvocationContext(mContext);
         mExec.runTests(info, mConfig, mMockLogListener);
 
         verify(mMockLogListener).testRunStarted(eq("runName"), eq(3), eq(0), Mockito.anyLong());
@@ -243,6 +244,7 @@ public class InvocationExecutionTest {
         testStubSetter.setOptionValue("log-fake-files", "true");
         tests.add(stubTest);
         mConfig.setTests(tests);
+        mConfig.getRetryDecision().setInvocationContext(mContext);
         LogSaverResultForwarder forwarder =
                 new LogSaverResultForwarder(mConfig.getLogSaver(), Arrays.asList(mMockLogListener));
         mExec.runTests(info, mConfig, forwarder);
