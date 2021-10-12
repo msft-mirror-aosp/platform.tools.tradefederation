@@ -101,6 +101,12 @@ public class RemoteInvocationExecution extends InvocationExecution {
     private static final int MAX_PUSH_TF_ATTEMPTS = 3;
     private static final String TRADEFED_EARLY_TERMINATION =
             "Remote Tradefed might have terminated early.\nRemote Stderr:\n%s";
+    /**
+     * Pass these invocation context attributes to remote if they are not part of invocation data
+     */
+    private static final String[] INVOCATION_CONTEXT_ATTR_TO_DATA = {
+        "invocation_id", "work_unit_id"
+    };
 
     private String mRemoteTradefedDir = null;
     private String mRemoteAdbPath = null;
@@ -212,7 +218,8 @@ public class RemoteInvocationExecution extends InvocationExecution {
         CLog.d("stdout: %s", listRemoteDir.getStdout());
         CLog.d("stderr: %s", listRemoteDir.getStderr());
 
-        File configFile = createRemoteConfig(config, listener, mRemoteTradefedDir);
+        File configFile =
+                createRemoteConfig(info.getContext(), config, listener, mRemoteTradefedDir);
         File globalConfig = null;
         try {
             CLog.d("Pushing Tradefed XML configuration to remote.");
@@ -625,6 +632,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
     /**
      * Create the configuration that will run in the remote VM.
      *
+     * @param context the {@link IInvocationContext} for the current invocation
      * @param config The main {@link IConfiguration}.
      * @param logger A logger where to save the XML configuration for debugging.
      * @param resultDirPath the remote result dir where results should be saved.
@@ -632,7 +640,11 @@ public class RemoteInvocationExecution extends InvocationExecution {
      * @throws IOException
      */
     @VisibleForTesting
-    File createRemoteConfig(IConfiguration config, ITestLogger logger, String resultDirPath)
+    File createRemoteConfig(
+            IInvocationContext context,
+            IConfiguration config,
+            ITestLogger logger,
+            String resultDirPath)
             throws IOException, ConfigurationException {
         // Setup the remote reporting to a proto file
         List<ITestInvocationListener> reporters = new ArrayList<>();
@@ -666,6 +678,17 @@ public class RemoteInvocationExecution extends InvocationExecution {
         config.getCommandOptions()
                 .getInvocationData()
                 .put(SubprocessTfLauncher.SUBPROCESS_TAG_NAME, "true");
+
+        // Pass invocation and work unit ids for local invocation since they are not provided as
+        // command line invocation-data options
+        for (String key : INVOCATION_CONTEXT_ATTR_TO_DATA) {
+            if (!config.getCommandOptions().getInvocationData().containsKey(key)) {
+                String value = context.getAttribute(key);
+                if (!Strings.isNullOrEmpty(value)) {
+                    config.getCommandOptions().getInvocationData().put(key, value);
+                }
+            }
+        }
 
         // Clear the server reference as remote will run its own.
         if (GlobalConfiguration.getInstance().getFeatureServer() != null) {
