@@ -775,7 +775,7 @@ public class OptionSetter {
     /**
      * Runs through all the {@link File} option type and check if their path should be resolved.
      *
-     * @param The {@link DynamicRemoteFileResolver} to use to resolve the files.
+     * @param resolver The {@link DynamicRemoteFileResolver} to use to resolve the files.
      * @return The list of {@link File} that was resolved that way.
      * @throws BuildRetrievalError
      */
