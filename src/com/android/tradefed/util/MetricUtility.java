@@ -32,9 +32,8 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -65,12 +64,12 @@ public class MetricUtility {
     private String mTestIterationSeparator = "$";
 
     // Percentiles to include when calculating the aggregates.
-    private Set<Integer> mActualPercentiles = new HashSet<>();
+    private Set<Integer> mActualPercentiles = new LinkedHashSet<>();
 
     // Store the test metrics for aggregation at the end of test run.
     // Outer map key is the test id and inner map key is the metric key name.
     private Map<String, ArrayListMultimap<String, Metric>> mStoredTestMetrics =
-            new HashMap<String, ArrayListMultimap<String, Metric>>();
+            new LinkedHashMap<String, ArrayListMultimap<String, Metric>>();
 
     /**
      * Used for storing the individual test metrics and use it for aggregation.
@@ -263,8 +262,8 @@ public class MetricUtility {
                 .average()
                 .orElseThrow(IllegalStateException::new);
         double variance = values.stream().reduce(0.0, (a, b) -> a + Math.pow(b - mean, 2) / count);
-        // Calculate percentiles. 50 th percentile will be used as medain.
-        Set<Integer> updatedPercentile = new HashSet<>(percentiles);
+        // Calculate percentiles. 50 th percentile will be used as median.
+        Set<Integer> updatedPercentile = new LinkedHashSet<>(percentiles);
         updatedPercentile.add(50);
         Map<Integer, Double> percentileStat = Quantiles.percentiles().indexes(updatedPercentile)
                 .compute(values);
