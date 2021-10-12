@@ -349,10 +349,9 @@ public class DynamicRemoteFileResolverTest {
         List<Callable<Set<File>>> call = new ArrayList<>();
         List<ITestDevice> devices = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
-            OptionSetter setter2 = new OptionSetter(object);
             Callable<Set<File>> callableTask =
                     () -> {
-                        return setter2.validateRemoteFilePath(mResolver);
+                        return setter.validateRemoteFilePath(mResolver);
                     };
             call.add(callableTask);
             devices.add(Mockito.mock(ITestDevice.class));
