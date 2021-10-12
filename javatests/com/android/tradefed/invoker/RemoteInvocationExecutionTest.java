@@ -96,7 +96,9 @@ public class RemoteInvocationExecutionTest {
         mConfiguration.setDeviceConfig(deviceConfig);
         File res = null;
         try {
-            res = mRemoteInvocation.createRemoteConfig(mConfiguration, mMockListener, "path/");
+            res =
+                    mRemoteInvocation.createRemoteConfig(
+                            mContext, mConfiguration, mMockListener, "path/");
             IConfiguration reparse =
                     ConfigurationFactory.getInstance()
                             .createConfigurationFromArgs(new String[] {res.getAbsolutePath()});
@@ -111,6 +113,37 @@ public class RemoteInvocationExecutionTest {
             assertEquals(
                     "",
                     reparse.getDeviceConfig().get(0).getDeviceOptions().getRemoteTf().getPath());
+        } finally {
+            FileUtil.deleteFile(res);
+        }
+
+        verify(mMockListener)
+                .testLog(
+                        Mockito.eq(RemoteInvocationExecution.REMOTE_CONFIG),
+                        Mockito.eq(LogDataType.XML),
+                        Mockito.any());
+    }
+
+    @Test
+    public void testCreateRemoteConfigForInvocationWorkUnitId() throws Exception {
+        mContext.addInvocationAttribute("invocation_id", "foo");
+        mContext.addInvocationAttribute("work_unit_id", "bar");
+        File res = null;
+        try {
+            res =
+                    mRemoteInvocation.createRemoteConfig(
+                            mContext, mConfiguration, mMockListener, "path/");
+            IConfiguration reparse =
+                    ConfigurationFactory.getInstance()
+                            .createConfigurationFromArgs(new String[] {res.getAbsolutePath()});
+            assertEquals(
+                    "invocation_id not set as expected",
+                    "foo",
+                    reparse.getCommandOptions().getInvocationData().get("invocation_id").get(0));
+            assertEquals(
+                    "work_unit_id not set as expected",
+                    "bar",
+                    reparse.getCommandOptions().getInvocationData().get("work_unit_id").get(0));
         } finally {
             FileUtil.deleteFile(res);
         }
