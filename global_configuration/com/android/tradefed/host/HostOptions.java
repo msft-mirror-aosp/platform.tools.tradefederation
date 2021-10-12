@@ -103,6 +103,13 @@ public class HostOptions implements IHostOptions {
     private Set<String> mKnownGceDeviceIpPool = new HashSet<>();
 
     @Option(
+            name = "known-remote-device-ip-pool",
+            description =
+                    "known remote device available via ip associated with the "
+                            + "remote-device placeholder.")
+    private Set<String> mKnownRemoteDeviceIpPool = new HashSet<>();
+
+    @Option(
             name = "use-zip64-in-partial-download",
             description = "Whether to use zip64 format in partial download.")
     private boolean mUseZip64InPartialDownload = false;
@@ -178,6 +185,12 @@ public class HostOptions implements IHostOptions {
     @Override
     public Set<String> getKnownGceDeviceIpPool() {
         return new HashSet<>(mKnownGceDeviceIpPool);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Set<String> getKnownRemoteDeviceIpPool() {
+        return new HashSet<>(mKnownRemoteDeviceIpPool);
     }
 
     /** {@inheritDoc} */
