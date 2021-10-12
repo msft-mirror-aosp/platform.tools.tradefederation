@@ -79,6 +79,9 @@ public interface IHostOptions {
     /** Known gce-device associated with a specific IP. */
     Set<String> getKnownGceDeviceIpPool();
 
+    /** Known remote-device associated with a specific IP. */
+    Set<String> getKnownRemoteDeviceIpPool();
+
     /** Check if it should use the zip64 format in partial download or not. */
     boolean getUseZip64InPartialDownload();
 
