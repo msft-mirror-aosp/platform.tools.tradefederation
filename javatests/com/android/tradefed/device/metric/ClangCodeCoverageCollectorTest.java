@@ -455,6 +455,10 @@ public class ClangCodeCoverageCollectorTest {
         List<String> getCommand() {
             return mCommand;
         }
+
+        /** Ignores sleep calls. */
+        @Override
+        public void sleep(long ms) {}
     }
 
     /** An {@link ITestInvocationListener} which reads test log data streams for verification. */

@@ -64,8 +64,8 @@ public class RemoteAndroidDevice extends TestDevice {
     public RemoteAndroidDevice(IDevice device, IDeviceStateMonitor stateMonitor,
             IDeviceMonitor allocationMonitor) {
         super(device, stateMonitor, allocationMonitor);
-        if (getIDevice() instanceof TcpDevice) {
-            mInitialIpDevice = ((TcpDevice) getIDevice()).getKnownDeviceIp();
+        if (getIDevice() instanceof IConfigurableIp) {
+            mInitialIpDevice = ((IConfigurableIp) getIDevice()).getKnownDeviceIp();
         }
         mInitialSerial = getSerialNumber();
     }

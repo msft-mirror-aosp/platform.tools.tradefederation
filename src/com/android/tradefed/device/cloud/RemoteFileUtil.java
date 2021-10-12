@@ -165,6 +165,35 @@ public class RemoteFileUtil {
     }
 
     /**
+     * Check if a file (or directory) exists on the remote instance
+     *
+     * @param remoteInstance The {@link GceAvdInfo} that describe the device.
+     * @param options a {@link TestDeviceOptions} describing the device options to be used for the
+     *     GCE device.
+     * @param runUtil a {@link IRunUtil} to execute commands.
+     * @param timeout in millisecond for the fetch to complete
+     * @param remotePath The remote path where to find the file.
+     * @return whether the file exists or not
+     */
+    public static boolean doesRemoteFileExist(
+            GceAvdInfo remoteInstance,
+            TestDeviceOptions options,
+            IRunUtil runUtil,
+            long timeout,
+            String remotePath) {
+        List<String> sshCmd =
+                GceRemoteCmdFormatter.getSshCommand(
+                        options.getSshPrivateKeyPath(),
+                        null,
+                        options.getInstanceUser(),
+                        remoteInstance.hostAndPort().getHost(),
+                        "ls",
+                        remotePath);
+        CommandResult resSsh = runUtil.runTimedCmd(timeout, sshCmd.toArray(new String[0]));
+        return resSsh.getExitCode() == 0;
+    }
+
+    /**
      * Push a {@link File} from the local host to the remote instance
      *
      * @param remoteInstance The {@link GceAvdInfo} that describe the device.

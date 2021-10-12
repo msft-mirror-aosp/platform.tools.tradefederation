@@ -79,6 +79,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.AdditionalMatchers;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayOutputStream;
@@ -98,6 +99,7 @@ public class CommandSchedulerTest {
 
     private CommandScheduler mScheduler;
     @Mock ITestInvocation mMockInvocation;
+    @Mock CommandFileWatcher mMockFileWatcher;
     private MockDeviceManager mFakeDeviceManager;
     @Mock IConfigurationFactory mMockConfigFactory;
     @Mock IConfiguration mMockConfiguration;
@@ -165,6 +167,11 @@ public class CommandSchedulerTest {
         @Override
         protected IKeyStoreClient getKeyStoreClient() {
             return mMockKeyStoreClient;
+        }
+
+        @Override
+        public synchronized CommandFileWatcher getCommandFileWatcher() {
+            return mMockFileWatcher;
         }
     }
 
@@ -628,6 +635,7 @@ public class CommandSchedulerTest {
                     }
                 };
 
+        when(mMockFileWatcher.isFileWatched(Mockito.any())).thenReturn(false).thenReturn(true);
         mScheduler.start();
         mScheduler.setCommandFileReload(true);
         mScheduler.addCommandFile("mycmd.txt", Collections.<String>emptyList());
