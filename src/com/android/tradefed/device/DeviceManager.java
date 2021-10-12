@@ -544,6 +544,14 @@ public class DeviceManager implements IDeviceManager {
                             String.format("%s-%d", GCE_DEVICE_SERIAL_PREFIX, index), ip));
             index++;
         }
+
+        index = mNumRemoteDevicesSupported;
+        for (String ip : getGlobalConfig().getHostOptions().getKnownRemoteDeviceIpPool()) {
+            addAvailableDevice(
+                    new VmRemoteDevice(
+                            String.format("%s-%d", REMOTE_DEVICE_SERIAL_PREFIX, index), ip));
+            index++;
+        }
     }
 
     private void addLocalVirtualDevices() {

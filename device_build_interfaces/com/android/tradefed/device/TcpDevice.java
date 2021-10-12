@@ -18,12 +18,12 @@ package com.android.tradefed.device;
 import com.android.ddmlib.IDevice;
 
 /**
- * A placeholder {@link IDevice} used by {@link DeviceManager} to allocate when
- * {@link DeviceSelectionOptions#tcpDeviceRequested()} is <code>true</code>
+ * A placeholder {@link IDevice} used by {@link DeviceManager} to allocate when {@link
+ * DeviceSelectionOptions#tcpDeviceRequested()} is <code>true</code>
  */
-public class TcpDevice extends StubDevice {
+public class TcpDevice extends StubDevice implements IConfigurableIp {
 
-    private String mKnownDeviceIp;
+    private String mKnownDeviceIp = null;
 
     public TcpDevice(String serial) {
         super(serial, false);
@@ -34,8 +34,10 @@ public class TcpDevice extends StubDevice {
         mKnownDeviceIp = knownDeviceIp;
     }
 
-    /** Returns the known associated IP if available, returns null if no known ip. */
+    /** {@inheritDoc} */
+    @Override
     public String getKnownDeviceIp() {
         return mKnownDeviceIp;
     }
+
 }
