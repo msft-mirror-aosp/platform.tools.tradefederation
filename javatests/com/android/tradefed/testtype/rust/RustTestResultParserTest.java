@@ -53,26 +53,30 @@ public class RustTestResultParserTest extends RustParserTestBase {
     @Test
     public void testRegexTestCase() {
         String[] goodPatterns = {
-            "test some_test ... ok",
-            "test some_test - should panic ... ok",
-            "test some_test ... pass",
-            "test other-test ... fail",
-            "test any ... FAIL",
+            "test some_test ... ok <0.000s>",
+            "test some_test - should panic ... ok <0.000s>",
+            "test some_test ... pass <0.000s>",
+            "test other-test ... fail <0.000s>",
+            "test any ... FAIL <0.000s>",
             "test some_test ... ignored",
-            "test some_test ... other_strings",
+            "test some_test ... other_strings <0.000s>",
+            "test some_test ... ok <0.001s>",
+            "test some_test ... ok <42.42s>",
         };
         String[] wrongPatterns = {
-            " test some_test ... ok",
-            "test some_test  - should panic ... ok",
-            "test some_test -  should panic ... ok",
-            "test some_test - should panic  ... ok",
-            "test some_test - something else ... ok",
-            "test  other-test ... fail",
+            " test some_test ... ok <0.000s>",
+            "test some_test  - should panic ... ok <0.000s>",
+            "test some_test -  should panic ... ok <0.000s>",
+            "test some_test - should panic  ... ok <0.000s>",
+            "test some_test - something else ... ok <0.000s>",
+            "test  other-test ... fail <0.000s>",
             "test any ...  FAIL",
             "test some_test  ... ignored",
             "test some_test .. other",
             "test some_test ... other strings",
             "test some_test .... ok",
+            "test some_test ... ok <42s>",
+            "test some_test ... ok <42>",
         };
         for (String s : goodPatterns) {
             assertTrue(s, RustTestResultParser.RUST_ONE_LINE_RESULT.matcher(s).matches());
@@ -161,9 +165,10 @@ public class RustTestResultParserTest extends RustParserTestBase {
         mParser.processNewLines(contents);
         mParser.done();
 
-        verify(mMockListener, times(10)).testStarted(Mockito.any());
+        verify(mMockListener, times(10)).testStarted(Mockito.any(), Mockito.anyLong());
         verify(mMockListener, times(10))
-                .testEnded(Mockito.any(), Mockito.<HashMap<String, Metric>>any());
+                .testEnded(
+                        Mockito.any(), Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
@@ -186,9 +191,10 @@ public class RustTestResultParserTest extends RustParserTestBase {
         mParser.processNewLines(contents);
         mParser.done();
 
-        verify(mMockListener, times(23)).testStarted(Mockito.any());
+        verify(mMockListener, times(23)).testStarted(Mockito.any(), Mockito.anyLong());
         verify(mMockListener, times(23))
-                .testEnded(Mockito.any(), Mockito.<HashMap<String, Metric>>any());
+                .testEnded(
+                        Mockito.any(), Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener)
                 .testFailed(
                         Mockito.eq(new TestDescription("test", "idents")), Mockito.eq(identsTrace));
@@ -224,9 +230,10 @@ public class RustTestResultParserTest extends RustParserTestBase {
         mParser.processNewLines(Arrays.copyOfRange(contents, 4, contents.length));
         mParser.done();
 
-        verify(mMockListener, times(10)).testStarted(Mockito.any());
+        verify(mMockListener, times(10)).testStarted(Mockito.any(), Mockito.anyLong());
         verify(mMockListener, times(10))
-                .testEnded(Mockito.any(), Mockito.<HashMap<String, Metric>>any());
+                .testEnded(
+                        Mockito.any(), Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
@@ -253,9 +260,10 @@ public class RustTestResultParserTest extends RustParserTestBase {
         mParser.processNewLines(contents);
         mParser.done();
 
-        verify(mMockListener, times(9)).testStarted(Mockito.any());
+        verify(mMockListener, times(9)).testStarted(Mockito.any(), Mockito.anyLong());
         verify(mMockListener, times(9))
-                .testEnded(Mockito.any(), Mockito.<HashMap<String, Metric>>any());
+                .testEnded(
+                        Mockito.any(), Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener)
                 .testRunFailed(Mockito.eq("Test run incomplete. Started 10 tests, finished 9"));
     }

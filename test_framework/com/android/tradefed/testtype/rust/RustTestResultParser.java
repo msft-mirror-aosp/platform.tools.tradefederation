@@ -20,6 +20,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.util.Pair;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,8 +40,8 @@ import java.util.regex.Pattern;
  *
  * <p><code>
  * running 10 tests
- * test LexError ... ok
- * test idents ... FAILED
+ * test LexError ... ok <0.001s>
+ * test idents ... FAILED <0.000s>
  * test make_sure_no_proc_macro ... ignored
  * ...
  * ---- tests::idents stdout ----
@@ -56,12 +57,13 @@ public class RustTestResultParser extends MultiLineReceiver {
     private String mCurrentTestFile;
     private String mCurrentTestName;
     private String mCurrentTestStatus;
+    private String mCurrentTestTime;
     private StringBuilder mCurrentTestTrace;
     private Matcher mCurrentMatcher;
 
     // General state
     private Collection<ITestInvocationListener> mListeners = new ArrayList<>();
-    private Map<TestDescription, String> mTestResultCache;
+    private Map<TestDescription, Pair<String, String>> mTestResultCache;
     private Map<TestDescription, String> mTestTraceCache;
 
     /** True if we have seen at least one test start. */
@@ -86,7 +88,8 @@ public class RustTestResultParser extends MultiLineReceiver {
             Pattern.compile("test result: (.*) (\\d+) passed; (\\d+) failed; (\\d+) ignored;.*");
 
     static final Pattern RUST_ONE_LINE_RESULT =
-            Pattern.compile("test (\\S*) (?:- should panic )?\\.\\.\\. (\\S*)");
+            Pattern.compile(
+                    "test (\\S*) (?:- should panic )?\\.\\.\\. (\\S*)(?: <(\\d+\\.\\d+)s>)?");
 
     static final Pattern RUNNING_PATTERN = Pattern.compile("running (.*) test[s]?");
 
@@ -131,6 +134,7 @@ public class RustTestResultParser extends MultiLineReceiver {
             if (lineMatchesPattern(line, RUST_ONE_LINE_RESULT)) {
                 mCurrentTestName = mCurrentMatcher.group(1);
                 mCurrentTestStatus = mCurrentMatcher.group(2);
+                mCurrentTestTime = mCurrentMatcher.group(3);
                 mNumTestsEnded++;
                 reportTestResult();
             } else if (lineMatchesPattern(line, RUNNING_PATTERN)) {
@@ -191,19 +195,33 @@ public class RustTestResultParser extends MultiLineReceiver {
         }
         mDoneCalled = true;
         for (ITestInvocationListener listener : mListeners) {
-            for (Entry<TestDescription, String> test : mTestResultCache.entrySet()) {
-                listener.testStarted(test.getKey());
-                if (SKIPPED_ENTRY.equals(test.getValue())) {
+            for (Entry<TestDescription, Pair<String, String>> test : mTestResultCache.entrySet()) {
+                String status = test.getValue().first;
+                Double time = parseTime(test.getValue().second);
+                long startTime = System.currentTimeMillis();
+                if (time == null) {
+                    listener.testStarted(test.getKey());
+                } else {
+                    listener.testStarted(test.getKey(), startTime);
+                }
+                if (SKIPPED_ENTRY.equals(status)) {
                     listener.testIgnored(test.getKey());
-                } else if (FAILED_ENTRY.equals(test.getValue())) {
+                } else if (FAILED_ENTRY.equals(status)) {
                     listener.testFailed(
                             test.getKey(), mTestTraceCache.getOrDefault(test.getKey(), ""));
-                } else if (test.getValue() != null) {
+                } else if (status != null) {
                     // Report all unexpected test result as failed tests,
                     // so they are not missed.
-                    listener.testFailed(test.getKey(), test.getValue());
+                    listener.testFailed(test.getKey(), status);
                 }
-                listener.testEnded(test.getKey(), new HashMap<String, Metric>());
+                if (time == null) {
+                    listener.testEnded(test.getKey(), new HashMap<String, Metric>());
+                } else {
+                    listener.testEnded(
+                            test.getKey(),
+                            startTime + (long) (time * 1000),
+                            new HashMap<String, Metric>());
+                }
             }
             // If we have not seen any tests start, report a failure.
             // If this happens, there are presumably no test results,
@@ -225,16 +243,18 @@ public class RustTestResultParser extends MultiLineReceiver {
     /** Record a test case. */
     private void reportTestResult() {
         TestDescription testId = new TestDescription(mCurrentTestFile, mCurrentTestName);
+        String status;
         if (mCurrentTestStatus.equals("ok")) {
-            mTestResultCache.put(testId, null);
+            status = null;
         } else if (mCurrentTestStatus.equals("ignored")) {
-            mTestResultCache.put(testId, SKIPPED_ENTRY);
+            status = SKIPPED_ENTRY;
         } else if (mCurrentTestStatus.equals("FAILED")) {
             // Rust tests report "FAILED" without stack trace.
-            mTestResultCache.put(testId, FAILED_ENTRY);
+            status = FAILED_ENTRY;
         } else {
-            mTestResultCache.put(testId, mCurrentTestStatus);
+            status = mCurrentTestStatus;
         }
+        mTestResultCache.put(testId, new Pair<>(status, mCurrentTestTime));
     }
 
     private void reportTestTrace() {
@@ -247,6 +267,20 @@ public class RustTestResultParser extends MultiLineReceiver {
         // Add the trace.
         TestDescription testId = new TestDescription(mCurrentTestFile, mCurrentTestName);
         mTestTraceCache.put(testId, mCurrentTestTrace.toString());
+    }
+
+    /** Parse the given string into a number */
+    private Double parseTime(String time) {
+        // Passing and failing tests have times, but ignored tests do not.
+        if (time == null) {
+            return null;
+        }
+        try {
+            return Double.valueOf(time);
+        } catch (NumberFormatException e) {
+            CLog.e("Test run time value is invalid, received: %s", time);
+            return null;
+        }
     }
 
     @Override
