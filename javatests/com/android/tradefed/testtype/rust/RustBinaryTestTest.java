@@ -100,17 +100,21 @@ public class RustBinaryTestTest {
 
     /** Add mocked Call "path --list" to count the number of tests. */
     private void mockCountTests(String path, String result) throws DeviceNotAvailableException {
-        mockCountTests(path, result, "");
+        mockCountTests(path, result, "", "");
     }
 
     /** Add mocked Call "path --list" to count the number of tests. */
-    private void mockCountTests(String path, String result, String flags)
+    private void mockCountTests(String path, String result, String flags, String filters)
             throws DeviceNotAvailableException {
         File file = new File(path);
         String dir = file.getParent();
         String cmd = "cd " + dir + " && " + path;
         if (flags.length() > 0) {
             cmd += " " + flags;
+        }
+        cmd += " -Zunstable-options --report-time";
+        if (filters.length() > 0) {
+            cmd += filters;
         }
         when(mMockITestDevice.executeShellCommand(cmd + " --list")).thenReturn(result);
     }
@@ -119,7 +123,10 @@ public class RustBinaryTestTest {
     private void mockCountBenchmarks(String path, String result)
             throws DeviceNotAvailableException {
         when(mMockITestDevice.executeShellCommand(
-                        Mockito.contains(path + " --bench --color never --list")))
+                        Mockito.contains(
+                                path
+                                        + " -Zunstable-options --report-time --bench --color never"
+                                        + " --list")))
                 .thenReturn(result);
     }
 
@@ -354,11 +361,11 @@ public class RustBinaryTestTest {
         when(mMockITestDevice.isExecutable(testPath1)).thenReturn(true);
 
         for (String filter : filterStrings) {
-            mockCountTests(testPath1 + filter, runListOutput(3));
+            mockCountTests(testPath1, runListOutput(3), "", filter);
         }
         mockTestRunStarted("test1", 3);
         for (String filter : filterStrings) {
-            mockShellCommand(test1 + filter);
+            mockShellCommand(test1 + " -Zunstable-options --report-time" + filter);
         }
         mockTestRunEnded();
         callReplayRunVerify();
@@ -417,7 +424,7 @@ public class RustBinaryTestTest {
         when(mMockITestDevice.isDirectory(testPath1)).thenReturn(false);
         when(mMockITestDevice.isExecutable(testPath1)).thenReturn(true);
 
-        mockCountTests(testPath1, runListOutput(42), "--option");
+        mockCountTests(testPath1, runListOutput(42), "--option", "");
         mockTestRunStarted("test1", 42);
         mockShellCommand(testPath1 + " --option");
         mockTestRunEnded();
