@@ -77,6 +77,7 @@ import com.android.tradefed.result.ReportPassedTests;
 import com.android.tradefed.result.ResultAndLogForwarder;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.device.internal.DeviceReleaseReporter;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.ResultAggregator;
@@ -397,11 +398,20 @@ public class TestInvocation implements ITestInvocation {
             }
             mStatus = "done running tests";
             CurrentInvocation.setActionInProgress(ActionInProgress.FREE_RESOURCES);
-            // Log count of allocated devices for test accounting
-            addInvocationMetric(InvocationMetricKey.DEVICE_COUNT, context.getNumDevicesAllocated());
-            // Track the timestamp when we are done with devices
-            addInvocationMetric(
-                    InvocationMetricKey.DEVICE_DONE_TIMESTAMP, System.currentTimeMillis());
+
+            // Only log the device done metrics if the delegatedEarlyDeviceRelease feature is turned
+            // off. If the feature is turned on, logging is done in the EarlyDeviceReleaseFeature.
+            // Note: When this flag is enabled by default, logging should not be performed if
+            // running as a parent or delegate object.
+            if (!config.getCommandOptions().delegatedEarlyDeviceRelease()) {
+                // Log count of allocated devices for test accounting
+                addInvocationMetric(
+                        InvocationMetricKey.DEVICE_COUNT, context.getNumDevicesAllocated());
+                // Track the timestamp when we are done with devices
+                addInvocationMetric(
+                        InvocationMetricKey.DEVICE_DONE_TIMESTAMP, System.currentTimeMillis());
+            }
+
             Map<ITestDevice, FreeDeviceState> devicesStates =
                     handleAndLogReleaseState(context, exception, tearDownException);
             if (config.getCommandOptions().earlyDeviceRelease()) {
@@ -840,6 +850,12 @@ public class TestInvocation implements ITestInvocation {
         }
         // Handle the automated reporting
         applyAutomatedReporters(config);
+
+        if (config.getCommandOptions().delegatedEarlyDeviceRelease()
+                && System.getenv(DelegatedInvocationExecution.DELEGATED_MODE_VAR) != null) {
+            // If in a subprocess, add the early device release feature as a listener.
+            mSchedulerListeners.add(new DeviceReleaseReporter());
+        }
 
         for (ITestInvocationListener listener : extraListeners) {
             if (listener instanceof IScheduledInvocationListener) {
