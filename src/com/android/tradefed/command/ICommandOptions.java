@@ -212,6 +212,12 @@ public interface ICommandOptions {
     /** Whether or not to release the device early when done with it. */
     public boolean earlyDeviceRelease();
 
+    /** Whether or not to release the device early in delegated mode. */
+    public boolean delegatedEarlyDeviceRelease();
+
+    /** Set whether or not to release the device early in delegated mode. */
+    public void setDelegatedEarlyDeviceRelease(boolean earlyRelease);
+
     /** Returns the map of args to pass to the dynamic download query. */
     public Map<String, String> getDynamicDownloadArgs();
 
