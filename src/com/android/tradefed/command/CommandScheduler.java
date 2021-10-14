@@ -1761,7 +1761,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         final String invocationName = String.format("Invocation-%s",
                 context.getSerials().get(0));
         if (getFeatureServer() != null) {
-            getFeatureServer().registerInvocation(cmd.getConfiguration());
+            getFeatureServer().registerInvocation(cmd.getConfiguration(), Arrays.asList(listeners));
         }
         InvocationThread invocationThread = new InvocationThread(invocationName, context, cmd,
                 listeners);
