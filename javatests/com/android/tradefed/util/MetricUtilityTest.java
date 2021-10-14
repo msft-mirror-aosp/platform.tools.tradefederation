@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 
 /** Unit tests for {@link MetricUtility}. */
@@ -244,7 +245,7 @@ public class MetricUtilityTest {
     @Test
     public void testCustomPercentiles() throws IOException {
 
-        mMetricUtil.setPercentiles(new HashSet<> (Arrays.asList(50, 90, 99)));
+        mMetricUtil.setPercentiles(new LinkedHashSet<> (Arrays.asList(50, 90, 99)));
 
         // Build first test metric.
         Map<String, Metric> thirdTestMetric = new HashMap<String, Metric>();
@@ -398,8 +399,8 @@ public class MetricUtilityTest {
                         "third_test_metric-total:6.00\n" +
                         "third_test_metric-metric-count:3.00\n" +
                         "third_test_metric-p50:2.00\n" +
-                        "third_test_metric-p99:2.98\n" +
                         "third_test_metric-p90:2.80\n" +
+                        "third_test_metric-p99:2.98\n" +
                         "\n" +
                         "\n";
             case OUTPUT_6:

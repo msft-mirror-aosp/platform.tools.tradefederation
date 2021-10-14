@@ -21,13 +21,19 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.testmapping.TestInfo;
 import com.android.tradefed.util.testmapping.TestMapping;
 import com.android.tradefed.util.testmapping.TestOption;
+import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.io.Files;
+
+import org.apache.commons.compress.archivers.zip.ZipFile;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -35,6 +41,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -169,6 +177,10 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                                 .stream()
                                 .filter(testInfo -> mTestModulesForced.contains(testInfo.getName()))
                                 .collect(Collectors.toSet());
+            }
+            if (!mAllowedTestLists.isEmpty()) {
+                CLog.i("Filtering tests from allowed test lists: %s", mAllowedTestLists);
+                testInfosToRun = filterByAllowedTestLists(testInfosToRun);
             }
             if (testInfosToRun.isEmpty()) {
                 throw new RuntimeException(
@@ -387,6 +399,53 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         return testInfos
                 .stream()
                 .filter(testInfo -> moduleName.equals(testInfo.getName()))
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Filter test infos by the given allowed test lists.
+     *
+     * @param testInfos A {@code Set<TestInfo>} containing multiple test options.
+     * @return A {@code Set<TestInfo>} of tests matching the allowed test lists.
+     */
+    @VisibleForTesting
+    Set<TestInfo> filterByAllowedTestLists(Set<TestInfo> testInfos) {
+        // Read the list of allowed tests, and compile a set of allowed test module names.
+        Set<String> allowedTests = new HashSet<String>();
+        for (String testList : mAllowedTestLists) {
+            File testListZip = getBuildInfo().getFile(testList);
+            if (testListZip == null) {
+                throw new RuntimeException("Failed to locate allowed test list " + testList);
+            }
+            File testListFile = null;
+            try {
+                ZipFile zipFile = new ZipFile(testListZip);
+                testListFile =
+                        ZipUtil2.extractFileFromZip(
+                                zipFile, Files.getNameWithoutExtension(testList));
+                zipFile.close();
+                String content = FileUtil.readStringFromFile(testListFile);
+                final String pattern = "([^//]*).config$";
+                Pattern namePattern = Pattern.compile(pattern);
+                for (String line : content.split("\n")) {
+                    Matcher matcher = namePattern.matcher(line);
+                    if (matcher.find()) {
+                        allowedTests.add(matcher.group(1));
+                    }
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(
+                        String.format(
+                                "IO exception (%s) when accessing allowed test list (%s)",
+                                e.getMessage(), testList),
+                        e);
+            } finally {
+                FileUtil.recursiveDelete(testListFile);
+            }
+        }
+
+        return testInfos.stream()
+                .filter(testInfo -> allowedTests.contains(testInfo.getName()))
                 .collect(Collectors.toSet());
     }
 }
