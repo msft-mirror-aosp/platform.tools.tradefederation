@@ -210,6 +210,8 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         List<String> commandLine = new ArrayList<>();
         commandLine.add(file.getAbsolutePath());
         commandLine.addAll(mTestOptions);
+        commandLine.add("-Zunstable-options");
+        commandLine.add("--report-time");
         addFiltersToArgs(commandLine, filter);
 
         // Pass parameter to criterion so it performs the benchmarking.

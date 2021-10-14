@@ -108,11 +108,7 @@ public class CommandRunner {
         try {
             initGlobalConfig(args);
 
-            ClearcutClient client =
-                    new ClearcutClient(
-                            TestSuiteInfo.getInstance().didLoadFromProperties()
-                                    ? TestSuiteInfo.getInstance().getName()
-                                    : "");
+            ClearcutClient client = createClient();
             Runtime.getRuntime().addShutdownHook(new TerminateClearcutClient(client));
             client.notifyTradefedStartEvent();
             TradefedFeatureServer server = null;
@@ -180,6 +176,13 @@ public class CommandRunner {
             // Print error to the stderr so that it can be recovered.
             printStackTrace(mScheduler.getLastInvocationThrowable());
         }
+    }
+
+    protected ClearcutClient createClient() {
+        return new ClearcutClient(
+                TestSuiteInfo.getInstance().didLoadFromProperties()
+                        ? TestSuiteInfo.getInstance().getName()
+                        : "");
     }
 
     public static void main(final String[] mainArgs) {

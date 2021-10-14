@@ -163,6 +163,7 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
         if (mTestOptions.size() > 0) {
             cmd += " " + String.join(" ", mTestOptions);
         }
+        cmd += " -Zunstable-options --report-time";
 
         // Pass parameter to criterion to run benchmark. Parameter is required when listing tests.
         // TODO(qtr): Explore using CRITERION_HOME for setting criterion output. Right now it's
