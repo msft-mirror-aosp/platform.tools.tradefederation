@@ -351,7 +351,8 @@ public class DynamicRemoteFileResolverTest {
         for (int i = 0; i < 5; i++) {
             Callable<Set<File>> callableTask =
                     () -> {
-                        return setter.validateRemoteFilePath(
+                        OptionSetter setter2 = new OptionSetter(object);
+                        return setter2.validateRemoteFilePath(
                                 new DynamicRemoteFileResolver(mResolverLoader));
                     };
             call.add(callableTask);
