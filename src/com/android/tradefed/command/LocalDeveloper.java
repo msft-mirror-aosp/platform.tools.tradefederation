@@ -41,6 +41,8 @@ public class LocalDeveloper {
         if (res) {
             System.exit(0);
         }
+        // Delete the tmp file in case of issue
+        clientFile.delete();
         System.exit(1);
     }
 }
