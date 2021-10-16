@@ -46,6 +46,7 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
@@ -61,6 +62,7 @@ public class DeviceStateMonitorTest {
     @Mock IDevice mMockDevice;
     private DeviceStateMonitor mMonitor;
     @Mock IDeviceManager mMockMgr;
+    private AtomicBoolean mAtomicBoolean = new AtomicBoolean(false);
     private String mStubValue = "not found";
 
     @Before
@@ -221,7 +223,10 @@ public class DeviceStateMonitorTest {
                         return new CollectingOutputReceiver() {
                             @Override
                             public String getOutput() {
-                                return mStubValue;
+                                if (mAtomicBoolean.get()) {
+                                  return "/system/bin/adb";
+                                }
+                                return "not found";
                             }
                         };
                     }
@@ -236,13 +241,14 @@ public class DeviceStateMonitorTest {
                     @Override
                     public void run() {
                         RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mStubValue = "/system/bin/adb";
+                        mAtomicBoolean.set(true);
                     }
                 };
         test.setName(getClass().getCanonicalName() + "#testWaitForShell_becomeAvailable");
         test.start();
         boolean res = mMonitor.waitForDeviceShell(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
+        test.join();
     }
 
     /**
@@ -395,11 +401,6 @@ public class DeviceStateMonitorTest {
     public void testWaitForPm_becomeResponsive() throws Exception {
         when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
         when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
-        mMockDevice.executeShellCommand(
-                (String) any(),
-                (CollectingOutputReceiver) any(),
-                anyInt(),
-                eq(TimeUnit.MILLISECONDS));
 
         mMonitor =
                 new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
@@ -408,7 +409,10 @@ public class DeviceStateMonitorTest {
                         return new CollectingOutputReceiver() {
                             @Override
                             public String getOutput() {
-                                return mStubValue;
+                                if (mAtomicBoolean.get()) {
+                                    return "package:com.android.awesomeclass";
+                                }
+                                return "not found";
                             }
                         };
                     }
@@ -423,13 +427,14 @@ public class DeviceStateMonitorTest {
                     @Override
                     public void run() {
                         RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mStubValue = "package:com.android.awesomeclass";
+                        mAtomicBoolean.set(true);
                     }
                 };
         test.setName(getClass().getCanonicalName() + "#testWaitForPm_becomeResponsive");
         test.start();
         boolean res = mMonitor.waitForPmResponsive(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
+        test.join();
     }
 
     /**
@@ -440,11 +445,6 @@ public class DeviceStateMonitorTest {
     public void testWaitForPm_timeout() throws Exception {
         when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
         when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
-        mMockDevice.executeShellCommand(
-                (String) any(),
-                (CollectingOutputReceiver) any(),
-                anyInt(),
-                eq(TimeUnit.MILLISECONDS));
 
         mMonitor =
                 new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
@@ -512,11 +512,6 @@ public class DeviceStateMonitorTest {
     public void testWaitForStoreMount() throws Exception {
         when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
         when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
-        mMockDevice.executeShellCommand(
-                (String) any(),
-                (CollectingOutputReceiver) any(),
-                anyInt(),
-                eq(TimeUnit.MILLISECONDS));
 
         mMonitor =
                 new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
@@ -549,14 +544,9 @@ public class DeviceStateMonitorTest {
      * denied should return directly false.
      */
     @Test
-    public void testWaitForStoreMount_PermDenied() throws Exception {
+    public void testWaitForStoreMount_permDenied() throws Exception {
         when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
         when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
-        mMockDevice.executeShellCommand(
-                (String) any(),
-                (CollectingOutputReceiver) any(),
-                anyInt(),
-                eq(TimeUnit.MILLISECONDS));
 
         Function<Integer, DeviceStateMonitor> creator =
                 (Integer count) ->
@@ -612,14 +602,8 @@ public class DeviceStateMonitorTest {
     /** Test {@link DeviceStateMonitor#waitForStoreMount(long)} when mount point become available */
     @Test
     public void testWaitForStoreMount_becomeAvailable() throws Exception {
-        mStubValue = null;
         when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
         when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
-        mMockDevice.executeShellCommand(
-                (String) any(),
-                (CollectingOutputReceiver) any(),
-                anyInt(),
-                eq(TimeUnit.MILLISECONDS));
 
         mMonitor =
                 new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
@@ -645,7 +629,10 @@ public class DeviceStateMonitorTest {
 
                     @Override
                     public String getMountPoint(String mountName) {
-                        return mStubValue;
+                        if (mAtomicBoolean.get()) {
+                            return "NOT NULL";
+                        }
+                        return null;
                     }
                 };
         Thread test =
@@ -653,13 +640,14 @@ public class DeviceStateMonitorTest {
                     @Override
                     public void run() {
                         RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mStubValue = "NOT NULL";
+                        mAtomicBoolean.set(true);
                     }
                 };
         test.setName(getClass().getCanonicalName() + "#testWaitForStoreMount_becomeAvailable");
         test.start();
         boolean res = mMonitor.waitForStoreMount(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
+        test.join();
     }
 
     /**
@@ -668,14 +656,8 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForStoreMount_outputBecomeValid() throws Exception {
-        mStubValue = "INVALID";
         when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
         when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
-        mMockDevice.executeShellCommand(
-                (String) any(),
-                (CollectingOutputReceiver) any(),
-                anyInt(),
-                eq(TimeUnit.MILLISECONDS));
 
         mMonitor =
                 new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
@@ -684,7 +666,10 @@ public class DeviceStateMonitorTest {
                         return new CollectingOutputReceiver() {
                             @Override
                             public String getOutput() {
-                                return mStubValue;
+                                if (mAtomicBoolean.get()) {
+                                    return "number 10 one";
+                                }
+                                return "INVALID";
                             }
                         };
                     }
@@ -709,13 +694,14 @@ public class DeviceStateMonitorTest {
                     @Override
                     public void run() {
                         RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mStubValue = "number 10 one";
+                        mAtomicBoolean.set(true);
                     }
                 };
         test.setName(getClass().getCanonicalName() + "#testWaitForStoreMount_outputBecomeValid");
         test.start();
         boolean res = mMonitor.waitForStoreMount(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
+        test.join();
     }
 
     /** Test {@link DeviceStateMonitor#waitForStoreMount(long)} when mount point check timeout */
@@ -724,11 +710,6 @@ public class DeviceStateMonitorTest {
         mStubValue = null;
         when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
         when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
-        mMockDevice.executeShellCommand(
-                (String) any(),
-                (CollectingOutputReceiver) any(),
-                anyInt(),
-                eq(TimeUnit.MILLISECONDS));
 
         mMonitor =
                 new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
