@@ -1057,9 +1057,9 @@ public class InvocationExecution implements IInvocationExecution {
         }
         CommandResult truncAdb =
                 RunUtil.getDefault()
-                        .runTimedCmd(60000, "tail", "--bytes=10MB", adbLog.getAbsolutePath());
+                        .runTimedCmd(60000, "tail", "-c", "10MB", adbLog.getAbsolutePath());
         if (!CommandStatus.SUCCESS.equals(truncAdb.getStatus())) {
-            CLog.e("Fail to truncate the adb log: %s\n%s", adbLog, truncAdb.getStderr());
+            CLog.e("Failed to truncate the adb log: %s\n%s", adbLog, truncAdb.getStderr());
             return;
         }
         try (InputStreamSource source =

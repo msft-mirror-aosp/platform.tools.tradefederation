@@ -76,6 +76,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.UUID;
 
 /** Implementation of {@link InvocationExecution} that drives a remote execution. */
 public class RemoteInvocationExecution extends InvocationExecution {
@@ -100,6 +101,12 @@ public class RemoteInvocationExecution extends InvocationExecution {
     private static final int MAX_PUSH_TF_ATTEMPTS = 3;
     private static final String TRADEFED_EARLY_TERMINATION =
             "Remote Tradefed might have terminated early.\nRemote Stderr:\n%s";
+    /**
+     * Pass these invocation context attributes to remote if they are not part of invocation data
+     */
+    private static final String[] INVOCATION_CONTEXT_ATTR_TO_DATA = {
+        "invocation_id", "work_unit_id"
+    };
 
     private String mRemoteTradefedDir = null;
     private String mRemoteAdbPath = null;
@@ -165,14 +172,19 @@ public class RemoteInvocationExecution extends InvocationExecution {
             return;
         }
 
-        mRemoteTradefedDir = mainRemoteDir + "tradefed/";
-        CommandResult createRemoteDir =
+        String invocationWorkDir =
+                String.format("%stf-invocation-%s/", mainRemoteDir, UUID.randomUUID().toString());
+        CLog.d("Remote invocation work directory is at %s", invocationWorkDir);
+
+        CommandResult cr =
                 GceManager.remoteSshCommandExecution(
-                        gceInfo, options, runUtil, 120000L, "mkdir", "-p", mRemoteTradefedDir);
-        if (!CommandStatus.SUCCESS.equals(createRemoteDir.getStatus())) {
+                        gceInfo, options, runUtil, 120000L, "mkdir", "-p", invocationWorkDir);
+        if (!CommandStatus.SUCCESS.equals(cr.getStatus())) {
+            CLog.e("Creation of %s failed.", invocationWorkDir);
+            CLog.e("Command stdout: %s, stderr: %s", cr.getStdout(), cr.getStderr());
             listener.invocationFailed(
                     createInvocationFailure(
-                            "Failed to create remote dir.", FailureStatus.INFRA_FAILURE));
+                            "Failed to create remote tradefed dir.", FailureStatus.INFRA_FAILURE));
             return;
         }
 
@@ -187,7 +199,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
                             Arrays.asList("-r"),
                             runUtil,
                             PUSH_TF_TIMEOUT,
-                            mRemoteTradefedDir,
+                            invocationWorkDir,
                             tfToPush);
             attempt++;
         }
@@ -199,14 +211,15 @@ public class RemoteInvocationExecution extends InvocationExecution {
             return;
         }
 
-        mRemoteTradefedDir = mRemoteTradefedDir + tfToPush.getName() + "/";
+        mRemoteTradefedDir = invocationWorkDir + tfToPush.getName() + "/";
         CommandResult listRemoteDir =
                 GceManager.remoteSshCommandExecution(
                         gceInfo, options, runUtil, 120000L, "ls", "-l", mRemoteTradefedDir);
         CLog.d("stdout: %s", listRemoteDir.getStdout());
         CLog.d("stderr: %s", listRemoteDir.getStderr());
 
-        File configFile = createRemoteConfig(config, listener, mRemoteTradefedDir);
+        File configFile =
+                createRemoteConfig(info.getContext(), config, listener, mRemoteTradefedDir);
         File globalConfig = null;
         try {
             CLog.d("Pushing Tradefed XML configuration to remote.");
@@ -278,6 +291,13 @@ public class RemoteInvocationExecution extends InvocationExecution {
         } finally {
             FileUtil.recursiveDelete(configFile);
             FileUtil.recursiveDelete(globalConfig);
+            cr =
+                    GceManager.remoteSshCommandExecution(
+                            gceInfo, options, runUtil, 120000L, "rm", "-rf", invocationWorkDir);
+            if (!CommandStatus.SUCCESS.equals(cr.getStatus())) {
+                CLog.w("Clean up of %s failed.", invocationWorkDir);
+                CLog.w("Command stdout: %s, stderr: %s", cr.getStdout(), cr.getStderr());
+            }
         }
     }
 
@@ -294,7 +314,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
             ITestLogger logger,
             Throwable exception)
             throws Throwable {
-            super.runDevicePostInvocationTearDown(testInfo.getContext(), config, exception);
+        super.runDevicePostInvocationTearDown(testInfo.getContext(), config, exception);
     }
 
     @Override
@@ -528,20 +548,22 @@ public class RemoteInvocationExecution extends InvocationExecution {
         if (config.getCommandOptions().shouldReportModuleProgression()) {
             // Process all remaining proto files available
             do {
-                resultFile =
-                        RemoteFileUtil.fetchRemoteFile(
-                                info,
-                                options,
-                                runUtil,
-                                PULL_RESULT_TIMEOUT,
-                                mRemoteTradefedDir + PROTO_RESULT_NAME + currentIndex);
-                if (resultFile != null) {
-                    currentIndex++;
-                    try {
-                        mProtoParser.processFileProto(resultFile);
-                    } finally {
-                        FileUtil.deleteFile(resultFile);
+                String remoteFilePath = mRemoteTradefedDir + PROTO_RESULT_NAME + currentIndex;
+                if (RemoteFileUtil.doesRemoteFileExist(
+                        info, options, runUtil, PULL_RESULT_TIMEOUT, remoteFilePath)) {
+                    resultFile =
+                            RemoteFileUtil.fetchRemoteFile(
+                                    info, options, runUtil, PULL_RESULT_TIMEOUT, remoteFilePath);
+                    if (resultFile != null) {
+                        currentIndex++;
+                        try {
+                            mProtoParser.processFileProto(resultFile);
+                        } finally {
+                            FileUtil.deleteFile(resultFile);
+                        }
                     }
+                } else {
+                    break;
                 }
             } while (resultFile != null);
         }
@@ -610,6 +632,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
     /**
      * Create the configuration that will run in the remote VM.
      *
+     * @param context the {@link IInvocationContext} for the current invocation
      * @param config The main {@link IConfiguration}.
      * @param logger A logger where to save the XML configuration for debugging.
      * @param resultDirPath the remote result dir where results should be saved.
@@ -617,7 +640,11 @@ public class RemoteInvocationExecution extends InvocationExecution {
      * @throws IOException
      */
     @VisibleForTesting
-    File createRemoteConfig(IConfiguration config, ITestLogger logger, String resultDirPath)
+    File createRemoteConfig(
+            IInvocationContext context,
+            IConfiguration config,
+            ITestLogger logger,
+            String resultDirPath)
             throws IOException, ConfigurationException {
         // Setup the remote reporting to a proto file
         List<ITestInvocationListener> reporters = new ArrayList<>();
@@ -651,6 +678,17 @@ public class RemoteInvocationExecution extends InvocationExecution {
         config.getCommandOptions()
                 .getInvocationData()
                 .put(SubprocessTfLauncher.SUBPROCESS_TAG_NAME, "true");
+
+        // Pass invocation and work unit ids for local invocation since they are not provided as
+        // command line invocation-data options
+        for (String key : INVOCATION_CONTEXT_ATTR_TO_DATA) {
+            if (!config.getCommandOptions().getInvocationData().containsKey(key)) {
+                String value = context.getAttribute(key);
+                if (!Strings.isNullOrEmpty(value)) {
+                    config.getCommandOptions().getInvocationData().put(key, value);
+                }
+            }
+        }
 
         // Clear the server reference as remote will run its own.
         if (GlobalConfiguration.getInstance().getFeatureServer() != null) {
