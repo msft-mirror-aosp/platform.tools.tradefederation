@@ -542,7 +542,7 @@ public class DeviceManagerTest {
         assertEquals(newMockDevice, device.getIDevice());
 
         verify(mMockTestDevice, times(1)).setDeviceState(TestDeviceState.NOT_AVAILABLE);
-        verify(mMockTestDevice, times(3)).setDeviceState(TestDeviceState.ONLINE);
+        verify(mMockTestDevice, times(2)).setDeviceState(TestDeviceState.ONLINE);
     }
 
     /**
@@ -869,7 +869,7 @@ public class DeviceManagerTest {
         when(mMockIDevice.isEmulator()).thenReturn(Boolean.FALSE);
         when(iDevice.getState()).thenReturn(DeviceState.ONLINE);
         when(mMockStateMonitor.waitForDeviceShell(Mockito.anyLong())).thenReturn(Boolean.TRUE);
-        mMockTestDevice.setDeviceState(TestDeviceState.ONLINE);
+        when(mMockTestDevice.getDeviceState()).thenReturn(TestDeviceState.ONLINE);
         when(mMockTestDevice.handleAllocationEvent(DeviceEvent.CONNECTED_ONLINE))
                 .thenReturn(
                         new DeviceEventResponse(DeviceAllocationState.Checking_Availability, true));
@@ -1315,7 +1315,8 @@ public class DeviceManagerTest {
                 manager.executeCmdOnAvailableDevice(
                         mMockTestDevice.getSerialNumber(), "mock cmd", 1, TimeUnit.SECONDS);
         assertEquals(CommandStatus.FAILED, res.getStatus());
-        assertEquals("The device is not available to execute the command", res.getStderr());
+        assertEquals(
+                "The device 'serial' is not available to execute the command", res.getStderr());
     }
 
     /** Test the command fails with long timeout. */
