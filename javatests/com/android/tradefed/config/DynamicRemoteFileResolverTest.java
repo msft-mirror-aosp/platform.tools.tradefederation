@@ -105,21 +105,21 @@ public class DynamicRemoteFileResolverTest {
     }
 
     private DynamicRemoteFileResolver mResolver;
+    private FileResolverLoader mResolverLoader =
+            new FileResolverLoader() {
+                @Override
+                public IRemoteFileResolver load(String scheme, Map<String, String> config) {
+                    return ImmutableMap.of(GcsRemoteFileResolver.PROTOCOL, mMockResolver)
+                            .get(scheme);
+                }
+            };
     @Mock IRemoteFileResolver mMockResolver;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
-        FileResolverLoader resolverLoader =
-                new FileResolverLoader() {
-                    @Override
-                    public IRemoteFileResolver load(String scheme, Map<String, String> config) {
-                        return ImmutableMap.of(GcsRemoteFileResolver.PROTOCOL, mMockResolver)
-                                .get(scheme);
-                    }
-                };
-        mResolver = new DynamicRemoteFileResolver(resolverLoader);
+        mResolver = new DynamicRemoteFileResolver(mResolverLoader);
     }
 
     @Test
@@ -351,7 +351,9 @@ public class DynamicRemoteFileResolverTest {
         for (int i = 0; i < 5; i++) {
             Callable<Set<File>> callableTask =
                     () -> {
-                        return setter.validateRemoteFilePath(mResolver);
+                        OptionSetter setter2 = new OptionSetter(object);
+                        return setter2.validateRemoteFilePath(
+                                new DynamicRemoteFileResolver(mResolverLoader));
                     };
             call.add(callableTask);
             devices.add(Mockito.mock(ITestDevice.class));

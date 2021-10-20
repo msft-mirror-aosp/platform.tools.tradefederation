@@ -74,6 +74,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 /**
@@ -115,7 +116,7 @@ public class Console extends Thread {
     protected IKeyStoreFactory mKeyStoreFactory;
     protected LineReader mConsoleReader;
     private RegexTrie<Runnable> mCommandTrie = new RegexTrie<Runnable>();
-    private boolean mShouldExit = false;
+    private AtomicBoolean mShouldExit = new AtomicBoolean(false);
     private List<String> mMainArgs = new ArrayList<String>(0);
     private long mConsoleStartTime;
 
@@ -902,7 +903,7 @@ public class Console extends Thread {
                         }
 
                         // Intentionally kill the console before CommandScheduler finishes
-                        mShouldExit = true;
+                        mShouldExit.set(true);
                     }
                 };
         trie.put(runAndExitCommand, RUN_PATTERN, "s(?:ingleCommand)?", null);
@@ -1129,7 +1130,7 @@ public class Console extends Thread {
                     return;
                 } else {
                     printLine("Non-interactive mode: Running initial command then exiting.");
-                    mShouldExit = true;
+                    mShouldExit.set(true);
                 }
             }
 
@@ -1153,7 +1154,7 @@ public class Console extends Thread {
                         // Usually the result of getting EOF on the console
                         printLine("");
                         printLine("Received EOF; quitting...");
-                        mShouldExit = true;
+                        mShouldExit.set(true);
                         break;
                     }
 
@@ -1183,7 +1184,7 @@ public class Console extends Thread {
                     tokens = arrrgs.toArray(new String[0]);
                     if (arrrgs.get(0).matches(HELP_PATTERN)) {
                         // if started from command line for help, return to shell
-                        mShouldExit = true;
+                        mShouldExit.set(true);
                     }
                     arrrgs = Collections.emptyList();
                 }
@@ -1198,7 +1199,7 @@ public class Console extends Thread {
                                     tokens[0]));
                 }
                 RunUtil.getDefault().sleep(100);
-            } while (!mShouldExit);
+            } while (!mShouldExit.get());
         } catch (Exception e) {
             printLine("Console received an unexpected exception (shown below); shutting down TF.");
             e.printStackTrace();
@@ -1214,7 +1215,7 @@ public class Console extends Thread {
     /** set the flag to exit the console. */
     @VisibleForTesting
     void exitConsole() {
-        mShouldExit = true;
+        mShouldExit.set(true);
     }
 
     void awaitScheduler() throws InterruptedException {
