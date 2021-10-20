@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.device;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -75,7 +77,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
     /** Expect bugreports to be at least a meg. */
     private static final int MIN_BUGREPORT_BYTES = 1024 * 1024;
 
-    private void assumeNotVirtualDevice() throws DeviceNotAvailableException {
+    private void assumeNotVirtualDevice() {
         assumeFalse(getDevice() instanceof RemoteAndroidDevice);
         return;
     }
@@ -942,17 +944,25 @@ public class TestDeviceFuncTest implements IDeviceTest {
         mTestDevice.setSetting(0, "system", "screen_brightness", initValue);
     }
 
-    /** Test for {@link TestDevice#listDisplayIds()}. */
+    /** Test for {@link TestDevice#getScreenshot()}. */
     @Test
-    public void testListDisplays() throws Exception {
-        Set<Long> displays = mTestDevice.listDisplayIds();
-        assertEquals(1, displays.size());
+    public void testScreenshot() throws Exception {
+        InputStreamSource screenshot = mTestDevice.getScreenshot();
+        assertNotNull(screenshot);
+        try (InputStream stream = screenshot.createInputStream();
+                BufferedInputStream bs = new BufferedInputStream(stream)) {
+            assertEquals("image/png", URLConnection.guessContentTypeFromStream(bs));
+        } finally {
+            StreamUtil.close(screenshot);
+        }
     }
 
     /** Test for {@link TestDevice#getScreenshot(long)}. */
     @Test
-    public void testScreenshot() throws Exception {
-        InputStreamSource screenshot = mTestDevice.getScreenshot(0L);
+    public void testScreenshot_withDisplay() throws Exception {
+        Set<Long> displays = mTestDevice.listDisplayIds();
+        assertThat(displays).isNotEmpty();
+        InputStreamSource screenshot = mTestDevice.getScreenshot(displays.iterator().next());
         assertNotNull(screenshot);
         try (InputStream stream = screenshot.createInputStream();
                 BufferedInputStream bs = new BufferedInputStream(stream)) {
