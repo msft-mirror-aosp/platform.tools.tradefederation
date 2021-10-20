@@ -101,7 +101,10 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
             IInvocationContext context, ITestInvocationListener listener) {
         super.init(context, listener);
 
-        if (isClangCoverageEnabled()) {
+        verifyNotNull(mConfiguration);
+
+        if (isClangCoverageEnabled()
+                && mConfiguration.getCoverageOptions().shouldResetCoverageBeforeTest()) {
             // Clear coverage measurements on the device.
             try (AdbRootElevator adbRoot = new AdbRootElevator(getDevices().get(0))) {
                 getCoverageFlusher().resetCoverage();
