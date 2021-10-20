@@ -675,7 +675,8 @@ public class TestDevice extends NativeDevice {
                         String.format("screencap -p -d %s %s", displayId, tmpDevicePath));
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             // Return an error in the buffer
-            CLog.e("Error: device reported error for screenshot: %s", result.getStderr());
+            CLog.e("Error: device reported error for screenshot:");
+            CLog.e("stdout: %s\nstderr: %s", result.getStdout(), result.getStderr());
             return null;
         }
         try {
