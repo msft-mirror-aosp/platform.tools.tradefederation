@@ -28,6 +28,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.ConfigurationException;
@@ -342,9 +343,10 @@ public class JavaCodeCoverageCollectorTest {
                         "/data/misc/trace/jacoco-456.mm.ec");
         String psOutput =
                 "USER       PID   PPID  VSZ   RSS   WCHAN       PC  S NAME\n"
-                        + "bluetooth   123  1366  123    456   SyS_epoll+   0  S com.android.bluetooth\n"
-                        + "radio       890     1 7890   123   binder_io+   0  S com.android.phone\n"
-                        + "root         11  1234  567   890   binder_io+   0  S not.a.java.package\n";
+                    + "bluetooth   123  1366  123    456   SyS_epoll+   0  S"
+                    + " com.android.bluetooth\n"
+                    + "radio       890     1 7890   123   binder_io+   0  S com.android.phone\n"
+                    + "root         11  1234  567   890   binder_io+   0  S not.a.java.package\n";
 
         // Setup mocks.
         mockCoverageFileOnDevice(DEVICE_PATH);
@@ -371,6 +373,18 @@ public class JavaCodeCoverageCollectorTest {
         verify(mMockDevice).deleteFile(coverageFileList.get(1));
         verify(mMockDevice, never()).deleteFile(coverageFileList.get(2));
         verify(mMockDevice).deleteFile(coverageFileList.get(3));
+    }
+
+    @Test
+    public void testInitNoResetCoverage_noop() throws Exception {
+        enableJavaCoverage();
+        mCoverageOptionsSetter.setOptionValue("reset-coverage-before-test", "false");
+
+        // Run init(...).
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+
+        // Verify that nothing was run on the device.
+        verifyZeroInteractions(mMockDevice);
     }
 
     private void mockCoverageFileOnDevice(String devicePath)
