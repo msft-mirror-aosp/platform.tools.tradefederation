@@ -65,7 +65,8 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
     @Option(
             name = "merge-coverage-measurements",
             description =
-                    "Merge coverage measurements after all tests are complete rather than logging individual measurements.")
+                    "Merge coverage measurements after all tests are complete rather than logging"
+                            + " individual measurements.")
     private boolean mMergeCoverageMeasurements = false;
 
     private final ExecFileLoader mExecFileLoader = new ExecFileLoader();
@@ -78,7 +79,10 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
             IInvocationContext context, ITestInvocationListener listener) {
         super.init(context, listener);
 
-        if (isJavaCoverageEnabled()) {
+        verifyNotNull(mConfiguration);
+
+        if (isJavaCoverageEnabled()
+                && mConfiguration.getCoverageOptions().shouldResetCoverageBeforeTest()) {
             try (AdbRootElevator adbRoot = new AdbRootElevator(getDevices().get(0))) {
                 getCoverageFlusher().resetCoverage();
             } catch (DeviceNotAvailableException e) {
