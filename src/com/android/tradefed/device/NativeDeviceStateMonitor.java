@@ -500,13 +500,14 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
 
     private boolean waitForDeviceState(TestDeviceState state, long time) {
         String deviceSerial = getSerialNumber();
-        if (getDeviceState() == state) {
+        TestDeviceState currentStatus = getDeviceState();
+        if (currentStatus.equals(state)) {
             CLog.i("Device %s is already %s", deviceSerial, state);
             return true;
         }
         CLog.i(
                 "Waiting for device %s to be in %s mode for '%s'; it is currently in %s mode...",
-                deviceSerial, state, TimeUtil.formatElapsedTime(time), getDeviceState());
+                deviceSerial, state, TimeUtil.formatElapsedTime(time), currentStatus);
         DeviceStateListener listener = new DeviceStateListener(state);
         addDeviceStateListener(listener);
         synchronized (listener) {
