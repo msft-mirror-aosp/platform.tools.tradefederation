@@ -1008,16 +1008,20 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             if (deviceDate == 0L) {
                 continue;
             }
-            boolean restarted =
-                    device.deviceSoftRestartedSince(deviceDate - 5000L, TimeUnit.MILLISECONDS);
-            if (restarted) {
-                CLog.e("Detected a soft-restart after module %s", mId);
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.SOFT_RESTART_AFTER_MODULE, 1);
-                // TODO: Enable actually failing module for reporting
-                /*throw new HarnessRuntimeException(
-                String.format("Device '%s' crashed after running %s.", device.getSerialNumber(), mId),
-                DeviceErrorIdentifier.DEVICE_CRASHED);*/
+            try {
+                boolean restarted =
+                        device.deviceSoftRestartedSince(deviceDate - 5000L, TimeUnit.MILLISECONDS);
+                if (restarted) {
+                    CLog.e("Detected a soft-restart after module %s", mId);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.SOFT_RESTART_AFTER_MODULE, 1);
+                    // TODO: Enable actually failing module for reporting
+                    /*throw new HarnessRuntimeException(
+                    String.format("Device '%s' crashed after running %s.", device.getSerialNumber(), mId),
+                    DeviceErrorIdentifier.DEVICE_CRASHED);*/
+                }
+            } catch (RuntimeException e) {
+                CLog.e(e);
             }
         }
     }
