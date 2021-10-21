@@ -61,6 +61,11 @@ public final class CoverageOptions {
     )
     private List<String> mCoverageProcesses = new ArrayList<>();
 
+    @Option(
+            name = "reset-coverage-before-test",
+            description = "Reset coverage before running each test.")
+    private boolean mResetCoverageBeforeTest = true;
+
     @Option(name = "llvm-profdata-path", description = "Path to llvm-profdata tool.")
     private File mLlvmProfdataPath = null;
 
@@ -106,6 +111,17 @@ public final class CoverageOptions {
      */
     public List<String> getCoverageProcesses() {
         return ImmutableList.copyOf(mCoverageProcesses);
+    }
+
+    /**
+     * Returns whether coverage measurements should be reset before each test.
+     *
+     * <p>Enabling this allows the coverage to be more targeted to the test.
+     *
+     * @return whether to reset coverage before the test
+     */
+    public boolean shouldResetCoverageBeforeTest() {
+        return mResetCoverageBeforeTest;
     }
 
     /**
