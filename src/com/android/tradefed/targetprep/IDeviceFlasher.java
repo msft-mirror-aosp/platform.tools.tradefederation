@@ -22,6 +22,8 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.util.CommandStatus;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Set;
 
 /**
  * Flashes a device image on a device.
@@ -150,5 +152,24 @@ public interface IDeviceFlasher {
      */
     public default boolean supportsFlashingInFastbootD() {
         return false;
+    }
+
+    /**
+     * Get filters for additional build artifacts.
+     *
+     * <p>Some flashers need certain build artifacts which are not among the default ones used. Such
+     * flashers should override this method, so every user of the flashing tools doesn't need to
+     * know about these files and provide command line options.
+     *
+     * <p>Note that this method is invoked on a temporary instance of the IDeviceFlasher, so no
+     * state beyond that provided in the default constructor should be relied upon.
+     *
+     * <p>Strings in the Set are interpreted as file patterns, and all files matching the pattern
+     * will be retrieved.
+     *
+     * <p>By default, this method returns an empty Set.
+     */
+    public default Set<String> getAdditionalFileFilters() {
+        return Collections.<String>emptySet();
     }
 }
