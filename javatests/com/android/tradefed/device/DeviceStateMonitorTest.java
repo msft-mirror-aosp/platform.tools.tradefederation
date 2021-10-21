@@ -46,8 +46,8 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 /** Unit tests for {@link DeviceStateMonitorTest}. */
@@ -90,18 +90,19 @@ public class DeviceStateMonitorTest {
     /** Test {@link DeviceStateMonitor#waitForDeviceOnline()} when device becomes online */
     @Test
     public void testWaitForDeviceOnline() {
-        mMonitor.setState(TestDeviceState.NOT_AVAILABLE);
-        Thread test =
-                new Thread() {
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public void run() {
-                        RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mMonitor.setState(TestDeviceState.ONLINE);
+                    public TestDeviceState getDeviceState() {
+                        if (mAtomicBoolean.get()) {
+                            return TestDeviceState.ONLINE;
+                        } else {
+                            mAtomicBoolean.set(true);
+                            return TestDeviceState.NOT_AVAILABLE;
+                        }
                     }
                 };
-        test.setName(getClass().getCanonicalName() + "#testWaitForDeviceOnline");
-        test.start();
-        assertEquals(mMockDevice, mMonitor.waitForDeviceOnline());
+        assertEquals(mMockDevice, mMonitor.waitForDeviceOnline(50));
     }
 
     /**
@@ -152,17 +153,18 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForDeviceOffline() {
-        mMonitor.setState(TestDeviceState.ONLINE);
-        Thread test =
-                new Thread() {
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public void run() {
-                        RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mMonitor.setState(TestDeviceState.NOT_AVAILABLE);
+                    public TestDeviceState getDeviceState() {
+                        if (mAtomicBoolean.get()) {
+                            return TestDeviceState.NOT_AVAILABLE;
+                        } else {
+                            mAtomicBoolean.set(true);
+                            return TestDeviceState.ONLINE;
+                        }
                     }
                 };
-        test.setName(getClass().getCanonicalName() + "#testWaitForDeviceOffline");
-        test.start();
         boolean res = mMonitor.waitForDeviceNotAvailable(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
     }
@@ -307,13 +309,16 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForBoot_becomeComplete() throws Exception {
-        mStubValue = "0";
         IDevice mFakeDevice =
                 new StubDevice("serial") {
                     @Override
                     public ListenableFuture<String> getSystemProperty(String name) {
                         SettableFuture<String> f = SettableFuture.create();
-                        f.set(mStubValue);
+                        if (mAtomicBoolean.get()) {
+                            f.set("1");
+                        } else {
+                            f.set("0");
+                        }
                         return f;
                     }
                 };
@@ -329,7 +334,7 @@ public class DeviceStateMonitorTest {
                     @Override
                     public void run() {
                         RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mStubValue = "1";
+                        mAtomicBoolean.set(true);
                     }
                 };
         test.setName(getClass().getCanonicalName() + "#testWaitForBoot_becomeComplete");
