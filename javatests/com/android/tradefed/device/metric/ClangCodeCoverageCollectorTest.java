@@ -26,7 +26,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.IBuildInfo;
@@ -447,7 +447,7 @@ public class ClangCodeCoverageCollectorTest {
         mListener.init(mMockContext, mFakeListener);
 
         // Verify nothing was executed on the device.
-        verifyZeroInteractions(mMockDevice);
+        verifyNoMoreInteractions(mMockDevice);
     }
 
     abstract static class CommandArgumentCaptor implements IRunUtil {

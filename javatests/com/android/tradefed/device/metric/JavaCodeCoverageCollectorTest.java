@@ -28,7 +28,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.ConfigurationException;
@@ -384,7 +384,7 @@ public class JavaCodeCoverageCollectorTest {
         mCodeCoverageCollector.init(mMockContext, mFakeListener);
 
         // Verify that nothing was run on the device.
-        verifyZeroInteractions(mMockDevice);
+        verifyNoMoreInteractions(mMockDevice);
     }
 
     private void mockCoverageFileOnDevice(String devicePath)
