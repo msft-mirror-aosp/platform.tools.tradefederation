@@ -4973,10 +4973,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         // Raise RuntimeException if there is abnormal reboot.
         for (Map.Entry<Long, String> entry : bootHistory.entrySet()) {
             if (!"reboot".equals(entry.getValue())) {
-                throw new RuntimeException(
+                throw new HarnessRuntimeException(
                         String.format(
                                 "Device %s has abnormal reboot reason %s at %d",
-                                getSerialNumber(), entry.getValue(), entry.getKey()));
+                                getSerialNumber(), entry.getValue(), entry.getKey()),
+                        DeviceErrorIdentifier.UNEXPECTED_REBOOT);
             }
         }
         return true;
