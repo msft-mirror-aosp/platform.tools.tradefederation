@@ -26,6 +26,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.IBuildInfo;
@@ -435,6 +436,18 @@ public class ClangCodeCoverageCollectorTest {
         inOrder.verify(mMockDevice).executeShellCommand("kill -37 123");
         inOrder.verify(mMockDevice, times(2)).executeShellCommand(anyString());
         inOrder.verify(mMockDevice).disableAdbRoot();
+    }
+
+    @Test
+    public void testInitNoReset_noop() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("reset-coverage-before-test", "false");
+        mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
+
+        // Call init(...).
+        mListener.init(mMockContext, mFakeListener);
+
+        // Verify nothing was executed on the device.
+        verifyNoMoreInteractions(mMockDevice);
     }
 
     abstract static class CommandArgumentCaptor implements IRunUtil {
