@@ -789,7 +789,16 @@ public class DeviceManager implements IDeviceManager {
         synchronized (device) {
             if (!device.getAllocationState().equals(DeviceAllocationState.Available)) {
                 CommandResult result = new CommandResult(CommandStatus.FAILED);
-                result.setStderr("The device is not available to execute the command");
+                result.setStderr(
+                        String.format(
+                                "The device '%s' is not available to execute the command", serial));
+                return result;
+            }
+            if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                CommandResult result = new CommandResult(CommandStatus.FAILED);
+                result.setStderr(
+                        String.format(
+                                "The device '%s' is not online to execute the command", serial));
                 return result;
             }
             try {
