@@ -43,15 +43,22 @@ public class ParentShardReplicate {
         if (config.getDeviceConfig().size() != 1) {
             return;
         }
+
+        // TODO: Support local sharding for multi-device tests.
         Integer shardCount = config.getCommandOptions().getShardCount();
         Integer shardIndex = config.getCommandOptions().getShardIndex();
+        Integer deviceCount = shardCount;
         if (shardCount == null || shardIndex != null) {
-            return;
+            // TODO: Remove the dependency on multiDeviceCount.
+            deviceCount = config.getCommandOptions().getMultiDeviceCount();
+            if (deviceCount == null || deviceCount < 2) {
+                return;
+            }
         }
         CLog.logAndDisplay(LogLevel.DEBUG, "Using replicated setup.");
         try {
             List<IDeviceConfiguration> currentConfigs = config.getDeviceConfig();
-            for (int i = 0; i < shardCount - 1; i++) {
+            for (int i = 0; i < deviceCount - 1; i++) {
                 IConfiguration deepCopy =
                         config.partialDeepClone(Arrays.asList(Configuration.DEVICE_NAME), client);
                 String newName = String.format("expanded-%s", i);
