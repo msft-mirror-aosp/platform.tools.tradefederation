@@ -267,6 +267,12 @@ public class CommandOptions implements ICommandOptions {
             description = "Disable the pre-invocation setup and post-invocation teardown phases.")
     private boolean mDisableInvocationSetupAndTeardown = false;
 
+    @Option(
+            name = "multi-device-count",
+            description = "The number of devices for multi-device tests. For a new feature "
+                                  + "under developing, not for other uses.")
+    private Integer mMultiDeviceCount;
+
     /**
      * Set the help mode for the config.
      * <p/>
@@ -684,5 +690,11 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public boolean shouldDisableInvocationSetupAndTeardown() {
         return mDisableInvocationSetupAndTeardown;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Integer getMultiDeviceCount() {
+        return mMultiDeviceCount;
     }
 }
