@@ -39,6 +39,12 @@ import java.util.stream.Collectors;
  */
 public class BaseRetryDecision implements IRetryDecision {
 
+    /** Describes the level of isolation */
+    public enum IsolationGrade {
+        NOT_ISOLATED, // No action were taken to isolate the test.
+        REBOOT_ISOLATED, // Reboot was done before the test.
+        FULLY_ISOLATED; // Test received a fresh device.
+    }
     private static final int ABORT_MAX_FAILURES = 50;
 
     @Option(
@@ -46,6 +52,12 @@ public class BaseRetryDecision implements IRetryDecision {
         description = "Reboot the device at the last retry attempt."
     )
     private boolean mRebootAtLastRetry = false;
+
+    @Option(
+            name = "retry-isolation-grade",
+            description = "Control the isolation level that should be attempted between retries."
+    )
+    private IsolationGrade mRetryIsolationGrade = IsolationGrade.NOT_ISOLATED;
 
     @Option(
         name = "max-testcase-run-count",
