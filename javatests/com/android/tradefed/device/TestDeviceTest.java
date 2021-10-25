@@ -91,6 +91,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.Nullable;
 
@@ -4007,11 +4008,11 @@ public class TestDeviceTest {
     public void testSwitchUser_delay_api30() throws Exception {
         mTestDevice =
                 new TestableTestDevice() {
-                    int ret = 0;
+                    AtomicInteger ret = new AtomicInteger(0);
 
                     @Override
                     public int getCurrentUser() throws DeviceNotAvailableException {
-                        return ret;
+                        return ret.get();
                     }
 
                     @Override
@@ -4057,7 +4058,7 @@ public class TestDeviceTest {
                                         @Override
                                         public void run() {
                                             RunUtil.getDefault().sleep(100);
-                                            ret = 10;
+                                            ret.set(10);
                                         }
                                     });
                 };
