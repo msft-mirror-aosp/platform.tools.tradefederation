@@ -746,7 +746,7 @@ public class TestInvocation implements ITestInvocation {
         }
         setExitCode(ExitCode.NO_BUILD, buildException);
         // If somehow we don't have builds
-        if (testInfo.getBuildInfo() == null) {
+        if (testInfo.getContext().getBuildInfos().isEmpty()) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.BACKFILL_BUILD_INFO, "true");
             IBuildInfo info = backFillBuildInfoForReporting(config.getCommandLine());
