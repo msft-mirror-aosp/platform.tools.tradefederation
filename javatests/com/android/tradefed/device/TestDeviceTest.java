@@ -3851,11 +3851,11 @@ public class TestDeviceTest {
     public void testSwitchUser_delay() throws Exception {
         mTestDevice =
                 new TestableTestDevice() {
-                    int ret = 0;
+                    AtomicInteger ret = new AtomicInteger(0);
 
                     @Override
                     public int getCurrentUser() throws DeviceNotAvailableException {
-                        return ret;
+                        return ret.get();
                     }
 
                     @Override
@@ -3905,7 +3905,7 @@ public class TestDeviceTest {
                                         @Override
                                         public void run() {
                                             RunUtil.getDefault().sleep(100);
-                                            ret = 10;
+                                            ret.set(10);
                                         }
                                     });
                 };
