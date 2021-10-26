@@ -3855,18 +3855,12 @@ public class TestDeviceTest {
 
                     @Override
                     public int getCurrentUser() throws DeviceNotAvailableException {
-                        return ret.get();
+                        return ret.getAndSet(10);
                     }
 
                     @Override
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
-                        if (!started) {
-                            started = true;
-                            test.setDaemon(true);
-                            test.setName(getClass().getCanonicalName() + "#testSwitchUser_delay");
-                            test.start();
-                        }
                         return "";
                     }
 
@@ -3897,17 +3891,6 @@ public class TestDeviceTest {
                     protected long getCheckNewUserSleep() {
                         return 100;
                     }
-
-                    boolean started = false;
-                    Thread test =
-                            new Thread(
-                                    new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            RunUtil.getDefault().sleep(100);
-                                            ret.set(10);
-                                        }
-                                    });
                 };
         assertTrue(mTestDevice.switchUser(10));
     }
@@ -4012,19 +3995,12 @@ public class TestDeviceTest {
 
                     @Override
                     public int getCurrentUser() throws DeviceNotAvailableException {
-                        return ret.get();
+                        return ret.getAndSet(10);
                     }
 
                     @Override
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
-                        RunUtil.getDefault().sleep(100);
-                        if (!started) {
-                            started = true;
-                            test.setDaemon(true);
-                            test.setName(getClass().getCanonicalName() + "#testSwitchUser_delay");
-                            test.start();
-                        }
                         return "";
                     }
 
@@ -4050,17 +4026,6 @@ public class TestDeviceTest {
                     protected long getCheckNewUserSleep() {
                         return 100;
                     }
-
-                    boolean started = false;
-                    Thread test =
-                            new Thread(
-                                    new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            RunUtil.getDefault().sleep(100);
-                                            ret.set(10);
-                                        }
-                                    });
                 };
         assertTrue(mTestDevice.switchUser(10));
     }
