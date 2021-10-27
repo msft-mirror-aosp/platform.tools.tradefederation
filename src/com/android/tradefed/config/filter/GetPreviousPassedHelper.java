@@ -69,7 +69,10 @@ public class GetPreviousPassedHelper {
         if ("0".equals(attempt)) {
             return filters;
         }
-
+        // Include the shard_index in query to filter server side.
+        if (config.getCommandOptions().getShardIndex() != null) {
+            args.put("shard_index", Integer.toString(config.getCommandOptions().getShardIndex()));
+        }
         try (TradefedFeatureClient client = new TradefedFeatureClient()) {
             FeatureResponse previousPassed = client.triggerFeature("getPreviousPassed", args);
             convertResponseToFilter(previousPassed, previousPassedFilters);
