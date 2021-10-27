@@ -142,8 +142,11 @@ public class CommandRunner {
         } catch (ConfigurationException e) {
             printStackTrace(e);
             mErrorCode = ExitCode.CONFIG_EXCEPTION;
+            return;
         } finally {
-            mScheduler.shutdownOnEmpty();
+            if (mScheduler != null) {
+                mScheduler.shutdownOnEmpty();
+            }
         }
         try {
             mScheduler.join(getCheckDeviceTimeout());
