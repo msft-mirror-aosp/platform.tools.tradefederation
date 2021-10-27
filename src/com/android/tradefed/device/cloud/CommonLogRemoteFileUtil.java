@@ -79,6 +79,9 @@ public class CommonLogRemoteFileUtil {
                         NESTED_REMOTE_LOG_DIR + "launcher.log",
                         "cuttlefish_launcher.log",
                         LogDataType.TEXT));
+        KNOWN_FILES_TO_FETCH.put(
+                InstanceType.CUTTLEFISH,
+                new KnownLogFileEntry("/var/log/kern.log", "host_kernel.log", LogDataType.TEXT));
         // Emulator known files to collect
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.EMULATOR,
@@ -96,6 +99,9 @@ public class CommonLogRemoteFileUtil {
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.EMULATOR,
                 new KnownLogFileEntry("/var/log/daemon.log", null, LogDataType.TEXT));
+        KNOWN_FILES_TO_FETCH.put(
+                InstanceType.EMULATOR,
+                new KnownLogFileEntry("/var/log/kern.log", "host_kernel.log", LogDataType.TEXT));
 
         OXYGEN_LOG_FILES.add(
                 new KnownLogFileEntry(
