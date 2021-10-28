@@ -47,6 +47,7 @@ public class MetricFilePostProcessorTest {
         boolean isMetricWrittenToFile = false;
         boolean isRunMetricAggregated = false;
         boolean isTestMetricAggregated = false;
+        Map<String, String> mMetricsInFile;
 
         @Override
         public void storeTestMetrics(TestDescription testDescription,
@@ -58,6 +59,7 @@ public class MetricFilePostProcessorTest {
         public File writeResultsToFile(String testFileSuffix, String testHeaderName,
                 Map<String, String> metrics, File resultsFile) {
             isMetricWrittenToFile = true;
+            mMetricsInFile = metrics;
             return null;
         }
 
@@ -71,6 +73,10 @@ public class MetricFilePostProcessorTest {
         public File aggregateStoredTestMetricsAndWriteToFile(String runName) {
             isTestMetricAggregated = true;
             return null;
+        }
+
+        public Map<String, String> getMetricsInFile() {
+            return mMetricsInFile;
         }
     }
 
@@ -139,7 +145,41 @@ public class MetricFilePostProcessorTest {
     }
 
     @Test
-    public void processRunMetricWithLogging() {
+    public void processRunMetricWithoutAggregationLogging() {
+        HashMap<String, Metric> runMetric = new HashMap<String, Metric>();
+        Metric.Builder metricBuilder1 = Metric.newBuilder();
+        metricBuilder1.getMeasurementsBuilder().setSingleString("2.9");
+        Metric currentRunMetric = metricBuilder1.build();
+        runMetric.put("run_metric_1", currentRunMetric);
+
+        Metric.Builder metricBuilder2 = Metric.newBuilder();
+        metricBuilder2.getMeasurementsBuilder().setSingleString("2.9,5.6");
+        Metric currentRunMetric2 = metricBuilder2.build();
+        runMetric.put("run_metric_2", currentRunMetric2);
+
+        Metric.Builder metricBuilder3 = Metric.newBuilder();
+        metricBuilder3.getMeasurementsBuilder().setSingleString("value_3");
+        Metric currentRunMetric3 = metricBuilder3.build();
+        runMetric.put("run_metric_3", currentRunMetric3);
+
+        mMetricFilePostProcessor.processRunMetricsAndLogs(runMetric, null);
+
+        assertFalse(mTestableMetricUtil.isRunMetricAggregated);
+        assertTrue(mTestableMetricUtil.isMetricWrittenToFile);
+        // By default do not attempt to aggregate the similar tests.
+        assertFalse(mTestableMetricUtil.isTestMetricAggregated);
+        assertTrue(
+                mTestableMetricUtil.getMetricsInFile().get("run_metric_1").equalsIgnoreCase("2.9"));
+        assertTrue(mTestableMetricUtil.getMetricsInFile().get("run_metric_2")
+                .equalsIgnoreCase("2.9,5.6"));
+        assertTrue(mTestableMetricUtil.getMetricsInFile().get("run_metric_3")
+                .equalsIgnoreCase("value_3"));
+    }
+
+    @Test
+    public void processRunMetricWithAggregationLogging() throws ConfigurationException {
+        OptionSetter setter = new OptionSetter(mMetricFilePostProcessor);
+        setter.setOptionValue("aggregate-run-metrics", "true");
         HashMap<String, Metric> runMetric = new HashMap<String, Metric>();
         Metric.Builder metricBuilder1 = Metric.newBuilder();
         metricBuilder1.getMeasurementsBuilder().setSingleString("2.9");
@@ -152,7 +192,6 @@ public class MetricFilePostProcessorTest {
         assertTrue(mTestableMetricUtil.isMetricWrittenToFile);
         // By default do not attempt to aggregate the similar tests.
         assertFalse(mTestableMetricUtil.isTestMetricAggregated);
-
     }
 
     @Test
