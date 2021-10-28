@@ -46,21 +46,20 @@ import java.util.stream.Collectors;
 @OptionClass(alias = "statsd-event-metric-processor")
 public class StatsdEventMetricPostProcessor extends StatsdGenericPostProcessor {
     @Option(
-        name = "metric-formatter",
-        description =
-                "A formatter to format a statsd atom into a key-value pair for a metric. "
-                        + "Format: Use the atom field name as key and a 'key=value' string "
-                        + "as value, and enclose atom field reference in square brackets, "
-                        + "where they will be substituted with the field values in the atom. "
-                        + "Example: key: app_start_occurred, "
-                        + "value: [type]_startup_[pkg_name]=[windows_drawn_delay_millis]."
-                        + "Additionally, use '[_<field reference>]' to access the other fields of "
-                        + "the EventMetricData message, e.g. [_elapsed_timestamp_nanos] for the "
-                        + "elapsed_timestamp_nanos field that records when the event occurred. "
-                        + "At most one reference to repeated fields in each formatter is supported."
-                        + "Field definitions can be found in the atoms.proto file under "
-                        + "frameworks/base/cmds/statsd/src in the source tree."
-    )
+            name = "metric-formatter",
+            description =
+                    "A formatter to format a statsd atom into a key-value pair for a metric."
+                        + " Format: Use the atom field name as key and a 'key=value' string as"
+                        + " value, and enclose atom field reference in square brackets, where they"
+                        + " will be substituted with the field values in the atom. Example: key:"
+                        + " app_start_occurred, value:"
+                        + " [type]_startup_[pkg_name]=[windows_drawn_delay_millis].Additionally,"
+                        + " use '[_<field reference>]' to access the other fields of the"
+                        + " EventMetricData message, e.g. [_elapsed_timestamp_nanos] for the"
+                        + " elapsed_timestamp_nanos field that records when the event occurred. At"
+                        + " most one reference to repeated fields in each formatter is"
+                        + " supported.Field definitions can be found in the atoms.proto file under"
+                        + " frameworks/proto_logging/stats in the source tree.")
     private MultiMap<String, String> mMetricFormatters = new MultiMap<>();
 
     // Corresponds to a field reference, e.g., "[field1_name.field2_name.field3_name]".
