@@ -113,7 +113,9 @@ public class RustBinaryTestTest {
             cmd += " " + flags;
         }
         cmd += " -Zunstable-options --report-time";
-        if (filters.length() > 0) {
+        if (filters.length() == 0) {
+            cmd += " --exact";
+        } else {
             cmd += filters;
         }
         when(mMockITestDevice.executeShellCommand(cmd + " --list")).thenReturn(result);
@@ -125,7 +127,8 @@ public class RustBinaryTestTest {
         when(mMockITestDevice.executeShellCommand(
                         Mockito.contains(
                                 path
-                                        + " -Zunstable-options --report-time --bench --color never"
+                                        + " -Zunstable-options --report-time"
+                                        + " --bench --color never --exact"
                                         + " --list")))
                 .thenReturn(result);
     }
@@ -377,7 +380,7 @@ public class RustBinaryTestTest {
         OptionSetter setter = new OptionSetter(mRustBinaryTest);
         setter.setOptionValue("exclude-filter", "NotMe");
         setter.setOptionValue("exclude-filter", "MyTest#Long");
-        doTestFilter(new String[] {" --skip NotMe --skip Long"});
+        doTestFilter(new String[] {" --exact --skip NotMe --skip Long"});
     }
 
     /** Test both include- and exclude-filter options. */
@@ -388,7 +391,7 @@ public class RustBinaryTestTest {
         setter.setOptionValue("include-filter", "MyTest#OnlyMe");
         setter.setOptionValue("exclude-filter", "MyTest#other");
         // Include filters are passed before exclude filters.
-        doTestFilter(new String[] {" OnlyMe --skip NotMe2 --skip other"});
+        doTestFilter(new String[] {" OnlyMe --exact --skip NotMe2 --skip other"});
     }
 
     /** Test multiple include- and exclude-filter options. */
@@ -402,7 +405,8 @@ public class RustBinaryTestTest {
         // Multiple include filters are run one by one.
         doTestFilter(
                 new String[] {
-                    " OnlyMe --skip NotMe2 --skip other", " Me2 --skip NotMe2 --skip other"
+                    " OnlyMe --exact --skip NotMe2 --skip other",
+                    " Me2 --exact --skip NotMe2 --skip other"
                 });
     }
 
