@@ -113,7 +113,7 @@ public class StatsdBeforeAfterGaugeMetricPostProcessor extends StatsdGenericPost
                             + "References to repeated fields should be avoided unless the user is "
                             + "confident that it will always contain only one value in practice. "
                             + "Field definitions can be found in the atoms.proto file under "
-                            + "frameworks/base/cmds/statsd/src in the source tree. "
+                            + "frameworks/proto_logging/stats in the source tree. "
                             + "The metric key can be empty if only one metric is coming out of a "
                             + "particular atom and the atom name is descriptive enough.")
     private MultiMap<String, String> mMetricFormatters = new MultiMap<>();
