@@ -259,6 +259,9 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             Set<TestInfo> testInfos, IConfiguration moduleConfig, IAbi abi) {
         List<IRemoteTest> tests = new ArrayList<>();
         String configPath = moduleConfig.getName();
+        // Save top-level exclude-filter test options so that we can inject them back
+        // afterwards when creating individual test.
+        Set<String> excludeFilterSet = getExcludeFilter();
         if (configPath == null) {
             throw new RuntimeException(String.format("Configuration path is null."));
         }
@@ -272,6 +275,8 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             // Clean up all the test options injected in SuiteModuleLoader.
             super.cleanUpSuiteSetup();
             super.clearModuleArgs();
+            // Inject back the original exclude-filter test options.
+            super.setExcludeFilter(excludeFilterSet);
             if (configFile != null) {
                 clearConfigPaths();
                 // Set config path to BaseTestSuite to limit the search.
