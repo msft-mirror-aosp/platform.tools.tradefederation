@@ -45,6 +45,7 @@ import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.cloud.ManagedRemoteDevice;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
+import com.android.tradefed.device.internal.DeviceReleaseReporter;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.guice.InvocationScope;
@@ -77,7 +78,6 @@ import com.android.tradefed.result.ReportPassedTests;
 import com.android.tradefed.result.ResultAndLogForwarder;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
-import com.android.tradefed.device.internal.DeviceReleaseReporter;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.ResultAggregator;
@@ -87,6 +87,7 @@ import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.DeviceFailedToBootError;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.testtype.SubprocessTfLauncher;
+import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.PrettyPrintDelimiter;
@@ -746,7 +747,7 @@ public class TestInvocation implements ITestInvocation {
         }
         setExitCode(ExitCode.NO_BUILD, buildException);
         // If somehow we don't have builds
-        if (testInfo.getBuildInfo() == null) {
+        if (testInfo.getContext().getBuildInfos().isEmpty()) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.BACKFILL_BUILD_INFO, "true");
             IBuildInfo info = backFillBuildInfoForReporting(config.getCommandLine());
@@ -1352,6 +1353,15 @@ public class TestInvocation implements ITestInvocation {
                         ((DeviceManager) GlobalConfiguration.getDeviceManagerInstance())
                                 .executeGlobalAdbCommand("devices");
                 CLog.e("'adb devices' output:\n%s", adbOutput);
+
+                CommandResult fastbootResult =
+                        getRunUtil()
+                                .runTimedCmdSilently(
+                                        60000L,
+                                        GlobalConfiguration.getDeviceManagerInstance()
+                                                .getFastbootPath(),
+                                        "devices");
+                CLog.d("'fastboot devices' output:\n%s", fastbootResult.getStdout());
             }
         } else if (countVirtualLost > 0) {
             CLog.e("Counting as virtual_device_lost.");
