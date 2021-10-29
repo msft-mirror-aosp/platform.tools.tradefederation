@@ -710,6 +710,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public String getFastbootVariable(String variableName)
             throws DeviceNotAvailableException, UnsupportedOperationException {
         CommandResult result = executeFastbootCommand("getvar", variableName);
+        CLog.d(
+                "(getvar %s) output:\nstdout%s\nstderr:%s",
+                variableName, result.getStdout(), result.getStderr());
         if (result.getStatus() == CommandStatus.SUCCESS) {
             Pattern fastbootProductPattern = Pattern.compile(variableName + ":\\s(.*)\\s");
             // fastboot is weird, and may dump the output on stderr instead of stdout
