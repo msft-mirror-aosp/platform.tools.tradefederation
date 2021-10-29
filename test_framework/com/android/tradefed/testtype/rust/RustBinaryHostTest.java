@@ -198,8 +198,10 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
             return true;
         } else {
             CLog.w(
-                    "Could not run command '%s' to get test list.",
-                    String.join(" ", listCommandLine));
+                    "Could not run command '%s' to get test list.\nstdout: %s\nstderr: %s",
+                    String.join(" ", listCommandLine),
+                    listResult.getStdout(),
+                    listResult.getStderr());
             return false;
         }
     }
