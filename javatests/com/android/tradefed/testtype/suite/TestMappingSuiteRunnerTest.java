@@ -849,6 +849,31 @@ public class TestMappingSuiteRunnerTest {
         assertEquals(0, mRunner2.getExcludeFilter().size());
     }
 
+    /**
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String, IAbi)} that
+     * IRemoteTest object are created according to the test infos with multiple test options and top
+     * level exclude-filter tests.
+     */
+    @Test
+    public void testCreateIndividualTestsWithExcludeFilterFromTFCommandLine() throws Exception {
+        IConfiguration config =
+                ConfigurationFactory.getInstance()
+                        .createConfigurationFromArgs(new String[] {EMPTY_CONFIG});
+        config.setTest(new StubTest());
+        // Inject top level exclude-filter test options into runner
+        mRunner2.setExcludeFilter(new HashSet<>(Arrays.asList("some-exclude-filter")));
+        config.getConfigurationDescription().setModuleName(TEST_CONFIG_NAME);
+        Set<TestInfo> testInfos = new HashSet<>();
+        testInfos.add(createTestInfo("test", "path"));
+        TestInfo info = new TestInfo("test", "path", false);
+        info.addOption(new TestOption("include-filter", "include-filter"));
+        testInfos.add(info);
+        assertEquals(2, mRunner2.createIndividualTests(testInfos, config, null).size());
+        assertEquals(1, mRunner2.getIncludeFilter().size());
+        // Ensure exclude filter are kept
+        assertEquals(1, mRunner2.getExcludeFilter().size());
+    }
+
     @Test
     public void testLoadTests_moduleDifferentoptions() throws Exception {
         File tempDir = null;
