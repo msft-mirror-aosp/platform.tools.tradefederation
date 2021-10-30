@@ -63,7 +63,8 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
     private static final Path ART_APEX_PATH = Paths.get("/apex", "com.android.art");
 
     private static final String DALVIKVM_CMD =
-            "dalvikvm|#BITNESS#| -classpath |#CLASSPATH#| |#MAINCLASS#|";
+            "dalvikvm|#BITNESS#| -Xcompiler-option --compile-art-test -classpath |#CLASSPATH#| "
+                    + "|#MAINCLASS#|";
 
     // Name of the Checker Python Archive (PAR) file.
     public static final String CHECKER_PAR_FILENAME = "art-run-test-checker";
@@ -381,7 +382,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         Path dex2oatPath = Paths.get(ART_APEX_PATH.toString(), "bin", dex2oatBinary);
         String dex2oatCmd =
                 String.format(
-                        "%s --dex-file=%s --oat-file=%s --dump-cfg=%s -j1",
+                        "%s --dex-file=%s --oat-file=%s --dump-cfg=%s -j1 --compile-art-test",
                         dex2oatPath, mClasspath.get(0), oatPath, cfgPath);
         CommandResult dex2oatResult = mDevice.executeShellV2Command(dex2oatCmd);
         if (dex2oatResult.getStatus() != CommandStatus.SUCCESS) {
