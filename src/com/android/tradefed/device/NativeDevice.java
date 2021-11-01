@@ -3229,31 +3229,23 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void reboot(@Nullable String reason) throws DeviceNotAvailableException {
-        long rebootStart = System.currentTimeMillis();
-        try {
-            rebootUntilOnline(reason);
+        rebootUntilOnline(reason);
 
-            RecoveryMode cachedRecoveryMode = getRecoveryMode();
-            setRecoveryMode(RecoveryMode.ONLINE);
+        RecoveryMode cachedRecoveryMode = getRecoveryMode();
+        setRecoveryMode(RecoveryMode.ONLINE);
 
-            if (isEncryptionSupported() && isDeviceEncrypted()) {
-                unlockDevice();
-            }
+        if (isEncryptionSupported() && isDeviceEncrypted()) {
+            unlockDevice();
+        }
 
-            setRecoveryMode(cachedRecoveryMode);
+        setRecoveryMode(cachedRecoveryMode);
 
-            if (mStateMonitor.waitForDeviceAvailable(mOptions.getRebootTimeout()) != null) {
-                postBootSetup();
-                postBootWifiSetup();
-                return;
-            } else {
-                recoverDevice();
-            }
-        } finally {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.ADB_REBOOT_TIME, System.currentTimeMillis() - rebootStart);
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.ADB_REBOOT_ROUTINE_COUNT, 1);
+        if (mStateMonitor.waitForDeviceAvailable(mOptions.getRebootTimeout()) != null) {
+            postBootSetup();
+            postBootWifiSetup();
+            return;
+        } else {
+            recoverDevice();
         }
     }
 
@@ -3289,12 +3281,20 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void rebootUntilOnline(@Nullable String reason) throws DeviceNotAvailableException {
-        doReboot(RebootMode.REBOOT_FULL, reason);
-        RecoveryMode cachedRecoveryMode = getRecoveryMode();
-        setRecoveryMode(RecoveryMode.ONLINE);
-        waitForDeviceOnline();
-        enableAdbRoot();
-        setRecoveryMode(cachedRecoveryMode);
+        long rebootStart = System.currentTimeMillis();
+        try {
+            doReboot(RebootMode.REBOOT_FULL, reason);
+            RecoveryMode cachedRecoveryMode = getRecoveryMode();
+            setRecoveryMode(RecoveryMode.ONLINE);
+            waitForDeviceOnline();
+            enableAdbRoot();
+            setRecoveryMode(cachedRecoveryMode);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.ADB_REBOOT_TIME, System.currentTimeMillis() - rebootStart);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.ADB_REBOOT_ROUTINE_COUNT, 1);
+        }
     }
 
     @Override
