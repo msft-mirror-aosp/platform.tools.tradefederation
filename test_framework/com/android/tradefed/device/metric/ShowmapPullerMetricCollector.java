@@ -49,7 +49,7 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
     private static final String METRIC_UNIT = "bytes";
     private Boolean processFound = false;
     private String processName = null;
-    private Map<String, Integer> mGranularInfo = new HashMap<>();
+    private Map<String, Long> mGranularInfo = new HashMap<>();
     private Set<String> mProcessObjInfo = new HashSet<>();
     private final Map<String, Integer> mIndexMemoryMap =
             new HashMap<String, Integer>() {
@@ -147,8 +147,8 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
      */
     private Boolean computeGranularMetrics(String line, String processName) {
         String objectName;
-        Integer mGranularValue;
-        Integer metricCounter;
+        Long mGranularValue;
+        Long metricCounter;
         String completeGranularMetric;
 
         if (isMetricParsingStartEnd(line)) {
@@ -173,7 +173,7 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
                 continue;
             }
             try {
-                mGranularValue = Integer.parseInt(metricLine[mIndexMemoryMap.get(memName)]);
+                mGranularValue = Long.parseLong(metricLine[mIndexMemoryMap.get(memName)]) * 1024;
             } catch (NumberFormatException e) {
                 CLog.e("Error parsing granular metrics for %s", processName);
                 computeObjectsPerProcess(processName);
@@ -196,7 +196,7 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
             metricCounter =
                     mGranularInfo.containsKey(completeGranularMetric)
                             ? mGranularInfo.get(completeGranularMetric)
-                            : 0;
+                            : 0L;
             mGranularInfo.put(completeGranularMetric, metricCounter + mGranularValue);
         }
         mProcessObjInfo.add(objectName);
@@ -209,7 +209,7 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
      * @param data
      */
     private void writeGranularMetricData(DeviceMetricData data) {
-        for (Map.Entry<String, Integer> granularData : mGranularInfo.entrySet()) {
+        for (Map.Entry<String, Long> granularData : mGranularInfo.entrySet()) {
             MetricMeasurement.Metric.Builder metricBuilder = MetricMeasurement.Metric.newBuilder();
             metricBuilder.getMeasurementsBuilder().setSingleInt(granularData.getValue());
             data.addMetric(
@@ -270,7 +270,7 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
                 String.join(
                         METRIC_VALUE_SEPARATOR, mMetricPrefix, processName, "total_object_count");
         if (mProcessObjInfo.size() > 0) {
-            mGranularInfo.put(objCounterMetric, mProcessObjInfo.size());
+            mGranularInfo.put(objCounterMetric, (long) mProcessObjInfo.size());
             mProcessObjInfo.clear();
         }
     }
