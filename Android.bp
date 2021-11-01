@@ -203,6 +203,7 @@ droiddoc_host {
         ":tradefed-doc-stubs",
     ],
     libs: [
+        "kotlin-annotations",
         "loganalysis",
         "tradefed",
     ],
