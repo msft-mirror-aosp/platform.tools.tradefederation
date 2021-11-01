@@ -125,6 +125,7 @@ public class RustBinaryHostTestTest {
         when(mMockRunUtil.runTimedCmdSilently(
                         Mockito.anyLong(),
                         Mockito.eq(binary.getAbsolutePath()),
+                        Mockito.eq("--exact"),
                         Mockito.eq("--list")))
                 .thenReturn(successResult("", runListOutput(numOfTest)));
     }
@@ -133,6 +134,7 @@ public class RustBinaryHostTestTest {
         when(mMockRunUtil.runTimedCmdSilently(
                         Mockito.anyLong(),
                         Mockito.eq(binary.getAbsolutePath()),
+                        Mockito.eq("--exact"),
                         Mockito.eq("--bench"),
                         Mockito.eq("--list")))
                 .thenReturn(successResult("", runListBenchmarksOutput(numOfTest)));
@@ -168,7 +170,8 @@ public class RustBinaryHostTestTest {
                         Mockito.anyLong(),
                         Mockito.eq(binary.getAbsolutePath()),
                         Mockito.eq("-Zunstable-options"),
-                        Mockito.eq("--report-time")))
+                        Mockito.eq("--report-time"),
+                        Mockito.eq("--exact")))
                 .thenReturn(res);
     }
 
@@ -178,6 +181,7 @@ public class RustBinaryHostTestTest {
                         Mockito.eq(binary.getAbsolutePath()),
                         Mockito.eq("-Zunstable-options"),
                         Mockito.eq("--report-time"),
+                        Mockito.eq("--exact"),
                         Mockito.eq("--bench"),
                         Mockito.eq("--color"),
                         Mockito.eq("never")))
@@ -289,6 +293,7 @@ public class RustBinaryHostTestTest {
             when(mMockRunUtil.runTimedCmdSilently(
                             Mockito.anyLong(),
                             Mockito.eq(binary.getAbsolutePath()),
+                            Mockito.eq("--exact"),
                             Mockito.eq("--list")))
                     .thenReturn(listRes);
 
@@ -342,6 +347,7 @@ public class RustBinaryHostTestTest {
             when(mMockRunUtil.runTimedCmdSilently(
                             Mockito.anyLong(),
                             Mockito.eq(binary.getAbsolutePath()),
+                            Mockito.eq("--exact"),
                             Mockito.eq("--skip"),
                             Mockito.eq("NotMe"),
                             Mockito.eq("--skip"),
@@ -355,6 +361,7 @@ public class RustBinaryHostTestTest {
                             Mockito.eq(binary.getAbsolutePath()),
                             Mockito.eq("-Zunstable-options"),
                             Mockito.eq("--report-time"),
+                            Mockito.eq("--exact"),
                             Mockito.eq("--skip"),
                             Mockito.eq("NotMe"),
                             Mockito.eq("--skip"),
@@ -392,6 +399,7 @@ public class RustBinaryHostTestTest {
                             Mockito.anyLong(),
                             Mockito.eq(binary.getAbsolutePath()),
                             Mockito.eq("OnlyMe"),
+                            Mockito.eq("--exact"),
                             Mockito.eq("--skip"),
                             Mockito.eq("NotMe"),
                             Mockito.eq("--skip"),
@@ -406,6 +414,7 @@ public class RustBinaryHostTestTest {
                             Mockito.eq("-Zunstable-options"),
                             Mockito.eq("--report-time"),
                             Mockito.eq("OnlyMe"),
+                            Mockito.eq("--exact"),
                             Mockito.eq("--skip"),
                             Mockito.eq("NotMe"),
                             Mockito.eq("--skip"),
@@ -445,6 +454,7 @@ public class RustBinaryHostTestTest {
                             Mockito.anyLong(),
                             Mockito.eq(binary.getAbsolutePath()),
                             Mockito.eq("OnlyMe"),
+                            Mockito.eq("--exact"),
                             Mockito.eq("--skip"),
                             Mockito.eq("NotMe"),
                             Mockito.eq("--skip"),
@@ -456,6 +466,7 @@ public class RustBinaryHostTestTest {
                             Mockito.anyLong(),
                             Mockito.eq(binary.getAbsolutePath()),
                             Mockito.eq("Me2"),
+                            Mockito.eq("--exact"),
                             Mockito.eq("--skip"),
                             Mockito.eq("NotMe"),
                             Mockito.eq("--skip"),
@@ -470,6 +481,7 @@ public class RustBinaryHostTestTest {
                             Mockito.eq("-Zunstable-options"),
                             Mockito.eq("--report-time"),
                             Mockito.eq("OnlyMe"),
+                            Mockito.eq("--exact"),
                             Mockito.eq("--skip"),
                             Mockito.eq("NotMe"),
                             Mockito.eq("--skip"),
@@ -483,6 +495,7 @@ public class RustBinaryHostTestTest {
                             Mockito.eq("-Zunstable-options"),
                             Mockito.eq("--report-time"),
                             Mockito.eq("Me2"),
+                            Mockito.eq("--exact"),
                             Mockito.eq("--skip"),
                             Mockito.eq("NotMe"),
                             Mockito.eq("--skip"),
