@@ -150,6 +150,7 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
         if (!"".equals(filter)) {
             args.add(cleanFilter(filter));
         }
+        args.add("--exact");
         for (String s : mExcludeFilters) {
             args.add("--skip");
             args.add(cleanFilter(s));
