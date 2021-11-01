@@ -15,8 +15,6 @@
  */
 package com.android.tradefed.device;
 
-import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain;
-
 import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.FileListingService;
 import com.android.ddmlib.FileListingService.FileEntry;
@@ -57,6 +55,7 @@ import com.android.tradefed.result.ddmlib.TestRunToTestInvocationForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
@@ -3230,23 +3229,31 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void reboot(@Nullable String reason) throws DeviceNotAvailableException {
-        rebootUntilOnline(reason);
+        long rebootStart = System.currentTimeMillis();
+        try {
+            rebootUntilOnline(reason);
 
-        RecoveryMode cachedRecoveryMode = getRecoveryMode();
-        setRecoveryMode(RecoveryMode.ONLINE);
+            RecoveryMode cachedRecoveryMode = getRecoveryMode();
+            setRecoveryMode(RecoveryMode.ONLINE);
 
-        if (isEncryptionSupported() && isDeviceEncrypted()) {
-            unlockDevice();
-        }
+            if (isEncryptionSupported() && isDeviceEncrypted()) {
+                unlockDevice();
+            }
 
-        setRecoveryMode(cachedRecoveryMode);
+            setRecoveryMode(cachedRecoveryMode);
 
-        if (mStateMonitor.waitForDeviceAvailable(mOptions.getRebootTimeout()) != null) {
-            postBootSetup();
-            postBootWifiSetup();
-            return;
-        } else {
-            recoverDevice();
+            if (mStateMonitor.waitForDeviceAvailable(mOptions.getRebootTimeout()) != null) {
+                postBootSetup();
+                postBootWifiSetup();
+                return;
+            } else {
+                recoverDevice();
+            }
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.ADB_REBOOT_TIME, System.currentTimeMillis() - rebootStart);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.ADB_REBOOT_ROUTINE_COUNT, 1);
         }
     }
 
