@@ -71,6 +71,8 @@ public class InvocationMetricLogger {
         RESET_RETRY_ISOLATION_PAIR("reset_isolation_timestamp_pair", true),
         // Capture the time spent isolating a retry with reboot
         REBOOT_RETRY_ISOLATION_PAIR("reboot_isolation_timestamp_pair", true),
+        // The time spent inside metric collectors
+        COLLECTOR_TIME("collector_time_ms", true),
         // Track if soft restart is occurring after test module
         SOFT_RESTART_AFTER_MODULE("soft_restart_after_module", true),
         CLOUD_DEVICE_PROJECT("cloud_device_project", false),
