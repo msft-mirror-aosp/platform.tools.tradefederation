@@ -8,3 +8,4 @@ com.android.compatibility.common.tradefed.targetprep.PackageDisabler
 com.android.compatibility.common.tradefed.targetprep.SettingsPreparer
 com.android.compatibility.common.tradefed.targetprep.ApkPreconditionCheck
 com.android.compatibility.common.tradefed.targetprep.WifiCheck
+com.android.compatibility.targetprep.AppSetupPreparer
