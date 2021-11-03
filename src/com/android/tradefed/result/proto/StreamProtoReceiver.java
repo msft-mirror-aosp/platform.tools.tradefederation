@@ -48,6 +48,7 @@ public class StreamProtoReceiver implements Closeable {
      */
     private long mExtraWaitTimeForEvents = 0L;
 
+    private boolean mJoinStarted = false;
     /**
      * Stop parsing events when this is set. This allows to avoid a thread parsing the events when
      * we don't expect them anymore.
@@ -199,6 +200,7 @@ public class StreamProtoReceiver implements Closeable {
 
     public boolean joinReceiver(long millis) {
         if (mEventReceiver != null) {
+            mJoinStarted = true;
             try {
                 long waitTime = millis + mExtraWaitTimeForEvents;
                 CLog.i(
@@ -238,7 +240,7 @@ public class StreamProtoReceiver implements Closeable {
         }
         try {
             TestLevel level = mParser.processNewProto(receivedRecord);
-            if (TestLevel.MODULE.equals(level)) {
+            if (TestLevel.MODULE.equals(level) && !mJoinStarted) {
                 mExtraWaitTimeForEvents += PER_MODULE_EXTRA_WAIT_TIME_MS;
             }
         } catch (Throwable e) {
