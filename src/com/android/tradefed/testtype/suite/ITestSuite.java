@@ -60,6 +60,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryStrategy;
+import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.suite.checker.ISystemStatusCheckerReceiver;
 import com.android.tradefed.suite.checker.StatusCheckerResult;
@@ -84,6 +85,7 @@ import com.android.tradefed.util.TimeUtil;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
+import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -320,6 +322,11 @@ public abstract class ITestSuite
     private boolean mMergeAttempts = true;
     // end [Options relate to module retry and intra-module retry]
 
+    @Option(
+            name = "partial-download-via-feature",
+            description = "Feature flag to test partial download via feature service.")
+    private boolean mStageArtifactsViaFeature = false;
+
     private ITestDevice mDevice;
     private IBuildInfo mBuildInfo;
     private List<ISystemStatusChecker> mSystemStatusCheckers;
@@ -466,25 +473,45 @@ public abstract class ITestSuite
         List<String> includeFilters = Arrays.asList(moduleRegex);
         // Ignore config file as it's part of config zip artifact that's staged already.
         List<String> excludeFilters = Arrays.asList("[.]config$");
-        mDynamicResolver.setDevice(device);
-        mDynamicResolver.addExtraArgs(
-                mMainConfiguration.getCommandOptions().getDynamicDownloadArgs());
-        for (File remoteFile : mBuildInfo.getRemoteFiles()) {
-            try {
-                mDynamicResolver.resolvePartialDownloadZip(
-                        getTestsDir(), remoteFile.toString(), includeFilters, excludeFilters);
-            } catch (BuildRetrievalError | FileNotFoundException e) {
-                String message =
-                        String.format(
-                                "Failed to download partial zip from %s for modules: %s",
-                                remoteFile, String.join(", ", modules));
-                CLog.e(message);
-                CLog.e(e);
-                if (e instanceof IHarnessException) {
-                    throw new HarnessRuntimeException(message, (IHarnessException) e);
+        if (mStageArtifactsViaFeature) {
+            try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+                Map<String, String> args = new HashMap<>();
+                args.put(ResolvePartialDownload.DESTINATION_DIR, getTestsDir().getAbsolutePath());
+                args.put(ResolvePartialDownload.INCLUDE_FILTERS, String.join(";", includeFilters));
+                args.put(ResolvePartialDownload.EXCLUDE_FILTERS, String.join(";", excludeFilters));
+                FeatureResponse rep =
+                        client.triggerFeature(
+                                ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);
+                if (rep.hasErrorInfo()) {
+                    throw new HarnessRuntimeException(
+                            rep.getErrorInfo().getErrorTrace(),
+                            InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
                 }
+            } catch (FileNotFoundException e) {
                 throw new HarnessRuntimeException(
-                        message, e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+                        e.getMessage(), e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+            }
+        } else {
+            mDynamicResolver.setDevice(device);
+            mDynamicResolver.addExtraArgs(
+                    mMainConfiguration.getCommandOptions().getDynamicDownloadArgs());
+            for (File remoteFile : mBuildInfo.getRemoteFiles()) {
+                try {
+                    mDynamicResolver.resolvePartialDownloadZip(
+                            getTestsDir(), remoteFile.toString(), includeFilters, excludeFilters);
+                } catch (BuildRetrievalError | FileNotFoundException e) {
+                    String message =
+                            String.format(
+                                    "Failed to download partial zip from %s for modules: %s",
+                                    remoteFile, String.join(", ", modules));
+                    CLog.e(message);
+                    CLog.e(e);
+                    if (e instanceof IHarnessException) {
+                        throw new HarnessRuntimeException(message, (IHarnessException) e);
+                    }
+                    throw new HarnessRuntimeException(
+                            message, e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+                }
             }
         }
         long elapsedTime = System.currentTimeMillis() - startTime;
