@@ -83,6 +83,7 @@ public class ProtoResultParser {
     private IInvocationContext mMainContext;
 
     private boolean mQuietParsing = true;
+    private boolean mSkipParsingAccounting = false;
 
     private boolean mInvocationStarted = false;
     /** Track whether or not invocationFailed was called. */
@@ -124,6 +125,10 @@ public class ProtoResultParser {
     /** Sets whether or not to print when events are received. */
     public void setQuiet(boolean quiet) {
         mQuietParsing = quiet;
+    }
+
+    public void setSkipParsingAccounting(boolean skip) {
+        mSkipParsingAccounting = skip;
     }
 
     /** Sets whether or not we should report the logs. */
@@ -642,6 +647,9 @@ public class ProtoResultParser {
                 if (attKey.startsWith(groupKey.toString() + ":")) {
                     List<String> values = attributes.get(attKey);
                     attributes.remove(attKey);
+                    if (mSkipParsingAccounting) {
+                        continue;
+                    }
                     String group = attKey.split(":", 2)[1];
                     for (String val : values) {
                         if (groupKey.shouldAdd()) {
@@ -668,6 +676,9 @@ public class ProtoResultParser {
             List<String> values = attributes.get(key.toString());
             attributes.remove(key.toString());
 
+            if (mSkipParsingAccounting) {
+                continue;
+            }
             for (String val : values) {
                 if (key.shouldAdd()) {
                     try {
@@ -682,22 +693,23 @@ public class ProtoResultParser {
             }
         }
         if (attributes.containsKey(TfObjectTracker.TF_OBJECTS_TRACKING_KEY)) {
-            List<String> values = attributes.get(TfObjectTracker.TF_OBJECTS_TRACKING_KEY);
-            for (String val : values) {
-                for (String pair : Splitter.on(",").split(val)) {
-                    if (!pair.contains("=")) {
-                        continue;
-                    }
-                    String[] pairSplit = pair.split("=");
-                    try {
-                        TfObjectTracker.directCount(pairSplit[0], Long.parseLong(pairSplit[1]));
-                    } catch (NumberFormatException e) {
-                        CLog.e(e);
-                        continue;
+            List<String> values = attributes.remove(TfObjectTracker.TF_OBJECTS_TRACKING_KEY);
+            if (!mSkipParsingAccounting) {
+                for (String val : values) {
+                    for (String pair : Splitter.on(",").split(val)) {
+                        if (!pair.contains("=")) {
+                            continue;
+                        }
+                        String[] pairSplit = pair.split("=");
+                        try {
+                            TfObjectTracker.directCount(pairSplit[0], Long.parseLong(pairSplit[1]));
+                        } catch (NumberFormatException e) {
+                            CLog.e(e);
+                            continue;
+                        }
                     }
                 }
             }
-            attributes.remove(TfObjectTracker.TF_OBJECTS_TRACKING_KEY);
         }
         receiverContext.addInvocationAttributes(attributes);
     }
