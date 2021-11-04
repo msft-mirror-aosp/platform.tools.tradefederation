@@ -15,8 +15,6 @@
  */
 package com.android.tradefed.device;
 
-import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain;
-
 import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.FileListingService;
 import com.android.ddmlib.FileListingService.FileEntry;
@@ -57,6 +55,7 @@ import com.android.tradefed.result.ddmlib.TestRunToTestInvocationForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
@@ -710,6 +709,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public String getFastbootVariable(String variableName)
             throws DeviceNotAvailableException, UnsupportedOperationException {
         CommandResult result = executeFastbootCommand("getvar", variableName);
+        CLog.d(
+                "(getvar %s) output:\nstdout%s\nstderr:%s",
+                variableName, result.getStdout(), result.getStderr());
         if (result.getStatus() == CommandStatus.SUCCESS) {
             Pattern fastbootProductPattern = Pattern.compile(variableName + ":\\s(.*)\\s");
             // fastboot is weird, and may dump the output on stderr instead of stdout
@@ -3279,12 +3281,20 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void rebootUntilOnline(@Nullable String reason) throws DeviceNotAvailableException {
-        doReboot(RebootMode.REBOOT_FULL, reason);
-        RecoveryMode cachedRecoveryMode = getRecoveryMode();
-        setRecoveryMode(RecoveryMode.ONLINE);
-        waitForDeviceOnline();
-        enableAdbRoot();
-        setRecoveryMode(cachedRecoveryMode);
+        long rebootStart = System.currentTimeMillis();
+        try {
+            doReboot(RebootMode.REBOOT_FULL, reason);
+            RecoveryMode cachedRecoveryMode = getRecoveryMode();
+            setRecoveryMode(RecoveryMode.ONLINE);
+            waitForDeviceOnline();
+            enableAdbRoot();
+            setRecoveryMode(cachedRecoveryMode);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.ADB_REBOOT_TIME, System.currentTimeMillis() - rebootStart);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.ADB_REBOOT_ROUTINE_COUNT, 1);
+        }
     }
 
     @Override

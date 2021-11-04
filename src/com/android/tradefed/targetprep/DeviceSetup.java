@@ -45,6 +45,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 
 /**
  * A {@link ITargetPreparer} that configures a device for testing based on provided {@link Option}s.
@@ -259,12 +260,18 @@ public class DeviceSetup extends BaseTargetPreparer {
     // OFF: settings put global auto_timezone 0
 
     @Option(
-        name = "set-timezone",
-        description =
-                "Set timezone property by TZ name "
-                        + "(http://en.wikipedia.org/wiki/List_of_tz_database_time_zones)"
-    )
+            name = "set-timezone",
+            description =
+                    "Set timezone property by TZ name "
+                            + "(http://en.wikipedia.org/wiki/List_of_tz_database_time_zones)")
     protected String mTimezone = null;
+
+    @Option(name = "sync-timezone-with-host",
+            description =
+                    "Turn on or off that make the time zone of device sync with host")
+    protected BinaryState mSyncTimezoneWithHost = BinaryState.IGNORE;
+    // ON:  settings put global sync_timezone 1
+    // OFF: settings put global sync_timezone 0
 
     // Calling
     @Option(name = "disable-dialing",
@@ -680,7 +687,18 @@ public class DeviceSetup extends BaseTargetPreparer {
 
         setSettingForBinaryState(mAutoUpdateTimezone, mGlobalSettings, "auto_timezone", "1", "0");
 
+        if (BinaryState.ON.equals(mSyncTimezoneWithHost)) {
+            if (mTimezone != null) {
+                throw new TargetSetupError("Option set-timezone cannot be set when " +
+                                               "sync-timezone-with-host is set to ON",
+                                           device.getDeviceDescriptor(),
+                                           InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+            } else {
+                mTimezone = TimeZone.getDefault().getID();
+            }
+        }
         if (mTimezone != null) {
+            CLog.i("The actual timezone we set here is  %s", mTimezone);
             mSetProps.put("persist.sys.timezone", mTimezone);
         }
 
