@@ -22,6 +22,7 @@ import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.ConfigurationUtil;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.TestAppInstallSetup;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
@@ -110,7 +111,9 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                 // from AndroidTest.xml
                 ValidateSuiteConfigHelper.validateConfig(c);
 
-                ensureApkUninstalled(configName, c.getTargetPreparers());
+                for (IDeviceConfiguration dConfig : c.getDeviceConfig()) {
+                    ensureApkUninstalled(configName, dConfig.getTargetPreparers());
+                }
                 // Check that all the tests runners are well supported.
                 checkRunners(c.getTests(), "general-tests");
 
