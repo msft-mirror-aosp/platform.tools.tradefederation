@@ -250,4 +250,7 @@ public interface ICommandOptions {
 
     /** Whether or not to disable pre-invocaiton setup and post-invocation teardown. */
     public boolean shouldDisableInvocationSetupAndTeardown();
+
+    /** Return the number of devices for multi-device tests. */
+    public Integer getMultiDeviceCount();
 }

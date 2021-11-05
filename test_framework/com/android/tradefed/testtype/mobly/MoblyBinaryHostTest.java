@@ -42,6 +42,8 @@ import com.android.tradefed.util.PythonVirtualenvHelper;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 
+import org.yaml.snakeyaml.Yaml;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -56,15 +58,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.yaml.snakeyaml.Yaml;
-
 /** Host test meant to run a mobly python binary file from the Android Build system (Soong) */
 @OptionClass(alias = "mobly-host")
 public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildReceiver {
 
     private static final String ANDROID_SERIAL_VAR = "ANDROID_SERIAL";
     private static final String MOBLY_TEST_SUMMARY = "test_summary.yaml";
-    private static final String MOBLY_TEST_SUMMARY_XML = "converted_test_summary.xml";
 
     // TODO(b/159366744): merge this and next options.
     @Option(
@@ -96,9 +95,8 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
     @Option(
             name = "mobly-config-file",
             description =
-                    "Mobly config file absolute path."
-                            + "If set, will append '--config=<config file path>' to the command for "
-                            + "running binary.")
+                    "Mobly config file absolute path. If set, will append '--config=<config file"
+                            + " path>' to the command for running binary.")
     private File mConfigFile;
 
     @Option(
@@ -137,8 +135,10 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
         mDevice = mTestInfo.getDevice();
         List<File> parFilesList = findParFiles(listener);
         File venvDir = mBuildInfo.getFile("VIRTUAL_ENV");
-        if (venvDir != null) {
+        if (venvDir != null && venvDir.exists()) {
             PythonVirtualenvHelper.activate(getRunUtil(), venvDir);
+        } else {
+            CLog.d("No virtualenv configured.");
         }
         for (File parFile : parFilesList) {
             // TODO(b/159365341): add a failure reporting for nonexistent binary.
@@ -150,7 +150,7 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
             }
             parFile.setExecutable(true);
             try {
-                runSingleParFile(listener, parFile.getAbsolutePath());
+                runSingleParFile(parFile.getAbsolutePath());
                 processTestResults(listener, parFile.getName());
             } finally {
                 reportLogs(getLogDir(), listener);
@@ -180,16 +180,19 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
         return files;
     }
 
-    private void runSingleParFile(ITestInvocationListener listener, String parFilePath) {
+    private void runSingleParFile(String parFilePath) {
         if (mInjectAndroidSerialVar) {
             getRunUtil().setEnvVariable(ANDROID_SERIAL_VAR, getDevice().getSerialNumber());
         }
         AdbUtils.updateAdb(mTestInfo, getRunUtil(), getAdbPath());
+        String configPath = null;
         if (mConfigFile != null) {
-            updateConfigFile();
+            configPath = updateTemplateConfigFile(mConfigFile);
         }
         CommandResult result =
-                getRunUtil().runTimedCmd(getTestTimeout(), buildCommandLineArray(parFilePath));
+                getRunUtil()
+                        .runTimedCmd(
+                                getTestTimeout(), buildCommandLineArray(parFilePath, configPath));
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             CLog.e(
                     "Something went wrong when running the python binary:\nstdout: "
@@ -246,22 +249,21 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
         }
     }
 
-    private void updateConfigFile() {
+    private String updateTemplateConfigFile(File templateConfig) {
         InputStream inputStream = null;
         FileWriter fileWriter = null;
         File localConfigFile = new File(getLogDir(), "local_config.yaml");
         try {
-            inputStream = new FileInputStream(mConfigFile);
+            inputStream = new FileInputStream(templateConfig);
             fileWriter = new FileWriter(localConfigFile);
             updateConfigFile(inputStream, fileWriter, getDevice().getSerialNumber());
-            // Update config file to local version.
-            mConfigFile = localConfigFile;
         } catch (IOException ex) {
             throw new RuntimeException("Exception in updating config file: %s", ex);
         } finally {
             StreamUtil.close(inputStream);
             StreamUtil.close(fileWriter);
         }
+        return localConfigFile.getAbsolutePath();
     }
 
     @VisibleForTesting
@@ -327,14 +329,14 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
     }
 
     @VisibleForTesting
-    protected String[] buildCommandLineArray(String filePath) {
+    protected String[] buildCommandLineArray(String filePath, String configPath) {
         List<String> commandLine = new ArrayList<>();
         commandLine.add(filePath);
         // TODO(b/166468397): some test binaries are actually a wrapper of Mobly runner and need --
         //  to separate Python options.
         commandLine.add("--");
-        if (getConfigPath() != null) {
-            commandLine.add("--config=" + getConfigPath());
+        if (configPath != null) {
+            commandLine.add("--config=" + configPath);
         }
         if (getTestBed() != null) {
             commandLine.add("--test_bed=" + getTestBed());
@@ -352,24 +354,12 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
             if (subFile.isDirectory()) {
                 reportLogs(subFile, listener);
             } else {
-                InputStreamSource dataStream = null;
-                try {
-                    dataStream = new FileInputStreamSource(subFile, true);
+                try (InputStreamSource dataStream = new FileInputStreamSource(subFile, true)) {
                     listener.testLog(subFile.getName(), LogDataType.TEXT, dataStream);
-                } finally {
-                    StreamUtil.close(dataStream);
                 }
             }
         }
-        FileUtil.deleteFile(logDir);
-    }
-
-    @VisibleForTesting
-    String getConfigPath() {
-        if (mConfigFile != null) {
-            return mConfigFile.getAbsolutePath();
-        }
-        return null;
+        FileUtil.recursiveDelete(logDir);
     }
 
     @VisibleForTesting

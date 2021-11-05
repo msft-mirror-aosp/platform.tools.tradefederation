@@ -166,7 +166,10 @@ public class ArtRunTestTest {
 
         TestDescription testId = new TestDescription(runName, runTestName);
 
-        String cmd = String.format("dalvikvm64 -classpath %s Main", classpath);
+        String cmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main",
+                        classpath);
         // Test execution.
         CommandResult result = createMockCommandResult("output\n", "no error\n", /* exitCode */ 0);
         when(mMockITestDevice.executeShellV2Command(cmd, 60000L, TimeUnit.MILLISECONDS, 0))
@@ -229,7 +232,10 @@ public class ArtRunTestTest {
 
         TestDescription testId = new TestDescription(runName, runTestName);
 
-        String cmd = String.format("dalvikvm64 -classpath %s Main", classpath);
+        String cmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main",
+                        classpath);
         // Test execution.
         CommandResult result = createMockCommandResult("output\n", "no error\n", /* exitCode */ 1);
         when(mMockITestDevice.executeShellV2Command(cmd, 60000L, TimeUnit.MILLISECONDS, 0))
@@ -268,7 +274,10 @@ public class ArtRunTestTest {
 
         TestDescription testId = new TestDescription(runName, runTestName);
 
-        String cmd = String.format("dalvikvm64 -classpath %s Main", classpath);
+        String cmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main",
+                        classpath);
         // Test execution.
         CommandResult result =
                 createMockCommandResult("unexpected\n", "no error\n", /* exitCode */ 0);
@@ -317,7 +326,10 @@ public class ArtRunTestTest {
 
         TestDescription testId = new TestDescription(runName, runTestName);
 
-        String cmd = String.format("dalvikvm64 -classpath %s Main", classpath);
+        String cmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main",
+                        classpath);
         // Test execution.
         CommandResult result =
                 createMockCommandResult("output\n", "unexpected error\n", /* exitCode */ 0);
@@ -366,7 +378,10 @@ public class ArtRunTestTest {
 
         TestDescription testId = new TestDescription(runName, runTestName);
 
-        String cmd = String.format("dalvikvm64 -classpath %s Main", classpath);
+        String cmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main",
+                        classpath);
         // Test execution.
         CommandResult result =
                 createMockCommandResult("unexpected\n", "unexpected error\n", /* exitCode */ 2);

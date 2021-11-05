@@ -55,6 +55,10 @@ public class InvocationMetricLogger {
         ADB_ROOT_TIME("adb_root_time", true),
         // Represents how often we enter the "adb root" device routine.
         ADB_ROOT_ROUTINE_COUNT("adb_root_routine_count", true),
+        // Represents the time we spend attempting to reboot a device.
+        ADB_REBOOT_TIME("adb_reboot_time", true),
+        // Represents how often we attempt to reboot the device.
+        ADB_REBOOT_ROUTINE_COUNT("adb_reboot_routine_count", true),
         // Represents the time we spend pulling file from device.
         PULL_FILE_TIME("pull_file_time_ms", true),
         // Represents how many times we pulled file from the device.
@@ -67,6 +71,8 @@ public class InvocationMetricLogger {
         RESET_RETRY_ISOLATION_PAIR("reset_isolation_timestamp_pair", true),
         // Capture the time spent isolating a retry with reboot
         REBOOT_RETRY_ISOLATION_PAIR("reboot_isolation_timestamp_pair", true),
+        // The time spent inside metric collectors
+        COLLECTOR_TIME("collector_time_ms", true),
         // Track if soft restart is occurring after test module
         SOFT_RESTART_AFTER_MODULE("soft_restart_after_module", true),
         CLOUD_DEVICE_PROJECT("cloud_device_project", false),
