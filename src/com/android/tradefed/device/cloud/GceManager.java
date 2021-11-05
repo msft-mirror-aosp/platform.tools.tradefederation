@@ -373,15 +373,17 @@ public class GceManager {
             gceArgs.add("--config_file");
             gceArgs.add(getAvdConfigFile().getAbsolutePath());
         }
-        if (ipDevice == null) {
-            if (getTestDeviceOptions().getServiceAccountJsonKeyFile() != null) {
-                gceArgs.add("--service_account_json_private_key_path");
-                gceArgs.add(
-                        getTestDeviceOptions().getServiceAccountJsonKeyFile().getAbsolutePath());
-            }
-        } else {
+        if (getTestDeviceOptions().getServiceAccountJsonKeyFile() != null) {
+            gceArgs.add("--service-account-json-private-key-path");
+            gceArgs.add(getTestDeviceOptions().getServiceAccountJsonKeyFile().getAbsolutePath());
+        }
+        if (ipDevice != null) {
             gceArgs.add("--host");
             gceArgs.add(ipDevice);
+            gceArgs.add("--host-user");
+            gceArgs.add(getTestDeviceOptions().getInstanceUser());
+            gceArgs.add("--host-ssh-private-key-path");
+            gceArgs.add(getTestDeviceOptions().getSshPrivateKeyPath().getAbsolutePath());
         }
         gceArgs.add("--report_file");
         gceArgs.add(reportFile.getAbsolutePath());
