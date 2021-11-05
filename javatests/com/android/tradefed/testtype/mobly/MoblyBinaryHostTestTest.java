@@ -16,14 +16,9 @@
 
 package com.android.tradefed.testtype.mobly;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.hasItems;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.core.StringStartsWith.startsWith;
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -50,7 +45,7 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.utils.FileUtils;
 
-import com.google.common.base.Throwables;
+import com.google.common.truth.Truth;
 
 import org.junit.After;
 import org.junit.Before;
@@ -71,6 +66,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
+/** Unit tests for {@link MoblyBinaryHostTest}. */
 @RunWith(JUnit4.class)
 public class MoblyBinaryHostTestTest {
     private static final String BINARY_PATH = "/binary/file/path/test.par";
@@ -222,13 +218,9 @@ public class MoblyBinaryHostTestTest {
             mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
             fail("Should have thrown an exception");
         } catch (RuntimeException e) {
-            assertThat(
-                    String.format(
-                            "An unexpected exception was thrown, full stack trace: %s",
-                            Throwables.getStackTraceAsString(e)),
-                    e.getMessage(),
-                    containsString(
-                            "Fail to find test summary file test_summary.yaml under directory"));
+            assertThat(e)
+                    .hasMessageThat()
+                    .contains("Fail to find test summary file test_summary.yaml under directory");
             assertFalse(new File(mSpyTest.getLogDirAbsolutePath()).exists());
         }
     }
@@ -305,17 +297,18 @@ public class MoblyBinaryHostTestTest {
         Mockito.doReturn(LOG_PATH).when(mSpyTest).getLogDirAbsolutePath();
         List<String> expOptions = Arrays.asList("--option1", "--option2=test_option");
         Mockito.doReturn(expOptions).when(mSpyTest).getTestOptions();
-        String[] cmdArray = mSpyTest.buildCommandLineArray(BINARY_PATH);
-        assertThat(cmdArray[0], is(BINARY_PATH));
-        assertThat(cmdArray[1], is("--"));
-        assertThat(Arrays.asList(cmdArray), not(hasItem(startsWith("--config"))));
-        assertThat(
-                Arrays.asList(cmdArray),
-                hasItems(
-                        "--device_serial=" + DEVICE_SERIAL,
-                        "--log_path=" + LOG_PATH,
-                        "--option1",
-                        "--option2=test_option"));
+
+        String[] cmdArray = mSpyTest.buildCommandLineArray(BINARY_PATH, null);
+        Truth.assertThat(cmdArray)
+                .isEqualTo(
+                        new String[] {
+                            BINARY_PATH,
+                            "--",
+                            "--device_serial=" + DEVICE_SERIAL,
+                            "--log_path=" + LOG_PATH,
+                            "--option1",
+                            "--option2=test_option"
+                        });
     }
 
     @Test
@@ -325,19 +318,18 @@ public class MoblyBinaryHostTestTest {
         Mockito.doReturn(LOG_PATH).when(mSpyTest).getLogDirAbsolutePath();
         List<String> expOptions = Arrays.asList("--option1", "--option2=test_option");
         Mockito.doReturn(expOptions).when(mSpyTest).getTestOptions();
-        String configFilePath = "/test/config/file/path.yaml";
-        Mockito.doReturn(configFilePath).when(mSpyTest).getConfigPath();
-        String[] cmdArray = mSpyTest.buildCommandLineArray(BINARY_PATH);
-        assertThat(cmdArray[0], is(BINARY_PATH));
-        assertThat(cmdArray[1], is("--"));
-        assertThat(
-                Arrays.asList(cmdArray),
-                hasItems(
-                        "--device_serial=" + DEVICE_SERIAL,
-                        "--log_path=" + LOG_PATH,
-                        "--config=" + configFilePath,
-                        "--option1",
-                        "--option2=test_option"));
+        String[] cmdArray = mSpyTest.buildCommandLineArray(BINARY_PATH, "path");
+        Truth.assertThat(cmdArray)
+                .isEqualTo(
+                        new String[] {
+                            BINARY_PATH,
+                            "--",
+                            "--config=path",
+                            "--device_serial=" + DEVICE_SERIAL,
+                            "--log_path=" + LOG_PATH,
+                            "--option1",
+                            "--option2=test_option"
+                        });
     }
 
     @Test
@@ -384,8 +376,8 @@ public class MoblyBinaryHostTestTest {
         String updatedConfigString = writer.toString();
         LogUtil.CLog.d("Updated config string: %s", updatedConfigString);
         // Check if serial injected.
-        assertThat(updatedConfigString, containsString(DEVICE_SERIAL));
+        assertThat(updatedConfigString).contains(DEVICE_SERIAL);
         // Check if original still exists.
-        assertThat(updatedConfigString, containsString("mobile_type"));
+        assertThat(updatedConfigString).contains("mobile_type");
     }
 }
