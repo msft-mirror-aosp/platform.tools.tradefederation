@@ -166,9 +166,9 @@ public class MetricUtility {
      * Aggregate the metrics collected from multiple iterations of the test and
      * write the aggregated metrics to a test result file.
      *
-     * @param runName name of the test run.
+     * @param fileName file name to use while writing the metrics.
      */
-    public File aggregateStoredTestMetricsAndWriteToFile(String runName) {
+    public File aggregateStoredTestMetricsAndWriteToFile(String fileName) {
         File resultsFile = null;
         for (String testName : mStoredTestMetrics.keySet()) {
             ArrayListMultimap<String, Metric> currentTest = mStoredTestMetrics.get(testName);
@@ -205,7 +205,7 @@ public class MetricUtility {
             Map<String, String> compatibleTestMetrics = TfMetricProtoUtil
                     .compatibleConvert(aggregateMetrics);
 
-            resultsFile = writeResultsToFile(runName + "_aggregate_metrics", testName,
+            resultsFile = writeResultsToFile(fileName, testName,
                     compatibleTestMetrics, resultsFile);
         }
         return resultsFile;
