@@ -46,6 +46,9 @@ import java.util.Set;
 @OptionClass(alias = "metric-file-post-processor")
 public class MetricFilePostProcessor extends BasePostProcessor {
 
+    private static final String AGGREGATE_TEST_SUFFIX = "_aggregate_test_metrics";
+    private static final String AGGREGATE_RUN_SUFFIX = "_aggregate_run_metrics";
+
     @Option(name = "enable-per-test-log", description = "Set this flag to false to disable"
             + " writing the per test metrics to a file.")
     private boolean mIsPerTestLogEnabled= true;
@@ -59,6 +62,10 @@ public class MetricFilePostProcessor extends BasePostProcessor {
             + " Used only in context with the microbenchmark test runner. Set this flag to false"
             + " to disable aggregating the metrics.")
     private boolean mAggregateSimilarTests= false;
+
+    @Option(name = "aggregate-run-metrics", description = "Aggregate run metrics which has more"
+            + " than one value.")
+    private boolean mAggregateRunMetrics= false;
 
     @Option(name = "test-iteration-separator", description = "Separator used in between the test"
             + " class name and the iteration number.")
@@ -84,8 +91,6 @@ public class MetricFilePostProcessor extends BasePostProcessor {
             HashMap<String, Metric> testMetrics,
             Map<String, LogFile> testLogs) {
         initializeMetricUtilArgs();
-        Map<String, String> compatibleTestMetrics = TfMetricProtoUtil
-                .compatibleConvert(testMetrics);
 
         // Store the test metric and use it for aggregation later at the end of
         // test run.
@@ -95,15 +100,7 @@ public class MetricFilePostProcessor extends BasePostProcessor {
 
         // Write test metric to a file and log it.
         if (mIsPerTestLogEnabled) {
-            String testId = testDescription.toString();
-            File metricFile = mMetricUtil.writeResultsToFile(testId, testId,
-                    compatibleTestMetrics,
-                    null);
-            if (metricFile != null) {
-                try (InputStreamSource source = new FileInputStreamSource(metricFile, true)) {
-                    testLog(metricFile.getName(), LogDataType.TEXT, source);
-                }
-            }
+            writeMetricFile(testMetrics, testDescription.toString());
         }
 
         return new HashMap<String, Builder>();
@@ -113,28 +110,21 @@ public class MetricFilePostProcessor extends BasePostProcessor {
     public Map<String, Builder> processRunMetricsAndLogs(
             HashMap<String, Metric> rawMetrics, Map<String, LogFile> runLogs) {
         initializeMetricUtilArgs();
-        // Aggregate and log metrics collected at the run level.
         if (mIsRunLogEnabled) {
-            Map<String, Metric> aggregatedRunMetrics = mMetricUtil.aggregateMetrics(rawMetrics);
-            // Write metric to a result file and log it.
-            Map<String, String> compatibleRunMetrics = TfMetricProtoUtil
-                    .compatibleConvert(aggregatedRunMetrics);
-            File runMetricFile = mMetricUtil.writeResultsToFile(getRunName(), getRunName(),
-                    compatibleRunMetrics,
-                    null);
-            if (runMetricFile != null) {
-                try (InputStreamSource source = new FileInputStreamSource(runMetricFile,
-                        true)) {
-                    testLog(runMetricFile.getName(), LogDataType.TEXT, source);
-                }
-            }
+            // Log the raw run metrics.
+            writeMetricFile(rawMetrics, getRunName());
 
+            // Log the aggregate run metrics.
+            if (mAggregateRunMetrics) {
+                Map<String, Metric> aggregatedRunMetrics = mMetricUtil.aggregateMetrics(rawMetrics);
+                writeMetricFile(aggregatedRunMetrics, getRunName() + AGGREGATE_RUN_SUFFIX);
+            }
         }
 
-        // Aggregate similar tests metric at the run level.
+        // Aggregate similar tests metric at the run level, write it to results file and upload it.
         if (mAggregateSimilarTests) {
             File aggregateTestResultsFile = mMetricUtil
-                    .aggregateStoredTestMetricsAndWriteToFile(getRunName());
+                    .aggregateStoredTestMetricsAndWriteToFile(getRunName() + AGGREGATE_TEST_SUFFIX);
             if (aggregateTestResultsFile != null) {
                 try (InputStreamSource source = new FileInputStreamSource(aggregateTestResultsFile,
                         true)) {
@@ -142,8 +132,27 @@ public class MetricFilePostProcessor extends BasePostProcessor {
                 }
             }
         }
-
         return new HashMap<String, Builder>();
+    }
+
+    /**
+     * Write the metrics to the results file and upload it.
+     *
+     * @param metrics
+     * @param testId
+     */
+    public void writeMetricFile(Map<String, Metric> metrics, String testId) {
+        Map<String, String> compatibleMetrics = TfMetricProtoUtil
+                .compatibleConvert(metrics);
+        File metricFile = mMetricUtil.writeResultsToFile(testId, testId,
+                compatibleMetrics,
+                null);
+        if (metricFile != null) {
+            try (InputStreamSource source = new FileInputStreamSource(metricFile,
+                    true)) {
+                testLog(metricFile.getName(), LogDataType.TEXT, source);
+            }
+        }
     }
 
     private void initializeMetricUtilArgs() {
