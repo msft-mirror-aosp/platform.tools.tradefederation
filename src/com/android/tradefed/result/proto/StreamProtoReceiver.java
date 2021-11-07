@@ -29,6 +29,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A receiver that translates proto TestRecord received into Tradefed events.
@@ -48,6 +49,7 @@ public class StreamProtoReceiver implements Closeable {
      */
     private long mExtraWaitTimeForEvents = 0L;
 
+    private AtomicBoolean mJoinStarted = new AtomicBoolean(false);
     /**
      * Stop parsing events when this is set. This allows to avoid a thread parsing the events when
      * we don't expect them anymore.
@@ -199,6 +201,7 @@ public class StreamProtoReceiver implements Closeable {
 
     public boolean joinReceiver(long millis) {
         if (mEventReceiver != null) {
+            mJoinStarted.set(true);
             try {
                 long waitTime = millis + mExtraWaitTimeForEvents;
                 CLog.i(
@@ -238,7 +241,7 @@ public class StreamProtoReceiver implements Closeable {
         }
         try {
             TestLevel level = mParser.processNewProto(receivedRecord);
-            if (TestLevel.MODULE.equals(level)) {
+            if (TestLevel.MODULE.equals(level) && !mJoinStarted.get()) {
                 mExtraWaitTimeForEvents += PER_MODULE_EXTRA_WAIT_TIME_MS;
             }
         } catch (Throwable e) {
