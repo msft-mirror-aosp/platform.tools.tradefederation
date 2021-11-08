@@ -54,7 +54,7 @@ public class StreamProtoReceiver implements Closeable {
      * Stop parsing events when this is set. This allows to avoid a thread parsing the events when
      * we don't expect them anymore.
      */
-    private boolean mStopParsing = false;
+    private AtomicBoolean mStopParsing = new AtomicBoolean(false);
 
     /**
      * Ctor.
@@ -216,7 +216,7 @@ public class StreamProtoReceiver implements Closeable {
                 CLog.e(e);
                 throw new RuntimeException(e);
             } finally {
-                mStopParsing = true;
+                mStopParsing.set(true);
             }
         }
         return true;
@@ -233,7 +233,7 @@ public class StreamProtoReceiver implements Closeable {
     }
 
     private void parse(TestRecord receivedRecord) {
-        if (mStopParsing) {
+        if (mStopParsing.get()) {
             CLog.i(
                     "Skip parsing of %s. It came after joinReceiver.",
                     receivedRecord.getTestRecordId());
