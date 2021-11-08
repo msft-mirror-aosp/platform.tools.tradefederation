@@ -62,6 +62,7 @@ public class GceAvdInfo {
     private String mErrors;
     private GceStatus mStatus;
     private HashMap<String, String> mBuildVars;
+    private boolean mIsIpPreconfigured = false;
 
     public static enum GceStatus {
         SUCCESS,
@@ -103,6 +104,8 @@ public class GceAvdInfo {
                 + mErrors
                 + ", mStatus="
                 + mStatus
+                + ", mIsIpPreconfigured="
+                + mIsIpPreconfigured
                 + ", mBuildVars="
                 + mBuildVars.toString()
                 + "]";
@@ -134,6 +137,14 @@ public class GceAvdInfo {
 
     private void addBuildVar(String buildKey, String buildValue) {
         mBuildVars.put(buildKey, buildValue);
+    }
+
+    public void setIpPreconfigured(boolean isIpPreconfigured) {
+        mIsIpPreconfigured = isIpPreconfigured;
+    }
+
+    public boolean isIpPreconfigured() {
+        return mIsIpPreconfigured;
     }
 
     /**
