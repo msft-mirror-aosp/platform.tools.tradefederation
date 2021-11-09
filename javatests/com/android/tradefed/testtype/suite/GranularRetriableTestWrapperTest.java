@@ -976,6 +976,7 @@ public class GranularRetriableTestWrapperTest {
         IConfiguration configuration = new Configuration("name", "description");
         configuration.getConfigurationDescription().setSandboxed(true);
         decision.setConfiguration(configuration);
+        decision.setTestInformation(mModuleInfo);
         FakeTest test = new FakeTest();
         test.setRunFailure("I failed!");
         ITestDevice noneAVDDevice = mock(ITestDevice.class);

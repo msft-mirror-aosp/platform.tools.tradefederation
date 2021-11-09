@@ -86,6 +86,7 @@ import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.DeviceFailedToBootError;
 import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.testtype.ITestInformationReceiver;
 import com.android.tradefed.testtype.SubprocessTfLauncher;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
@@ -910,6 +911,9 @@ public class TestInvocation implements ITestInvocation {
         IRetryDecision decision = config.getRetryDecision();
         ResultAggregator aggregator = null;
         decision.setInvocationContext(context);
+        if (decision instanceof ITestInformationReceiver) {
+            ((ITestInformationReceiver) decision).setTestInformation(info);
+        }
         // We don't need the aggregator in the subprocess because the parent will take care of it.
         if (!config.getCommandOptions()
                         .getInvocationData()
