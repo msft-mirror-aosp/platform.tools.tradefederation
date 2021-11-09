@@ -136,7 +136,6 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
             runTest(
                     testDevice,
                     listener,
-                    createParser(listener, new File(root).getName(), mIsBenchmark),
                     root);
             return true;
         }
@@ -146,14 +145,12 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
      * Run the given Rust binary
      *
      * @param testDevice the {@link ITestDevice}
-     * @param resultParser the test run output parser
      * @param fullPath absolute file system path to rust binary on device
      * @throws DeviceNotAvailableException
      */
     private void runTest(
             final ITestDevice testDevice,
             final ITestInvocationListener listener,
-            final IShellOutputReceiver resultParser,
             final String fullPath)
             throws DeviceNotAvailableException {
         CLog.d("RustBinaryTest runTest: " + fullPath);
@@ -192,7 +189,8 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
         int testCount = foundTests.size();
         CLog.d("Total test count: %d", testCount);
         long startTimeMs = System.currentTimeMillis();
-        listener.testRunStarted(new File(fullPath).getName(), testCount, 0, startTimeMs);
+        String name = new File(fullPath).getName();
+        listener.testRunStarted(name, testCount, 0, startTimeMs);
         for (String filter : includeFilters) {
             String newCmd = addFiltersToCommand(cmd, filter);
 
@@ -201,6 +199,7 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
                 newCmd = "GCOV_PREFIX=/data/misc/trace " + newCmd;
             }
 
+            IShellOutputReceiver resultParser = createParser(listener, name, mIsBenchmark);
             try {
                 testDevice.executeShellCommand(
                         newCmd,
