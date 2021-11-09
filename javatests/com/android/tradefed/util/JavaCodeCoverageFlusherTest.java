@@ -41,7 +41,8 @@ public final class JavaCodeCoverageFlusherTest {
     private static final String PS_OUTPUT =
             "USER       PID   PPID  VSZ   RSS   WCHAN       PC  S NAME\n"
                     + "bluetooth   123  1366  123   456   SyS_epoll+   0  S com.android.bluetooth\n"
-                    + "u0_a80     4567  1366  456   789   SyS_epoll+   0  S com.google.android.gms.persistent\n"
+                    + "u0_a80     4567  1366  456   789   SyS_epoll+   0  S"
+                    + " com.google.android.gms.persistent\n"
                     + "radio       890     1 7890   123   binder_io+   0  S com.android.phone\n"
                     + "root         11  1234  567   890   binder_io+   0  S not.a.java.package\n";
 
@@ -51,6 +52,7 @@ public final class JavaCodeCoverageFlusherTest {
                     + "package:com.android.not.used\n"
                     + "package:com.android.phone\n";
 
+    @Mock IRunUtil mMockRunUtil;
     @Mock ITestDevice mMockDevice;
 
     // Object under test
@@ -64,6 +66,7 @@ public final class JavaCodeCoverageFlusherTest {
     @Test
     public void testResetAll_calledForAllProcesses() throws DeviceNotAvailableException {
         mFlusher = new JavaCodeCoverageFlusher(mMockDevice, ImmutableList.of());
+        mFlusher.setRunUtil(mMockRunUtil);
 
         doReturn(PS_OUTPUT).when(mMockDevice).executeShellCommand("ps -e");
         doReturn(PM_LIST_PACKAGES_OUTPUT)
@@ -93,6 +96,7 @@ public final class JavaCodeCoverageFlusherTest {
     @Test
     public void testResetSpecific_calledForSpecificProcesses() throws DeviceNotAvailableException {
         mFlusher = new JavaCodeCoverageFlusher(mMockDevice, ImmutableList.of("com.android.phone"));
+        mFlusher.setRunUtil(mMockRunUtil);
 
         doReturn(PS_OUTPUT).when(mMockDevice).executeShellCommand("ps -e");
         doReturn(PM_LIST_PACKAGES_OUTPUT)
@@ -112,6 +116,7 @@ public final class JavaCodeCoverageFlusherTest {
     @Test
     public void testDumpAll_calledForAllProcesses() throws DeviceNotAvailableException {
         mFlusher = new JavaCodeCoverageFlusher(mMockDevice, ImmutableList.of());
+        mFlusher.setRunUtil(mMockRunUtil);
 
         doReturn(PS_OUTPUT).when(mMockDevice).executeShellCommand("ps -e");
         doReturn(PM_LIST_PACKAGES_OUTPUT)
@@ -154,6 +159,7 @@ public final class JavaCodeCoverageFlusherTest {
                         mMockDevice,
                         ImmutableList.of(
                                 "com.android.bluetooth", "com.google.android.gms.persistent"));
+        mFlusher.setRunUtil(mMockRunUtil);
 
         doReturn(PM_LIST_PACKAGES_OUTPUT)
                 .when(mMockDevice)
