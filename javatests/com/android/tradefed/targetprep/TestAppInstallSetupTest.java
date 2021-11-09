@@ -40,6 +40,7 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.UserInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -64,6 +65,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -240,6 +242,10 @@ public class TestAppInstallSetupTest {
         mSetter.setOptionValue("test-file-name", APK_NAME);
         mTestInfo.properties().put(RUN_TESTS_AS_USER_KEY, Integer.toString(userId));
 
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(0, null);
+        userInfos.put(userId, null);
+        when(mMockTestDevice.getUserInfos()).thenReturn(userInfos);
         when(mMockTestDevice.installPackageForUser(
                         Mockito.eq(fakeApk), Mockito.eq(true), Mockito.eq(userId)))
                 .thenReturn(null);

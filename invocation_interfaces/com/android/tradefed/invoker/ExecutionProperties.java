@@ -112,4 +112,9 @@ public class ExecutionProperties {
     public String remove(String key) {
         return mProperties.remove(key);
     }
+
+    /** Clear the execution properties. Used during reset isolation to remove exec data. */
+    public void clear() {
+        mProperties.clear();
+    }
 }
