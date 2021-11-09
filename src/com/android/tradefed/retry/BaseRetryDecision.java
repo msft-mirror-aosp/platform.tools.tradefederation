@@ -26,6 +26,7 @@ import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.internal.DeviceResetHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -39,6 +40,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFileFilterReceiver;
 import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.testtype.ITestInformationReceiver;
 import com.android.tradefed.testtype.SubprocessTfLauncher;
 import com.android.tradefed.testtype.retry.IAutoRetriableTest;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
@@ -61,7 +63,8 @@ import java.util.stream.Collectors;
  * Base implementation of {@link IRetryDecision}. Base implementation only take local signals into
  * account.
  */
-public class BaseRetryDecision implements IRetryDecision, IConfigurationReceiver {
+public class BaseRetryDecision
+        implements IRetryDecision, IConfigurationReceiver, ITestInformationReceiver {
 
     private static final int ABORT_MAX_FAILURES = 75;
 
@@ -119,6 +122,7 @@ public class BaseRetryDecision implements IRetryDecision, IConfigurationReceiver
 
     private IInvocationContext mContext;
     private IConfiguration mConfiguration;
+    private TestInformation mTestInformation;
 
     private IRemoteTest mCurrentlyConsideredTest;
     private Set<TestDescription> mPreviouslyFailing;
@@ -155,6 +159,16 @@ public class BaseRetryDecision implements IRetryDecision, IConfigurationReceiver
     @Override
     public void setConfiguration(IConfiguration configuration) {
         mConfiguration = configuration;
+    }
+
+    @Override
+    public void setTestInformation(TestInformation testInformation) {
+        mTestInformation = testInformation;
+    }
+
+    @Override
+    public TestInformation getTestInformation() {
+        return mTestInformation;
     }
 
     @Override
@@ -518,6 +532,10 @@ public class BaseRetryDecision implements IRetryDecision, IConfigurationReceiver
         long start = System.currentTimeMillis();
         try {
             isolateRetry(devices);
+            CLog.d(
+                    "Current host properties being erased by reset: %s",
+                    mTestInformation.properties().getAll());
+            mTestInformation.properties().clear();
             // Rerun suite level preparer if we are inside a subprocess
             reSetupModule(module, mConfiguration.getCommandOptions()
                     .getInvocationData()
