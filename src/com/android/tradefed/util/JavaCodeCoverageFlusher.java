@@ -19,6 +19,7 @@ package com.android.tradefed.util;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -39,6 +40,9 @@ public class JavaCodeCoverageFlusher {
     private static final String COVERAGE_FLUSH_FORMAT =
             "am attach-agent %s /system/lib/libdumpcoverage.so=dump:%s";
     private static final String PACKAGE_PREFIX = "package:";
+    private static final long FLUSH_DELAY = 60 * 1000; // 1 minute
+
+    private IRunUtil mRunUtil = RunUtil.getDefault();
 
     private final ITestDevice mDevice;
     private final List<String> mProcessNames;
@@ -46,6 +50,11 @@ public class JavaCodeCoverageFlusher {
     public JavaCodeCoverageFlusher(ITestDevice device, List<String> processNames) {
         mDevice = device;
         mProcessNames = ImmutableList.copyOf(processNames);
+    }
+
+    @VisibleForTesting
+    void setRunUtil(IRunUtil runUtil) {
+        mRunUtil = runUtil;
     }
 
     /** Retrieves the name of all running processes on the device. */
@@ -140,6 +149,10 @@ public class JavaCodeCoverageFlusher {
         // Flush coverage for system_server.
         mDevice.executeShellCommand("cmd coverage dump /data/misc/trace/system_server.ec");
         coverageFiles.add("/data/misc/trace/system_server.ec");
+
+        // Allow time for the system to fully write coverage to disk before pulling measurements.
+        // This reduces the rate of incomplete coverage measurements received.
+        mRunUtil.sleep(FLUSH_DELAY);
 
         return coverageFiles;
     }
