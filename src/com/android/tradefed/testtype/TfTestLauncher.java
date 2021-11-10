@@ -312,7 +312,10 @@ public class TfTestLauncher extends SubprocessTfLauncher {
                     cmd);
             CLog.d(result.getStdout());
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                throw new IOException(result.getStderr());
+                throw new IOException(
+                        String.format(
+                                "error with ants: stdout:%s, stderr:%s",
+                                result.getStdout(), result.getStderr()));
             }
             return xmlReport;
         } finally {
