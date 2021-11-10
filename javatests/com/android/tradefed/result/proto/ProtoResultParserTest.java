@@ -20,6 +20,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.config.ConfigurationDef;
@@ -711,6 +712,28 @@ public class ProtoResultParserTest {
                 .logAssociation(Mockito.eq("subprocess-log-module"), Mockito.any());
         inOrder.verify(mMockListener).testModuleEnded();
         inOrder.verify(mMockListener).invocationEnded(500L);
+    }
+
+    @Test
+    public void testIncompleteModule() throws Exception {
+        ArgumentCaptor<FailureDescription> capture =
+                ArgumentCaptor.forClass(FailureDescription.class);
+        mTestParser.invocationStarted(mInvocationContext);
+        // Run modules
+        mTestParser.testModuleStarted(createModuleContext("arm64 module1"));
+        // It stops unexpectedly
+        mParser.completeModuleEvents();
+
+        verify(mMockListener).invocationStarted(Mockito.any());
+        verify(mMockListener).testModuleStarted(Mockito.any());
+        verify(mMockListener).testRunStarted(Mockito.eq("arm64 module1"), Mockito.eq(0));
+        verify(mMockListener).testRunFailed(capture.capture());
+        verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        verify(mMockListener).testModuleEnded();
+        assertEquals(
+                "Module was interrupted after starting, results are incomplete.",
+                capture.getValue().getErrorMessage());
     }
 
     /** Helper to create a module context. */
