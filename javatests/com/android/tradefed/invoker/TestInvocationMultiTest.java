@@ -228,7 +228,7 @@ public class TestInvocationMultiTest {
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
         verify(mMockConfig).dumpXml(Mockito.any());
-        verify(mMockTestListener, times(2)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
+        verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.<FailureDescription>any());
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());
         verify(mMockLogSaver).invocationEnded(Mockito.anyLong());
@@ -311,7 +311,7 @@ public class TestInvocationMultiTest {
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
         verify(mMockConfig).dumpXml(Mockito.any());
-        verify(mMockTestListener, times(2)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
+        verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.eq(failure));
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());
         verify(mMockLogSaver).invocationEnded(Mockito.anyLong());
@@ -374,7 +374,7 @@ public class TestInvocationMultiTest {
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
         verify(mMockConfig).dumpXml(Mockito.any());
-        verify(mMockTestListener, times(2)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
+        verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.<FailureDescription>any());
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());
         verify(mMockLogSaver).invocationEnded(Mockito.anyLong());
@@ -444,7 +444,7 @@ public class TestInvocationMultiTest {
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
         verify(mMockConfig).dumpXml(Mockito.any());
-        verify(mMockTestListener, times(2)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
+        verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.<FailureDescription>any());
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());
         verify(mMockLogSaver).invocationEnded(Mockito.anyLong());
