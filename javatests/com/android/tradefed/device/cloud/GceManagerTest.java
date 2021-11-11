@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
@@ -227,8 +228,55 @@ public class GceManagerTest {
                             "BUILDID",
                             "--config_file",
                             mGceManager.getAvdConfigFile().getAbsolutePath(),
-                            "--service_account_json_private_key_path",
+                            "--service-account-json-private-key-path",
                             "/path/to/key.json",
+                            "--report_file",
+                            reportFile.getAbsolutePath(),
+                            "-v");
+            assertEquals(expected, result);
+        } finally {
+            FileUtil.deleteFile(reportFile);
+        }
+    }
+
+    /** Test {@link GceManager#buildGceCmd(File, IBuildInfo, String)} with IP based device. */
+    @Test
+    public void testBuildGceCommandWithIpDevice() throws Exception {
+        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
+        when(mMockBuildInfo.getBuildAttributes())
+                .thenReturn(Collections.<String, String>emptyMap());
+        when(mMockBuildInfo.getBuildFlavor()).thenReturn("FLAVOR");
+        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
+        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
+
+        File reportFile = null;
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue("gce-driver-service-account-json-key-path", "/path/to/key.json");
+        setter.setOptionValue("gce-private-key-path", "/path/to/id_rsa");
+        setter.setOptionValue("instance-user", "foo");
+        try {
+            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
+            List<String> result = mGceManager.buildGceCmd(reportFile, mMockBuildInfo, "bar", null);
+            List<String> expected =
+                    ArrayUtil.list(
+                            mOptions.getAvdDriverBinary().getAbsolutePath(),
+                            "create",
+                            "--build-target",
+                            "FLAVOR",
+                            "--branch",
+                            "BRANCH",
+                            "--build-id",
+                            "BUILDID",
+                            "--config_file",
+                            mGceManager.getAvdConfigFile().getAbsolutePath(),
+                            "--service-account-json-private-key-path",
+                            "/path/to/key.json",
+                            "--host",
+                            "bar",
+                            "--host-user",
+                            "foo",
+                            "--host-ssh-private-key-path",
+                            "/path/to/id_rsa",
                             "--report_file",
                             reportFile.getAbsolutePath(),
                             "-v");
@@ -610,6 +658,78 @@ public class GceManagerTest {
     }
 
     /**
+     * Test {@link GceManager#buildShutdownCommand(File, TestDeviceOptions, String, String,
+     * boolean)}.
+     */
+    @Test
+    public void testBuildShutdownCommand() {
+        List<String> result =
+                GceManager.buildShutdownCommand(
+                        mGceManager.getAvdConfigFile(), mOptions, "instance1", null, false);
+        List<String> expected =
+                ArrayUtil.list(
+                        mOptions.getAvdDriverBinary().getAbsolutePath(),
+                        "delete",
+                        "--instance_names",
+                        "instance1",
+                        "--config_file",
+                        mGceManager.getAvdConfigFile().getAbsolutePath());
+        assertEquals(expected, result);
+    }
+
+    /**
+     * Test {@link GceManager#buildShutdownCommand(File, TestDeviceOptions, String, String,
+     * boolean)}.
+     */
+    @Test
+    public void testBuildShutdownCommandWithJsonKeyFile() throws ConfigurationException {
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue("gce-driver-service-account-json-key-path", "/path/to/key.json");
+        List<String> result =
+                GceManager.buildShutdownCommand(
+                        mGceManager.getAvdConfigFile(), mOptions, "instance1", null, false);
+        List<String> expected =
+                ArrayUtil.list(
+                        mOptions.getAvdDriverBinary().getAbsolutePath(),
+                        "delete",
+                        "--service-account-json-private-key-path",
+                        "/path/to/key.json",
+                        "--instance_names",
+                        "instance1",
+                        "--config_file",
+                        mGceManager.getAvdConfigFile().getAbsolutePath());
+        assertEquals(expected, result);
+    }
+
+    /**
+     * Test {@link GceManager#buildShutdownCommand(File, TestDeviceOptions, String, String,
+     * boolean)}.
+     */
+    @Test
+    public void testBuildShutdownCommandWithIpDevice() throws ConfigurationException {
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue("gce-driver-service-account-json-key-path", "/path/to/key.json");
+        setter.setOptionValue("gce-private-key-path", "/path/to/id_rsa");
+        setter.setOptionValue("instance-user", "bar");
+        List<String> result =
+                GceManager.buildShutdownCommand(
+                        mGceManager.getAvdConfigFile(), mOptions, "instance1", "foo", true);
+        List<String> expected =
+                ArrayUtil.list(
+                        mOptions.getAvdDriverBinary().getAbsolutePath(),
+                        "delete",
+                        "--service-account-json-private-key-path",
+                        "/path/to/key.json",
+                        "--host",
+                        "foo",
+                        "--host-user",
+                        "bar",
+                        "--host-ssh-private-key-path",
+                        "/path/to/id_rsa");
+        assertEquals(expected, result);
+    }
+
+    /**
      * Test for {@link GceManager#shutdownGce() }.
      *
      * @throws Exception
@@ -627,22 +747,13 @@ public class GceManagerTest {
         CommandResult cmd = new CommandResult();
         cmd.setStatus(CommandStatus.SUCCESS);
         cmd.setStdout("output");
-        when(mMockRunUtil.runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq(mOptions.getAvdDriverBinary().getAbsolutePath()),
-                        Mockito.eq("delete"),
-                        Mockito.eq("--instance_names"),
-                        Mockito.eq("instance1"),
-                        Mockito.eq("--config_file"),
-                        Mockito.contains(mGceManager.getAvdConfigFile().getAbsolutePath()),
-                        Mockito.eq("--report_file"),
-                        Mockito.any()))
-                .thenReturn(cmd);
+        when(mMockRunUtil.runTimedCmd(Mockito.anyLong(), (String[]) Mockito.any())).thenReturn(cmd);
 
         mGceManager.shutdownGce();
 
         // Attributes are marked when successful
         assertTrue(
+                "build attribute did not contain " + GceManager.GCE_INSTANCE_CLEANED_KEY,
                 mMockBuildInfo
                         .getBuildAttributes()
                         .containsKey(GceManager.GCE_INSTANCE_CLEANED_KEY));
@@ -671,43 +782,6 @@ public class GceManagerTest {
 
         List<String> args = capture.getValue();
         assertTrue(args.get(5).contains(mAvdBinary.getName()));
-    }
-
-    /**
-     * Test for {@link GceManager#shutdownGce() }.
-     *
-     * @throws Exception
-     */
-    @Test
-    public void testShutdownGce_withJsonKeyFile() throws Exception {
-        mGceManager =
-                new GceManager(mMockDeviceDesc, mOptions, mMockBuildInfo, "instance1", "host1") {
-                    @Override
-                    IRunUtil getRunUtil() {
-                        return mMockRunUtil;
-                    }
-                };
-        OptionSetter setter = new OptionSetter(mOptions);
-        setter.setOptionValue("gce-driver-service-account-json-key-path", "/path/to/key.json");
-        mGceManager.startGce();
-        CommandResult cmd = new CommandResult();
-        cmd.setStatus(CommandStatus.SUCCESS);
-        cmd.setStdout("output");
-        when(mMockRunUtil.runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq(mOptions.getAvdDriverBinary().getAbsolutePath()),
-                        Mockito.eq("delete"),
-                        Mockito.eq("--instance_names"),
-                        Mockito.eq("instance1"),
-                        Mockito.eq("--config_file"),
-                        Mockito.contains(mGceManager.getAvdConfigFile().getAbsolutePath()),
-                        Mockito.eq("--service_account_json_private_key_path"),
-                        Mockito.eq("/path/to/key.json"),
-                        Mockito.eq("--report_file"),
-                        Mockito.any()))
-                .thenReturn(cmd);
-
-        mGceManager.shutdownGce();
     }
 
     /** Test a success case for collecting the bugreport with ssh. */

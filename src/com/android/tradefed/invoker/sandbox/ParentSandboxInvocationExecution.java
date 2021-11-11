@@ -150,6 +150,7 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                 // hostname is only needed for Oxygen cuttlefish cleanup.
                 String hostname = null;
                 boolean cleaned = false;
+                boolean ipPreconfigured = false;
                 for (IBuildInfo build : info.getContext().getBuildInfos()) {
                     if (build.getBuildAttributes().get(GceManager.GCE_INSTANCE_NAME_KEY) != null) {
                         instanceName =
@@ -162,6 +163,13 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                             != null) {
                         cleaned = true;
                     }
+                    if (build.getBuildAttributes().get(GceManager.GCE_IP_PRECONFIGURED_KEY)
+                            != null) {
+                        ipPreconfigured =
+                                Boolean.valueOf(
+                                        build.getBuildAttributes()
+                                                .get(GceManager.GCE_IP_PRECONFIGURED_KEY));
+                    }
                 }
                 if (instanceName != null && !cleaned) {
                     // TODO: Handle other devices if needed.
@@ -170,7 +178,7 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
 
                     boolean res =
                             GceManager.AcloudShutdown(
-                                    options, getRunUtil(), instanceName, hostname);
+                                    options, getRunUtil(), instanceName, hostname, ipPreconfigured);
                     if (res) {
                         info.getBuildInfo()
                                 .addBuildAttribute(GceManager.GCE_INSTANCE_CLEANED_KEY, "true");
