@@ -84,7 +84,14 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
 
     @Override
     public void processFinalProto(TestRecord finalRecord) {
-        writeRecordToSocket(finalRecord);
+        try {
+            writeRecordToSocket(finalRecord);
+        } finally {
+            closeSocket();
+        }
+    }
+
+    protected void closeSocket() {
         StreamUtil.close(mReportSocket);
     }
 
