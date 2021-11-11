@@ -68,6 +68,7 @@ import com.android.tradefed.log.StdoutLogger;
 import com.android.tradefed.postprocessor.IPostProcessor;
 import com.android.tradefed.result.ActionInProgress;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
+import com.android.tradefed.result.EventsLoggerListener;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -186,6 +187,7 @@ public class TestInvocation implements ITestInvocation {
     private DeviceUnavailableMonitor mUnavailableMonitor = new DeviceUnavailableMonitor();
     private ExitCode mExitCode = ExitCode.NO_ERROR;
     private Throwable mExitStack = null;
+    private EventsLoggerListener mEventsLogger = null;
 
     /**
      * Display a log message informing the user of a invocation being started.
@@ -916,15 +918,21 @@ public class TestInvocation implements ITestInvocation {
         }
         // We don't need the aggregator in the subprocess because the parent will take care of it.
         if (!config.getCommandOptions()
-                        .getInvocationData()
-                        .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)
-                && decision.isAutoRetryEnabled()
-                && decision.getMaxRetryCount() > 1
-                && !RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())) {
-            CLog.d("Auto-retry enabled, using the ResultAggregator to handle multiple retries.");
-            aggregator = new ResultAggregator(allListeners, decision.getRetryStrategy());
-            aggregator.setUpdatedReporting(decision.useUpdatedReporting());
-            allListeners = Arrays.asList(aggregator);
+                .getInvocationData()
+                .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)) {
+            if (decision.isAutoRetryEnabled()
+                    && decision.getMaxRetryCount() > 1
+                    && !RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())) {
+                CLog.d(
+                        "Auto-retry enabled, using the ResultAggregator to handle multiple"
+                                + " retries.");
+                aggregator = new ResultAggregator(allListeners, decision.getRetryStrategy());
+                aggregator.setUpdatedReporting(decision.useUpdatedReporting());
+                allListeners = Arrays.asList(aggregator);
+            } else {
+                mEventsLogger = new EventsLoggerListener("all-events");
+                allListeners.add(mEventsLogger);
+            }
         }
 
         if (!config.getPostProcessors().isEmpty()) {
@@ -1121,6 +1129,9 @@ public class TestInvocation implements ITestInvocation {
                     // If we did an early setup, do the tear down.
                     invocationPath.runDevicePostInvocationTearDown(context, config, null);
                 }
+                if (mEventsLogger != null) {
+                    logEventsFile(mEventsLogger.getLoggedEvents(), listener);
+                }
                 listener.invocationEnded(0L);
                 return;
             }
@@ -1255,6 +1266,15 @@ public class TestInvocation implements ITestInvocation {
                         source);
             }
         }
+    }
+
+    private void logEventsFile(File eventsLog, ITestLogger logger) {
+        if (eventsLog != null && eventsLog.length() > 0) {
+            try (FileInputStreamSource source = new FileInputStreamSource(eventsLog, true)) {
+                logger.testLog("event-logs", LogDataType.TF_EVENTS, source);
+            }
+        }
+        FileUtil.deleteFile(eventsLog);
     }
 
     /**
@@ -1425,6 +1445,9 @@ public class TestInvocation implements ITestInvocation {
         try {
             // Copy the invocation metrics to the context
             ((InvocationContext) context).logInvocationMetrics();
+            if (mEventsLogger != null) {
+                logEventsFile(mEventsLogger.getLoggedEvents(), listener);
+            }
             listener.invocationEnded(elapsedTime);
         } finally {
             InvocationMetricLogger.clearInvocationMetrics();
