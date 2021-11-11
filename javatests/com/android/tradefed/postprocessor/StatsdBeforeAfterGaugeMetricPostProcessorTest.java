@@ -16,11 +16,13 @@
 package com.android.tradefed.postprocessor;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.mockito.Mockito.argThat;
+
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.MockitoAnnotations.initMocks;
+
 import static java.util.stream.Collectors.toMap;
 
 import com.android.os.AtomsProto.Atom;
@@ -40,6 +42,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -723,10 +726,15 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
     }
 
     private static Atom createTestBatteryAtom(int chargeMicroAmpereHour) {
+        // Use the field number due to naming difference in proto libs
+        FieldDescriptor chargeMicroAmpHour =
+                RemainingBatteryCapacity.getDescriptor().findFieldByNumber(1);
         return Atom.newBuilder()
                 .setRemainingBatteryCapacity(
                         RemainingBatteryCapacity.newBuilder()
-                                .setChargeMicroAmpereHour(chargeMicroAmpereHour))
+                                .setField(
+                                        chargeMicroAmpHour, Integer.valueOf(chargeMicroAmpereHour))
+                                .build())
                 .build();
     }
 
