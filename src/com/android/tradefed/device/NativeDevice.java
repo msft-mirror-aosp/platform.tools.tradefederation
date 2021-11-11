@@ -4906,7 +4906,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         String output = executeShellCommand(String.format("ps -p %s -o stime=", pidString));
         if (output != null && !output.trim().isEmpty()) {
             output = output.trim();
-            String dateInSecond = executeShellCommand("date -d\"" + output + "\" +%s");
+            String dateInSecond =
+                    executeShellCommand(
+                            "date -d \"$(date +%Y:%m:%e:)"
+                                    + output
+                                    + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
             if (Strings.isNullOrEmpty(dateInSecond)) {
                 return -1L;
             }
