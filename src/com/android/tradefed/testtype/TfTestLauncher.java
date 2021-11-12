@@ -25,11 +25,8 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
-import com.android.tradefed.util.CommandResult;
-import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.HprofAllocSiteParser;
-import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.SystemUtil.EnvVariable;
 import com.android.tradefed.util.TarUtil;
@@ -39,7 +36,6 @@ import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -56,8 +52,6 @@ import java.util.regex.Pattern;
  * functional tests continuously.
  */
 public class TfTestLauncher extends SubprocessTfLauncher {
-
-    private static final long COVERAGE_REPORT_TIMEOUT_MS = 5 * 60 * 1000;
 
     @Option(name = "jacoco-code-coverage", description = "Enable jacoco code coverage on the java "
             + "sub process. Run will be slightly slower because of the overhead.")
@@ -108,24 +102,14 @@ public class TfTestLauncher extends SubprocessTfLauncher {
     private static final String[] EXPECTED_TMP_FILE_PATTERNS = {
         "inv_.*", "tradefed_global_log_.*", "lc_cache", "stage-android-build-api",
     };
-
-    // A destination file where the report will be put.
-    private File mDestCoverageFile = null;
     // A destination file where the hprof report will be put.
     private File mHprofFile = null;
-    // A {@link File} pointing to the jacoco args jar file extracted from the resources
-    private File mAgent = null;
 
     /** {@inheritDoc} */
     @Override
     protected void addJavaArguments(List<String> args) {
         super.addJavaArguments(args);
         try {
-            if (mEnableCoverage) {
-                mDestCoverageFile = FileUtil.createTempFile("coverage", ".exec");
-                mAgent = extractJacocoAgent();
-                addCoverageArgs(mAgent, args, mDestCoverageFile);
-            }
             if (mEnableHprof) {
                 mHprofFile = FileUtil.createTempFile("java.hprof", ".txt");
                 // verbose=n to avoid dump in stderr
@@ -200,30 +184,6 @@ public class TfTestLauncher extends SubprocessTfLauncher {
     protected void postRun(ITestInvocationListener listener, boolean exception, long elapsedTime) {
         super.postRun(listener, exception, elapsedTime);
         reportMetrics(elapsedTime, listener);
-        FileUtil.deleteFile(mAgent);
-
-        // Evaluate coverage from the subprocess
-        if (mEnableCoverage) {
-            InputStreamSource coverage = null;
-            File xmlResult = null;
-            try {
-                xmlResult = processExecData(mDestCoverageFile, mRootDir);
-                coverage = new FileInputStreamSource(xmlResult);
-                listener.testLog("coverage_xml", LogDataType.JACOCO_XML, coverage);
-            } catch (IOException e) {
-                if (exception) {
-                    // If exception was thrown above, we only log this one since it's most
-                    // likely related to it.
-                    CLog.e(e);
-                } else {
-                    throw new RuntimeException(e);
-                }
-            } finally {
-                FileUtil.deleteFile(mDestCoverageFile);
-                StreamUtil.cancel(coverage);
-                FileUtil.deleteFile(xmlResult);
-            }
-        }
         if (mEnableHprof) {
             logHprofResults(mHprofFile, listener);
         }
@@ -237,91 +197,6 @@ public class TfTestLauncher extends SubprocessTfLauncher {
     @VisibleForTesting
     void cleanTmpFile() {
         FileUtil.deleteFile(mHprofFile);
-        FileUtil.deleteFile(mDestCoverageFile);
-        FileUtil.deleteFile(mAgent);
-    }
-
-    /**
-     * Helper to add arguments required for code coverage collection.
-     *
-     * @param jacocoAgent the jacoco args file to run the coverage.
-     * @param args list of arguments that will be run in the subprocess.
-     * @param destfile destination file where the report will be put.
-     */
-    private void addCoverageArgs(File jacocoAgent, List<String> args, File destfile) {
-        if (mIncludeCoverage.isEmpty() && mExcludeCoverage.isEmpty()) {
-            mIncludeCoverage.add("com.android.tradefed*");
-            mIncludeCoverage.add("com.google.android.tradefed*");
-        }
-        String includeFilter = String.join(":", mIncludeCoverage);
-        String javaagent =
-                String.format(
-                        "-javaagent:%s=destfile=%s," + "includes=%s",
-                        jacocoAgent.getAbsolutePath(), destfile.getAbsolutePath(), includeFilter);
-        if (!mExcludeCoverage.isEmpty()) {
-            String excludeFilter = String.join(":", mExcludeCoverage);
-            javaagent += ",excludes=" + excludeFilter;
-        }
-        args.add(javaagent);
-    }
-
-    /**
-     * Returns a {@link File} pointing to the jacoco args jar file extracted from the resources.
-     */
-    private File extractJacocoAgent() throws IOException {
-        String jacocoAgentRes = "/jacoco/jacocoagent.jar";
-        InputStream jacocoAgentStream = getClass().getResourceAsStream(jacocoAgentRes);
-        if (jacocoAgentStream == null) {
-            throw new IOException("Could not find " + jacocoAgentRes);
-        }
-        File jacocoAgent = FileUtil.createTempFile("jacocoagent", ".jar");
-        FileUtil.writeToFile(jacocoAgentStream, jacocoAgent);
-        return jacocoAgent;
-    }
-
-    /**
-     * Helper to process the execution data into user readable format (xml) that can easily be
-     * parsed.
-     *
-     * @param executionData output files of the java args jacoco.
-     * @param rootDir base directory of downloaded TF
-     * @return a {@link File} pointing to the human readable xml result file.
-     */
-    private File processExecData(File executionData, String rootDir) throws IOException {
-        File xmlReport = FileUtil.createTempFile("coverage_xml", ".xml");
-        InputStream template = getClass().getResourceAsStream(mAntConfigResource);
-        if (template == null) {
-            throw new IOException("Could not find " + mAntConfigResource);
-        }
-        String jacocoAntRes = "/jacoco/jacocoant.jar";
-        InputStream jacocoAntStream = getClass().getResourceAsStream(jacocoAntRes);
-        if (jacocoAntStream == null) {
-            throw new IOException("Could not find " + jacocoAntRes);
-        }
-        File antConfig = FileUtil.createTempFile("ant-merge_", ".xml");
-        File jacocoAnt = FileUtil.createTempFile("jacocoant", ".jar");
-        try {
-            FileUtil.writeToFile(template, antConfig);
-            FileUtil.writeToFile(jacocoAntStream, jacocoAnt);
-            String[] cmd = {"ant", "-f", antConfig.getPath(),
-                    "-Djacocoant.path=" + jacocoAnt.getAbsolutePath(),
-                    "-Dexecution.files=" + executionData.getAbsolutePath(),
-                    "-Droot.dir=" + rootDir,
-                    "-Ddest.file=" + xmlReport.getAbsolutePath()};
-            CommandResult result = RunUtil.getDefault().runTimedCmd(COVERAGE_REPORT_TIMEOUT_MS,
-                    cmd);
-            CLog.d(result.getStdout());
-            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                throw new IOException(
-                        String.format(
-                                "error with ants: stdout:%s, stderr:%s",
-                                result.getStdout(), result.getStderr()));
-            }
-            return xmlReport;
-        } finally {
-            FileUtil.deleteFile(antConfig);
-            FileUtil.deleteFile(jacocoAnt);
-        }
     }
 
     /**
