@@ -101,6 +101,7 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
     private static final String METRIC_PREFIX_BATTERY =
             STATSD_REPORT_PREFIX_BATTERY + "-gauge-" + ATOM_NAME_BATTERY;
     private static final String METRIC_FORMATTER_BATTERY = "=[charge_micro_ampere_hour]";
+    private static final String METRIC_FORMATTER_BATTERY_ALT = "=[charge_micro_amp_hours]";
 
     // Test data related to testing multiple metrics within one report.
     private static final String STATSD_REPORT_PREFIX_MULTI = "statsd-metric-multi";
@@ -565,6 +566,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
 
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY);
+        mOptionSetter.setOptionValue(
+                "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY_ALT);
 
         Map<String, String> metrics =
                 getSingleStringMetrics(
@@ -604,6 +607,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
                 "metric-formatter", ATOM_NAME_ODPM, METRIC_FORMATTER_ODPM_SUBSYSTEM_RAIL);
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY);
+        mOptionSetter.setOptionValue(
+                "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY_ALT);
 
         Map<String, String> metrics =
                 getSingleStringMetrics(
@@ -640,6 +645,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
 
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_ODPM, METRIC_FORMATTER_ODPM_SUBSYSTEM_RAIL);
+        mOptionSetter.setOptionValue(
+                "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY_ALT);
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY);
 
@@ -690,6 +697,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
 
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_ODPM, METRIC_FORMATTER_ODPM_SUBSYSTEM_RAIL);
+        mOptionSetter.setOptionValue(
+                "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY_ALT);
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY);
 
