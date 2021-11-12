@@ -26,8 +26,11 @@ import com.android.tradefed.build.StubBuildProvider;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.DeviceConfigurationHolder;
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.IDeviceConfiguration;
+import com.android.tradefed.config.IGlobalConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceSelectionOptions;
 import com.android.tradefed.device.DeviceSelectionOptions.DeviceRequestedType;
@@ -35,6 +38,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.ProtoResultReporter;
+import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
 
 import org.junit.Before;
@@ -44,6 +48,8 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
 import java.io.File;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 
 /** Unit tests for {@link RemoteInvocationExecution}. */
@@ -153,5 +159,54 @@ public class RemoteInvocationExecutionTest {
                         Mockito.eq(RemoteInvocationExecution.REMOTE_CONFIG),
                         Mockito.eq(LogDataType.XML),
                         Mockito.any());
+    }
+
+    @Test
+    public void testFileValueOptionTransform() throws Exception {
+        IConfigurationFactory configFactory =
+                new ConfigurationFactory() {
+                    @Override
+                    protected String getConfigPrefix() {
+                        return "testconfigs/";
+                    }
+                };
+        IGlobalConfiguration globalConfig =
+                configFactory.createGlobalConfigurationFromArgs(
+                        new String[] {"global-config-file-option-value-test"},
+                        Collections.emptyList());
+        IGlobalConfiguration transformedConfig = null;
+        File newConfig = null;
+        try {
+            newConfig =
+                    globalConfig.cloneConfigWithFilter(
+                            new HashSet<>(),
+                            new RemoteInvocationExecution.FileOptionValueTransformer("/foo/"),
+                            new String[] {
+                                GlobalConfiguration.HOST_OPTIONS_TYPE_NAME,
+                                GlobalConfiguration.KEY_STORE_TYPE_NAME
+                            });
+            transformedConfig =
+                    configFactory.createGlobalConfigurationFromArgs(
+                            ArrayUtil.buildArray(new String[] {newConfig.toString()}),
+                            Collections.emptyList());
+        } finally {
+            FileUtil.deleteFile(newConfig);
+        }
+        assertEquals(
+                "expected filename transformation did not happen",
+                "/foo/tradefed_api-key.json",
+                transformedConfig
+                        .getHostOptions()
+                        .getServiceAccountJsonKeyFiles()
+                        .get("api-key")
+                        .toString());
+        assertEquals(
+                "non-file path should not be transformed",
+                "gs:/tradefed/other-key.json",
+                transformedConfig
+                        .getHostOptions()
+                        .getServiceAccountJsonKeyFiles()
+                        .get("other-key")
+                        .toString());
     }
 }

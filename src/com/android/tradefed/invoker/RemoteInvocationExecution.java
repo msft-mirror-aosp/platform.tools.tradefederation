@@ -24,8 +24,10 @@ import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.command.CommandRunner;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
+import com.android.tradefed.config.IConfigOptionValueTransformer;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
+import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -74,8 +76,10 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** Implementation of {@link InvocationExecution} that drives a remote execution. */
@@ -241,16 +245,20 @@ public class RemoteInvocationExecution extends InvocationExecution {
                 return;
             }
 
-            String[] whitelistConfigs =
+            String[] allowListConfigs =
                     new String[] {
                         GlobalConfiguration.SANDBOX_FACTORY_TYPE_NAME,
                         GlobalConfiguration.HOST_OPTIONS_TYPE_NAME,
                         "android-build"
                     };
+            // use an IConfigOptionValueTransformer to collect+rewrite options that are File type
+            FileOptionValueTransformer fileTransformer =
+                    new FileOptionValueTransformer(mRemoteTradefedDir);
             try {
                 globalConfig =
                         GlobalConfiguration.getInstance()
-                                .cloneConfigWithFilter(new HashSet<>(), whitelistConfigs);
+                                .cloneConfigWithFilter(
+                                        new HashSet<>(), fileTransformer, allowListConfigs);
             } catch (IOException e) {
                 listener.invocationFailed(createInvocationFailure(e, FailureStatus.INFRA_FAILURE));
                 return;
@@ -275,6 +283,33 @@ public class RemoteInvocationExecution extends InvocationExecution {
                                 "Failed to push Tradefed Global Configuration.",
                                 FailureStatus.INFRA_FAILURE));
                 return;
+            }
+            // Push files referenced in global config over to remote
+            if (!fileTransformer.getRenamedFiles().isEmpty()) {
+                List<String> pushErrors = new ArrayList<>();
+                CLog.d("Pushing files referenced in global config to remote.");
+                for (Map.Entry<String, String> entry :
+                        fileTransformer.getRenamedFiles().entrySet()) {
+                    boolean pushResult =
+                            RemoteFileUtil.pushFileToRemote(
+                                    gceInfo,
+                                    options,
+                                    null,
+                                    runUtil,
+                                    PUSH_TF_TIMEOUT,
+                                    entry.getValue(),
+                                    new File(entry.getKey()));
+                    if (!pushResult) {
+                        pushErrors.add(entry.getKey());
+                    }
+                }
+                CLog.d("Done pushing files.");
+                if (!pushErrors.isEmpty()) {
+                    listener.invocationFailed(
+                            createInvocationFailure(
+                                    "Failed to push some files to remote: " + pushErrors,
+                                    FailureStatus.INFRA_FAILURE));
+                }
             }
 
             resetAdb(gceInfo, options, runUtil);
@@ -818,5 +853,48 @@ public class RemoteInvocationExecution extends InvocationExecution {
             failure.setFailureStatus(defaultStatus);
         }
         return failure;
+    }
+
+    protected static class FileOptionValueTransformer implements IConfigOptionValueTransformer {
+
+        private Map<String, String> mRenamedFiles = new HashMap<>();
+        private String mBaseRemoteDir;
+
+        public FileOptionValueTransformer(String baseRemoteDir) {
+            mBaseRemoteDir = baseRemoteDir;
+        }
+
+        public Map<String, String> getRenamedFiles() {
+            return mRenamedFiles;
+        }
+
+        private boolean shouldTransformValueForOption(Option option) {
+            // seems sufficient for now, may need more configurable mechanism eventually
+            return option.name().contains("key-file");
+        }
+
+        private File handleFileTypeValue(File file) {
+            // use String here because it might contain unresolved value e.g. "gs://"
+            String filePath = file.toString();
+            if (filePath.startsWith("/")) {
+                // strip the leading '/' of the file path and replace the rest with '_'
+                // i.e. /path/to/file becomes path_to_file
+                String remoteName = mBaseRemoteDir + filePath.substring(1).replace('/', '_');
+                mRenamedFiles.put(filePath, remoteName);
+                CLog.v("File to be transferred: local=%s -> remote=%s", filePath, remoteName);
+                return new File(remoteName);
+            }
+            return file;
+        }
+
+        @Override
+        public Object transform(Object configObj, Option option, Object fieldValue) {
+            if (fieldValue instanceof File) {
+                if (shouldTransformValueForOption(option)) {
+                    return handleFileTypeValue((File) fieldValue);
+                }
+            }
+            return fieldValue;
+        }
     }
 }
