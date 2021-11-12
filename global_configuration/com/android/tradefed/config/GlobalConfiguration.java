@@ -834,6 +834,17 @@ public class GlobalConfiguration implements IGlobalConfiguration {
     @Override
     public File cloneConfigWithFilter(Set<String> exclusionPatterns, String... allowlistConfigs)
             throws IOException {
+        return cloneConfigWithFilter(
+                exclusionPatterns, new NoOpConfigOptionValueTransformer(), allowlistConfigs);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public File cloneConfigWithFilter(
+            Set<String> exclusionPatterns,
+            IConfigOptionValueTransformer transformer,
+            String... allowlistConfigs)
+            throws IOException {
         IConfigurationFactory configFactory = getConfigurationFactory();
         IGlobalConfiguration copy = null;
         try {
@@ -866,7 +877,14 @@ public class GlobalConfiguration implements IGlobalConfiguration {
                 isGenericObject = true;
             }
             ConfigurationUtil.dumpClassToXml(
-                    serializer, config, configObj, isGenericObject, new ArrayList<>(), true, false);
+                    serializer,
+                    config,
+                    configObj,
+                    isGenericObject,
+                    new ArrayList<>(),
+                    transformer,
+                    true,
+                    false);
         }
         serializer.endTag(null, ConfigurationUtil.CONFIGURATION_NAME);
         serializer.endDocument();
