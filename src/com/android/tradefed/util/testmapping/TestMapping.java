@@ -428,8 +428,7 @@ public class TestMapping {
     }
 
     /**
-     * Helper to find all tests in all TEST_MAPPING files. This is needed when a suite run requires
-     * to run all tests in TEST_MAPPING files for a given group, e.g., presubmit.
+     * Helper to find all tests in all TEST_MAPPING files based on a artifact in the device build.
      *
      * @param buildInfo the {@link IBuildInfo} describing the build.
      * @param testGroup a {@link String} of the test group.
@@ -437,11 +436,33 @@ public class TestMapping {
      *     returned. false to return tests that require device to run.
      * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
      */
-    @SuppressWarnings("StreamResourceLeak")
     public static Set<TestInfo> getTests(
             IBuildInfo buildInfo, String testGroup, boolean hostOnly, Set<String> keywords) {
+        File zipFile = buildInfo.getFile(TEST_MAPPINGS_ZIP);
+        return getTests(buildInfo, testGroup, hostOnly, keywords, zipFile);
+    }
+
+    /**
+     * Helper to find all tests in all TEST_MAPPING files based on the given artifact. This is
+     * needed when a suite run requires to run all tests in TEST_MAPPING files for a given group,
+     * e.g., presubmit.
+     *
+     * @param buildInfo the {@link IBuildInfo} describing the build.
+     * @param testGroup a {@link String} of the test group.
+     * @param hostOnly true if only tests running on host and don't require device should be
+     *     returned. false to return tests that require device to run.
+     * @param zipFile the {@link File} of the test mapping zip.
+     * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
+     */
+    @SuppressWarnings("StreamResourceLeak")
+    public static Set<TestInfo> getTests(
+        IBuildInfo buildInfo,
+        String testGroup,
+        boolean hostOnly,
+        Set<String> keywords,
+        File zipFile) {
         Set<TestInfo> tests = new HashSet<TestInfo>();
-        File testMappingsDir = extractTestMappingsZip(buildInfo.getFile(TEST_MAPPINGS_ZIP));
+        File testMappingsDir = extractTestMappingsZip(zipFile);
         Stream<Path> stream = null;
         try {
             Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
