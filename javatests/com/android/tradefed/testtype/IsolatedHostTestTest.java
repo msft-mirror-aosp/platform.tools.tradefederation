@@ -32,6 +32,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ResourceUtil;
 
 import org.junit.After;
 import org.junit.Before;
@@ -44,7 +45,6 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.Inet4Address;
 import java.net.ServerSocket;
 import java.util.ArrayList;
@@ -72,20 +72,12 @@ public class IsolatedHostTestTest {
      * @return the extracted jar file.
      */
     protected File getJarResource(String filename, File parentDir, String name) throws IOException {
-        File jarFile = null;
-        try (InputStream jarFileStream = getClass().getResourceAsStream(filename);
-                InputStream qualifiedPathStream =
-                        getClass().getResourceAsStream(PACKAGE + filename)) {
-            if (jarFileStream == null && qualifiedPathStream == null) {
-                throw new RuntimeException(String.format("Failed to read resource '%s'", filename));
-            }
-            jarFile = new File(parentDir, name);
-            jarFile.createNewFile();
-            if (jarFileStream != null) {
-                FileUtil.writeToFile(jarFileStream, jarFile);
-            } else {
-                FileUtil.writeToFile(qualifiedPathStream, jarFile);
-            }
+        File jarFile = FileUtil.createTempFile("tradefed-isolation", ".jar", parentDir);
+        boolean res =
+                ResourceUtil.extractResourceWithAltAsFile(filename, PACKAGE + filename, jarFile);
+        if (!res) {
+            FileUtil.deleteFile(jarFile);
+            throw new IOException(String.format("Failed to read resource '%s'", filename));
         }
         return jarFile;
     }
@@ -172,10 +164,10 @@ public class IsolatedHostTestTest {
 
     private OptionSetter setUpSimpleMockJarTest(String jarName) throws Exception {
         OptionSetter setter = new OptionSetter(mHostTest);
-        getJarResource("/" + jarName, mMockTestDir, jarName);
+        File jar = getJarResource("/" + jarName, mMockTestDir, jarName);
         doReturn(mMockTestDir).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
         doReturn(mMockTestDir).when(mMockBuildInfo).getFile(BuildInfoFileKey.TESTDIR_IMAGE);
-        setter.setOptionValue("jar", jarName);
+        setter.setOptionValue("jar", jar.getName());
         setter.setOptionValue("exclude-paths", "org/junit");
         setter.setOptionValue("exclude-paths", "junit");
         return setter;

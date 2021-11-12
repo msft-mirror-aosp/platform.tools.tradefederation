@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.testtype;
 
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,7 +37,6 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
-import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.IRunUtil.EnvPriority;
 import com.android.tradefed.util.SystemUtil.EnvVariable;
@@ -242,50 +240,5 @@ public class TfTestLauncherTest {
                 .testEnded(
                         (TestDescription) Mockito.any(), Mockito.eq(new HashMap<String, Metric>()));
         verify(mMockListener).testRunEnded(0, new HashMap<String, Metric>());
-    }
-
-    /** Test that when code coverage option is on, we add the javaagent to the java arguments. */
-    @Test
-    public void testRunCoverage() throws Exception {
-        OptionSetter setter = new OptionSetter(mTfTestLauncher);
-        setter.setOptionValue("jacoco-code-coverage", "true");
-        setter.setOptionValue("include-coverage", "com.android.tradefed*");
-        setter.setOptionValue("include-coverage", "com.google.android.tradefed*");
-        setter.setOptionValue("exclude-coverage", "com.test*");
-        when(mMockBuildInfo.getRootDir()).thenReturn(new File(""));
-        when(mMockBuildInfo.getTestTag()).thenReturn(TEST_TAG);
-        when(mMockBuildInfo.getBuildBranch()).thenReturn(BUILD_BRANCH);
-        when(mMockBuildInfo.getBuildFlavor()).thenReturn(BUILD_FLAVOR);
-        when(mMockBuildInfo.getBuildId()).thenReturn(BUILD_ID);
-
-        try {
-            mTfTestLauncher.preRun();
-            verify(mMockBuildInfo, times(2)).getBuildBranch();
-            verify(mMockBuildInfo, times(2)).getBuildFlavor();
-            verify(mMockBuildInfo, times(2)).getBuildId();
-            verify(mMockRunUtil).unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
-            verify(mMockRunUtil)
-                    .unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
-            verify(mMockRunUtil).unsetEnvVariable(SubprocessTfLauncher.ANDROID_SERIAL_VAR);
-            for (String variable : AutomatedReporters.REPORTER_MAPPING) {
-                verify(mMockRunUtil).unsetEnvVariable(variable);
-            }
-            verify(mMockRunUtil).unsetEnvVariable(EnvVariable.ANDROID_HOST_OUT_TESTCASES.name());
-            verify(mMockRunUtil).unsetEnvVariable(EnvVariable.ANDROID_TARGET_OUT_TESTCASES.name());
-            verify(mMockRunUtil).setEnvVariablePriority(EnvPriority.SET);
-            verify(mMockRunUtil)
-                    .setEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE, SUB_GLOBAL_CONFIG);
-            assertTrue(mTfTestLauncher.mCmdArgs.get(2).startsWith("-javaagent:"));
-            assertTrue(
-                    mTfTestLauncher
-                            .mCmdArgs
-                            .get(2)
-                            .contains(
-                                    "includes=com.android.tradefed*:com.google.android.tradefed*,"
-                                            + "excludes=com.test*"));
-        } finally {
-            FileUtil.recursiveDelete(mTfTestLauncher.mTmpDir);
-            mTfTestLauncher.cleanTmpFile();
-        }
     }
 }
