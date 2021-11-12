@@ -366,6 +366,23 @@ public interface IGlobalConfiguration {
             throws IOException;
 
     /**
+     * Filter the GlobalConfiguration based on a white list while allowing for manipulation of
+     * option values and output to an XML file.
+     *
+     * @param exclusionPatterns The pattern of class name to exclude from the dump.
+     * @param allowlistConfigs  a {@link String} array of configs to be included in the new XML
+     *                          file.
+     *                          If it's set to <code>null<code/>, a default list should be used.
+     * @return the File containing the new filtered global config.
+     * @see #cloneConfigWithFilter(String...)
+     */
+    public File cloneConfigWithFilter(
+            Set<String> exclusionPatterns,
+            IConfigOptionValueTransformer transformer,
+            String... allowlistConfigs)
+            throws IOException;
+
+    /**
      * Proper setup at the start of tradefed.
      *
      * @throws ConfigurationException
