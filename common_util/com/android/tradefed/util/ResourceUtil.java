@@ -43,6 +43,18 @@ public class ResourceUtil {
     }
 
     /**
+     * Extracts a given resource to an output file with fallback alternative path. Returns false if
+     * it fails.
+     */
+    public static boolean extractResourceWithAltAsFile(
+            String resource, String altResourcePath, File output) {
+        if (extractResourceAsFile(resource, output)) {
+            return true;
+        }
+        return extractResourceAsFile(altResourcePath, output);
+    }
+
+    /**
      * Read a property configuration from the resources. Configuration must follow a "key=value" or
      * "key:value" format. Method is safe and will return an empty map in case of error.
      *
