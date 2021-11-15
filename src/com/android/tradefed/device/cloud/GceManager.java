@@ -544,6 +544,7 @@ public class GceManager {
                         runUtil.runTimedCmd(
                                 options.getGceCmdTimeout(),
                                 gceArgs.toArray(new String[gceArgs.size()]));
+                FileUtil.deleteFile(config);
                 CLog.i(
                         "GCE driver teardown output:\nstdout:%s\nstderr:%s",
                         cmd.getStdout(), cmd.getStderr());
@@ -563,9 +564,8 @@ public class GceManager {
         } catch (IOException ioe) {
             CLog.e("failed to create log file for GCE Teardown");
             CLog.e(ioe);
-            return false;
-        } finally {
             FileUtil.deleteFile(config);
+            return false;
         }
         return true;
     }
