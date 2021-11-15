@@ -352,6 +352,7 @@ public class MoblyBinaryHostTestTest {
     @Test
     public void testUpdateConfigFile() throws Exception {
         Mockito.doReturn(DEVICE_SERIAL).when(mMockDevice).getSerialNumber();
+        Mockito.doReturn(LOG_PATH).when(mSpyTest).getLogDirAbsolutePath();
         Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
         Mockito.doReturn("testBedName").when(mSpyTest).getTestBed();
         String configString =
@@ -384,6 +385,8 @@ public class MoblyBinaryHostTestTest {
         assertThat(updatedConfigString).contains(DEVICE_SERIAL);
         // Check if original still exists.
         assertThat(updatedConfigString).contains("mobile_type");
+        // Check if log path is injected.
+        assertThat(updatedConfigString).contains(LOG_PATH);
     }
 
     @Test
@@ -392,6 +395,7 @@ public class MoblyBinaryHostTestTest {
         Mockito.doReturn(Arrays.asList(mMockDevice, mMockDevice2)).when(mTestInfo).getDevices();
         Mockito.doReturn(DEVICE_SERIAL).when(mMockDevice).getSerialNumber();
         Mockito.doReturn(DEVICE_SERIAL_2).when(mMockDevice2).getSerialNumber();
+        Mockito.doReturn(LOG_PATH).when(mSpyTest).getLogDirAbsolutePath();
         Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
         Mockito.doReturn("testBedName").when(mSpyTest).getTestBed();
         String configString =
@@ -424,10 +428,12 @@ public class MoblyBinaryHostTestTest {
         mSpyTest.updateConfigFile(inputStream, writer);
         String updatedConfigString = writer.toString();
         LogUtil.CLog.d("Updated config string: %s", updatedConfigString);
-        // Check if serial injected.
+        // Check if serials are injected.
         assertThat(updatedConfigString).contains(DEVICE_SERIAL);
         assertThat(updatedConfigString).contains(DEVICE_SERIAL_2);
         // Check if original still exists.
         assertThat(updatedConfigString).contains("mobile_type");
+        // Check if log path is injected.
+        assertThat(updatedConfigString).contains(LOG_PATH);
     }
 }
