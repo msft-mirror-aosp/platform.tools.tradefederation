@@ -316,7 +316,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         return resultFile;
     }
 
-    private static void serializeTestCases(
+    private void serializeTestCases(
             XmlSerializer serializer, Map<TestDescription, TestResult> results)
             throws IllegalArgumentException, IllegalStateException, IOException {
         // We reformat into the same format as the ResultHandler from CTS to be compatible for now.
@@ -361,7 +361,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         }
     }
 
-    private static void handleTestFailure(XmlSerializer serializer, String fullStack)
+    private void handleTestFailure(XmlSerializer serializer, String fullStack)
             throws IllegalArgumentException, IllegalStateException, IOException {
         if (fullStack != null) {
             String message;
@@ -709,7 +709,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     }
 
     @VisibleForTesting
-    static String sanitizeXmlContent(String s) {
+    protected String sanitizeXmlContent(String s) {
         return XmlEscapers.xmlContentEscaper().escape(s);
     }
 

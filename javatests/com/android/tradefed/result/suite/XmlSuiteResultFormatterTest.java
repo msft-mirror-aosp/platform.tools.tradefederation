@@ -68,7 +68,14 @@ public class XmlSuiteResultFormatterTest {
 
     @Before
     public void setUp() throws Exception {
-        mFormatter = new XmlSuiteResultFormatter();
+        mFormatter =
+                new XmlSuiteResultFormatter() {
+                    @Override
+                    protected String sanitizeXmlContent(String s) {
+                        // Stub sanitize to avoid some versioning issues
+                        return s.replace("\0", "0");
+                    }
+                };
         mResultHolder = new SuiteResultHolder();
         mContext = new InvocationContext();
         mResultDir = FileUtil.createTempDir("result-dir");
@@ -172,7 +179,7 @@ public class XmlSuiteResultFormatterTest {
         assertXmlContainsValue(
                 content,
                 "Result/Module/TestCase/Test/Failure/StackTrace",
-                XmlSuiteResultFormatter.sanitizeXmlContent("module1 failed.\nstack\nstack\0"));
+                mFormatter.sanitizeXmlContent("module1 failed.\nstack\nstack\0"));
         // Test that we can read back the informations
         SuiteResultHolder holder = mFormatter.parseResults(mResultDir, false);
         assertEquals(holder.completeModules, mResultHolder.completeModules);
@@ -226,7 +233,7 @@ public class XmlSuiteResultFormatterTest {
         assertXmlContainsValue(
                 content,
                 "Result/Module/TestCase/Test/Failure/StackTrace",
-                XmlSuiteResultFormatter.sanitizeXmlContent("module1 failed.\nstack\nstack\0"));
+                mFormatter.sanitizeXmlContent("module1 failed.\nstack\nstack\0"));
         // Test that we can read back the informations
         SuiteResultHolder holder = mFormatter.parseResults(mResultDir, false);
         assertEquals(holder.completeModules, mResultHolder.completeModules);
@@ -479,7 +486,7 @@ public class XmlSuiteResultFormatterTest {
         assertXmlContainsValue(
                 content,
                 "Result/Module/TestCase/Test/Failure/StackTrace",
-                XmlSuiteResultFormatter.sanitizeXmlContent("module1 failed.\nstack\nstack\0"));
+                mFormatter.sanitizeXmlContent("module1 failed.\nstack\nstack\0"));
         // Test that we can read back the informations
         SuiteResultHolder holder = mFormatter.parseResults(mResultDir, true);
         assertEquals(holder.completeModules, mResultHolder.completeModules);
