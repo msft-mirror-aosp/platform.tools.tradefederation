@@ -93,11 +93,11 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
     private List<String> mTestOptions = new ArrayList<>();
 
     @Option(
-            name = "mobly-config-file",
+            name = "mobly-config-file-name",
             description =
-                    "Mobly config file absolute path. If set, will append '--config=<config file"
+                    "Mobly config file name. If set, will append '--config=<config file"
                             + " path>' to the command for running binary.")
-    private File mConfigFile;
+    private String mConfigFileName;
 
     @Option(
             name = "test-bed",
@@ -150,7 +150,7 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
             }
             parFile.setExecutable(true);
             try {
-                runSingleParFile(parFile.getAbsolutePath());
+                runSingleParFile(parFile.getAbsolutePath(), listener);
                 processTestResults(listener, parFile.getName());
             } finally {
                 reportLogs(getLogDir(), listener);
@@ -180,14 +180,23 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
         return files;
     }
 
-    private void runSingleParFile(String parFilePath) {
+    private void runSingleParFile(String parFilePath, ITestInvocationListener listener) {
         if (mInjectAndroidSerialVar) {
             getRunUtil().setEnvVariable(ANDROID_SERIAL_VAR, getDevice().getSerialNumber());
         }
         AdbUtils.updateAdb(mTestInfo, getRunUtil(), getAdbPath());
         String configPath = null;
-        if (mConfigFile != null) {
-            configPath = updateTemplateConfigFile(mConfigFile);
+        if (mConfigFileName != null) {
+            try {
+                File configFile =
+                        mTestInfo.getDependencyFile(mConfigFileName, /* targetFirst */ false);
+                configPath = updateTemplateConfigFile(configFile);
+            } catch (FileNotFoundException e) {
+                reportFailure(
+                        listener,
+                        mConfigFileName,
+                        "Couldn't find Mobly config file " + mConfigFileName);
+            }
         }
         CommandResult result =
                 getRunUtil()
@@ -305,6 +314,15 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
             Map<String, Object> deviceMap = (Map<String, Object>) androidDeviceList.get(index);
             deviceMap.put("serial", devices.get(index).getSerialNumber());
         }
+
+        // Inject log path
+        Map<String, Object> paramsMap = (Map<String, Object>) configMap.get("MoblyParams");
+        if (paramsMap == null) {
+            paramsMap = new HashMap();
+            configMap.put("MoblyParams", paramsMap);
+        }
+        paramsMap.put("LogPath", getLogDirAbsolutePath());
+
         yaml.dump(configMap, writer);
     }
 
