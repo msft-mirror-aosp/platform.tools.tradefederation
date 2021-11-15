@@ -84,7 +84,7 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
 
     @Option(
             name = "inject-android-serial",
-            description = "Whether or not to pass a ANDROID_SERIAL variable to the process.")
+            description = "Whether or not to pass an ANDROID_SERIAL variable to the process.")
     private boolean mInjectAndroidSerialVar = true;
 
     @Option(
@@ -256,7 +256,7 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
         try {
             inputStream = new FileInputStream(templateConfig);
             fileWriter = new FileWriter(localConfigFile);
-            updateConfigFile(inputStream, fileWriter, getDevice().getSerialNumber());
+            updateConfigFile(inputStream, fileWriter);
         } catch (IOException ex) {
             throw new RuntimeException("Exception in updating config file: %s", ex);
         } finally {
@@ -267,7 +267,7 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
     }
 
     @VisibleForTesting
-    protected void updateConfigFile(InputStream configInputStream, Writer writer, String serial) {
+    protected void updateConfigFile(InputStream configInputStream, Writer writer) {
         Yaml yaml = new Yaml();
         Map<String, Object> configMap = (Map<String, Object>) yaml.load(configInputStream);
         CLog.d("Loaded yaml config: \n%s", configMap);
@@ -289,11 +289,22 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
             throw new RuntimeException(
                     String.format("Fail to find specified test bed: %s.", getTestBed()));
         }
+
         Map<String, Object> controllerMap = (Map<String, Object>) targetTb.get("Controllers");
         List<Object> androidDeviceList = (List<Object>) controllerMap.get("AndroidDevice");
-        // Inject serial for the first device
-        Map<String, Object> deviceMap = (Map<String, Object>) androidDeviceList.get(0);
-        deviceMap.put("serial", serial);
+
+        // Inject serial for devices
+        List<ITestDevice> devices = getTestInfo().getDevices();
+        if (devices.size() != androidDeviceList.size()) {
+            throw new RuntimeException(
+                    String.format(
+                            "Device count mismatch (configured: %s vs allocated: %s)",
+                            androidDeviceList.size(), devices.size()));
+        }
+        for (int index = 0; index < androidDeviceList.size(); index++) {
+            Map<String, Object> deviceMap = (Map<String, Object>) androidDeviceList.get(index);
+            deviceMap.put("serial", devices.get(index).getSerialNumber());
+        }
         yaml.dump(configMap, writer);
     }
 
@@ -329,6 +340,11 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
     }
 
     @VisibleForTesting
+    TestInformation getTestInfo() {
+        return mTestInfo;
+    }
+
+    @VisibleForTesting
     protected String[] buildCommandLineArray(String filePath, String configPath) {
         List<String> commandLine = new ArrayList<>();
         commandLine.add(filePath);
@@ -341,7 +357,9 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
         if (getTestBed() != null) {
             commandLine.add("--test_bed=" + getTestBed());
         }
-        commandLine.add("--device_serial=" + getDevice().getSerialNumber());
+        for (ITestDevice device : getTestInfo().getDevices()) {
+            commandLine.add("--device_serial=" + device.getSerialNumber());
+        }
         commandLine.add("--log_path=" + getLogDirAbsolutePath());
         // Add all the other options
         commandLine.addAll(getTestOptions());
