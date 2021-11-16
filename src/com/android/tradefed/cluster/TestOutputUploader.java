@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.cluster;
 
-import com.android.loganalysis.util.ArrayUtil;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -25,13 +24,16 @@ import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import com.google.common.net.UrlEscapers;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-/** A class to upload test output files to GCS/HTTP. */
+/** Uploads test output files to local file system, GCS, or an HTTP(S) endpoint. */
 public class TestOutputUploader {
 
     static final long UPLOAD_TIMEOUT_MS = 30 * 60 * 1000;
@@ -52,74 +54,79 @@ public class TestOutputUploader {
         mProtocol = urlObj.getProtocol();
     }
 
-    public String uploadFile(File file, final String destinationPath) throws IOException {
-        String uploadUrl = mUploadUrl;
-        if (!mUploadUrl.endsWith("/")) {
-            uploadUrl += "/";
-        }
-        if (destinationPath != null) {
-            uploadUrl += destinationPath;
-        }
-        CLog.i("Uploading %s to %s", file.getAbsolutePath(), uploadUrl);
-        if (FILE_PROTOCOL.equals(mProtocol)) {
-            final File dir = new File(new URL(uploadUrl).getPath());
-            if (!dir.exists()) {
-                dir.mkdirs();
-            }
-            final File destFile = new File(dir, file.getName());
-            FileUtil.copyFile(file, destFile);
-        } else {
-            final List<String> cmdArgs = buildUploadCommandArgs(file, uploadUrl);
-            final CommandResult result =
-                    getRunUtil()
-                            .runTimedCmdRetry(
-                                    UPLOAD_TIMEOUT_MS,
-                                    RETRY_INTERVAL_MS,
-                                    MAX_RETRY_COUNT,
-                                    cmdArgs.toArray(new String[0]));
-            if (!result.getStatus().equals(CommandStatus.SUCCESS)) {
-                final String msg =
-                        String.format(
-                                "failed to upload %s: command status=%s",
-                                file.getAbsolutePath(), result.getStatus());
-                CLog.e(msg);
-                CLog.e("stdout:\n'''\n%s'''\n", result.getStdout());
-                CLog.e("stderr:\n'''\n%s'''\n", result.getStderr());
-                throw new RuntimeException(msg);
-            }
-        }
-        String baseUrl = uploadUrl;
-        if (!baseUrl.endsWith("/")) {
-            baseUrl += "/";
-        }
-        return baseUrl + file.getName();
-    }
-
-    private List<String> buildUploadCommandArgs(File file, String uploadUrl) {
+    /**
+     * Upload a file to the specified destination path (relative to the upload URL).
+     *
+     * @param file file to upload
+     * @param destPath relative destination path
+     * @return uploaded file URL
+     */
+    public String uploadFile(File file, String destPath) throws IOException {
         if (mUploadUrl == null) {
-            throw new IllegalStateException("upload url is not set");
+            throw new IllegalStateException("Upload URL is not set");
         }
+        String uploadUrl = joinSegments(mUploadUrl, destPath);
+        CLog.i("Uploading %s to %s", file.getAbsolutePath(), uploadUrl);
+
         switch (mProtocol) {
+            case FILE_PROTOCOL:
+                File destDir = new File(new URL(uploadUrl).getPath());
+                destDir.mkdirs();
+                File destFile = new File(destDir, file.getName());
+                FileUtil.copyFile(file, destFile);
+                return joinSegments(uploadUrl, file.getName());
             case GCS_PROTOCOL:
-                return ArrayUtil.list("gsutil", "cp", file.getAbsolutePath(), uploadUrl);
+                executeUploadCommand(file, "gsutil", "cp", file.getAbsolutePath(), uploadUrl);
+                return joinSegments(uploadUrl, file.getName());
             case HTTP_PROTOCOL:
             case HTTPS_PROTOCOL:
-                // uploadUrl for HTTP prototal should include filename.
-                if (!uploadUrl.endsWith("/")) {
-                    uploadUrl += "/";
-                }
-                // Add -L option to handle redirect.
-                uploadUrl += file.getName();
-                return ArrayUtil.list(
+                // Upload URL for HTTP(S) protocols should include the filename, and special
+                // characters in the paths should be escaped.
+                String fullPath = joinSegments(destPath, file.getName());
+                String encodedPath = UrlEscapers.urlFragmentEscaper().escape(fullPath);
+                uploadUrl = joinSegments(mUploadUrl, encodedPath);
+                executeUploadCommand(
+                        file,
                         "curl",
-                        "-X",
+                        "--request",
                         "POST",
-                        "-F file=@" + file.getAbsolutePath(),
-                        "-fL",
+                        "--form",
+                        "file=@" + file.getAbsolutePath(),
+                        "--fail", // Return non-zero status code on error.
+                        "--location", // Handle redirects.
                         uploadUrl);
+                return uploadUrl;
+            default:
+                throw new IllegalArgumentException(
+                        String.format("Protocol '%s' is not supported", mProtocol));
         }
-        throw new IllegalArgumentException(
-                String.format("Protocol '%s' is not supported", mProtocol));
+    }
+
+    /** Executes an upload command and handle the result. */
+    private void executeUploadCommand(File file, String... cmdArgs) {
+        CommandResult result =
+                getRunUtil()
+                        .runTimedCmdRetry(
+                                UPLOAD_TIMEOUT_MS, RETRY_INTERVAL_MS, MAX_RETRY_COUNT, cmdArgs);
+        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+            String error =
+                    String.format(
+                            "Failed to upload %s, status = %s, stdout = [%s], stderr = [%s].",
+                            file.getAbsolutePath(),
+                            result.getStatus(),
+                            result.getStdout(),
+                            result.getStderr());
+            CLog.e(error);
+            throw new RuntimeException(error);
+        }
+    }
+
+    /** Joins path segments with slashes. */
+    private String joinSegments(String... segments) {
+        return Stream.of(segments)
+                .filter(Objects::nonNull) // Ignore null segments.
+                .map(s -> s.replaceAll("^/|/$", "")) // Remove leading/trailing slashes.
+                .collect(Collectors.joining("/"));
     }
 
     @VisibleForTesting
