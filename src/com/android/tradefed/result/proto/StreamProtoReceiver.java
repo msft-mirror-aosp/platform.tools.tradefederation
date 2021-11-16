@@ -23,6 +23,8 @@ import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -203,7 +205,7 @@ public class StreamProtoReceiver implements Closeable {
         if (mEventReceiver != null) {
             mJoinStarted.set(true);
             try {
-                long waitTime = millis + mExtraWaitTimeForEvents;
+                long waitTime = getJoinTimeout(millis);
                 CLog.i(
                         "Waiting for events to finish being processed for %s",
                         TimeUtil.formatElapsedTime(waitTime));
@@ -230,6 +232,11 @@ public class StreamProtoReceiver implements Closeable {
     /** Returns whether or not the invocation failed has been reported. */
     public boolean hasInvocationFailed() {
         return mParser.hasInvocationFailed();
+    }
+
+    @VisibleForTesting
+    protected long getJoinTimeout(long millis) {
+        return millis + mExtraWaitTimeForEvents;
     }
 
     private void parse(TestRecord receivedRecord) {
