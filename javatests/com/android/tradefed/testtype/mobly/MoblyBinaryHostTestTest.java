@@ -436,4 +436,40 @@ public class MoblyBinaryHostTestTest {
         // Check if log path is injected.
         assertThat(updatedConfigString).contains(LOG_PATH);
     }
+
+    @Test
+    public void testUpdateConfigFileDetectDevice() throws Exception {
+        mMockDevice2 = Mockito.mock(ITestDevice.class);
+        Mockito.doReturn(Arrays.asList(mMockDevice, mMockDevice2)).when(mTestInfo).getDevices();
+        Mockito.doReturn(DEVICE_SERIAL).when(mMockDevice).getSerialNumber();
+        Mockito.doReturn(DEVICE_SERIAL_2).when(mMockDevice2).getSerialNumber();
+        Mockito.doReturn(LOG_PATH).when(mSpyTest).getLogDirAbsolutePath();
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        Mockito.doReturn("testBedName").when(mSpyTest).getTestBed();
+        String configString =
+                new StringBuilder()
+                        .append("TestBeds:")
+                        .append("\n")
+                        .append("- TestParams:")
+                        .append("\n")
+                        .append("    dut_name: is_dut")
+                        .append("\n")
+                        .append("  Name: testBedName")
+                        .append("\n")
+                        .append("  Controllers:")
+                        .append("\n")
+                        .append("    AndroidDevice: '*'")
+                        .append("\n")
+                        .toString();
+        InputStream inputStream = new ByteArrayInputStream(configString.getBytes());
+        Writer writer = new StringWriter();
+        mSpyTest.updateConfigFile(inputStream, writer);
+        String updatedConfigString = writer.toString();
+        LogUtil.CLog.d("Updated config string: %s", updatedConfigString);
+        // Check if serials are injected.
+        assertThat(updatedConfigString).contains(DEVICE_SERIAL);
+        assertThat(updatedConfigString).contains(DEVICE_SERIAL_2);
+        // Check if original still exists.
+        assertThat(updatedConfigString).contains(LOG_PATH);
+    }
 }
