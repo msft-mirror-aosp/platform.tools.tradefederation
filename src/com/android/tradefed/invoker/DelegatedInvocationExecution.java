@@ -140,6 +140,9 @@ public class DelegatedInvocationExecution extends InvocationExecution {
         commandLine.add("-cp");
         // Add classpath
         commandLine.add(delegator.createClasspath());
+        // Carry the updated TF_JAR_DIR to delegate, this will simulate tradefed.sh environment.
+        commandLine.add(
+                String.format("-DTF_JAR_DIR=%s", delegator.getTfRootDir().getAbsolutePath()));
         commandLine.add("com.android.tradefed.command.CommandRunner");
         // Add command line
         commandLine.addAll(Arrays.asList(delegator.getCommandLine()));

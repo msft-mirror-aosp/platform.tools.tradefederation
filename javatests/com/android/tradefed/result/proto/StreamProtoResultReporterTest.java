@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.result.proto;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.verify;
 
@@ -36,12 +35,12 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
+import java.io.IOException;
 import java.util.HashMap;
 
 /** Unit tests for {@link StreamProtoResultReporter}. */
@@ -52,6 +51,22 @@ public class StreamProtoResultReporterTest {
     private IInvocationContext mInvocationContext;
     private IInvocationContext mMainInvocationContext;
     @Mock ITestInvocationListener mMockListener;
+
+    private class StreamProtoReceiverTestable extends StreamProtoReceiver {
+
+        public StreamProtoReceiverTestable(
+                ITestInvocationListener listener,
+                IInvocationContext mainContext,
+                boolean reportInvocation)
+                throws IOException {
+            super(listener, mainContext, reportInvocation);
+        }
+
+        @Override
+        protected long getJoinTimeout(long millis) {
+            return millis;
+        }
+    }
 
     @Before
     public void setUp() {
@@ -66,7 +81,7 @@ public class StreamProtoResultReporterTest {
     @Test
     public void testStream() throws Exception {
         StreamProtoReceiver receiver =
-                new StreamProtoReceiver(mMockListener, mMainInvocationContext, true);
+                new StreamProtoReceiverTestable(mMockListener, mMainInvocationContext, true);
         OptionSetter setter = new OptionSetter(mReporter);
         TestDescription test1 = new TestDescription("class1", "test1");
         TestDescription test2 = new TestDescription("class1", "test2");
@@ -149,7 +164,7 @@ public class StreamProtoResultReporterTest {
     @Test
     public void testStream_stopParsing() throws Exception {
         StreamProtoReceiver receiver =
-                new StreamProtoReceiver(mMockListener, mMainInvocationContext, true);
+                new StreamProtoReceiverTestable(mMockListener, mMainInvocationContext, true);
         OptionSetter setter = new OptionSetter(mReporter);
         try {
             setter.setOptionValue(
@@ -171,7 +186,7 @@ public class StreamProtoResultReporterTest {
     @Test
     public void testStream_noInvocationReporting() throws Exception {
         StreamProtoReceiver receiver =
-                new StreamProtoReceiver(
+                new StreamProtoReceiverTestable(
                         mMockListener,
                         mMainInvocationContext,
                         /** No invocation reporting */
@@ -231,41 +246,6 @@ public class StreamProtoResultReporterTest {
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener).testModuleEnded();
         assertNull(receiver.getError());
-    }
-
-    @Test
-    public void testStream_incompleteModule() throws Exception {
-        StreamProtoReceiver receiver =
-                new StreamProtoReceiver(mMockListener, mMainInvocationContext, true);
-        OptionSetter setter = new OptionSetter(mReporter);
-        ArgumentCaptor<FailureDescription> capture =
-                ArgumentCaptor.forClass(FailureDescription.class);
-        try {
-            setter.setOptionValue(
-                    "proto-report-port", Integer.toString(receiver.getSocketServerPort()));
-            // Verify mocks
-
-            mReporter.invocationStarted(mInvocationContext);
-            // Run modules
-            mReporter.testModuleStarted(createModuleContext("arm64 module1"));
-            // It stops unexpectedly
-        } finally {
-            receiver.joinReceiver(2000);
-            receiver.close();
-            receiver.completeModuleEvents();
-        }
-
-        verify(mMockListener).invocationStarted(Mockito.any());
-        verify(mMockListener).testModuleStarted(Mockito.any());
-        verify(mMockListener).testRunStarted(Mockito.eq("arm64 module1"), Mockito.eq(0));
-        verify(mMockListener).testRunFailed(capture.capture());
-        verify(mMockListener)
-                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
-        verify(mMockListener).testModuleEnded();
-        assertNull(receiver.getError());
-        assertEquals(
-                "Module was interrupted after starting, results are incomplete.",
-                capture.getValue().getErrorMessage());
     }
 
     /** Helper to create a module context. */

@@ -72,11 +72,13 @@ public class MoblyBinaryHostTestTest {
     private static final String BINARY_PATH = "/binary/file/path/test.par";
     private static final String LOG_PATH = "/log/dir/abs/path";
     private static final String DEVICE_SERIAL = "X123SER";
+    private static final String DEVICE_SERIAL_2 = "Y456SER";
     private static final long DEFAULT_TIME_OUT = 30 * 1000L;
     private static final String TEST_RESULT_FILE_NAME = "test_summary.yaml";
 
     private MoblyBinaryHostTest mSpyTest;
     private ITestDevice mMockDevice;
+    private ITestDevice mMockDevice2;
     private IRunUtil mMockRunUtil;
     private MoblyYamlResultParser mMockParser;
     private InputStream mMockSummaryInputStream;
@@ -102,6 +104,8 @@ public class MoblyBinaryHostTestTest {
         mVenvDir = FileUtil.createTempDir("venv");
         new File(mVenvDir, "bin").mkdir();
 
+        Mockito.doReturn(Arrays.asList(mMockDevice)).when(mTestInfo).getDevices();
+        Mockito.doReturn(mTestInfo).when(mSpyTest).getTestInfo();
         Mockito.doReturn(mMockRunUtil).when(mSpyTest).getRunUtil();
         Mockito.doReturn(DEFAULT_TIME_OUT).when(mSpyTest).getTestTimeout();
         Mockito.doReturn("not_adb").when(mSpyTest).getAdbPath();
@@ -347,6 +351,8 @@ public class MoblyBinaryHostTestTest {
 
     @Test
     public void testUpdateConfigFile() throws Exception {
+        Mockito.doReturn(DEVICE_SERIAL).when(mMockDevice).getSerialNumber();
+        Mockito.doReturn(LOG_PATH).when(mSpyTest).getLogDirAbsolutePath();
         Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
         Mockito.doReturn("testBedName").when(mSpyTest).getTestBed();
         String configString =
@@ -372,12 +378,62 @@ public class MoblyBinaryHostTestTest {
                         .toString();
         InputStream inputStream = new ByteArrayInputStream(configString.getBytes());
         Writer writer = new StringWriter();
-        mSpyTest.updateConfigFile(inputStream, writer, DEVICE_SERIAL);
+        mSpyTest.updateConfigFile(inputStream, writer);
         String updatedConfigString = writer.toString();
         LogUtil.CLog.d("Updated config string: %s", updatedConfigString);
         // Check if serial injected.
         assertThat(updatedConfigString).contains(DEVICE_SERIAL);
         // Check if original still exists.
         assertThat(updatedConfigString).contains("mobile_type");
+        // Check if log path is injected.
+        assertThat(updatedConfigString).contains(LOG_PATH);
+    }
+
+    @Test
+    public void testUpdateConfigFileMultidevice() throws Exception {
+        mMockDevice2 = Mockito.mock(ITestDevice.class);
+        Mockito.doReturn(Arrays.asList(mMockDevice, mMockDevice2)).when(mTestInfo).getDevices();
+        Mockito.doReturn(DEVICE_SERIAL).when(mMockDevice).getSerialNumber();
+        Mockito.doReturn(DEVICE_SERIAL_2).when(mMockDevice2).getSerialNumber();
+        Mockito.doReturn(LOG_PATH).when(mSpyTest).getLogDirAbsolutePath();
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        Mockito.doReturn("testBedName").when(mSpyTest).getTestBed();
+        String configString =
+                new StringBuilder()
+                        .append("TestBeds:")
+                        .append("\n")
+                        .append("- TestParams:")
+                        .append("\n")
+                        .append("    dut_name: is_dut")
+                        .append("\n")
+                        .append("  Name: testBedName")
+                        .append("\n")
+                        .append("  Controllers:")
+                        .append("\n")
+                        .append("    AndroidDevice:")
+                        .append("\n")
+                        .append("    - dimensions: {mobile_type: 'dut_rear'}")
+                        .append("\n")
+                        .append("      serial: old123")
+                        .append("\n")
+                        .append("    - dimensions: {mobile_type: 'dut_rear'}")
+                        .append("\n")
+                        .append("      serial: old456")
+                        .append("\n")
+                        .append("MoblyParams: {{LogPath: {log_path}}}")
+                        .append("\n")
+                        .toString();
+        InputStream inputStream = new ByteArrayInputStream(configString.getBytes());
+        Writer writer = new StringWriter();
+        mSpyTest.updateConfigFile(inputStream, writer);
+        String updatedConfigString = writer.toString();
+        LogUtil.CLog.d("Updated config string: %s", updatedConfigString);
+        // Check if serials are injected.
+        assertThat(updatedConfigString).contains(DEVICE_SERIAL);
+        assertThat(updatedConfigString).contains(DEVICE_SERIAL_2);
+        // Check if original still exists.
+        assertThat(updatedConfigString).contains("mobile_type");
+        // Check if log path is injected.
+        assertThat(updatedConfigString).contains(LOG_PATH);
     }
 }

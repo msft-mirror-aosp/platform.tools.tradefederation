@@ -87,7 +87,7 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
 
         // Launch GCE helper script.
         long startTime = getCurrentTime();
-        launchGce();
+        launchGce(attributes);
         long remainingTime = options.getGceCmdTimeout() - (getCurrentTime() - startTime);
         if (remainingTime < 0) {
             throw new DeviceNotAvailableException(
@@ -159,14 +159,15 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
     }
 
     /** Launch the actual gce device based on the build info. */
-    protected void launchGce() throws TargetSetupError {
+    protected void launchGce(MultiMap<String, String> attributes) throws TargetSetupError {
         TargetSetupError exception = null;
         for (int attempt = 0; attempt < getOptions().getGceMaxAttempt(); attempt++) {
             try {
                 mGceAvd =
                         getGceHandler()
                                 .startGce(
-                                        ((IConfigurableIp) getIDevice()).getKnownDeviceIp(), null);
+                                        ((IConfigurableIp) getIDevice()).getKnownDeviceIp(),
+                                        attributes);
                 if (mGceAvd != null) break;
             } catch (TargetSetupError tse) {
                 CLog.w(
