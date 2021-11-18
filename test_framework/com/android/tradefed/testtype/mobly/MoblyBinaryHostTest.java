@@ -33,6 +33,7 @@ import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.util.AdbUtils;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -54,13 +55,15 @@ import java.io.Writer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /** Host test meant to run a mobly python binary file from the Android Build system (Soong) */
 @OptionClass(alias = "mobly-host")
-public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildReceiver {
+public class MoblyBinaryHostTest
+        implements IRemoteTest, IDeviceTest, IBuildReceiver, ITestFilterReceiver {
 
     private static final String ANDROID_SERIAL_VAR = "ANDROID_SERIAL";
     private static final String MOBLY_TEST_SUMMARY = "test_summary.yaml";
@@ -112,6 +115,56 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
     private File mLogDir;
     private TestInformation mTestInfo;
     private IRunUtil mRunUtil;
+    private Set<String> mIncludeFilters = new LinkedHashSet<>();
+    private Set<String> mExcludeFilters = new LinkedHashSet<>();
+
+    /** {@inheritDoc} */
+    @Override
+    public void addIncludeFilter(String filter) {
+        mIncludeFilters.add(filter);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void addExcludeFilter(String filter) {
+        mExcludeFilters.add(filter);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void addAllIncludeFilters(Set<String> filters) {
+        mIncludeFilters.addAll(filters);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void addAllExcludeFilters(Set<String> filters) {
+        mExcludeFilters.addAll(filters);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void clearIncludeFilters() {
+        mIncludeFilters.clear();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void clearExcludeFilters() {
+        mExcludeFilters.clear();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Set<String> getIncludeFilters() {
+        return mIncludeFilters;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Set<String> getExcludeFilters() {
+        return mExcludeFilters;
+    }
 
     @Override
     public void setDevice(ITestDevice device) {
