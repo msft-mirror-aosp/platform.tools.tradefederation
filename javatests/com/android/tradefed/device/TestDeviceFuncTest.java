@@ -24,7 +24,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
-import static org.junit.Assume.assumeTrue;
 import static org.mockito.Mockito.mock;
 
 import com.android.ddmlib.IDevice;
@@ -669,11 +668,6 @@ public class TestDeviceFuncTest implements IDeviceTest {
     public void testDeviceSoftRestart() throws DeviceNotAvailableException {
         Log.i(LOG_TAG, "testDeviceSoftRestartSince");
 
-        // API 29 was the first to support soft reboot detection in this way
-        assumeTrue(
-                "Test only valid for devices at or above API level 29",
-                mTestDevice.getApiLevel() >= 29);
-
         // Get system_server process info
         ProcessInfo prev = mTestDevice.getProcessByName("system_server");
         long deviceTimeMs = mTestDevice.getDeviceDate();
@@ -692,9 +686,6 @@ public class TestDeviceFuncTest implements IDeviceTest {
         assertTrue(mTestDevice.deviceSoftRestarted(prev));
         prev = waitForSystemServerProcess();
         deviceTimeMs = mTestDevice.getDeviceDate();
-        // Sleep for a second to ensure the reboot happens in at least the second after
-        // we took this timestamp
-        RunUtil.getDefault().sleep(1000);
         mTestDevice.reboot();
         if (!mTestDevice.isAdbRoot()) {
             mTestDevice.enableAdbRoot();

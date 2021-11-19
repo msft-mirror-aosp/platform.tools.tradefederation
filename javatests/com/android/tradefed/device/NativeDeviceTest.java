@@ -2403,12 +2403,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn(fakePid).when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p " + fakePid + " -o stime=");
-        doReturn(fakeCreationTime)
-                .when(spy)
-                .executeShellCommand(
-                        "date -d \"$(date +%Y:%m:%e:)"
-                                + "12:07:32"
-                                + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+        doReturn(fakeCreationTime).when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/" + fakePid);
 
         assertEquals(Integer.parseInt(fakePid), spy.getProcessByName("system_server").getPid());
@@ -2603,12 +2598,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
-        doReturn("1559091922")
-                .when(spy)
-                .executeShellCommand(
-                        "date -d \"$(date +%Y:%m:%e:)"
-                                + "12:07:32"
-                                + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+        doReturn("1559091922").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
                         "kernel_panic,1556587278\n"
@@ -2640,12 +2630,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
-        doReturn("1559091999")
-                .when(spy)
-                .executeShellCommand(
-                        "date -d \"$(date +%Y:%m:%e:)"
-                                + "12:07:32"
-                                + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+        doReturn("1559091999").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
                         "kernel_panic,1559091933\n"
@@ -2670,12 +2655,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
-        doReturn("1559091939")
-                .when(spy)
-                .executeShellCommand(
-                        "date -d \"$(date +%Y:%m:%e:)"
-                                + "12:07:32"
-                                + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+        doReturn("1559091939").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
                         "reboot,1559091933\n"
@@ -2694,12 +2674,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
-        doReturn("1559091992")
-                .when(spy)
-                .executeShellCommand(
-                        "date -d \"$(date +%Y:%m:%e:)"
-                                + "12:07:32"
-                                + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+        doReturn("1559091992").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
                         "reboot,1559091933\n"
@@ -2720,12 +2695,7 @@ public class NativeDeviceTest {
         ProcessInfo prev2 = new ProcessInfo("system", 914, "system_server", 1559091922L);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
-        doReturn("1559091922")
-                .when(spy)
-                .executeShellCommand(
-                        "date -d \"$(date +%Y:%m:%e:)"
-                                + "12:07:32"
-                                + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+        doReturn("1559091922").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
                         "kernel_panic,1556587278\n"
@@ -2755,12 +2725,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
-        doReturn("1559091999")
-                .when(spy)
-                .executeShellCommand(
-                        "date -d \"$(date +%Y:%m:%e:)"
-                                + "12:07:32"
-                                + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+        doReturn("1559091999").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
                         "kernel_panic,1559091933\n"
@@ -2785,12 +2750,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
-        doReturn("1559091935")
-                .when(spy)
-                .executeShellCommand(
-                        "date -d \"$(date +%Y:%m:%e:)"
-                                + "12:07:32"
-                                + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+        doReturn("1559091935").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
                         "reboot,,1559091933\n"
@@ -2811,12 +2771,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
-        doReturn("1559091995")
-                .when(spy)
-                .executeShellCommand(
-                        "date -d \"$(date +%Y:%m:%e:)"
-                                + "12:07:32"
-                                + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+        doReturn("1559091995").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
                         "reboot,,1559091933\n"
