@@ -1,4 +1,3 @@
-package com.android.tradefed.util;
 /*
  * Copyright (C) 2010 The Android Open Source Project
  *
@@ -14,9 +13,8 @@ package com.android.tradefed.util;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.android.tradefed.util;
 
-
-import com.android.ddmlib.Log;
 import com.android.tradefed.command.FatalHostError;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.error.IHarnessException;
@@ -62,7 +60,6 @@ import java.util.zip.ZipFile;
  */
 public class FileUtil {
 
-    private static final String LOG_TAG = "FileUtil";
     /**
      * The minimum allowed disk space in megabytes. File creation methods will throw
      * {@link LowDiskSpaceException} if the usable disk space in desired partition is less than
@@ -161,7 +158,7 @@ public class FileUtil {
             // parent doesn't exist.  recurse upward, which should both mkdir and chmod
             if (!mkdirsRWX(parent)) {
                 // Couldn't mkdir parent, fail
-                Log.w(LOG_TAG, String.format("Failed to mkdir parent dir %s.", parent));
+                CLog.w("Failed to mkdir parent dir %s.", parent);
                 return false;
             }
         }
@@ -171,7 +168,7 @@ public class FileUtil {
             // file should exist.  Try chmod and complain if that fails, but keep going
             boolean setPerms = chmodGroupRWX(file);
             if (!setPerms) {
-                Log.w(LOG_TAG, String.format("Failed to set dir %s to be group accessible.", file));
+                CLog.w("Failed to set dir %s to be group accessible.", file);
             }
         }
 
@@ -230,12 +227,11 @@ public class FileUtil {
             if (chmod(file, "ug+rw")) {
                 return true;
             } else {
-                Log.d(LOG_TAG, String.format("Failed chmod on %s", file.getAbsolutePath()));
+                CLog.d("Failed chmod on %s", file.getAbsolutePath());
                 return false;
             }
         } else {
-            Log.d(LOG_TAG, String.format("chmod not available; "
-                    + "attempting to set %s globally RW", file.getAbsolutePath()));
+            CLog.d("chmod not available; attempting to set %s globally RW", file.getAbsolutePath());
             return file.setWritable(true, false /* false == writable for all */) &&
                     file.setReadable(true, false /* false == readable for all */);
         }
@@ -255,12 +251,13 @@ public class FileUtil {
             if (chmod(file, "ug+rwx")) {
                 return true;
             } else {
-                Log.d(LOG_TAG, String.format("Failed chmod on %s", file.getAbsolutePath()));
+                CLog.d("Failed chmod on %s", file.getAbsolutePath());
                 return false;
             }
         } else {
-            Log.d(LOG_TAG, String.format("chmod not available; "
-                    + "attempting to set %s globally RWX", file.getAbsolutePath()));
+            CLog.d(
+                    "chmod not available; attempting to set %s globally RWX",
+                    file.getAbsolutePath());
             return file.setExecutable(true, false /* false == executable for all */) &&
                     file.setWritable(true, false /* false == writable for all */) &&
                     file.setReadable(true, false /* false == readable for all */);

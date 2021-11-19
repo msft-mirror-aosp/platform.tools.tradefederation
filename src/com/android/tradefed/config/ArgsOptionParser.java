@@ -15,7 +15,7 @@
  */
 package com.android.tradefed.config;
 
-import com.android.ddmlib.Log;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.keystore.DryRunKeyStore;
@@ -136,7 +136,6 @@ import java.util.regex.Pattern;
  * @see OptionSetter
  */
 public class ArgsOptionParser extends OptionSetter {
-    private static final String LOG_TAG = "ArgsOptionParser";
 
     static final String SHORT_NAME_PREFIX = "-";
     static final String OPTION_NAME_PREFIX = "--";
@@ -538,8 +537,7 @@ public class ArgsOptionParser extends OptionSetter {
             case ALWAYS:
                 return true;
         }
-        Log.e(LOG_TAG, String.format("Unrecognized importance setting '%s'",
-                option.importance().toString()));
+        CLog.e("Unrecognized importance setting '%s'", option.importance().toString());
         return false;
     }
 

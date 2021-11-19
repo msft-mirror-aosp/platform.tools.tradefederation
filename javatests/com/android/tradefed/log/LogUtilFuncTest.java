@@ -18,13 +18,13 @@ package com.android.tradefed.log;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+
+import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.log.LogUtil.CLog;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import com.android.ddmlib.Log;
-import com.android.ddmlib.Log.LogLevel;
-import com.android.tradefed.log.LogUtil.CLog;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,35 +38,30 @@ public class LogUtilFuncTest {
 
     @Test
     public void testCLog_v() {
-        Log.v(CLASS_NAME, "this is the real Log.v");
         CLog.v("this is CLog.v");
         CLog.v("this is CLog.v with a format string: %s has length %d", STRING, STRING.length());
     }
 
     @Test
     public void testCLog_d() {
-        Log.d(CLASS_NAME, "this is the real Log.d");
         CLog.d("this is CLog.d");
         CLog.d("this is CLog.d with a format string: %s has length %d", STRING, STRING.length());
     }
 
     @Test
     public void testCLog_i() {
-        Log.i(CLASS_NAME, "this is the real Log.i");
         CLog.i("this is CLog.i");
         CLog.i("this is CLog.i with a format string: %s has length %d", STRING, STRING.length());
     }
 
     @Test
     public void testCLog_w() {
-        Log.w(CLASS_NAME, "this is the real Log.w");
         CLog.w("this is CLog.w");
         CLog.w("this is CLog.w with a format string: %s has length %d", STRING, STRING.length());
     }
 
     @Test
     public void testCLog_e() {
-        Log.e(CLASS_NAME, "this is the real Log.e");
         CLog.e("this is CLog.e");
         CLog.e("this is CLog.e with a format string: %s has length %d", STRING, STRING.length());
     }

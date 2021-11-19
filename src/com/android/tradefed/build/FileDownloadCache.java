@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.build;
 
-import com.android.ddmlib.Log;
 import com.android.tradefed.command.FatalHostError;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
@@ -48,8 +47,6 @@ import java.util.concurrent.locks.ReentrantLock;
  * A helper class that maintains a local filesystem LRU cache of downloaded files.
  */
 public class FileDownloadCache {
-
-    private static final String LOG_TAG = "FileDownloadCache";
 
     private static final char REL_PATH_SEPARATOR = '/';
 
@@ -112,8 +109,7 @@ public class FileDownloadCache {
     FileDownloadCache(File cacheRoot) {
         mCacheRoot = cacheRoot;
         if (!mCacheRoot.exists()) {
-            Log.d(LOG_TAG, String.format("Creating file cache at %s",
-                    mCacheRoot.getAbsolutePath()));
+            CLog.d("Creating file cache at %s", mCacheRoot.getAbsolutePath());
             if (!mCacheRoot.mkdirs()) {
                 throw new FatalHostError(String.format("Could not create cache directory at %s",
                         mCacheRoot.getAbsolutePath()));
@@ -121,11 +117,7 @@ public class FileDownloadCache {
         } else {
             mCacheMapLock.lock();
             try {
-                Log.d(
-                        LOG_TAG,
-                        String.format(
-                                "Building file cache from contents at %s",
-                                mCacheRoot.getAbsolutePath()));
+                CLog.d("Building file cache from contents at %s", mCacheRoot.getAbsolutePath());
                 // create an unsorted list of all the files in mCacheRoot. Need to create list first
                 // rather than inserting in Map directly because Maps cannot be sorted
                 List<FilePair> cacheEntryList = new LinkedList<FilePair>();
@@ -179,8 +171,7 @@ public class FileDownloadCache {
                 relPath.append(childFile.getName());
                 cacheEntryList.add(new FilePair(relPath.toString(), childFile));
             } else {
-                Log.w(LOG_TAG, String.format("Unrecognized file type %s in cache",
-                        childFile.getAbsolutePath()));
+                CLog.w("Unrecognized file type %s in cache", childFile.getAbsolutePath());
             }
         }
     }
@@ -355,11 +346,9 @@ public class FileDownloadCache {
                         && cachedFile.exists()
                         && (cachedFile.length() == 0L
                                 || !downloader.isFresh(cachedFile, remotePath))) {
-                    Log.d(
-                            LOG_TAG,
-                            String.format(
-                                    "Cached file %s for %s is out of date, re-download.",
-                                    cachedFile, remotePath));
+                    CLog.d(
+                            "Cached file %s for %s is out of date, re-download.",
+                            cachedFile, remotePath);
                     FileUtil.recursiveDelete(cachedFile);
                     download = true;
                 }
@@ -371,11 +360,9 @@ public class FileDownloadCache {
                     }
                     downloadFile(downloader, remotePath, cachedFile);
                 } else {
-                    Log.d(
-                            LOG_TAG,
-                            String.format(
-                                    "Retrieved remote file %s from cached file %s",
-                                    remotePath, cachedFile.getAbsolutePath()));
+                    CLog.d(
+                            "Retrieved remote file %s from cached file %s",
+                            remotePath, cachedFile.getAbsolutePath());
                 }
                 copyFile = copyFile(remotePath, cachedFile, destFile);
             } catch (BuildRetrievalError | RuntimeException e) {
@@ -397,7 +384,7 @@ public class FileDownloadCache {
     /** Do the actual file download, clean up on exception is done by the caller. */
     private void downloadFile(IFileDownloader downloader, String remotePath, File cachedFile)
             throws BuildRetrievalError {
-        Log.d(LOG_TAG, String.format("Downloading %s to cache", remotePath));
+        CLog.d("Downloading %s to cache", remotePath);
         downloader.downloadFile(remotePath, cachedFile);
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.ARTIFACTS_DOWNLOAD_SIZE, cachedFile.length());
@@ -478,12 +465,12 @@ public class FileDownloadCache {
             // audit cache size
             if (mCurrentCacheSize < 0) {
                 // should never happen
-                Log.e(LOG_TAG, "Cache size is less than 0!");
+                CLog.e("Cache size is less than 0!");
                 // TODO: throw fatal error?
             } else if (mCurrentCacheSize > getMaxFileCacheSize()) {
                 // May occur if the cache is configured to be too small or if mCurrentCacheSize is
                 // accounting for non-existent files.
-                Log.w(LOG_TAG, "File cache is over-capacity.");
+                CLog.w("File cache is over-capacity.");
             }
         } finally {
             mCacheMapLock.unlock();

@@ -16,8 +16,6 @@
 
 package com.android.tradefed.result;
 
-import com.android.ddmlib.Log;
-import com.android.ddmlib.Log.LogLevel;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -49,8 +47,6 @@ import java.util.TimeZone;
  */
 @OptionClass(alias = "xml")
 public class XmlResultReporter extends CollectingTestListener implements ILogSaverListener {
-
-    private static final String LOG_TAG = "XmlResultReporter";
 
     private static final String TEST_RESULT_FILE_PREFIX = "test_result_";
 
@@ -114,11 +110,11 @@ public class XmlResultReporter extends CollectingTestListener implements ILogSav
             LogFile log = mLogSaver.saveLogData(TEST_RESULT_FILE_PREFIX, LogDataType.XML,
                     inputStream);
 
-            String msg = String.format("XML test result file generated at %s. Total tests %d, " +
-                    "Failed %d", log.getPath(), getNumTotalTests(), getNumAllFailedTests());
-            Log.logAndDisplay(LogLevel.INFO, LOG_TAG, msg);
+            CLog.i(
+                    "XML test result file generated at %s. Total tests %d, " + "Failed %d",
+                    log.getPath(), getNumTotalTests(), getNumAllFailedTests());
         } catch (IOException e) {
-            Log.e(LOG_TAG, "Failed to generate report data");
+            CLog.e("Failed to generate report data");
             // TODO: consider throwing exception
         } finally {
             StreamUtil.close(outputStream);
@@ -217,8 +213,7 @@ public class XmlResultReporter extends CollectingTestListener implements ILogSav
     @Override
     public void testLogSaved(String dataName, LogDataType dataType, InputStreamSource dataStream,
             LogFile logFile) {
-        Log.logAndDisplay(LogLevel.INFO, LOG_TAG, String.format("Saved %s log to %s", dataName,
-                logFile.getPath()));
+        CLog.i("Saved %s log to %s", dataName, logFile.getPath());
     }
 
     /**

@@ -18,10 +18,10 @@ package com.android.tradefed.testtype;
 
 import static org.mockito.Mockito.verify;
 
-import com.android.ddmlib.Log;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
@@ -40,7 +40,6 @@ import java.util.HashMap;
 @RunWith(DeviceJUnit4ClassRunner.class)
 public class GTestFuncTest implements IDeviceTest {
 
-    private static final String LOG_TAG = "GTestFuncTest";
     private GTest mGTest = null;
     @Mock ITestInvocationListener mMockListener;
     private TestInformation mTestInfo;
@@ -83,7 +82,7 @@ public class GTestFuncTest implements IDeviceTest {
     public void testRun() throws DeviceNotAvailableException {
         HashMap<String, Metric> emptyMap = new HashMap<>();
         mGTest.setModuleName(NATIVE_SAMPLETEST_MODULE_NAME);
-        Log.i(LOG_TAG, "testRun");
+        CLog.i("testRun");
 
         String[][] allTests = {
             {"FibonacciTest", "testRecursive_One"},
@@ -143,7 +142,7 @@ public class GTestFuncTest implements IDeviceTest {
     /** Test run scenario where test process crashes while trying to access NULL ptr. */
     @Test
     public void testRun_testCrash() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testRun_testCrash");
+        CLog.i("testRun_testCrash");
         TestDescription testId =
                 new TestDescription(
                         NATIVE_TESTAPP_GTEST_CLASSNAME, NATIVE_TESTAPP_GTEST_CRASH_METHOD);
@@ -159,7 +158,7 @@ public class GTestFuncTest implements IDeviceTest {
     /** Test run scenario where device reboots during test run. */
     @Test
     public void testRun_deviceReboot() throws Exception {
-        Log.i(LOG_TAG, "testRun_deviceReboot");
+        CLog.i("testRun_deviceReboot");
 
         TestDescription testId =
                 new TestDescription(
@@ -184,9 +183,9 @@ public class GTestFuncTest implements IDeviceTest {
                                                     "adb -s %s reboot",
                                                     getDevice().getIDevice().getSerialNumber()));
                         } catch (InterruptedException e) {
-                            Log.w(LOG_TAG, "interrupted");
+                            CLog.w("interrupted");
                         } catch (IOException e) {
-                            Log.w(LOG_TAG, "IOException when rebooting");
+                            CLog.w("IOException when rebooting");
                         }
                     }
                 };
@@ -199,7 +198,7 @@ public class GTestFuncTest implements IDeviceTest {
     /** Test run scenario where test timesout. */
     @Test
     public void testRun_timeout() throws Exception {
-        Log.i(LOG_TAG, "testRun_timeout");
+        CLog.i("testRun_timeout");
 
         TestDescription testId =
                 new TestDescription(
