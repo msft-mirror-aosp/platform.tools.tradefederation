@@ -1404,17 +1404,25 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public boolean doesFileExist(String deviceFilePath) throws DeviceNotAvailableException {
-        if (isSdcardOrEmulated(deviceFilePath)) {
-            ContentProviderHandler handler = getContentProvider();
-            if (handler != null) {
-                CLog.d("Delegating check to ContentProvider doesFileExist(%s)", deviceFilePath);
-
-                return handler.doesFileExist(deviceFilePath);
+        long startTime = System.currentTimeMillis();
+        try {
+            if (isSdcardOrEmulated(deviceFilePath)) {
+                ContentProviderHandler handler = getContentProvider();
+                if (handler != null) {
+                    CLog.d("Delegating check to ContentProvider doesFileExist(%s)", deviceFilePath);
+                    return handler.doesFileExist(deviceFilePath);
+                }
             }
+            CLog.d("Using 'ls' to check doesFileExist(%s)", deviceFilePath);
+            String lsGrep = executeShellCommand(String.format("ls \"%s\"", deviceFilePath));
+            return !lsGrep.contains("No such file or directory");
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DOES_FILE_EXISTS_TIME,
+                    System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DOES_FILE_EXISTS_COUNT, 1);
         }
-        CLog.d("Using 'ls' to check doesFileExist(%s)", deviceFilePath);
-        String lsGrep = executeShellCommand(String.format("ls \"%s\"", deviceFilePath));
-        return !lsGrep.contains("No such file or directory");
     }
 
     /** {@inheritDoc} */
