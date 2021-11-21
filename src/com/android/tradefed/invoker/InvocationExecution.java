@@ -271,8 +271,8 @@ public class InvocationExecution implements IInvocationExecution {
             InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP, setupDuration);
             CLog.d("Setup duration: %s'", TimeUtil.formatElapsedTime(setupDuration));
             // Upload the setup logcat after setup is complete.
-            for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
-                reportLogs(testInfo.getContext().getDevice(deviceName), listener, Stage.SETUP);
+            for (ITestDevice device : testInfo.getDevices()) {
+                reportLogs(device, listener, Stage.SETUP);
             }
         }
     }
