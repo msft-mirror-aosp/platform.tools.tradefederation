@@ -15,8 +15,8 @@
  */
 package com.android.tradefed.util;
 
-import com.android.ddmlib.Log;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 
 import java.util.ArrayList;
@@ -24,7 +24,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class QuotationAwareTokenizer {
-    private static final String LOG_TAG = "TOKEN";
 
     /**
      * Tokenizes the string, splitting on specified delimiter. Does not split between consecutive,
@@ -183,7 +182,7 @@ public class QuotationAwareTokenizer {
 
     private static void log(String message, boolean display) {
         if (display) {
-            Log.v(LOG_TAG, message);
+            CLog.v(message);
         }
     }
 }

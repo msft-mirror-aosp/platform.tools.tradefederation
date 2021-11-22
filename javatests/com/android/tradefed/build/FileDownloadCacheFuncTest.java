@@ -23,7 +23,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
-import com.android.ddmlib.Log;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.RunUtil;
@@ -53,7 +53,6 @@ public class FileDownloadCacheFuncTest {
 
     private static final String REMOTE_PATH = "path";
     private static final String DOWNLOADED_CONTENTS = "downloaded contents";
-    protected static final String LOG_TAG = "FileDownloadCacheFuncTest";
 
     @Mock IFileDownloader mMockDownloader;
 
@@ -329,7 +328,7 @@ public class FileDownloadCacheFuncTest {
                 try {
                     mReturnedFiles.add(mCache.fetchRemoteFile(downloader, remotePath));
                 } catch (BuildRetrievalError e) {
-                    Log.e(LOG_TAG, e);
+                    CLog.e(e);
                 }
             }
         };

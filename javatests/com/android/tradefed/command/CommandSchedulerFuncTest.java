@@ -23,7 +23,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.Log;
 import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.DeviceConfigurationHolder;
@@ -67,7 +66,6 @@ import java.util.List;
 @RunWith(JUnit4.class)
 public class CommandSchedulerFuncTest {
 
-    private static final String LOG_TAG = "CommandSchedulerFuncTest";
     private static final long WAIT_TIMEOUT_MS = 30 * 1000;
     /** the {@link CommandScheduler} under test, with all dependencies mocked out */
     private CommandScheduler mCommandScheduler;
@@ -206,11 +204,9 @@ public class CommandSchedulerFuncTest {
         mCommandScheduler.shutdown();
         mCommandScheduler.join(WAIT_TIMEOUT_MS);
 
-        Log.i(
-                LOG_TAG,
-                String.format(
-                        "fast times %d slow times %d",
-                        mMockTestInvoker.mFastCount, mMockTestInvoker.mSlowCount));
+        CLog.i(
+                "fast times %d slow times %d",
+                mMockTestInvoker.mFastCount, mMockTestInvoker.mSlowCount);
         // assert that fast config has executed roughly twice as much as slow config. Allow for
         // some variance since the execution time of each config (governed via Thread.sleep) will
         // not be 100% accurate
