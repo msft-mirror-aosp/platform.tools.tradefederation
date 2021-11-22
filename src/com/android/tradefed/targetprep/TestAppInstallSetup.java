@@ -376,6 +376,10 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
 
         if (mUserId == null && testInfo.properties().get(RUN_TESTS_AS_USER_KEY) != null) {
             mUserId = Integer.parseInt(testInfo.properties().get(RUN_TESTS_AS_USER_KEY));
+            if (!testInfo.getDevice().getUserInfos().containsKey(mUserId)) {
+                CLog.w("User requested: %s doesn't exist on device. Ignoring it.", mUserId);
+                mUserId = null;
+            }
         }
 
         if (mForceQueryable && getDevice().isAppEnumerationSupported()) {

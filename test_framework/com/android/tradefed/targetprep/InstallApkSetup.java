@@ -16,7 +16,6 @@
 
 package com.android.tradefed.targetprep;
 
-import com.android.ddmlib.Log;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
@@ -45,8 +44,6 @@ import java.util.concurrent.TimeUnit;
  */
 @OptionClass(alias = "install-apk")
 public class InstallApkSetup extends BaseTargetPreparer {
-
-    private static final String LOG_TAG = InstallApkSetup.class.getSimpleName();
 
     @Option(name = "apk-path", description =
             "the filesystem path of the apk to install. Can be repeated.",
@@ -91,8 +88,7 @@ public class InstallApkSetup extends BaseTargetPreparer {
                 throw new TargetSetupError(String.format("%s does not exist",
                         apk.getAbsolutePath()), device.getDeviceDescriptor());
             }
-            Log.i(LOG_TAG, String.format("Installing %s on %s", apk.getName(),
-                    device.getSerialNumber()));
+            CLog.i("Installing %s on %s", apk.getName(), device.getSerialNumber());
             if (mForceAbi != null) {
                 String abi = AbiFormatter.getDefaultAbi(device, mForceAbi);
                 if (abi != null) {
@@ -111,8 +107,9 @@ public class InstallApkSetup extends BaseTargetPreparer {
                             apk.getAbsolutePath(), device.getSerialNumber(), result),
                             device.getDeviceDescriptor());
                 }
-                Log.e(LOG_TAG, String.format("Failed to install %s on device %s. Reason: %s",
-                        apk.getAbsolutePath(), device.getSerialNumber(), result));
+                CLog.e(
+                        "Failed to install %s on device %s. Reason: %s",
+                        apk.getAbsolutePath(), device.getSerialNumber(), result);
             }
         }
 

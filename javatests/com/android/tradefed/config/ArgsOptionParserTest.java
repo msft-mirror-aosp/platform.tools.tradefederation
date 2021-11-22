@@ -25,6 +25,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.Option.Importance;
+import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
 import com.android.tradefed.util.keystore.StubKeyStoreClient;
 
@@ -51,6 +52,22 @@ public class ArgsOptionParserTest {
 
         @Option(name = OPTION_NAME, shortName = 'o', description = OPTION_DESC)
         private String mMyOption = DEFAULT_VALUE;
+    }
+
+    /** An option source with two {@link Option} specified. */
+    private static class TwoOptionSource {
+
+        private static final String DEFAULT_VALUE_ONE = "defaultOne";
+        private static final String OPTION_NAME_ONE = "my_option_one";
+
+        private static final String DEFAULT_VALUE_TWO = "defaultTwo";
+        private static final String OPTION_NAME_TWO = "my_option_two";
+
+        @Option(name = OPTION_NAME_ONE)
+        private String mMyOptionOne = DEFAULT_VALUE_ONE;
+
+        @Option(name = OPTION_NAME_TWO)
+        private String mMyOptionTwo = DEFAULT_VALUE_TWO;
     }
 
     /** An option source with one {@link Option} specified. */
@@ -681,6 +698,25 @@ public class ArgsOptionParserTest {
         } catch (ConfigurationException e) {
             // expected
         }
+    }
+
+    /**
+     * Test passing two arguments with extra space between them for an object that has two options
+     * specified.
+     */
+    @Test
+    public void testParse_twoArgsExtraspace()
+            throws ConfigurationException, IllegalArgumentException {
+        TwoOptionSource object = new TwoOptionSource();
+        ArgsOptionParser parser = new ArgsOptionParser(object);
+        final String expectedValueOne = "one";
+        final String expectedValueTwo = "two";
+        final String args =
+                "--my_option_one " + expectedValueOne + "  --my_option_two " + expectedValueTwo;
+        parser.parse(QuotationAwareTokenizer.tokenizeLine(args));
+
+        assertEquals(expectedValueOne, object.mMyOptionOne);
+        assertEquals(expectedValueTwo, object.mMyOptionTwo);
     }
 
     // SECTION: tests for #parseBestEffort(...)

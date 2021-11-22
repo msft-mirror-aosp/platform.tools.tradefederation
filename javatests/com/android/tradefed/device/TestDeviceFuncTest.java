@@ -27,7 +27,6 @@ import static org.junit.Assume.assumeFalse;
 import static org.mockito.Mockito.mock;
 
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.Log;
 import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.TestAppConstants;
@@ -71,7 +70,6 @@ import javax.imageio.ImageIO;
 @RunWith(DeviceJUnit4ClassRunner.class)
 public class TestDeviceFuncTest implements IDeviceTest {
 
-    private static final String LOG_TAG = "TestDeviceFuncTest";
     private TestDevice mTestDevice;
     private IDeviceStateMonitor mMonitor;
     /** Expect bugreports to be at least a meg. */
@@ -147,7 +145,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
      */
     @Test
     public void testExecuteShellCommand() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testExecuteShellCommand");
+        CLog.i("testExecuteShellCommand");
         assertSimpleShellCommand();
     }
 
@@ -163,7 +161,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
     /** Test install and uninstall of package */
     @Test
     public void testInstallUninstall() throws IOException, DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testInstallUninstall");
+        CLog.i("testInstallUninstall");
         // use the wifi util apk
         File tmpFile = WifiHelper.extractWifiUtilApk();
         try {
@@ -198,7 +196,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
     /** Test install and uninstall of package with spaces in file name */
     @Test
     public void testInstallUninstall_space() throws IOException, DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testInstallUninstall_space");
+        CLog.i("testInstallUninstall_space");
 
         File tmpFile = WifiHelper.extractWifiUtilApk();
         File tmpFileSpaces = null;
@@ -215,7 +213,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
     /** Push and then pull a file from device, and verify contents are as expected. */
     @Test
     public void testPushPull_normal() throws IOException, DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testPushPull");
+        CLog.i("testPushPull");
         File tmpFile = null;
         File tmpDestFile = null;
         String deviceFilePath = null;
@@ -254,7 +252,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
      */
     @Test
     public void testPushPull_extStorageVariable() throws IOException, DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testPushPull");
+        CLog.i("testPushPull");
         File tmpFile = null;
         File tmpDestFile = null;
         File tmpDestFile2 = null;
@@ -298,7 +296,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
      */
     @Test
     public void testPull_noexist() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testPull_noexist");
+        CLog.i("testPull_noexist");
 
         // make sure the root path is valid
         String externalStorePath = mTestDevice.getMountPoint(IDevice.MNT_EXTERNAL_STORAGE);
@@ -349,7 +347,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
      */
     @Test
     public void testPush_noexist() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testPush_noexist");
+        CLog.i("testPush_noexist");
 
         // make sure the root path is valid
         String externalStorePath = mTestDevice.getMountPoint(IDevice.MNT_EXTERNAL_STORAGE);
@@ -542,9 +540,9 @@ public class TestDeviceFuncTest implements IDeviceTest {
      */
     @Test
     public void testExecuteFastbootCommand_deviceInAdb() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testExecuteFastbootCommand_deviceInAdb");
+        CLog.i("testExecuteFastbootCommand_deviceInAdb");
         if (!mTestDevice.isFastbootEnabled()) {
-            Log.i(LOG_TAG, "Fastboot not enabled skipping testExecuteFastbootCommand_deviceInAdb");
+            CLog.i("Fastboot not enabled skipping testExecuteFastbootCommand_deviceInAdb");
             return;
         }
 
@@ -573,9 +571,9 @@ public class TestDeviceFuncTest implements IDeviceTest {
      */
     @Test
     public void testExecuteFastbootCommand_badCommand() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testExecuteFastbootCommand_badCommand");
+        CLog.i("testExecuteFastbootCommand_badCommand");
         if (!mTestDevice.isFastbootEnabled()) {
-            Log.i(LOG_TAG, "Fastboot not enabled skipping testExecuteFastbootCommand_badCommand");
+            CLog.i("Fastboot not enabled skipping testExecuteFastbootCommand_badCommand");
             return;
         }
 
@@ -602,9 +600,9 @@ public class TestDeviceFuncTest implements IDeviceTest {
     /** Verify device can be rebooted into bootloader and back to adb. */
     @Test
     public void testRebootIntoBootloader() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testRebootIntoBootloader");
+        CLog.i("testRebootIntoBootloader");
         if (!mTestDevice.isFastbootEnabled()) {
-            Log.i(LOG_TAG, "Fastboot not enabled skipping testRebootInBootloader");
+            CLog.i("Fastboot not enabled skipping testRebootInBootloader");
             return;
         }
 
@@ -622,7 +620,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
     /** Verify device can be rebooted into adb. */
     @Test
     public void testReboot() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testReboot");
+        CLog.i("testReboot");
         mTestDevice.reboot();
         assertEquals(TestDeviceState.ONLINE, mMonitor.getDeviceState());
         // check that device has root
@@ -632,9 +630,9 @@ public class TestDeviceFuncTest implements IDeviceTest {
     /** Verify device can be rebooted into adb recovery. */
     @Test
     public void testRebootIntoRecovery() throws Exception {
-        Log.i(LOG_TAG, "testRebootIntoRecovery");
+        CLog.i("testRebootIntoRecovery");
         if (!mTestDevice.isFastbootEnabled()) {
-            Log.i(LOG_TAG, "Fastboot not enabled skipping testRebootInRecovery");
+            CLog.i("Fastboot not enabled skipping testRebootInRecovery");
             return;
         }
 
@@ -659,20 +657,20 @@ public class TestDeviceFuncTest implements IDeviceTest {
             }
             RunUtil.getDefault().sleep(1000);
         }
-        Log.i(LOG_TAG, "The system_server process fails to come up");
+        CLog.i("The system_server process fails to come up");
         return null;
     }
 
     /** Test device soft-restart detection API. */
     @Test
     public void testDeviceSoftRestart() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testDeviceSoftRestartSince");
+        CLog.i("testDeviceSoftRestartSince");
 
         // Get system_server process info
         ProcessInfo prev = mTestDevice.getProcessByName("system_server");
         long deviceTimeMs = mTestDevice.getDeviceDate();
         if (prev == null) {
-            Log.i(LOG_TAG, "System_server process does not exist. Abort testDeviceSoftRestart.");
+            CLog.i("System_server process does not exist. Abort testDeviceSoftRestart.");
             return;
         }
         assertFalse(mTestDevice.deviceSoftRestartedSince(prev.getStartTime(), TimeUnit.SECONDS));
@@ -716,7 +714,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
     @Ignore
     @Test
     public void testClearErrorDialogs_crash() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testClearErrorDialogs_crash");
+        CLog.i("testClearErrorDialogs_crash");
         // Ensure device is in a known state, we doing extra care here otherwise it may be flaky
         int retry = 5;
         mTestDevice.disableKeyguard();
@@ -750,7 +748,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
      */
     @Test
     public void testDisableKeyguard() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testDisableKeyguard");
+        CLog.i("testDisableKeyguard");
         getDevice().reboot();
         mTestDevice.waitForDeviceAvailable();
         // Bump from 3000 to reduce risk of racing "wm dismiss-keyguard"
@@ -782,7 +780,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
      */
     @Test
     public void testGetScreenshot() throws DeviceNotAvailableException, IOException {
-        CLog.i(LOG_TAG, "testGetScreenshot");
+        CLog.i("testGetScreenshot");
         InputStreamSource source = getDevice().getScreenshot();
         assertNotNull(source);
         File tmpPngFile = FileUtil.createTempFile("screenshot", ".png");
@@ -809,7 +807,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
      */
     @Test
     public void testGetLogcat_size() throws DeviceNotAvailableException, IOException {
-        CLog.i(LOG_TAG, "testGetLogcat_size");
+        CLog.i("testGetLogcat_size");
         for (int i = 0; i < 100; i++) {
             getDevice().executeShellCommand(String.format("log testGetLogcat_size log dump %d", i));
         }
@@ -885,7 +883,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
     @Test
     public void testGetFileEntry_recovery() throws Exception {
         if (!mTestDevice.isFastbootEnabled()) {
-            Log.i(LOG_TAG, "Fastboot not enabled skipping testGetFileEntry_recovery");
+            CLog.i("Fastboot not enabled skipping testGetFileEntry_recovery");
             return;
         }
 

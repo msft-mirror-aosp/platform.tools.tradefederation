@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.command.remote;
 
-import com.android.ddmlib.Log;
 
 import org.json.JSONException;
 
@@ -39,7 +38,6 @@ public class RemoteClient implements IRemoteClient {
     // popular program
     public static final int DEFAULT_PORT = 30103;
 
-    private static final String TAG = RemoteClient.class.getSimpleName();
     private final Socket mSocket;
     private final PrintWriter mWriter;
     private final BufferedReader mReader;
@@ -78,7 +76,6 @@ public class RemoteClient implements IRemoteClient {
      */
     private synchronized <T> T sendOperation(RemoteOperation<T> op) throws RemoteException {
        try {
-           Log.d(TAG, String.format("Sending remote op %s", op.getType()));
            mWriter.println(op.pack());
            String response = mReader.readLine();
            if (response == null) {
@@ -253,7 +250,7 @@ public class RemoteClient implements IRemoteClient {
             try {
                 mSocket.close();
             } catch (IOException e) {
-                Log.w(TAG, String.format("exception closing socket: %s", e.toString()));
+                // Ignore exception
             }
         }
         if (mWriter != null) {

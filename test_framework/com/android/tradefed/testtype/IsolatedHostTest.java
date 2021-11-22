@@ -17,8 +17,6 @@ package com.android.tradefed.testtype;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
@@ -42,6 +40,7 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ResourceUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.SystemUtil;
@@ -51,7 +50,6 @@ import com.google.common.annotations.VisibleForTesting;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.ProcessBuilder.Redirect;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -83,8 +81,7 @@ public class IsolatedHostTest
                 IBuildReceiver,
                 ITestAnnotationFilterReceiver,
                 ITestFilterReceiver,
-                ITestCollector,
-                IConfigurationReceiver {
+                ITestCollector {
     @Option(
             name = "class",
             description =
@@ -171,13 +168,10 @@ public class IsolatedHostTest
     private File mSubprocessLog;
     private File mWorkDir;
     private boolean mReportedFailure = false;
-    private IConfiguration mConfiguration;
 
     private static final String ROOT_DIR = "ROOT_DIR";
     private ServerSocket mServer = null;
 
-    private File mCoverageDestination;
-    private File mAgent;
     private File mIsolationJar;
 
     /** {@inheritDoc} */
@@ -185,8 +179,6 @@ public class IsolatedHostTest
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         mReportedFailure = false;
-        mCoverageDestination = null;
-        mAgent = null;
         try {
             mServer = new ServerSocket(0);
             mServer.setSoTimeout(mSocketTimeout);
@@ -259,15 +251,6 @@ public class IsolatedHostTest
             }
         } finally {
             FileUtil.deleteFile(mIsolationJar);
-            FileUtil.deleteFile(mAgent);
-            mAgent = null;
-            if (mCoverageDestination != null && mCoverageDestination.length() > 0) {
-                try (FileInputStreamSource source =
-                        new FileInputStreamSource(mCoverageDestination, true)) {
-                    listener.testLog("coverage", LogDataType.COVERAGE, source);
-                }
-                mCoverageDestination = null;
-            }
         }
     }
 
@@ -289,19 +272,6 @@ public class IsolatedHostTest
             String javaPath = javaExec.getAbsolutePath();
             cmdArgs.add(javaPath);
             CLog.v("Using java executable at %s", javaPath);
-        }
-        if (mConfiguration != null && mConfiguration.getCoverageOptions().isCoverageEnabled()) {
-            try {
-                mCoverageDestination = FileUtil.createTempFile("coverage", ".exec");
-                mAgent = extractJacocoAgent();
-                String javaAgent =
-                        String.format(
-                                "-javaagent:%s=destfile=%s",
-                                mAgent.getAbsolutePath(), mCoverageDestination.getAbsolutePath());
-                cmdArgs.add(javaAgent);
-            } catch (IOException e) {
-                CLog.e(e);
-            }
         }
         cmdArgs.add("-cp");
         cmdArgs.add(classpath);
@@ -369,8 +339,8 @@ public class IsolatedHostTest
         File testDir = findTestDirectory();
 
         try {
-            File isolationJar = getIsolationJar(CurrentInvocation.getWorkFolder());
-            paths.add(isolationJar.getAbsolutePath());
+            mIsolationJar = getIsolationJar(CurrentInvocation.getWorkFolder());
+            paths.add(mIsolationJar.getAbsolutePath());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -798,11 +768,6 @@ public class IsolatedHostTest
         mExcludeAnnotations.clear();
     }
 
-    @Override
-    public void setConfiguration(IConfiguration configuration) {
-        mConfiguration = configuration;
-    }
-
     /**
      * Copied over from HostTest to mimic its unit test harnessing.
      *
@@ -829,34 +794,17 @@ public class IsolatedHostTest
         return listener;
     }
 
-    /** Returns a {@link File} pointing to the jacoco args jar file extracted from the resources. */
-    private File extractJacocoAgent() throws IOException {
-        String jacocoAgentRes = "/jacoco/jacocoagent.jar";
-        InputStream jacocoAgentStream = getClass().getResourceAsStream(jacocoAgentRes);
-        if (jacocoAgentStream == null) {
-            throw new IOException("Could not find " + jacocoAgentRes);
-        }
-        File jacocoAgent = FileUtil.createTempFile("jacocoagent", ".jar");
-        FileUtil.writeToFile(jacocoAgentStream, jacocoAgent);
-        return jacocoAgent;
-    }
-
     private File getIsolationJar(File workDir) throws IOException {
-        try (InputStream jarFileStream = getClass().getResourceAsStream("/tradefed-isolation.jar");
-                InputStream qualifiedJarStream =
-                        getClass()
-                                .getResourceAsStream(
-                                        QUALIFIED_PATH + "/tradefed-isolation_deploy.jar")) {
-            if (jarFileStream == null && qualifiedJarStream == null) {
-                throw new RuntimeException("/tradefed-isolation.jar not found.");
-            }
-            mIsolationJar = FileUtil.createTempFile("tradefed-isolation", ".jar", workDir);
-            if (qualifiedJarStream != null) {
-                FileUtil.writeToFile(qualifiedJarStream, mIsolationJar);
-            } else {
-                FileUtil.writeToFile(jarFileStream, mIsolationJar);
-            }
-            return mIsolationJar;
+        File isolationJar = FileUtil.createTempFile("tradefed-isolation", ".jar", workDir);
+        boolean res =
+                ResourceUtil.extractResourceWithAltAsFile(
+                        "/tradefed-isolation.jar",
+                        QUALIFIED_PATH + "/tradefed-isolation_deploy.jar",
+                        isolationJar);
+        if (!res) {
+            FileUtil.deleteFile(isolationJar);
+            throw new RuntimeException("/tradefed-isolation.jar not found.");
         }
+        return isolationJar;
     }
 }

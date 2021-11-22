@@ -149,7 +149,7 @@ public class EventsLoggerListener implements ILogSaverListener {
     }
 
     private void writeToFile(String text) {
-        if (mLog == null) {
+        if (mLog == null || !mLog.exists()) {
             return;
         }
         try {

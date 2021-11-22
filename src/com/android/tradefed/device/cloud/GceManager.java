@@ -67,6 +67,7 @@ public class GceManager {
     public static final String GCE_INSTANCE_NAME_KEY = "gce-instance-name";
     public static final String GCE_HOSTNAME_KEY = "gce-hostname";
     public static final String GCE_INSTANCE_CLEANED_KEY = "gce-instance-clean-called";
+    public static final String GCE_IP_PRECONFIGURED_KEY = "gce-ip-pre-configured";
 
     private static final long BUGREPORT_TIMEOUT = 15 * 60 * 1000L;
     private static final long REMOTE_FILE_OP_TIMEOUT = 10 * 60 * 1000L;
@@ -173,8 +174,11 @@ public class GceManager {
                             mGceInstanceName,
                             HostAndPort.fromString(mGceHost)
                                     .withDefaultPort(mDeviceOptions.getRemoteAdbPort()));
+            mGceAvdInfo.setIpPreconfigured(ipDevice != null);
             return mGceAvdInfo;
         }
+
+        mBuildInfo.addBuildAttribute(GCE_IP_PRECONFIGURED_KEY, Boolean.toString(ipDevice != null));
 
         // If ipDevice is specified, skip collecting serial log as the host may not be GCE instance
         // If Oxygen cuttlefish is used, skip collecting serial log due to lack of access.
@@ -223,6 +227,7 @@ public class GceManager {
                     // can be shutdown.
                     mGceAvdInfo =
                             new GceAvdInfo(instanceName, null, null, errors, GceStatus.BOOT_FAIL);
+                    mGceAvdInfo.setIpPreconfigured(ipDevice != null);
                     return mGceAvdInfo;
                 }
                 throw new TargetSetupError(
@@ -236,6 +241,7 @@ public class GceManager {
                 if (mGceAvdInfo != null) {
                     // We always return the GceAvdInfo describing the instance when possible
                     // The caller can decide actions to be taken.
+                    mGceAvdInfo.setIpPreconfigured(ipDevice != null);
                     return mGceAvdInfo;
                 } else {
                     errors =
@@ -257,6 +263,7 @@ public class GceManager {
                 // process if needed.
                 mBuildInfo.addBuildAttribute(GCE_HOSTNAME_KEY, mGceAvdInfo.hostAndPort().getHost());
             }
+            mGceAvdInfo.setIpPreconfigured(ipDevice != null);
             return mGceAvdInfo;
         } catch (IOException e) {
             throw new TargetSetupError(
@@ -441,9 +448,18 @@ public class GceManager {
         if (mGceAvdInfo != null && mGceAvdInfo.hostAndPort() != null) {
             hostname = mGceAvdInfo.hostAndPort().getHost();
         }
+        boolean ipPreconfigured = false;
+        if (mGceAvdInfo != null) {
+            ipPreconfigured = mGceAvdInfo.isIpPreconfigured();
+        }
         try {
             boolean res =
-                    AcloudShutdown(getTestDeviceOptions(), getRunUtil(), instanceName, hostname);
+                    AcloudShutdown(
+                            getTestDeviceOptions(),
+                            getRunUtil(),
+                            instanceName,
+                            hostname,
+                            ipPreconfigured);
             // Be more lenient if instance name was not reported officially and we still attempt
             // to clean it.
             if (res || notFromGceAvd) {
@@ -455,6 +471,43 @@ public class GceManager {
         }
     }
 
+    protected static List<String> buildShutdownCommand(
+            File config,
+            TestDeviceOptions options,
+            String instanceName,
+            String hostname,
+            boolean isIpPreconfigured) {
+        List<String> gceArgs = ArrayUtil.list(options.getAvdDriverBinary().getAbsolutePath());
+        gceArgs.add("delete");
+        if (options.useOxygen()) {
+            if (Strings.isNullOrEmpty(hostname)) {
+                CLog.w("`hostname` is needed for releasing Oxygen cuttlefish.");
+                return null;
+            }
+            gceArgs.add("--oxygen");
+            gceArgs.add("--ip");
+            gceArgs.add(hostname);
+        }
+        if (options.getServiceAccountJsonKeyFile() != null) {
+            gceArgs.add("--service-account-json-private-key-path");
+            gceArgs.add(options.getServiceAccountJsonKeyFile().getAbsolutePath());
+        }
+        if (isIpPreconfigured) {
+            gceArgs.add("--host");
+            gceArgs.add(hostname);
+            gceArgs.add("--host-user");
+            gceArgs.add(options.getInstanceUser());
+            gceArgs.add("--host-ssh-private-key-path");
+            gceArgs.add(options.getSshPrivateKeyPath().getAbsolutePath());
+        } else {
+            gceArgs.add("--instance_names");
+            gceArgs.add(instanceName);
+            gceArgs.add("--config_file");
+            gceArgs.add(config.getAbsolutePath());
+        }
+        return gceArgs;
+    }
+
     /**
      * Actual Acloud run to shutdown the virtual device.
      *
@@ -462,40 +515,29 @@ public class GceManager {
      * @param runUtil The {@link IRunUtil} to run Acloud
      * @param instanceName The instance to shutdown.
      * @param hostname hostname of the instance, only used for Oxygen cuttlefish.
+     * @param isIpPreconfigured whether the AVD was created on a remote device with preconfigured IP
      * @return True if successful
      */
     public static boolean AcloudShutdown(
-            TestDeviceOptions options, IRunUtil runUtil, String instanceName, String hostname) {
-        List<String> gceArgs = ArrayUtil.list(options.getAvdDriverBinary().getAbsolutePath());
-        gceArgs.add("delete");
+            TestDeviceOptions options,
+            IRunUtil runUtil,
+            String instanceName,
+            String hostname,
+            boolean isIpPreconfigured) {
         // Add extra args.
-        File f = null;
         File config = null;
         try {
             config = FileUtil.createTempFile(options.getAvdConfigFile().getName(), "config");
-            if (options.useOxygen()) {
-                if (Strings.isNullOrEmpty(hostname)) {
-                    CLog.w("`hostname` is needed for releasing Oxygen cuttlefish.");
-                    return false;
-                }
-                gceArgs.add("--oxygen");
-                gceArgs.add("--ip");
-                gceArgs.add(hostname);
-            }
-            gceArgs.add("--instance_names");
-            gceArgs.add(instanceName);
-            gceArgs.add("--config_file");
             // Copy the config in case it comes from a dynamic file. In order to ensure Acloud has
             // the file until it's done with it.
             FileUtil.copyFile(options.getAvdConfigFile(), config);
-            gceArgs.add(config.getAbsolutePath());
-            if (options.getServiceAccountJsonKeyFile() != null) {
-                gceArgs.add("--service_account_json_private_key_path");
-                gceArgs.add(options.getServiceAccountJsonKeyFile().getAbsolutePath());
+            List<String> gceArgs =
+                    buildShutdownCommand(
+                            config, options, instanceName, hostname, isIpPreconfigured);
+            if (gceArgs == null) {
+                CLog.w("Shutdown command as <null>, see earlier logs for reasons.");
+                return false;
             }
-            f = FileUtil.createTempFile("gce_avd_driver", ".json");
-            gceArgs.add("--report_file");
-            gceArgs.add(f.getAbsolutePath());
             CLog.i("Tear down of GCE with %s", gceArgs.toString());
             if (options.waitForGceTearDown()) {
                 CommandResult cmd =
@@ -503,11 +545,13 @@ public class GceManager {
                                 options.getGceCmdTimeout(),
                                 gceArgs.toArray(new String[gceArgs.size()]));
                 FileUtil.deleteFile(config);
+                CLog.i(
+                        "GCE driver teardown output:\nstdout:%s\nstderr:%s",
+                        cmd.getStdout(), cmd.getStderr());
                 if (!CommandStatus.SUCCESS.equals(cmd.getStatus())) {
                     CLog.w(
-                            "Failed to tear down GCE %s with the following arg: %s."
-                                    + "\nstdout:%s\nstderr:%s",
-                            instanceName, gceArgs, cmd.getStdout(), cmd.getStderr());
+                            "Failed to tear down GCE %s with the following arg: %s.",
+                            instanceName, gceArgs);
                     return false;
                 }
             } else {
@@ -517,13 +561,11 @@ public class GceManager {
                 AcloudDeleteCleaner cleaner = new AcloudDeleteCleaner(p, config);
                 cleaner.start();
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException ioe) {
             CLog.e("failed to create log file for GCE Teardown");
-            CLog.e(e);
+            CLog.e(ioe);
             FileUtil.deleteFile(config);
             return false;
-        } finally {
-            FileUtil.deleteFile(f);
         }
         return true;
     }

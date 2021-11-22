@@ -16,7 +16,6 @@
 package com.android.tradefed.testtype.python;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.ddmlib.Log;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -340,7 +339,7 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
             }
 
             if (!Strings.isNullOrEmpty(result.getStdout())) {
-                CLog.logAndDisplay(Log.LogLevel.INFO, "\nstdout:\n%s", result.getStdout());
+                CLog.i("\nstdout:\n%s", result.getStdout());
                 try (InputStreamSource data =
                         new ByteArrayInputStreamSource(result.getStdout().getBytes())) {
                     listener.testLog(
@@ -350,7 +349,7 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
                 }
             }
             if (!Strings.isNullOrEmpty(result.getStderr())) {
-                CLog.logAndDisplay(Log.LogLevel.INFO, "\nstderr:\n%s", result.getStderr());
+                CLog.i("\nstderr:\n%s", result.getStderr());
             }
 
             File testOutputFile = stderrFile;

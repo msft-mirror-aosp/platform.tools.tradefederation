@@ -23,12 +23,15 @@ import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A receiver that translates proto TestRecord received into Tradefed events.
@@ -48,12 +51,12 @@ public class StreamProtoReceiver implements Closeable {
      */
     private long mExtraWaitTimeForEvents = 0L;
 
-    private boolean mJoinStarted = false;
+    private AtomicBoolean mJoinStarted = new AtomicBoolean(false);
     /**
      * Stop parsing events when this is set. This allows to avoid a thread parsing the events when
      * we don't expect them anymore.
      */
-    private boolean mStopParsing = false;
+    private AtomicBoolean mStopParsing = new AtomicBoolean(false);
 
     /**
      * Ctor.
@@ -200,9 +203,9 @@ public class StreamProtoReceiver implements Closeable {
 
     public boolean joinReceiver(long millis) {
         if (mEventReceiver != null) {
-            mJoinStarted = true;
+            mJoinStarted.set(true);
             try {
-                long waitTime = millis + mExtraWaitTimeForEvents;
+                long waitTime = getJoinTimeout(millis);
                 CLog.i(
                         "Waiting for events to finish being processed for %s",
                         TimeUtil.formatElapsedTime(waitTime));
@@ -215,7 +218,7 @@ public class StreamProtoReceiver implements Closeable {
                 CLog.e(e);
                 throw new RuntimeException(e);
             } finally {
-                mStopParsing = true;
+                mStopParsing.set(true);
             }
         }
         return true;
@@ -231,8 +234,13 @@ public class StreamProtoReceiver implements Closeable {
         return mParser.hasInvocationFailed();
     }
 
+    @VisibleForTesting
+    protected long getJoinTimeout(long millis) {
+        return millis + mExtraWaitTimeForEvents;
+    }
+
     private void parse(TestRecord receivedRecord) {
-        if (mStopParsing) {
+        if (mStopParsing.get()) {
             CLog.i(
                     "Skip parsing of %s. It came after joinReceiver.",
                     receivedRecord.getTestRecordId());
@@ -240,7 +248,7 @@ public class StreamProtoReceiver implements Closeable {
         }
         try {
             TestLevel level = mParser.processNewProto(receivedRecord);
-            if (TestLevel.MODULE.equals(level) && !mJoinStarted) {
+            if (TestLevel.MODULE.equals(level) && !mJoinStarted.get()) {
                 mExtraWaitTimeForEvents += PER_MODULE_EXTRA_WAIT_TIME_MS;
             }
         } catch (Throwable e) {
