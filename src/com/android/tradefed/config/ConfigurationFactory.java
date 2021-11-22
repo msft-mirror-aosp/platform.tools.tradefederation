@@ -16,7 +16,6 @@
 
 package com.android.tradefed.config;
 
-import com.android.ddmlib.Log;
 import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.config.yaml.ConfigurationYamlParser;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -63,7 +62,6 @@ public class ConfigurationFactory implements IConfigurationFactory {
     private static final Set<String> SUPPORTED_EXTENSIONS =
             ImmutableSortedSet.of(".xml", ".config");
 
-    private static final String LOG_TAG = "ConfigurationFactory";
     private static IConfigurationFactory sInstance = null;
     private static final String CONFIG_PREFIX = "config/";
     private static final String DRY_RUN_TEMPLATE_CONFIG = "empty";
@@ -865,9 +863,9 @@ public class ConfigurationFactory implements IConfigurationFactory {
             InputStream configStream = getConfigStream(configName);
             StreamUtil.copyStreams(configStream, out);
         } catch (ConfigurationException e) {
-            Log.e(LOG_TAG, e);
+            CLog.e(e);
         } catch (IOException e) {
-            Log.e(LOG_TAG, e);
+            CLog.e(e);
         }
     }
 
