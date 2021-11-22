@@ -17,7 +17,6 @@ package com.android.tradefed.device;
 
 import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.Log;
 import com.android.ddmlib.TimeoutException;
 import com.android.helper.aoa.UsbDevice;
 import com.android.helper.aoa.UsbHelper;
@@ -41,8 +40,6 @@ import java.util.concurrent.ExecutionException;
  * respond to simple commands.
  */
 public class WaitDeviceRecovery implements IDeviceRecovery {
-
-    private static final String LOG_TAG = "WaitDeviceRecovery";
 
     /** the time in ms to wait before beginning recovery attempts */
     protected static final long INITIAL_PAUSE_TIME = 5 * 1000;
@@ -127,8 +124,7 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
         // device may have just gone offline
         // sleep a small amount to give ddms state a chance to settle
         // TODO - see if there is better way to handle this
-        Log.i(LOG_TAG, String.format("Pausing for %d for %s to recover",
-                INITIAL_PAUSE_TIME, monitor.getSerialNumber()));
+        CLog.i("Pausing for %d for %s to recover", INITIAL_PAUSE_TIME, monitor.getSerialNumber());
         getRunUtil().sleep(INITIAL_PAUSE_TIME);
 
         // ensure bootloader state is updated
@@ -136,11 +132,9 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
 
         TestDeviceState state = monitor.getDeviceState();
         if (TestDeviceState.FASTBOOT.equals(state) || TestDeviceState.FASTBOOTD.equals(state)) {
-            Log.i(
-                    LOG_TAG,
-                    String.format(
-                            "Found device %s in %s but expected online. Rebooting...",
-                            monitor.getSerialNumber(), state));
+            CLog.i(
+                    "Found device %s in %s but expected online. Rebooting...",
+                    monitor.getSerialNumber(), state);
             // TODO: retry if failed
             getRunUtil()
                     .runTimedCmd(
@@ -233,8 +227,7 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
     protected void handleDeviceUnresponsive(IDevice device, IDeviceStateMonitor monitor)
             throws DeviceNotAvailableException {
         if (!mDisableUnresponsiveReboot) {
-            Log.i(LOG_TAG, String.format(
-                    "Device %s unresponsive. Rebooting...", monitor.getSerialNumber()));
+            CLog.i("Device %s unresponsive. Rebooting...", monitor.getSerialNumber());
             rebootDevice(device, null);
             IDevice newdevice = monitor.waitForDeviceOnline(mOnlineWaitTime);
             if (newdevice == null) {
@@ -281,8 +274,7 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
         // device may have just gone offline
         // wait a small amount to give device state a chance to settle
         // TODO - see if there is better way to handle this
-        Log.i(LOG_TAG, String.format("Pausing for %d for %s to recover",
-                INITIAL_PAUSE_TIME, monitor.getSerialNumber()));
+        CLog.i("Pausing for %d for %s to recover", INITIAL_PAUSE_TIME, monitor.getSerialNumber());
         getRunUtil().sleep(INITIAL_PAUSE_TIME);
 
         // poll and wait for device to return to valid state
@@ -307,11 +299,7 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
         // device may have just gone offline
         // wait a small amount to give device state a chance to settle
         // TODO - see if there is better way to handle this
-        Log.i(
-                LOG_TAG,
-                String.format(
-                        "Pausing for %d for %s to recover",
-                        INITIAL_PAUSE_TIME, monitor.getSerialNumber()));
+        CLog.i("Pausing for %d for %s to recover", INITIAL_PAUSE_TIME, monitor.getSerialNumber());
         getRunUtil().sleep(INITIAL_PAUSE_TIME);
 
         // poll and wait for device to return to valid state
@@ -339,11 +327,7 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
      */
     private void handleDeviceOnlineExpectedBootloader(final IDeviceStateMonitor monitor)
             throws DeviceNotAvailableException {
-        Log.i(
-                LOG_TAG,
-                String.format(
-                        "Found device %s online but expected bootloader.",
-                        monitor.getSerialNumber()));
+        CLog.i("Found device %s online but expected bootloader.", monitor.getSerialNumber());
         // call waitForDeviceOnline to get handle to IDevice
         IDevice device = monitor.waitForDeviceOnline(mOnlineWaitTime);
         if (device == null) {
@@ -362,11 +346,7 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
 
     private void handleDeviceOnlineExpectedFasbootd(final IDeviceStateMonitor monitor)
             throws DeviceNotAvailableException {
-        Log.i(
-                LOG_TAG,
-                String.format(
-                        "Found device %s online but expected fastbootd.",
-                        monitor.getSerialNumber()));
+        CLog.i("Found device %s online but expected fastbootd.", monitor.getSerialNumber());
         // call waitForDeviceOnline to get handle to IDevice
         IDevice device = monitor.waitForDeviceOnline(mOnlineWaitTime);
         if (device == null) {
@@ -468,13 +448,11 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
         try {
             device.reboot(mode);
         } catch (IOException e) {
-            Log.w(LOG_TAG, String.format("failed to reboot %s: %s", device.getSerialNumber(),
-                    e.getMessage()));
+            CLog.w("failed to reboot %s: %s", device.getSerialNumber(), e.getMessage());
         } catch (TimeoutException e) {
-            Log.w(LOG_TAG, String.format("failed to reboot %s: timeout", device.getSerialNumber()));
+            CLog.w("failed to reboot %s: timeout", device.getSerialNumber());
         } catch (AdbCommandRejectedException e) {
-            Log.w(LOG_TAG, String.format("failed to reboot %s: %s", device.getSerialNumber(),
-                    e.getMessage()));
+            CLog.w("failed to reboot %s: %s", device.getSerialNumber(), e.getMessage());
         }
     }
 
