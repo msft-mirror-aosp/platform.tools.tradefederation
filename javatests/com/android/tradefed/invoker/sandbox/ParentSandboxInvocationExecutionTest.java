@@ -16,7 +16,6 @@
 package com.android.tradefed.invoker.sandbox;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.times;
@@ -32,17 +31,12 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.TestDeviceOptions;
-import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.targetprep.ITargetPreparer;
-import com.android.tradefed.util.CommandResult;
-import com.android.tradefed.util.CommandStatus;
-import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 
 import org.junit.Before;
@@ -50,8 +44,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
-
-import java.io.File;
 
 /** Unit tests for {@link ParentSandboxInvocationExecution}. */
 @RunWith(JUnit4.class)
@@ -157,38 +149,6 @@ public class ParentSandboxInvocationExecutionTest {
             fail("Should have thrown an exception.");
         } catch (BuildRetrievalError expected) {
             assertEquals("stub failed to get build.", expected.getMessage());
-        }
-    }
-
-    @Test
-    public void testParentSandbox_shutdown() throws Throwable {
-        TestDeviceOptions options = mConfig.getDeviceConfig().get(0).getDeviceOptions();
-        options.setAvdDriverBinary(new File("fakeAcloud"));
-        File fakeConfigFile = FileUtil.createTempFile("fake-acloud-config", ".config");
-        try {
-            options.setAvdConfigFile(fakeConfigFile);
-            OptionSetter setter = new OptionSetter(options);
-            setter.setOptionValue("wait-gce-teardown", "true");
-            TestInformation testInfo =
-                    TestInformation.newBuilder().setInvocationContext(mContext).build();
-            testInfo.getBuildInfo().addBuildAttribute(GceManager.GCE_INSTANCE_NAME_KEY, "ins-gce");
-            assertFalse(
-                    testInfo.getBuildInfo()
-                            .getBuildAttributes()
-                            .containsKey(GceManager.GCE_INSTANCE_CLEANED_KEY));
-            CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-            Mockito.doReturn(result)
-                    .when(mMockRunUtil)
-                    .runTimedCmd(Mockito.anyLong(), Mockito.any());
-
-            mParentSandbox.runTests(testInfo, mConfig, null);
-
-            assertTrue(
-                    testInfo.getBuildInfo()
-                            .getBuildAttributes()
-                            .containsKey(GceManager.GCE_INSTANCE_CLEANED_KEY));
-        } finally {
-            FileUtil.deleteFile(fakeConfigFile);
         }
     }
 
