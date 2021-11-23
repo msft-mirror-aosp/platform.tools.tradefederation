@@ -16,6 +16,7 @@
 
 package com.android.tradefed.util;
 
+import com.android.ddmlib.Log.LogLevel;
 import com.android.ddmlib.MultiLineReceiver;
 import com.android.loganalysis.item.LogcatItem;
 import com.android.loganalysis.item.MiscLogcatItem;
@@ -138,6 +139,20 @@ public class GenericLogcatEventParser<LogcatEventType> implements Closeable {
     }
 
     /**
+     * Register an event of given logcat level, tag and message with the desired response. Message
+     * may be partial.
+     */
+    public void registerEventTrigger(
+            LogLevel logLevel, String tag, String msg, LogcatEventType response) {
+        mEventTriggerMap.put(tag, msg, response);
+        if (mLogcatTags.add(tag)) {
+            // Pattern regex is null because we will rely on EventTriggerMap to parse events.
+            mInternalParser.addPattern(
+                    null, String.valueOf(logLevel.getPriorityLetter()), tag, CUSTOM_CATEGORY);
+        }
+    }
+
+    /**
      * Blocks until it receives an event.
      *
      * @param timeoutMs Time to wait in milliseconds
@@ -191,7 +206,7 @@ public class GenericLogcatEventParser<LogcatEventType> implements Closeable {
         }
         StringBuilder logcatCmdBuilder = new StringBuilder(BASE_LOGCAT_CMD);
         for (String tag : mLogcatTags) {
-            logcatCmdBuilder.append(" ").append(tag).append(":I");
+            logcatCmdBuilder.append(" ").append(tag).append(":V");
         }
         String logcatCmd = logcatCmdBuilder.toString();
         CLog.i("Starting logcat with command: %s", logcatCmd);
