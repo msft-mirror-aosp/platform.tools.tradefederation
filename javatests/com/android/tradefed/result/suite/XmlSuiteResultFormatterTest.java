@@ -24,11 +24,13 @@ import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.util.FileUtil;
@@ -170,12 +172,22 @@ public class XmlSuiteResultFormatterTest {
                 content, "Result/Module/TestCase/Test", "name", "module1.method0");
         assertXmlContainsAttribute(
                 content, "Result/Module/TestCase/Test", "name", "module1.method1");
-        // Check that failures are showing in the xml for the test cases
+        // Check that failures are showing in the xml for the test cases with error identifiers
         assertXmlContainsAttribute(
                 content, "Result/Module/TestCase/Test", "name", "module1.failed0");
         assertXmlContainsAttribute(content, "Result/Module/TestCase/Test", "result", "fail");
         assertXmlContainsAttribute(
                 content, "Result/Module/TestCase/Test/Failure", "message", "module1 failed.");
+        assertXmlContainsAttribute(
+                content,
+                "Result/Module/TestCase/Test/Failure",
+                "error_name",
+                TestErrorIdentifier.TEST_ABORTED.name());
+        assertXmlContainsAttribute(
+                content,
+                "Result/Module/TestCase/Test/Failure",
+                "error_code",
+                Long.toString(TestErrorIdentifier.TEST_ABORTED.code()));
         assertXmlContainsValue(
                 content,
                 "Result/Module/TestCase/Test/Failure/StackTrace",
@@ -200,7 +212,10 @@ public class XmlSuiteResultFormatterTest {
 
         List<TestRunResult> runResults = new ArrayList<>();
         runResults.add(createFakeResult("module1", 2, 1, 0, 0));
-        runResults.get(0).testRunFailed("Failed module");
+        FailureDescription failureDescription =
+                FailureDescription.create("Failed module")
+                        .setErrorIdentifier(TestErrorIdentifier.TEST_ABORTED);
+        runResults.get(0).testRunFailed(failureDescription);
         mResultHolder.runResults = runResults;
 
         Map<String, IAbi> modulesAbi = new HashMap<>();
@@ -219,6 +234,17 @@ public class XmlSuiteResultFormatterTest {
         assertXmlContainsNode(content, "Result/Module");
         assertXmlContainsAttribute(content, "Result/Module", "done", "false");
         assertXmlContainsNode(content, "Result/Module/Reason");
+        // Check that Reason contains error identifiers
+        assertXmlContainsAttribute(
+                content,
+                "Result/Module/Reason",
+                "error_name",
+                TestErrorIdentifier.TEST_ABORTED.name());
+        assertXmlContainsAttribute(
+                content,
+                "Result/Module/Reason",
+                "error_code",
+                Long.toString(TestErrorIdentifier.TEST_ABORTED.code()));
         assertXmlContainsAttribute(content, "Result/Module/TestCase", "name", "com.class.module1");
         assertXmlContainsAttribute(
                 content, "Result/Module/TestCase/Test", "name", "module1.method0");
@@ -680,7 +706,10 @@ public class XmlSuiteResultFormatterTest {
                     new TestDescription("com.class." + runName, runName + ".failed" + i);
             fakeRes.testStarted(description);
             // Include a null character \0 that is not XML supported
-            fakeRes.testFailed(description, runName + " failed.\nstack\nstack\0");
+            FailureDescription failureDescription =
+                    FailureDescription.create(runName + " failed.\nstack\nstack\0")
+                            .setErrorIdentifier(TestErrorIdentifier.TEST_ABORTED);
+            fakeRes.testFailed(description, failureDescription);
             HashMap<String, Metric> metrics = new HashMap<String, Metric>();
             if (withMetrics) {
                 metrics.put("metric0" + i, TfMetricProtoUtil.stringToMetric("value0" + i));
