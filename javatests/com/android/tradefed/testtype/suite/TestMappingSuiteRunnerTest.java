@@ -18,6 +18,7 @@ package com.android.tradefed.testtype.suite;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -35,6 +36,7 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -941,7 +943,7 @@ public class TestMappingSuiteRunnerTest {
             tempDir = FileUtil.createTempDir("test_mapping");
             tempTestsDir = FileUtil.createTempDir("test_mapping_testcases");
 
-            File zipFile = createTestMappingZip(tempDir);
+            File zipFile = createMainlineTestMappingZip(tempDir);
             createMainlineModuleConfig(tempTestsDir.getAbsolutePath());
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
@@ -1100,6 +1102,96 @@ public class TestMappingSuiteRunnerTest {
         }
     }
 
+    @Test
+    public void testLoadTests_WithCollisionAdditionalTestMappingZip() throws Exception {
+        File tempDir = null;
+        try {
+            mOptionSetter.setOptionValue("test-mapping-test-group", "presubmit");
+            mOptionSetter.setOptionValue("additional-test-mapping-zip", "extra-zip");
+
+            tempDir = FileUtil.createTempDir("test_mapping");
+            File zipFile = createTestMappingZip(tempDir);
+
+            IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
+            when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
+            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
+            when(mockBuildInfo.getFile("extra-zip")).thenReturn(zipFile);
+            mRunner.setBuild(mockBuildInfo);
+
+            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
+            fail("Should have thrown an exception.");
+        } catch (HarnessRuntimeException expected) {
+            // expected
+            assertTrue(expected.getMessage().contains("Collision of Test Mapping file"));
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+            TestMapping.setIgnoreTestMappingImports(true);
+            TestMapping.setTestMappingPaths(new ArrayList<String>());
+        }
+    }
+
+    @Test
+    public void testLoadTests_WithoutCollisionAdditionalTestMappingZip() throws Exception {
+        File tempDir = null;
+        File tempDir2 = null;
+        try {
+            mOptionSetter.setOptionValue("test-mapping-test-group", "presubmit");
+            mOptionSetter.setOptionValue("additional-test-mapping-zip", "extra-zip");
+
+            tempDir = FileUtil.createTempDir("test_mapping");
+            tempDir2 = FileUtil.createTempDir("test_mapping");
+            File zipFile = createTestMappingZip(tempDir);
+            File zipFile2 = createTestMappingZip(tempDir2);
+
+            IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
+            when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
+            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
+            when(mockBuildInfo.getFile("extra-zip")).thenReturn(zipFile2);
+            mRunner.setBuild(mockBuildInfo);
+
+            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
+            assertEquals(2, configMap.size());
+            verify(mockBuildInfo, times(1)).getFile(TEST_MAPPINGS_ZIP);
+            verify(mockBuildInfo, times(1)).getFile("extra-zip");
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+            FileUtil.recursiveDelete(tempDir2);
+            TestMapping.setIgnoreTestMappingImports(true);
+            TestMapping.setTestMappingPaths(new ArrayList<String>());
+        }
+    }
+
+    @Test
+    public void testLoadTests_WithMissingAdditionalTestMappingZips() throws Exception {
+        File tempDir = null;
+        try {
+            mOptionSetter.setOptionValue("test-mapping-test-group", "presubmit");
+            mOptionSetter.setOptionValue("additional-test-mapping-zip", "extra-zip");
+
+            tempDir = FileUtil.createTempDir("test_mapping");
+            File zipFile = createTestMappingZip(tempDir);
+
+            IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
+            when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
+            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
+            when(mockBuildInfo.getFile("extra-zip")).thenReturn(null);
+            mRunner.setBuild(mockBuildInfo);
+            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
+            fail("Should have thrown an exception.");
+        } catch (HarnessRuntimeException expected) {
+            // expected
+            assertEquals(
+                "Missing extra-zip in the BuildInfo file.", expected.getMessage());
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+            TestMapping.setIgnoreTestMappingImports(true);
+            TestMapping.setTestMappingPaths(new ArrayList<String>());
+        }
+    }
+
     /** Helper to create specific test infos. */
     private TestInfo createTestInfo(String name, String source) {
         TestInfo info = new TestInfo(name, source, false);
@@ -1109,6 +1201,28 @@ public class TestMappingSuiteRunnerTest {
         return info;
     }
 
+    /** Helper to create test_mappings.zip for Mainline. */
+    private File createMainlineTestMappingZip(File tempDir) throws IOException {
+        File srcDir = FileUtil.createTempDir("src", tempDir);
+        String srcFile = File.separator + TEST_DATA_DIR + File.separator + DISABLED_PRESUBMIT_TESTS;
+        InputStream resourceStream = this.getClass().getResourceAsStream(srcFile);
+        FileUtil.saveResourceFile(resourceStream, srcDir, DISABLED_PRESUBMIT_TESTS);
+
+        srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_with_mainline";
+        resourceStream = this.getClass().getResourceAsStream(srcFile);
+        FileUtil.saveResourceFile(resourceStream, srcDir, TEST_MAPPING);
+        File subDir = FileUtil.createTempDir("sub_dir", srcDir);
+        srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_2";
+        resourceStream = this.getClass().getResourceAsStream(srcFile);
+        FileUtil.saveResourceFile(resourceStream, subDir, TEST_MAPPING);
+
+        List<File> filesToZip = Arrays.asList(srcDir, new File(tempDir, DISABLED_PRESUBMIT_TESTS));
+        File zipFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPINGS_ZIP).toFile();
+        ZipUtil.createZip(filesToZip, zipFile);
+
+        return zipFile;
+    }
+
     /** Helper to create test_mappings.zip. */
     private File createTestMappingZip(File tempDir) throws IOException {
         File srcDir = FileUtil.createTempDir("src", tempDir);
@@ -1116,7 +1230,7 @@ public class TestMappingSuiteRunnerTest {
         InputStream resourceStream = this.getClass().getResourceAsStream(srcFile);
         FileUtil.saveResourceFile(resourceStream, srcDir, DISABLED_PRESUBMIT_TESTS);
 
-        srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_with_mainline";
+        srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_1";
         resourceStream = this.getClass().getResourceAsStream(srcFile);
         FileUtil.saveResourceFile(resourceStream, srcDir, TEST_MAPPING);
         File subDir = FileUtil.createTempDir("sub_dir", srcDir);

@@ -759,6 +759,53 @@ public class TestMappingTest {
         }
     }
 
+    /** Test for {@link TestMapping#getTests()} for loading tests from a given test_mappings.zip. */
+    @Test
+    public void testGetTestsWithGivenFilePath() throws Exception {
+        File tempDir = null;
+        IBuildInfo mockBuildInfo = mock(IBuildInfo.class);
+        try {
+            tempDir = FileUtil.createTempDir("test_mapping");
+            File srcDir = FileUtil.createTempDir("src", tempDir);
+            File subDir = FileUtil.createTempDir("sub_dir", srcDir);
+            createTestMapping(srcDir, "test_mapping_1", TEST_MAPPING);
+            createTestMapping(subDir, "test_mapping_2", TEST_MAPPING);
+            createTestMapping(tempDir, DISABLED_PRESUBMIT_TESTS, DISABLED_PRESUBMIT_TESTS);
+            List<File> filesToZip =
+                Arrays.asList(srcDir, new File(tempDir, DISABLED_PRESUBMIT_TESTS));
+            File zipFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPINGS_ZIP).toFile();
+            ZipUtil.createZip(filesToZip, zipFile);
+
+            // Ensure the static variable doesn't have any relative path configured.
+            TestMapping.setTestMappingPaths(new ArrayList<String>());
+            Set<TestInfo> tests = TestMapping.getTests(
+                    mockBuildInfo, "presubmit", false, null, zipFile);
+            assertEquals(0, tests.size());
+
+            tests = TestMapping.getTests(mockBuildInfo, "presubmit", true, null, zipFile);
+            assertEquals(2, tests.size());
+            Set<String> names = new HashSet<String>();
+            for (TestInfo test : tests) {
+                names.add(test.getName());
+                if (test.getName().equals("test1")) {
+                    assertTrue(test.getHostOnly());
+                } else {
+                    assertFalse(test.getHostOnly());
+                }
+            }
+            assertTrue(!names.contains("suite/stub1"));
+            assertTrue(names.contains("test1"));
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+        }
+    }
+
+    private void createTestMapping(File srcDir, String srcName, String dstName) throws Exception {
+        String srcFile = File.separator + TEST_DATA_DIR + File.separator + srcName;
+        InputStream resourceStream = this.getClass().getResourceAsStream(srcFile);
+        FileUtil.saveResourceFile(resourceStream, srcDir, dstName);
+    }
+
     private String getJsonStringByName(String fileName) throws Exception {
         File tempDir = null;
         try {
