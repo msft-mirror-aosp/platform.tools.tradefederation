@@ -19,6 +19,7 @@ import com.android.tradefed.device.TestDeviceFileFuncTest;
 import com.android.tradefed.device.TestDeviceFuncTest;
 import com.android.tradefed.device.TestDevicePackageFuncTest;
 import com.android.tradefed.device.TestDeviceUserFuncTest;
+import com.android.tradefed.suite.checker.ActivityStatusCheckerFuncTest;
 import com.android.tradefed.targetprep.AppSetupFuncTest;
 import com.android.tradefed.targetprep.DeviceSetupFuncTest;
 import com.android.tradefed.targetprep.UserCleanerFuncTest;
@@ -37,6 +38,8 @@ import org.junit.runners.Suite.SuiteClasses;
     TestDeviceFileFuncTest.class,
     TestDevicePackageFuncTest.class,
     TestDeviceUserFuncTest.class,
+    // suite.checker
+    ActivityStatusCheckerFuncTest.class,
     // targetprep
     AppSetupFuncTest.class,
     DeviceSetupFuncTest.class,

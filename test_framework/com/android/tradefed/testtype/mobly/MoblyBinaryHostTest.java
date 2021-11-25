@@ -21,6 +21,7 @@ import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -29,10 +30,12 @@ import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.util.AdbUtils;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -54,13 +57,15 @@ import java.io.Writer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /** Host test meant to run a mobly python binary file from the Android Build system (Soong) */
 @OptionClass(alias = "mobly-host")
-public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildReceiver {
+public class MoblyBinaryHostTest
+        implements IRemoteTest, IDeviceTest, IBuildReceiver, ITestFilterReceiver {
 
     private static final String ANDROID_SERIAL_VAR = "ANDROID_SERIAL";
     private static final String MOBLY_TEST_SUMMARY = "test_summary.yaml";
@@ -112,6 +117,56 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
     private File mLogDir;
     private TestInformation mTestInfo;
     private IRunUtil mRunUtil;
+    private Set<String> mIncludeFilters = new LinkedHashSet<>();
+    private Set<String> mExcludeFilters = new LinkedHashSet<>();
+
+    /** {@inheritDoc} */
+    @Override
+    public void addIncludeFilter(String filter) {
+        mIncludeFilters.add(filter);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void addExcludeFilter(String filter) {
+        mExcludeFilters.add(filter);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void addAllIncludeFilters(Set<String> filters) {
+        mIncludeFilters.addAll(filters);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void addAllExcludeFilters(Set<String> filters) {
+        mExcludeFilters.addAll(filters);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void clearIncludeFilters() {
+        mIncludeFilters.clear();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void clearExcludeFilters() {
+        mExcludeFilters.clear();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Set<String> getIncludeFilters() {
+        return mIncludeFilters;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Set<String> getExcludeFilters() {
+        return mExcludeFilters;
+    }
 
     @Override
     public void setDevice(ITestDevice device) {
@@ -299,20 +354,38 @@ public class MoblyBinaryHostTest implements IRemoteTest, IDeviceTest, IBuildRece
                     String.format("Fail to find specified test bed: %s.", getTestBed()));
         }
 
-        Map<String, Object> controllerMap = (Map<String, Object>) targetTb.get("Controllers");
-        List<Object> androidDeviceList = (List<Object>) controllerMap.get("AndroidDevice");
-
         // Inject serial for devices
         List<ITestDevice> devices = getTestInfo().getDevices();
-        if (devices.size() != androidDeviceList.size()) {
-            throw new RuntimeException(
-                    String.format(
-                            "Device count mismatch (configured: %s vs allocated: %s)",
-                            androidDeviceList.size(), devices.size()));
-        }
-        for (int index = 0; index < androidDeviceList.size(); index++) {
-            Map<String, Object> deviceMap = (Map<String, Object>) androidDeviceList.get(index);
-            deviceMap.put("serial", devices.get(index).getSerialNumber());
+        Map<String, Object> controllerMap = (Map<String, Object>) targetTb.get("Controllers");
+        Object androidDeviceValue = controllerMap.get("AndroidDevice");
+        List<Object> androidDeviceList = null;
+        if (androidDeviceValue instanceof List) {
+            androidDeviceList = (List<Object>) controllerMap.get("AndroidDevice");
+            if (devices.size() != androidDeviceList.size()) {
+                throw new HarnessRuntimeException(
+                        String.format(
+                                "Device count mismatch (configured: %s vs allocated: %s)",
+                                androidDeviceList.size(), devices.size()),
+                        InfraErrorIdentifier.UNEXPECTED_DEVICE_CONFIGURED);
+            }
+
+            for (int index = 0; index < devices.size(); index++) {
+                Map<String, Object> deviceMap = (Map<String, Object>) androidDeviceList.get(index);
+                deviceMap.put("serial", devices.get(index).getSerialNumber());
+            }
+        } else if ("*".equals(androidDeviceValue)) {
+            // Auto-find Android devices - add explicit device list with serials
+            androidDeviceList = new ArrayList();
+            controllerMap.put("AndroidDevice", androidDeviceList);
+            for (int index = 0; index < devices.size(); index++) {
+                Map<String, String> deviceMap = new HashMap();
+                androidDeviceList.add(deviceMap);
+                deviceMap.put("serial", devices.get(index).getSerialNumber());
+            }
+        } else {
+            throw new HarnessRuntimeException(
+                    String.format("Unsupported value for AndroidDevice: %s", androidDeviceValue),
+                    InfraErrorIdentifier.UNEXPECTED_DEVICE_CONFIGURED);
         }
 
         // Inject log path

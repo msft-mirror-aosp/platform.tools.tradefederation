@@ -20,7 +20,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.Log;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner.TestSize;
 import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
@@ -79,8 +78,6 @@ public class InstrumentationTest
                 IAbiReceiver,
                 IConfigurationReceiver,
                 IMetricCollectorReceiver {
-
-    private static final String LOG_TAG = "InstrumentationTest";
 
     /** max number of attempts to collect list of tests in package */
     private static final int COLLECT_TESTS_ATTEMPTS = 3;
@@ -1039,8 +1036,9 @@ public class InstrumentationTest
             final ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         if (isRerunMode()) {
-            Log.d(LOG_TAG, String.format("Collecting test info for %s on device %s",
-                    mPackageName, mDevice.getSerialNumber()));
+            CLog.d(
+                    "Collecting test info for %s on device %s",
+                    mPackageName, mDevice.getSerialNumber());
             runner.setTestCollection(true);
             // always explicitly set debug to false when collecting tests
             runner.setDebug(false);
@@ -1084,9 +1082,9 @@ public class InstrumentationTest
             TestRunResult runResults = collector.getCurrentRunResults();
             if (!instrResult || !runResults.isRunComplete()) {
                 // communication failure with device, retry
-                Log.w(LOG_TAG, String.format(
+                CLog.w(
                         "No results when collecting tests to run for %s on device %s. Retrying",
-                        mPackageName, mDevice.getSerialNumber()));
+                        mPackageName, mDevice.getSerialNumber());
                 communicationFailure = true;
             } else if (runResults.isRunFailure()) {
                 // not a communication failure, but run still failed.

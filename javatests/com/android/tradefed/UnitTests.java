@@ -214,6 +214,7 @@ import com.android.tradefed.sandbox.SandboxConfigUtilTest;
 import com.android.tradefed.sandbox.SandboxInvocationRunnerTest;
 import com.android.tradefed.sandbox.TradefedSandboxTest;
 import com.android.tradefed.suite.checker.ActivityStatusCheckerTest;
+import com.android.tradefed.suite.checker.DeviceBaselineCheckerTest;
 import com.android.tradefed.suite.checker.DeviceSettingCheckerTest;
 import com.android.tradefed.suite.checker.DeviceStorageStatusCheckerTest;
 import com.android.tradefed.suite.checker.EnforcedSeLinuxCheckerTest;
@@ -773,6 +774,7 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // suite/checker
     ActivityStatusCheckerTest.class,
+    DeviceBaselineCheckerTest.class,
     DeviceSettingCheckerTest.class,
     DeviceStorageStatusCheckerTest.class,
     EnforcedSeLinuxCheckerTest.class,

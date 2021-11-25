@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.command.remote;
 
-import com.android.ddmlib.Log;
 import com.android.tradefed.device.DeviceAllocationState;
 
 import org.json.JSONArray;
@@ -92,10 +91,8 @@ class ListDevicesOp extends RemoteOperation<List<DeviceDescriptor>> {
                         .valueOf(stateString), product, productVariant, sdk, incrementalBuild,
                         batteryLevel));
             } catch (IllegalArgumentException e) {
-                String msg = String.format("unrecognized state %s for device %s", stateString,
-                        serial);
-                Log.e("ListDevicesOp", msg);
-                throw new JSONException(msg);
+                throw new JSONException(
+                        String.format("unrecognized state %s for device %s", stateString, serial));
             }
         }
         return deviceList;

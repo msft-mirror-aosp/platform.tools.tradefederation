@@ -162,14 +162,19 @@ public abstract class BasePostProcessor implements IPostProcessor {
     /** Test run callbacks */
     @Override
     public final void testRunStarted(String runName, int testCount) {
-        mRunName = runName;
-        mForwarder.testRunStarted(runName, testCount);
+        testRunStarted(runName, testCount, 0, System.currentTimeMillis());
     }
 
     @Override
     public final void testRunStarted(String runName, int testCount, int attemptNumber) {
+        testRunStarted(runName, testCount, attemptNumber, System.currentTimeMillis());
+    }
+
+    @Override
+    public final void testRunStarted(
+            String runName, int testCount, int attemptNumber, long startTime) {
         mRunName = runName;
-        mForwarder.testRunStarted(runName, testCount, attemptNumber);
+        mForwarder.testRunStarted(runName, testCount, attemptNumber, startTime);
     }
 
     @Override

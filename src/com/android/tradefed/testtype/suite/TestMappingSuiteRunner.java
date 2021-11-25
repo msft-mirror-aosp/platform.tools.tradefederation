@@ -15,10 +15,13 @@
  */
 package com.android.tradefed.testtype.suite;
 
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.FileUtil;
@@ -111,10 +114,20 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "filtered by allowed tests.")
     private Set<String> mAllowedTestLists = new HashSet<>();
 
+    @Option(
+            name = "additional-test-mapping-zip",
+            description =
+                    "A list of additional test_mappings.zip that contains TEST_MAPPING files. The "
+                            + "runner will collect tests based on them. If none  is specified, "
+                            + "only the tests on the triggering device build will be run.")
+    private List<String> mAdditionalTestMappingZip = new ArrayList<>();
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
     private static final String TEST_MAPPING_EXCLUDE_FILTER = "exclude-filter";
+
+    private IBuildInfo mBuildInfo;
 
     /**
      * Load the tests configuration that will be run. Each tests is defined by a {@link
@@ -137,6 +150,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         // Name of the tests
         Set<String> testNames = new HashSet<>();
         Set<TestInfo> testInfosToRun = new HashSet<>();
+        mBuildInfo = getBuildInfo();
         if (mTestGroup == null && includeFilter.isEmpty()) {
             throw new RuntimeException(
                     "At least one of the options, --test-mapping-test-group or --include-filter, "
@@ -169,7 +183,28 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             }
             testInfosToRun =
                     TestMapping.getTests(
-                            getBuildInfo(), mTestGroup, getPrioritizeHostConfig(), mKeywords);
+                            mBuildInfo, mTestGroup, getPrioritizeHostConfig(), mKeywords);
+            if (!mAdditionalTestMappingZip.isEmpty()) {
+                for (String zipName : mAdditionalTestMappingZip) {
+                    File zipFile = mBuildInfo.getFile(zipName);
+                    if (zipFile == null) {
+                        throw new HarnessRuntimeException(
+                                String.format("Missing %s in the BuildInfo file.", zipName),
+                                InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
+                    }
+                    CLog.i("Getting tests from additional test mapping zip: %s", zipName);
+                    Set<TestInfo> additionalTests =
+                            TestMapping.getTests(
+                                    mBuildInfo,
+                                    mTestGroup,
+                                    getPrioritizeHostConfig(),
+                                    mKeywords,
+                                    zipFile
+                            );
+                    validateTestMappingSource(testInfosToRun, additionalTests, zipName);
+                    testInfosToRun.addAll(additionalTests);
+                }
+            }
             if (!mTestModulesForced.isEmpty()) {
                 CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
                 testInfosToRun =
@@ -245,6 +280,24 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     @VisibleForTesting
     boolean getUseTestMappingPath() {
         return mUseTestMappingPath;
+    }
+
+    /** Ensure there are no collisions of TEST_MAPPING paths between different test mapping zips. */
+    private void validateTestMappingSource(Set<TestInfo> base, Set<TestInfo> target, String name) {
+        Set<String> baseSorces = new HashSet<>();
+        for (TestInfo testInfo : base) {
+            baseSorces.addAll(testInfo.getSources());
+        }
+        for (TestInfo testInfo : target) {
+            for (String src : testInfo.getSources()) {
+                if (baseSorces.contains(src)) {
+                    throw new HarnessRuntimeException(
+                            String.format("Collision of Test Mapping file: %s/TEST_MAPPING in " +
+                                    "artifact: %s.", src, name),
+                            InfraErrorIdentifier.TEST_MAPPING_PATH_COLLISION);
+                }
+            }
+        }
     }
 
     /**

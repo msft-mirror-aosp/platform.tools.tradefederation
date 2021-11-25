@@ -16,7 +16,7 @@
 
 package com.android.tradefed.util;
 
-import com.android.ddmlib.Log;
+import com.android.tradefed.log.LogUtil.CLog;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -33,7 +33,6 @@ import java.util.List;
  * The binary pointed at by the {@code mailer} constant doesn't exist.
  */
 public class Email implements IEmail {
-    private static final String LOG_TAG = "Email";
     private static final String[] mailer = {"/usr/sbin/sendmail", "-t", "-i"};
     static final String CRLF = "\r\n";
 
@@ -129,8 +128,7 @@ public class Email implements IEmail {
         fullMsg.append(CRLF);
         fullMsg.append(msg.getBody());
 
-        Log.d(LOG_TAG, String.format("About to send email with command: %s",
-                Arrays.toString(mailCmd)));
+        CLog.d("About to send email with command: %s", Arrays.toString(mailCmd));
         Process mailerProc = run(mailCmd);
         BufferedOutputStream mailerStdin = new BufferedOutputStream(mailerProc.getOutputStream());
         /* There is no such thing as a "character" in the land of the shell; there are only bytes.
@@ -150,16 +148,16 @@ public class Email implements IEmail {
             retValue = -12345;
         }
         if (retValue != 0) {
-            Log.e(LOG_TAG, String.format("Mailer finished with non-zero return value: %d", retValue));
+            CLog.e("Mailer finished with non-zero return value: %d", retValue);
             BufferedInputStream mailerStdout = new BufferedInputStream(mailerProc.getInputStream());
             StringBuilder stdout = new StringBuilder();
             int theByte;
             while((theByte = mailerStdout.read()) != -1) {
                 stdout.append((char)theByte);
             }
-            Log.e(LOG_TAG, "Mailer output was: " + stdout.toString());
+            CLog.e("Mailer output was: " + stdout.toString());
         } else {
-            Log.v(LOG_TAG, "Mailer returned successfully.");
+            CLog.v("Mailer returned successfully.");
         }
     }
 }
