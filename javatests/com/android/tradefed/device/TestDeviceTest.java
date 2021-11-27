@@ -626,7 +626,7 @@ public class TestDeviceTest {
                         invocation -> {
                             if (mAnswerIndex == 0) {
                                 mAnswerIndex++;
-                                throw (new IOException());
+                                throw new IOException();
                             }
                             return null;
                         })
@@ -690,7 +690,7 @@ public class TestDeviceTest {
                         invocation -> {
                             if (mAnswerIndex == 0) {
                                 mAnswerIndex++;
-                                throw (new IOException());
+                                throw new IOException();
                             }
                             return null;
                         })
@@ -784,7 +784,7 @@ public class TestDeviceTest {
                         invocation -> {
                             if (mAnswerIndex == 0) {
                                 mAnswerIndex++;
-                                throw (new IOException());
+                                throw new IOException();
                             }
                             return null;
                         })
