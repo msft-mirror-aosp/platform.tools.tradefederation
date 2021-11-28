@@ -80,6 +80,16 @@ public class EventsLoggerListener implements ILogSaverListener {
     }
 
     @Override
+    public void testRunStarted(String runName, int testCount) {
+        testRunStarted(runName, testCount, 0, System.currentTimeMillis());
+    }
+
+    @Override
+    public void testRunStarted(String runName, int testCount, int attemptNumber) {
+        testRunStarted(runName, testCount, attemptNumber, System.currentTimeMillis());
+    }
+
+    @Override
     public void testRunStarted(String runName, int testCount, int attemptNumber, long startTime) {
         writeToFile(
                 String.format(
@@ -145,7 +155,12 @@ public class EventsLoggerListener implements ILogSaverListener {
 
     @Override
     public void logAssociation(String dataName, LogFile logFile) {
-        writeToFile(String.format("[    log: %s | path: %s]\n", dataName, logFile.getPath()));
+        String extra = "";
+        if (mTestCaseStatus != null) {
+            extra = "test";
+        }
+        writeToFile(
+                String.format("[   %s log: %s | path: %s]\n", extra, dataName, logFile.getPath()));
     }
 
     private void writeToFile(String text) {

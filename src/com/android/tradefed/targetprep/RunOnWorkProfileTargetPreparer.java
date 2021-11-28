@@ -16,7 +16,6 @@
 
 package com.android.tradefed.targetprep;
 
-import com.android.ddmlib.Log;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
@@ -26,6 +25,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.UserInfo;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -50,8 +50,6 @@ import java.util.Map;
 @OptionClass(alias = "run-on-work-profile")
 public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
         implements IConfigurationReceiver {
-
-    private static final String LOG_TAG = "RunOnWorkProfileTargetPreparer";
 
     @VisibleForTesting static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
@@ -110,8 +108,7 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
             mDeviceOwnerToSet = getDeviceOwner(testInfo.getDevice());
 
             if (mDeviceOwnerToSet != null) {
-                Log.d(
-                        LOG_TAG,
+                CLog.d(
                         "Work profiles cannot be created after device owner is set. Attempting to"
                                 + " remove device owner");
                 removeDeviceOwner(testInfo.getDevice(), mDeviceOwnerToSet);
