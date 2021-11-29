@@ -992,4 +992,16 @@ public interface ITestDevice extends INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public DeviceFoldableState getCurrentFoldableState() throws DeviceNotAvailableException;
+
+    /**
+     * Helper method to determine if file on device exists for a given user.
+     *
+     * @param deviceFilePath the absolute path of file on device to check
+     * @param userId The user id against which to check file existence
+     * @return <code>true</code> if file exists, <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean doesFileExist(String deviceFilePath, int userId)
+            throws DeviceNotAvailableException;
 }

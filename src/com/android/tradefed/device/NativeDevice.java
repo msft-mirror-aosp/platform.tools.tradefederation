@@ -1404,9 +1404,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public boolean doesFileExist(String deviceFilePath) throws DeviceNotAvailableException {
+        return doesFileExist(deviceFilePath, 0);
+    }
+
+    @Override
+    public boolean doesFileExist(String deviceFilePath, int userId)
+            throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         try {
-            if (isSdcardOrEmulated(deviceFilePath)) {
+            // Skip ContentProvider for user 0
+            if (isSdcardOrEmulated(deviceFilePath) && userId != 0) {
                 ContentProviderHandler handler = getContentProvider();
                 if (handler != null) {
                     CLog.d("Delegating check to ContentProvider doesFileExist(%s)", deviceFilePath);
