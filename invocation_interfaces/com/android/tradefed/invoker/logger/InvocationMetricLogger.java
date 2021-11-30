@@ -157,7 +157,8 @@ public class InvocationMetricLogger {
 
     /** Grouping allows to log several groups under a same key. */
     public enum InvocationGroupMetricKey {
-        TEST_TYPE_COUNT("test-type-count", true);
+        TEST_TYPE_COUNT("test-type-count", true),
+        TARGET_PREPARER_SETUP_LATENCY("target-preparer-setup-latency", true);
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.
