@@ -416,6 +416,16 @@ public class TestInvocation implements ITestInvocation {
                         InvocationMetricKey.DEVICE_DONE_TIMESTAMP, System.currentTimeMillis());
             }
 
+            // Ensure we always deregister the logger
+            for (String deviceName : context.getDeviceConfigNames()) {
+                if (!(context.getDevice(deviceName).getIDevice() instanceof StubDevice)) {
+                    context.getDevice(deviceName).stopLogcat();
+                    CLog.i(
+                            "Done stopping logcat for %s",
+                            context.getDevice(deviceName).getSerialNumber());
+                }
+            }
+
             Map<ITestDevice, FreeDeviceState> devicesStates =
                     handleAndLogReleaseState(context, exception, tearDownException);
             if (config.getCommandOptions().earlyDeviceRelease()) {
@@ -1143,20 +1153,16 @@ public class TestInvocation implements ITestInvocation {
         } finally {
             scope.exit();
             // Ensure build infos are always cleaned up at the end of invocation.
+            CLog.i("Cleaning up builds");
             invocationPath.cleanUpBuilds(context, config);
-            // ensure we always deregister the logger
-            for (String deviceName : context.getDeviceConfigNames()) {
-                if (!(context.getDevice(deviceName).getIDevice() instanceof StubDevice)) {
-                    context.getDevice(deviceName).stopLogcat();
-                }
-            }
             if (!sharding) {
                 // If we are the parent shard, we do not delete the test information
                 deleteInvocationFiles(info, config);
             }
-            // save remaining logs contents to global log
-            getLogRegistry().dumpToGlobalLog(config.getLogOutput());
+
             if (!config.getCommandOptions().reportInvocationComplete()) {
+                // save remaining logs contents to global log
+                getLogRegistry().dumpToGlobalLog(config.getLogOutput());
                 // Ensure log is unregistered and closed
                 getLogRegistry().unregisterLogger();
                 config.getLogOutput().closeLog();
