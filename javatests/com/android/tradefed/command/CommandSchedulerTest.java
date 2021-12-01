@@ -63,7 +63,9 @@ import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.ITestInvocation;
 import com.android.tradefed.invoker.ITestInvocation.ExitInformation;
 import com.android.tradefed.invoker.InvocationContext;
+import com.android.tradefed.log.ILeveledLogOutput;
 import com.android.tradefed.log.ILogRegistry.EventType;
+import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.util.FileUtil;
@@ -100,6 +102,8 @@ public class CommandSchedulerTest {
     private CommandScheduler mScheduler;
     @Mock ITestInvocation mMockInvocation;
     @Mock CommandFileWatcher mMockFileWatcher;
+    @Mock ILogSaver mMockLogSaver;
+    @Mock ILeveledLogOutput mMockLogOutput;
     private MockDeviceManager mFakeDeviceManager;
     @Mock IConfigurationFactory mMockConfigFactory;
     @Mock IConfiguration mMockConfiguration;
@@ -492,6 +496,8 @@ public class CommandSchedulerTest {
         when(mockRescheduledConfig.getDeviceConfig()).thenReturn(mDeviceConfigList);
         when(mockRescheduledConfig.getCommandLine()).thenReturn("");
         when(mockRescheduledConfig.getConfigurationDescription()).thenReturn(mConfigDescriptor);
+        when(mockRescheduledConfig.getLogSaver()).thenReturn(mMockLogSaver);
+        when(mockRescheduledConfig.getLogOutput()).thenReturn(mMockLogOutput);
 
         // The first call sets recheduler and throws. The second call is successful.
         doAnswer(
@@ -672,7 +678,6 @@ public class CommandSchedulerTest {
 
     /** Set EasyMock expectations for a create configuration call. */
     private void setCreateConfigExpectations(String[] args) throws ConfigurationException {
-        List<String> nullArg = null;
         when(mMockConfigFactory.createConfigurationFromArgs(
                         AdditionalMatchers.aryEq(args), isNull(), (IKeyStoreClient) any()))
                 .thenReturn(mMockConfiguration);
@@ -681,6 +686,8 @@ public class CommandSchedulerTest {
         when(mMockConfiguration.getDeviceConfig()).thenReturn(mDeviceConfigList);
         when(mMockConfiguration.getCommandLine()).thenReturn("");
         when(mMockConfiguration.getConfigurationDescription()).thenReturn(mConfigDescriptor);
+        when(mMockConfiguration.getLogSaver()).thenReturn(mMockLogSaver);
+        when(mMockConfiguration.getLogOutput()).thenReturn(mMockLogOutput);
 
         // Assume all legacy test are single device
         if (mDeviceConfigList.isEmpty()) {
