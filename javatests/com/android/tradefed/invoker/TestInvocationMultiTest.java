@@ -214,10 +214,10 @@ public class TestInvocationMultiTest {
 
         mInvocation.invoke(
                 mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
-        verify(mMockLogger, times(2)).init();
-        verify(mMockLogger, times(3)).closeLog();
-        verify(mMockLogRegistry, times(2)).registerLogger(mMockLogger);
-        verify(mMockLogRegistry, times(3)).unregisterLogger();
+        verify(mMockLogger, times(3)).init();
+        verify(mMockLogger, times(2)).closeLog();
+        verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
+        verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockConfig, times(2)).getTestInvocationListeners();
         verify(mMockConfig, times(3)).getConfigurationDescription();
         verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
@@ -298,10 +298,10 @@ public class TestInvocationMultiTest {
 
         mInvocation.invoke(
                 mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
-        verify(mMockLogger, times(2)).init();
-        verify(mMockLogger, times(3)).closeLog();
-        verify(mMockLogRegistry, times(2)).registerLogger(mMockLogger);
-        verify(mMockLogRegistry, times(3)).unregisterLogger();
+        verify(mMockLogger, times(3)).init();
+        verify(mMockLogger, times(2)).closeLog();
+        verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
+        verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockConfig, times(2)).getTestInvocationListeners();
         verify(mMockConfig, times(3)).getConfigurationDescription();
         verify(mDevice1).clearLogcat();
@@ -362,10 +362,10 @@ public class TestInvocationMultiTest {
 
         mInvocation.invoke(
                 mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
-        verify(mMockLogger, times(2)).init();
-        verify(mMockLogger, times(3)).closeLog();
-        verify(mMockLogRegistry, times(2)).registerLogger(mMockLogger);
-        verify(mMockLogRegistry, times(3)).unregisterLogger();
+        verify(mMockLogger, times(3)).init();
+        verify(mMockLogger, times(2)).closeLog();
+        verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
+        verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockConfig, times(2)).getTestInvocationListeners();
         verify(mMockConfig, times(3)).getConfigurationDescription();
         verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
@@ -432,10 +432,10 @@ public class TestInvocationMultiTest {
 
         mInvocation.invoke(
                 mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
-        verify(mMockLogger, times(2)).init();
-        verify(mMockLogger, times(3)).closeLog();
-        verify(mMockLogRegistry, times(2)).registerLogger(mMockLogger);
-        verify(mMockLogRegistry, times(3)).unregisterLogger();
+        verify(mMockLogger, times(3)).init();
+        verify(mMockLogger, times(2)).closeLog();
+        verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
+        verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockConfig, times(2)).getTestInvocationListeners();
         verify(mMockConfig, times(3)).getConfigurationDescription();
         verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
