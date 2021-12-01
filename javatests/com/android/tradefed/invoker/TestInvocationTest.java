@@ -443,7 +443,6 @@ public class TestInvocationTest {
 
             // always expect logger initialization and cleanup calls
             verify(mMockLogRegistry, times(2)).unregisterLogger();
-            verify(mMockLogRegistry).dumpToGlobalLog(Mockito.eq(mMockLogger));
             verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
 
             verify(mMockPreparer).setUp(Mockito.any());
@@ -494,7 +493,6 @@ public class TestInvocationTest {
             // always expect logger initialization and cleanup calls
             verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
             verify(mMockLogRegistry, times(2)).unregisterLogger();
-            verify(mMockLogRegistry).dumpToGlobalLog(Mockito.eq(mMockLogger));
 
         } catch (IOException e) {
             // Never happens since these are all verify calls
@@ -967,7 +965,6 @@ public class TestInvocationTest {
             // always expect logger initialization and cleanup calls
             verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
             verify(mMockLogRegistry, times(2)).unregisterLogger();
-            verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
 
             verify(mMockLogger, times(3)).init();
             verify(mMockLogger, times(2)).closeLog();
@@ -1004,7 +1001,6 @@ public class TestInvocationTest {
         mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
 
         verify(mMockBuildProvider).cleanUp(captured.capture());
-        verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
         verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockLogger, times(3)).init();
@@ -1036,7 +1032,6 @@ public class TestInvocationTest {
         verify(mMockBuildProvider).cleanUp(captured.capture());
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
         verify(mMockLogRegistry, times(2)).unregisterLogger();
-        verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
         verify(mMockLogger, times(3)).init();
         verify(mMockLogger, times(2)).closeLog();
 
@@ -1071,7 +1066,6 @@ public class TestInvocationTest {
         verify(mMockBuildProvider).cleanUp(captured.capture());
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
         verify(mMockLogRegistry, times(2)).unregisterLogger();
-        verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
         verify(mMockLogger, times(3)).init();
         verify(mMockLogger, times(2)).closeLog();
 
