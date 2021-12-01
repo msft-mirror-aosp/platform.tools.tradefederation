@@ -220,7 +220,6 @@ public class TestInvocationMultiTest {
         verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockConfig, times(2)).getTestInvocationListeners();
         verify(mMockConfig, times(3)).getConfigurationDescription();
-        verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
         verify(mMockConfig).resolveDynamicOptions(Mockito.any());
         verify(mMockConfig).cleanConfigurationData();
         verify(mProvider1).cleanUp(build1);
@@ -306,7 +305,6 @@ public class TestInvocationMultiTest {
         verify(mMockConfig, times(3)).getConfigurationDescription();
         verify(mDevice1).clearLogcat();
         verify(mDevice2).clearLogcat();
-        verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
         verify(mMockConfig).cleanConfigurationData();
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
@@ -368,7 +366,6 @@ public class TestInvocationMultiTest {
         verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockConfig, times(2)).getTestInvocationListeners();
         verify(mMockConfig, times(3)).getConfigurationDescription();
-        verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
         verify(mMockConfig).resolveDynamicOptions(Mockito.any());
         verify(mMockConfig).cleanConfigurationData();
         verify(mMockTestListener).invocationStarted(mContext);
@@ -438,7 +435,6 @@ public class TestInvocationMultiTest {
         verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockConfig, times(2)).getTestInvocationListeners();
         verify(mMockConfig, times(3)).getConfigurationDescription();
-        verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
         verify(mMockConfig).resolveDynamicOptions(Mockito.any());
         verify(mMockConfig).cleanConfigurationData();
         verify(mMockTestListener).invocationStarted(mContext);
