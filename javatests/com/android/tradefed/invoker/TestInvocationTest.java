@@ -432,8 +432,8 @@ public class TestInvocationTest {
     private void verifyNormalInvoke(IRemoteTest test) throws Throwable {
         try {
             verify(mMockLogger).getLog();
-            verify(mMockLogger, times(2)).init();
-            verify(mMockLogger, times(3)).closeLog();
+            verify(mMockLogger, times(3)).init();
+            verify(mMockLogger, times(2)).closeLog();
 
             verify(mMockBuildProvider, atLeast(1)).cleanUp(Mockito.eq(mMockBuildInfo));
             verify(mMockBuildProvider).getBuild();
@@ -442,9 +442,9 @@ public class TestInvocationTest {
             verify(mMockBuildInfo).setTestTag(Mockito.eq("stub"));
 
             // always expect logger initialization and cleanup calls
-            verify(mMockLogRegistry, times(3)).unregisterLogger();
+            verify(mMockLogRegistry, times(2)).unregisterLogger();
             verify(mMockLogRegistry).dumpToGlobalLog(Mockito.eq(mMockLogger));
-            verify(mMockLogRegistry, times(2)).registerLogger(mMockLogger);
+            verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
 
             verify(mMockPreparer).setUp(Mockito.any());
 
@@ -483,8 +483,8 @@ public class TestInvocationTest {
     private void verifyInvokeWithBuild() throws DeviceNotAvailableException {
         try {
             verify(mMockLogger).getLog();
-            verify(mMockLogger, times(2)).init();
-            verify(mMockLogger, times(3)).closeLog();
+            verify(mMockLogger, times(3)).init();
+            verify(mMockLogger, times(2)).closeLog();
 
             verify(mMockBuildInfo).setDeviceSerial(Mockito.eq(SERIAL));
             verify(mMockBuildInfo).setTestTag(Mockito.eq("stub"));
@@ -492,8 +492,8 @@ public class TestInvocationTest {
             verify(mMockBuildProvider, atLeast(1)).cleanUp(Mockito.eq(mMockBuildInfo));
 
             // always expect logger initialization and cleanup calls
-            verify(mMockLogRegistry, times(2)).registerLogger(mMockLogger);
-            verify(mMockLogRegistry, times(3)).unregisterLogger();
+            verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
+            verify(mMockLogRegistry, times(2)).unregisterLogger();
             verify(mMockLogRegistry).dumpToGlobalLog(Mockito.eq(mMockLogger));
 
         } catch (IOException e) {
@@ -965,12 +965,12 @@ public class TestInvocationTest {
         // Needed a full custom set of verifications because it is messy
         try {
             // always expect logger initialization and cleanup calls
-            verify(mMockLogRegistry, times(2)).registerLogger(mMockLogger);
-            verify(mMockLogRegistry, times(3)).unregisterLogger();
+            verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
+            verify(mMockLogRegistry, times(2)).unregisterLogger();
             verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
 
-            verify(mMockLogger, times(2)).init();
-            verify(mMockLogger, times(3)).closeLog();
+            verify(mMockLogger, times(3)).init();
+            verify(mMockLogger, times(2)).closeLog();
             verify(mMockLogger).getLog();
 
             verify(mMockBuildProvider).cleanUp(mMockBuildInfo);
@@ -1005,10 +1005,10 @@ public class TestInvocationTest {
 
         verify(mMockBuildProvider).cleanUp(captured.capture());
         verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
-        verify(mMockLogRegistry, times(2)).registerLogger(mMockLogger);
-        verify(mMockLogRegistry, times(3)).unregisterLogger();
-        verify(mMockLogger, times(2)).init();
-        verify(mMockLogger, times(3)).closeLog();
+        verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
+        verify(mMockLogRegistry, times(2)).unregisterLogger();
+        verify(mMockLogger, times(3)).init();
+        verify(mMockLogger, times(2)).closeLog();
 
         verifyMockFailureListenersAny(error, true);
 
@@ -1034,11 +1034,11 @@ public class TestInvocationTest {
         mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
 
         verify(mMockBuildProvider).cleanUp(captured.capture());
-        verify(mMockLogRegistry, times(2)).registerLogger(mMockLogger);
-        verify(mMockLogRegistry, times(3)).unregisterLogger();
+        verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
+        verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
-        verify(mMockLogger, times(2)).init();
-        verify(mMockLogger, times(3)).closeLog();
+        verify(mMockLogger, times(3)).init();
+        verify(mMockLogger, times(2)).closeLog();
 
         verifyMockFailureListenersAny(error, true);
 
@@ -1069,11 +1069,11 @@ public class TestInvocationTest {
         mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
 
         verify(mMockBuildProvider).cleanUp(captured.capture());
-        verify(mMockLogRegistry, times(2)).registerLogger(mMockLogger);
-        verify(mMockLogRegistry, times(3)).unregisterLogger();
+        verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
+        verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockLogRegistry).dumpToGlobalLog(mMockLogger);
-        verify(mMockLogger, times(2)).init();
-        verify(mMockLogger, times(3)).closeLog();
+        verify(mMockLogger, times(3)).init();
+        verify(mMockLogger, times(2)).closeLog();
 
         verifyMockFailureListeners(error, true, false);
 
