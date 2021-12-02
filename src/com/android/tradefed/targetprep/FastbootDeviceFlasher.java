@@ -36,6 +36,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableSet;
 
 import org.apache.commons.compress.archivers.zip.ZipFile;
 
@@ -61,6 +62,8 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     private static final String SLOT_PROP = "ro.boot.slot_suffix";
     private static final String SLOT_VAR = "current-slot";
     private static final String SKIP_REBOOT_PARAM = "--skip-reboot";
+    private static final ImmutableSet<String> DISK_SPACE_ERRORS =
+        ImmutableSet.of("No space left on device", "failed to create temporary file");
 
     private long mWipeTimeout = 4 * 60 * 1000;
 
@@ -851,10 +854,17 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         CLog.v("fastboot stderr: " + result.getStderr());
         mFbCmdStatus = result.getStatus();
         ErrorIdentifier errorIdentifier = null;
-        if (result.getStderr().contains("failed to create temporary file")) {
-            errorIdentifier = InfraErrorIdentifier.NO_DISK_SPACE;
-            mFbCmdStatus = CommandStatus.FAILED;
-        } else if (result.getStderr().contains("FAILED")) {
+        boolean diskErrorIdentified = false;
+        for (String diskError : DISK_SPACE_ERRORS) {
+            if (result.getStderr().contains(diskError)) {
+                errorIdentifier = InfraErrorIdentifier.NO_DISK_SPACE;
+                mFbCmdStatus = CommandStatus.FAILED;
+                diskErrorIdentified = true;
+                break;
+            }
+        }
+
+        if (!diskErrorIdentified && result.getStderr().contains("FAILED")) {
             // if output contains "FAILED", just override to failure
             mFbCmdStatus = CommandStatus.FAILED;
         }
