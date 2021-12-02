@@ -41,13 +41,23 @@ public class TradefedDelegator {
     @Option(
             name = DELETEGATED_OPTION_NAME,
             description =
-                    "Points to the root dir of another Tradefed binary that will be used to drive the invocation")
+                    "Points to the root dir of another Tradefed binary that will be used to drive"
+                            + " the invocation")
     private File mDelegatedTfRootDir;
 
     @Option(
             name = CommandOptions.INVOCATION_DATA,
             description = "Mirror of CommandOptions#INVOCATION_DATA")
     private UniqueMultiMap<String, String> mInvocationData = new UniqueMultiMap<>();
+
+    // Not used directly but needed for proper parsing.
+    @SuppressWarnings("unused")
+    @Option(
+            name = "cts-params",
+            description =
+                    "This option is special and can mess up the best effort parser, define "
+                            + "it so it knows how to parse it.")
+    private List<String> mCtsParams = new ArrayList<>();
 
     private String[] mCommandLine = null;
 
