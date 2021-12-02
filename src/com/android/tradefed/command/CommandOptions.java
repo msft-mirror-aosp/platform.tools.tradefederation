@@ -260,7 +260,7 @@ public class CommandOptions implements ICommandOptions {
     @Option(
             name = "report-invocation-complete-logs",
             description = "Whether or not to attempt to report the logs until invocationComplete.")
-    private boolean mReportInvocationCompleteLogs = false;
+    private boolean mReportInvocationCompleteLogs = true;
 
     @Option(
             name = "disable-invocation-setup-and-teardown",
