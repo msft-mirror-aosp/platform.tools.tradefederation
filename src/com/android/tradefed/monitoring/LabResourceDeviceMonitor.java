@@ -82,6 +82,7 @@ public class LabResourceDeviceMonitor extends LabResourceServiceGrpc.LabResource
     public static final String POOL_ATTRIBUTE_NAME = "pool";
     public static final String RUN_TARGET_ATTRIBUTE_NAME = "run_target";
     public static final String STATUS_RESOURCE_NAME = "status";
+    public static final String HARDWARE_REVISION_RESOURCE_NAME = "hardware_revision";
     public static final float FIXED_METRIC_VALUE = 1.0f;
     private static final long EXECUTOR_TERMINATE_TIMEOUT_SEC = 10;
     private Server mServer;
