@@ -1271,7 +1271,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         .createPartialConfigurationFromArgs(
                                 originalArgs,
                                 getKeyStoreClient(),
-                                ImmutableSet.of(ProxyConfiguration.PROXY_CONFIG_TYPE_KEY));
+                                ImmutableSet.of(ProxyConfiguration.PROXY_CONFIG_TYPE_KEY),
+                                null);
         try {
             config.resolveDynamicOptions(new DynamicRemoteFileResolver());
         } catch (BuildRetrievalError e) {
@@ -1322,8 +1323,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                                                 Configuration.DEVICE_REQUIREMENTS_TYPE_NAME,
                                                 Configuration.LOGGER_TYPE_NAME,
                                                 Configuration.LOG_SAVER_TYPE_NAME,
-                                                Configuration.RESULT_REPORTER_TYPE_NAME));
-                config.setConfigurationObject(TradefedDelegator.DELEGATE_OBJECT, delegator);
+                                                Configuration.RESULT_REPORTER_TYPE_NAME),
+                                        delegator);
                 setDelegateLevelReporting(config);
                 return config;
             }
