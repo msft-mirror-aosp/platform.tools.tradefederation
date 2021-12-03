@@ -4869,6 +4869,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     getDisplayString(selector.getDeviceProductVariant(idevice)),
                     getDisplayString(idevice.getProperty(DeviceProperties.SDK_VERSION)),
                     getDisplayString(idevice.getProperty(DeviceProperties.BUILD_ALIAS)),
+                    getDisplayString(idevice.getProperty(DeviceProperties.HARDWARE_REVISION)),
                     getDisplayString(getBattery()),
                     getDeviceClass(),
                     getDisplayString(getMacAddress()),

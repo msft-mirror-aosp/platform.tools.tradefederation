@@ -1168,6 +1168,7 @@ public class DeviceManagerTest {
                         "product_test",
                         "sdk",
                         "bid_test",
+                        null,
                         "50",
                         "class",
                         MAC_ADDRESS,
