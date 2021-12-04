@@ -462,6 +462,7 @@ public class AndroidJUnitTest extends InstrumentationTest
         ITestDevice device = getDevice();
         try {
             CLog.d("Attempting to push filters to %s", destination);
+            boolean filterDirExists = device.doesFileExist(mTestFilterDir);
             if (!device.pushFile(testFile, destination)) {
                 String message =
                         String.format(
@@ -471,7 +472,10 @@ public class AndroidJUnitTest extends InstrumentationTest
                 throw new RuntimeException(message);
             }
             // in case the folder was created as 'root' we make is usable.
-            device.executeShellCommand(String.format("chown -R shell:shell %s", mTestFilterDir));
+            if (!filterDirExists) {
+                device.executeShellCommand(
+                        String.format("chown -R shell:shell %s", mTestFilterDir));
+            }
         } catch (DeviceNotAvailableException e) {
             reportEarlyFailure(listener, e.getMessage());
             throw e;
