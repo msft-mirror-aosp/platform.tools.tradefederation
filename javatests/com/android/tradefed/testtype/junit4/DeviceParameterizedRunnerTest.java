@@ -15,10 +15,12 @@
  */
 package com.android.tradefed.testtype.junit4;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -29,13 +31,12 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.HostTest;
 
-import junitparams.Parameters;
-
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -44,6 +45,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
+import junitparams.Parameters;
+
 /** Unit tests for {@link DeviceParameterizedRunner}. */
 @RunWith(JUnit4.class)
 public class DeviceParameterizedRunnerTest {
@@ -51,6 +54,9 @@ public class DeviceParameterizedRunnerTest {
     /** Test class that uses the parameterized runner. */
     @RunWith(DeviceParameterizedRunner.class)
     public static class TestJUnitParamsClass extends BaseHostJUnit4Test {
+
+        @Option(name = "test-option")
+        private int mOption = 5;
 
         /** Not all test cases have to be parameterized. */
         @Test
@@ -65,6 +71,7 @@ public class DeviceParameterizedRunnerTest {
             assertNotNull(param);
             assertNotNull(getDevice());
             assertNotNull(getBuild());
+            assertEquals(10, mOption);
         }
 
         public List<String> getParams() {
@@ -117,6 +124,7 @@ public class DeviceParameterizedRunnerTest {
     public void testRun() throws Exception {
         OptionSetter setter = new OptionSetter(mTest);
         setter.setOptionValue("class", TestJUnitParamsClass.class.getName());
+        setter.setOptionValue("set-option", "test-option:10");
 
         TestDescription test1 =
                 new TestDescription(TestJUnitParamsClass.class.getName(), "testOne");
@@ -129,14 +137,18 @@ public class DeviceParameterizedRunnerTest {
 
         mTest.run(mTestInfo, mListener);
 
-        verify(mListener).testRunStarted(TestJUnitParamsClass.class.getName(), 3);
-        verify(mListener).testStarted(test1);
-        verify(mListener).testEnded(test1, new HashMap<String, Metric>());
-        verify(mListener).testStarted(test2_p1);
-        verify(mListener).testEnded(test2_p1, new HashMap<String, Metric>());
-        verify(mListener).testStarted(test2_2);
-        verify(mListener).testEnded(test2_2, new HashMap<String, Metric>());
-        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        InOrder inOrder = Mockito.inOrder(mListener);
+        inOrder.verify(mListener).testRunStarted(TestJUnitParamsClass.class.getName(), 3);
+        inOrder.verify(mListener).testStarted(test1);
+        inOrder.verify(mListener).testEnded(test1, new HashMap<String, Metric>());
+        inOrder.verify(mListener).testStarted(test2_p1);
+        inOrder.verify(mListener).testEnded(test2_p1, new HashMap<String, Metric>());
+        inOrder.verify(mListener).testStarted(test2_2);
+        inOrder.verify(mListener).testEnded(test2_2, new HashMap<String, Metric>());
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verifyNoMoreInteractions();
+        Mockito.verifyNoMoreInteractions(mListener);
     }
 
     /** Test running the parameterized tests in collect-tests-only mode. */
