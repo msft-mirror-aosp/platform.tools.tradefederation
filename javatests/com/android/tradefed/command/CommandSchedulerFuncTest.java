@@ -41,7 +41,9 @@ import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.ITestInvocation;
+import com.android.tradefed.log.ILeveledLogOutput;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.util.RunInterruptedException;
@@ -76,6 +78,8 @@ public class CommandSchedulerFuncTest {
     @Mock IConfiguration mSlowConfig;
     @Mock IConfiguration mFastConfig;
     @Mock IConfigurationFactory mMockConfigFactory;
+    @Mock ILeveledLogOutput mMockLogLevel;
+    @Mock ILogSaver mMockLogSaver;
     private CommandOptions mCommandOptions;
     private DeviceSelectionOptions mDeviceOptions;
     private boolean mInterruptible = false;
@@ -127,6 +131,10 @@ public class CommandSchedulerFuncTest {
         when(mFastConfig.getConfigurationDescription()).thenReturn(new ConfigurationDescriptor());
         when(mFastConfig.getTests()).thenReturn(new ArrayList<>());
         when(mSlowConfig.getTests()).thenReturn(new ArrayList<>());
+        when(mFastConfig.getLogSaver()).thenReturn(mMockLogSaver);
+        when(mSlowConfig.getLogSaver()).thenReturn(mMockLogSaver);
+        when(mFastConfig.getLogOutput()).thenReturn(mMockLogLevel);
+        when(mSlowConfig.getLogOutput()).thenReturn(mMockLogLevel);
 
         mCommandScheduler =
                 new CommandScheduler() {

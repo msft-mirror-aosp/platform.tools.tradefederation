@@ -1404,9 +1404,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public boolean doesFileExist(String deviceFilePath) throws DeviceNotAvailableException {
+        return doesFileExist(deviceFilePath, 0);
+    }
+
+    @Override
+    public boolean doesFileExist(String deviceFilePath, int userId)
+            throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         try {
-            if (isSdcardOrEmulated(deviceFilePath)) {
+            // Skip ContentProvider for user 0
+            if (isSdcardOrEmulated(deviceFilePath) && userId != 0) {
                 ContentProviderHandler handler = getContentProvider();
                 if (handler != null) {
                     CLog.d("Delegating check to ContentProvider doesFileExist(%s)", deviceFilePath);
@@ -4862,6 +4869,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     getDisplayString(selector.getDeviceProductVariant(idevice)),
                     getDisplayString(idevice.getProperty(DeviceProperties.SDK_VERSION)),
                     getDisplayString(idevice.getProperty(DeviceProperties.BUILD_ALIAS)),
+                    getDisplayString(idevice.getProperty(DeviceProperties.HARDWARE_REVISION)),
                     getDisplayString(getBattery()),
                     getDeviceClass(),
                     getDisplayString(getMacAddress()),
@@ -4906,12 +4914,26 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         String output = executeShellCommand(String.format("ps -p %s -o stime=", pidString));
         if (output != null && !output.trim().isEmpty()) {
             output = output.trim();
-            String dateInSecond = executeShellCommand("date -d\"" + output + "\" +%s");
-            if (Strings.isNullOrEmpty(dateInSecond)) {
+
+            String dateInSeconds;
+
+            // toybox has a bug that prevents this more explicit command
+            // from working on newer devices, but it's the only thing that works
+            // on the older ones.
+            if (getApiLevel() <= 28) {
+                dateInSeconds =
+                        executeShellCommand(
+                                "date -d \"$(date +%Y:%m:%e):"
+                                        + output
+                                        + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+            } else {
+                dateInSeconds = executeShellCommand("date -d\"" + output + "\" +%s");
+            }
+            if (Strings.isNullOrEmpty(dateInSeconds)) {
                 return -1L;
             }
             try {
-                return Long.parseLong(dateInSecond.trim());
+                return Long.parseLong(dateInSeconds.trim());
             } catch (NumberFormatException e) {
                 CLog.e("Failed to parse the start time for process:");
                 CLog.e(e);
