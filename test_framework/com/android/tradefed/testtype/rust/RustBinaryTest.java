@@ -192,7 +192,7 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
         String name = new File(fullPath).getName();
         listener.testRunStarted(name, testCount, 0, startTimeMs);
         for (String filter : includeFilters) {
-            String newCmd = addFiltersToCommand(cmd, filter);
+            String newCmd = "RUST_BACKTRACE=full " + addFiltersToCommand(cmd, filter);
 
             if (mConfiguration != null
                     && mConfiguration.getCoverageOptions().getCoverageToolchains().contains(GCOV)) {
