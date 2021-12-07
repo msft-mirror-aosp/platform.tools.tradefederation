@@ -203,7 +203,8 @@ public class ModuleOemTargetPreparer extends InstallApexModuleTargetPreparer {
                     device.getDeviceDescriptor(),
                     DeviceErrorIdentifier.FAIL_PUSH_FILE);
         }
-
+        // Add a wait time to collect module info after module push
+        RunUtil.getDefault().sleep(delayWaitingTime);
         ModuleInfo moduleInfo =
                 new ModuleInfo(packageName, preloadVersion, containsApk(moduleFile));
         return moduleInfo;
