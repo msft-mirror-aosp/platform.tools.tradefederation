@@ -840,37 +840,6 @@ public class TestDeviceFuncTest implements IDeviceTest {
         }
     }
 
-    /**
-     * Basic test for encryption if encryption is supported.
-     *
-     * <p>Calls {@link TestDevice#encryptDevice(boolean)}, {@link TestDevice#unlockDevice()}, and
-     * {@link TestDevice#unencryptDevice()}, as well as reboots the device while the device is
-     * encrypted.
-     *
-     * @throws DeviceNotAvailableException
-     */
-    @Test
-    public void testEncryption() throws DeviceNotAvailableException {
-        CLog.i("testEncryption");
-
-        if (!getDevice().isEncryptionSupported()) {
-            CLog.i("Encrypting userdata is not supported. Skipping test.");
-            return;
-        }
-
-        assertTrue(getDevice().unencryptDevice());
-        assertFalse(getDevice().isDeviceEncrypted());
-        assertTrue(getDevice().encryptDevice(false));
-        assertTrue(getDevice().isDeviceEncrypted());
-        assertTrue(getDevice().unlockDevice());
-        // TODO: decryptUserData() can be called more than once, the framework should only be
-        // restarted on the first call.
-        assertTrue(getDevice().unlockDevice());
-        getDevice().reboot();
-        assertTrue(getDevice().unencryptDevice());
-        assertFalse(getDevice().isDeviceEncrypted());
-    }
-
     /** Test that {@link TestDevice#getProperty(String)} works after a reboot. */
     @Test
     public void testGetProperty() throws Exception {
