@@ -1096,40 +1096,6 @@ public interface INativeDevice {
     public boolean isAdbRoot() throws DeviceNotAvailableException;
 
     /**
-     * Encrypts the device.
-     * <p/>
-     * Encrypting the device may be done inplace or with a wipe.  Inplace encryption will not wipe
-     * any data on the device but normally takes a couple orders of magnitude longer than the wipe.
-     * <p/>
-     * This method will reboot the device if it is not already encrypted and will block until device
-     * is online.  Also, it will not decrypt the device after the reboot.  Therefore, the device
-     * might not be fully booted and/or ready to be tested when this method returns.
-     *
-     * @param inplace if the encryption process should take inplace and the device should not be
-     * wiped.
-     * @return <code>true</code> if successful.
-     * @throws DeviceNotAvailableException if device is not available after reboot.
-     * @throws UnsupportedOperationException if encryption is not supported on the device.
-     */
-    public boolean encryptDevice(boolean inplace) throws DeviceNotAvailableException,
-            UnsupportedOperationException;
-
-    /**
-     * Unencrypts the device.
-     * <p/>
-     * Unencrypting the device may cause device to be wiped and may reboot device. This method will
-     * block until device is available and ready for testing.  Requires fastboot inorder to wipe the
-     * userdata partition.
-     *
-     * @return <code>true</code> if successful.
-     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
-     * recovered.
-     * @throws UnsupportedOperationException if encryption is not supported on the device.
-     */
-    public boolean unencryptDevice() throws DeviceNotAvailableException,
-            UnsupportedOperationException;
-
-    /**
      * Unlocks the device if the device is in an encrypted state.
      * </p>
      * This method may restart the framework but will not call {@link #postBootSetup()}. Therefore,
