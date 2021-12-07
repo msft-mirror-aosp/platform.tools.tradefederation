@@ -1868,6 +1868,11 @@ public class NativeDeviceTest {
                     }
 
                     @Override
+                    public String getProperty(String name) throws DeviceNotAvailableException {
+                        return "block";
+                    }
+
+                    @Override
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "200 checkpw -1";
@@ -1895,6 +1900,11 @@ public class NativeDeviceTest {
                     @Override
                     public boolean enableAdbRoot() throws DeviceNotAvailableException {
                         return true;
+                    }
+
+                    @Override
+                    public String getProperty(String name) throws DeviceNotAvailableException {
+                        return "block";
                     }
 
                     @Override
@@ -1928,6 +1938,11 @@ public class NativeDeviceTest {
                     }
 
                     @Override
+                    public String getProperty(String name) throws DeviceNotAvailableException {
+                        return "block";
+                    }
+
+                    @Override
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "";
@@ -1955,6 +1970,11 @@ public class NativeDeviceTest {
                     @Override
                     public boolean enableAdbRoot() throws DeviceNotAvailableException {
                         return true;
+                    }
+
+                    @Override
+                    public String getProperty(String name) throws DeviceNotAvailableException {
+                        return "block";
                     }
 
                     @Override
