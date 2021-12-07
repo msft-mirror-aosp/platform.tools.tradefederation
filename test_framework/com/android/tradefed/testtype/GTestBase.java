@@ -603,7 +603,9 @@ public abstract class GTestBase
             gTestCmdLine.append(String.format("LD_LIBRARY_PATH=%s ", mLdLibraryPath));
         }
 
-        for (String environmentVar : mEnvironmentVars) gTestCmdLine.append(environmentVar + " ");
+        for (String environmentVar : mEnvironmentVars) {
+            gTestCmdLine.append(environmentVar + " ");
+        }
 
         // su to requested user
         if (mRunTestAs != null) {
