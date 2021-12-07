@@ -3753,6 +3753,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             CLog.d("Device %s is not encrypted, skipping", getSerialNumber());
             return true;
         }
+        String encryptionType = getProperty("ro.crypto.type");
+        if (!"block".equals(encryptionType)) {
+            CLog.d(
+                    "Skipping unlockDevice since it's not encrypted. ro.crypto.type=%s",
+                    encryptionType);
+            return true;
+        }
 
         CLog.i("Unlocking device %s", getSerialNumber());
 
