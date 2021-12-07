@@ -375,10 +375,10 @@ public class MoblyBinaryHostTest
             }
         } else if ("*".equals(androidDeviceValue)) {
             // Auto-find Android devices - add explicit device list with serials
-            androidDeviceList = new ArrayList();
+            androidDeviceList = new ArrayList<>();
             controllerMap.put("AndroidDevice", androidDeviceList);
             for (int index = 0; index < devices.size(); index++) {
-                Map<String, String> deviceMap = new HashMap();
+                Map<String, String> deviceMap = new HashMap<>();
                 androidDeviceList.add(deviceMap);
                 deviceMap.put("serial", devices.get(index).getSerialNumber());
             }
@@ -391,7 +391,7 @@ public class MoblyBinaryHostTest
         // Inject log path
         Map<String, Object> paramsMap = (Map<String, Object>) configMap.get("MoblyParams");
         if (paramsMap == null) {
-            paramsMap = new HashMap();
+            paramsMap = new HashMap<>();
             configMap.put("MoblyParams", paramsMap);
         }
         paramsMap.put("LogPath", getLogDirAbsolutePath());
