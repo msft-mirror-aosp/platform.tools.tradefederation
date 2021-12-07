@@ -261,7 +261,9 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         for (int attempt = 0; attempt < getOptions().getGceMaxAttempt(); attempt++) {
             try {
                 mGceAvd = getGceHandler().startGce(getInitialIp(), attributes);
-                if (mGceAvd != null) break;
+                if (mGceAvd != null) {
+                    break;
+                }
             } catch (TargetSetupError tse) {
                 CLog.w(
                         "Failed to start Gce with attempt: %s out of %s. With Exception: %s",
