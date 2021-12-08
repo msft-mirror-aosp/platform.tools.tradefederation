@@ -42,6 +42,7 @@ public class AdbRootElevatorTest {
         MockitoAnnotations.initMocks(this);
     }
 
+    @SuppressWarnings("try")
     @Test
     public void testEnablesAndDisablesRoot() throws Exception {
         when(mMockDevice.isAdbRoot()).thenReturn(false);
@@ -58,6 +59,7 @@ public class AdbRootElevatorTest {
         inOrder.verify(mMockDevice).disableAdbRoot();
     }
 
+    @SuppressWarnings("try")
     @Test
     public void testRootAlreadyEnabled_doesNotEnableOrDisableRoot() throws Exception {
         when(mMockDevice.isAdbRoot()).thenReturn(true);
@@ -72,6 +74,7 @@ public class AdbRootElevatorTest {
         inOrder.verifyNoMoreInteractions();
     }
 
+    @SuppressWarnings("try")
     @Test
     public void testFailsToEnableAdbRoot_throwsException() throws Exception {
         when(mMockDevice.isAdbRoot()).thenReturn(false);
@@ -86,6 +89,7 @@ public class AdbRootElevatorTest {
         verify(mMockDevice, never()).disableAdbRoot();
     }
 
+    @SuppressWarnings("try")
     @Test
     public void testDeviceNotAvailableOnRoot_throwsException() throws Exception {
         when(mMockDevice.isAdbRoot()).thenReturn(false);
