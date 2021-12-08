@@ -62,7 +62,9 @@ class CommandFileWatcher extends Thread {
          * @param cmdFile a {@link File} representing the command file path
          */
         public CommandFile(File cmdFile) {
-            if (cmdFile == null) throw new NullPointerException();
+            if (cmdFile == null) {
+                throw new NullPointerException();
+            }
 
             this.file = cmdFile;
             this.modTime = cmdFile.lastModified();
@@ -84,7 +86,9 @@ class CommandFileWatcher extends Thread {
          *        main command file, {@code cmdFile}.
          */
         public CommandFile(File cmdFile, List<String> extraArgs, List<File> dependencies) {
-            if (cmdFile == null) throw new NullPointerException();
+            if (cmdFile == null) {
+                throw new NullPointerException();
+            }
 
             this.file = cmdFile;
             this.modTime = cmdFile.lastModified();
