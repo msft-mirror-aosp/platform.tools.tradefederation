@@ -31,7 +31,9 @@ public class ConsoleReaderOutputStream extends OutputStream {
     private String unfinishedLine = "";
 
     public ConsoleReaderOutputStream(LineReader reader) {
-        if (reader == null) throw new NullPointerException();
+        if (reader == null) {
+            throw new NullPointerException();
+        }
         mConsoleReader = reader;
     }
 

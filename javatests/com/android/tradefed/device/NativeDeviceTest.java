@@ -1868,6 +1868,11 @@ public class NativeDeviceTest {
                     }
 
                     @Override
+                    public String getProperty(String name) throws DeviceNotAvailableException {
+                        return "block";
+                    }
+
+                    @Override
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "200 checkpw -1";
@@ -1895,6 +1900,11 @@ public class NativeDeviceTest {
                     @Override
                     public boolean enableAdbRoot() throws DeviceNotAvailableException {
                         return true;
+                    }
+
+                    @Override
+                    public String getProperty(String name) throws DeviceNotAvailableException {
+                        return "block";
                     }
 
                     @Override
@@ -1928,6 +1938,11 @@ public class NativeDeviceTest {
                     }
 
                     @Override
+                    public String getProperty(String name) throws DeviceNotAvailableException {
+                        return "block";
+                    }
+
+                    @Override
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "";
@@ -1955,6 +1970,11 @@ public class NativeDeviceTest {
                     @Override
                     public boolean enableAdbRoot() throws DeviceNotAvailableException {
                         return true;
+                    }
+
+                    @Override
+                    public String getProperty(String name) throws DeviceNotAvailableException {
+                        return "block";
                     }
 
                     @Override
@@ -2395,21 +2415,42 @@ public class NativeDeviceTest {
         assertNull(spy.getProcessPid("system_server"));
     }
 
-    /** Test get ProcessInfo by process name */
-    @Test
-    public void testGetProcessByName() throws Exception {
+    public void runTestGetProcessByName(int apiLevel) throws Exception {
         final String fakePid = "914";
         final String fakeCreationTime = "1559091922";
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn(fakePid).when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p " + fakePid + " -o stime=");
-        doReturn(fakeCreationTime).when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
+
+        doReturn(apiLevel).when(spy).getApiLevel();
+
+        if (apiLevel <= 28) {
+            doReturn(fakeCreationTime)
+                    .when(spy)
+                    .executeShellCommand(
+                            "date -d \"$(date +%Y:%m:%e):"
+                                    + "12:07:32"
+                                    + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+        } else {
+            doReturn(fakeCreationTime).when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
+        }
+
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/" + fakePid);
 
+        ProcessInfo info = spy.getProcessByName("system_server");
         assertEquals(Integer.parseInt(fakePid), spy.getProcessByName("system_server").getPid());
         assertEquals(
                 Long.parseLong(fakeCreationTime),
                 spy.getProcessByName("system_server").getStartTime());
+    }
+
+    /** Test get ProcessInfo by process name */
+    @Test
+    public void testGetProcessByName() throws Exception {
+        runTestGetProcessByName(26);
+        runTestGetProcessByName(28);
+        runTestGetProcessByName(29);
+        runTestGetProcessByName(31);
     }
 
     /** Test get ProcessInfo by process name return null for invalid process */
@@ -2598,6 +2639,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
+        doReturn(29).when(spy).getApiLevel();
         doReturn("1559091922").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
@@ -2630,6 +2672,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
+        doReturn(29).when(spy).getApiLevel();
         doReturn("1559091999").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
@@ -2655,6 +2698,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
+        doReturn(29).when(spy).getApiLevel();
         doReturn("1559091939").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
@@ -2674,6 +2718,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
+        doReturn(29).when(spy).getApiLevel();
         doReturn("1559091992").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
@@ -2695,6 +2740,7 @@ public class NativeDeviceTest {
         ProcessInfo prev2 = new ProcessInfo("system", 914, "system_server", 1559091922L);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
+        doReturn(29).when(spy).getApiLevel();
         doReturn("1559091922").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
@@ -2725,6 +2771,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
+        doReturn(29).when(spy).getApiLevel();
         doReturn("1559091999").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
@@ -2750,6 +2797,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
+        doReturn(29).when(spy).getApiLevel();
         doReturn("1559091935").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(
@@ -2771,6 +2819,7 @@ public class NativeDeviceTest {
         TestableAndroidNativeDevice spy = Mockito.spy(mTestDevice);
         doReturn("914").doReturn("914").when(spy).executeShellCommand("pidof system_server");
         doReturn("12:07:32").when(spy).executeShellCommand("ps -p 914 -o stime=");
+        doReturn(29).when(spy).getApiLevel();
         doReturn("1559091995").when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         doReturn("system").when(spy).executeShellCommand("stat -c%U /proc/914");
         doReturn(

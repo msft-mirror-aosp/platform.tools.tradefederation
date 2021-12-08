@@ -296,11 +296,10 @@ public class ClusterHostUtilTest {
     @Test
     public void testGetRunTarget_withStubDevice() {
         final String hostname = ClusterHostUtil.getHostName();
-        // with a stub device.
         DeviceDescriptor device =
                 new DeviceDescriptor(
                         DEVICE_SERIAL,
-                        true,
+                        true, // Stub device.
                         DeviceAllocationState.Available,
                         "product",
                         "productVariant",
@@ -313,12 +312,30 @@ public class ClusterHostUtilTest {
     }
 
     @Test
-    public void testGetRunTarget_withEmulator() {
-        final String hostname = ClusterHostUtil.getHostName();
-        // with a stub device.
+    public void testGetRunTarget_withFastbootDevice() {
         DeviceDescriptor device =
                 new DeviceDescriptor(
-                        EMULATOR_SERIAL,
+                        DEVICE_SERIAL,
+                        true, // Stub device.
+                        DeviceAllocationState.Available,
+                        "product",
+                        "productVariant",
+                        "sdkVersion",
+                        "buildId",
+                        "batteryLevel",
+                        FastbootDevice.class.getSimpleName(), // Fastboot device.
+                        "macAddress",
+                        "simState",
+                        "simOperator");
+        Assert.assertEquals(DEVICE_SERIAL, ClusterHostUtil.getRunTarget(device, "{SERIAL}", null));
+    }
+
+    @Test
+    public void testGetRunTarget_withEmulator() {
+        final String hostname = ClusterHostUtil.getHostName();
+        DeviceDescriptor device =
+                new DeviceDescriptor(
+                        EMULATOR_SERIAL, // Emulator.
                         false,
                         DeviceAllocationState.Available,
                         "product",
@@ -334,10 +351,9 @@ public class ClusterHostUtilTest {
     @Test
     public void testGetRunTarget_withEmptyDeviceSerial() {
         final String hostname = ClusterHostUtil.getHostName();
-        // with a stub device.
         DeviceDescriptor device =
                 new DeviceDescriptor(
-                        "",
+                        "", // Empty serial number.
                         false,
                         DeviceAllocationState.Available,
                         "product",

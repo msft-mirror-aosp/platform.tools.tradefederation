@@ -22,7 +22,6 @@ import com.android.ddmlib.IDevice;
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.ddmlib.InstallException;
 import com.android.ddmlib.Log.LogLevel;
-import com.android.ddmlib.NullOutputReceiver;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.SyncException.SyncError;
@@ -156,10 +155,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** The password for encrypting and decrypting the device. */
     private static final String ENCRYPTION_PASSWORD = "android";
-    /** Encrypting with inplace can take up to 2 hours. */
-    private static final int ENCRYPTION_INPLACE_TIMEOUT_MIN = 2 * 60;
-    /** Encrypting with wipe can take up to 20 minutes. */
-    private static final long ENCRYPTION_WIPE_TIMEOUT_MIN = 20;
 
     /** The maximum system_server start delay in seconds after device boot up */
     private static final int MAX_SYSTEM_SERVER_DELAY_AFTER_BOOT_UP_SEC = 25;
@@ -3611,137 +3606,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * {@inheritDoc}
      */
     @Override
-    public boolean encryptDevice(boolean inplace) throws DeviceNotAvailableException,
-            UnsupportedOperationException {
-        if (!isEncryptionSupported()) {
-            throw new UnsupportedOperationException(String.format("Can't encrypt device %s: "
-                    + "encryption not supported", getSerialNumber()));
-        }
-
-        if (isDeviceEncrypted()) {
-            CLog.d("Device %s is already encrypted, skipping", getSerialNumber());
-            return true;
-        }
-
-        enableAdbRoot();
-
-        String encryptMethod;
-        long timeout;
-        if (inplace) {
-            encryptMethod = "inplace";
-            timeout = ENCRYPTION_INPLACE_TIMEOUT_MIN;
-        } else {
-            encryptMethod = "wipe";
-            timeout = ENCRYPTION_WIPE_TIMEOUT_MIN;
-        }
-
-        CLog.i("Encrypting device %s via %s", getSerialNumber(), encryptMethod);
-
-        // enable crypto takes one of the following formats:
-        // cryptfs enablecrypto <wipe|inplace> <passwd>
-        // cryptfs enablecrypto <wipe|inplace> default|password|pin|pattern [passwd]
-        // Try the first one first, if it outputs "500 0 Usage: ...", try the second.
-        CollectingOutputReceiver receiver = new CollectingOutputReceiver();
-        String command = String.format("vdc cryptfs enablecrypto %s \"%s\"", encryptMethod,
-                ENCRYPTION_PASSWORD);
-        executeShellCommand(command, receiver, timeout, TimeUnit.MINUTES, 1);
-        if (receiver.getOutput().split(":")[0].matches("500 \\d+ Usage")) {
-            command = String.format("vdc cryptfs enablecrypto %s default", encryptMethod);
-            executeShellCommand(command, new NullOutputReceiver(), timeout, TimeUnit.MINUTES, 1);
-        }
-
-        waitForDeviceNotAvailable("reboot", getCommandTimeout());
-        waitForDeviceOnline();  // Device will not become available until the user data is unlocked.
-
-        return isDeviceEncrypted();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean unencryptDevice() throws DeviceNotAvailableException,
-            UnsupportedOperationException {
-        if (!isEncryptionSupported()) {
-            throw new UnsupportedOperationException(String.format("Can't unencrypt device %s: "
-                    + "encryption not supported", getSerialNumber()));
-        }
-
-        if (!isDeviceEncrypted()) {
-            CLog.d("Device %s is already unencrypted, skipping", getSerialNumber());
-            return true;
-        }
-
-        CLog.i("Unencrypting device %s", getSerialNumber());
-
-        // If the device supports fastboot format, then we're done.
-        if (!mOptions.getUseFastbootErase()) {
-            rebootIntoBootloader();
-            fastbootWipePartition("userdata");
-            rebootUntilOnline();
-            waitForDeviceAvailable(ENCRYPTION_WIPE_TIMEOUT_MIN * 60 * 1000);
-            return true;
-        }
-
-        // Determine if we need to format partition instead of wipe.
-        boolean format = false;
-        String output = executeShellCommand("vdc volume list");
-        String[] splitOutput;
-        if (output != null) {
-            splitOutput = output.split("\r?\n");
-            for (String line : splitOutput) {
-                if (line.startsWith("110 ") && line.contains("sdcard /mnt/sdcard") &&
-                        !line.endsWith("0")) {
-                    format = true;
-                }
-            }
-        }
-
-        rebootIntoBootloader();
-        fastbootWipePartition("userdata");
-
-        // If the device requires time to format the filesystem after fastboot erase userdata, wait
-        // for the device to reboot a second time.
-        if (mOptions.getUnencryptRebootTimeout() > 0) {
-            rebootUntilOnline();
-            if (waitForDeviceNotAvailable(mOptions.getUnencryptRebootTimeout())) {
-                waitForDeviceOnline();
-            }
-        }
-
-        if (format) {
-            CLog.d("Need to format sdcard for device %s", getSerialNumber());
-
-            RecoveryMode cachedRecoveryMode = getRecoveryMode();
-            setRecoveryMode(RecoveryMode.ONLINE);
-
-            output = executeShellCommand("vdc volume format sdcard");
-            if (output == null) {
-                CLog.e("Command vdc volume format sdcard failed will no output for device %s:\n%s",
-                        getSerialNumber());
-                setRecoveryMode(cachedRecoveryMode);
-                return false;
-            }
-            splitOutput = output.split("\r?\n");
-            if (!splitOutput[splitOutput.length - 1].startsWith("200 ")) {
-                CLog.e("Command vdc volume format sdcard failed for device %s:\n%s",
-                        getSerialNumber(), output);
-                setRecoveryMode(cachedRecoveryMode);
-                return false;
-            }
-
-            setRecoveryMode(cachedRecoveryMode);
-        }
-
-        reboot();
-
-        return true;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
     public boolean unlockDevice() throws DeviceNotAvailableException,
             UnsupportedOperationException {
         if (!isEncryptionSupported()) {
@@ -3751,6 +3615,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         if (!isDeviceEncrypted()) {
             CLog.d("Device %s is not encrypted, skipping", getSerialNumber());
+            return true;
+        }
+        String encryptionType = getProperty("ro.crypto.type");
+        if (!"block".equals(encryptionType)) {
+            CLog.d(
+                    "Skipping unlockDevice since it's not encrypted. ro.crypto.type=%s",
+                    encryptionType);
             return true;
         }
 
@@ -4869,6 +4740,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     getDisplayString(selector.getDeviceProductVariant(idevice)),
                     getDisplayString(idevice.getProperty(DeviceProperties.SDK_VERSION)),
                     getDisplayString(idevice.getProperty(DeviceProperties.BUILD_ALIAS)),
+                    getDisplayString(idevice.getProperty(DeviceProperties.HARDWARE_REVISION)),
                     getDisplayString(getBattery()),
                     getDeviceClass(),
                     getDisplayString(getMacAddress()),
@@ -4913,12 +4785,26 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         String output = executeShellCommand(String.format("ps -p %s -o stime=", pidString));
         if (output != null && !output.trim().isEmpty()) {
             output = output.trim();
-            String dateInSecond = executeShellCommand("date -d\"" + output + "\" +%s");
-            if (Strings.isNullOrEmpty(dateInSecond)) {
+
+            String dateInSeconds;
+
+            // toybox has a bug that prevents this more explicit command
+            // from working on newer devices, but it's the only thing that works
+            // on the older ones.
+            if (getApiLevel() <= 28) {
+                dateInSeconds =
+                        executeShellCommand(
+                                "date -d \"$(date +%Y:%m:%e):"
+                                        + output
+                                        + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+            } else {
+                dateInSeconds = executeShellCommand("date -d\"" + output + "\" +%s");
+            }
+            if (Strings.isNullOrEmpty(dateInSeconds)) {
                 return -1L;
             }
             try {
-                return Long.parseLong(dateInSecond.trim());
+                return Long.parseLong(dateInSeconds.trim());
             } catch (NumberFormatException e) {
                 CLog.e("Failed to parse the start time for process:");
                 CLog.e(e);

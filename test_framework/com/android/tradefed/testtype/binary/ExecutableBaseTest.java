@@ -162,7 +162,9 @@ public abstract class ExecutableBaseTest
             String cmd = testCommands.get(testName);
             String path = findBinary(cmd);
             TestDescription description = new TestDescription(testName, testName);
-            if (shouldSkipCurrentTest(description)) continue;
+            if (shouldSkipCurrentTest(description)) {
+                continue;
+            }
             if (path == null) {
                 listener.testRunStarted(testName, 0);
                 FailureDescription failure =

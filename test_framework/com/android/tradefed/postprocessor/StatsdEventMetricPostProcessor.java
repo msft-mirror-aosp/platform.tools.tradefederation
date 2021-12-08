@@ -157,7 +157,7 @@ public class StatsdEventMetricPostProcessor extends StatsdGenericPostProcessor {
             String placeholder = matcher.group();
             // Strip the brackets.
             String fieldReference = placeholder.substring(1, placeholder.length() - 1);
-            List<String> actual = new ArrayList();
+            List<String> actual = new ArrayList<>();
             if (fieldReference.startsWith("_")) {
                 actual.addAll(
                         ProtoUtil.getNestedFieldFromMessageAsStrings(

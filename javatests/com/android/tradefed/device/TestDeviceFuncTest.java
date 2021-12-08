@@ -24,6 +24,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
+import static org.junit.Assume.assumeTrue;
 import static org.mockito.Mockito.mock;
 
 import com.android.ddmlib.IDevice;
@@ -666,6 +667,11 @@ public class TestDeviceFuncTest implements IDeviceTest {
     public void testDeviceSoftRestart() throws DeviceNotAvailableException {
         CLog.i("testDeviceSoftRestartSince");
 
+        // API 29 was the first to support soft reboot detection in this way
+        assumeTrue(
+                "Test only valid for devices at or above API level 29",
+                mTestDevice.getApiLevel() >= 29);
+
         // Get system_server process info
         ProcessInfo prev = mTestDevice.getProcessByName("system_server");
         long deviceTimeMs = mTestDevice.getDeviceDate();
@@ -684,6 +690,9 @@ public class TestDeviceFuncTest implements IDeviceTest {
         assertTrue(mTestDevice.deviceSoftRestarted(prev));
         prev = waitForSystemServerProcess();
         deviceTimeMs = mTestDevice.getDeviceDate();
+        // Sleep for a second to ensure the reboot happens in at least the second after
+        // we took this timestamp
+        RunUtil.getDefault().sleep(1000);
         mTestDevice.reboot();
         if (!mTestDevice.isAdbRoot()) {
             mTestDevice.enableAdbRoot();
@@ -829,37 +838,6 @@ public class TestDeviceFuncTest implements IDeviceTest {
         } finally {
             FileUtil.deleteFile(tmpTxtFile);
         }
-    }
-
-    /**
-     * Basic test for encryption if encryption is supported.
-     *
-     * <p>Calls {@link TestDevice#encryptDevice(boolean)}, {@link TestDevice#unlockDevice()}, and
-     * {@link TestDevice#unencryptDevice()}, as well as reboots the device while the device is
-     * encrypted.
-     *
-     * @throws DeviceNotAvailableException
-     */
-    @Test
-    public void testEncryption() throws DeviceNotAvailableException {
-        CLog.i("testEncryption");
-
-        if (!getDevice().isEncryptionSupported()) {
-            CLog.i("Encrypting userdata is not supported. Skipping test.");
-            return;
-        }
-
-        assertTrue(getDevice().unencryptDevice());
-        assertFalse(getDevice().isDeviceEncrypted());
-        assertTrue(getDevice().encryptDevice(false));
-        assertTrue(getDevice().isDeviceEncrypted());
-        assertTrue(getDevice().unlockDevice());
-        // TODO: decryptUserData() can be called more than once, the framework should only be
-        // restarted on the first call.
-        assertTrue(getDevice().unlockDevice());
-        getDevice().reboot();
-        assertTrue(getDevice().unencryptDevice());
-        assertFalse(getDevice().isDeviceEncrypted());
     }
 
     /** Test that {@link TestDevice#getProperty(String)} works after a reboot. */
