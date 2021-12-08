@@ -81,7 +81,9 @@ public class TimeVal extends Number implements Comparable<Long> {
      * non-negative, and to fit within the {@code long} type.
      */
     public static long fromString(String value) throws NumberFormatException {
-        if (value == null) throw new NumberFormatException("value is null");
+        if (value == null) {
+            throw new NumberFormatException("value is null");
+        }
 
         try {
             value = value.replaceAll("\\s+", "");
@@ -120,7 +122,9 @@ public class TimeVal extends Number implements Comparable<Long> {
     }
 
     static long val(String str) throws NumberFormatException {
-        if (str == null) return 0;
+        if (str == null) {
+            return 0;
+        }
 
         Long value = Long.parseLong(str);
         return value;

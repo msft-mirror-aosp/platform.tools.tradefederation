@@ -224,18 +224,36 @@ public class FailureDescription {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null) return false;
-        if (getClass() != obj.getClass()) return false;
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
         FailureDescription other = (FailureDescription) obj;
-        if (mActionInProgress != other.mActionInProgress) return false;
+        if (mActionInProgress != other.mActionInProgress) {
+            return false;
+        }
         if (mDebugHelpMessage == null) {
-            if (other.mDebugHelpMessage != null) return false;
-        } else if (!mDebugHelpMessage.equals(other.mDebugHelpMessage)) return false;
+            if (other.mDebugHelpMessage != null) {
+                return false;
+            }
+        } else if (!mDebugHelpMessage.equals(other.mDebugHelpMessage)) {
+            return false;
+        }
         if (mErrorMessage == null) {
-            if (other.mErrorMessage != null) return false;
-        } else if (!mErrorMessage.equals(other.mErrorMessage)) return false;
-        if (mFailureStatus != other.mFailureStatus) return false;
+            if (other.mErrorMessage != null) {
+                return false;
+            }
+        } else if (!mErrorMessage.equals(other.mErrorMessage)) {
+            return false;
+        }
+        if (mFailureStatus != other.mFailureStatus) {
+            return false;
+        }
         return true;
     }
 }
