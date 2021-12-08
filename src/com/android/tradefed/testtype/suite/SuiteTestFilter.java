@@ -197,33 +197,44 @@ public class SuiteTestFilter {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
+        if (this == obj) {
             return true;
-        if (obj == null)
+        }
+        if (obj == null) {
             return false;
-        if (getClass() != obj.getClass())
+        }
+        if (getClass() != obj.getClass()) {
             return false;
+        }
         SuiteTestFilter other = (SuiteTestFilter) obj;
         if (mAbi == null) {
-            if (other.mAbi != null)
+            if (other.mAbi != null) {
                 return false;
-        } else if (!mAbi.equals(other.mAbi))
+            }
+        } else if (!mAbi.equals(other.mAbi)) {
             return false;
+        }
         if (mName == null) {
-            if (other.mName != null)
+            if (other.mName != null) {
                 return false;
-        } else if (!mName.equals(other.mName))
+            }
+        } else if (!mName.equals(other.mName)) {
             return false;
+        }
         if (mShardIndex == null) {
-            if (other.mShardIndex != null)
+            if (other.mShardIndex != null) {
                 return false;
-        } else if (!mShardIndex.equals(other.mShardIndex))
+            }
+        } else if (!mShardIndex.equals(other.mShardIndex)) {
             return false;
+        }
         if (mTest == null) {
-            if (other.mTest != null)
+            if (other.mTest != null) {
                 return false;
-        } else if (!mTest.equals(other.mTest))
+            }
+        } else if (!mTest.equals(other.mTest)) {
             return false;
+        }
         return true;
     }
 }
