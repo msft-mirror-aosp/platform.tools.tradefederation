@@ -114,10 +114,12 @@ public class ConfigurationFactory implements IConfigurationFactory {
         }
 
         private boolean matches(Object a, Object b) {
-            if (a == null && b == null)
+            if (a == null && b == null) {
                 return true;
-            if (a == null || b == null)
+            }
+            if (a == null || b == null) {
                 return false;
+            }
             return a.equals(b);
         }
 
@@ -126,10 +128,12 @@ public class ConfigurationFactory implements IConfigurationFactory {
          */
         @Override
         public boolean equals(Object other) {
-            if (other == null)
+            if (other == null) {
                 return false;
-            if (!(other instanceof ConfigId))
+            }
+            if (!(other instanceof ConfigId)) {
                 return false;
+            }
 
             final ConfigId otherConf = (ConfigId) other;
             return matches(name, otherConf.name) && matches(templateMap, otherConf.templateMap);
