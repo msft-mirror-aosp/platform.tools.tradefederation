@@ -151,7 +151,7 @@ public class ClusterBuildProviderTest {
         List<File> mountDirs = new ArrayList<File>();
         Mockito.when(mMockFuseUtil.canMountZip()).thenReturn(true);
         Mockito.doAnswer(
-                        new Answer() {
+                        new Answer<Object>() {
                             @Override
                             public Object answer(InvocationOnMock invocation) throws Throwable {
                                 File zipFile = (File) invocation.getArgument(0);
