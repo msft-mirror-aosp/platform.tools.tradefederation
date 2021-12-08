@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+import java.util.logging.Logger;
 import javax.annotation.Nonnull;
 
 /**
@@ -43,7 +44,7 @@ import javax.annotation.Nonnull;
  */
 public class AoaDevice implements AutoCloseable {
 
-    private static final String LOG_TAG = "AoaDevice";
+    private static final Logger LOGGER = Logger.getLogger(AoaDevice.class.getName());
 
     // USB error code
     static final int DEVICE_NOT_FOUND = -4;
@@ -115,12 +116,11 @@ public class AoaDevice implements AutoCloseable {
                 return;
             }
             if (attempt >= ACCESSORY_START_MAX_RETRIES) {
-                // Log.w(
-                //        LOG_TAG,
-                //        String.format(
-                //                "Failed to start accessory mode after %d attempts; "
-                //                        + "proceeding anyway",
-                //                attempt));
+                LOGGER.warning(
+                        String.format(
+                                "Failed to start accessory mode on %s after %d attempts;"
+                                        + " proceeding anyway",
+                                mSerialNumber, attempt));
                 registerHIDs();
                 return;
             }
@@ -309,7 +309,10 @@ public class AoaDevice implements AutoCloseable {
     private void send(AoaHID hid, byte[] data, Duration pause) {
         int result = transfer(ACCESSORY_SEND_HID_EVENT, hid.getId(), 0, data);
         if (result == DEVICE_NOT_FOUND) {
-            // Log.w(LOG_TAG, "Device not found while sending HID event; resetting connection");
+            LOGGER.warning(
+                    String.format(
+                            "Device %s not found while sending AOA HID event; resetting connection",
+                            mSerialNumber));
             resetConnection();
             result = transfer(ACCESSORY_SEND_HID_EVENT, hid.getId(), 0, data);
         }
