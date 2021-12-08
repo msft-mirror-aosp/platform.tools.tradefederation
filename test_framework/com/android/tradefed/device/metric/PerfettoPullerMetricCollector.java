@@ -60,9 +60,11 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
     private static final String LINE_SEPARATOR = "\\r?\\n";
     private static final char KEY_VALUE_SEPARATOR = ':';
     private static final String EXTRACTOR_STATUS = "trace_extractor_status";
-    private static final String EXTRACTOR_SUCCESS = "1";
-    private static final String EXTRACTOR_FAILURE = "0";
+    private static final String PROCESSOR_STATUS = "trace_processor_status";
+    private static final String STATUS_SUCCESS = "1";
+    private static final String STATUS_FAILURE = "0";
     private static final String EXTRACTOR_RUNTIME = "trace_extractor_runtime";
+    private static final String PROCESSOR_RUNTIME = "trace_processor_runtime";
     private static final String RAW_TRACE_FILE_SIZE = "perfetto_trace_file_size_bytes";
     private static final String NSS_CACHE_ERROR = "base/nsscache-inl.h failed to lookup";
 
@@ -208,13 +210,28 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
 
         // Convert to perfetto metric format.
         if (mConvertToMetricFile) {
-            File convertedMetricFile = convertToMetricProto(processSrcFile);
+            TraceProcessorResult result = convertToMetricProto(processSrcFile);
+            File convertedMetricFile = result.file;
             if (convertedMetricFile != null) {
                 try (InputStreamSource source = new FileInputStreamSource(convertedMetricFile,
                         true)) {
                     testLog(convertedMetricFile.getName(), getLogDataType(), source);
                 }
             }
+
+            Metric.Builder processorRuntimeBuilder = Metric.newBuilder();
+            processorRuntimeBuilder
+                    .getMeasurementsBuilder()
+                    .setSingleDouble((double) result.runtime);
+            data.addMetric(
+                    String.format("%s_%s", mMetricPrefix, PROCESSOR_RUNTIME),
+                    processorRuntimeBuilder.setType(DataType.RAW));
+
+            Metric.Builder processorStatusBuilder = Metric.newBuilder();
+            processorStatusBuilder.getMeasurementsBuilder().setSingleString(result.status);
+            data.addMetric(
+                    String.format("%s_%s", mMetricPrefix, PROCESSOR_STATUS),
+                    processorStatusBuilder.setType(DataType.RAW));
         }
 
         if (processSrcFile != null) {
@@ -234,7 +251,7 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
                     commandArgsList.add(String.join(",", mProcessNames));
                 }
 
-                String traceExtractorStatus = EXTRACTOR_SUCCESS;
+                String traceExtractorStatus = STATUS_SUCCESS;
 
                 double scriptDuration = 0;
                 double scriptStartTime = System.currentTimeMillis();
@@ -281,7 +298,7 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
                     }
                     CLog.i(cr.getStdout());
                 } else {
-                    traceExtractorStatus = EXTRACTOR_FAILURE;
+                    traceExtractorStatus = STATUS_FAILURE;
                     CLog.e("Unable to parse the trace file %s due to %s - Status - %s ",
                             processSrcFile.getName(), cr.getStderr(), cr.getStatus());
                 }
@@ -314,14 +331,26 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
 
     }
 
+    private static class TraceProcessorResult {
+        public final File file;
+        // runtime is set to -1 if the trace processor was never run.
+        public final long runtime;
+        public final String status;
+
+        public TraceProcessorResult(File file, long runtime, String status) {
+            this.file = file;
+            this.runtime = runtime;
+            this.status = status;
+        }
+    }
+
     /**
      * Converts the raw trace file into perfetto metric file.
      *
-     * @param perfettoRawTraceFile Raw perfetto trace file that needs to be
-     *        converted.
-     * @return File converted perfetto metric file.
+     * @param perfettoRawTraceFile Raw perfetto trace file that needs to be converted.
+     * @return The result of the conversion.
      */
-    private File convertToMetricProto(File perfettoRawTraceFile) {
+    private TraceProcessorResult convertToMetricProto(File perfettoRawTraceFile) {
 
         // Use absolute path to the trace file if it is available otherwise
         // resolve the trace processor name from the test or module artifacts.
@@ -330,9 +359,11 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
         }
 
         File metricOutputFile = null;
+        long runtime = -1L;
+
         if (mTraceProcessorBinary == null) {
             CLog.e("Failed to locate the trace processor shell binary file.");
-            return metricOutputFile;
+            return new TraceProcessorResult(metricOutputFile, runtime, STATUS_FAILURE);
         }
 
         FileUtil.chmodGroupRWX(mTraceProcessorBinary);
@@ -354,7 +385,7 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
         } catch (IOException e) {
             CLog.e("Not able to create metric perfetto output file.");
             CLog.e(e);
-            return null;
+            return new TraceProcessorResult(null, runtime, STATUS_FAILURE);
         }
 
         // Running the trace conversion.
@@ -362,10 +393,12 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
         boolean isConversionSuccess = true;
         try (FileOutputStream outStream = new FileOutputStream(metricOutputFile);
                 ByteArrayOutputStream errStream = new ByteArrayOutputStream()) {
+            long startTime = System.currentTimeMillis();
             CommandResult conversionResult = runHostCommand(mTraceConversionTimeout,
                     commandArgsList.toArray(new String[commandArgsList
                             .size()]),
                     outStream, errStream);
+            runtime = System.currentTimeMillis() - startTime;
             if (!CommandStatus.SUCCESS.equals(conversionResult.getStatus())) {
                 CLog.e("Unable to convert the raw trace - %s to metric file due to"
                         + " %s - Status - %s ", perfettoRawTraceFile.getName(),
@@ -375,7 +408,7 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
                     mTraceProcessorOutputFormat.equals(METRIC_FILE_FORMAT.json)) {
                 File compressedFile = getCompressedFile(metricOutputFile);
                 metricOutputFile.delete();
-                return compressedFile;
+                return new TraceProcessorResult(compressedFile, runtime, STATUS_SUCCESS);
             }
         } catch (FileNotFoundException e) {
             CLog.e("Not able to find the result metric file to write the "
@@ -389,10 +422,10 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
         } finally {
             if (!isConversionSuccess) {
                 metricOutputFile.delete();
-                return null;
+                return new TraceProcessorResult(null, runtime, STATUS_FAILURE);
             }
         }
-        return metricOutputFile;
+        return new TraceProcessorResult(metricOutputFile, runtime, STATUS_SUCCESS);
     }
 
 
