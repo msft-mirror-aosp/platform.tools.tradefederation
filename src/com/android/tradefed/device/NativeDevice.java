@@ -336,6 +336,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             } else if (mResult.getStatus() == CommandStatus.TIMED_OUT) {
                 throw new TimeoutException(mResult.getStderr());
             }
+            String stdErr = mResult.getStderr();
+            if (stdErr != null) {
+                stdErr = stdErr.trim();
+                if (stdErr.contains("device offline")) {
+                    throw new IOException(stdErr);
+                }
+            }
             // If it's not some issue with running the adb command, then we return the CommandResult
             // which will contain all the infos.
             return true;
