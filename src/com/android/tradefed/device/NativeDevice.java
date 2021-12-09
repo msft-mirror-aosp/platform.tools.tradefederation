@@ -517,11 +517,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 // property.
                 recoverDevice();
             } else {
-                // Only query property for online device
-                CLog.d(
-                        "Device %s is in state '%s' cannot get property %s.",
-                        getSerialNumber(), state, name);
-                return null;
+                if (mStateMonitor.waitForDeviceOnline() == null) {
+                    CLog.w(
+                            "Waited for device %s to be online but it is in state '%s', cannot "
+                                    + "get property %s.",
+                            getSerialNumber(), getDeviceState(), name);
+                    return null;
+                }
             }
         }
         String cmd = String.format("getprop %s", name);
