@@ -121,12 +121,14 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
 
     /** Unregister an invocation by its configuration. */
     public void unregisterInvocation(IConfiguration reference) {
-        mRegisteredInvocation.remove(
+        String referenceId =
                 reference
                         .getConfigurationDescription()
                         .getAllMetaData()
                         .getUniqueMap()
-                        .get(SERVER_REFERENCE));
+                        .get(SERVER_REFERENCE);
+        mRegisteredInvocation.remove(referenceId);
+        mRegisteredScheduledInvocationListeners.remove(referenceId);
     }
 
     private FeatureResponse createResponse(FeatureRequest request) {
