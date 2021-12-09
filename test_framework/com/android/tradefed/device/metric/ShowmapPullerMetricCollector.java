@@ -147,8 +147,8 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
      */
     private Boolean computeGranularMetrics(String line, String processName) {
         String objectName;
-        Long mGranularValue;
-        Long metricCounter;
+        long mGranularValue;
+        long metricCounter;
         String completeGranularMetric;
 
         if (isMetricParsingStartEnd(line)) {
@@ -249,7 +249,7 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
      * @return true or false
      */
     private Boolean isProcessFound(String line) {
-        Boolean psResult;
+        boolean psResult;
         Pattern psPattern = Pattern.compile(PROCESS_NAME_REGEX);
         Matcher psMatcher = psPattern.matcher(line);
         if (psMatcher.find()) {

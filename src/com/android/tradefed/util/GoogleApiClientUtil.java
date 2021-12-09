@@ -127,12 +127,12 @@ public class GoogleApiClientUtil {
      * @throws GeneralSecurityException
      */
     public static Credential createCredential(
-            Collection<String> scopes,
-            Boolean useCredentialFactory,
-            File primaryKeyFile,
-            String hostOptionKeyFileName,
-            File... backupKeyFiles)
-            throws IOException, GeneralSecurityException {
+        Collection<String> scopes,
+        boolean useCredentialFactory,
+        File primaryKeyFile,
+        String hostOptionKeyFileName,
+        File... backupKeyFiles)
+          throws IOException, GeneralSecurityException {
         Credential credential = null;
         if (useCredentialFactory) {
             credential = getInstance().doCreateCredentialFromCredentialFactory(scopes);
