@@ -220,15 +220,15 @@ public class AoaDevice implements AutoCloseable {
         click(point, Duration.ZERO);
     }
 
-    /** Perform a long click. */
-    public void longClick(@Nonnull Point point) {
-        click(point, LONG_CLICK);
-    }
-
     // Click and wait at a location.
     private void click(Point point, Duration duration) {
         touch(TOUCH_DOWN, point, duration);
         touch(TOUCH_UP, point, ACTION_DELAY);
+    }
+
+    /** Perform a long click. */
+    public void longClick(@Nonnull Point point) {
+        click(point, LONG_CLICK);
     }
 
     /**
