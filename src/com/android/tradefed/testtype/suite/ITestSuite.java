@@ -646,8 +646,9 @@ public abstract class ITestSuite
         for (IDeviceConfiguration holder : config.getDeviceConfig()) {
             List<ITargetPreparer> preparers = new ArrayList<>();
             for (ITargetPreparer preparer : holder.getTargetPreparers()) {
-                if (allowedSuitePreparers.contains(preparer.getClass().getCanonicalName()))
+                if (allowedSuitePreparers.contains(preparer.getClass().getCanonicalName())) {
                     preparers.add(preparer);
+                }
             }
             res.put(holder.getDeviceName(), preparers);
         }
