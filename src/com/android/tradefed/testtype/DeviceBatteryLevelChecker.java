@@ -240,7 +240,7 @@ public class DeviceBatteryLevelChecker implements IRemoteTest {
 
     private Integer runBatteryCharging(ITestLifeCycleReceiver listener, TestDescription test) {
         // If we're down here, it's time to hold the device until it reaches mResumeLevel
-        Long lastReportTime = System.currentTimeMillis();
+        long lastReportTime = System.currentTimeMillis();
         Integer batteryLevel = checkBatteryLevel(mTestDevice);
 
         long startTime = System.currentTimeMillis();
