@@ -1631,7 +1631,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         // The overhead of parsing all of the lines should be minimal
         List<MountPointInfo> mountpoints = getMountPointInfo();
         for (MountPointInfo info : mountpoints) {
-            if (mountpoint.equals(info.mountpoint)) return info;
+            if (mountpoint.equals(info.mountpoint)) {
+                return info;
+            }
         }
         return null;
     }
@@ -3795,7 +3797,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * of it in that case.
      */
     private void throwIfNull(Object obj) {
-        if (obj == null) throw new NullPointerException();
+        if (obj == null) {
+            throw new NullPointerException();
+        }
     }
 
     /** Retrieve this device's recovery mechanism. */
