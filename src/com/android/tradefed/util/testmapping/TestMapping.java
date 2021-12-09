@@ -348,7 +348,7 @@ public class TestMapping {
             }
             // Skip the test if any of the required keywords is not specified by the test.
             if (keywords != null) {
-                Boolean allKeywordsFound = true;
+                boolean allKeywordsFound = true;
                 for (String keyword : keywords) {
                     if (!test.getKeywords().contains(keyword)) {
                         allKeywordsFound = false;

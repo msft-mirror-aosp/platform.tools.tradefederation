@@ -236,7 +236,7 @@ public class TfTestLauncher extends SubprocessTfLauncher {
         List<String> patterns = new ArrayList<String>(Arrays.asList(EXPECTED_TMP_FILE_PATTERNS));
         patterns.add(mBuildInfo.getBuildBranch());
         for (String file : Arrays.asList(listFiles)) {
-            Boolean matchFound = false;
+            boolean matchFound = false;
             for (String pattern : patterns) {
                 if (Pattern.matches(pattern, file)) {
                     patterns.remove(pattern);

@@ -1554,13 +1554,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             String numericValueString = tablePatternMatcher.group(1);
             String unitType = tablePatternMatcher.group(2);
             try {
-                Float freeSpaceFloat = Float.parseFloat(numericValueString);
+                float freeSpaceFloat = Float.parseFloat(numericValueString);
                 if (unitType.equals("M")) {
                     freeSpaceFloat = freeSpaceFloat * 1024;
                 } else if (unitType.equals("G")) {
                     freeSpaceFloat = freeSpaceFloat * 1024 * 1024;
                 }
-                freeSpace = freeSpaceFloat.longValue();
+                freeSpace = (long) freeSpaceFloat;
             } catch (NumberFormatException e) {
                 // fall through
             }
@@ -4250,7 +4250,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public long getDeviceTimeOffset(Date date) throws DeviceNotAvailableException {
-        Long deviceTime = getDeviceDate();
+        long deviceTime = getDeviceDate();
 
         if (date == null) {
             date = new Date();
