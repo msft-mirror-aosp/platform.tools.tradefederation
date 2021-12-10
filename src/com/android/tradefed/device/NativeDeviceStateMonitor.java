@@ -133,12 +133,28 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
         return null;
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public IDevice waitForDeviceOnline() {
+        return waitForDeviceOnline(mDefaultOnlineTimeout);
+    }
+
     @Override
     public IDevice waitForDeviceInRecovery() {
         if (waitForDeviceState(TestDeviceState.RECOVERY, mDefaultOnlineTimeout)) {
             return getIDevice();
         }
         return null;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean waitForDeviceInRecovery(long waitTime) {
+        return waitForDeviceState(TestDeviceState.RECOVERY, waitTime);
     }
 
     /**
@@ -171,14 +187,6 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
      * {@inheritDoc}
      */
     @Override
-    public IDevice waitForDeviceOnline() {
-        return waitForDeviceOnline(mDefaultOnlineTimeout);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
     public boolean waitForDeviceNotAvailable(long waitTime) {
         IFastbootListener listener = new StubFastbootListener();
         if (mFastbootEnabled) {
@@ -189,14 +197,6 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
             mMgr.removeFastbootListener(listener);
         }
         return result;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean waitForDeviceInRecovery(long waitTime) {
-        return waitForDeviceState(TestDeviceState.RECOVERY, waitTime);
     }
 
     /** {@inheritDoc} */
