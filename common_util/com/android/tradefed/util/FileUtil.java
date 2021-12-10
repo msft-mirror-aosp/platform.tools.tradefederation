@@ -925,6 +925,46 @@ public class FileUtil {
     }
 
     /**
+     * Get all file paths of files in the given directory with name matching the given filter and
+     * also filter the found file by abi arch if abi is not null. Return the first match file found.
+     *
+     * @param fileName {@link String} of the regex to match file path
+     * @param abi {@link IAbi} object of the abi to match the target
+     * @param dirs a varargs array of {@link File} object of the directories to search for files
+     * @return the {@link File} or <code>null</code> if it could not be found
+     */
+    public static File findFile(String fileName, IAbi abi, File... dirs) throws IOException {
+        for (File dir : dirs) {
+            Set<File> testSrcs = findFilesObject(dir, fileName);
+            if (testSrcs.isEmpty()) {
+                continue;
+            }
+            Iterator<File> itr = testSrcs.iterator();
+            if (abi == null) {
+                // Return the first candidate be found.
+                return itr.next();
+            }
+            while (itr.hasNext()) {
+                File matchFile = itr.next();
+                if (matchFile
+                        .getParentFile()
+                        .getName()
+                        .equals(AbiUtils.getArchForAbi(abi.getName()))) {
+                    return matchFile;
+                }
+            }
+        }
+        // Scan dirs again without abi rule.
+        for (File dir : dirs) {
+            File matchFile = findFile(dir, fileName);
+            if (matchFile != null && matchFile.exists()) {
+                return matchFile;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Recursively find all directories under the given {@code rootDir}
      *
      * @param rootDir the root directory to search in
@@ -1184,46 +1224,6 @@ public class FileUtil {
                     .forEach(path -> files.add(path.toString()));
         }
         return files;
-    }
-
-    /**
-     * Get all file paths of files in the given directory with name matching the given filter and
-     * also filter the found file by abi arch if abi is not null. Return the first match file found.
-     *
-     * @param fileName {@link String} of the regex to match file path
-     * @param abi {@link IAbi} object of the abi to match the target
-     * @param dirs a varargs array of {@link File} object of the directories to search for files
-     * @return the {@link File} or <code>null</code> if it could not be found
-     */
-    public static File findFile(String fileName, IAbi abi, File... dirs) throws IOException {
-        for (File dir : dirs) {
-            Set<File> testSrcs = findFilesObject(dir, fileName);
-            if (testSrcs.isEmpty()) {
-                continue;
-            }
-            Iterator<File> itr = testSrcs.iterator();
-            if (abi == null) {
-                // Return the first candidate be found.
-                return itr.next();
-            }
-            while (itr.hasNext()) {
-                File matchFile = itr.next();
-                if (matchFile
-                        .getParentFile()
-                        .getName()
-                        .equals(AbiUtils.getArchForAbi(abi.getName()))) {
-                    return matchFile;
-                }
-            }
-        }
-        // Scan dirs again without abi rule.
-        for (File dir : dirs) {
-            File matchFile = findFile(dir, fileName);
-            if (matchFile != null && matchFile.exists()) {
-                return matchFile;
-            }
-        }
-        return null;
     }
 
     /**
