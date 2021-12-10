@@ -67,15 +67,6 @@ public class LogFileSaver {
         mInvLogPathSegments.add(invLogDirName);
     }
 
-    private File createTempDir() {
-        try {
-            return FileUtil.createTempDir("inv_");
-        } catch (IOException e) {
-            // uh oh, this can't be good, abort tradefed
-            throw new FatalHostError("Cannot create tmp directory.", e);
-        }
-    }
-
     /**
      * Creates a {@link LogFileSaver}.
      * <p/>
@@ -96,6 +87,15 @@ public class LogFileSaver {
      */
     public LogFileSaver(File rootDir) {
         this(null, rootDir, null);
+    }
+
+    private File createTempDir() {
+        try {
+            return FileUtil.createTempDir("inv_");
+        } catch (IOException e) {
+            // uh oh, this can't be good, abort tradefed
+            throw new FatalHostError("Cannot create tmp directory.", e);
+        }
     }
 
     /**
