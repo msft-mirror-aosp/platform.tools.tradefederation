@@ -77,6 +77,7 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             "com.android.tradefed.testtype.IsolatedHostTest",
                             "com.android.tradefed.testtype.python.PythonBinaryHostTest",
                             "com.android.tradefed.testtype.binary.ExecutableHostTest",
+                            "com.android.tradefed.testtype.binary.ExecutableTargetTest",
                             "com.android.tradefed.testtype.rust.RustBinaryHostTest",
                             "com.android.tradefed.testtype.rust.RustBinaryTest",
                             "com.android.tradefed.testtype.StubTest",
