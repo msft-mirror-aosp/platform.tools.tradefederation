@@ -1105,7 +1105,8 @@ public class HostTest
                 String esc = "\\";
                 String regex = "(?<!" + Pattern.quote(esc) + ")" + Pattern.quote(delim);
                 String[] fields = item.split(regex);
-                String key, value;
+                String key;
+                String value;
                 if (fields.length == 3) {
                     String target = fields[0];
                     if (testObj.getClass().getName().equals(target)) {
