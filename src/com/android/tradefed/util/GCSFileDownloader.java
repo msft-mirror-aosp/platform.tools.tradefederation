@@ -64,29 +64,6 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
 
     public GCSFileDownloader() {}
 
-    /**
-     * Download a file from a GCS bucket file.
-     *
-     * @param bucketName GCS bucket name
-     * @param filename the filename
-     * @return {@link InputStream} with the file content.
-     */
-    public InputStream downloadFile(String bucketName, String filename) throws IOException {
-        InputStream remoteInput = null;
-        ByteArrayOutputStream tmpStream = null;
-        try {
-            remoteInput =
-                    getStorage().objects().get(bucketName, filename).executeMediaAsInputStream();
-            // The input stream from api call can not be reset. Change it to ByteArrayInputStream.
-            tmpStream = new ByteArrayOutputStream();
-            StreamUtil.copyStreams(remoteInput, tmpStream);
-            return new ByteArrayInputStream(tmpStream.toByteArray());
-        } finally {
-            StreamUtil.close(remoteInput);
-            StreamUtil.close(tmpStream);
-        }
-    }
-
     private Storage getStorage() throws IOException {
         return getStorage(SCOPES);
     }
@@ -125,10 +102,68 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         }
     }
 
+    /**
+     * Download a file from a GCS bucket file.
+     *
+     * @param bucketName GCS bucket name
+     * @param filename the filename
+     * @return {@link InputStream} with the file content.
+     */
+    public InputStream downloadFile(String bucketName, String filename) throws IOException {
+        InputStream remoteInput = null;
+        ByteArrayOutputStream tmpStream = null;
+        try {
+            remoteInput =
+                    getStorage().objects().get(bucketName, filename).executeMediaAsInputStream();
+            // The input stream from api call can not be reset. Change it to ByteArrayInputStream.
+            tmpStream = new ByteArrayOutputStream();
+            StreamUtil.copyStreams(remoteInput, tmpStream);
+            return new ByteArrayInputStream(tmpStream.toByteArray());
+        } finally {
+            StreamUtil.close(remoteInput);
+            StreamUtil.close(tmpStream);
+        }
+    }
+
     @Override
     public void downloadFile(String remotePath, File destFile) throws BuildRetrievalError {
         String[] pathParts = parseGcsPath(remotePath);
         downloadFile(pathParts[0], pathParts[1], destFile);
+    }
+
+    @VisibleForTesting
+    void downloadFile(String bucketName, String remoteFilename, File localFile)
+            throws BuildRetrievalError {
+        int i = 0;
+        try {
+            do {
+                i++;
+                try {
+                    if (!isRemoteFolder(bucketName, remoteFilename)) {
+                        fetchRemoteFile(bucketName, remoteFilename, localFile);
+                        return;
+                    }
+                    remoteFilename = sanitizeDirectoryName(remoteFilename);
+                    recursiveDownloadFolder(bucketName, remoteFilename, localFile);
+                    return;
+                } catch (SocketException se) {
+                    // Allow one retry in case of flaky connection.
+                    if (i >= 2) {
+                        throw se;
+                    }
+                    CLog.e(
+                            "Error '%s' while downloading gs://%s/%s. retrying.",
+                            se.getMessage(), bucketName, remoteFilename);
+                }
+            } while (true);
+        } catch (IOException e) {
+            String message =
+                    String.format(
+                            "Failed to download gs://%s/%s due to: %s",
+                            bucketName, remoteFilename, e.getMessage());
+            CLog.e(message);
+            throw new BuildRetrievalError(message, e, InfraErrorIdentifier.GCS_ERROR);
+        }
     }
 
     private boolean isFileFresh(File localFile, StorageObject remoteFile) throws IOException {
@@ -303,41 +338,6 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
             return true;
         }
         return false;
-    }
-
-    @VisibleForTesting
-    void downloadFile(String bucketName, String remoteFilename, File localFile)
-            throws BuildRetrievalError {
-        int i = 0;
-        try {
-            do {
-                i++;
-                try {
-                    if (!isRemoteFolder(bucketName, remoteFilename)) {
-                        fetchRemoteFile(bucketName, remoteFilename, localFile);
-                        return;
-                    }
-                    remoteFilename = sanitizeDirectoryName(remoteFilename);
-                    recursiveDownloadFolder(bucketName, remoteFilename, localFile);
-                    return;
-                } catch (SocketException se) {
-                    // Allow one retry in case of flaky connection.
-                    if (i >= 2) {
-                        throw se;
-                    }
-                    CLog.e(
-                            "Error '%s' while downloading gs://%s/%s. retrying.",
-                            se.getMessage(), bucketName, remoteFilename);
-                }
-            } while (true);
-        } catch (IOException e) {
-            String message =
-                    String.format(
-                            "Failed to download gs://%s/%s due to: %s",
-                            bucketName, remoteFilename, e.getMessage());
-            CLog.e(message);
-            throw new BuildRetrievalError(message, e, InfraErrorIdentifier.GCS_ERROR);
-        }
     }
 
     private void fetchRemoteFile(String bucketName, String remoteFilename, File localFile)
