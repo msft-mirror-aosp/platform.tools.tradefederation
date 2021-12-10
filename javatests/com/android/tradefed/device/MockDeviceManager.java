@@ -187,6 +187,34 @@ public class MockDeviceManager implements IDeviceManager {
 
     /** {@inheritDoc} */
     @Override
+    public ITestDevice allocateDevice(IDeviceSelection options) {
+        return allocateDevice(options, false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public ITestDevice allocateDevice(IDeviceSelection options, boolean isTemporary) {
+        if (mTcpDeviceRequested) {
+            ((DeviceSelectionOptions) options).setTcpDeviceRequested(true);
+        }
+        if (mNullDeviceRequested) {
+            ((DeviceSelectionOptions) options).setNullDeviceRequested(true);
+        }
+        if (mStubDeviceRequested) {
+            ((DeviceSelectionOptions) options).setStubEmulatorRequested(true);
+        }
+        ITestDevice d = mAvailableDeviceQueue.poll(new TestDeviceMatcher(options));
+        if (d != null) {
+            mDvcMon.notifyDeviceStateChange(
+                    d.getSerialNumber(),
+                    DeviceAllocationState.Available,
+                    DeviceAllocationState.Allocated);
+        }
+        return d;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public void freeDevice(ITestDevice device, FreeDeviceState state) {
         if (!state.equals(FreeDeviceState.UNAVAILABLE)) {
             mAvailableDeviceQueue.add(device);
@@ -225,34 +253,6 @@ public class MockDeviceManager implements IDeviceManager {
     @Override
     public void terminateDeviceMonitor() {
         // ignore
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public ITestDevice allocateDevice(IDeviceSelection options) {
-        return allocateDevice(options, false);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public ITestDevice allocateDevice(IDeviceSelection options, boolean isTemporary) {
-        if (mTcpDeviceRequested) {
-            ((DeviceSelectionOptions) options).setTcpDeviceRequested(true);
-        }
-        if (mNullDeviceRequested) {
-            ((DeviceSelectionOptions) options).setNullDeviceRequested(true);
-        }
-        if (mStubDeviceRequested) {
-            ((DeviceSelectionOptions) options).setStubEmulatorRequested(true);
-        }
-        ITestDevice d = mAvailableDeviceQueue.poll(new TestDeviceMatcher(options));
-        if (d != null) {
-            mDvcMon.notifyDeviceStateChange(
-                    d.getSerialNumber(),
-                    DeviceAllocationState.Available,
-                    DeviceAllocationState.Allocated);
-        }
-        return d;
     }
 
     /** {@inheritDoc} */
