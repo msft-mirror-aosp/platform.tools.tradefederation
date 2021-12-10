@@ -57,6 +57,14 @@ public interface IDeviceStateMonitor {
     public IDevice waitForDeviceInRecovery();
 
     /**
+     * Waits for the device to be in the 'adb recovery' state
+     *
+     * @param waitTime the maximum time in ms to wait
+     * @return True if the device is in Recovery before the timeout, False otherwise.
+     */
+    public boolean waitForDeviceInRecovery(long waitTime);
+
+    /**
      * Blocks until the device's boot complete flag is set
      *
      * @param waitTime the amount in ms to wait
@@ -123,14 +131,6 @@ public interface IDeviceStateMonitor {
      * @return <code>true</code> if device becomes unavailable
      */
     public boolean waitForDeviceNotAvailable(long waitTime);
-
-    /**
-     * Waits for the device to be in the 'adb recovery' state
-     *
-     * @param waitTime the maximum time in ms to wait
-     * @return True if the device is in Recovery before the timeout, False otherwise.
-     */
-    public boolean waitForDeviceInRecovery(long waitTime);
 
     /**
      * Waits for the device to be in the 'adb sideload' state
