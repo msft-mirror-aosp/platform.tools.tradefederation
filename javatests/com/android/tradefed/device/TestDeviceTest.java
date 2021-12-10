@@ -5051,7 +5051,8 @@ public class TestDeviceTest {
     /** Test that displays can be collected. */
     @Test
     public void testListDisplayId() throws Exception {
-        OutputStream stdout = null, stderr = null;
+        OutputStream stdout = null;
+        OutputStream stderr = null;
         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
         res.setStdout("Display 0 color modes:\nDisplay 5 color modes:\n");
         when(mMockRunUtil.runTimedCmd(
