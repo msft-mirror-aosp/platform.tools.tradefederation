@@ -3100,7 +3100,8 @@ public class NativeDeviceTest {
     /** Test when {@link NativeDevice#executeShellV2Command(String)} returns a success. */
     @Test
     public void testExecuteShellV2Command() throws Exception {
-        OutputStream stdout = null, stderr = null;
+    OutputStream stdout = null;
+    OutputStream stderr = null;
         CommandResult res = new CommandResult();
         res.setStatus(CommandStatus.SUCCESS);
         when(mMockRunUtil.runTimedCmd(
@@ -3116,7 +3117,8 @@ public class NativeDeviceTest {
      */
     @Test
     public void testExecuteShellV2Command_timeout() throws Exception {
-        OutputStream stdout = null, stderr = null;
+    OutputStream stdout = null;
+    OutputStream stderr = null;
         CommandResult res = new CommandResult();
         res.setStatus(CommandStatus.TIMED_OUT);
         res.setStderr("timed out");
@@ -3141,7 +3143,8 @@ public class NativeDeviceTest {
      */
     @Test
     public void testExecuteShellV2Command_fail() throws Exception {
-        OutputStream stdout = null, stderr = null;
+    OutputStream stdout = null;
+    OutputStream stderr = null;
         CommandResult res = new CommandResult();
         res.setStatus(CommandStatus.FAILED);
         res.setStderr("timed out");
@@ -3218,7 +3221,8 @@ public class NativeDeviceTest {
     /** Unit test for {@link INativeDevice#setProperty(String, String)}. */
     @Test
     public void testSetProperty() throws DeviceNotAvailableException {
-        OutputStream stdout = null, stderr = null;
+        OutputStream stdout = null;
+        OutputStream stderr = null;
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
