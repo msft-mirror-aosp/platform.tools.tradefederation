@@ -91,6 +91,7 @@ public abstract class BasePostProcessor implements IPostProcessor {
     /** {@inheritDoc} */
     @Override
     public final ITestInvocationListener init(ITestInvocationListener listener) {
+        setUp();
         mForwarder = listener;
         return this;
     }
@@ -324,6 +325,13 @@ public abstract class BasePostProcessor implements IPostProcessor {
         mForwarder.testIgnored(test);
     }
 
+    /**
+     * Override this method in the child post processors to initialize before the test runs.
+     */
+    public void setUp() {
+        // NO-OP by default
+    }
+
     @Override
     public final void setLogSaver(ILogSaver logSaver) {
         mLogSaver = logSaver;
@@ -414,4 +422,6 @@ public abstract class BasePostProcessor implements IPostProcessor {
     protected String getRunName() {
         return mRunName;
     }
+
+
 }
