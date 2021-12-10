@@ -341,7 +341,7 @@ public class FileUtil {
     /**
      * Helper function to create a named directory inside your temp folder.
      * <p/>
-     * This directory will not have it's name randomized. If the directory already exists it will
+     * This directory will not have its name randomized. If the directory already exists it will
      * be returned.
      *
      * @param name The name of the directory to create in your tmp folder.
@@ -349,6 +349,30 @@ public class FileUtil {
      */
     public static File createNamedTempDir(String name) throws IOException {
         File namedTmpDir = new File(System.getProperty("java.io.tmpdir"), name);
+        if (!namedTmpDir.exists()) {
+            createDir(namedTmpDir);
+        }
+        return namedTmpDir;
+    }
+
+    /**
+     * Helper function to create a named directory inside a foldere.
+     *
+     * <p>This directory will not have its name randomized. If the directory already exists it will
+     * be returned.
+     *
+     * @param parentDir the directory where to create the dir. If null, will be in /tmp
+     * @param name The name of the directory to create in the parent folder
+     * @return the created directory
+     */
+    public static File createNamedTempDir(File parentDir, String name) throws IOException {
+        String parentPath;
+        if (parentDir == null) {
+            parentPath = System.getProperty("java.io.tmpdir");
+        } else {
+            parentPath = parentDir.getAbsolutePath();
+        }
+        File namedTmpDir = new File(parentPath, name);
         if (!namedTmpDir.exists()) {
             createDir(namedTmpDir);
         }
