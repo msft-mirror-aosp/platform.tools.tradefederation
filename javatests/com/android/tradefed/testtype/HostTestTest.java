@@ -63,6 +63,7 @@ import junit.framework.TestCase;
 import junit.framework.TestSuite;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.AssumptionViolatedException;
@@ -74,6 +75,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.BlockJUnit4ClassRunner;
 import org.junit.runners.JUnit4;
+import org.junit.runners.Parameterized;
 import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
 import org.junit.runners.model.InitializationError;
@@ -345,6 +347,18 @@ public class HostTestTest {
     }
 
     @RunWith(DeviceJUnit4ClassRunner.class)
+    public static class JUnit4TestClassAssumeInStaticAfter {
+
+        @AfterClass
+        public static void afterClass() {
+            Assume.assumeTrue(false);
+        }
+
+        @org.junit.Test
+        public void testPass5() {}
+    }
+
+    @RunWith(DeviceJUnit4ClassRunner.class)
     public static class JUnit4TestClassMultiException {
 
         @org.junit.Test
@@ -566,6 +580,9 @@ public class HostTestTest {
         }
     }
 
+    @RunWith(Parameterized.class)
+    public static class ParameterizedTest {}
+
     public static class TestableHostTest extends HostTest {
 
         private IRemoteFileResolver mRemoteFileResolver;
@@ -593,7 +610,6 @@ public class HostTestTest {
         }
     }
 
-    /** {@inheritDoc} */
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
@@ -1359,6 +1375,28 @@ public class HostTestTest {
         inOrder.verify(mListener)
                 .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
         inOrder.verifyNoMoreInteractions();
+        Mockito.verifyNoMoreInteractions(mListener);
+    }
+
+    @org.junit.Test
+    public void testRun_junit4style_assumeFailure_after_static() throws Exception {
+        mHostTest.setClassName(JUnit4TestClassAssumeInStaticAfter.class.getName());
+
+        mHostTest.run(mTestInfo, mListener);
+
+        InOrder inOrder = Mockito.inOrder(mListener);
+        inOrder.verify(mListener).testRunStarted((String) Mockito.any(), Mockito.eq(1));
+        TestDescription test1 =
+                new TestDescription(
+                        JUnit4TestClassAssumeInStaticAfter.class.getName(), "testPass5");
+        inOrder.verify(mListener).testStarted(Mockito.eq(test1));
+        inOrder.verify(mListener)
+                .testEnded(Mockito.eq(test1), (HashMap<String, Metric>) Mockito.any());
+        inOrder.verify(mListener).testRunFailed((String) Mockito.any());
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
+        inOrder.verifyNoMoreInteractions();
+        Mockito.verifyNoMoreInteractions(mListener);
     }
 
     /**
