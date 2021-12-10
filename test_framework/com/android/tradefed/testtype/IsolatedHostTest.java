@@ -649,6 +649,18 @@ public class IsolatedHostTest
         throw new FileNotFoundException(String.format("Could not find jar: %s", jarName));
     }
 
+    /**
+     * Copied over from HostTest to mimic its unit test harnessing.
+     *
+     * <p>Inspect several location where the artifact are usually located for different use cases to
+     * find our jar.
+     */
+    @VisibleForTesting
+    protected File getJarFile(String jarName, TestInformation testInfo)
+            throws FileNotFoundException {
+        return testInfo.getDependencyFile(jarName, /* target first*/ false);
+    }
+
     /** Looks for a jar file given a place to start and a filename. */
     private File searchJarFile(File baseSearchFile, String jarName) {
         if (baseSearchFile != null && baseSearchFile.isDirectory()) {
@@ -766,18 +778,6 @@ public class IsolatedHostTest
     @Override
     public void clearExcludeAnnotations() {
         mExcludeAnnotations.clear();
-    }
-
-    /**
-     * Copied over from HostTest to mimic its unit test harnessing.
-     *
-     * <p>Inspect several location where the artifact are usually located for different use cases to
-     * find our jar.
-     */
-    @VisibleForTesting
-    protected File getJarFile(String jarName, TestInformation testInfo)
-            throws FileNotFoundException {
-        return testInfo.getDependencyFile(jarName, /* target first*/ false);
     }
 
     @VisibleForTesting
