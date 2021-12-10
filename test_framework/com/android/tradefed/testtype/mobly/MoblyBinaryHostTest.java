@@ -463,6 +463,9 @@ public class MoblyBinaryHostTest
             if (subFile.isDirectory()) {
                 reportLogs(subFile, listener);
             } else {
+                if (!subFile.exists()) {
+                    continue;
+                }
                 try (InputStreamSource dataStream = new FileInputStreamSource(subFile, true)) {
                     listener.testLog(subFile.getName(), LogDataType.TEXT, dataStream);
                 }
