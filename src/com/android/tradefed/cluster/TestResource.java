@@ -111,12 +111,12 @@ public class TestResource {
         return mDecompressDir;
     }
 
-    public File getFile(File parentDir) {
-        return new File(parentDir, mName);
-    }
-
     public File getDecompressDir(File parentDir) {
         return new File(parentDir, mDecompressDir);
+    }
+
+    public File getFile(File parentDir) {
+        return new File(parentDir, mName);
     }
 
     public boolean mountZip() {
