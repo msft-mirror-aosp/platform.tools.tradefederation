@@ -24,16 +24,16 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import org.apache.commons.compress.archivers.zip.ZipFile;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
 
-
-/**
- * Unit tests for {@link LocalDeviceBuildProvider}
- */
+/** Unit tests for {@link LocalDeviceBuildProvider} */
+@RunWith(JUnit4.class)
 public class LocalDeviceBuildProviderTest {
 
     private static final String ANDROID_INFO =

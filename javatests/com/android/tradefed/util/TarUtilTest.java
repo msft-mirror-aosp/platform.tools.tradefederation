@@ -24,6 +24,8 @@ import static org.mockito.Mockito.verify;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.LogDataType;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -38,6 +40,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /** Test class for {@link TarUtil}. */
+@RunWith(JUnit4.class)
 public class TarUtilTest {
 
     // This archive contains TEST.log and TEST2.log.
