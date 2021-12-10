@@ -891,18 +891,6 @@ public interface INativeDevice {
     public InputStreamSource getLogcat();
 
     /**
-     * Grabs a snapshot stream of captured logcat data starting the date provided. The time on the
-     * device should be used {@link #getDeviceDate}.
-     *
-     * <p>
-     *
-     * @param date in millisecond since epoch format of when to start the snapshot until present.
-     *     (can be be obtained using 'date +%s')
-     */
-    @MustBeClosed
-    public InputStreamSource getLogcatSince(long date);
-
-    /**
      * Grabs a snapshot stream of the last <code>maxBytes</code> of captured logcat data.
      *
      * <p>Useful for cases when you want to capture frequent snapshots of the captured logcat data
@@ -914,6 +902,18 @@ public interface INativeDevice {
      */
     @MustBeClosed
     public InputStreamSource getLogcat(int maxBytes);
+
+    /**
+     * Grabs a snapshot stream of captured logcat data starting the date provided. The time on the
+     * device should be used {@link #getDeviceDate}.
+     *
+     * <p>
+     *
+     * @param date in millisecond since epoch format of when to start the snapshot until present.
+     *     (can be be obtained using 'date +%s')
+     */
+    @MustBeClosed
+    public InputStreamSource getLogcatSince(long date);
 
     /**
      * Get a dump of the current logcat for device. Unlike {@link #getLogcat()}, this method will
