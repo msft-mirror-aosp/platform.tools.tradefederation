@@ -198,6 +198,21 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         return new ArrayList<>(mSerials);
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public Collection<String> getSerials(IDevice device) {
+        // If no serial was explicitly set, use the environment variable ANDROID_SERIAL.
+        if (mSerials.isEmpty() && !mFetchedEnvVariable) {
+            String env_serial = fetchEnvironmentVariable("ANDROID_SERIAL");
+            if (env_serial != null
+                    && (!(device instanceof StubDevice) || (device instanceof FastbootDevice))) {
+                mSerials.add(env_serial);
+            }
+            mFetchedEnvVariable = true;
+        }
+        return copyCollection(mSerials);
+    }
+
     /**
      * Add a serial number to exclusion list.
      *
@@ -221,21 +236,6 @@ public class DeviceSelectionOptions implements IDeviceSelection {
      */
     public void addProperty(String propertyKey, String propValue) {
         mPropertyMap.put(propertyKey, propValue);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public Collection<String> getSerials(IDevice device) {
-        // If no serial was explicitly set, use the environment variable ANDROID_SERIAL.
-        if (mSerials.isEmpty() && !mFetchedEnvVariable) {
-            String env_serial = fetchEnvironmentVariable("ANDROID_SERIAL");
-            if (env_serial != null
-                    && (!(device instanceof StubDevice) || (device instanceof FastbootDevice))) {
-                mSerials.add(env_serial);
-            }
-            mFetchedEnvVariable = true;
-        }
-        return copyCollection(mSerials);
     }
 
     /**

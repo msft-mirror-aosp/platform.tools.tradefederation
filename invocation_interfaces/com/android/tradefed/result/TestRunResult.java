@@ -140,6 +140,20 @@ public class TestRunResult {
         return mIsRunComplete;
     }
 
+    /** Decides whether or not considering an aggregation of runs completed or not. */
+    private static boolean isRunComplete(
+            boolean isAtLeastOneCompleted, boolean areAllCompleted, MergeStrategy strategy) {
+        switch (strategy) {
+            case ANY_PASS_IS_PASS:
+            case ONE_TESTRUN_PASS_IS_PASS:
+                return isAtLeastOneCompleted;
+            case ONE_TESTCASE_PASS_IS_PASS:
+            case ANY_FAIL_IS_FAIL:
+            default:
+                return areAllCompleted;
+        }
+    }
+
     public void setRunComplete(boolean runComplete) {
         mIsRunComplete = runComplete;
     }
@@ -611,20 +625,6 @@ public class TestRunResult {
             case ANY_FAIL_IS_FAIL:
             default:
                 return atLeastOneFailure;
-        }
-    }
-
-    /** Decides whether or not considering an aggregation of runs completed or not. */
-    private static boolean isRunComplete(
-            boolean isAtLeastOneCompleted, boolean areAllCompleted, MergeStrategy strategy) {
-        switch (strategy) {
-            case ANY_PASS_IS_PASS:
-            case ONE_TESTRUN_PASS_IS_PASS:
-                return isAtLeastOneCompleted;
-            case ONE_TESTCASE_PASS_IS_PASS:
-            case ANY_FAIL_IS_FAIL:
-            default:
-                return areAllCompleted;
         }
     }
 }

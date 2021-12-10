@@ -52,18 +52,6 @@ public class OptionCopier {
     }
 
     /**
-     * Identical to {@link #copyOptions(Object, Object)} but will log instead of throw if exception
-     * occurs.
-     */
-    public static void copyOptionsNoThrow(Object source, Object dest) {
-        try {
-            copyOptions(source, dest);
-        } catch (ConfigurationException e) {
-            CLog.e(e);
-        }
-    }
-
-    /**
      * Copy the given option from {@link Option} fields in <var>origObject</var> to
      * <var>destObject</var>
      *
@@ -85,6 +73,18 @@ public class OptionCopier {
                     OptionSetter.setFieldValue(option.name(), destObject, destField, origValue);
                 }
             }
+        }
+    }
+
+    /**
+     * Identical to {@link #copyOptions(Object, Object)} but will log instead of throw if exception
+     * occurs.
+     */
+    public static void copyOptionsNoThrow(Object source, Object dest) {
+        try {
+            copyOptions(source, dest);
+        } catch (ConfigurationException e) {
+            CLog.e(e);
         }
     }
 
