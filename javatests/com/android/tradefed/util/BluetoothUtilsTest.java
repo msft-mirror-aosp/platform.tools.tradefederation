@@ -23,6 +23,8 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.util.sl4a.FakeSocketServerHelper;
 import com.android.tradefed.util.sl4a.Sl4aClient;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -33,6 +35,7 @@ import java.io.IOException;
 import java.util.Set;
 
 /** Unit tests for {@link BluetoothUtils} */
+@RunWith(JUnit4.class)
 public class BluetoothUtilsTest {
 
     private Sl4aClient mClient;
