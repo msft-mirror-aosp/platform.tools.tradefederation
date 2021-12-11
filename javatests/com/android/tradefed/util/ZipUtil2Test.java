@@ -21,6 +21,8 @@ import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.File;
 import java.io.IOException;
@@ -34,6 +36,7 @@ import java.util.Set;
 /**
  * Unit tests for {@link ZipUtil2}
  */
+@RunWith(JUnit4.class)
 public class ZipUtil2Test {
 
     private Set<File> mTempFiles = new HashSet<File>();

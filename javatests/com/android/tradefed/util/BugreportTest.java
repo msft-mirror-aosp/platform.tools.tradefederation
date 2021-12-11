@@ -27,6 +27,8 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -39,6 +41,7 @@ import java.util.List;
 import java.util.zip.ZipOutputStream;
 
 /** Unit test suite for {@link Bugreport} */
+@RunWith(JUnit4.class)
 public class BugreportTest {
 
     private static final String BUGREPORT_PREFIX = "bugreport_DEVICE_";
