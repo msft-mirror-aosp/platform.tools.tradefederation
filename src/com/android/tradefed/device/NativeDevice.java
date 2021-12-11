@@ -1012,10 +1012,31 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** {@inheritDoc} */
     @Override
+    public boolean runInstrumentationTests(
+            IRemoteAndroidTestRunner runner, ITestLifeCycleReceiver... listeners)
+            throws DeviceNotAvailableException {
+        List<ITestLifeCycleReceiver> listenerList = new ArrayList<>();
+        listenerList.addAll(Arrays.asList(listeners));
+        return runInstrumentationTests(runner, listenerList);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean runInstrumentationTestsAsUser(
             final IRemoteAndroidTestRunner runner,
             int userId,
             final Collection<ITestLifeCycleReceiver> listeners)
+            throws DeviceNotAvailableException {
+        String oldRunTimeOptions = appendUserRunTimeOptionToRunner(runner, userId);
+        boolean result = runInstrumentationTests(runner, listeners);
+        resetUserRunTimeOptionToRunner(runner, oldRunTimeOptions);
+        return result;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean runInstrumentationTestsAsUser(
+            IRemoteAndroidTestRunner runner, int userId, ITestLifeCycleReceiver... listeners)
             throws DeviceNotAvailableException {
         String oldRunTimeOptions = appendUserRunTimeOptionToRunner(runner, userId);
         boolean result = runInstrumentationTests(runner, listeners);
@@ -1073,27 +1094,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         public boolean isRunFailure() {
             return mIsRunFailure;
         }
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean runInstrumentationTests(
-            IRemoteAndroidTestRunner runner, ITestLifeCycleReceiver... listeners)
-            throws DeviceNotAvailableException {
-        List<ITestLifeCycleReceiver> listenerList = new ArrayList<>();
-        listenerList.addAll(Arrays.asList(listeners));
-        return runInstrumentationTests(runner, listenerList);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean runInstrumentationTestsAsUser(
-            IRemoteAndroidTestRunner runner, int userId, ITestLifeCycleReceiver... listeners)
-            throws DeviceNotAvailableException {
-        String oldRunTimeOptions = appendUserRunTimeOptionToRunner(runner, userId);
-        boolean result = runInstrumentationTests(runner, listeners);
-        resetUserRunTimeOptionToRunner(runner, oldRunTimeOptions);
-        return result;
     }
 
     /**
@@ -3507,6 +3507,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * {@inheritDoc}
      */
     @Override
+    public boolean waitForDeviceNotAvailable(long waitTime) {
+        return mStateMonitor.waitForDeviceNotAvailable(waitTime);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public boolean enableAdbRoot() throws DeviceNotAvailableException {
         // adb root is a relatively intensive command, so do a brief check first to see
         // if its necessary or not
@@ -3765,14 +3773,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (mStateMonitor.waitForDeviceAvailable() == null) {
             recoverDevice();
         }
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean waitForDeviceNotAvailable(long waitTime) {
-        return mStateMonitor.waitForDeviceNotAvailable(waitTime);
     }
 
     /**
@@ -5050,6 +5050,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return null;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public String getMacAddress() {
+        return getMacAddress(MAC_ADDRESS_COMMAND);
+    }
+
     /**
      * Query EUI-48 MAC address from the device
      *
@@ -5099,12 +5105,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             addr = addr >> 8;
         }
         return bytes;
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public String getMacAddress() {
-        return getMacAddress(MAC_ADDRESS_COMMAND);
     }
 
     /** {@inheritDoc} */
