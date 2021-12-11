@@ -48,7 +48,9 @@ public class SuiteTestFilter {
         }
         String[] parts = filter.split(" +");
         Integer shardIndex = null;
-        String abi = null, name = null, test = null;
+        String abi = null;
+        String name = null;
+        String test = null;
         // Either:
         // <name>
         // <name> <test>
