@@ -26,6 +26,8 @@ import com.google.common.collect.ArrayListMultimap;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.Test;
 
 import java.io.File;
@@ -38,6 +40,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 
 /** Unit tests for {@link MetricUtility}. */
+@RunWith(JUnit4.class)
 public class MetricUtilityTest {
 
     private static final String OUTPUT_1 = "case_1";
