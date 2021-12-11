@@ -15,11 +15,12 @@
  */
 package com.android.tradefed.command.remote;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.Test;
 
-/**
- * Unit tests for {@link RemoteOperation}.
- */
+/** Unit tests for {@link RemoteOperation}. */
+@RunWith(JUnit4.class)
 public class RemoteOperationTest {
 
     /**
