@@ -248,8 +248,9 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
     public void onTestEnd(
             DeviceMetricData testData, final Map<String, Metric> currentTestCaseMetrics) {
 
-        if (mCategories.isEmpty())
+        if (mCategories.isEmpty()) {
             return;
+        }
 
         for (ITestDevice device : getDevices()) {
             try {

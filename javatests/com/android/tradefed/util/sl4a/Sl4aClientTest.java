@@ -28,6 +28,8 @@ import com.android.tradefed.util.IRunUtil;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -37,6 +39,7 @@ import java.io.File;
 import java.io.IOException;
 
 /** Test class for {@link Sl4aClient}. */
+@RunWith(JUnit4.class)
 public class Sl4aClientTest {
 
     private static final String DEVICE_SERIAL = "54321";

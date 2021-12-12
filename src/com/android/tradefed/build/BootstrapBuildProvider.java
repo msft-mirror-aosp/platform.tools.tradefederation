@@ -93,15 +93,15 @@ public class BootstrapBuildProvider implements IDeviceBuildProvider {
     private boolean mCreatedTestDir = false;
 
     @Override
-    public IBuildInfo getBuild() throws BuildRetrievalError {
-        throw new UnsupportedOperationException("Call getBuild(ITestDevice)");
-    }
-
-    @Override
     public void cleanUp(IBuildInfo info) {
         if (mCreatedTestDir) {
             FileUtil.recursiveDelete(mTestsDir);
         }
+    }
+
+    @Override
+    public IBuildInfo getBuild() throws BuildRetrievalError {
+        throw new UnsupportedOperationException("Call getBuild(ITestDevice)");
     }
 
     @Override

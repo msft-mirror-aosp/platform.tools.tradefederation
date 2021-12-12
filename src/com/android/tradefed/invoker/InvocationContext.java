@@ -187,17 +187,17 @@ public class InvocationContext implements IInvocationContext {
      * {@inheritDoc}
      */
     @Override
-    public void addDeviceBuildInfo(String deviceName, IBuildInfo buildinfo) {
-        mNameAndBuildinfoMap.put(deviceName, buildinfo);
-        mAllocatedDeviceAndBuildMap.put(getDevice(deviceName), buildinfo);
+    public IBuildInfo getBuildInfo(ITestDevice testDevice) {
+        return mAllocatedDeviceAndBuildMap.get(testDevice);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public IBuildInfo getBuildInfo(ITestDevice testDevice) {
-        return mAllocatedDeviceAndBuildMap.get(testDevice);
+    public void addDeviceBuildInfo(String deviceName, IBuildInfo buildinfo) {
+        mNameAndBuildinfoMap.put(deviceName, buildinfo);
+        mAllocatedDeviceAndBuildMap.put(getDevice(deviceName), buildinfo);
     }
 
     /**

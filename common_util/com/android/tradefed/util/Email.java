@@ -72,7 +72,9 @@ public class Email implements IEmail {
      * is non-null
      */
     private void addHeader(List<String> headers, String name, String value) {
-        if (name == null || value == null) return;
+        if (name == null || value == null) {
+            return;
+        }
         headers.add(String.format("%s: %s", name, value));
     }
 
@@ -81,8 +83,12 @@ public class Email implements IEmail {
      * is non-null
      */
     private void addHeaders(List<String> headers, String name, Collection<String> values) {
-        if (name == null || values == null) return;
-        if (values.isEmpty()) return;
+        if (name == null || values == null) {
+            return;
+        }
+        if (values.isEmpty()) {
+            return;
+        }
 
         final String strValues = join(values, ",");
         headers.add(String.format("%s: %s", name, strValues));

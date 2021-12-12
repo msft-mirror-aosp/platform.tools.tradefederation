@@ -83,7 +83,7 @@ public class StatsdGenericPostProcessor extends BasePostProcessor {
     // A few fields to skip as they are large and not currently used.
     private static final String UID_MAP_FIELD_NAME = "uid_map";
     private static final String STRINGS_FIELD_NAME = "strings";
-    private static final ImmutableList FIELDS_TO_SKIP =
+    private static final ImmutableList<String> FIELDS_TO_SKIP =
             ImmutableList.of(UID_MAP_FIELD_NAME, STRINGS_FIELD_NAME);
 
     private static final JsonFormat.Printer JSON_PRINTER = JsonFormat.printer();

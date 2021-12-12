@@ -344,7 +344,9 @@ public class ArgsOptionParser extends OptionSetter {
                 value = "false";
             } else {
                 // default boolean flag to true and overwrite it if value is provided by user
-                if (value == null) value = "true";
+                if (value == null) {
+                    value = "true";
+                }
                 String nextArg = args.hasNext() ? args.next() : null;
                 if (nextArg != null) {
                     if (nextArg.equalsIgnoreCase("true") || nextArg.equalsIgnoreCase("false")) {

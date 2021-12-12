@@ -68,9 +68,15 @@ public class BasePostProcessorTest {
         public static final String FILE_PREFIX = "file-";
 
         private boolean mSavesFile = false;
+        private boolean mSetUp = false;
 
         public void setSavesFile() {
             mSavesFile = true;
+        }
+
+        @Override
+        public void setUp() {
+            mSetUp = true;
         }
 
         @Override
@@ -293,6 +299,9 @@ public class BasePostProcessorTest {
                         .get(TestablePostProcessor.FILE_PREFIX + RUN_DATA_NAME_1)
                         .getMeasurements()
                         .getSingleString());
+
+        // Verify setup method is called.
+        assertTrue(mProcessor.mSetUp);
     }
 
     /** Test that only run logs are processed in post processing. */
@@ -341,6 +350,9 @@ public class BasePostProcessorTest {
         // Neither of the test-level logs should be in the metrics.
         assertFalse(finalMetrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1));
         assertFalse(finalMetrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2));
+
+        // Verify setup method is called.
+        assertTrue(mProcessor.mSetUp);
     }
 
     /** Test that the test metrics are found in the after-test callback. */

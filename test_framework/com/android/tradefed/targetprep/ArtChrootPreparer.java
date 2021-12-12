@@ -80,7 +80,8 @@ public class ArtChrootPreparer extends BaseTargetPreparer {
 
         // Activate APEXes in the chroot.
         DeviceDescriptor deviceDesc = device.getDeviceDescriptor();
-        File art_apex, tempDir = null;
+        File art_apex;
+        File tempDir = null;
         try {
             art_apex = testInfo.getDependencyFile("com.android.art.testing.apex", /*target=*/ true);
         } catch (FileNotFoundException e) {

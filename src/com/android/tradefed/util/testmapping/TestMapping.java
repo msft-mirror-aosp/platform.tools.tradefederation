@@ -348,7 +348,7 @@ public class TestMapping {
             }
             // Skip the test if any of the required keywords is not specified by the test.
             if (keywords != null) {
-                Boolean allKeywordsFound = true;
+                boolean allKeywordsFound = true;
                 for (String keyword : keywords) {
                     if (!test.getKeywords().contains(keyword)) {
                         allKeywordsFound = false;
@@ -364,67 +364,6 @@ public class TestMapping {
         }
 
         return tests;
-    }
-
-    /**
-     * Merge multiple tests if there are any for the same test module, but with different test
-     * options.
-     *
-     * @param tests A {@code Set<TestInfo>} of the test infos to be processed.
-     * @return A {@code Set<TestInfo>} of tests that each is for a unique test module.
-     */
-    private static Set<TestInfo> mergeTests(Set<TestInfo> tests) {
-        Map<String, List<TestInfo>> testsGroupedbyNameAndHost =
-                tests.stream()
-                        .collect(
-                                Collectors.groupingBy(
-                                        TestInfo::getNameAndHostOnly, Collectors.toList()));
-
-        Set<TestInfo> mergedTests = new HashSet<>();
-        for (List<TestInfo> multiTests : testsGroupedbyNameAndHost.values()) {
-            TestInfo mergedTest = multiTests.get(0);
-            if (multiTests.size() > 1) {
-                for (TestInfo test : multiTests.subList(1, multiTests.size())) {
-                    mergedTest.merge(test);
-                }
-            }
-            mergedTests.add(mergedTest);
-        }
-
-        return mergedTests;
-    }
-
-    /**
-     * Helper to get all TEST_MAPPING paths relative to TEST_MAPPINGS_ZIP.
-     *
-     * @param testMappingsRootPath The {@link Path} to a test mappings zip path.
-     * @return A {@code Set<Path>} of all the TEST_MAPPING paths relative to TEST_MAPPINGS_ZIP.
-     */
-    @VisibleForTesting
-    static Set<Path> getAllTestMappingPaths(Path testMappingsRootPath) {
-        Set<Path> allTestMappingPaths = new HashSet<>();
-        for (String path : mTestMappingRelativePaths) {
-            boolean hasAdded = false;
-            Path testMappingPath = testMappingsRootPath.resolve(path);
-            // Recursively find the TEST_MAPPING file until reaching to testMappingsRootPath.
-            while (!testMappingPath.equals(testMappingsRootPath)) {
-                if (testMappingPath.resolve(TEST_MAPPING).toFile().exists()) {
-                    hasAdded = true;
-                    CLog.d("Adding TEST_MAPPING path: %s", testMappingPath);
-                    allTestMappingPaths.add(testMappingPath.resolve(TEST_MAPPING));
-                }
-                testMappingPath = testMappingPath.getParent();
-            }
-            if (!hasAdded) {
-                CLog.w("Couldn't find TEST_MAPPING files from %s", path);
-            }
-        }
-        if (allTestMappingPaths.isEmpty()) {
-            throw new RuntimeException(
-                    String.format(
-                            "Couldn't find TEST_MAPPING files from %s", mTestMappingRelativePaths));
-        }
-        return allTestMappingPaths;
     }
 
     /**
@@ -500,6 +439,67 @@ public class TestMapping {
     }
 
     /**
+     * Merge multiple tests if there are any for the same test module, but with different test
+     * options.
+     *
+     * @param tests A {@code Set<TestInfo>} of the test infos to be processed.
+     * @return A {@code Set<TestInfo>} of tests that each is for a unique test module.
+     */
+    private static Set<TestInfo> mergeTests(Set<TestInfo> tests) {
+        Map<String, List<TestInfo>> testsGroupedbyNameAndHost =
+                tests.stream()
+                        .collect(
+                                Collectors.groupingBy(
+                                        TestInfo::getNameAndHostOnly, Collectors.toList()));
+
+        Set<TestInfo> mergedTests = new HashSet<>();
+        for (List<TestInfo> multiTests : testsGroupedbyNameAndHost.values()) {
+            TestInfo mergedTest = multiTests.get(0);
+            if (multiTests.size() > 1) {
+                for (TestInfo test : multiTests.subList(1, multiTests.size())) {
+                    mergedTest.merge(test);
+                }
+            }
+            mergedTests.add(mergedTest);
+        }
+
+        return mergedTests;
+    }
+
+    /**
+     * Helper to get all TEST_MAPPING paths relative to TEST_MAPPINGS_ZIP.
+     *
+     * @param testMappingsRootPath The {@link Path} to a test mappings zip path.
+     * @return A {@code Set<Path>} of all the TEST_MAPPING paths relative to TEST_MAPPINGS_ZIP.
+     */
+    @VisibleForTesting
+    static Set<Path> getAllTestMappingPaths(Path testMappingsRootPath) {
+        Set<Path> allTestMappingPaths = new HashSet<>();
+        for (String path : mTestMappingRelativePaths) {
+            boolean hasAdded = false;
+            Path testMappingPath = testMappingsRootPath.resolve(path);
+            // Recursively find the TEST_MAPPING file until reaching to testMappingsRootPath.
+            while (!testMappingPath.equals(testMappingsRootPath)) {
+                if (testMappingPath.resolve(TEST_MAPPING).toFile().exists()) {
+                    hasAdded = true;
+                    CLog.d("Adding TEST_MAPPING path: %s", testMappingPath);
+                    allTestMappingPaths.add(testMappingPath.resolve(TEST_MAPPING));
+                }
+                testMappingPath = testMappingPath.getParent();
+            }
+            if (!hasAdded) {
+                CLog.w("Couldn't find TEST_MAPPING files from %s", path);
+            }
+        }
+        if (allTestMappingPaths.isEmpty()) {
+            throw new RuntimeException(
+                    String.format(
+                            "Couldn't find TEST_MAPPING files from %s", mTestMappingRelativePaths));
+        }
+        return allTestMappingPaths;
+    }
+
+    /**
      * Helper to find all tests in the TEST_MAPPING files from a given directory.
      *
      * @param testMappingsDir the {@link File} the directory containing all Test Mapping files.
@@ -529,6 +529,23 @@ public class TestMapping {
             }
         }
         return allTests;
+    }
+
+    /**
+     * Helper to find all tests in the TEST_MAPPING files from a given directory.
+     *
+     * @param allTests the {@code HashMap<String, Set<TestInfo>>} containing the tests of each
+     * test group.
+     * @param path the {@link Path} to a TEST_MAPPING file.
+     * @param testMappingsRootPath the {@link Path} to a test mappings zip path.
+     */
+    private static void getAllTests(Map<String, Set<TestInfo>> allTests,
+        Path path, Path testMappingsRootPath) {
+        Map<String, Set<TestInfo>> testCollection =
+            new TestMapping(path, testMappingsRootPath).getTestCollection();
+        for (String group : testCollection.keySet()) {
+            allTests.computeIfAbsent(group, k -> new HashSet<>()).addAll(testCollection.get(group));
+        }
     }
 
     /**
@@ -578,23 +595,6 @@ public class TestMapping {
                             e.getMessage(), disabledPresubmitTestsFile.getAbsolutePath()), e);
         }
         return disabledTests;
-    }
-
-    /**
-     * Helper to find all tests in the TEST_MAPPING files from a given directory.
-     *
-     * @param allTests the {@code HashMap<String, Set<TestInfo>>} containing the tests of each
-     * test group.
-     * @param path the {@link Path} to a TEST_MAPPING file.
-     * @param testMappingsRootPath the {@link Path} to a test mappings zip path.
-     */
-    private static void getAllTests(Map<String, Set<TestInfo>> allTests,
-        Path path, Path testMappingsRootPath) {
-        Map<String, Set<TestInfo>> testCollection =
-            new TestMapping(path, testMappingsRootPath).getTestCollection();
-        for (String group : testCollection.keySet()) {
-            allTests.computeIfAbsent(group, k -> new HashSet<>()).addAll(testCollection.get(group));
-        }
     }
 
     /**

@@ -53,7 +53,9 @@ public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceT
     @Override
     public String findBinary(String binary) throws DeviceNotAvailableException {
         for (String path : binary.split(" ")) {
-            if (mDevice.isExecutable(path)) return binary;
+            if (mDevice.isExecutable(path)) {
+                return binary;
+            }
         }
         return null;
     }

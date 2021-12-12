@@ -321,7 +321,8 @@ public class FileDownloadCache {
             IFileDownloader downloader, String remotePath, File destFile)
             throws BuildRetrievalError {
         boolean download = false;
-        File cachedFile, copyFile;
+        File cachedFile;
+        File copyFile;
         if (remotePath == null) {
             throw new BuildRetrievalError(
                     "remote path was null.", InfraErrorIdentifier.ARTIFACT_REMOTE_PATH_NULL);

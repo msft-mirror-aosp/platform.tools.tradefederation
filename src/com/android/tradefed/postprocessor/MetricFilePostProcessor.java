@@ -90,7 +90,6 @@ public class MetricFilePostProcessor extends BasePostProcessor {
             TestDescription testDescription,
             HashMap<String, Metric> testMetrics,
             Map<String, LogFile> testLogs) {
-        initializeMetricUtilArgs();
 
         // Store the test metric and use it for aggregation later at the end of
         // test run.
@@ -109,7 +108,6 @@ public class MetricFilePostProcessor extends BasePostProcessor {
     @Override
     public Map<String, Builder> processRunMetricsAndLogs(
             HashMap<String, Metric> rawMetrics, Map<String, LogFile> runLogs) {
-        initializeMetricUtilArgs();
         if (mIsRunLogEnabled) {
             // Log the raw run metrics.
             writeMetricFile(rawMetrics, getRunName());
@@ -155,7 +153,8 @@ public class MetricFilePostProcessor extends BasePostProcessor {
         }
     }
 
-    private void initializeMetricUtilArgs() {
+    @Override
+    public void setUp() {
         mMetricUtil.setPercentiles(mPercentiles);
         mMetricUtil.setIterationSeparator(mTestIterationSeparator);
     }

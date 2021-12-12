@@ -22,7 +22,6 @@ import com.android.ddmlib.IDevice;
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.ddmlib.InstallException;
 import com.android.ddmlib.Log.LogLevel;
-import com.android.ddmlib.NullOutputReceiver;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.SyncException.SyncError;
@@ -156,10 +155,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** The password for encrypting and decrypting the device. */
     private static final String ENCRYPTION_PASSWORD = "android";
-    /** Encrypting with inplace can take up to 2 hours. */
-    private static final int ENCRYPTION_INPLACE_TIMEOUT_MIN = 2 * 60;
-    /** Encrypting with wipe can take up to 20 minutes. */
-    private static final long ENCRYPTION_WIPE_TIMEOUT_MIN = 20;
 
     /** The maximum system_server start delay in seconds after device boot up */
     private static final int MAX_SYSTEM_SERVER_DELAY_AFTER_BOOT_UP_SEC = 25;
@@ -341,6 +336,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             } else if (mResult.getStatus() == CommandStatus.TIMED_OUT) {
                 throw new TimeoutException(mResult.getStderr());
             }
+            String stdErr = mResult.getStderr();
+            if (stdErr != null) {
+                stdErr = stdErr.trim();
+                if (stdErr.contains("device offline")) {
+                    throw new IOException(stdErr);
+                }
+            }
             // If it's not some issue with running the adb command, then we return the CommandResult
             // which will contain all the infos.
             return true;
@@ -515,11 +517,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 // property.
                 recoverDevice();
             } else {
-                // Only query property for online device
-                CLog.d(
-                        "Device %s is in state '%s' cannot get property %s.",
-                        getSerialNumber(), state, name);
-                return null;
+                if (mStateMonitor.waitForDeviceOnline() == null) {
+                    CLog.w(
+                            "Waited for device %s to be online but it is in state '%s', cannot "
+                                    + "get property %s.",
+                            getSerialNumber(), getDeviceState(), name);
+                    return null;
+                }
             }
         }
         String cmd = String.format("getprop %s", name);
@@ -1008,10 +1012,31 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** {@inheritDoc} */
     @Override
+    public boolean runInstrumentationTests(
+            IRemoteAndroidTestRunner runner, ITestLifeCycleReceiver... listeners)
+            throws DeviceNotAvailableException {
+        List<ITestLifeCycleReceiver> listenerList = new ArrayList<>();
+        listenerList.addAll(Arrays.asList(listeners));
+        return runInstrumentationTests(runner, listenerList);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean runInstrumentationTestsAsUser(
             final IRemoteAndroidTestRunner runner,
             int userId,
             final Collection<ITestLifeCycleReceiver> listeners)
+            throws DeviceNotAvailableException {
+        String oldRunTimeOptions = appendUserRunTimeOptionToRunner(runner, userId);
+        boolean result = runInstrumentationTests(runner, listeners);
+        resetUserRunTimeOptionToRunner(runner, oldRunTimeOptions);
+        return result;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean runInstrumentationTestsAsUser(
+            IRemoteAndroidTestRunner runner, int userId, ITestLifeCycleReceiver... listeners)
             throws DeviceNotAvailableException {
         String oldRunTimeOptions = appendUserRunTimeOptionToRunner(runner, userId);
         boolean result = runInstrumentationTests(runner, listeners);
@@ -1069,27 +1094,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         public boolean isRunFailure() {
             return mIsRunFailure;
         }
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean runInstrumentationTests(
-            IRemoteAndroidTestRunner runner, ITestLifeCycleReceiver... listeners)
-            throws DeviceNotAvailableException {
-        List<ITestLifeCycleReceiver> listenerList = new ArrayList<>();
-        listenerList.addAll(Arrays.asList(listeners));
-        return runInstrumentationTests(runner, listenerList);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean runInstrumentationTestsAsUser(
-            IRemoteAndroidTestRunner runner, int userId, ITestLifeCycleReceiver... listeners)
-            throws DeviceNotAvailableException {
-        String oldRunTimeOptions = appendUserRunTimeOptionToRunner(runner, userId);
-        boolean result = runInstrumentationTests(runner, listeners);
-        resetUserRunTimeOptionToRunner(runner, oldRunTimeOptions);
-        return result;
     }
 
     /**
@@ -1552,13 +1556,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             String numericValueString = tablePatternMatcher.group(1);
             String unitType = tablePatternMatcher.group(2);
             try {
-                Float freeSpaceFloat = Float.parseFloat(numericValueString);
+                float freeSpaceFloat = Float.parseFloat(numericValueString);
                 if (unitType.equals("M")) {
                     freeSpaceFloat = freeSpaceFloat * 1024;
                 } else if (unitType.equals("G")) {
                     freeSpaceFloat = freeSpaceFloat * 1024 * 1024;
                 }
-                freeSpace = freeSpaceFloat.longValue();
+                freeSpace = (long) freeSpaceFloat;
             } catch (NumberFormatException e) {
                 // fall through
             }
@@ -1627,7 +1631,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         // The overhead of parsing all of the lines should be minimal
         List<MountPointInfo> mountpoints = getMountPointInfo();
         for (MountPointInfo info : mountpoints) {
-            if (mountpoint.equals(info.mountpoint)) return info;
+            if (mountpoint.equals(info.mountpoint)) {
+                return info;
+            }
         }
         return null;
     }
@@ -3501,6 +3507,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * {@inheritDoc}
      */
     @Override
+    public boolean waitForDeviceNotAvailable(long waitTime) {
+        return mStateMonitor.waitForDeviceNotAvailable(waitTime);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public boolean enableAdbRoot() throws DeviceNotAvailableException {
         // adb root is a relatively intensive command, so do a brief check first to see
         // if its necessary or not
@@ -3611,137 +3625,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * {@inheritDoc}
      */
     @Override
-    public boolean encryptDevice(boolean inplace) throws DeviceNotAvailableException,
-            UnsupportedOperationException {
-        if (!isEncryptionSupported()) {
-            throw new UnsupportedOperationException(String.format("Can't encrypt device %s: "
-                    + "encryption not supported", getSerialNumber()));
-        }
-
-        if (isDeviceEncrypted()) {
-            CLog.d("Device %s is already encrypted, skipping", getSerialNumber());
-            return true;
-        }
-
-        enableAdbRoot();
-
-        String encryptMethod;
-        long timeout;
-        if (inplace) {
-            encryptMethod = "inplace";
-            timeout = ENCRYPTION_INPLACE_TIMEOUT_MIN;
-        } else {
-            encryptMethod = "wipe";
-            timeout = ENCRYPTION_WIPE_TIMEOUT_MIN;
-        }
-
-        CLog.i("Encrypting device %s via %s", getSerialNumber(), encryptMethod);
-
-        // enable crypto takes one of the following formats:
-        // cryptfs enablecrypto <wipe|inplace> <passwd>
-        // cryptfs enablecrypto <wipe|inplace> default|password|pin|pattern [passwd]
-        // Try the first one first, if it outputs "500 0 Usage: ...", try the second.
-        CollectingOutputReceiver receiver = new CollectingOutputReceiver();
-        String command = String.format("vdc cryptfs enablecrypto %s \"%s\"", encryptMethod,
-                ENCRYPTION_PASSWORD);
-        executeShellCommand(command, receiver, timeout, TimeUnit.MINUTES, 1);
-        if (receiver.getOutput().split(":")[0].matches("500 \\d+ Usage")) {
-            command = String.format("vdc cryptfs enablecrypto %s default", encryptMethod);
-            executeShellCommand(command, new NullOutputReceiver(), timeout, TimeUnit.MINUTES, 1);
-        }
-
-        waitForDeviceNotAvailable("reboot", getCommandTimeout());
-        waitForDeviceOnline();  // Device will not become available until the user data is unlocked.
-
-        return isDeviceEncrypted();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean unencryptDevice() throws DeviceNotAvailableException,
-            UnsupportedOperationException {
-        if (!isEncryptionSupported()) {
-            throw new UnsupportedOperationException(String.format("Can't unencrypt device %s: "
-                    + "encryption not supported", getSerialNumber()));
-        }
-
-        if (!isDeviceEncrypted()) {
-            CLog.d("Device %s is already unencrypted, skipping", getSerialNumber());
-            return true;
-        }
-
-        CLog.i("Unencrypting device %s", getSerialNumber());
-
-        // If the device supports fastboot format, then we're done.
-        if (!mOptions.getUseFastbootErase()) {
-            rebootIntoBootloader();
-            fastbootWipePartition("userdata");
-            rebootUntilOnline();
-            waitForDeviceAvailable(ENCRYPTION_WIPE_TIMEOUT_MIN * 60 * 1000);
-            return true;
-        }
-
-        // Determine if we need to format partition instead of wipe.
-        boolean format = false;
-        String output = executeShellCommand("vdc volume list");
-        String[] splitOutput;
-        if (output != null) {
-            splitOutput = output.split("\r?\n");
-            for (String line : splitOutput) {
-                if (line.startsWith("110 ") && line.contains("sdcard /mnt/sdcard") &&
-                        !line.endsWith("0")) {
-                    format = true;
-                }
-            }
-        }
-
-        rebootIntoBootloader();
-        fastbootWipePartition("userdata");
-
-        // If the device requires time to format the filesystem after fastboot erase userdata, wait
-        // for the device to reboot a second time.
-        if (mOptions.getUnencryptRebootTimeout() > 0) {
-            rebootUntilOnline();
-            if (waitForDeviceNotAvailable(mOptions.getUnencryptRebootTimeout())) {
-                waitForDeviceOnline();
-            }
-        }
-
-        if (format) {
-            CLog.d("Need to format sdcard for device %s", getSerialNumber());
-
-            RecoveryMode cachedRecoveryMode = getRecoveryMode();
-            setRecoveryMode(RecoveryMode.ONLINE);
-
-            output = executeShellCommand("vdc volume format sdcard");
-            if (output == null) {
-                CLog.e("Command vdc volume format sdcard failed will no output for device %s:\n%s",
-                        getSerialNumber());
-                setRecoveryMode(cachedRecoveryMode);
-                return false;
-            }
-            splitOutput = output.split("\r?\n");
-            if (!splitOutput[splitOutput.length - 1].startsWith("200 ")) {
-                CLog.e("Command vdc volume format sdcard failed for device %s:\n%s",
-                        getSerialNumber(), output);
-                setRecoveryMode(cachedRecoveryMode);
-                return false;
-            }
-
-            setRecoveryMode(cachedRecoveryMode);
-        }
-
-        reboot();
-
-        return true;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
     public boolean unlockDevice() throws DeviceNotAvailableException,
             UnsupportedOperationException {
         if (!isEncryptionSupported()) {
@@ -3751,6 +3634,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         if (!isDeviceEncrypted()) {
             CLog.d("Device %s is not encrypted, skipping", getSerialNumber());
+            return true;
+        }
+        String encryptionType = getProperty("ro.crypto.type");
+        if (!"block".equals(encryptionType)) {
+            CLog.d(
+                    "Skipping unlockDevice since it's not encrypted. ro.crypto.type=%s",
+                    encryptionType);
             return true;
         }
 
@@ -3889,14 +3779,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * {@inheritDoc}
      */
     @Override
-    public boolean waitForDeviceNotAvailable(long waitTime) {
-        return mStateMonitor.waitForDeviceNotAvailable(waitTime);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
     public boolean waitForDeviceInRecovery(long waitTime) {
         return mStateMonitor.waitForDeviceInRecovery(waitTime);
     }
@@ -3915,7 +3797,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * of it in that case.
      */
     private void throwIfNull(Object obj) {
-        if (obj == null) throw new NullPointerException();
+        if (obj == null) {
+            throw new NullPointerException();
+        }
     }
 
     /** Retrieve this device's recovery mechanism. */
@@ -4372,7 +4256,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public long getDeviceTimeOffset(Date date) throws DeviceNotAvailableException {
-        Long deviceTime = getDeviceDate();
+        long deviceTime = getDeviceDate();
 
         if (date == null) {
             date = new Date();
@@ -5166,6 +5050,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return null;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public String getMacAddress() {
+        return getMacAddress(MAC_ADDRESS_COMMAND);
+    }
+
     /**
      * Query EUI-48 MAC address from the device
      *
@@ -5215,12 +5105,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             addr = addr >> 8;
         }
         return bytes;
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public String getMacAddress() {
-        return getMacAddress(MAC_ADDRESS_COMMAND);
     }
 
     /** {@inheritDoc} */
