@@ -39,7 +39,7 @@ public class CommandFileWatcherTest {
     private static final List<String> EMPTY_DEPENDENCIES = Collections.<String>emptyList();
 
     private CommandFileWatcher mWatcher = null;
-    @Mock ICommandFileListener mMockListener = null;
+    @Mock ICommandFileListener mMockListener;
 
     @Before
     public void setUp() throws Exception {
