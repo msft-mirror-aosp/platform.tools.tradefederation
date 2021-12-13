@@ -3493,14 +3493,23 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return new RebootDeviceAction(rebootMode, reason);
     }
 
-    protected void waitForDeviceNotAvailable(String operationDesc, long time) {
+    /**
+     * Wait to see the device going unavailable (stop reporting to adb).
+     *
+     * @param operationDesc The name of the operation that is waiting for unavailable.
+     * @param time The time to wait for unavailable to occur.
+     * @return True if device did become unavailable.
+     */
+    protected boolean waitForDeviceNotAvailable(String operationDesc, long time) {
         // TODO: a bit of a race condition here. Would be better to start a
         // before the operation
         if (!mStateMonitor.waitForDeviceNotAvailable(time)) {
             // above check is flaky, ignore till better solution is found
             CLog.w("Did not detect device %s becoming unavailable after %s", getSerialNumber(),
                     operationDesc);
+            return false;
         }
+        return true;
     }
 
     /**
@@ -3538,7 +3547,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             for (int i = 1; i <= attempts; i++) {
                 String output = executeAdbCommand("root");
                 // wait for device to disappear from adb
-                waitForDeviceNotAvailable("root", 20 * 1000);
+                boolean res = waitForDeviceNotAvailable("root", 2 * 1000);
+                if (!res && TestDeviceState.ONLINE.equals(getDeviceState())) {
+                    if (isAdbRoot()) {
+                        return true;
+                    }
+                }
 
                 postAdbRootAction();
 
