@@ -285,7 +285,7 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
      * Process perfetto metric files that does not have proto defined in TraceMetrics into key,
      * value pairs.
      *
-     * @param perfettoMetricFiles perfetto metric files to be processed.
+     * @param perfettoMetricFile perfetto metric file to be processed.
      * @return key, value pairs processed from the metrics.
      */
     private Map<String, Metric.Builder> processPerfettoMetricsWithAlternativeMethods(
