@@ -33,7 +33,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.incfs.install.IncrementalInstallSession;
-import com.android.incfs.install.IncrementalInstallSession.Builder;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.ConfigurationException;
@@ -376,13 +375,14 @@ public class TestAppInstallSetupTest {
                     }
 
                     @Override
-                    protected Builder getIncrementalInstallSessionBuilder() {
+                    protected IncrementalInstallSession.Builder
+                            getIncrementalInstallSessionBuilder() {
                         return mMockIncrementalInstallSessionBuilder;
                     }
 
                     @Override
-                    protected void installPackageIncrementally(Builder builder)
-                            throws TargetSetupError {
+                    protected void installPackageIncrementally(
+                            IncrementalInstallSession.Builder builder) throws TargetSetupError {
                         try {
                             incrementalInstallSession =
                                     mMockIncrementalInstallSessionBuilder.build();
@@ -433,8 +433,8 @@ public class TestAppInstallSetupTest {
                     }
 
                     @Override
-                    protected void installPackageIncrementally(Builder builder)
-                            throws TargetSetupError {
+                    protected void installPackageIncrementally(
+                            IncrementalInstallSession.Builder builder) throws TargetSetupError {
                         try {
                             incrementalInstallSession =
                                     mMockIncrementalInstallSessionBuilder.build();
@@ -486,8 +486,8 @@ public class TestAppInstallSetupTest {
                     }
 
                     @Override
-                    protected void installPackageIncrementally(Builder builder)
-                            throws TargetSetupError {
+                    protected void installPackageIncrementally(
+                            IncrementalInstallSession.Builder builder) throws TargetSetupError {
                         try {
                             incrementalInstallSession =
                                     mMockIncrementalInstallSessionBuilder.build();
