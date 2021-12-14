@@ -66,7 +66,6 @@ import com.android.tradefed.log.ILogRegistry;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Measurements;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
-import com.android.tradefed.metrics.proto.MetricMeasurement.Metric.Builder;
 import com.android.tradefed.postprocessor.BasePostProcessor;
 import com.android.tradefed.result.ActionInProgress;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
@@ -829,9 +828,9 @@ public class TestInvocationTest {
         }
 
         @Override
-        public Map<String, Builder> processRunMetricsAndLogs(
+        public Map<String, Metric.Builder> processRunMetricsAndLogs(
                 HashMap<String, Metric> rawMetrics, Map<String, LogFile> runLogs) {
-            Map<String, Builder> post = new LinkedHashMap<>();
+            Map<String, Metric.Builder> post = new LinkedHashMap<>();
             post.put(mName, Metric.newBuilder());
             return post;
         }
