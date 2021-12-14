@@ -346,7 +346,7 @@ public class RustBinaryTestTest {
     /**
      * Helper function to do the actual filtering test.
      *
-     * @param filterString The string to search for in the Mock, to verify filtering was called
+     * @param filterStrings The strings to search for in the Mock, to verify filtering was called
      * @throws DeviceNotAvailableException
      */
     private void doTestFilter(String[] filterStrings) throws DeviceNotAvailableException {

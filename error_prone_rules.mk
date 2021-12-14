@@ -27,6 +27,7 @@ LOCAL_ERROR_PRONE_FLAGS:= -XDandroidCompatible=false \
                           -Xep:FormatString:ERROR \
                           -Xep:GetClassOnClass:ERROR \
                           -Xep:IdentityBinaryExpression:ERROR \
+                          -Xep:InvalidParam:ERROR \
                           -Xep:JUnit3TestNotRun:ERROR \
                           -Xep:JUnit4TestNotRun:ERROR \
                           -Xep:JUnit4ClassUsedInJUnit3:ERROR \
