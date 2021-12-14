@@ -47,6 +47,7 @@ LOCAL_ERROR_PRONE_FLAGS:= -XDandroidCompatible=false \
                           -Xep:SizeGreaterThanOrEqualsZero:ERROR \
                           -Xep:StreamResourceLeak:ERROR \
                           -Xep:TryFailThrowable:ERROR \
+                          -Xep:UnnecessaryAssignment:ERROR \
                           -Xep:UnnecessaryParentheses:ERROR \
                           -Xep:UseCorrectAssertInTests:ERROR
 

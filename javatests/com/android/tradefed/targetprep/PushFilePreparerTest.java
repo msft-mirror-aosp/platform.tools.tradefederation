@@ -58,7 +58,7 @@ public class PushFilePreparerTest {
     private static final String HOST_TESTCASES = "host/testcases";
 
     private PushFilePreparer mPreparer = null;
-    @Mock ITestDevice mMockDevice = null;
+    @Mock ITestDevice mMockDevice;
     private OptionSetter mOptionSetter = null;
     private TestInformation mTestInfo;
 
