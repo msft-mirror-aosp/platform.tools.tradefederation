@@ -2259,13 +2259,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             try {
                 return action.run();
             } catch (TimeoutException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, false);
             } catch (IOException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
             } catch (InstallException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
             } catch (SyncException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
                 // a SyncException is not necessarily a device communication problem
                 // do additional diagnosis
                 if (!e.getErrorCode().equals(SyncError.BUFFER_OVERRUN) &&
@@ -2283,7 +2283,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                                     + " fastboot.");
                     return true;
                 }
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, false);
             } catch (ShellCommandUnresponsiveException e) {
                 // ShellCommandUnresponsiveException is thrown when no output occurs within the
                 // timeout. It doesn't necessarily mean the device is offline.
@@ -2313,10 +2313,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      *
      * @param actionDescription the action's description
      * @param e the exception
+     * @param logFullTrace whether the full exception stack trace should be logged
      */
-    private void logDeviceActionException(String actionDescription, Exception e) {
+    private void logDeviceActionException(
+            String actionDescription, Exception e, boolean logFullTrace) {
         CLog.w("%s (%s) when attempting %s on device %s", e.getClass().getSimpleName(),
                 getExceptionMessage(e), actionDescription, getSerialNumber());
+        if (logFullTrace) {
+            CLog.w(e);
+        }
     }
 
     /**
