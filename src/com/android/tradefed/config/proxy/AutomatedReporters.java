@@ -36,8 +36,10 @@ public class AutomatedReporters {
 
     public static final String PROTO_REPORTING_PORT = "PROTO_REPORTING_PORT";
     public static final String PROTO_REPORTING_FILE = "PROTO_REPORTING_FILE";
+    public static final String PROTO_REPORTING_FILE_GRANULAR = "PROTO_REPORTING_FILE_GRANULAR";
     public static final ImmutableSet<String> REPORTER_MAPPING =
-            ImmutableSet.of(PROTO_REPORTING_PORT, PROTO_REPORTING_FILE);
+            ImmutableSet.of(
+                    PROTO_REPORTING_PORT, PROTO_REPORTING_FILE, PROTO_REPORTING_FILE_GRANULAR);
 
     /**
      * Complete the listeners based on the environment.
@@ -67,7 +69,16 @@ public class AutomatedReporters {
                     FileProtoResultReporter fileReporter = new FileProtoResultReporter();
                     fileReporter.setOutputFile(new File(envValue));
                     fileReporter.setDelimitedOutput(false);
+                    // Aggregate results for this option
+                    fileReporter.setGranularResults(false);
                     addToReporters(configuration, fileReporter);
+                    break;
+                case PROTO_REPORTING_FILE_GRANULAR:
+                    FileProtoResultReporter fileReporterGranular = new FileProtoResultReporter();
+                    fileReporterGranular.setOutputFile(new File(envValue));
+                    fileReporterGranular.setDelimitedOutput(false);
+                    fileReporterGranular.setGranularResults(true);
+                    addToReporters(configuration, fileReporterGranular);
                     break;
                 default:
                     break;
