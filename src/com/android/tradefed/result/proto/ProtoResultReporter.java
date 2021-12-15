@@ -76,6 +76,10 @@ public abstract class ProtoResultReporter
         return mReportGranularResults;
     }
 
+    public void setGranularResults(boolean granularResults) {
+        mReportGranularResults = granularResults;
+    }
+
     /**
      * Handling of the partial invocation test record proto after {@link
      * #invocationStarted(IInvocationContext)} occurred.
