@@ -170,16 +170,6 @@ public class CollectingTestListener implements ITestInvocationListener, ILogSave
         testRunStarted(name, numTests, 0);
     }
 
-    private TestRunResult getNewRunResult() {
-        TestRunResult result = new TestRunResult();
-        if (mDefaultRun) {
-            result = mCurrentTestRunResult;
-            mDefaultRun = false;
-        }
-        result.setAggregateMetrics(mIsAggregateMetrics);
-        return result;
-    }
-
     /** {@inheritDoc} */
     @Override
     public void testRunStarted(String name, int numTests, int attemptNumber) {
@@ -236,6 +226,16 @@ public class CollectingTestListener implements ITestInvocationListener, ILogSave
 
         mCurrentTestRunResult.testRunStarted(name, numTests, startTime);
         mRunInProgress = true;
+    }
+
+    private TestRunResult getNewRunResult() {
+        TestRunResult result = new TestRunResult();
+        if (mDefaultRun) {
+            result = mCurrentTestRunResult;
+            mDefaultRun = false;
+        }
+        result.setAggregateMetrics(mIsAggregateMetrics);
+        return result;
     }
 
     /** {@inheritDoc} */

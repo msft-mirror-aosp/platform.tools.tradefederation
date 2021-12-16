@@ -98,7 +98,9 @@ public class StatsdGenericPostProcessorTest {
     private static final long APP_CRASH_NANOS = 11;
     private static final String APP_CRASH_PACKAGE = "crash.package";
 
-    private File mAppStartupReportFile, mAppCrashReportFile, mBadReportFile;
+    private File mAppStartupReportFile;
+    private File mAppCrashReportFile;
+    private File mBadReportFile;
 
     @Before
     public void setUp() throws IOException, ConfigurationException {

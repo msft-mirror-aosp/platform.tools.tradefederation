@@ -336,6 +336,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             } else if (mResult.getStatus() == CommandStatus.TIMED_OUT) {
                 throw new TimeoutException(mResult.getStderr());
             }
+            String stdErr = mResult.getStderr();
+            if (stdErr != null) {
+                stdErr = stdErr.trim();
+                if (stdErr.contains("device offline")) {
+                    throw new IOException(stdErr);
+                }
+            }
             // If it's not some issue with running the adb command, then we return the CommandResult
             // which will contain all the infos.
             return true;
@@ -510,11 +517,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 // property.
                 recoverDevice();
             } else {
-                // Only query property for online device
-                CLog.d(
-                        "Device %s is in state '%s' cannot get property %s.",
-                        getSerialNumber(), state, name);
-                return null;
+                if (mStateMonitor.waitForDeviceOnline() == null) {
+                    CLog.w(
+                            "Waited for device %s to be online but it is in state '%s', cannot "
+                                    + "get property %s.",
+                            getSerialNumber(), getDeviceState(), name);
+                    return null;
+                }
             }
         }
         String cmd = String.format("getprop %s", name);
@@ -1003,10 +1012,31 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** {@inheritDoc} */
     @Override
+    public boolean runInstrumentationTests(
+            IRemoteAndroidTestRunner runner, ITestLifeCycleReceiver... listeners)
+            throws DeviceNotAvailableException {
+        List<ITestLifeCycleReceiver> listenerList = new ArrayList<>();
+        listenerList.addAll(Arrays.asList(listeners));
+        return runInstrumentationTests(runner, listenerList);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean runInstrumentationTestsAsUser(
             final IRemoteAndroidTestRunner runner,
             int userId,
             final Collection<ITestLifeCycleReceiver> listeners)
+            throws DeviceNotAvailableException {
+        String oldRunTimeOptions = appendUserRunTimeOptionToRunner(runner, userId);
+        boolean result = runInstrumentationTests(runner, listeners);
+        resetUserRunTimeOptionToRunner(runner, oldRunTimeOptions);
+        return result;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean runInstrumentationTestsAsUser(
+            IRemoteAndroidTestRunner runner, int userId, ITestLifeCycleReceiver... listeners)
             throws DeviceNotAvailableException {
         String oldRunTimeOptions = appendUserRunTimeOptionToRunner(runner, userId);
         boolean result = runInstrumentationTests(runner, listeners);
@@ -1064,27 +1094,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         public boolean isRunFailure() {
             return mIsRunFailure;
         }
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean runInstrumentationTests(
-            IRemoteAndroidTestRunner runner, ITestLifeCycleReceiver... listeners)
-            throws DeviceNotAvailableException {
-        List<ITestLifeCycleReceiver> listenerList = new ArrayList<>();
-        listenerList.addAll(Arrays.asList(listeners));
-        return runInstrumentationTests(runner, listenerList);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean runInstrumentationTestsAsUser(
-            IRemoteAndroidTestRunner runner, int userId, ITestLifeCycleReceiver... listeners)
-            throws DeviceNotAvailableException {
-        String oldRunTimeOptions = appendUserRunTimeOptionToRunner(runner, userId);
-        boolean result = runInstrumentationTests(runner, listeners);
-        resetUserRunTimeOptionToRunner(runner, oldRunTimeOptions);
-        return result;
     }
 
     /**
@@ -1547,13 +1556,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             String numericValueString = tablePatternMatcher.group(1);
             String unitType = tablePatternMatcher.group(2);
             try {
-                Float freeSpaceFloat = Float.parseFloat(numericValueString);
+                float freeSpaceFloat = Float.parseFloat(numericValueString);
                 if (unitType.equals("M")) {
                     freeSpaceFloat = freeSpaceFloat * 1024;
                 } else if (unitType.equals("G")) {
                     freeSpaceFloat = freeSpaceFloat * 1024 * 1024;
                 }
-                freeSpace = freeSpaceFloat.longValue();
+                freeSpace = (long) freeSpaceFloat;
             } catch (NumberFormatException e) {
                 // fall through
             }
@@ -1622,7 +1631,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         // The overhead of parsing all of the lines should be minimal
         List<MountPointInfo> mountpoints = getMountPointInfo();
         for (MountPointInfo info : mountpoints) {
-            if (mountpoint.equals(info.mountpoint)) return info;
+            if (mountpoint.equals(info.mountpoint)) {
+                return info;
+            }
         }
         return null;
     }
@@ -2248,13 +2259,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             try {
                 return action.run();
             } catch (TimeoutException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, false);
             } catch (IOException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
             } catch (InstallException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
             } catch (SyncException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
                 // a SyncException is not necessarily a device communication problem
                 // do additional diagnosis
                 if (!e.getErrorCode().equals(SyncError.BUFFER_OVERRUN) &&
@@ -2272,7 +2283,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                                     + " fastboot.");
                     return true;
                 }
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, false);
             } catch (ShellCommandUnresponsiveException e) {
                 // ShellCommandUnresponsiveException is thrown when no output occurs within the
                 // timeout. It doesn't necessarily mean the device is offline.
@@ -2302,10 +2313,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      *
      * @param actionDescription the action's description
      * @param e the exception
+     * @param logFullTrace whether the full exception stack trace should be logged
      */
-    private void logDeviceActionException(String actionDescription, Exception e) {
+    private void logDeviceActionException(
+            String actionDescription, Exception e, boolean logFullTrace) {
         CLog.w("%s (%s) when attempting %s on device %s", e.getClass().getSimpleName(),
                 getExceptionMessage(e), actionDescription, getSerialNumber());
+        if (logFullTrace) {
+            CLog.w(e);
+        }
     }
 
     /**
@@ -3482,14 +3498,31 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return new RebootDeviceAction(rebootMode, reason);
     }
 
-    protected void waitForDeviceNotAvailable(String operationDesc, long time) {
+    /**
+     * Wait to see the device going unavailable (stop reporting to adb).
+     *
+     * @param operationDesc The name of the operation that is waiting for unavailable.
+     * @param time The time to wait for unavailable to occur.
+     * @return True if device did become unavailable.
+     */
+    protected boolean waitForDeviceNotAvailable(String operationDesc, long time) {
         // TODO: a bit of a race condition here. Would be better to start a
         // before the operation
         if (!mStateMonitor.waitForDeviceNotAvailable(time)) {
             // above check is flaky, ignore till better solution is found
             CLog.w("Did not detect device %s becoming unavailable after %s", getSerialNumber(),
                     operationDesc);
+            return false;
         }
+        return true;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean waitForDeviceNotAvailable(long waitTime) {
+        return mStateMonitor.waitForDeviceNotAvailable(waitTime);
     }
 
     /**
@@ -3519,7 +3552,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             for (int i = 1; i <= attempts; i++) {
                 String output = executeAdbCommand("root");
                 // wait for device to disappear from adb
-                waitForDeviceNotAvailable("root", 20 * 1000);
+                boolean res = waitForDeviceNotAvailable("root", 2 * 1000);
+                if (!res && TestDeviceState.ONLINE.equals(getDeviceState())) {
+                    if (isAdbRoot()) {
+                        return true;
+                    }
+                }
 
                 postAdbRootAction();
 
@@ -3760,14 +3798,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * {@inheritDoc}
      */
     @Override
-    public boolean waitForDeviceNotAvailable(long waitTime) {
-        return mStateMonitor.waitForDeviceNotAvailable(waitTime);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
     public boolean waitForDeviceInRecovery(long waitTime) {
         return mStateMonitor.waitForDeviceInRecovery(waitTime);
     }
@@ -3786,7 +3816,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * of it in that case.
      */
     private void throwIfNull(Object obj) {
-        if (obj == null) throw new NullPointerException();
+        if (obj == null) {
+            throw new NullPointerException();
+        }
     }
 
     /** Retrieve this device's recovery mechanism. */
@@ -4243,7 +4275,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public long getDeviceTimeOffset(Date date) throws DeviceNotAvailableException {
-        Long deviceTime = getDeviceDate();
+        long deviceTime = getDeviceDate();
 
         if (date == null) {
             date = new Date();
@@ -5037,6 +5069,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return null;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public String getMacAddress() {
+        return getMacAddress(MAC_ADDRESS_COMMAND);
+    }
+
     /**
      * Query EUI-48 MAC address from the device
      *
@@ -5086,12 +5124,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             addr = addr >> 8;
         }
         return bytes;
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public String getMacAddress() {
-        return getMacAddress(MAC_ADDRESS_COMMAND);
     }
 
     /** {@inheritDoc} */

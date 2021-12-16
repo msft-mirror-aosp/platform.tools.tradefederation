@@ -129,20 +129,20 @@ public class RemoteManager extends Thread {
     }
 
     /**
-     * Attemps to connect to any free port.
-     * @return true if we successfully connected to the port, false otherwise.
-     */
-    public boolean connectAnyPort() {
-        return connect(0);
-    }
-
-    /**
      * Attempts to connect server to a given port.
      * @return true if we successfully connect to the port, false otherwise.
      */
     protected boolean connect(int port) {
         mServerSocket = openSocket(port);
         return mServerSocket != null;
+    }
+
+    /**
+     * Attempts to connect to any free port.
+     * @return true if we successfully connected to the port, false otherwise.
+     */
+    public boolean connectAnyPort() {
+        return connect(0);
     }
 
     /**

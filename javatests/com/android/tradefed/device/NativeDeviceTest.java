@@ -3100,7 +3100,8 @@ public class NativeDeviceTest {
     /** Test when {@link NativeDevice#executeShellV2Command(String)} returns a success. */
     @Test
     public void testExecuteShellV2Command() throws Exception {
-        OutputStream stdout = null, stderr = null;
+    OutputStream stdout = null;
+    OutputStream stderr = null;
         CommandResult res = new CommandResult();
         res.setStatus(CommandStatus.SUCCESS);
         when(mMockRunUtil.runTimedCmd(
@@ -3116,7 +3117,8 @@ public class NativeDeviceTest {
      */
     @Test
     public void testExecuteShellV2Command_timeout() throws Exception {
-        OutputStream stdout = null, stderr = null;
+    OutputStream stdout = null;
+    OutputStream stderr = null;
         CommandResult res = new CommandResult();
         res.setStatus(CommandStatus.TIMED_OUT);
         res.setStderr("timed out");
@@ -3141,7 +3143,8 @@ public class NativeDeviceTest {
      */
     @Test
     public void testExecuteShellV2Command_fail() throws Exception {
-        OutputStream stdout = null, stderr = null;
+    OutputStream stdout = null;
+    OutputStream stderr = null;
         CommandResult res = new CommandResult();
         res.setStatus(CommandStatus.FAILED);
         res.setStderr("timed out");
@@ -3159,10 +3162,67 @@ public class NativeDeviceTest {
                         200L, stdout, stderr, "adb", "-s", "serial", "shell", "some", "command");
     }
 
+    /**
+     * Test when {@link NativeDevice#executeShellV2Command(String, long, TimeUnit, int)} hit offline
+     * but successful on retry
+     */
+    @Test
+    public void testExecuteShellV2Command_offline_recovered() throws Exception {
+        OutputStream stdout = null, stderr = null;
+        CommandResult res = new CommandResult();
+        res.setStatus(CommandStatus.FAILED);
+        res.setStderr("adb: device offline");
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public void recoverDevice() throws DeviceNotAvailableException {
+                        // change shell command result since now we want success on retry
+                        res.setStatus(CommandStatus.SUCCESS);
+                        res.setStderr("");
+                    }
+                };
+        when(mMockRunUtil.runTimedCmd(
+                        200L, stdout, stderr, "adb", "-s", "serial", "shell", "some", "command"))
+                .thenReturn(res);
+
+        CommandResult result =
+                mTestDevice.executeShellV2Command("some command", 200L, TimeUnit.MILLISECONDS, 1);
+        assertNotNull(result);
+        // The final result is what RunUtil returned, so it contains full status information.
+        assertSame(res, result);
+        verify(mMockRunUtil, times(2))
+                .runTimedCmd(
+                        200L, stdout, stderr, "adb", "-s", "serial", "shell", "some", "command");
+    }
+
+    /**
+     * Test when {@link NativeDevice#executeShellV2Command(String, long, TimeUnit, int)} hit offline
+     */
+    @Test
+    public void testExecuteShellV2Command_offline_exception() throws Exception {
+        OutputStream stdout = null, stderr = null;
+        CommandResult res = new CommandResult();
+        res.setStatus(CommandStatus.FAILED);
+        res.setStderr("adb: device offline");
+        when(mMockRunUtil.runTimedCmd(
+                        200L, stdout, stderr, "adb", "-s", "serial", "shell", "some", "command"))
+                .thenReturn(res);
+
+        try {
+            CommandResult result =
+                    mTestDevice.executeShellV2Command(
+                            "some command", 200L, TimeUnit.MILLISECONDS, 1);
+            fail("executeShellV2Command should have thrown a DeviceNotAvailableException");
+        } catch (DeviceNotAvailableException dnae) {
+            // expected
+        }
+    }
+
     /** Unit test for {@link INativeDevice#setProperty(String, String)}. */
     @Test
     public void testSetProperty() throws DeviceNotAvailableException {
-        OutputStream stdout = null, stderr = null;
+        OutputStream stdout = null;
+        OutputStream stderr = null;
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override

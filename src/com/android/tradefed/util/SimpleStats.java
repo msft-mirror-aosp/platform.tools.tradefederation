@@ -142,9 +142,9 @@ public class SimpleStats {
         }
 
         Double avg = mean();
-        Double ssd = 0.0;  // sum of squared differences
+        double ssd = 0.0; // sum of squared differences
         for (Double meas : mData) {
-            Double diff = meas - avg;
+            double diff = meas - avg;
             ssd += diff * diff;
         }
 
@@ -165,9 +165,9 @@ public class SimpleStats {
 
         Double avg = mean();
         Double std = stdev();
-        Double upper = avg + std;
-        Double lower = avg - std;
-        Double sum = 0.0;
+    double upper = avg + std;
+    double lower = avg - std;
+    double sum = 0.0;
         int count = 0;
         for (Double meas : mData) {
             if (meas > lower && meas < upper) {

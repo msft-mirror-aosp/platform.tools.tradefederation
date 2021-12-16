@@ -21,6 +21,8 @@ import com.android.tradefed.device.IDeviceManager;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -37,6 +39,7 @@ import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 
 /** Tests for {@link DeviceStorageAgeResourceMetricCollector}. */
+@RunWith(JUnit4.class)
 public class DeviceStorageAgeResourceMetricCollectorTest {
     private static final String MOCK_CMD_RESPONSE =
             "11-20 17:54:09.226 16112 16113 I storaged_emmc_info: [ufs 210,1,1,1]";

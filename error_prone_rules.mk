@@ -16,6 +16,7 @@
 # PackageLocation check requires the androidCompatible=false otherwise it does not do anything.
 LOCAL_ERROR_PRONE_FLAGS:= -XDandroidCompatible=false \
                           -Xep:ArrayToString:ERROR \
+                          -Xep:BadInmport:ERROR \
                           -Xep:BoxedPrimitiveConstructor:ERROR \
                           -Xep:CatchFail:ERROR \
                           -Xep:ConstantField:ERROR \
@@ -26,6 +27,7 @@ LOCAL_ERROR_PRONE_FLAGS:= -XDandroidCompatible=false \
                           -Xep:FormatString:ERROR \
                           -Xep:GetClassOnClass:ERROR \
                           -Xep:IdentityBinaryExpression:ERROR \
+                          -Xep:InvalidParam:ERROR \
                           -Xep:JUnit3TestNotRun:ERROR \
                           -Xep:JUnit4TestNotRun:ERROR \
                           -Xep:JUnit4ClassUsedInJUnit3:ERROR \
@@ -46,6 +48,7 @@ LOCAL_ERROR_PRONE_FLAGS:= -XDandroidCompatible=false \
                           -Xep:SizeGreaterThanOrEqualsZero:ERROR \
                           -Xep:StreamResourceLeak:ERROR \
                           -Xep:TryFailThrowable:ERROR \
+                          -Xep:UnnecessaryAssignment:ERROR \
                           -Xep:UnnecessaryParentheses:ERROR \
                           -Xep:UseCorrectAssertInTests:ERROR
 

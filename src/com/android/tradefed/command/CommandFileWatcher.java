@@ -138,6 +138,22 @@ class CommandFileWatcher extends Thread {
     }
 
     /**
+     * <p>
+     * Add a command file to watch, as well as its dependencies.  When either
+     * the command file itself or any of its dependencies changes, notify the registered
+     * {@link ICommandFileListener}
+     * </p>
+     * if the cmdFile is already being watching, this call will replace the current entry
+     */
+    public void addCmdFile(File cmdFile, List<String> extraArgs, Collection<String> includedFiles) {
+        List<File> includesAsFiles = new ArrayList<File>(includedFiles.size());
+        for (String p : includedFiles) {
+            includesAsFiles.add(new File(p));
+        }
+        addCmdFile(cmdFile, extraArgs, includesAsFiles);
+    }
+
+    /**
      * Returns true if given command gile path is currently being watched
      */
     public boolean isFileWatched(File cmdFile) {
@@ -230,22 +246,6 @@ class CommandFileWatcher extends Thread {
      */
     IRunUtil getRunUtil() {
         return RunUtil.getDefault();
-    }
-
-    /**
-     * <p>
-     * Add a command file to watch, as well as its dependencies.  When either
-     * the command file itself or any of its dependencies changes, notify the registered
-     * {@link ICommandFileListener}
-     * </p>
-     * if the cmdFile is already being watching, this call will replace the current entry
-     */
-    public void addCmdFile(File cmdFile, List<String> extraArgs, Collection<String> includedFiles) {
-        List<File> includesAsFiles = new ArrayList<File>(includedFiles.size());
-        for (String p : includedFiles) {
-            includesAsFiles.add(new File(p));
-        }
-        addCmdFile(cmdFile, extraArgs, includesAsFiles);
     }
 
     /**

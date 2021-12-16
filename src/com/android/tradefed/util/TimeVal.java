@@ -126,7 +126,7 @@ public class TimeVal extends Number implements Comparable<Long> {
             return 0;
         }
 
-        Long value = Long.parseLong(str);
+        long value = Long.parseLong(str);
         return value;
     }
 

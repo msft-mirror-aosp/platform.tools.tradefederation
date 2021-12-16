@@ -462,8 +462,9 @@ public abstract class SubprocessTfLauncher
      * @param listener the {@link ITestInvocationListener} where to report the test.
      */
     private void logAndCleanFile(File fileToExport, ITestInvocationListener listener) {
-        if (fileToExport == null)
+        if (fileToExport == null) {
             return;
+        }
 
         try (FileInputStreamSource inputStream = new FileInputStreamSource(fileToExport)) {
             listener.testLog(fileToExport.getName(), LogDataType.TEXT, inputStream);

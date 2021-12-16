@@ -325,7 +325,7 @@ public abstract class ITestSuite
     @Option(
             name = "partial-download-via-feature",
             description = "Feature flag to test partial download via feature service.")
-    private boolean mStageArtifactsViaFeature = false;
+    private boolean mStageArtifactsViaFeature = true;
 
     private ITestDevice mDevice;
     private IBuildInfo mBuildInfo;
@@ -646,8 +646,9 @@ public abstract class ITestSuite
         for (IDeviceConfiguration holder : config.getDeviceConfig()) {
             List<ITargetPreparer> preparers = new ArrayList<>();
             for (ITargetPreparer preparer : holder.getTargetPreparers()) {
-                if (allowedSuitePreparers.contains(preparer.getClass().getCanonicalName()))
+                if (allowedSuitePreparers.contains(preparer.getClass().getCanonicalName())) {
                     preparers.add(preparer);
+                }
             }
             res.put(holder.getDeviceName(), preparers);
         }
