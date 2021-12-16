@@ -38,7 +38,6 @@ public class InvocationToJUnitResultForwarderTest {
     private InvocationToJUnitResultForwarder mTestForwarder;
     private TestDescription mTestIdentifier;
 
-    /** {@inheritDoc} */
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
