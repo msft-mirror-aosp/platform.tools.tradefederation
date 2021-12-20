@@ -28,7 +28,6 @@ public class NativeStressTestParserTest {
     private static final String RUN_NAME = "run-name";
     private NativeStressTestParser mParser;
 
-    /** {@inheritDoc} */
     @Before
     public void setUp() throws Exception {
 

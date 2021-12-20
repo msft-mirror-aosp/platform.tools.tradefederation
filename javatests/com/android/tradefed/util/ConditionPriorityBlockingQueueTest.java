@@ -33,7 +33,6 @@ public class ConditionPriorityBlockingQueueTest {
 
     private ConditionPriorityBlockingQueue<Integer> mQueue;
 
-    /** {@inheritDoc} */
     @Before
     public void setUp() throws Exception {
 
