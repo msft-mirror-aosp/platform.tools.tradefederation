@@ -50,7 +50,6 @@ public class StopServicesSetupTest {
     @Mock ITestDevice mMockDevice;
     private TestInformation mTestInfo = null;
 
-    /** {@inheritDoc} */
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
