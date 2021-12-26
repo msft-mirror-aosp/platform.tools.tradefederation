@@ -16,7 +16,6 @@
 
 package com.android.tradefed.testtype.mobly;
 
-import com.android.tradefed.testtype.mobly.MoblyYamlResultHandlerFactory.Type;
 
 import java.util.Map;
 
@@ -39,8 +38,8 @@ public class MoblyYamlResultControllerInfoHandler implements IMoblyYamlResultHan
         }
 
         @Override
-        public Type getType() {
-            return Type.CONTROLLER_INFO;
+        public MoblyYamlResultHandlerFactory.Type getType() {
+            return MoblyYamlResultHandlerFactory.Type.CONTROLLER_INFO;
         }
 
         public long getTimeStamp() {

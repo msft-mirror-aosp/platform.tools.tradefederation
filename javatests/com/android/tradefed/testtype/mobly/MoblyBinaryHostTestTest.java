@@ -118,6 +118,8 @@ public class MoblyBinaryHostTestTest {
     public void tearDown() throws Exception {
         FileUtil.recursiveDelete(mMoblyTestDir);
         FileUtil.recursiveDelete(mVenvDir);
+        // Delete log dir.
+        FileUtil.recursiveDelete(new File(mSpyTest.getLogDirAbsolutePath()));
     }
 
     @Test
@@ -240,6 +242,7 @@ public class MoblyBinaryHostTestTest {
                                 anyLong(),
                                 anyString(),
                                 eq("--"),
+                                contains("--config="),
                                 contains("--device_serial="),
                                 contains("--log_path=")))
                 .thenAnswer(
@@ -313,6 +316,50 @@ public class MoblyBinaryHostTestTest {
                             "--option1",
                             "--option2=test_option"
                         });
+    }
+
+    @Test
+    public void testBuildCommandLineArrayWithOutConfigWithWildcardOn() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-par-file-name", mMoblyBinary2.getName());
+        setter.setOptionValue("mobly-wildcard-config", "true");
+        Mockito.doReturn(mMoblyTestDir)
+                .when(mTestInfo)
+                .getDependencyFile(eq(mMoblyBinary2.getName()), eq(false));
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        Mockito.when(
+                        mMockRunUtil.runTimedCmd(
+                                anyLong(),
+                                any(),
+                                eq("--"),
+                                contains("--config="),
+                                contains("--device_serial="),
+                                contains("--log_path=")))
+                .thenAnswer(
+                        new Answer<CommandResult>() {
+                            @Override
+                            public CommandResult answer(InvocationOnMock invocation)
+                                    throws Throwable {
+                                FileUtils.createFile(testResult, "");
+                                FileUtils.createFile(
+                                        new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                        "log content");
+                                return new CommandResult(CommandStatus.SUCCESS);
+                            }
+                        });
+
+        mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
+
+        // Verify the command line contains "--config"
+        verify(mSpyTest.getRunUtil(), times(1))
+                .runTimedCmd(
+                        anyLong(),
+                        any(),
+                        eq("--"),
+                        contains("--config="),
+                        contains("--device_serial="),
+                        contains("--log_path="));
     }
 
     @Test

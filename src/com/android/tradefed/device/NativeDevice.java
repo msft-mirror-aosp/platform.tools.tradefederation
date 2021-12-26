@@ -2259,13 +2259,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             try {
                 return action.run();
             } catch (TimeoutException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, false);
             } catch (IOException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
             } catch (InstallException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
             } catch (SyncException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
                 // a SyncException is not necessarily a device communication problem
                 // do additional diagnosis
                 if (!e.getErrorCode().equals(SyncError.BUFFER_OVERRUN) &&
@@ -2283,7 +2283,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                                     + " fastboot.");
                     return true;
                 }
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, false);
             } catch (ShellCommandUnresponsiveException e) {
                 // ShellCommandUnresponsiveException is thrown when no output occurs within the
                 // timeout. It doesn't necessarily mean the device is offline.
@@ -2313,10 +2313,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      *
      * @param actionDescription the action's description
      * @param e the exception
+     * @param logFullTrace whether the full exception stack trace should be logged
      */
-    private void logDeviceActionException(String actionDescription, Exception e) {
+    private void logDeviceActionException(
+            String actionDescription, Exception e, boolean logFullTrace) {
         CLog.w("%s (%s) when attempting %s on device %s", e.getClass().getSimpleName(),
                 getExceptionMessage(e), actionDescription, getSerialNumber());
+        if (logFullTrace) {
+            CLog.w(e);
+        }
     }
 
     /**
@@ -3493,14 +3498,23 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return new RebootDeviceAction(rebootMode, reason);
     }
 
-    protected void waitForDeviceNotAvailable(String operationDesc, long time) {
+    /**
+     * Wait to see the device going unavailable (stop reporting to adb).
+     *
+     * @param operationDesc The name of the operation that is waiting for unavailable.
+     * @param time The time to wait for unavailable to occur.
+     * @return True if device did become unavailable.
+     */
+    protected boolean waitForDeviceNotAvailable(String operationDesc, long time) {
         // TODO: a bit of a race condition here. Would be better to start a
         // before the operation
         if (!mStateMonitor.waitForDeviceNotAvailable(time)) {
             // above check is flaky, ignore till better solution is found
             CLog.w("Did not detect device %s becoming unavailable after %s", getSerialNumber(),
                     operationDesc);
+            return false;
         }
+        return true;
     }
 
     /**
@@ -3538,7 +3552,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             for (int i = 1; i <= attempts; i++) {
                 String output = executeAdbCommand("root");
                 // wait for device to disappear from adb
-                waitForDeviceNotAvailable("root", 20 * 1000);
+                boolean res = waitForDeviceNotAvailable("root", 2 * 1000);
+                if (!res && TestDeviceState.ONLINE.equals(getDeviceState())) {
+                    if (isAdbRoot()) {
+                        return true;
+                    }
+                }
 
                 postAdbRootAction();
 

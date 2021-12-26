@@ -325,7 +325,7 @@ public abstract class ITestSuite
     @Option(
             name = "partial-download-via-feature",
             description = "Feature flag to test partial download via feature service.")
-    private boolean mStageArtifactsViaFeature = false;
+    private boolean mStageArtifactsViaFeature = true;
 
     private ITestDevice mDevice;
     private IBuildInfo mBuildInfo;

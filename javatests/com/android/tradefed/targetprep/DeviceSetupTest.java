@@ -68,7 +68,6 @@ public class DeviceSetupTest {
 
     private static final int DEFAULT_API_LEVEL = 23;
 
-    /** {@inheritDoc} */
     @Before
     public void setUp() throws Exception {
         mMockDevice = mock(ITestDevice.class);
@@ -87,7 +86,6 @@ public class DeviceSetupTest {
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
     }
 
-    /** {@inheritDoc} */
     @After
     public void tearDown() throws Exception {
         FileUtil.recursiveDelete(mTmpDir);

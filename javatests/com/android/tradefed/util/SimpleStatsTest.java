@@ -28,7 +28,6 @@ import org.junit.runners.JUnit4;
 public class SimpleStatsTest {
     private SimpleStats mStats = null;
 
-    /** {@inheritDoc} */
     @Before
     public void setUp() throws Exception {
         mStats = new SimpleStats();
