@@ -43,7 +43,7 @@ public class PerfettoPreparerTest {
     private static final String DEVICE_CONFIG_PATH = "/data/misc/perfetto-traces/trace_config.pb";
 
     private PerfettoPreparer mPreparer = null;
-    @Mock ITestDevice mMockDevice = null;
+    @Mock ITestDevice mMockDevice;
     private OptionSetter mOptionSetter = null;
     private TestInformation mTestInfo;
 

@@ -749,7 +749,7 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
 
     /**
      * Create a {@code ConfigMetricsReportList} for test from the supplied atoms. If either {@code
-     * before} or {@code after} is {@code null}, the corresponding bucket will be omitted.
+     * befores} or {@code afters} is {@code null}, the corresponding bucket will be omitted.
      */
     private static ConfigMetricsReportList createTestReportList(
             Collection<Atom> befores, Collection<Atom> afters) {

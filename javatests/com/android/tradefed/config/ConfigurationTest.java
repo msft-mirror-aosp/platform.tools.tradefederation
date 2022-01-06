@@ -113,7 +113,6 @@ public class ConfigurationTest {
 
     private Configuration mConfig;
 
-    /** {@inheritDoc} */
     @Before
     public void setUp() throws Exception {
         mConfig = new Configuration(CONFIG_NAME, CONFIG_DESCRIPTION);

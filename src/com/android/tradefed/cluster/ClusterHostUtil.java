@@ -97,13 +97,13 @@ public class ClusterHostUtil {
      */
     public static String getUniqueDeviceSerial(DeviceDescriptor device) {
         String serial = device.getSerial();
-        if (Strings.isNullOrEmpty(serial)
-                || device.isStubDevice()
+        if (Strings.isNullOrEmpty(serial)) {
+            return String.format("%s:%s", getHostName(), NULL_DEVICE_SERIAL_PLACEHOLDER);
+        }
+        if ((device.isStubDevice()
+                        && !FastbootDevice.class.getSimpleName().equals(device.getDeviceClass()))
                 || serial.startsWith(EMULATOR_SERIAL_PREFIX)) {
-            if (Strings.isNullOrEmpty(serial)) {
-                serial = NULL_DEVICE_SERIAL_PLACEHOLDER;
-            }
-            serial = String.format("%s:%s", getHostName(), serial);
+            return String.format("%s:%s", getHostName(), serial);
         }
         return serial;
     }

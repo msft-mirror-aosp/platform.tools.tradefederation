@@ -17,6 +17,7 @@
 package com.android.tradefed.config;
 
 import com.android.tradefed.command.CommandOptions;
+import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.config.yaml.ConfigurationYamlParser;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -113,10 +114,12 @@ public class ConfigurationFactory implements IConfigurationFactory {
         }
 
         private boolean matches(Object a, Object b) {
-            if (a == null && b == null)
+            if (a == null && b == null) {
                 return true;
-            if (a == null || b == null)
+            }
+            if (a == null || b == null) {
                 return false;
+            }
             return a.equals(b);
         }
 
@@ -125,10 +128,12 @@ public class ConfigurationFactory implements IConfigurationFactory {
          */
         @Override
         public boolean equals(Object other) {
-            if (other == null)
+            if (other == null) {
                 return false;
-            if (!(other instanceof ConfigId))
+            }
+            if (!(other instanceof ConfigId)) {
                 return false;
+            }
 
             final ConfigId otherConf = (ConfigId) other;
             return matches(name, otherConf.name) && matches(templateMap, otherConf.templateMap);
@@ -560,7 +565,10 @@ public class ConfigurationFactory implements IConfigurationFactory {
     /** {@inheritDoc} */
     @Override
     public IConfiguration createPartialConfigurationFromArgs(
-            String[] arrayArgs, IKeyStoreClient keyStoreClient, Set<String> allowedObjects)
+            String[] arrayArgs,
+            IKeyStoreClient keyStoreClient,
+            Set<String> allowedObjects,
+            TradefedDelegator delegator)
             throws ConfigurationException {
         if (arrayArgs.length == 0) {
             throw new ConfigurationException("Configuration to run was not specified");
@@ -571,6 +579,9 @@ public class ConfigurationFactory implements IConfigurationFactory {
         IConfiguration config =
                 internalCreateConfigurationFromArgs(
                         reorderedArrayArgs, listArgs, keyStoreClient, allowedObjects);
+        if (delegator != null) {
+            config.setConfigurationObject(TradefedDelegator.DELEGATE_OBJECT, delegator);
+        }
         config.setCommandLine(arrayArgs);
         List<String> leftOver =
                 config.setBestEffortOptionsFromCommandLineArgs(listArgs, keyStoreClient);

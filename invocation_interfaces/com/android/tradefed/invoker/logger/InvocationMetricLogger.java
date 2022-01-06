@@ -157,7 +157,10 @@ public class InvocationMetricLogger {
 
     /** Grouping allows to log several groups under a same key. */
     public enum InvocationGroupMetricKey {
-        TEST_TYPE_COUNT("test-type-count", true);
+        TEST_TYPE_COUNT("test-type-count", true),
+        TARGET_PREPARER_SETUP_LATENCY("target-preparer-setup-latency", true),
+        TARGET_PREPARER_TEARDOWN_LATENCY("target-preparer-teardown-latency", true),
+        MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true);
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.
@@ -209,6 +212,42 @@ public class InvocationMetricLogger {
             value += existingLong;
         }
         addInvocationMetrics(key.toString(), Long.toString(value));
+    }
+
+    /**
+     * Add one key-value for a given group
+     *
+     * @param groupKey The key of the group
+     * @param group The group name associated with the key
+     * @param value The value for the group
+     */
+    public static void addInvocationMetrics(
+            InvocationGroupMetricKey groupKey, String group, String value) {
+        String key = groupKey.toString() + ":" + group;
+        if (groupKey.shouldAdd()) {
+            String existingVal = getInvocationMetrics().get(key.toString());
+            if (existingVal != null) {
+                value = String.format("%s,%s", existingVal, value);
+            }
+        }
+        addInvocationMetrics(key, value);
+    }
+
+    /**
+     * Add one key-value to be tracked at the invocation level. Don't expose the String key yet to
+     * avoid abuse, stick to the official {@link InvocationMetricKey} to start with.
+     *
+     * @param key The key under which the invocation metric will be tracked.
+     * @param value The value of the invocation metric.
+     */
+    private static void addInvocationMetrics(String key, String value) {
+        ThreadGroup group = Thread.currentThread().getThreadGroup();
+        synchronized (mPerGroupMetrics) {
+            if (mPerGroupMetrics.get(group) == null) {
+                mPerGroupMetrics.put(group, new HashMap<>());
+            }
+            mPerGroupMetrics.get(group).put(key, value);
+        }
     }
 
     /**
@@ -270,42 +309,6 @@ public class InvocationMetricLogger {
             }
         }
         addInvocationMetrics(key.toString(), value);
-    }
-
-    /**
-     * Add one key-value for a given group
-     *
-     * @param groupKey The key of the group
-     * @param group The group name associated with the key
-     * @param value The value for the group
-     */
-    public static void addInvocationMetrics(
-            InvocationGroupMetricKey groupKey, String group, String value) {
-        String key = groupKey.toString() + ":" + group;
-        if (groupKey.shouldAdd()) {
-            String existingVal = getInvocationMetrics().get(key.toString());
-            if (existingVal != null) {
-                value = String.format("%s,%s", existingVal, value);
-            }
-        }
-        addInvocationMetrics(key, value);
-    }
-
-    /**
-     * Add one key-value to be tracked at the invocation level. Don't expose the String key yet to
-     * avoid abuse, stick to the official {@link InvocationMetricKey} to start with.
-     *
-     * @param key The key under which the invocation metric will be tracked.
-     * @param value The value of the invocation metric.
-     */
-    private static void addInvocationMetrics(String key, String value) {
-        ThreadGroup group = Thread.currentThread().getThreadGroup();
-        synchronized (mPerGroupMetrics) {
-            if (mPerGroupMetrics.get(group) == null) {
-                mPerGroupMetrics.put(group, new HashMap<>());
-            }
-            mPerGroupMetrics.get(group).put(key, value);
-        }
     }
 
     /** Returns the Map of invocation metrics for the invocation in progress. */

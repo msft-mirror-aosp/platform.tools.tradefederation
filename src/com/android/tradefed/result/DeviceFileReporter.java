@@ -204,15 +204,21 @@ public class DeviceFileReporter {
      * file's extension IFF inferences are enabled, and the current data type is {@code UNKNOWN}.
      */
     LogDataType getDataType(String filename, LogDataType defaultType) {
-        if (!mInferDataTypes) return defaultType;
-        if (!LogDataType.UNKNOWN.equals(defaultType)) return defaultType;
+        if (!mInferDataTypes) {
+            return defaultType;
+        }
+        if (!LogDataType.UNKNOWN.equals(defaultType)) {
+            return defaultType;
+        }
 
         CLog.d("Running type inference for file %s with default type %s", filename, defaultType);
         String ext = FileUtil.getExtension(filename);
         CLog.v("Found raw extension \"%s\"", ext);
 
         // Normalize the extension
-        if (ext == null) return defaultType;
+        if (ext == null) {
+            return defaultType;
+        }
         ext = ext.toLowerCase();
 
         if (DATA_TYPE_REVERSE_MAP.containsKey(ext)) {

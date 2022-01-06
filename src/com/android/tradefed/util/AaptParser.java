@@ -16,6 +16,7 @@
 package com.android.tradefed.util;
 
 import com.android.tradefed.log.LogUtil.CLog;
+
 import com.google.common.base.Strings;
 
 import java.io.File;
@@ -163,16 +164,6 @@ public class AaptParser {
         return false;
     }
 
-    boolean parseXmlTree(String aaptOut) {
-        Matcher m = REQUEST_LEGACY_STORAGE_PATTERN.matcher(aaptOut);
-        if (m.find()) {
-            // 0xffffffff is true and 0x0 is false
-            mRequestLegacyStorage = m.group(1).equals("0xffffffff");
-        }
-        // REQUEST_LEGACY_STORAGE_PATTERN may or may not be present
-        return true;
-    }
-
     /**
      * Parse info from the apk.
      *
@@ -228,6 +219,16 @@ public class AaptParser {
             return null;
         }
         return p;
+    }
+
+    boolean parseXmlTree(String aaptOut) {
+        Matcher m = REQUEST_LEGACY_STORAGE_PATTERN.matcher(aaptOut);
+        if (m.find()) {
+            // 0xffffffff is true and 0x0 is false
+            mRequestLegacyStorage = m.group(1).equals("0xffffffff");
+        }
+        // REQUEST_LEGACY_STORAGE_PATTERN may or may not be present
+        return true;
     }
 
     public String getPackageName() {

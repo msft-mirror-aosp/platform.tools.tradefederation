@@ -1773,6 +1773,8 @@ public class ITestSuiteTest {
                         assertArrayEquals(new String[] {"[.]config$"}, excludeFilters.toArray());
                     }
                 };
+        OptionSetter setter = new OptionSetter(mTestSuite);
+        setter.setOptionValue("partial-download-via-feature", "false");
         mTestSuite.setDynamicResolver(dynamicResolver);
         IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
         when(mockBuildInfo.getTestsDir()).thenReturn(new File("tests_dir"));

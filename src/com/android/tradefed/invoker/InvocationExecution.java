@@ -43,6 +43,7 @@ import com.android.tradefed.invoker.TestInvocation.Stage;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.invoker.shard.IShardHelper;
@@ -357,6 +358,7 @@ public class InvocationExecution implements IInvocationExecution {
             if (preparer instanceof ITestLoggerReceiver) {
                 ((ITestLoggerReceiver) preparer).setTestLogger(logger);
             }
+            long startTime = System.currentTimeMillis();
             CLog.d("starting preparer '%s' on device: '%s'", preparer, device.getSerialNumber());
             try {
                 testInfo.setActiveDeviceIndex(index);
@@ -366,8 +368,15 @@ public class InvocationExecution implements IInvocationExecution {
             }
 
             mTrackTargetPreparers.get(deviceName).add(preparer);
+            long elapsedTime = System.currentTimeMillis() - startTime;
 
-            CLog.d("done with preparer '%s' on device: '%s'", preparer, device.getSerialNumber());
+            CLog.d(
+                    "done with preparer '%s' on device: '%s' in %s",
+                    preparer, device.getSerialNumber(), TimeUtil.formatElapsedTime(elapsedTime));
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationGroupMetricKey.TARGET_PREPARER_SETUP_LATENCY,
+                    preparer.getClass().getName(),
+                    elapsedTime);
         }
         CLog.d("Done with setup of device: '%s'", device.getSerialNumber());
     }
@@ -478,6 +487,7 @@ public class InvocationExecution implements IInvocationExecution {
             if (multipreparer instanceof ITestLoggerReceiver) {
                 ((ITestLoggerReceiver) multipreparer).setTestLogger(logger);
             }
+            long startTime = System.currentTimeMillis();
             CLog.d("Starting %s '%s'", description, multipreparer);
             try {
                 multipreparer.tearDown(testInfo, throwable);
@@ -490,7 +500,15 @@ public class InvocationExecution implements IInvocationExecution {
                     deferredThrowable = t;
                 }
             }
-            CLog.d("Done with %s '%s'", description, multipreparer);
+            long elapsedTime = System.currentTimeMillis() - startTime;
+
+            CLog.d(
+                    "Done with %s '%s' in %s",
+                    description, multipreparer, TimeUtil.formatElapsedTime(elapsedTime));
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationGroupMetricKey.MULTI_TARGET_PREPARER_TEARDOWN_LATENCY,
+                    multipreparer.getClass().getName(),
+                    elapsedTime);
         }
 
         return deferredThrowable;
@@ -600,6 +618,7 @@ public class InvocationExecution implements IInvocationExecution {
             if (preparer instanceof ITestLoggerReceiver) {
                 ((ITestLoggerReceiver) preparer).setTestLogger(logger);
             }
+            long startTime = System.currentTimeMillis();
             try {
                 CLog.d(
                         "starting tearDown '%s' on device: '%s'",
@@ -621,9 +640,16 @@ public class InvocationExecution implements IInvocationExecution {
                 }
             } finally {
                 testInfo.setActiveDeviceIndex(0);
+                long elapsedTime = System.currentTimeMillis() - startTime;
                 CLog.d(
-                        "done with tearDown '%s' on device: '%s'",
-                        preparer, device.getSerialNumber());
+                        "done with tearDown '%s' on device: '%s' in %s",
+                        preparer,
+                        device.getSerialNumber(),
+                        TimeUtil.formatElapsedTime(elapsedTime));
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationGroupMetricKey.TARGET_PREPARER_TEARDOWN_LATENCY,
+                        preparer.getClass().getName(),
+                        elapsedTime);
             }
         }
         return deferredThrowable;

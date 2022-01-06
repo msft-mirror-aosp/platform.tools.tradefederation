@@ -30,7 +30,7 @@ import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
-import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.IDeviceTest;
@@ -47,6 +47,7 @@ import com.android.tradefed.util.StreamUtil;
 
 import org.yaml.snakeyaml.Yaml;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -69,6 +70,7 @@ public class MoblyBinaryHostTest
 
     private static final String ANDROID_SERIAL_VAR = "ANDROID_SERIAL";
     private static final String MOBLY_TEST_SUMMARY = "test_summary.yaml";
+    private static final String LOCAL_CONFIG_FILENAME = "local_config.yaml";
 
     // TODO(b/159366744): merge this and next options.
     @Option(
@@ -103,6 +105,13 @@ public class MoblyBinaryHostTest
                     "Mobly config file name. If set, will append '--config=<config file"
                             + " path>' to the command for running binary.")
     private String mConfigFileName;
+
+    @Option(
+            name = "mobly-wildcard-config",
+            description =
+                    "Use wildcard config. If set and 'mobly-config-file-name' is not set, use"
+                            + " wildcard config with all allocted devices.")
+    private boolean mWildcardConfig = true;
 
     @Option(
             name = "test-bed",
@@ -241,11 +250,14 @@ public class MoblyBinaryHostTest
         }
         AdbUtils.updateAdb(mTestInfo, getRunUtil(), getAdbPath());
         String configPath = null;
-        if (mConfigFileName != null) {
+        if (mConfigFileName != null || mWildcardConfig) {
             try {
-                File configFile =
-                        mTestInfo.getDependencyFile(mConfigFileName, /* targetFirst */ false);
-                configPath = updateTemplateConfigFile(configFile);
+                File configFile = null;
+                if (mConfigFileName != null) {
+                    configFile =
+                            mTestInfo.getDependencyFile(mConfigFileName, /* targetFirst */ false);
+                }
+                configPath = updateTemplateConfigFile(configFile, mWildcardConfig);
             } catch (FileNotFoundException e) {
                 reportFailure(
                         listener,
@@ -265,14 +277,16 @@ public class MoblyBinaryHostTest
         }
     }
 
-    private void processTestResults(ITestInvocationListener listener, String runName) {
+    private void processTestResults(ITestInvocationListener listener, String runName)
+            throws HarnessRuntimeException {
         // Convert yaml test summary to xml.
         File yamlSummaryFile = FileUtil.findFile(getLogDir(), MOBLY_TEST_SUMMARY);
         if (yamlSummaryFile == null) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     String.format(
                             "Fail to find test summary file %s under directory %s",
-                            MOBLY_TEST_SUMMARY, getLogDir()));
+                            MOBLY_TEST_SUMMARY, getLogDir()),
+                    TestErrorIdentifier.UNEXPECTED_MOBLY_BEHAVIOR);
         }
 
         MoblyYamlResultParser parser = new MoblyYamlResultParser(listener, runName);
@@ -313,16 +327,26 @@ public class MoblyBinaryHostTest
         }
     }
 
-    private String updateTemplateConfigFile(File templateConfig) {
+    private String updateTemplateConfigFile(File templateConfig, boolean wildcardConfig)
+            throws HarnessRuntimeException {
         InputStream inputStream = null;
         FileWriter fileWriter = null;
         File localConfigFile = new File(getLogDir(), "local_config.yaml");
         try {
-            inputStream = new FileInputStream(templateConfig);
+            if (templateConfig != null) {
+                inputStream = new FileInputStream(templateConfig);
+            } else {
+                String configString =
+                        "TestBeds:\n"
+                                + "- Name: TestBed\n"
+                                + "  Controllers:\n"
+                                + "    AndroidDevice: '*'\n";
+                inputStream = new ByteArrayInputStream(configString.getBytes());
+            }
             fileWriter = new FileWriter(localConfigFile);
             updateConfigFile(inputStream, fileWriter);
         } catch (IOException ex) {
-            throw new RuntimeException("Exception in updating config file: %s", ex);
+            throw new RuntimeException("Exception in creating local config file: %s", ex);
         } finally {
             StreamUtil.close(inputStream);
             StreamUtil.close(fileWriter);
@@ -331,7 +355,8 @@ public class MoblyBinaryHostTest
     }
 
     @VisibleForTesting
-    protected void updateConfigFile(InputStream configInputStream, Writer writer) {
+    protected void updateConfigFile(InputStream configInputStream, Writer writer)
+            throws HarnessRuntimeException {
         Yaml yaml = new Yaml();
         Map<String, Object> configMap = (Map<String, Object>) yaml.load(configInputStream);
         CLog.d("Loaded yaml config: \n%s", configMap);
@@ -350,8 +375,9 @@ public class MoblyBinaryHostTest
             }
         }
         if (targetTb == null) {
-            throw new RuntimeException(
-                    String.format("Fail to find specified test bed: %s.", getTestBed()));
+            throw new HarnessRuntimeException(
+                    String.format("Fail to find specified test bed: %s.", getTestBed()),
+                    TestErrorIdentifier.UNEXPECTED_MOBLY_BEHAVIOR);
         }
 
         // Inject serial for devices
@@ -366,7 +392,7 @@ public class MoblyBinaryHostTest
                         String.format(
                                 "Device count mismatch (configured: %s vs allocated: %s)",
                                 androidDeviceList.size(), devices.size()),
-                        InfraErrorIdentifier.UNEXPECTED_DEVICE_CONFIGURED);
+                        TestErrorIdentifier.UNEXPECTED_MOBLY_BEHAVIOR);
             }
 
             for (int index = 0; index < devices.size(); index++) {
@@ -375,23 +401,23 @@ public class MoblyBinaryHostTest
             }
         } else if ("*".equals(androidDeviceValue)) {
             // Auto-find Android devices - add explicit device list with serials
-            androidDeviceList = new ArrayList();
+            androidDeviceList = new ArrayList<>();
             controllerMap.put("AndroidDevice", androidDeviceList);
             for (int index = 0; index < devices.size(); index++) {
-                Map<String, String> deviceMap = new HashMap();
+                Map<String, String> deviceMap = new HashMap<>();
                 androidDeviceList.add(deviceMap);
                 deviceMap.put("serial", devices.get(index).getSerialNumber());
             }
         } else {
             throw new HarnessRuntimeException(
                     String.format("Unsupported value for AndroidDevice: %s", androidDeviceValue),
-                    InfraErrorIdentifier.UNEXPECTED_DEVICE_CONFIGURED);
+                    TestErrorIdentifier.UNEXPECTED_MOBLY_BEHAVIOR);
         }
 
         // Inject log path
         Map<String, Object> paramsMap = (Map<String, Object>) configMap.get("MoblyParams");
         if (paramsMap == null) {
-            paramsMap = new HashMap();
+            paramsMap = new HashMap<>();
             configMap.put("MoblyParams", paramsMap);
         }
         paramsMap.put("LogPath", getLogDirAbsolutePath());
@@ -463,6 +489,9 @@ public class MoblyBinaryHostTest
             if (subFile.isDirectory()) {
                 reportLogs(subFile, listener);
             } else {
+                if (!subFile.exists()) {
+                    continue;
+                }
                 try (InputStreamSource dataStream = new FileInputStreamSource(subFile, true)) {
                     listener.testLog(subFile.getName(), LogDataType.TEXT, dataStream);
                 }

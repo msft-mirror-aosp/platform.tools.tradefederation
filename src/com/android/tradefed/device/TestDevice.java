@@ -254,40 +254,6 @@ public class TestDevice extends NativeDevice {
         return internalInstallPackage(packageFile, reinstall, args);
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public String installPackageForUser(File packageFile, boolean reinstall, int userId,
-            String... extraArgs) throws DeviceNotAvailableException {
-        boolean runtimePermissionSupported = isRuntimePermissionSupported();
-        List<String> args = new ArrayList<>(Arrays.asList(extraArgs));
-        // grant all permissions by default if feature is supported
-        if (runtimePermissionSupported) {
-            args.add("-g");
-        }
-        args.add("--user");
-        args.add(Integer.toString(userId));
-        return internalInstallPackage(packageFile, reinstall, args);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public String installPackageForUser(File packageFile, boolean reinstall,
-            boolean grantPermissions, int userId, String... extraArgs)
-                    throws DeviceNotAvailableException {
-        ensureRuntimePermissionSupported();
-        List<String> args = new ArrayList<>(Arrays.asList(extraArgs));
-        if (grantPermissions) {
-            args.add("-g");
-        }
-        args.add("--user");
-        args.add(Integer.toString(userId));
-        return internalInstallPackage(packageFile, reinstall, args);
-    }
-
     public String installPackage(final File packageFile, final File certFile,
             final boolean reinstall, final String... extraArgs) throws DeviceNotAvailableException {
         // use array to store response, so it can be returned to caller
@@ -361,16 +327,43 @@ public class TestDevice extends NativeDevice {
      * {@inheritDoc}
      */
     @Override
+    public String installPackageForUser(File packageFile, boolean reinstall, int userId,
+            String... extraArgs) throws DeviceNotAvailableException {
+        boolean runtimePermissionSupported = isRuntimePermissionSupported();
+        List<String> args = new ArrayList<>(Arrays.asList(extraArgs));
+        // grant all permissions by default if feature is supported
+        if (runtimePermissionSupported) {
+            args.add("-g");
+        }
+        args.add("--user");
+        args.add(Integer.toString(userId));
+        return internalInstallPackage(packageFile, reinstall, args);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String installPackageForUser(File packageFile, boolean reinstall,
+            boolean grantPermissions, int userId, String... extraArgs)
+                    throws DeviceNotAvailableException {
+        ensureRuntimePermissionSupported();
+        List<String> args = new ArrayList<>(Arrays.asList(extraArgs));
+        if (grantPermissions) {
+            args.add("-g");
+        }
+        args.add("--user");
+        args.add(Integer.toString(userId));
+        return internalInstallPackage(packageFile, reinstall, args);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public String uninstallPackage(final String packageName) throws DeviceNotAvailableException {
         // use array to store response, so it can be returned to caller
         return uninstallPackage(packageName, /* extraArgs= */ null);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public String uninstallPackageForUser(final String packageName, int userId)
-            throws DeviceNotAvailableException {
-        return uninstallPackage(packageName, "--user " + userId);
     }
 
     private String uninstallPackage(String packageName, @Nullable String extraArgs)
@@ -393,6 +386,13 @@ public class TestDevice extends NativeDevice {
                 uninstallAction,
                 MAX_RETRY_ATTEMPTS);
         return response[0];
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String uninstallPackageForUser(final String packageName, int userId)
+            throws DeviceNotAvailableException {
+        return uninstallPackage(packageName, "--user " + userId);
     }
 
     /**
@@ -1019,6 +1019,32 @@ public class TestDevice extends NativeDevice {
         return getInstalledPackageNames(null, null);
     }
 
+    // TODO: convert this to use DumpPkgAction
+    private Set<String> getInstalledPackageNames(String packageNameSearched, String userId)
+            throws DeviceNotAvailableException {
+        Set<String> packages= new HashSet<String>();
+        String command = LIST_PACKAGES_CMD;
+        if (userId != null) {
+            command += String.format(" --user %s", userId);
+        }
+        if (packageNameSearched != null) {
+            command += (" | grep " + packageNameSearched);
+        }
+        String output = executeShellCommand(command);
+        if (output != null) {
+            Matcher m = PACKAGE_REGEX.matcher(output);
+            while (m.find()) {
+                String packageName = m.group(2);
+                if (packageNameSearched != null && packageName.equals(packageNameSearched)) {
+                    packages.add(packageName);
+                } else if (packageNameSearched == null) {
+                    packages.add(packageName);
+                }
+            }
+        }
+        return packages;
+    }
+
     /** {@inheritDoc} */
     @Override
     public boolean isPackageInstalled(String packageName) throws DeviceNotAvailableException {
@@ -1146,46 +1172,29 @@ public class TestDevice extends NativeDevice {
         return new ArrayList<>(action.mPkgInfoMap.values());
     }
 
-    // TODO: convert this to use DumpPkgAction
-    private Set<String> getInstalledPackageNames(String packageNameSearched, String userId)
-            throws DeviceNotAvailableException {
-        Set<String> packages= new HashSet<String>();
-        String command = LIST_PACKAGES_CMD;
-        if (userId != null) {
-            command += String.format(" --user %s", userId);
-        }
-        if (packageNameSearched != null) {
-            command += (" | grep " + packageNameSearched);
-        }
-        String output = executeShellCommand(command);
-        if (output != null) {
-            Matcher m = PACKAGE_REGEX.matcher(output);
-            while (m.find()) {
-                String packageName = m.group(2);
-                if (packageNameSearched != null && packageName.equals(packageNameSearched)) {
-                    packages.add(packageName);
-                } else if (packageNameSearched == null) {
-                    packages.add(packageName);
-                }
+    /** {@inheritDoc} */
+    @Override
+    public boolean doesFileExist(String deviceFilePath) throws DeviceNotAvailableException {
+        int currentUser = 0;
+        if (deviceFilePath.startsWith(SD_CARD)) {
+            if (getApiLevel() > 23) {
+                // Don't trigger the current logic if unsupported
+                currentUser = getCurrentUser();
             }
         }
-        return packages;
+        return doesFileExist(deviceFilePath, currentUser);
     }
 
     /** {@inheritDoc} */
     @Override
-    public boolean doesFileExist(String deviceFilePath) throws DeviceNotAvailableException {
+    public boolean doesFileExist(String deviceFilePath, int userId)
+            throws DeviceNotAvailableException {
         if (deviceFilePath.startsWith(SD_CARD)) {
-            String currentUser = "0";
-            if (getApiLevel() > 23) {
-                // Don't trigger the current logic if unsupported
-                currentUser = Integer.toString(getCurrentUser());
-            }
             deviceFilePath =
                     deviceFilePath.replaceFirst(
-                            SD_CARD, String.format("/storage/emulated/%s/", currentUser));
+                            SD_CARD, String.format("/storage/emulated/%s/", userId));
         }
-        return super.doesFileExist(deviceFilePath);
+        return super.doesFileExist(deviceFilePath, userId);
     }
 
     /**
@@ -1300,17 +1309,6 @@ public class TestDevice extends NativeDevice {
         return createUser(name, false, false);
     }
 
-    /** {@inheritDoc} */
-    @Override
-    public int createUserNoThrow(String name) throws DeviceNotAvailableException {
-        try {
-            return createUser(name);
-        } catch (IllegalStateException e) {
-            CLog.e("Error creating user: " + e.toString());
-            return -1;
-        }
-    }
-
     /**
      * {@inheritDoc}
      */
@@ -1329,6 +1327,17 @@ public class TestDevice extends NativeDevice {
             }
         }
         throw new IllegalStateException(String.format("Failed to create user: %s", output));
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int createUserNoThrow(String name) throws DeviceNotAvailableException {
+        try {
+            return createUser(name);
+        } catch (IllegalStateException e) {
+            CLog.e("Error creating user: " + e.toString());
+            return -1;
+        }
     }
 
     /**

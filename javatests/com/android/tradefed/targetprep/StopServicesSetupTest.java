@@ -47,10 +47,9 @@ import org.mockito.MockitoAnnotations;
 public class StopServicesSetupTest {
 
     private StopServicesSetup mPreparer = null;
-    @Mock ITestDevice mMockDevice = null;
+    @Mock ITestDevice mMockDevice;
     private TestInformation mTestInfo = null;
 
-    /** {@inheritDoc} */
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);

@@ -371,6 +371,148 @@ public class PerfettoPullerMetricCollectorTest {
         Assert.assertTrue(args.contains("--metrics-output=text"));
     }
 
+    /** Test that the trace processor shell outputs run time and status. */
+    @Test
+    public void testTraceProcessorRunTimeAndStatus_success() throws Exception {
+        OptionSetter setter = new OptionSetter(mPerfettoMetricCollector);
+        setter.setOptionValue("pull-pattern-keys", "perfettofile");
+        HashMap<String, Metric> currentMetrics = new HashMap<>();
+
+        currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+                .thenReturn(new File("trace"));
+
+        TestDescription testDesc = new TestDescription("xyz", "abc");
+        CommandResult cr = new CommandResult();
+        cr.setStatus(CommandStatus.SUCCESS);
+        cr.setStdout("sometext");
+
+        File tmpFile = File.createTempFile("trace_processor_shell", "");
+
+        // Verifies the trace processor shell lookup in test artifacts file path map.
+        Mockito.doReturn(tmpFile)
+                .when(mPerfettoMetricCollector)
+                .getFileFromTestArtifacts("trace_processor_shell");
+        Mockito.doReturn(cr)
+                .when(mPerfettoMetricCollector)
+                .runHostCommand(Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        mPerfettoMetricCollector.testRunStarted("runName", 1);
+        mPerfettoMetricCollector.testStarted(testDesc);
+        mPerfettoMetricCollector.testEnded(testDesc, currentMetrics);
+        mPerfettoMetricCollector.testRunEnded(100L, currentMetrics);
+
+        String path = tmpFile.getAbsolutePath();
+        tmpFile.delete();
+
+        Assert.assertTrue(currentMetrics.containsKey("perfetto_trace_processor_runtime"));
+        Assert.assertTrue(
+                currentMetrics
+                                .get("perfetto_trace_processor_runtime")
+                                .getMeasurements()
+                                .getSingleDouble()
+                        >= 0);
+        Assert.assertTrue(currentMetrics.containsKey("perfetto_trace_processor_status"));
+        Assert.assertEquals(
+                "1",
+                currentMetrics
+                        .get("perfetto_trace_processor_status")
+                        .getMeasurements()
+                        .getSingleString());
+    }
+
+    /** Test that the trace processor shell outputs run time and status even if processing fails. */
+    @Test
+    public void testTraceProcessorRunTimeAndStatus_failure() throws Exception {
+        OptionSetter setter = new OptionSetter(mPerfettoMetricCollector);
+        setter.setOptionValue("pull-pattern-keys", "perfettofile");
+        HashMap<String, Metric> currentMetrics = new HashMap<>();
+
+        currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+                .thenReturn(new File("trace"));
+
+        TestDescription testDesc = new TestDescription("xyz", "abc");
+        CommandResult cr = new CommandResult();
+        cr.setStatus(CommandStatus.FAILED);
+        cr.setStdout("sometext");
+
+        File tmpFile = File.createTempFile("trace_processor_shell", "");
+
+        // Verifies the trace processor shell lookup in test artifacts file path map.
+        Mockito.doReturn(tmpFile)
+                .when(mPerfettoMetricCollector)
+                .getFileFromTestArtifacts("trace_processor_shell");
+        Mockito.doReturn(cr)
+                .when(mPerfettoMetricCollector)
+                .runHostCommand(Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        mPerfettoMetricCollector.testRunStarted("runName", 1);
+        mPerfettoMetricCollector.testStarted(testDesc);
+        mPerfettoMetricCollector.testEnded(testDesc, currentMetrics);
+        mPerfettoMetricCollector.testRunEnded(100L, currentMetrics);
+
+        String path = tmpFile.getAbsolutePath();
+        tmpFile.delete();
+
+        Assert.assertTrue(currentMetrics.containsKey("perfetto_trace_processor_runtime"));
+        Assert.assertTrue(
+                currentMetrics
+                                .get("perfetto_trace_processor_runtime")
+                                .getMeasurements()
+                                .getSingleDouble()
+                        >= 0);
+        Assert.assertTrue(currentMetrics.containsKey("perfetto_trace_processor_status"));
+        Assert.assertEquals(
+                "0",
+                currentMetrics
+                        .get("perfetto_trace_processor_status")
+                        .getMeasurements()
+                        .getSingleString());
+    }
+
+    /**
+     * Test that the metric collector reports a negative runtime and failure if the trace processor
+     * is never invoked.
+     */
+    @Test
+    public void testTraceProcessorRunTimeAndStatus_notInvoked() throws Exception {
+        OptionSetter setter = new OptionSetter(mPerfettoMetricCollector);
+        setter.setOptionValue("pull-pattern-keys", "perfettofile");
+        HashMap<String, Metric> currentMetrics = new HashMap<>();
+
+        currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+                .thenReturn(new File("trace"));
+
+        TestDescription testDesc = new TestDescription("xyz", "abc");
+
+        // No trace processor shell means that the trace proessor won't be invoked.
+        Mockito.doReturn(null)
+                .when(mPerfettoMetricCollector)
+                .getFileFromTestArtifacts("trace_processor_shell");
+
+        mPerfettoMetricCollector.testRunStarted("runName", 1);
+        mPerfettoMetricCollector.testStarted(testDesc);
+        mPerfettoMetricCollector.testEnded(testDesc, currentMetrics);
+        mPerfettoMetricCollector.testRunEnded(100L, currentMetrics);
+
+        Assert.assertTrue(currentMetrics.containsKey("perfetto_trace_processor_runtime"));
+        Assert.assertTrue(
+                currentMetrics
+                                .get("perfetto_trace_processor_runtime")
+                                .getMeasurements()
+                                .getSingleDouble()
+                        < 0);
+        Assert.assertTrue(currentMetrics.containsKey("perfetto_trace_processor_status"));
+        Assert.assertEquals(
+                "0",
+                currentMetrics
+                        .get("perfetto_trace_processor_status")
+                        .getMeasurements()
+                        .getSingleString());
+    }
+
     @Test
     public void testSplitKeyValue() {
         Assert.assertNull(PerfettoPullerMetricCollector.splitKeyValue("a:"));

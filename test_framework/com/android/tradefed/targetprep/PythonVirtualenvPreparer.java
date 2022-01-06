@@ -21,6 +21,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -120,7 +121,10 @@ public class PythonVirtualenvPreparer extends BaseTargetPreparer {
         }
         checkVirtualenvVersion(device);
         try {
-            mVenvDir = FileUtil.createNamedTempDir(buildInfo.getTestTag() + "-virtualenv");
+            mVenvDir =
+                    FileUtil.createNamedTempDir(
+                            CurrentInvocation.getWorkFolder(),
+                            buildInfo.getTestTag() + "-virtualenv");
             CommandResult c =
                     mRunUtil.runTimedCmd(BASE_TIMEOUT, "virtualenv", mVenvDir.getAbsolutePath());
             if (c.getStatus() != CommandStatus.SUCCESS) {

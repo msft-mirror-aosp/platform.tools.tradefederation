@@ -258,7 +258,7 @@ public class DelegatedInvocationExecution extends InvocationExecution {
      */
     private void logAndCleanFile(
             File fileToExport, LogDataType type, ITestInvocationListener listener) {
-        if (fileToExport == null) return;
+        if (fileToExport == null) { return; }
 
         try (FileInputStreamSource inputStream = new FileInputStreamSource(fileToExport, true)) {
             listener.testLog(fileToExport.getName(), type, inputStream);

@@ -56,4 +56,6 @@ public class DeviceProperties {
     public static final String BUILD_TAGS = "ro.build.tags";
     /** property name for the SDK version that initially shipped on the device. */
     public static final String FIRST_API_LEVEL = "ro.product.first_api_level";
+    /** property name for the hardware revision. */
+    public static final String HARDWARE_REVISION = "ro.revision";
 }

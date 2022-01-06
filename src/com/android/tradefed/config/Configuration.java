@@ -558,11 +558,6 @@ public class Configuration implements IConfiguration {
         return getAllConfigurationObjects(null, true);
     }
 
-    /** Return a copy of all config objects that are not disabled via {@link IDisableable}. */
-    private Collection<Object> getAllNonDisabledConfigurationObjects() {
-        return getAllConfigurationObjects(null, false);
-    }
-
     /**
      * Return a copy of all config objects, minus the object configuration of the type specified.
      * Returns all the config objects if param is null.
@@ -586,6 +581,11 @@ public class Configuration implements IConfiguration {
             }
         }
         return objectsCopy;
+    }
+
+    /** Return a copy of all config objects that are not disabled via {@link IDisableable}. */
+    private Collection<Object> getAllNonDisabledConfigurationObjects() {
+        return getAllConfigurationObjects(null, false);
     }
 
     /**

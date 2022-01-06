@@ -377,11 +377,9 @@ public class GoogleBenchmarkTestTest {
     /**
      * Helper function to do the actual filtering test.
      *
-     * @param incFilter filter flag for querying tests to include
      * @param incTests tests to include
-     * @param excFilter filter flag for querying tests to exclude
      * @param excTests tests to exclude
-     * @param testFilter filter flag for running tests
+     * @param filteredTests filtered tests
      * @throws DeviceNotAvailableException
      */
     private void doTestFilter(String incTests, String excTests, Set<String> filteredTests)

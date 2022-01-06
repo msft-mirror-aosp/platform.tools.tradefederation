@@ -37,7 +37,6 @@ public class AllTestAppsInstallSetupTest {
 
     private TestInformation mTestInfo;
 
-    /** {@inheritDoc} */
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);

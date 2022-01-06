@@ -554,10 +554,10 @@ public class ZipUtil {
             }
 
             File zipFile = targetFile;
-            if (zipEntry.getCompressionMethod() != COMPRESSION_METHOD_STORED)
+            if (zipEntry.getCompressionMethod() != COMPRESSION_METHOD_STORED) {
                 // Create a temp file to store the compressed data, then unzip it.
                 zipFile = FileUtil.createTempFile(PARTIAL_ZIP_DATA, ZIP_EXTENSION);
-            else {
+            } else {
                 // The file is not compressed, stream it directly to the target.
                 zipFile.getParentFile().mkdirs();
                 zipFile.createNewFile();

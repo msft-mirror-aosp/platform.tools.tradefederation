@@ -47,6 +47,7 @@ public class JUnit4ResultForwarder extends RunListener {
     private ITestInvocationListener mListener;
     private List<Throwable> mTestCaseFailures;
     private Description mRunDescription;
+    private boolean mBeforeClass = true;
 
     public JUnit4ResultForwarder(ITestInvocationListener listener) {
         mListener = listener;
@@ -100,19 +101,28 @@ public class JUnit4ResultForwarder extends RunListener {
     public void testRunFinished(Result result) throws Exception {
         if (!mTestCaseFailures.isEmpty()) {
             String stack = StreamUtil.getStackTrace(mTestCaseFailures.get(0));
-            for (Description test : mRunDescription.getChildren()) {
-                TestDescription testid =
-                        new TestDescription(
-                                test.getClassName(), test.getMethodName(), test.getAnnotations());
-                mListener.testStarted(testid);
-                mListener.testAssumptionFailure(testid, stack);
-                mListener.testEnded(testid, new HashMap<String, Metric>());
+            if (mBeforeClass) {
+                for (Description test : mRunDescription.getChildren()) {
+                    TestDescription testid =
+                            new TestDescription(
+                                    test.getClassName(),
+                                    test.getMethodName(),
+                                    test.getAnnotations());
+                    mListener.testStarted(testid);
+                    mListener.testAssumptionFailure(testid, stack);
+                    mListener.testEnded(testid, new HashMap<String, Metric>());
+                }
+            } else {
+                // This would be an error in AfterClass, we have no good place to put results today
+                // so report it as a failure for now.
+                mListener.testRunFailed(stack);
             }
         }
     }
 
     @Override
     public void testStarted(Description description) throws Exception {
+        mBeforeClass = false;
         mTestCaseFailures.clear();
         TestDescription testid =
                 new TestDescription(
@@ -149,7 +159,6 @@ public class JUnit4ResultForwarder extends RunListener {
                     }
                 }
             }
-            //description.
             mListener.testEnded(testid, metrics);
             mTestCaseFailures.clear();
         }

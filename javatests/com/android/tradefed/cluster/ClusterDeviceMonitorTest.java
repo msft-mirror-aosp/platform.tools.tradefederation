@@ -267,7 +267,7 @@ public class ClusterDeviceMonitorTest {
         Assert.assertEquals(1, hostEvent.getDeviceInfos().size());
         ClusterDeviceInfo device = hostEvent.getDeviceInfos().get(0);
         Assert.assertEquals("device1", device.getDeviceDescriptor().getSerial());
-        Assert.assertEquals(1, device.getExtraInfo().size());
+        Assert.assertEquals(2, device.getExtraInfo().size());
         Assert.assertEquals("10.0", device.getExtraInfo().get("resource1-tag1"));
     }
 }

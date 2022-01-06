@@ -348,7 +348,7 @@ public class TestMapping {
             }
             // Skip the test if any of the required keywords is not specified by the test.
             if (keywords != null) {
-                Boolean allKeywordsFound = true;
+                boolean allKeywordsFound = true;
                 for (String keyword : keywords) {
                     if (!test.getKeywords().contains(keyword)) {
                         allKeywordsFound = false;
@@ -361,6 +361,78 @@ public class TestMapping {
                 }
             }
             tests.add(test);
+        }
+
+        return tests;
+    }
+
+    /**
+     * Helper to find all tests in all TEST_MAPPING files based on a artifact in the device build.
+     *
+     * @param buildInfo the {@link IBuildInfo} describing the build.
+     * @param testGroup a {@link String} of the test group.
+     * @param hostOnly true if only tests running on host and don't require device should be
+     *     returned. false to return tests that require device to run.
+     * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
+     */
+    public static Set<TestInfo> getTests(
+            IBuildInfo buildInfo, String testGroup, boolean hostOnly, Set<String> keywords) {
+        File zipFile = buildInfo.getFile(TEST_MAPPINGS_ZIP);
+        return getTests(buildInfo, testGroup, hostOnly, keywords, zipFile);
+    }
+
+    /**
+     * Helper to find all tests in all TEST_MAPPING files based on the given artifact. This is
+     * needed when a suite run requires to run all tests in TEST_MAPPING files for a given group,
+     * e.g., presubmit.
+     *
+     * @param buildInfo the {@link IBuildInfo} describing the build.
+     * @param testGroup a {@link String} of the test group.
+     * @param hostOnly true if only tests running on host and don't require device should be
+     *     returned. false to return tests that require device to run.
+     * @param zipFile the {@link File} of the test mapping zip.
+     * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
+     */
+    @SuppressWarnings("StreamResourceLeak")
+    public static Set<TestInfo> getTests(
+        IBuildInfo buildInfo,
+        String testGroup,
+        boolean hostOnly,
+        Set<String> keywords,
+        File zipFile) {
+        Set<TestInfo> tests = new HashSet<TestInfo>();
+        File testMappingsDir = extractTestMappingsZip(zipFile);
+        Stream<Path> stream = null;
+        try {
+            Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
+            Set<String> disabledTests = getDisabledTests(testMappingsRootPath, testGroup);
+            if (mTestMappingRelativePaths.isEmpty()) {
+                stream = Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS);
+            }
+            else {
+                stream = getAllTestMappingPaths(testMappingsRootPath).stream();
+            }
+            stream.filter(path -> path.getFileName().toString().equals(TEST_MAPPING))
+                    .forEach(
+                            path ->
+                                    tests.addAll(
+                                            new TestMapping(path, testMappingsRootPath)
+                                                    .getTests(
+                                                            testGroup,
+                                                            disabledTests,
+                                                            hostOnly,
+                                                            keywords)));
+
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    String.format(
+                            "IO exception (%s) when reading tests from TEST_MAPPING files (%s)",
+                            e.getMessage(), testMappingsDir.getAbsolutePath()), e);
+        } finally {
+            if (stream != null) {
+                stream.close();
+            }
+            FileUtil.recursiveDelete(testMappingsDir);
         }
 
         return tests;
@@ -428,57 +500,6 @@ public class TestMapping {
     }
 
     /**
-     * Helper to find all tests in all TEST_MAPPING files. This is needed when a suite run requires
-     * to run all tests in TEST_MAPPING files for a given group, e.g., presubmit.
-     *
-     * @param buildInfo the {@link IBuildInfo} describing the build.
-     * @param testGroup a {@link String} of the test group.
-     * @param hostOnly true if only tests running on host and don't require device should be
-     *     returned. false to return tests that require device to run.
-     * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
-     */
-    @SuppressWarnings("StreamResourceLeak")
-    public static Set<TestInfo> getTests(
-            IBuildInfo buildInfo, String testGroup, boolean hostOnly, Set<String> keywords) {
-        Set<TestInfo> tests = new HashSet<TestInfo>();
-        File testMappingsDir = extractTestMappingsZip(buildInfo.getFile(TEST_MAPPINGS_ZIP));
-        Stream<Path> stream = null;
-        try {
-            Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
-            Set<String> disabledTests = getDisabledTests(testMappingsRootPath, testGroup);
-            if (mTestMappingRelativePaths.isEmpty()) {
-                stream = Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS);
-            }
-            else {
-                stream = getAllTestMappingPaths(testMappingsRootPath).stream();
-            }
-            stream.filter(path -> path.getFileName().toString().equals(TEST_MAPPING))
-                    .forEach(
-                            path ->
-                                    tests.addAll(
-                                            new TestMapping(path, testMappingsRootPath)
-                                                    .getTests(
-                                                            testGroup,
-                                                            disabledTests,
-                                                            hostOnly,
-                                                            keywords)));
-
-        } catch (IOException e) {
-            throw new RuntimeException(
-                    String.format(
-                            "IO exception (%s) when reading tests from TEST_MAPPING files (%s)",
-                            e.getMessage(), testMappingsDir.getAbsolutePath()), e);
-        } finally {
-            if (stream != null) {
-                stream.close();
-            }
-            FileUtil.recursiveDelete(testMappingsDir);
-        }
-
-        return tests;
-    }
-
-    /**
      * Helper to find all tests in the TEST_MAPPING files from a given directory.
      *
      * @param testMappingsDir the {@link File} the directory containing all Test Mapping files.
@@ -508,6 +529,23 @@ public class TestMapping {
             }
         }
         return allTests;
+    }
+
+    /**
+     * Helper to find all tests in the TEST_MAPPING files from a given directory.
+     *
+     * @param allTests the {@code HashMap<String, Set<TestInfo>>} containing the tests of each
+     * test group.
+     * @param path the {@link Path} to a TEST_MAPPING file.
+     * @param testMappingsRootPath the {@link Path} to a test mappings zip path.
+     */
+    private static void getAllTests(Map<String, Set<TestInfo>> allTests,
+        Path path, Path testMappingsRootPath) {
+        Map<String, Set<TestInfo>> testCollection =
+            new TestMapping(path, testMappingsRootPath).getTestCollection();
+        for (String group : testCollection.keySet()) {
+            allTests.computeIfAbsent(group, k -> new HashSet<>()).addAll(testCollection.get(group));
+        }
     }
 
     /**
@@ -557,23 +595,6 @@ public class TestMapping {
                             e.getMessage(), disabledPresubmitTestsFile.getAbsolutePath()), e);
         }
         return disabledTests;
-    }
-
-    /**
-     * Helper to find all tests in the TEST_MAPPING files from a given directory.
-     *
-     * @param allTests the {@code HashMap<String, Set<TestInfo>>} containing the tests of each
-     * test group.
-     * @param path the {@link Path} to a TEST_MAPPING file.
-     * @param testMappingsRootPath the {@link Path} to a test mappings zip path.
-     */
-    private static void getAllTests(Map<String, Set<TestInfo>> allTests,
-        Path path, Path testMappingsRootPath) {
-        Map<String, Set<TestInfo>> testCollection =
-            new TestMapping(path, testMappingsRootPath).getTestCollection();
-        for (String group : testCollection.keySet()) {
-            allTests.computeIfAbsent(group, k -> new HashSet<>()).addAll(testCollection.get(group));
-        }
     }
 
     /**

@@ -140,6 +140,20 @@ public class TestRunResult {
         return mIsRunComplete;
     }
 
+    /** Decides whether or not considering an aggregation of runs completed or not. */
+    private static boolean isRunComplete(
+            boolean isAtLeastOneCompleted, boolean areAllCompleted, MergeStrategy strategy) {
+        switch (strategy) {
+            case ANY_PASS_IS_PASS:
+            case ONE_TESTRUN_PASS_IS_PASS:
+                return isAtLeastOneCompleted;
+            case ONE_TESTCASE_PASS_IS_PASS:
+            case ANY_FAIL_IS_FAIL:
+            default:
+                return areAllCompleted;
+        }
+    }
+
     public void setRunComplete(boolean runComplete) {
         mIsRunComplete = runComplete;
     }
@@ -411,15 +425,15 @@ public class TestRunResult {
     private String combineValues(String existingValue, String newValue) {
         if (existingValue != null) {
             try {
-                Long existingLong = Long.parseLong(existingValue);
-                Long newLong = Long.parseLong(newValue);
+                long existingLong = Long.parseLong(existingValue);
+                long newLong = Long.parseLong(newValue);
                 return Long.toString(existingLong + newLong);
             } catch (NumberFormatException e) {
                 // not a long, skip to next
             }
             try {
-                Double existingDouble = Double.parseDouble(existingValue);
-                Double newDouble = Double.parseDouble(newValue);
+                double existingDouble = Double.parseDouble(existingValue);
+                double newDouble = Double.parseDouble(newValue);
                 return Double.toString(existingDouble + newDouble);
             } catch (NumberFormatException e) {
                 // not a double either, fall through
@@ -611,20 +625,6 @@ public class TestRunResult {
             case ANY_FAIL_IS_FAIL:
             default:
                 return atLeastOneFailure;
-        }
-    }
-
-    /** Decides whether or not considering an aggregation of runs completed or not. */
-    private static boolean isRunComplete(
-            boolean isAtLeastOneCompleted, boolean areAllCompleted, MergeStrategy strategy) {
-        switch (strategy) {
-            case ANY_PASS_IS_PASS:
-            case ONE_TESTRUN_PASS_IS_PASS:
-                return isAtLeastOneCompleted;
-            case ONE_TESTCASE_PASS_IS_PASS:
-            case ANY_FAIL_IS_FAIL:
-            default:
-                return areAllCompleted;
         }
     }
 }

@@ -29,8 +29,10 @@ import com.android.ddmlib.SyncService;
 import com.android.ddmlib.TimeoutException;
 import com.android.ddmlib.log.LogReceiver;
 import com.android.sdklib.AndroidVersion;
+
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
@@ -62,23 +64,10 @@ public class StubDevice implements IDevice, Serializable {
     }
     /** {@inheritDoc} */
     @Override
-    public void executeShellCommand(String command, IShellOutputReceiver receiver)
-            throws TimeoutException, AdbCommandRejectedException, ShellCommandUnresponsiveException,
-                    IOException {
-        throw new IOException("stub");
-    }
-    /**
-     * {@inheritDoc}
-     *
-     * @deprecated use {@link #executeShellCommand(String, IShellOutputReceiver, long, TimeUnit)}.
-     */
-    @Deprecated
-    @Override
-    public void executeShellCommand(
-            String command, IShellOutputReceiver receiver, int maxTimeToOutputResponse)
-            throws TimeoutException, AdbCommandRejectedException, ShellCommandUnresponsiveException,
-                    IOException {
-        throw new IOException("stub");
+    public void createForward(
+            int localPort, String remoteSocketName, DeviceUnixSocketNamespace namespace)
+            throws TimeoutException, AdbCommandRejectedException, IOException {
+        // ignore
     }
     /** {@inheritDoc} */
     @Override
@@ -398,13 +387,6 @@ public class StubDevice implements IDevice, Serializable {
     }
     /** {@inheritDoc} */
     @Override
-    public void createForward(
-            int localPort, String remoteSocketName, DeviceUnixSocketNamespace namespace)
-            throws TimeoutException, AdbCommandRejectedException, IOException {
-        // ignore
-    }
-    /** {@inheritDoc} */
-    @Override
     public String getName() {
         return null;
     }
@@ -433,8 +415,35 @@ public class StubDevice implements IDevice, Serializable {
     }
     /** {@inheritDoc} */
     @Override
+    public void executeShellCommand(String command, IShellOutputReceiver receiver)
+            throws TimeoutException, AdbCommandRejectedException, ShellCommandUnresponsiveException,
+                    IOException {
+        throw new IOException("stub");
+    }
+    /**
+     * {@inheritDoc}
+     *
+     * @deprecated use {@link #executeShellCommand(String, IShellOutputReceiver, long, TimeUnit)}.
+     */
+    @Deprecated
+    @Override
+    public void executeShellCommand(
+            String command, IShellOutputReceiver receiver, int maxTimeToOutputResponse)
+            throws TimeoutException, AdbCommandRejectedException, ShellCommandUnresponsiveException,
+                    IOException {
+        throw new IOException("stub");
+    }
+    /** {@inheritDoc} */
+    @Override
     public boolean supportsFeature(Feature feature) {
         return false;
+    }
+    /* (non-Javadoc)
+     * @see com.android.ddmlib.IDevice#supportsFeature(com.android.ddmlib.IDevice.HardwareFeature)
+     */
+    @Override
+    public boolean supportsFeature(HardwareFeature arg0) {
+        return true;
     }
     /** {@inheritDoc} */
     @Override
@@ -443,13 +452,6 @@ public class StubDevice implements IDevice, Serializable {
             throws TimeoutException, AdbCommandRejectedException, IOException,
                     ShellCommandUnresponsiveException {
         // no-op
-    }
-    /* (non-Javadoc)
-     * @see com.android.ddmlib.IDevice#supportsFeature(com.android.ddmlib.IDevice.HardwareFeature)
-     */
-    @Override
-    public boolean supportsFeature(HardwareFeature arg0) {
-        return true;
     }
     /** {@inheritDoc} */
     @Override
