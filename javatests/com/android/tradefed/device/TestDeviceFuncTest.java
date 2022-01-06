@@ -37,6 +37,7 @@ import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IDeviceTest;
+import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.KeyguardControllerState;
@@ -838,6 +839,19 @@ public class TestDeviceFuncTest implements IDeviceTest {
         } finally {
             FileUtil.deleteFile(tmpTxtFile);
         }
+    }
+
+    /**
+     * Basic test for testing LOGCAT_CMD backward compatibility.
+     *
+     * <p>Checks if future changes to LOGCAT_CMD does not break APIs.
+     */
+    @Test
+    public void testLogcatCmd() throws DeviceNotAvailableException {
+        CLog.i("testLogcatCmd");
+        // Adding -d flag to dump the log and exit, to make this a non-blocking call
+        CommandResult result = mTestDevice.executeShellV2Command(LogcatReceiver.LOGCAT_CMD + " -d");
+        assertThat(result.getStatus()).isEqualTo(CommandStatus.SUCCESS);
     }
 
     /** Test that {@link TestDevice#getProperty(String)} works after a reboot. */
