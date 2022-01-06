@@ -208,6 +208,9 @@ public abstract class ProtoResultReporter
         DebugInfo invocationFailure = handleInvocationFailure();
         if (invocationFailure != null) {
             mInvocationRecordBuilder.setDebugInfo(invocationFailure);
+            mInvocationRecordBuilder.setStatus(TestStatus.FAIL);
+        } else {
+            mInvocationRecordBuilder.setStatus(TestStatus.PASS);
         }
 
         // Finalize the protobuf handling: where to put the results.
