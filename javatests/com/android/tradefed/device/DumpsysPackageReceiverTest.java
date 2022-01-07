@@ -96,4 +96,28 @@ public class DumpsysPackageReceiverTest {
         DumpsysPackageReceiver parser = new DumpsysPackageReceiver();
         assertEquals(0,  parser.getPackages().size());
     }
+
+    /** Verifies parse handles multiple users */
+    @Test
+    public void testParse_perUser() {
+        final String[] pkgTxt =
+                new String[] {
+                    "Packages:",
+                    "Package [com.android.soundrecorder] (462f6b38):",
+                    "targetSdk=8",
+                    "User 0: installed=true virtual=false",
+                    "firstInstallTime=2021-09-27 11:40:29",
+                    "User 1: installed=true virtual=false",
+                    "firstInstallTime=2021-09-27 11:40:30"
+                };
+
+        DumpsysPackageReceiver p = new DumpsysPackageReceiver();
+        p.processNewLines(pkgTxt);
+        assertEquals("failed to parse package data", 1, p.getPackages().size());
+        PackageInfo pkg = p.getPackages().get("com.android.soundrecorder");
+        assertNotNull("failed to parse package data", pkg);
+        assertEquals("com.android.soundrecorder", pkg.getPackageName());
+        assertEquals("2021-09-27 11:40:29", pkg.getFirstInstallTime(0));
+        assertEquals("2021-09-27 11:40:30", pkg.getFirstInstallTime(1));
+    }
 }
