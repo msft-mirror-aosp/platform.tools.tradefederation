@@ -75,6 +75,10 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
             description = "produce a compressed trace dump")
     private boolean mCompressDump = true;
 
+    @Option(name = "atrace-on-boot",
+            description = "enable atrace collection for bootup")
+    private boolean mTraceOnBoot = false;
+
     /* These options will arrange a post processing executable binary to be ran on the collected
      * trace.
      * E.G.
@@ -132,6 +136,11 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
 
     private IRunUtil mRunUtil = RunUtil.getDefault();
 
+    private Thread mThread;
+
+    private static final long DEVICE_OFFLINE_TIMEOUT_MS = 60 * 1000;
+    private static final long DEVICE_ONLINE_TIMEOUT_MS = 60 * 1000;
+
     protected String fullLogPath() {
         return Paths.get(mLogPath, mLogFilename + "." + getLogType().getFileExt()).toString();
     }
@@ -170,8 +179,28 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
             return;
         }
 
-        for (ITestDevice device : getDevices()) {
-            startTracing(device);
+        if (mTraceOnBoot) {
+            mThread = new Thread(() -> {
+                try {
+                    for (ITestDevice device : getDevices()) {
+                        // wait for device reboot
+                        device.waitForDeviceNotAvailable(DEVICE_OFFLINE_TIMEOUT_MS);
+                        device.waitForDeviceOnline(DEVICE_ONLINE_TIMEOUT_MS);
+                        // wait for device to be in root
+                        device.waitForDeviceNotAvailable(DEVICE_OFFLINE_TIMEOUT_MS);
+                        device.waitForDeviceOnline();
+                        startTracing(device);
+                    }
+                } catch (DeviceNotAvailableException e) {
+                    CLog.e("Error starting atrace");
+                    CLog.e(e);
+                }
+            });
+            mThread.start();
+        } else {
+            for (ITestDevice device : getDevices()) {
+                startTracing(device);
+            }
         }
     }
 
