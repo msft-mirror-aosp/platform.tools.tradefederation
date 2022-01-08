@@ -15,7 +15,9 @@
  */
 package com.android.tradefed.device;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -99,7 +101,7 @@ public class WifiHelperTest {
      */
     @Test
     public void testWaitForIp_failThenPass() throws Exception {
-        MockTestDeviceHelper.injectShellResponse(mMockDevice, null, 5, TimeUnit.MINUTES, 0, "");
+        MockTestDeviceHelper.injectShellResponse(mMockDevice, null, 2, TimeUnit.MINUTES, 0, "");
         MockTestDeviceHelper.injectShellResponse(
                 mMockDevice,
                 null,
