@@ -98,6 +98,7 @@ class MockTestDeviceHelper {
                             eq(expectedCommand),
                             any(),
                             eq(expectedTimeout),
+                            eq(expectedTimeout),
                             eq(expectedTimeUnit),
                             eq(expectedRetryAttempts));
         } else {
@@ -113,6 +114,7 @@ class MockTestDeviceHelper {
                     .executeShellCommand(
                             anyString(),
                             any(),
+                            eq(expectedTimeout),
                             eq(expectedTimeout),
                             eq(expectedTimeUnit),
                             eq(expectedRetryAttempts));
