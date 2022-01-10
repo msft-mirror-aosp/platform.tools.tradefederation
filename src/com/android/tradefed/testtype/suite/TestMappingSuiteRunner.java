@@ -120,7 +120,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                     "A list of additional test_mappings.zip that contains TEST_MAPPING files. The "
                             + "runner will collect tests based on them. If none  is specified, "
                             + "only the tests on the triggering device build will be run.")
-    private List<String> mAdditionalTestMappingZip = new ArrayList<>();
+    private List<String> mAdditionalTestMappingZips = new ArrayList<>();
 
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
@@ -183,28 +183,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             }
             testInfosToRun =
                     TestMapping.getTests(
-                            mBuildInfo, mTestGroup, getPrioritizeHostConfig(), mKeywords);
-            if (!mAdditionalTestMappingZip.isEmpty()) {
-                for (String zipName : mAdditionalTestMappingZip) {
-                    File zipFile = mBuildInfo.getFile(zipName);
-                    if (zipFile == null) {
-                        throw new HarnessRuntimeException(
-                                String.format("Missing %s in the BuildInfo file.", zipName),
-                                InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
-                    }
-                    CLog.i("Getting tests from additional test mapping zip: %s", zipName);
-                    Set<TestInfo> additionalTests =
-                            TestMapping.getTests(
-                                    mBuildInfo,
-                                    mTestGroup,
-                                    getPrioritizeHostConfig(),
-                                    mKeywords,
-                                    zipFile
-                            );
-                    validateTestMappingSource(testInfosToRun, additionalTests, zipName);
-                    testInfosToRun.addAll(additionalTests);
-                }
-            }
+                            mBuildInfo,
+                            mTestGroup,
+                            getPrioritizeHostConfig(),
+                            mKeywords,
+                            mAdditionalTestMappingZips);
             if (!mTestModulesForced.isEmpty()) {
                 CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
                 testInfosToRun =
