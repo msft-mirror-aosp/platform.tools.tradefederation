@@ -36,6 +36,8 @@ class DumpsysPackageReceiver extends MultiLineReceiver {
 
     /** regex for marking the start of a single package's output */
     private static final Pattern PACKAGE_PATTERN = Pattern.compile("Package\\s\\[([\\w\\.]+)\\]");
+    /** regex for marking the start of a single user's output inside a package's output */
+    private static final Pattern USER_PATTERN = Pattern.compile("User\\s(\\d+):");
 
     static class ParseException extends IOException {
         private static final long serialVersionUID = BuildSerializedVersion.VERSION;
@@ -110,8 +112,13 @@ class DumpsysPackageReceiver extends MultiLineReceiver {
                 // done parsing packages, now parse hidden packages
                 return new HiddenPackagesParserState();
             }
-            parseAttributes(line);
+            Matcher userStateMatcher = USER_PATTERN.matcher(line);
+            if (userStateMatcher.find()) {
+                int userId = Integer.parseInt(userStateMatcher.group(1));
+                return new PerUserPackageParserState(mPkgInfo.getPackageName(), userId);
+            }
 
+            parseAttributes(line);
             return this;
         }
 
@@ -184,6 +191,43 @@ class DumpsysPackageReceiver extends MultiLineReceiver {
                 return new HiddenPackageParserState(name);
             }
             return this;
+        }
+    }
+
+    private class PerUserPackageParserState implements ParserState {
+        private final PackageInfo mPkgInfo;
+        private final int mUserId;
+
+        public PerUserPackageParserState(String name, int userId) throws ParseException {
+            mPkgInfo = mPkgInfoMap.get(name);
+            if (mPkgInfo == null) {
+                throw new ParseException(
+                        String.format("could not find package for hidden package %s", name));
+            }
+            mUserId = userId;
+        }
+
+        @Override
+        public ParserState parse(String line) throws ParseException {
+            Matcher matcher = PACKAGE_PATTERN.matcher(line);
+            if (matcher.find()) {
+                String name = matcher.group(1);
+                return new PackageParserState(name);
+            }
+            Matcher userStateMatcher = USER_PATTERN.matcher(line);
+            if (userStateMatcher.find()) {
+                int userId = Integer.parseInt(userStateMatcher.group(1));
+                return new PerUserPackageParserState(mPkgInfo.getPackageName(), userId);
+            }
+            parseAttributes(line);
+            return this;
+        }
+
+        private void parseAttributes(String line) {
+            String[] prop = line.split("=");
+            if (prop.length == 2) {
+                mPkgInfo.addPerUserAttribute(mUserId, prop[0], prop[1]);
+            }
         }
     }
 
