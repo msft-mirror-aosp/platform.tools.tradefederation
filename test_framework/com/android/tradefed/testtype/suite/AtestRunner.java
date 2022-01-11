@@ -96,6 +96,10 @@ public class AtestRunner extends BaseTestSuite {
     )
     private List<File> mModuleConfigPaths = new ArrayList<>();
 
+    public AtestRunner() {
+        setMultiDeviceStrategy(MultiDeviceModuleStrategy.RUN);
+    }
+
     @Override
     public LinkedHashMap<String, IConfiguration> loadingStrategy(Set<IAbi> abis,
         List<File> testsDirs,
