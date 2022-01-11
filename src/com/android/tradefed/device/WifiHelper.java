@@ -175,7 +175,7 @@ public class WifiHelper implements IWifiHelper {
         mDevice.executeShellCommand(ENABLE_WIFI_CMD);
         // shell command does not produce any message to indicate success/failure, wait for state
         // change to complete.
-        return waitForWifiEnabled();
+        return waitForWifiEnabled(120000L);
     }
 
     /**
@@ -368,7 +368,11 @@ public class WifiHelper implements IWifiHelper {
      */
     @Override
     public boolean isWifiEnabled() throws DeviceNotAvailableException {
-        return asBool(runWifiUtil("isWifiEnabled"));
+        return asBool(
+                runWifiUtil(
+                        "isWifiEnabled", 2
+                        /** 2 minutes timeout */
+                        ));
     }
 
     /**
@@ -513,19 +517,25 @@ public class WifiHelper implements IWifiHelper {
         return values;
     }
 
+    private String runWifiUtil(String method, String... args) throws DeviceNotAvailableException {
+        return runWifiUtil(method, WIFIUTIL_CMD_TIMEOUT_MINUTES, args);
+    }
+
     /**
      * Run a WifiUtil command and return the result
      *
      * @param method the WifiUtil method to call
+     * @param timeout in minutes for the command
      * @param args a flat list of [arg-name, value] pairs to pass
-     * @return The value of the result field in the output, or <code>null</code> if result could
-     * not be parsed
+     * @return The value of the result field in the output, or <code>null</code> if result could not
+     *     be parsed
      */
-    private String runWifiUtil(String method, String... args) throws DeviceNotAvailableException {
+    private String runWifiUtil(String method, long timeout, String... args)
+            throws DeviceNotAvailableException {
         final String cmd = buildWifiUtilCmd(method, args);
 
         WifiUtilOutput parser = new WifiUtilOutput();
-        mDevice.executeShellCommand(cmd, parser, WIFIUTIL_CMD_TIMEOUT_MINUTES, TimeUnit.MINUTES, 0);
+        mDevice.executeShellCommand(cmd, parser, timeout, timeout, TimeUnit.MINUTES, 0);
         if (parser.getError() != null) {
             String errorMessage =
                     String.format(

@@ -29,6 +29,7 @@ import com.proto.tradefed.feature.FeatureResponse;
 import java.io.File;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Resolve a partial download request. */
@@ -66,7 +67,15 @@ public class ResolvePartialDownload implements IRemoteFeature, ITestInformationR
             Map<String, String> args = new HashMap<>(request.getArgsMap());
             String destDir = args.remove(DESTINATION_DIR);
             String includeFilter = args.remove(INCLUDE_FILTERS);
+            List<String> includeFilterList = null;
+            if (includeFilter != null) {
+                includeFilterList = Arrays.asList(includeFilter);
+            }
             String excludeFilter = args.remove(EXCLUDE_FILTERS);
+            List<String> excludeFilterList = null;
+            if (excludeFilter != null) {
+                excludeFilterList = Arrays.asList(excludeFilter);
+            }
 
             dynamicResolver.addExtraArgs(args);
 
@@ -74,8 +83,8 @@ public class ResolvePartialDownload implements IRemoteFeature, ITestInformationR
                 dynamicResolver.resolvePartialDownloadZip(
                         new File(destDir),
                         remotePath.toString(),
-                        Arrays.asList(includeFilter),
-                        Arrays.asList(excludeFilter));
+                        includeFilterList,
+                        excludeFilterList);
             }
         } catch (RuntimeException | BuildRetrievalError e) {
             responseBuilder.setErrorInfo(
