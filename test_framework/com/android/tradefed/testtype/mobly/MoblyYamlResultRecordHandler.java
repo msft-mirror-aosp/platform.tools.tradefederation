@@ -145,6 +145,7 @@ public class MoblyYamlResultRecordHandler implements IMoblyYamlResultHandler {
     }
 
     public enum RecordResult {
+        SKIP,
         PASS,
         FAIL,
         ERROR
