@@ -19,17 +19,21 @@ import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.proto.BuildInformation;
 import com.android.tradefed.build.proto.BuildInformation.BuildFile;
 import com.android.tradefed.build.proto.BuildInformation.KeyBuildFilePair;
-import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.service.TradefedFeatureClient;
+import com.android.tradefed.testtype.suite.ResolvePartialDownload;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.UniqueMultiMap;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
+import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,6 +43,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
@@ -698,23 +703,30 @@ public class BuildInfo implements IBuildInfo {
     /** {@inheritDoc} */
     @Override
     public File stageRemoteFile(String fileName, File workingDir) {
+        if (getRemoteFiles().isEmpty()) {
+            return null;
+        }
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.STAGE_TESTS_INDIVIDUAL_DOWNLOADS, fileName);
         List<String> includeFilters = Arrays.asList(String.format("/%s$", fileName));
-        for (File file : getRemoteFiles()) {
-            try {
-                new DynamicRemoteFileResolver()
-                        .resolvePartialDownloadZip(
-                                workingDir, file.toString(), includeFilters, null);
-            } catch (BuildRetrievalError e) {
-                throw new RuntimeException(e);
-            }
 
-            File stagedFile = FileUtil.findFile(workingDir, fileName);
-            if (stagedFile != null) {
-                return stagedFile;
+        try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+            Map<String, String> args = new HashMap<>();
+            args.put(ResolvePartialDownload.DESTINATION_DIR, workingDir.getAbsolutePath());
+            args.put(ResolvePartialDownload.INCLUDE_FILTERS, String.join(";", includeFilters));
+            // TODO: Remove exclude filter when we support not specifying it. For now put a
+            // placeholder that will exclude nothing.
+            args.put(ResolvePartialDownload.EXCLUDE_FILTERS, "doesntmatch");
+            FeatureResponse rep =
+                    client.triggerFeature(
+                            ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);
+            if (rep.hasErrorInfo()) {
+                throw new HarnessRuntimeException(
+                        rep.getErrorInfo().getErrorTrace(),
+                        InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
             }
         }
-        return null;
+
+        return FileUtil.findFile(workingDir, fileName);
     }
 }
