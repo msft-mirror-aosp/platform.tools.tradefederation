@@ -132,7 +132,7 @@ public class ClusterBuildProvider implements IBuildProvider {
                 File cachedFile = retrieveFile(resource.getUrl(), cache, downloader, resourceFile);
                 file = prepareTestResource(resource, createdResources, cachedFile, buildInfo);
             } catch (UncheckedIOException e) {
-                throw new BuildRetrievalError("failed to get test resources", e.getCause());
+                throw new BuildRetrievalError("failed to get test resources", e);
             }
             buildInfo.setFile(resource.getName(), file, DEFAULT_FILE_VERSION);
         }
