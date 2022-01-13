@@ -90,6 +90,11 @@ public class DeviceSetup extends BaseTargetPreparer {
     // OFF: settings put global wifi_off 0
     //      svc wifi disable
 
+    @Option(
+            name = "skip-wifi-connection",
+            description = "Whether or not to completely skip connecting to wifi.")
+    private boolean mSkipWifi = false;
+
     @Option(name = "wifi-network",
             description = "The SSID of the network to connect to. Will only attempt to " +
             "connect to a network if set")
@@ -991,6 +996,10 @@ public class DeviceSetup extends BaseTargetPreparer {
             return;
         }
         if ((mWifiSsid == null || mWifiSsid.isEmpty()) && mWifiSsidToPsk.isEmpty()) {
+            return;
+        }
+        if (mSkipWifi) {
+            CLog.d("Skipping wifi connection due to skip-wifi-connection");
             return;
         }
 
