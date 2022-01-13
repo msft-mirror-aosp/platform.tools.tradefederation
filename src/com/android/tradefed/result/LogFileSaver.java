@@ -219,7 +219,7 @@ public class LogFileSaver {
         // add underscore to end of data name to make generated name more readable
         File logFile = FileUtil.createTempFile(saneDataName + "_", "." + ext, mInvLogDir);
         FileUtil.writeToFile(dataStream, logFile);
-        CLog.i("Saved log file %s", logFile.getAbsolutePath());
+        CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
         return logFile;
     }
 
@@ -247,7 +247,7 @@ public class LogFileSaver {
             bufInput = new BufferedInputStream(dataStream);
             outStream = createGZipLogStream(logFile);
             StreamUtil.copyStreams(bufInput, outStream);
-            CLog.i("Saved log file %s", logFile.getAbsolutePath());
+            CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
             return logFile;
         } finally {
             StreamUtil.close(bufInput);
@@ -283,7 +283,7 @@ public class LogFileSaver {
                     logFile), BUFFER_SIZE));
             outStream.putNextEntry(new ZipEntry(saneDataName + "." + dataType.getFileExt()));
             StreamUtil.copyStreams(bufInput, outStream);
-            CLog.i("Saved log file %s", logFile.getAbsolutePath());
+            CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
             return logFile;
         } finally {
             StreamUtil.close(bufInput);

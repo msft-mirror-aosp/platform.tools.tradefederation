@@ -17,13 +17,18 @@ package com.android.tradefed.util.testmapping;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.ConfigurationException;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 
+import java.util.Enumeration;
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
+import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -373,12 +378,13 @@ public class TestMapping {
      * @param testGroup a {@link String} of the test group.
      * @param hostOnly true if only tests running on host and don't require device should be
      *     returned. false to return tests that require device to run.
+     * @param keywords A set of {@link String} to be matched when filtering tests to run in a Test
+     *     Mapping suite.
      * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
      */
     public static Set<TestInfo> getTests(
             IBuildInfo buildInfo, String testGroup, boolean hostOnly, Set<String> keywords) {
-        File zipFile = buildInfo.getFile(TEST_MAPPINGS_ZIP);
-        return getTests(buildInfo, testGroup, hostOnly, keywords, zipFile);
+        return getTests(buildInfo, testGroup, hostOnly, keywords, new ArrayList<>());
     }
 
     /**
@@ -390,7 +396,10 @@ public class TestMapping {
      * @param testGroup a {@link String} of the test group.
      * @param hostOnly true if only tests running on host and don't require device should be
      *     returned. false to return tests that require device to run.
-     * @param zipFile the {@link File} of the test mapping zip.
+     * @param keywords A set of {@link String} to be matched when filtering tests to run in a Test
+     *     Mapping suite.
+     * @param extraZipNames A set of {@link String} for the name of additional test_mappings.zip
+     *     that will be merged.
      * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
      */
     @SuppressWarnings("StreamResourceLeak")
@@ -399,11 +408,13 @@ public class TestMapping {
         String testGroup,
         boolean hostOnly,
         Set<String> keywords,
-        File zipFile) {
+        List<String> extraZipNames) {
         Set<TestInfo> tests = new HashSet<TestInfo>();
+        File zipFile = buildInfo.getFile(TEST_MAPPINGS_ZIP);
         File testMappingsDir = extractTestMappingsZip(zipFile);
         Stream<Path> stream = null;
         try {
+            mergeTestMappingZips(buildInfo, extraZipNames, zipFile, testMappingsDir);
             Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
             Set<String> disabledTests = getDisabledTests(testMappingsRootPath, testGroup);
             if (mTestMappingRelativePaths.isEmpty()) {
@@ -623,5 +634,71 @@ public class TestMapping {
                         "Unmatched \"[]\" for \"%s\" configured in the %s. "
                                 + "Parameter must contain square brackets.",
                         info.getName(), info.getSources()));
+    }
+
+    /**
+     * Merge additional test mapping zips into the given directory.
+     */
+    @VisibleForTesting
+    static void mergeTestMappingZips(
+        IBuildInfo buildInfo, List<String> extraZips, File baseFile, File baseDir)
+        throws IOException {
+        Set<String> baseNames = getTestMappingSources(baseFile);
+        for (String zipName : extraZips) {
+            File zipFile = buildInfo.getFile(zipName);
+            if (zipFile == null) {
+                throw new HarnessRuntimeException(
+                        String.format("Missing %s in the BuildInfo file.", zipName),
+                        InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
+            }
+            Set<String> targetNames = getTestMappingSources(zipFile);
+            validateSources(baseNames, targetNames, zipName);
+            baseNames.addAll(targetNames);
+            ZipUtil2.extractZip(zipFile, baseDir);
+        }
+    }
+
+    /**
+     * Helper to validate whether there exists collision of the path of Test Mapping files.
+     */
+    private static void validateSources(Set<String> base, Set<String> target, String zipName) {
+        for (String name : target) {
+            if (base.contains(name)) {
+                throw new HarnessRuntimeException(
+                    String.format("Collision of Test Mapping file: %s in artifact: %s.",
+                        name, zipName), InfraErrorIdentifier.TEST_MAPPING_PATH_COLLISION);
+            }
+        }
+    }
+
+    /**
+     * Helper to collect the path of Test Mapping files with a given zip file.
+     */
+    @VisibleForTesting
+    static Set<String> getTestMappingSources(File zipFile) {
+        Set<String> fileNames = new HashSet<>();
+        Enumeration<? extends ZipArchiveEntry> entries = null;
+        ZipFile f = null;
+        try {
+            f = new ZipFile(zipFile);
+            entries = f.getEntries();
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    String.format(
+                            "IO exception (%s) when accessing test_mappings.zip (%s)",
+                            e.getMessage(), zipFile),
+                    e);
+        } finally {
+            ZipUtil2.closeZip(f);
+        }
+        while (entries.hasMoreElements()) {
+            ZipArchiveEntry entry = entries.nextElement();
+            // TODO: Temporarily exclude disabled-presubmit-test file. We'll need to revisit if that
+            // file is used on the older branch/target, if no, remove that file.
+            if (!entry.isDirectory() && !entry.getName().equals(DISABLED_PRESUBMIT_TESTS_FILE)) {
+                fileNames.add(entry.getName());
+            }
+        }
+        return fileNames;
     }
 }

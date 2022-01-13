@@ -78,9 +78,12 @@ public class ITestSuiteMultiTest {
         private int mNumTests = 1;
         private ITargetPreparer mPreparer;
 
-        public TestSuiteMultiDeviceImpl() {}
+        public TestSuiteMultiDeviceImpl() {
+            setMultiDeviceStrategy(MultiDeviceModuleStrategy.ONLY_MULTI_DEVICES);
+        }
 
         public TestSuiteMultiDeviceImpl(int numTests, ITargetPreparer targetPrep) {
+            this();
             mNumTests = numTests;
             mPreparer = targetPrep;
         }
