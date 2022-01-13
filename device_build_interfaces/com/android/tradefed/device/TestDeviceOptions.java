@@ -84,6 +84,13 @@ public class TestDeviceOptions {
             "time in ms to wait for a device to reboot to full system.")
     private int mRebootTimeout = 2 * 60 * 1000;
 
+    @Option(
+            name = "device-fastboot-binary",
+            description =
+                    "The fastboot binary to use for the test session. If null, will use "
+                            + "the same fastboot binary as DeviceManager.")
+    private File mFastbootBinary = null;
+
     @Option(name = "use-fastboot-erase", description =
             "use fastboot erase instead of fastboot format to wipe partitions")
     private boolean mUseFastbootErase = false;
@@ -386,6 +393,11 @@ public class TestDeviceOptions {
      */
     public void setUseFastbootErase(boolean useFastbootErase) {
         mUseFastbootErase = useFastbootErase;
+    }
+
+    /** Returns a specified fastboot binary to be used. if null, use the DeviceManager one. */
+    public File getFastbootBinary() {
+        return mFastbootBinary;
     }
 
     /**
