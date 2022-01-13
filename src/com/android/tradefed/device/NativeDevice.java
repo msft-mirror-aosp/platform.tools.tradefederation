@@ -408,6 +408,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public void setOptions(TestDeviceOptions options) {
         throwIfNull(options);
         mOptions = options;
+        if (mOptions.getFastbootBinary() != null) {
+            setFastbootPath(mOptions.getFastbootBinary().getAbsolutePath());
+        }
         mStateMonitor.setDefaultOnlineTimeout(options.getOnlineTimeout());
         mStateMonitor.setDefaultAvailableTimeout(options.getAvailableTimeout());
     }
