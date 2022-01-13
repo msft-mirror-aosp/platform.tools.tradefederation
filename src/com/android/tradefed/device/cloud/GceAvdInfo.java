@@ -19,6 +19,7 @@ import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
@@ -37,6 +38,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Structure to hold relevant data for a given GCE AVD instance. */
 public class GceAvdInfo {
@@ -62,6 +64,7 @@ public class GceAvdInfo {
     private String mErrors;
     private GceStatus mStatus;
     private HashMap<String, String> mBuildVars;
+    private Map<String, LogDataType> mLogs;
     private boolean mIsIpPreconfigured = false;
 
     public static enum GceStatus {
@@ -75,6 +78,7 @@ public class GceAvdInfo {
         mInstanceName = instanceName;
         mHostAndPort = hostAndPort;
         mBuildVars = new HashMap<String, String>();
+        mLogs = new HashMap<String, LogDataType>();
     }
 
     public GceAvdInfo(
@@ -83,12 +87,10 @@ public class GceAvdInfo {
             ErrorIdentifier errorType,
             String errors,
             GceStatus status) {
-        mInstanceName = instanceName;
-        mHostAndPort = hostAndPort;
+        this(instanceName, hostAndPort);
         mErrorType = errorType;
         mErrors = errors;
         mStatus = status;
-        mBuildVars = new HashMap<String, String>();
     }
 
     /** {@inheritDoc} */
@@ -108,6 +110,8 @@ public class GceAvdInfo {
                 + mIsIpPreconfigured
                 + ", mBuildVars="
                 + mBuildVars.toString()
+                + ", mLogs="
+                + mLogs.toString()
                 + "]";
     }
 
@@ -125,6 +129,11 @@ public class GceAvdInfo {
 
     public String getErrors() {
         return mErrors;
+    }
+
+    /** Return the map from local or remote log paths to types. */
+    public Map<String, LogDataType> getLogs() {
+        return mLogs;
     }
 
     public GceStatus getStatus() {
@@ -228,6 +237,7 @@ public class GceAvdInfo {
                                     errorId,
                                     errors,
                                     gceStatus);
+                    avdInfo.mLogs.putAll(parseLogField(d));
                     for (String buildVar : BUILD_VARS) {
                         if (d.has(buildVar) && !d.getString(buildVar).trim().isEmpty()) {
                             avdInfo.addBuildVar(buildVar, d.getString(buildVar).trim());
@@ -263,6 +273,37 @@ public class GceAvdInfo {
             res += (errors.getString(i) + "\n");
         }
         return res;
+    }
+
+    /**
+     * Parse log paths from a device object.
+     *
+     * @param device the device object in JSON.
+     * @return a map from log paths to {@link LogDataType}.
+     * @throws JSONException if any required property is missing.
+     */
+    private static Map<String, LogDataType> parseLogField(JSONObject device) throws JSONException {
+        Map<String, LogDataType> logs = new HashMap<String, LogDataType>();
+        JSONArray logArray = device.optJSONArray("logs");
+        if (logArray == null) {
+            return logs;
+        }
+        for (int i = 0; i < logArray.length(); i++) {
+            JSONObject logObject = logArray.getJSONObject(i);
+            String path = logObject.getString("path");
+            String typeString = logObject.getString("type");
+            LogDataType type;
+            try {
+                type = LogDataType.valueOf(typeString);
+            } catch (IllegalArgumentException e) {
+                CLog.w("Unknown log type in GCE AVD info: %s", typeString);
+                type = LogDataType.UNKNOWN;
+            }
+            if (logs.put(path, type) != null) {
+                CLog.w("Repeated log path in GCE AVD info: %s", path);
+            }
+        }
+        return logs;
     }
 
     @VisibleForTesting
