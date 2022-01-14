@@ -115,7 +115,7 @@ public class ZipUtil2Test {
             ZipUtil2.extractZip(zipFile, destDir);
             // now loop over files to verify
             for (File file : destDir.listFiles()) {
-                // the pmierssion-test.zip file has no hierarchy inside
+                // the permission-test.zip file has no hierarchy inside
                 verifyFilePermission(file);
             }
         } finally {
