@@ -831,7 +831,7 @@ public class NativeDeviceTest {
                         mTestDevice.getOptions().getConnCheckUrl(),
                         false);
         verify(mMockWifi, times(2)).getWifiInfo();
-        Mockito.verify(mockClock, Mockito.times(3)).millis();
+        Mockito.verify(mockClock, Mockito.times(4)).millis();
     }
 
     /** Unit test for {@link NativeDevice#connectToWifiNetwork(String, String, boolean)}. */
