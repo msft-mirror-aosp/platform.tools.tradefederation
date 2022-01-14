@@ -205,6 +205,18 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                     // Fetch all tombstones if any.
                     CommonLogRemoteFileUtil.fetchTombstones(
                             mTestLogger, mGceAvd, getOptions(), getRunUtil());
+
+                    // Fetch host kernel log by running `dmesg` for Oxygen hosts
+                    if (getOptions().useOxygen()) {
+                        CommonLogRemoteFileUtil.logRemoteCommandOutput(
+                                mTestLogger,
+                                mGceAvd,
+                                getOptions(),
+                                getRunUtil(),
+                                "host_kernel.log",
+                                "toybox",
+                                "dmesg");
+                    }
                 }
             }
 
