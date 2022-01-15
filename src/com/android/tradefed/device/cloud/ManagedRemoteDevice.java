@@ -124,6 +124,18 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
                     // Fetch remote files
                     CommonLogRemoteFileUtil.fetchCommonFiles(
                             mTestLogger, mGceAvd, getOptions(), getRunUtil());
+
+                    // Fetch host kernel log by running `dmesg` for Oxygen hosts
+                    if (getOptions().useOxygen()) {
+                        CommonLogRemoteFileUtil.logRemoteCommandOutput(
+                                mTestLogger,
+                                mGceAvd,
+                                getOptions(),
+                                getRunUtil(),
+                                "host_kernel.log",
+                                "toybox",
+                                "dmesg");
+                    }
                 }
                 // Cleanup GCE first to make sure ssh tunnel has nowhere to go.
                 if (!getOptions().shouldSkipTearDown()) {

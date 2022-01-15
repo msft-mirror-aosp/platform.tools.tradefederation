@@ -19,6 +19,7 @@ import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
@@ -176,6 +177,44 @@ public class CommonLogRemoteFileUtil {
             // TODO: Improve type of files.
             LogRemoteFile(testLogger, gceAvd, options, runUtil, file, LogDataType.TEXT, null);
         }
+    }
+
+    /**
+     * Execute a command on remote instance and log its output
+     *
+     * @param testLogger The {@link ITestLogger} where to log the files.
+     * @param gceAvd The descriptor of the remote instance.
+     * @param options The {@link TestDeviceOptions} describing the device options
+     * @param runUtil A {@link IRunUtil} to execute commands.
+     * @param logName the log name to use when reporting to the {@link ITestLogger}
+     * @param remoteCommand the command line to be executed on remote instance
+     */
+    public static void logRemoteCommandOutput(
+            ITestLogger testLogger,
+            GceAvdInfo gceAvd,
+            TestDeviceOptions options,
+            IRunUtil runUtil,
+            String logName,
+            String... remoteCommand) {
+        if (gceAvd == null) {
+            CLog.e("GceAvdInfo was null, cannot collect remote files.");
+            return;
+        }
+        CommandResult commandResult =
+                GceManager.remoteSshCommandExecution(
+                        gceAvd, options, runUtil, 60000, remoteCommand);
+        StringBuilder builder = new StringBuilder();
+        builder.append(String.format("Command: %s\n", remoteCommand));
+        builder.append(
+                String.format(
+                        "Exit code: %d, Status: %s\n",
+                        commandResult.getExitCode(), commandResult.getStatus()));
+        builder.append(String.format("stdout:\n%s\n", commandResult.getStdout()));
+        builder.append(String.format("stderr:\n%s\n", commandResult.getStderr()));
+        testLogger.testLog(
+                logName,
+                LogDataType.TEXT,
+                new ByteArrayInputStreamSource(builder.toString().getBytes()));
     }
 
     /**
