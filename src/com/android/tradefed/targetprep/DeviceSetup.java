@@ -90,6 +90,11 @@ public class DeviceSetup extends BaseTargetPreparer {
     // OFF: settings put global wifi_off 0
     //      svc wifi disable
 
+    @Option(
+            name = "skip-wifi-connection",
+            description = "Whether or not to completely skip connecting to wifi.")
+    private boolean mSkipWifi = false;
+
     @Option(name = "wifi-network",
             description = "The SSID of the network to connect to. Will only attempt to " +
             "connect to a network if set")
@@ -435,6 +440,11 @@ public class DeviceSetup extends BaseTargetPreparer {
     @Deprecated
     private Collection<String> mDeprecatedSetProps = new ArrayList<String>();
 
+    @Option(
+            name = "skip-virtual-device-teardown",
+            description = "Whether or not to skip the teardown if it's a virtual device.")
+    private boolean mSkipVirtualDeviceTeardown = true;
+
     private static final String PERSIST_PREFIX = "persist.";
 
     public ITestDevice getDevice(TestInformation testInfo) {
@@ -488,9 +498,10 @@ public class DeviceSetup extends BaseTargetPreparer {
         if (device.getIDevice() instanceof StubDevice) {
             return;
         }
-
-        CLog.i("Performing teardown on %s", device.getSerialNumber());
-
+        if (device instanceof RemoteAndroidVirtualDevice && mSkipVirtualDeviceTeardown) {
+            CLog.d("Skipping teardown on virtual device that will be deleted.");
+            return;
+        }
         if (e instanceof DeviceFailedToBootError) {
             CLog.d("boot failure: skipping teardown");
             return;
@@ -503,6 +514,7 @@ public class DeviceSetup extends BaseTargetPreparer {
             CLog.d("device offline: skipping teardown");
             return;
         }
+        CLog.i("Performing teardown on %s", device.getSerialNumber());
 
         // Only try to disconnect if wifi ssid is set since isWifiEnabled() is a heavy operation
         // which should be avoided when possible
@@ -984,6 +996,10 @@ public class DeviceSetup extends BaseTargetPreparer {
             return;
         }
         if ((mWifiSsid == null || mWifiSsid.isEmpty()) && mWifiSsidToPsk.isEmpty()) {
+            return;
+        }
+        if (mSkipWifi) {
+            CLog.d("Skipping wifi connection due to skip-wifi-connection");
             return;
         }
 

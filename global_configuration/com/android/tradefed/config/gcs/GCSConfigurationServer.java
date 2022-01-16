@@ -167,7 +167,7 @@ public class GCSConfigurationServer implements IConfigurationServer {
             try {
                 mHostname = InetAddress.getLocalHost().getHostName();
             } catch (UnknownHostException e) {
-                throw new ConfigurationException(e.getMessage(), e.getCause());
+                throw new ConfigurationException("failed to get host name", e);
             }
         }
         return mHostname;
@@ -192,7 +192,7 @@ public class GCSConfigurationServer implements IConfigurationServer {
         try {
             return getFileDownloader().downloadFile(mBucketName, name);
         } catch (IOException e) {
-            throw new ConfigurationException(e.getMessage(), e.getCause());
+            throw new ConfigurationException("failed to download from GCS", e);
         }
     }
 
@@ -200,7 +200,7 @@ public class GCSConfigurationServer implements IConfigurationServer {
         try {
             return getFileDownloader().downloadFile(String.format("gs://%s/%s", mBucketName, name));
         } catch (BuildRetrievalError e) {
-            throw new ConfigurationException(e.getMessage(), e.getCause());
+            throw new ConfigurationException("failed to download from GCS", e);
         }
     }
 

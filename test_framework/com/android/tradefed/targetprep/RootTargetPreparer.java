@@ -70,6 +70,10 @@ public final class RootTargetPreparer extends BaseTargetPreparer {
         if (device.getIDevice() instanceof StubDevice) {
             return;
         }
+        if (e instanceof DeviceNotAvailableException) {
+            CLog.d("device not available: skipping teardown");
+            return;
+        }
         if (!mWasRoot && mForceRoot) {
             device.disableAdbRoot();
         } else if (mWasRoot && !mForceRoot) {

@@ -408,6 +408,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public void setOptions(TestDeviceOptions options) {
         throwIfNull(options);
         mOptions = options;
+        if (mOptions.getFastbootBinary() != null) {
+            setFastbootPath(mOptions.getFastbootBinary().getAbsolutePath());
+        }
         mStateMonitor.setDefaultOnlineTimeout(options.getOnlineTimeout());
         mStateMonitor.setDefaultAvailableTimeout(options.getAvailableTimeout());
     }
@@ -2892,44 +2895,53 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         int waitTime = 0;
         IWifiHelper wifi = createWifiHelper();
         long startTime = mClock.millis();
-        for (int i = 1; i <= mOptions.getWifiAttempts(); i++) {
-            CLog.i("Connecting to wifi network %s on %s", wifiSsid, getSerialNumber());
-            boolean success =
-                    wifi.connectToNetwork(wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
-            final Map<String, String> wifiInfo = wifi.getWifiInfo();
-            if (success) {
-                CLog.i(
-                        "Successfully connected to wifi network %s(%s) on %s",
-                        wifiSsid, wifiInfo.get("bssid"), getSerialNumber());
+        try {
+            for (int i = 1; i <= mOptions.getWifiAttempts(); i++) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.WIFI_CONNECT_RETRY_COUNT, 1);
+                CLog.i("Connecting to wifi network %s on %s", wifiSsid, getSerialNumber());
+                boolean success =
+                        wifi.connectToNetwork(
+                                wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
+                final Map<String, String> wifiInfo = wifi.getWifiInfo();
+                if (success) {
+                    CLog.i(
+                            "Successfully connected to wifi network %s(%s) on %s",
+                            wifiSsid, wifiInfo.get("bssid"), getSerialNumber());
 
-                mLastConnectedWifiSsid = wifiSsid;
-                mLastConnectedWifiPsk = wifiPsk;
+                    mLastConnectedWifiSsid = wifiSsid;
+                    mLastConnectedWifiPsk = wifiPsk;
 
-                return true;
-            } else {
-                CLog.w(
-                        "Failed to connect to wifi network %s(%s) on %s on attempt %d of %d",
-                        wifiSsid,
-                        wifiInfo.get("bssid"),
-                        getSerialNumber(),
-                        i,
-                        mOptions.getWifiAttempts());
-            }
-            if (mClock.millis() - startTime >= mOptions.getMaxWifiConnectTime()) {
-                CLog.e(
-                        "Failed to connect to wifi after %d ms. Aborting.",
-                        mOptions.getMaxWifiConnectTime());
-                break;
-            }
-            if (i < mOptions.getWifiAttempts()) {
-                if (mOptions.isWifiExpoRetryEnabled()) {
-                    // use binary exponential back-offs when retrying.
-                    waitTime = rnd.nextInt(backoffSlotCount) * slotTime;
-                    backoffSlotCount *= 2;
+                    return true;
+                } else {
+                    CLog.w(
+                            "Failed to connect to wifi network %s(%s) on %s on attempt %d of %d",
+                            wifiSsid,
+                            wifiInfo.get("bssid"),
+                            getSerialNumber(),
+                            i,
+                            mOptions.getWifiAttempts());
                 }
-                CLog.e("Waiting for %d ms before reconnecting to %s...", waitTime, wifiSsid);
-                getRunUtil().sleep(waitTime);
+                if (mClock.millis() - startTime >= mOptions.getMaxWifiConnectTime()) {
+                    CLog.e(
+                            "Failed to connect to wifi after %d ms. Aborting.",
+                            mOptions.getMaxWifiConnectTime());
+                    break;
+                }
+                if (i < mOptions.getWifiAttempts()) {
+                    if (mOptions.isWifiExpoRetryEnabled()) {
+                        // use binary exponential back-offs when retrying.
+                        waitTime = rnd.nextInt(backoffSlotCount) * slotTime;
+                        backoffSlotCount *= 2;
+                    }
+                    CLog.e("Waiting for %d ms before reconnecting to %s...", waitTime, wifiSsid);
+                    getRunUtil().sleep(waitTime);
+                }
             }
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.WIFI_CONNECT_TIME, mClock.millis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.WIFI_CONNECT_COUNT, 1);
         }
         return false;
     }

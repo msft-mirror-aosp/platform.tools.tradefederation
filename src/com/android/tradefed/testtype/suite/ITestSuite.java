@@ -327,6 +327,17 @@ public abstract class ITestSuite
             description = "Feature flag to test partial download via feature service.")
     private boolean mStageArtifactsViaFeature = true;
 
+    @Option(
+            name = "multi-devices-modules",
+            description = "Running strategy for modules that require multiple devices.")
+    private MultiDeviceModuleStrategy mMultiDevicesStrategy = MultiDeviceModuleStrategy.EXCLUDE_ALL;
+
+    public enum MultiDeviceModuleStrategy {
+        EXCLUDE_ALL,
+        RUN,
+        ONLY_MULTI_DEVICES
+    }
+
     private ITestDevice mDevice;
     private IBuildInfo mBuildInfo;
     private List<ISystemStatusChecker> mSystemStatusCheckers;
@@ -439,6 +450,22 @@ public abstract class ITestSuite
                 // if the module config did not pass the runner type filter, it's excluded from
                 // execution.
                 continue;
+            }
+            switch (mMultiDevicesStrategy) {
+                case EXCLUDE_ALL:
+                    if (config.getValue().getDeviceConfig().size() > 1) {
+                        // Exclude multi-devices configs
+                        continue;
+                    }
+                    break;
+                case ONLY_MULTI_DEVICES:
+                    if (config.getValue().getDeviceConfig().size() == 1) {
+                        // Exclude single devices configs
+                        continue;
+                    }
+                    break;
+                default:
+                    break;
             }
             filterPreparers(config.getValue(), mAllowedPreparers);
 
@@ -1517,5 +1544,9 @@ public abstract class ITestSuite
 
     protected boolean shouldModuleRun(ModuleDefinition module) {
         return true;
+    }
+
+    protected void setMultiDeviceStrategy(MultiDeviceModuleStrategy strategy) {
+        mMultiDevicesStrategy = strategy;
     }
 }
