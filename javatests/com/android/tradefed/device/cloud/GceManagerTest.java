@@ -418,6 +418,60 @@ public class GceManagerTest {
         }
     }
 
+    /** Test {@link GceManager#buildGceCmd(File, IBuildInfo, String)}. */
+    @Test
+    public void testBuildGceCommandWithExtraFiles() throws Exception {
+        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
+        when(mMockBuildInfo.getBuildAttributes())
+                .thenReturn(Collections.<String, String>emptyMap());
+        when(mMockBuildInfo.getBuildFlavor()).thenReturn("TARGET");
+        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
+        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
+
+        File reportFile = null;
+        MultiMap<File, String> extraFiles = new MultiMap<>();
+        File file1 = FileUtil.createTempFile("test_file1", ".txt");
+        File file2 = FileUtil.createTempFile("test_file2", ".txt");
+        extraFiles.put(file1, "/home/vsoc-01/test_file1.txt");
+        extraFiles.put(file2, "/home/vsoc-01/test_file2.txt");
+        try {
+            mOptions.setExtraFiles(extraFiles);
+            mGceManager =
+                    new GceManager(mMockDeviceDesc, mOptions, mMockBuildInfo) {
+                        @Override
+                        IRunUtil getRunUtil() {
+                            return mMockRunUtil;
+                        }
+                    };
+            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
+            List<String> result = mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null);
+            List<String> expected =
+                    ArrayUtil.list(
+                            mOptions.getAvdDriverBinary().getAbsolutePath(),
+                            "create",
+                            "--build-target",
+                            "TARGET",
+                            "--branch",
+                            "BRANCH",
+                            "--build-id",
+                            "BUILDID",
+                            "--extra-files",
+                            file1.getAbsolutePath() + ",/home/vsoc-01/test_file1.txt",
+                            file2.getAbsolutePath() + ",/home/vsoc-01/test_file2.txt",
+                            "--config_file",
+                            mGceManager.getAvdConfigFile().getAbsolutePath(),
+                            "--report_file",
+                            reportFile.getAbsolutePath(),
+                            "-v");
+            assertEquals(expected, result);
+        } finally {
+            FileUtil.deleteFile(reportFile);
+            FileUtil.deleteFile(file1);
+            FileUtil.deleteFile(file2);
+            mOptions.setExtraFiles(new MultiMap<>());
+        }
+    }
+
     /** Ensure exception is thrown after a timeout from the acloud command. */
     @Test
     public void testStartGce_timeout() throws Exception {
