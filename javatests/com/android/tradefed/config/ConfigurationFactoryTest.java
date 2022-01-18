@@ -23,6 +23,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import static java.util.Map.entry;
+
 import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IBuildProvider;
@@ -49,6 +51,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
@@ -1904,6 +1907,81 @@ public class ConfigurationFactoryTest {
             assertEquals("main", info.getBuildBranch());
         } finally {
             info.cleanUp();
+        }
+    }
+
+    /**
+     * Test that the direct config regex is working as expected
+     *
+     * <p>This test contains examples that should fail the regex.
+     */
+    @Test
+    public void testIsDirectConfigurationFalses() throws Exception {
+        Map<String, Boolean> testMatrixMap =
+                Map.ofEntries(
+                        entry("yaml/test-config.tf_yaml", false),
+                        entry("suite/test-mapping", false),
+                        entry(
+                                "./out/host/linux-x86/testcases/HelloWorldHostTest/HelloWorldHostTest.config",
+                                false),
+                        entry("gs/proxy-config", false));
+
+        for (Map.Entry<String, Boolean> entry : testMatrixMap.entrySet()) {
+            assertEquals(entry.getValue(), mFactory.isDirectConfiguration(entry.getKey()));
+        }
+    }
+
+    /**
+     * Test that the direct config regex is working as expected
+     *
+     * <p>This test contains examples that should match the regex.
+     */
+    @Test
+    public void testIsDirectConfigurationTrues() throws Exception {
+        Map<String, Boolean> testMatrixMap =
+                Map.ofEntries(
+                        entry("gs://tradefed_test_resources/configs/HelloWorldHostTest.xml", true),
+                        entry("gs://other_teams_bucket/SomeOtherTest.xml", true),
+                        entry(
+                                "https://android-build.googleplex.com/objects/configs/SomeABConfig.xml",
+                                true),
+                        entry("http://source.android.com/code/AConfig.config", true),
+                        entry("file://localhost/home/tradefed/config.xml", true));
+
+        for (Map.Entry<String, Boolean> entry : testMatrixMap.entrySet()) {
+            assertEquals(entry.getValue(), mFactory.isDirectConfiguration(entry.getKey()));
+        }
+    }
+
+    /** Test that the direct configuration method is minimally working */
+    @Test
+    public void testLoadDirectConfiguration() throws Exception {
+        ConfigurationFactory spyFactory = Mockito.spy(mRealFactory);
+        // extract the test-config.xml into a tmp file
+        InputStream configStream =
+                getClass().getResourceAsStream(String.format("/testconfigs/%s.xml", TEST_CONFIG));
+        File tmpFile = FileUtil.createTempFile(TEST_CONFIG, ".xml");
+        String cfgPath = "gs://tradefed_test_resources/configs/test-config.xml";
+        try {
+            FileUtil.writeToFile(configStream, tmpFile);
+
+            // Inject it into the direct config resolver, then try to load a direct config
+            URI cfgUri = new URI(cfgPath);
+            Mockito.doReturn(tmpFile)
+                    .when(spyFactory)
+                    .resolveRemoteFile(Mockito.eq(cfgUri), Mockito.<URI>any());
+
+            String args[] = {cfgPath, "--null-device"};
+            IConfiguration config = spyFactory.createConfigurationFromArgs(args);
+
+            assertNotNull(config);
+
+            // ensure it looks like what we'd expect
+            assertTrue(config.getDeviceRequirements().nullDeviceRequested());
+            assertEquals(1, config.getTests().size());
+            assertTrue(config.getTests().get(0) instanceof StubOptionTest);
+        } finally {
+            FileUtil.deleteFile(tmpFile);
         }
     }
 
