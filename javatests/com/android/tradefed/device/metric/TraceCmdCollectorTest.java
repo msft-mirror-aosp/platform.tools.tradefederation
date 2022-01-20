@@ -28,6 +28,7 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.TestDescription;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -147,12 +148,12 @@ public final class TraceCmdCollectorTest {
     @Test
     public void testStopsTraceCmdDuringTearDown() throws Exception {
         // wait won't work, as trace-cmd was ran with nohup in a different session.
-
+        TestDescription test = new TestDescription("class", "test");
         when(mMockDevice.pullFile(Mockito.eq(mDefaultLogPath))).thenReturn(new File("/tmp/potato"));
 
         mOptionSetter.setOptionValue("trace-cmd-binary", "trc");
         mTraceCmd.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
         verify(mMockDevice, times(1))
                 .executeShellCommand(
                         Mockito.eq(
@@ -173,16 +174,17 @@ public final class TraceCmdCollectorTest {
      */
     @Test
     public void testUploadslogWithRawKernelBuffer() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         when(mMockDevice.pullFile((String) Mockito.any())).thenReturn(new File("/tmp/potato"));
         when(mMockDevice.getSerialNumber()).thenReturn(mSerialNo);
 
         mOptionSetter.setOptionValue("trace-cmd-binary", "trace-cmd");
         mTraceCmd.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + mSerialNo),
+                        Mockito.eq("atrace_class#test" + mSerialNo + "_"),
                         Mockito.eq(LogDataType.KERNEL_TRACE),
                         Mockito.any());
     }
