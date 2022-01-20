@@ -282,7 +282,10 @@ public class TestFilterHelper {
             if (!shouldRunFilter(packageName, className, methodName)) {
                 return false;
             }
-            if (!shouldTestRun(desc)) {
+            // Carry the parent class annotations to ensure includeAnnotations are respected
+            List<Annotation> annotations = new ArrayList<>(desc.getAnnotations());
+            annotations.addAll(Arrays.asList(classObj.getAnnotations()));
+            if (!shouldTestRun(annotations)) {
                 return false;
             }
             return mIncludeFilters.isEmpty()
