@@ -509,9 +509,10 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
                         }
                     }
                 }
-            } catch (UnsatisfiedLinkError ule) {
-                CLog.w("Problem loading JNI library for USB helper, skipping USB reset.");
-                CLog.w(ule);
+            } catch (LinkageError e) {
+                CLog.w("Problem initializing USB helper, skipping USB reset and disabling it.");
+                CLog.w(e);
+                mDisableUsbReset = true;
             }
         }
         if (recoveryAttempted) {
