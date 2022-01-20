@@ -495,6 +495,8 @@ public class GTestResultParser extends MultiLineReceiver {
         String[] testId = identifier.split("\\.");
         if (testId.length < 2) {
             CLog.e("Could not detect the test class and test name, received: %s", identifier);
+            returnInfo.mTestClassName = null;
+            returnInfo.mTestName = null;
         }
         else {
             returnInfo.mTestClassName = testId[0];
@@ -579,7 +581,7 @@ public class GTestResultParser extends MultiLineReceiver {
         testResult.mTestName = parsedResults.mTestName;
         testResult.mStartTimeMs = System.currentTimeMillis();
         TestDescription testId = null;
-        if (getTestClass(testResult) !=null && testResult.mTestName !=null) {
+        if (getTestClass(testResult) != null && testResult.mTestName != null) {
             testId = new TestDescription(getTestClass(testResult), testResult.mTestName);
         } else {
             CLog.e("Error during parsing, className: %s and testName: %s, should both be not null",
