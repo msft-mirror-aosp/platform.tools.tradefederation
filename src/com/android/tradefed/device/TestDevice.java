@@ -23,6 +23,7 @@ import com.android.ddmlib.RawImage;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.TimeoutException;
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -43,6 +44,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -51,6 +53,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -129,6 +133,19 @@ public class TestDevice extends NativeDevice {
 
     private static final String APEX_SUFFIX = ".apex";
     private static final String APEX_ARG = "--apex";
+
+    private ITestDevice microdroid = null;
+    private String microdroidCID = null;
+    private String microdroidPackageName = null;
+    private static final String TEST_ROOT = "/data/local/tmp/virt/";
+    private static final String VIRT_APEX = "/apex/com.android.virt/";
+    private static final String INSTANCE_IMG = "instance.img";
+
+    // This is really slow on GCE (2m 40s) but fast on localhost or actual Android phones (< 10s).
+    // Then there is time to run the actual task. Set the maximum timeout value big enough.
+    private static final long MICRODROID_MAX_LIFETIME_MINUTES = 20;
+
+    private static final long MICRODROID_ADB_CONNECT_TIMEOUT_MINUTES = 5;
 
     /**
      * @param device
@@ -2008,5 +2025,298 @@ public class TestDevice extends NativeDevice {
             }
         }
         return null;
+    }
+
+    /**
+     * Checks the preconditions to run a microdroid.
+     *
+     * @return returns true if the preconditions are satisfied, false otherwise.
+     */
+    public boolean deviceSupportsMicrodroid() throws Exception {
+        CommandResult result = executeShellV2Command("getprop ro.product.cpu.abi");
+        if (result.getStatus() != CommandStatus.SUCCESS) {
+            return false;
+        }
+        String abi = result.getStdout().trim();
+
+        if (abi.isEmpty() || (!abi.startsWith("arm64") && !abi.startsWith("x86_64"))) {
+            CLog.d("Unsupported ABI: " + abi);
+            return false;
+        }
+
+        if (!doesFileExist("/dev/kvm")) {
+            CLog.i("com.android.virt APEX was not pre-installed. Command Failed: 'ls /dev/kvm'");
+            return false;
+        }
+        if (!doesFileExist("/dev/vhost-vsock")) {
+            CLog.i(
+                    "com.android.virt APEX was not pre-installed. Command Failed: 'ls"
+                            + " /dev/vhost-vsock'");
+            return false;
+        }
+        if (!doesFileExist("/apex/com.android.virt/bin/crosvm")) {
+            CLog.i(
+                    "com.android.virt APEX was not pre-installed. Command Failed: 'ls"
+                            + " /apex/com.android.virt/bin/crosvm'");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Starts a Microdroid TestDevice.
+     *
+     * @param apkFile APK file of the Microdroid app to install.
+     * @param packageName package name of your app
+     * @param configPath the name of the VM config file that you embedded in the APK.
+     * @param debug debugging flag
+     * @param memoryMib minimum memory size
+     * @return returns a ITestDevice for the microdroid, can return null.
+     */
+    public ITestDevice startMicrodroid(
+            File apkFile, String packageName, String configPath, boolean debug, int memoryMib)
+            throws DeviceNotAvailableException {
+        if (microdroidCID != null)
+            throw new IllegalStateException(
+                    String.format(
+                            "Microdroid with cid '%s' already exists in device. Can not create"
+                                    + " another one.",
+                            microdroidCID));
+
+        String microdroidSerial;
+        int vmAdbPort = -1;
+        try {
+            ServerSocket microdroidServerSocket = new ServerSocket(0);
+            vmAdbPort = microdroidServerSocket.getLocalPort();
+            microdroidServerSocket.close();
+        } catch (IOException e) {
+            throw new DeviceRuntimeException(
+                    "Unable to get an unused port for Microdroid.",
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+
+        microdroidSerial = "localhost:" + vmAdbPort;
+
+        // kill stale crosvm processes
+        executeShellV2Command("killall crosvm");
+
+        // disconnect from microdroid
+        getRunUtil()
+                .runTimedCmd(
+                        10000,
+                        GlobalConfiguration.getDeviceManagerInstance().getAdbPath(),
+                        "disconnect",
+                        microdroidSerial);
+
+        // remove any leftover files under test root
+        executeShellV2Command("rm -rf " + vmAdbPort + "*");
+
+        // Install APK
+        installPackage(apkFile, true);
+
+        // Get the path to the installed apk. Note that
+        // getDevice().getAppPackageInfo(...).getCodePath() doesn't work due to the incorrect
+        // parsing of the "=" character. (b/190975227). So we use the `pm path` command directly.
+        CommandResult result = executeShellV2Command("pm path " + packageName);
+        if (result.getStatus() != CommandStatus.SUCCESS) {
+            throw new DeviceRuntimeException(
+                    "pm path " + packageName + " has failed: " + result,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        String apkPath = result.getStdout().trim();
+        if (!apkPath.startsWith("package:")) {
+            throw new DeviceRuntimeException(
+                    String.format("Path for package '%s' was not found.", packageName),
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        apkPath = apkPath.substring("package:".length());
+
+        result = executeShellV2Command("mkdir -p " + TEST_ROOT);
+        if (result.getStatus() != CommandStatus.SUCCESS) {
+            throw new DeviceRuntimeException(
+                    "mkdir -p " + TEST_ROOT + " has failed: " + result,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+
+        // This file is not what we provide. It will be created by the vm tool.
+        final String outApkIdsigPath = TEST_ROOT + apkFile.getName() + ".idsig";
+
+        final String instanceImg = TEST_ROOT + INSTANCE_IMG;
+        final String logPath = TEST_ROOT + "log.txt";
+        final String debugFlag = debug ? "--debug full" : "";
+
+        // Run the VM
+        String vmRunCmd =
+                String.join(
+                        " ",
+                        Arrays.asList(
+                                VIRT_APEX + "bin/vm",
+                                "run-app",
+                                "--daemonize",
+                                "--log " + logPath,
+                                "--mem " + memoryMib,
+                                debugFlag,
+                                apkPath,
+                                outApkIdsigPath,
+                                instanceImg,
+                                configPath));
+        result = executeShellV2Command(vmRunCmd);
+        if (result.getStatus() != CommandStatus.SUCCESS) {
+            throw new DeviceRuntimeException(
+                    vmRunCmd + " has failed: " + result, DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        String ret = result.getStdout().trim();
+
+        // Redirect log.txt to logd using logwrapper
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+        executor.execute(
+                () -> {
+                    try {
+                        // Keep redirecting as long as the expecting maximum test time. When an adb
+                        // command times out, it may trigger the device recovery process, which
+                        // disconnect adb, which terminates any live adb commands. See an example at
+                        // b/194974010#comment25.
+                        String logwrapperCmd =
+                                String.join(
+                                        " ",
+                                        Arrays.asList(
+                                                "logwrapper", "tail", "-f", "-n +0", logPath));
+                        CommandResult logwrapperResult =
+                                executeShellV2Command(
+                                        logwrapperCmd,
+                                        MICRODROID_MAX_LIFETIME_MINUTES * 60 * 1000,
+                                        java.util.concurrent.TimeUnit.MILLISECONDS);
+                        if (logwrapperResult.getStatus() != CommandStatus.SUCCESS) {
+                            throw new DeviceRuntimeException(
+                                    logwrapperCmd + " has failed: " + logwrapperResult,
+                                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+                        }
+                    } catch (Exception e) {
+                        // Consume
+                    }
+                });
+
+        // Retrieve the CID from the vm tool output
+        Pattern pattern = Pattern.compile("with CID (\\d+)");
+        Matcher matcher = pattern.matcher(ret);
+        if (matcher.find()) {
+            microdroidCID = matcher.group(1);
+            microdroidPackageName = packageName;
+            adbConnectToMicrodroid(microdroidCID, microdroidSerial, vmAdbPort);
+
+            microdroid =
+                    GlobalConfiguration.getDeviceManagerInstance()
+                            .forceAllocateDevice(microdroidSerial);
+            return microdroid;
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Establish an adb connection to microdroid by letting Android forward the connection to
+     * microdroid. Wait until the connection is established and microdroid is booted.
+     */
+    private void adbConnectToMicrodroid(String cid, String microdroidSerial, int vmAdbPort) {
+        MicrodroidHelper microdroidHelper = new MicrodroidHelper();
+        IDeviceManager deviceManager = GlobalConfiguration.getDeviceManagerInstance();
+
+        long start = System.currentTimeMillis();
+        long timeoutMillis = MICRODROID_ADB_CONNECT_TIMEOUT_MINUTES * 60 * 1000;
+        long elapsed = 0;
+
+        final String serial = getSerialNumber();
+        final String from = "tcp:" + vmAdbPort;
+        final String to = "vsock:" + cid + ":5555";
+        getRunUtil()
+                .runTimedCmd(10000, deviceManager.getAdbPath(), "-s", serial, "forward", from, to);
+
+        boolean disconnected = true;
+        while (disconnected) {
+            elapsed = System.currentTimeMillis() - start;
+            timeoutMillis -= elapsed;
+            start = System.currentTimeMillis();
+            CommandResult result =
+                    getRunUtil()
+                            .runTimedCmd(
+                                    timeoutMillis,
+                                    deviceManager.getAdbPath(),
+                                    "connect",
+                                    microdroidSerial);
+            if (result.getStatus() != CommandStatus.SUCCESS) {
+                throw new DeviceRuntimeException(
+                        deviceManager.getAdbPath()
+                                + " connect "
+                                + microdroidSerial
+                                + " has failed: "
+                                + result,
+                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+            }
+            disconnected =
+                    result.getStdout().trim().equals("failed to connect to " + microdroidSerial);
+            if (disconnected) {
+                // adb demands us to disconnect if the prior connection was a failure.
+                // b/194375443: this somtimes fails, thus 'try*'.
+                getRunUtil()
+                        .runTimedCmd(
+                                10000, deviceManager.getAdbPath(), "disconnect", microdroidSerial);
+            }
+        }
+
+        elapsed = System.currentTimeMillis() - start;
+        timeoutMillis -= elapsed;
+        getRunUtil()
+                .runTimedCmd(
+                        timeoutMillis,
+                        deviceManager.getAdbPath(),
+                        "-s",
+                        microdroidSerial,
+                        "wait-for-device");
+
+        boolean dataAvailable = false;
+        while (!dataAvailable && timeoutMillis >= 0) {
+            elapsed = System.currentTimeMillis() - start;
+            timeoutMillis -= elapsed;
+            start = System.currentTimeMillis();
+            final String checkCmd = "if [ -d /data/local/tmp ]; then echo 1; fi";
+            dataAvailable =
+                    microdroidHelper.runOnMicrodroid(microdroidSerial, checkCmd).equals("1");
+        }
+        // Check if it actually booted by reading a sysprop.
+        if (!microdroidHelper
+                .runOnMicrodroid(microdroidSerial, "getprop", "ro.hardware")
+                .equals("microdroid")) {
+            throw new DeviceRuntimeException(
+                    String.format("Device '%s' was not booted.", microdroidSerial),
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        microdroidHelper.tryRunOnMicrodroid(
+                microdroidSerial, "watch -e \"getprop init.svc.logd-reinit | grep '^$'\"");
+    }
+
+    /**
+     * Shuts down the microdroid device, if one exist.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void shutdownMicrodroid() throws DeviceNotAvailableException {
+        if (microdroidCID == null) return;
+
+        // Shutdown the VM
+        CommandResult result = executeShellV2Command(VIRT_APEX + "bin/vm stop " + microdroidCID);
+        if (result.getStatus() != CommandStatus.SUCCESS) {
+            throw new DeviceRuntimeException(
+                    VIRT_APEX + "bin/vm stop " + microdroidCID + " has failed: " + result,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        uninstallPackage(microdroidPackageName);
+
+        // See(b/192660485) for the reason of this wait.
+        getRunUtil().sleep(1000);
+
+        GlobalConfiguration.getDeviceManagerInstance()
+                .freeDevice(microdroid, FreeDeviceState.AVAILABLE);
+        microdroidCID = null;
+        microdroid = null;
     }
 }
