@@ -49,6 +49,7 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Generic implementation of a {@link IBuildInfo} that should be associated
@@ -717,6 +718,11 @@ public class BuildInfo implements IBuildInfo {
             // TODO: Remove exclude filter when we support not specifying it. For now put a
             // placeholder that will exclude nothing.
             args.put(ResolvePartialDownload.EXCLUDE_FILTERS, "doesntmatch");
+            String remotePaths =
+                    getRemoteFiles().stream()
+                            .map(p -> p.toString())
+                            .collect(Collectors.joining(";"));
+            args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
             FeatureResponse rep =
                     client.triggerFeature(
                             ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);
