@@ -165,8 +165,8 @@ public class ZipUtil2 {
      */
     public static File extractZipToTemp(File zipFile, String nameHint) throws IOException {
         File localRootDir = FileUtil.createTempDir(nameHint);
-        try (ZipFile zip = new ZipFile(zipFile)) {
-            extractZip(zip, localRootDir);
+        try {
+            extractZip(zipFile, localRootDir);
             return localRootDir;
         } catch (IOException e) {
             // clean tmp file since we couldn't extract.
