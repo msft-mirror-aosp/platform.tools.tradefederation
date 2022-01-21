@@ -369,6 +369,16 @@ public class GceManager {
             }
         }
 
+        MultiMap<File, String> extraFiles = getTestDeviceOptions().getExtraFiles();
+        if (!extraFiles.isEmpty()) {
+            gceArgs.add("--extra-files");
+            for (File local : extraFiles.keySet()) {
+                for (String remoteDestination : extraFiles.get(local)) {
+                    gceArgs.add(local.getAbsolutePath() + "," + remoteDestination);
+                }
+            }
+        }
+
         // Add additional args passed by gce-driver-param.
         gceArgs.addAll(gceDriverParams);
         // Get extra params by instance type
