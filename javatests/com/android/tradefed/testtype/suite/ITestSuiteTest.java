@@ -1787,7 +1787,7 @@ public class ITestSuiteTest {
 
         mTestSuite.run(mTestInfo, mMockListener);
 
-        verify(mockBuildInfo, times(3)).getRemoteFiles();
+        verify(mockBuildInfo, times(4)).getRemoteFiles();
     }
 
     /** Test for {@link ITestSuite#reportNotExecuted(ITestInvocationListener, String)}. */
