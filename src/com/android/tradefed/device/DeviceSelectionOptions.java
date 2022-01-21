@@ -210,6 +210,14 @@ public class DeviceSelectionOptions implements IDeviceSelection {
             }
             mFetchedEnvVariable = true;
         }
+        if (device != null && !mSerials.isEmpty()) {
+            String hardwareProperty = device.getProperty("ro.hardware");
+            if (hardwareProperty != null
+                    && hardwareProperty.equals("microdroid")
+                    && !mSerials.contains(device.getSerialNumber())) {
+                mSerials.add(device.getSerialNumber());
+            }
+        }
         return copyCollection(mSerials);
     }
 
