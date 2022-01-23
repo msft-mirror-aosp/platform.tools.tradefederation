@@ -27,6 +27,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
@@ -275,7 +276,9 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
 
     @Override
     public void onTestEnd(
-            DeviceMetricData testData, final Map<String, Metric> currentTestCaseMetrics) {
+            DeviceMetricData testData,
+            final Map<String, Metric> currentTestCaseMetrics,
+            TestDescription test) {
 
         if (mCategories.isEmpty()) {
             return;
@@ -291,7 +294,7 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
 
                     try (FileInputStreamSource streamSource = new FileInputStreamSource(trace)) {
                         testLog(
-                                mLogFilename + device.getSerialNumber(),
+                                mLogFilename + "_" + test + device.getSerialNumber() + "_",
                                 getLogType(),
                                 streamSource);
                     }
