@@ -311,4 +311,25 @@ public class GTestResultParserTest extends GTestParserTestBase {
         FailureDescription cap = captured.getValue();
         assertEquals("Test run incomplete. Expected 11 tests, received 0", cap.getErrorMessage());
     }
+
+    @Test
+    public void testParse_interrupted() throws Exception {
+        String[] contents = readInFile(GTEST_OUTPUT_FILE_13);
+        ITestInvocationListener mockRunListener = mock(ITestInvocationListener.class);
+
+        ArgumentCaptor<FailureDescription> captured =
+                ArgumentCaptor.forClass(FailureDescription.class);
+
+        GTestResultParser resultParser = new GTestResultParser(TEST_MODULE_NAME, mockRunListener);
+        resultParser.processNewLines(contents);
+        resultParser.flush();
+
+        verify(mockRunListener).testRunStarted(TEST_MODULE_NAME, 11);
+        verify(mockRunListener).testRunFailed(captured.capture());
+        verify(mockRunListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        FailureDescription cap = captured.getValue();
+        assertEquals("Test run incomplete. Expected 11 tests, received 0", cap.getErrorMessage());
+        Mockito.verifyNoMoreInteractions(mockRunListener);
+    }
 }
