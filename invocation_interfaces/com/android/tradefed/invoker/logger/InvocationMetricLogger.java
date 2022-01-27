@@ -30,6 +30,9 @@ public class InvocationMetricLogger {
         WIFI_CONNECT_TIME("wifi_connect_time", true),
         WIFI_CONNECT_COUNT("wifi_connect_count", true),
         WIFI_CONNECT_RETRY_COUNT("wifi_connect_retry_count", true),
+        // Bugreport time and count
+        BUGREPORT_TIME("bugreport_time", true),
+        BUGREPORT_COUNT("bugreport_count", true),
         CLEARED_RUN_ERROR("cleared_run_error", true),
         FETCH_BUILD("fetch_build_time_ms", true),
         SETUP("setup_time_ms", true),

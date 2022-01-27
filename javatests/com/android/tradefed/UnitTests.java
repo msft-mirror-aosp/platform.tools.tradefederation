@@ -330,6 +330,7 @@ import com.android.tradefed.testtype.suite.ModuleListenerTest;
 import com.android.tradefed.testtype.suite.ModuleMergerTest;
 import com.android.tradefed.testtype.suite.ModuleSplitterTest;
 import com.android.tradefed.testtype.suite.RemoteTestTimeOutEnforcerTest;
+import com.android.tradefed.testtype.suite.ResolvePartialDownloadTest;
 import com.android.tradefed.testtype.suite.SuiteModuleLoaderTest;
 import com.android.tradefed.testtype.suite.SuiteTestFilterTest;
 import com.android.tradefed.testtype.suite.TestFailureListenerTest;
@@ -857,6 +858,7 @@ import org.junit.runners.Suite.SuiteClasses;
     ModuleMergerTest.class,
     ModuleSplitterTest.class,
     RemoteTestTimeOutEnforcerTest.class,
+    ResolvePartialDownloadTest.class,
     SuiteModuleLoaderTest.class,
     SuiteTestFilterTest.class,
     TestFailureListenerTest.class,

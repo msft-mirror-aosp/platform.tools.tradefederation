@@ -490,6 +490,9 @@ public abstract class ITestSuite
 
     /** Helper to download all artifacts for the given modules. */
     private void stageTestArtifacts(ITestDevice device, Set<String> modules) {
+        if (mBuildInfo.getRemoteFiles().isEmpty()) {
+            return;
+        }
         CLog.i(String.format("Start to stage test artifacts for %d modules.", modules.size()));
         long startTime = System.currentTimeMillis();
         // Include the file if its path contains a folder name matching any of the module.
@@ -506,6 +509,13 @@ public abstract class ITestSuite
                 args.put(ResolvePartialDownload.DESTINATION_DIR, getTestsDir().getAbsolutePath());
                 args.put(ResolvePartialDownload.INCLUDE_FILTERS, String.join(";", includeFilters));
                 args.put(ResolvePartialDownload.EXCLUDE_FILTERS, String.join(";", excludeFilters));
+                // Pass the remote paths
+                String remotePaths =
+                        mBuildInfo.getRemoteFiles().stream()
+                                .map(p -> p.toString())
+                                .collect(Collectors.joining(";"));
+                args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+
                 FeatureResponse rep =
                         client.triggerFeature(
                                 ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);

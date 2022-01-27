@@ -18,6 +18,7 @@ package com.android.tradefed.device;
 import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.util.ArrayUtil;
+import com.android.tradefed.util.MultiMap;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -291,6 +292,12 @@ public class TestDeviceOptions {
             description = "path of the prebuilt cuttlefish host package.")
     private File mAvdCuttlefishHostPkg = null;
 
+    @Option(
+            name = "gce-extra-files",
+            description =
+                    "Path of extra files need to upload GCE instance during Acloud create."
+                            + "Key is local file, value is GCE destination path.")
+    private MultiMap<File, String> mGceExtraFiles = new MultiMap<>();
     // END ====================== Options Related to Virtual Devices ======================
 
     // Option related to Remote Device only
@@ -710,6 +717,16 @@ public class TestDeviceOptions {
     /** Return the path to the cuttlefish host package. */
     public File getAvdCuttlefishHostPkg() {
         return mAvdCuttlefishHostPkg;
+    }
+
+    /** Return the extra files need to upload to GCE during acloud create. */
+    public MultiMap<File, String> getExtraFiles() {
+        return mGceExtraFiles;
+    }
+
+    /** Set the extra files need to upload to GCE during acloud create. */
+    public void setExtraFiles(MultiMap<File, String> extraFiles) {
+        mGceExtraFiles = extraFiles;
     }
 
     public static String getCreateCommandByInstanceType(InstanceType type) {

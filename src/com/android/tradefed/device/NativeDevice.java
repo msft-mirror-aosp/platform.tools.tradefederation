@@ -2614,6 +2614,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         CLog.d("Api level above 24, using bugreportz instead.");
         File mainEntry = null;
         File bugreportzFile = null;
+        long startTime = System.currentTimeMillis();
         try {
             bugreportzFile = getBugreportzInternal();
             if (bugreportzFile == null) {
@@ -2636,6 +2637,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             CLog.e(e);
             return new ByteArrayInputStreamSource("corrupted bugreport.".getBytes());
         } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
             FileUtil.deleteFile(bugreportzFile);
             FileUtil.deleteFile(mainEntry);
         }
@@ -2722,29 +2726,36 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (apiLevel == UNKNOWN_API_LEVEL) {
             return null;
         }
-        if (apiLevel >= 24) {
-            CLog.d("Api level above 24, using bugreportz.");
-            bugreportFile = getBugreportzInternal();
-            if (bugreportFile != null) {
-                return new Bugreport(bugreportFile, true);
+        long startTime = System.currentTimeMillis();
+        try {
+            if (apiLevel >= 24) {
+                CLog.d("Api level above 24, using bugreportz.");
+                bugreportFile = getBugreportzInternal();
+                if (bugreportFile != null) {
+                    return new Bugreport(bugreportFile, true);
+                }
+                return null;
+            }
+            // fall back to regular bugreport
+            InputStreamSource bugreport = getBugreportInternal();
+            if (bugreport == null) {
+                CLog.e("Error when collecting the bugreport.");
+                return null;
+            }
+            try {
+                bugreportFile = FileUtil.createTempFile("bugreport", ".txt");
+                FileUtil.writeToFile(bugreport.createInputStream(), bugreportFile);
+                return new Bugreport(bugreportFile, false);
+            } catch (IOException e) {
+                CLog.e("Error when writing the bugreport file");
+                CLog.e(e);
             }
             return null;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
         }
-        // fall back to regular bugreport
-        InputStreamSource bugreport = getBugreportInternal();
-        if (bugreport == null) {
-            CLog.e("Error when collecting the bugreport.");
-            return null;
-        }
-        try {
-            bugreportFile = FileUtil.createTempFile("bugreport", ".txt");
-            FileUtil.writeToFile(bugreport.createInputStream(), bugreportFile);
-            return new Bugreport(bugreportFile, false);
-        } catch (IOException e) {
-            CLog.e("Error when writing the bugreport file");
-            CLog.e(e);
-        }
-        return null;
     }
 
     /**
@@ -2755,14 +2766,21 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (getApiLevelSafe() < 24) {
             return null;
         }
-        File bugreportZip = getBugreportzInternal();
-        if (bugreportZip == null) {
-            bugreportZip = bugreportzFallback();
+        long startTime = System.currentTimeMillis();
+        try {
+            File bugreportZip = getBugreportzInternal();
+            if (bugreportZip == null) {
+                bugreportZip = bugreportzFallback();
+            }
+            if (bugreportZip != null) {
+                return new FileInputStreamSource(bugreportZip, true);
+            }
+            return null;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
         }
-        if (bugreportZip != null) {
-            return new FileInputStreamSource(bugreportZip, true);
-        }
-        return null;
     }
 
     /** Internal Helper method to get the bugreportz zip file as a {@link File}. */
