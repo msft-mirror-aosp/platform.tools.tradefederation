@@ -224,9 +224,9 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer {
                                 "delete-logical-partition", "product" + currSlot);
                     }
                 }
+                executeFastbootCmd(device, "-w");
                 executeFastbootCmd(device, "erase", "system" + currSlot);
                 executeFastbootCmd(device, "flash", "system", mSystemImg.getAbsolutePath());
-                executeFastbootCmd(device, "-w");
             }
             if (mBootImg != null) {
                 device.rebootIntoBootloader();
