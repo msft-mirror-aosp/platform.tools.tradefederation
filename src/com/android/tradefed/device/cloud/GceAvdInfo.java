@@ -215,6 +215,9 @@ public class GceAvdInfo {
                     GceStatus.SUCCESS.equals(gceStatus)
                             ? null
                             : determineAcloudErrorType(errorType);
+            if (errorId == InfraErrorIdentifier.ACLOUD_OXYGEN_LEASE_ERROR) {
+                errorId = refineOxygenErrorType(errors);
+            }
             JSONArray devices = null;
             if (GceStatus.FAIL.equals(gceStatus) || GceStatus.BOOT_FAIL.equals(gceStatus)) {
                 // In case of failure we still look for instance name to shutdown if needed.
@@ -263,6 +266,28 @@ public class GceAvdInfo {
                 String.format("acloud errors: %s", !errors.isEmpty() ? errors : data),
                 descriptor,
                 errorId);
+    }
+
+    /**
+     * Search error message from Oxygen service for more accurate error code.
+     *
+     * @param errors error messages returned by Oxygen service.
+     * @return InfraErrorIdentifier for the Oxygen service error.
+     */
+    private static InfraErrorIdentifier refineOxygenErrorType(String errors) {
+        if (errors.contains("Lease aborted due to launcher failure")) {
+            return InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE;
+        } else if (errors.contains("server_shutting_down")) {
+            return InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN;
+        } else if (errors.contains("UNAVAILABLE: HTTP status code 502")) {
+            return InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR;
+        } else if (errors.contains("DeadlineExceeded")) {
+            return InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT;
+        } else if (errors.contains("RESOURCE_EXHAUSTED")) {
+            return InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED;
+        }
+
+        return InfraErrorIdentifier.ACLOUD_OXYGEN_LEASE_ERROR;
     }
 
     private static String parseErrorField(String data) throws JSONException {
