@@ -260,13 +260,13 @@ public class HostOptions implements IHostOptions {
         if (!mConcurrentLocks.containsKey(type)) {
             return;
         }
-        CLog.i(
-                "Requesting a '%s' permit out of the max limit of %s. Current queue "
-                        + "length: %s",
-                        type,
-                        mConcurrentLimit.get(type),
-                        mConcurrentLocks.get(type).getQueueLength());
-        mConcurrentLocks.get(type).acquireUninterruptibly();
+        synchronized (mConcurrentLocks.get(type)) {
+            CLog.i(
+                    "Requesting a '%s' permit out of the max limit of %s. Current queue "
+                            + "length: %s",
+                    type, mConcurrentLimit.get(type), mConcurrentLocks.get(type).getQueueLength());
+            mConcurrentLocks.get(type).acquireUninterruptibly();
+        }
     }
 
     @Override
