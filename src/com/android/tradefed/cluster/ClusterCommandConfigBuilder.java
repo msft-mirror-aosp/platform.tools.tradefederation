@@ -35,6 +35,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -162,6 +164,19 @@ public class ClusterCommandConfigBuilder {
         return new Configuration("Cluster Command " + mCommand.getCommandId(), "");
     }
 
+    @VisibleForTesting
+    IClusterOptions getClusterOptions() {
+        return ClusterHostUtil.getClusterOptions();
+    }
+
+    private String getHost(String url) {
+        try {
+            return new URL(url).getHost();
+        } catch (MalformedURLException e) {
+            return url;
+        }
+    }
+
     /**
      * Builds a configuration file.
      *
@@ -192,6 +207,11 @@ public class ClusterCommandConfigBuilder {
 
         Map<String, String> envVars = new TreeMap<>();
         envVars.put("TF_WORK_DIR", mWorkDir.getAbsolutePath());
+        String serviceUrl = getClusterOptions().getServiceUrl();
+        if (serviceUrl != null) {
+            envVars.put("SERVICE_HOST", getHost(serviceUrl));
+            envVars.put("SERVICE_URL", serviceUrl);
+        }
         envVars.putAll(mTestEnvironment.getEnvVars());
         envVars.putAll(mTestContext.getEnvVars());
 
@@ -295,7 +315,9 @@ public class ClusterCommandConfigBuilder {
         testResources.addAll(mTestResources);
         testResources.addAll(mTestContext.getTestResources());
         for (final TestResource resource : testResources) {
-            config.injectOptionValue("cluster:test-resource", resource.toJson().toString());
+            config.injectOptionValue(
+                    "cluster:test-resource",
+                    StringUtil.expand(resource.toJson().toString(), envVars));
         }
 
         // Inject any extra options into the configuration
