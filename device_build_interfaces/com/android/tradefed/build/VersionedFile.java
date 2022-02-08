@@ -23,10 +23,18 @@ public class VersionedFile implements Serializable {
     private static final long serialVersionUID = BuildSerializedVersion.VERSION;
     private final File mFile;
     private final String mVersion;
+    private final Boolean mIsFuseZip;
 
     public VersionedFile(File file, String version) {
         mFile = file;
         mVersion = version;
+        mIsFuseZip = false;
+    }
+
+    public VersionedFile(File file, String version, Boolean isFuseZip) {
+        mFile = file;
+        mVersion = version;
+        mIsFuseZip = isFuseZip;
     }
 
     public File getFile() {
@@ -35,6 +43,15 @@ public class VersionedFile implements Serializable {
 
     public String getVersion() {
         return mVersion;
+    }
+
+    /**
+     * Retrieve the flag to determine if a file is from fuse-zip file system
+     *
+     * @return the boolean fuse-zip flag of a file
+     */
+    public Boolean getIsFuseZip() {
+        return mIsFuseZip;
     }
 
     @Override
