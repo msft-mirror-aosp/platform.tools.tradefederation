@@ -78,6 +78,7 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     OXYGEN_BAD_GATEWAY_ERROR(505_014, FailureStatus.INFRA_FAILURE),
     OXYGEN_REQUEST_TIMEOUT(505_015, FailureStatus.INFRA_FAILURE),
     OXYGEN_RESOURCE_EXHAUSTED(505_016, FailureStatus.INFRA_FAILURE),
+    OXYGEN_SERVER_CONNECTION_FAILURE(505_017, FailureStatus.INFRA_FAILURE),
 
     // 505_251 - 505_300: Configuration errors
     INTERNAL_CONFIG_ERROR(505_251, FailureStatus.INFRA_FAILURE),
