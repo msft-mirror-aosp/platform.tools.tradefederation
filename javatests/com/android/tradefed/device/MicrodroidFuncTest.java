@@ -47,7 +47,6 @@ import java.util.Arrays;
 @RunWith(DeviceJUnit4ClassRunner.class)
 public class MicrodroidFuncTest implements IDeviceTest, ITestInformationReceiver {
     private static final String APK_NAME = "MicrodroidTestApp.apk";
-    private static final String PACKAGE_NAME = "com.android.microdroid.test";
     private static final String CONFIG_PATH = "assets/vm_config.json"; // path inside the APK
 
     private TestDevice mTestDevice;
@@ -85,12 +84,12 @@ public class MicrodroidFuncTest implements IDeviceTest, ITestInformationReceiver
     public void testStartAndShutdownMicrodroid()
             throws DeviceNotAvailableException, FileNotFoundException {
         final ITestDevice microdroid =
-                mTestDevice.startMicrodroid(
-                        findTestFile(mTestInformation, APK_NAME),
-                        PACKAGE_NAME,
-                        CONFIG_PATH,
-                        /* debug */ true,
-                        /* use default memoryMib */ 0);
+                TestDevice.MicrodroidBuilder.fromFile(
+                                findTestFile(mTestInformation, APK_NAME), CONFIG_PATH)
+                        .debugLevel("full")
+                        .memoryMib(0)
+                        .numCpus(1)
+                        .build(mTestDevice);
         assertNotNull(microdroid);
 
         MicrodroidHelper microdroidHelper = new MicrodroidHelper();
@@ -122,17 +121,16 @@ public class MicrodroidFuncTest implements IDeviceTest, ITestInformationReceiver
         assertThat(
                 runOnDevice(microdroid, "getprop", "debug.microdroid.app.sublib.run"), is("true"));
 
-        // Check that keystore was found by the payload. Wait until the property is set.
-        assertThat(
-                runOnDevice(microdroid, "getprop", "debug.microdroid.test.keystore"), is("PASS"));
-
         // Check that no denials have happened so far
         assertThat(runOnDevice(microdroid, "logcat -d -e 'avc:[[:space:]]{1,2}denied'"), is(""));
+        assertThat(
+                runOnDevice(microdroid, "cat /proc/cpuinfo | grep processor | wc -l"),
+                is(Integer.toString(1)));
 
         assertThat(
                 microdroidHelper.runOnMicrodroid(microdroid.getSerialNumber(), "echo true"),
                 is("true"));
-        mTestDevice.shutdownMicrodroid();
+        mTestDevice.shutdownMicrodroid(microdroid);
         assertNull(microdroidHelper.tryRunOnMicrodroid(microdroid.getSerialNumber(), "echo true"));
     }
 
