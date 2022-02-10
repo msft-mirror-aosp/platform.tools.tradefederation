@@ -119,6 +119,11 @@ public class HostOptions implements IHostOptions {
             description = "The network interface used to connect to test devices.")
     private String mNetworkInterface = null;
 
+    @Option(
+            name = "preconfigured-virtual-device-pool",
+            description = "Preconfigured virtual device pool. (Value format: $hostname:$user.)")
+    private List<String> mPreconfiguredVirtualDevicePool = new ArrayList<>();
+
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
 
     /** {@inheritDoc} */
@@ -191,6 +196,12 @@ public class HostOptions implements IHostOptions {
     @Override
     public Set<String> getKnownRemoteDeviceIpPool() {
         return new HashSet<>(mKnownRemoteDeviceIpPool);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Set<String> getKnownPreconfigureVirtualDevicePool() {
+        return new HashSet<>(mPreconfiguredVirtualDevicePool);
     }
 
     /** {@inheritDoc} */
