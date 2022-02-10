@@ -674,14 +674,24 @@ public class TestDeviceOptions {
         return mUseOxygen;
     }
 
-    /** Returns the instance type of GCE virtual device that should be created */
+    /** Returns the instance user of GCE virtual device that should be created */
     public String getInstanceUser() {
         return mInstanceUser;
+    }
+
+    /** Set the instance user of GCE virtual device that should be created. */
+    public void setInstanceUser(String instanceUser) {
+        mInstanceUser = instanceUser;
     }
 
     /** Returns the remote port in instance that the adb server listens to */
     public int getRemoteAdbPort() {
         return mRemoteAdbPort;
+    }
+
+    /** Set the remote port in instance that the adb server listens to */
+    public void setRemoteAdbPort(int remoteAdbPort) {
+        mRemoteAdbPort = remoteAdbPort;
     }
 
     /** Returns the base image name to be used for the current instance */
