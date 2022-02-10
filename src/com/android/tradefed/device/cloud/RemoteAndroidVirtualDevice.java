@@ -228,7 +228,12 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             mGceAvd = null;
 
             if (getInitialSerial() != null) {
-                setIDevice(new RemoteAvdIDevice(getInitialSerial(), getInitialIp()));
+                setIDevice(
+                        new RemoteAvdIDevice(
+                                getInitialSerial(),
+                                getInitialIp(),
+                                getInitialUser(),
+                                getInitialDeviceNumOffset()));
             }
             setFastbootEnabled(false);
 
@@ -272,7 +277,13 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         TargetSetupError exception = null;
         for (int attempt = 0; attempt < getOptions().getGceMaxAttempt(); attempt++) {
             try {
-                mGceAvd = getGceHandler().startGce(getInitialIp(), attributes);
+                mGceAvd =
+                        getGceHandler()
+                                .startGce(
+                                        getInitialIp(),
+                                        getInitialUser(),
+                                        getInitialDeviceNumOffset(),
+                                        attributes);
                 if (mGceAvd != null) {
                     break;
                 }

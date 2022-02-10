@@ -21,7 +21,7 @@ import com.android.ddmlib.IDevice;
  * A placeholder {@link IDevice} used by {@link DeviceManager} to allocate when {@link
  * DeviceSelectionOptions#tcpDeviceRequested()} is <code>true</code>
  */
-public class TcpDevice extends StubDevice implements IConfigurableIp {
+public class TcpDevice extends StubDevice implements IConfigurableVirtualDevice {
 
     private String mKnownDeviceIp = null;
 
