@@ -530,19 +530,15 @@ public class DeviceManager implements IDeviceManager {
     }
 
     private void addNetworkDevices() {
-        int index = mNumTcpDevicesSupported;
         for (String ip : getGlobalConfig().getHostOptions().getKnownTcpDeviceIpPool()) {
             addAvailableDevice(
-                    new TcpDevice(String.format("%s-%d", TCP_DEVICE_SERIAL_PREFIX, index), ip));
-            index++;
+                    new TcpDevice(String.format("%s-%s", TCP_DEVICE_SERIAL_PREFIX, ip), ip));
         }
 
-        index = mNumGceDevicesSupported;
         for (String ip : getGlobalConfig().getHostOptions().getKnownGceDeviceIpPool()) {
             addAvailableDevice(
                     new RemoteAvdIDevice(
-                            String.format("%s-%d", GCE_DEVICE_SERIAL_PREFIX, index), ip));
-            index++;
+                            String.format("%s-%s", GCE_DEVICE_SERIAL_PREFIX, ip), ip));
         }
 
         Map<String, List<String>> preconfigureHostUsers = new HashMap<>();
@@ -559,24 +555,20 @@ public class DeviceManager implements IDeviceManager {
                 addAvailableDevice(
                         new RemoteAvdIDevice(
                                 String.format(
-                                        "%s-%d-%s-%s",
+                                        "%s-%s-%s",
                                         GCE_DEVICE_SERIAL_PREFIX,
-                                        index,
                                         hostUsers.getKey(),
                                         hostUsers.getValue().get(i)),
                                 hostUsers.getKey(),
                                 hostUsers.getValue().get(i),
                                 i));
-                index++;
             }
         }
 
-        index = mNumRemoteDevicesSupported;
         for (String ip : getGlobalConfig().getHostOptions().getKnownRemoteDeviceIpPool()) {
             addAvailableDevice(
                     new VmRemoteDevice(
-                            String.format("%s-%d", REMOTE_DEVICE_SERIAL_PREFIX, index), ip));
-            index++;
+                            String.format("%s-%s", REMOTE_DEVICE_SERIAL_PREFIX, ip), ip));
         }
     }
 
