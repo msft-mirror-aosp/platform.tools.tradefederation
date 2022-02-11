@@ -2145,19 +2145,20 @@ public class TestDevice extends NativeDevice {
                 Strings.isNullOrEmpty(cpuAffinity) ? "" : "--cpu-affinity " + cpuAffinity;
 
         List<String> args =
-                Arrays.asList(
-                        VIRT_APEX + "bin/vm",
-                        "run-app",
-                        "--daemonize",
-                        "--log " + logPath,
-                        "--mem " + memoryMib,
-                        debugFlag,
-                        "--cpus " + numCpus,
-                        cpuAffinityFlag,
-                        apkPath,
-                        outApkIdsigPath,
-                        instanceImg,
-                        configPath);
+                new ArrayList<>(
+                        Arrays.asList(
+                                VIRT_APEX + "bin/vm",
+                                "run-app",
+                                "--daemonize",
+                                "--log " + logPath,
+                                "--mem " + memoryMib,
+                                debugFlag,
+                                "--cpus " + numCpus,
+                                cpuAffinityFlag,
+                                apkPath,
+                                outApkIdsigPath,
+                                instanceImg,
+                                configPath));
         for (String path : extraIdsigPaths) {
             args.add("--extra-idsig");
             args.add(path);
@@ -2431,7 +2432,7 @@ public class TestDevice extends NativeDevice {
 
         /** Adds extra idsig file to the list. */
         public MicrodroidBuilder addExtraIdsigPath(String extraIdsigPath) {
-            if (extraIdsigPath != null && !extraIdsigPath.isEmpty()) {
+            if (!Strings.isNullOrEmpty(extraIdsigPath)) {
                 mExtraIdsigPaths.add(extraIdsigPath);
             }
             return this;
