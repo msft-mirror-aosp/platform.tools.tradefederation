@@ -32,8 +32,8 @@ public interface IConfigurableVirtualDevice {
         return null;
     }
 
-    /** Returns the known device num offset if available, returns 0 if device num offset not set. */
+    /** Returns the known device num offset if available, returns null if device num offset not set. */
     default Integer getDeviceNumOffset() {
-        return 0;
+        return null;
     }
 }
