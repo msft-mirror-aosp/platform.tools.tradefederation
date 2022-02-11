@@ -26,7 +26,7 @@ public abstract class DeviceBaselineSetter {
     public abstract String getName();
 
     /** Sets the baseline setting for the device. */
-    public abstract void setBaseline(ITestDevice mDevice) throws DeviceNotAvailableException;
+    public abstract Boolean setBaseline(ITestDevice mDevice) throws DeviceNotAvailableException;
 
     /**
      * Whether the baseline setting is under experiment stage. It is used for the rollout of a new
