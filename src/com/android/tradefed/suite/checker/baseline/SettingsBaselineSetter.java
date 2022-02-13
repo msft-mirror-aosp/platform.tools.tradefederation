@@ -22,26 +22,28 @@ import com.android.tradefed.device.ITestDevice;
 /** A common setter to handle device baseline settings via ITestDevice.setSetting. */
 public class SettingsBaselineSetter extends DeviceBaselineSetter {
 
-    private final String name;
-    private final String namespace;
-    private final String key;
-    private final String value;
+    private final String mName;
+    private final String mNamespace;
+    private final String mKey;
+    private final String mValue;
 
     public SettingsBaselineSetter(String name, String namespace, String key, String value) {
-        this.name = name;
-        this.namespace = namespace;
-        this.key = key;
-        this.value = value;
+        mName = name;
+        mNamespace = namespace;
+        mKey = key;
+        mValue = value;
     }
 
     @Override
-    public void setBaseline(ITestDevice mDevice) throws DeviceNotAvailableException {
-        mDevice.setSetting(namespace, key, value);
+    public Boolean setBaseline(ITestDevice mDevice) throws DeviceNotAvailableException {
+        mDevice.setSetting(mNamespace, mKey, mValue);
+        String settingValue = mDevice.getSetting(mNamespace, mKey);
+        return settingValue != null && settingValue.equals(mValue);
     }
 
     @Override
     public String getName() {
-        return name;
+        return mName;
     }
 
     @Override

@@ -545,6 +545,32 @@ public class DeviceManager implements IDeviceManager {
             index++;
         }
 
+        Map<String, List<String>> preconfigureHostUsers = new HashMap<>();
+        for (String preconfigureDevice :
+                getGlobalConfig().getHostOptions().getKnownPreconfigureVirtualDevicePool()) {
+            // Expect the preconfigureDevice string in a certain format($hostname:$user).
+            //  hostname.google.com:vsoc-1
+            String[] parts = preconfigureDevice.split(":", 2);
+            preconfigureHostUsers.putIfAbsent(parts[0], new ArrayList<>());
+            preconfigureHostUsers.get(parts[0]).add(parts[1]);
+        }
+        for (Map.Entry<String, List<String>> hostUsers : preconfigureHostUsers.entrySet()) {
+            for (int i = 0; i < hostUsers.getValue().size(); i++) {
+                addAvailableDevice(
+                        new RemoteAvdIDevice(
+                                String.format(
+                                        "%s-%d-%s-%s",
+                                        GCE_DEVICE_SERIAL_PREFIX,
+                                        index,
+                                        hostUsers.getKey(),
+                                        hostUsers.getValue().get(i)),
+                                hostUsers.getKey(),
+                                hostUsers.getValue().get(i),
+                                i));
+                index++;
+            }
+        }
+
         index = mNumRemoteDevicesSupported;
         for (String ip : getGlobalConfig().getHostOptions().getKnownRemoteDeviceIpPool()) {
             addAvailableDevice(

@@ -16,11 +16,24 @@
 
 package com.android.tradefed.device;
 
-/** An interface to provide information about a possibly preconfigured IP */
-public interface IConfigurableIp {
+/**
+ * An interface to provide information about a possibly preconfigured virtual device info (host ip,
+ * host user, ports offset and etc.).
+ */
+public interface IConfigurableVirtualDevice {
 
     /** Returns the known associated IP if available, returns null if no known ip. */
     default String getKnownDeviceIp() {
+        return null;
+    }
+
+    /** Returns the known user if available, returns null if no known user. */
+    default String getKnownUser() {
+        return null;
+    }
+
+    /** Returns the known device num offset if available, returns null if device num offset not set. */
+    default Integer getDeviceNumOffset() {
         return null;
     }
 }

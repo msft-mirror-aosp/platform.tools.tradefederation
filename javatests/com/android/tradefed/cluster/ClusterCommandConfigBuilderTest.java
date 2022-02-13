@@ -74,6 +74,7 @@ public class ClusterCommandConfigBuilderTest {
     private TestEnvironment mTestEnvironment;
     private List<TestResource> mTestResources;
     private TestContext mTestContext;
+    private ClusterOptions mClusterOptions = null;
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private IConfiguration mConfig;
@@ -84,6 +85,8 @@ public class ClusterCommandConfigBuilderTest {
 
     @Before
     public void setUp() throws IOException {
+        mClusterOptions = new ClusterOptions();
+        mClusterOptions.setServiceUrl("http://service_host:8000");
         mWorkDir = FileUtil.createTempDir(this.getClass().getSimpleName());
         mCommand = new ClusterCommand(REQUEST_ID, COMMAND_ID, TASK_ID, COMMAND_LINE, ATTEMPT_ID,
                 ClusterCommand.RequestType.MANAGED, 0, 0);
@@ -97,6 +100,11 @@ public class ClusterCommandConfigBuilderTest {
                     @Override
                     IConfiguration initConfiguration() {
                         return mConfig;
+                    }
+
+                    @Override
+                    IClusterOptions getClusterOptions() {
+                        return mClusterOptions;
                     }
                 };
         builder.setWorkDir(mWorkDir)
@@ -176,6 +184,10 @@ public class ClusterCommandConfigBuilderTest {
         builder.build();
         // work directory and environment variables from both sources were injected
         verify(mConfig, times(1))
+                .injectOptionValue("cluster:env-var", "SERVICE_HOST", "service_host");
+        verify(mConfig, times(1))
+                .injectOptionValue("cluster:env-var", "SERVICE_URL", "http://service_host:8000");
+        verify(mConfig, times(1))
                 .injectOptionValue("cluster:env-var", "TF_WORK_DIR", mWorkDir.getAbsolutePath());
         verify(mConfig, times(1)).injectOptionValue("cluster:env-var", "E1", "V1");
         verify(mConfig, times(1)).injectOptionValue("cluster:env-var", "E2", "V2");
@@ -232,6 +244,17 @@ public class ClusterCommandConfigBuilderTest {
                 .injectOptionValue(
                         "cluster:test-resource",
                         mTestContext.getTestResources().get(0).toJson().toString());
+    }
+
+    @Test
+    public void testBuild_testResourcesWithTemplatedUrl()
+            throws IOException, ConfigurationException, JSONException {
+        mTestResources.add(new TestResource("N1", "http://${SERVICE_HOST}:8000/tests"));
+        TestResource updatedTestResource = new TestResource("N1", "http://service_host:8000/tests");
+        builder.build();
+        verify(mConfig, times(1))
+                .injectOptionValue(
+                        "cluster:test-resource", updatedTestResource.toJson().toString());
     }
 
     @Test

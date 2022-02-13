@@ -23,6 +23,9 @@ import com.android.ddmlib.IDevice;
  */
 public class RemoteAvdIDevice extends TcpDevice {
 
+    protected String mUser = null;
+    protected Integer mDeviceNumOffset = null;
+
     /** @param serial placeholder for the real serial */
     public RemoteAvdIDevice(String serial) {
         super(serial);
@@ -30,5 +33,23 @@ public class RemoteAvdIDevice extends TcpDevice {
 
     public RemoteAvdIDevice(String serial, String knowDeviceIp) {
         super(serial, knowDeviceIp);
+    }
+
+    public RemoteAvdIDevice(String serial, String knowDeviceIp, String user, Integer offset) {
+        super(serial, knowDeviceIp);
+        this.mUser = user;
+        this.mDeviceNumOffset = offset;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String getKnownUser() {
+        return mUser;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Integer getDeviceNumOffset() {
+        return mDeviceNumOffset;
     }
 }

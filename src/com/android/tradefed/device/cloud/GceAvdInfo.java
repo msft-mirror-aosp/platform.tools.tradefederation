@@ -285,6 +285,8 @@ public class GceAvdInfo {
             return InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT;
         } else if (errors.contains("RESOURCE_EXHAUSTED")) {
             return InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED;
+        } else if (errors.contains("502:Bad Gateway")) {
+            return InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE;
         }
 
         return InfraErrorIdentifier.ACLOUD_OXYGEN_LEASE_ERROR;
