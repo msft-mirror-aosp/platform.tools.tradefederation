@@ -23,6 +23,7 @@ import static org.junit.Assert.fail;
 
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 
@@ -46,7 +47,17 @@ public class GceAvdInfoTest {
                         + "      \"devices\": [\n"
                         + "        {\n"
                         + "          \"ip\": \"104.154.62.236\",\n"
-                        + "          \"instance_name\": \"gce-x86-phone-userdebug-2299773-22cf\"\n"
+                        + "          \"instance_name\": \"gce-x86-phone-userdebug-2299773-22cf\",\n"
+                        + "          \"logs\": [\n"
+                        + "            {\n"
+                        + "              \"path\": \"/text/log\",\n"
+                        + "              \"type\": \"TEXT\"\n"
+                        + "            },\n"
+                        + "            {\n"
+                        + "              \"path\": \"/unknown/log\",\n"
+                        + "              \"type\": \"invalid\"\n"
+                        + "            }\n"
+                        + "          ]\n"
                         + "        }\n"
                         + "      ]\n"
                         + "    },\n"
@@ -58,6 +69,10 @@ public class GceAvdInfoTest {
         assertNotNull(avd);
         assertEquals(avd.hostAndPort().getHost(), "104.154.62.236");
         assertEquals(avd.instanceName(), "gce-x86-phone-userdebug-2299773-22cf");
+        Map<String, LogDataType> logs = avd.getLogs();
+        assertEquals(logs.size(), 2);
+        assertEquals(logs.get("/text/log"), LogDataType.TEXT);
+        assertEquals(logs.get("/unknown/log"), LogDataType.UNKNOWN);
         assertTrue(avd.getBuildVars().isEmpty());
     }
 
@@ -84,6 +99,7 @@ public class GceAvdInfoTest {
         assertNotNull(avd);
         assertEquals(avd.hostAndPort().getHost(), "104.154.62.236");
         assertEquals(avd.instanceName(), "gce-x86-phone-userdebug-2299773-22cf");
+        assertTrue(avd.getLogs().isEmpty());
         assertEquals(avd.getBuildVars().get("branch"), "git_main");
         assertEquals(avd.getBuildVars().get("build_id"), "5230832");
         assertEquals(avd.getBuildVars().get("build_target"), "cf_x86_phone-userdebug");

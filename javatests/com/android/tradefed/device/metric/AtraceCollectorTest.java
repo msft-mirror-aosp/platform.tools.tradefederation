@@ -28,6 +28,7 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -207,12 +208,12 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testStopsAtraceDuringTearDown() throws Exception {
-
+        TestDescription test = new TestDescription("class", "test");
         when(mMockDevice.pullFile(Mockito.eq(M_DEFAULT_LOG_PATH)))
                 .thenReturn(new File("/tmp/potato"));
 
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
         verify(mMockDevice, times(1))
                 .executeShellCommand(
                         Mockito.eq("atrace --async_stop -o " + M_DEFAULT_LOG_PATH),
@@ -233,13 +234,13 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testPreserveFileOnDeviceOption() throws Exception {
-
+        TestDescription test = new TestDescription("class", "test");
         when(mMockDevice.pullFile(Mockito.eq(M_DEFAULT_LOG_PATH)))
                 .thenReturn(new File("/tmp/potato"));
 
         mOptionSetter.setOptionValue("preserve-ondevice-log", "true");
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
         verify(mMockDevice, times(1))
                 .executeShellCommand(
                         Mockito.eq("atrace --async_stop -o " + M_DEFAULT_LOG_PATH),
@@ -258,10 +259,11 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testLogPullFail() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         when(mMockDevice.pullFile((String) Mockito.any())).thenReturn(null);
 
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
         verify(mMockDevice, times(1)).pullFile((String) Mockito.any());
     }
 
@@ -273,15 +275,16 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testUploadsLogWithCompression() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         when(mMockDevice.pullFile((String) Mockito.any())).thenReturn(new File("/tmp/potato"));
         when(mMockDevice.getSerialNumber()).thenReturn(M_SERIAL_NO);
 
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + M_SERIAL_NO),
+                        Mockito.eq("atrace_class#test" + M_SERIAL_NO + "_"),
                         Mockito.eq(LogDataType.ATRACE),
                         Mockito.any());
     }
@@ -294,16 +297,17 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testUploadsLogWithoutCompression() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         when(mMockDevice.pullFile((String) Mockito.any())).thenReturn(new File("/tmp/potato"));
         when(mMockDevice.getSerialNumber()).thenReturn(M_SERIAL_NO);
 
         mOptionSetter.setOptionValue("compress-dump", "false");
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + M_SERIAL_NO),
+                        Mockito.eq("atrace_class#test" + M_SERIAL_NO + "_"),
                         Mockito.eq(LogDataType.TEXT),
                         Mockito.any());
     }
@@ -331,9 +335,10 @@ public final class AtraceCollectorTest {
         AtraceCollector atrace = new AtraceCollector();
         OptionSetter optionSetter = new OptionSetter(atrace);
         optionSetter.setOptionValue("categories", M_CATEGORIES);
+        TestDescription test = new TestDescription("class", "test");
         atrace.init(mockInvocationContext, mMockTestLogger);
         atrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(num_devices))
                 .testLog((String) Mockito.any(), Mockito.eq(LogDataType.ATRACE), Mockito.any());
@@ -347,6 +352,7 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testExecutesPostProcessPar() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         CommandResult commandResult = new CommandResult(CommandStatus.SUCCESS);
         commandResult.setStdout("stdout");
         commandResult.setStderr("stderr");
@@ -367,11 +373,11 @@ public final class AtraceCollectorTest {
         mOptionSetter.setOptionValue("post-process-timeout", "60");
         mAtrace.setRunUtil(mMockRunUtil);
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + M_SERIAL_NO),
+                        Mockito.eq("atrace_class#test" + M_SERIAL_NO + "_"),
                         Mockito.eq(LogDataType.ATRACE),
                         Mockito.any());
         verify(mMockRunUtil, times(1))
@@ -391,6 +397,7 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testExecutesPostProcessParDifferentFormat() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         CommandResult commandResult = new CommandResult(CommandStatus.SUCCESS);
         commandResult.setStdout("stdout");
         commandResult.setStderr("stderr");
@@ -408,11 +415,11 @@ public final class AtraceCollectorTest {
         mOptionSetter.setOptionValue("post-process-timeout", "60");
         mAtrace.setRunUtil(mMockRunUtil);
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + M_SERIAL_NO),
+                        Mockito.eq("atrace_class#test" + M_SERIAL_NO + "_"),
                         Mockito.eq(LogDataType.ATRACE),
                         Mockito.any());
         verify(mMockRunUtil, times(1))
@@ -431,6 +438,7 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testExecutesPostProcessParNoStderr() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         CommandResult commandResult = new CommandResult(CommandStatus.SUCCESS);
         commandResult.setStdout("stdout");
         when(mMockRunUtil.runTimedCmd(
@@ -449,11 +457,11 @@ public final class AtraceCollectorTest {
         mOptionSetter.setOptionValue("post-process-timeout", "3m");
         mAtrace.setRunUtil(mMockRunUtil);
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + M_SERIAL_NO),
+                        Mockito.eq("atrace_class#test" + M_SERIAL_NO + "_"),
                         Mockito.eq(LogDataType.ATRACE),
                         Mockito.any());
         verify(mMockRunUtil, times(1))
@@ -473,6 +481,7 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testExecutesPostProcessParFailed() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         CommandResult commandResult = new CommandResult(CommandStatus.FAILED);
         commandResult.setStderr("stderr");
 
@@ -492,11 +501,11 @@ public final class AtraceCollectorTest {
         mOptionSetter.setOptionValue("post-process-timeout", "1m");
         mAtrace.setRunUtil(mMockRunUtil);
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + M_SERIAL_NO),
+                        Mockito.eq("atrace_class#test" + M_SERIAL_NO + "_"),
                         Mockito.eq(LogDataType.ATRACE),
                         Mockito.any());
         verify(mMockRunUtil, times(1))
@@ -516,6 +525,7 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testExecutesPostProcessParTimeout() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         CommandResult commandResult = new CommandResult(CommandStatus.TIMED_OUT);
 
         when(mMockRunUtil.runTimedCmd(
@@ -534,11 +544,11 @@ public final class AtraceCollectorTest {
         mOptionSetter.setOptionValue("post-process-timeout", "1h1m1s");
         mAtrace.setRunUtil(mMockRunUtil);
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + M_SERIAL_NO),
+                        Mockito.eq("atrace_class#test" + M_SERIAL_NO + "_"),
                         Mockito.eq(LogDataType.ATRACE),
                         Mockito.any());
         verify(mMockRunUtil, times(1))
@@ -558,6 +568,7 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testProcessesMetricOutput() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         CommandResult commandResult = new CommandResult(CommandStatus.SUCCESS);
         commandResult.setStdout("line1\nt:" + mDummyMetricPng.getAbsolutePath());
         commandResult.setStderr("stderr");
@@ -568,11 +579,11 @@ public final class AtraceCollectorTest {
 
         mAtrace.setRunUtil(mMockRunUtil);
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + M_SERIAL_NO),
+                        Mockito.eq("atrace_class#test" + M_SERIAL_NO + "_"),
                         Mockito.eq(LogDataType.ATRACE),
                         Mockito.any());
         verify(mMockRunUtil, times(1)).runTimedCmd(Mockito.anyLong(), Mockito.any());
@@ -591,6 +602,7 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testProcessesMetricOutputWithMalformedRegex() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         CommandResult commandResult = new CommandResult(CommandStatus.SUCCESS);
         commandResult.setStdout("text\nt:" + mDummyMetricPng.getAbsolutePath());
         commandResult.setStderr("stderr");
@@ -601,11 +613,11 @@ public final class AtraceCollectorTest {
 
         mAtrace.setRunUtil(mMockRunUtil);
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + M_SERIAL_NO),
+                        Mockito.eq("atrace_class#test" + M_SERIAL_NO + "_"),
                         Mockito.eq(LogDataType.ATRACE),
                         Mockito.any());
         verify(mMockRunUtil, times(1)).runTimedCmd(Mockito.anyLong(), Mockito.any());
@@ -619,6 +631,7 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testProcessesMetricOutputWithFileNotFound() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         CommandResult commandResult = new CommandResult(CommandStatus.SUCCESS);
         commandResult.setStdout("text\nt:/file/not/found.txt");
         when(mMockRunUtil.runTimedCmd(Mockito.anyLong(), Mockito.any())).thenReturn(commandResult);
@@ -628,11 +641,11 @@ public final class AtraceCollectorTest {
 
         mAtrace.setRunUtil(mMockRunUtil);
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + M_SERIAL_NO),
+                        Mockito.eq("atrace_class#test" + M_SERIAL_NO + "_"),
                         Mockito.eq(LogDataType.ATRACE),
                         Mockito.any());
         verify(mMockRunUtil, times(1)).runTimedCmd(Mockito.anyLong(), Mockito.any());
@@ -646,6 +659,7 @@ public final class AtraceCollectorTest {
      */
     @Test
     public void testProcessesMetricOutputTwoKeys() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
         CommandResult commandResult = new CommandResult(CommandStatus.SUCCESS);
         commandResult.setStdout(
                 "line1\nt:"
@@ -661,11 +675,11 @@ public final class AtraceCollectorTest {
 
         mAtrace.setRunUtil(mMockRunUtil);
         mAtrace.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
         verify(mMockTestLogger, times(1))
                 .testLog(
-                        Mockito.eq("atrace" + M_SERIAL_NO),
+                        Mockito.eq("atrace_class#test" + M_SERIAL_NO + "_"),
                         Mockito.eq(LogDataType.ATRACE),
                         Mockito.any());
         verify(mMockTestLogger, times(1))

@@ -487,6 +487,7 @@ public class InvocationExecution implements IInvocationExecution {
             if (multipreparer instanceof ITestLoggerReceiver) {
                 ((ITestLoggerReceiver) multipreparer).setTestLogger(logger);
             }
+            long startTime = System.currentTimeMillis();
             CLog.d("Starting %s '%s'", description, multipreparer);
             try {
                 multipreparer.tearDown(testInfo, throwable);
@@ -499,7 +500,15 @@ public class InvocationExecution implements IInvocationExecution {
                     deferredThrowable = t;
                 }
             }
-            CLog.d("Done with %s '%s'", description, multipreparer);
+            long elapsedTime = System.currentTimeMillis() - startTime;
+
+            CLog.d(
+                    "Done with %s '%s' in %s",
+                    description, multipreparer, TimeUtil.formatElapsedTime(elapsedTime));
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationGroupMetricKey.MULTI_TARGET_PREPARER_TEARDOWN_LATENCY,
+                    multipreparer.getClass().getName(),
+                    elapsedTime);
         }
 
         return deferredThrowable;
@@ -609,6 +618,7 @@ public class InvocationExecution implements IInvocationExecution {
             if (preparer instanceof ITestLoggerReceiver) {
                 ((ITestLoggerReceiver) preparer).setTestLogger(logger);
             }
+            long startTime = System.currentTimeMillis();
             try {
                 CLog.d(
                         "starting tearDown '%s' on device: '%s'",
@@ -630,9 +640,16 @@ public class InvocationExecution implements IInvocationExecution {
                 }
             } finally {
                 testInfo.setActiveDeviceIndex(0);
+                long elapsedTime = System.currentTimeMillis() - startTime;
                 CLog.d(
-                        "done with tearDown '%s' on device: '%s'",
-                        preparer, device.getSerialNumber());
+                        "done with tearDown '%s' on device: '%s' in %s",
+                        preparer,
+                        device.getSerialNumber(),
+                        TimeUtil.formatElapsedTime(elapsedTime));
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationGroupMetricKey.TARGET_PREPARER_TEARDOWN_LATENCY,
+                        preparer.getClass().getName(),
+                        elapsedTime);
             }
         }
         return deferredThrowable;

@@ -18,6 +18,7 @@ package com.android.tradefed.device;
 import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.util.ArrayUtil;
+import com.android.tradefed.util.MultiMap;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -83,6 +84,13 @@ public class TestDeviceOptions {
     @Option(name = "reboot-timeout", description =
             "time in ms to wait for a device to reboot to full system.")
     private int mRebootTimeout = 2 * 60 * 1000;
+
+    @Option(
+            name = "device-fastboot-binary",
+            description =
+                    "The fastboot binary to use for the test session. If null, will use "
+                            + "the same fastboot binary as DeviceManager.")
+    private File mFastbootBinary = null;
 
     @Option(name = "use-fastboot-erase", description =
             "use fastboot erase instead of fastboot format to wipe partitions")
@@ -284,6 +292,12 @@ public class TestDeviceOptions {
             description = "path of the prebuilt cuttlefish host package.")
     private File mAvdCuttlefishHostPkg = null;
 
+    @Option(
+            name = "gce-extra-files",
+            description =
+                    "Path of extra files need to upload GCE instance during Acloud create."
+                            + "Key is local file, value is GCE destination path.")
+    private MultiMap<File, String> mGceExtraFiles = new MultiMap<>();
     // END ====================== Options Related to Virtual Devices ======================
 
     // Option related to Remote Device only
@@ -386,6 +400,11 @@ public class TestDeviceOptions {
      */
     public void setUseFastbootErase(boolean useFastbootErase) {
         mUseFastbootErase = useFastbootErase;
+    }
+
+    /** Returns a specified fastboot binary to be used. if null, use the DeviceManager one. */
+    public File getFastbootBinary() {
+        return mFastbootBinary;
     }
 
     /**
@@ -655,14 +674,24 @@ public class TestDeviceOptions {
         return mUseOxygen;
     }
 
-    /** Returns the instance type of GCE virtual device that should be created */
+    /** Returns the instance user of GCE virtual device that should be created */
     public String getInstanceUser() {
         return mInstanceUser;
+    }
+
+    /** Set the instance user of GCE virtual device that should be created. */
+    public void setInstanceUser(String instanceUser) {
+        mInstanceUser = instanceUser;
     }
 
     /** Returns the remote port in instance that the adb server listens to */
     public int getRemoteAdbPort() {
         return mRemoteAdbPort;
+    }
+
+    /** Set the remote port in instance that the adb server listens to */
+    public void setRemoteAdbPort(int remoteAdbPort) {
+        mRemoteAdbPort = remoteAdbPort;
     }
 
     /** Returns the base image name to be used for the current instance */
@@ -698,6 +727,16 @@ public class TestDeviceOptions {
     /** Return the path to the cuttlefish host package. */
     public File getAvdCuttlefishHostPkg() {
         return mAvdCuttlefishHostPkg;
+    }
+
+    /** Return the extra files need to upload to GCE during acloud create. */
+    public MultiMap<File, String> getExtraFiles() {
+        return mGceExtraFiles;
+    }
+
+    /** Set the extra files need to upload to GCE during acloud create. */
+    public void setExtraFiles(MultiMap<File, String> extraFiles) {
+        mGceExtraFiles = extraFiles;
     }
 
     public static String getCreateCommandByInstanceType(InstanceType type) {

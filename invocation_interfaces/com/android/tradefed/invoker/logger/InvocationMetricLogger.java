@@ -27,6 +27,12 @@ public class InvocationMetricLogger {
     /** Some special named key that we will always populate for the invocation. */
     public enum InvocationMetricKey {
         WIFI_AP_NAME("wifi_ap_name", false),
+        WIFI_CONNECT_TIME("wifi_connect_time", true),
+        WIFI_CONNECT_COUNT("wifi_connect_count", true),
+        WIFI_CONNECT_RETRY_COUNT("wifi_connect_retry_count", true),
+        // Bugreport time and count
+        BUGREPORT_TIME("bugreport_time", true),
+        BUGREPORT_COUNT("bugreport_count", true),
         CLEARED_RUN_ERROR("cleared_run_error", true),
         FETCH_BUILD("fetch_build_time_ms", true),
         SETUP("setup_time_ms", true),
@@ -122,6 +128,9 @@ public class InvocationMetricLogger {
         FLASHING_FROM_FASTBOOTD("flashing_from_fastbootd", true),
         FLASHING_PERMIT_LATENCY("flashing_permit_latency_ms", true),
         DOWNLOAD_PERMIT_LATENCY("download_permit_latency_ms", true),
+        // Unzipping metrics
+        UNZIP_TESTS_DIR_TIME("unzip_tests_dir_time_ms", true),
+        UNZIP_TESTS_DIR_COUNT("unzip_tests_dir_count", true),
         // Don't aggregate test pair, latest report wins because it's the closest to
         // the execution like in a subprocess.
         TEST_PAIR("tf_test_pair_timestamp", false),
@@ -158,7 +167,9 @@ public class InvocationMetricLogger {
     /** Grouping allows to log several groups under a same key. */
     public enum InvocationGroupMetricKey {
         TEST_TYPE_COUNT("test-type-count", true),
-        TARGET_PREPARER_SETUP_LATENCY("target-preparer-setup-latency", true);
+        TARGET_PREPARER_SETUP_LATENCY("target-preparer-setup-latency", true),
+        TARGET_PREPARER_TEARDOWN_LATENCY("target-preparer-teardown-latency", true),
+        MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true);
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.

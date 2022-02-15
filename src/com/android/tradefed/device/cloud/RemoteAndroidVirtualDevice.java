@@ -205,6 +205,18 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                     // Fetch all tombstones if any.
                     CommonLogRemoteFileUtil.fetchTombstones(
                             mTestLogger, mGceAvd, getOptions(), getRunUtil());
+
+                    // Fetch host kernel log by running `dmesg` for Oxygen hosts
+                    if (getOptions().useOxygen()) {
+                        CommonLogRemoteFileUtil.logRemoteCommandOutput(
+                                mTestLogger,
+                                mGceAvd,
+                                getOptions(),
+                                getRunUtil(),
+                                "host_kernel.log",
+                                "toybox",
+                                "dmesg");
+                    }
                 }
             }
 
@@ -216,7 +228,12 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             mGceAvd = null;
 
             if (getInitialSerial() != null) {
-                setIDevice(new RemoteAvdIDevice(getInitialSerial(), getInitialIp()));
+                setIDevice(
+                        new RemoteAvdIDevice(
+                                getInitialSerial(),
+                                getInitialIp(),
+                                getInitialUser(),
+                                getInitialDeviceNumOffset()));
             }
             setFastbootEnabled(false);
 
@@ -260,7 +277,13 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         TargetSetupError exception = null;
         for (int attempt = 0; attempt < getOptions().getGceMaxAttempt(); attempt++) {
             try {
-                mGceAvd = getGceHandler().startGce(getInitialIp(), attributes);
+                mGceAvd =
+                        getGceHandler()
+                                .startGce(
+                                        getInitialIp(),
+                                        getInitialUser(),
+                                        getInitialDeviceNumOffset(),
+                                        attributes);
                 if (mGceAvd != null) {
                     break;
                 }

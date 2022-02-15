@@ -781,6 +781,11 @@ public class ClusterCommandScheduler extends CommandScheduler {
         execCommand(handler, QuotationAwareTokenizer.tokenizeLine(cmdLine));
     }
 
+    @VisibleForTesting
+    ClusterCommandConfigBuilder getClusterCommandConfigBuilder() {
+        return new ClusterCommandConfigBuilder();
+    }
+
     void execManagedClusterCommand(ClusterCommand commandTask, InvocationEventHandler handler)
             throws IOException, JSONException, ConfigurationException, NoDeviceException {
         File workDir = null;
@@ -795,7 +800,7 @@ public class ClusterCommandScheduler extends CommandScheduler {
             final TestContext testContext = client.getTestContext(requestId, commandId);
             testResources.addAll(testContext.getTestResources());
             final File configFile =
-                    new ClusterCommandConfigBuilder()
+                    getClusterCommandConfigBuilder()
                             .setWorkDir(workDir)
                             .setClusterCommand(commandTask)
                             .setTestEnvironment(testEnvironment)

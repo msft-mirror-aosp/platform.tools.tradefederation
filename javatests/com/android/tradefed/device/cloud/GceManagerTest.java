@@ -176,7 +176,8 @@ public class GceManagerTest {
         try {
             reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
             List<String> result =
-                    mGceManager.buildGceCmd(reportFile, mockBuildInfo, null, stubAttributes);
+                    mGceManager.buildGceCmd(
+                            reportFile, mockBuildInfo, null, null, null, stubAttributes);
             List<String> expected =
                     ArrayUtil.list(
                             mOptions.getAvdDriverBinary().getAbsolutePath(),
@@ -215,7 +216,8 @@ public class GceManagerTest {
         setter.setOptionValue("gce-driver-service-account-json-key-path", "/path/to/key.json");
         try {
             reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result = mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null);
+            List<String> result =
+                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
             List<String> expected =
                     ArrayUtil.list(
                             mOptions.getAvdDriverBinary().getAbsolutePath(),
@@ -256,7 +258,8 @@ public class GceManagerTest {
         setter.setOptionValue("instance-user", "foo");
         try {
             reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result = mGceManager.buildGceCmd(reportFile, mMockBuildInfo, "bar", null);
+            List<String> result =
+                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, "bar", null, null, null);
             List<String> expected =
                     ArrayUtil.list(
                             mOptions.getAvdDriverBinary().getAbsolutePath(),
@@ -310,7 +313,8 @@ public class GceManagerTest {
                         }
                     };
             reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result = mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null);
+            List<String> result =
+                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
             List<String> expected =
                     ArrayUtil.list(
                             mOptions.getAvdDriverBinary().getAbsolutePath(),
@@ -358,7 +362,8 @@ public class GceManagerTest {
                         }
                     };
             reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result = mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null);
+            List<String> result =
+                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
             List<String> expected =
                     ArrayUtil.list(
                             mOptions.getAvdDriverBinary().getAbsolutePath(),
@@ -371,6 +376,60 @@ public class GceManagerTest {
                             mGceManager.getAvdConfigFile().getAbsolutePath(),
                             "--report_file",
                             reportFile.getAbsolutePath(),
+                            "-v");
+            assertEquals(expected, result);
+        } finally {
+            FileUtil.deleteFile(reportFile);
+        }
+    }
+
+    /**
+     * Test {@link GceManager#buildGceCmd(File, IBuildInfo, String, String, Integer,
+     * MultiMap<String, String>)} with preconfigured virtual device.
+     */
+    @Test
+    public void testBuildGceCommand_withPreconfiguredVirtualDevice() throws Exception {
+        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
+        when(mMockBuildInfo.getBuildAttributes())
+                .thenReturn(Collections.<String, String>emptyMap());
+        when(mMockBuildInfo.getBuildFlavor()).thenReturn("FLAVOR");
+        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
+        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
+
+        File reportFile = null;
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue("gce-driver-service-account-json-key-path", "/path/to/key.json");
+        setter.setOptionValue("gce-private-key-path", "/path/to/id_rsa");
+
+        try {
+            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
+            List<String> result =
+                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, "bar", "vsoc-1", 2, null);
+            List<String> expected =
+                    ArrayUtil.list(
+                            mOptions.getAvdDriverBinary().getAbsolutePath(),
+                            "create",
+                            "--build-target",
+                            "FLAVOR",
+                            "--branch",
+                            "BRANCH",
+                            "--build-id",
+                            "BUILDID",
+                            "--config_file",
+                            mGceManager.getAvdConfigFile().getAbsolutePath(),
+                            "--service-account-json-private-key-path",
+                            "/path/to/key.json",
+                            "--host",
+                            "bar",
+                            "--host-user",
+                            "vsoc-1",
+                            "--host-ssh-private-key-path",
+                            "/path/to/id_rsa",
+                            "--report_file",
+                            reportFile.getAbsolutePath(),
+                            "--base-instance-num",
+                            "3",
+                            "--launch-args=\"--base_instance_num=3\"",
                             "-v");
             assertEquals(expected, result);
         } finally {
@@ -394,7 +453,8 @@ public class GceManagerTest {
         setter.setOptionValue("gce-driver-param", "--no-autoconnect");
         try {
             reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result = mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null);
+            List<String> result =
+                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
             List<String> expected =
                     ArrayUtil.list(
                             mOptions.getAvdDriverBinary().getAbsolutePath(),
@@ -418,6 +478,61 @@ public class GceManagerTest {
         }
     }
 
+    /** Test {@link GceManager#buildGceCmd(File, IBuildInfo, String)}. */
+    @Test
+    public void testBuildGceCommandWithExtraFiles() throws Exception {
+        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
+        when(mMockBuildInfo.getBuildAttributes())
+                .thenReturn(Collections.<String, String>emptyMap());
+        when(mMockBuildInfo.getBuildFlavor()).thenReturn("TARGET");
+        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
+        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
+
+        File reportFile = null;
+        MultiMap<File, String> extraFiles = new MultiMap<>();
+        File file1 = FileUtil.createTempFile("test_file1", ".txt");
+        File file2 = FileUtil.createTempFile("test_file2", ".txt");
+        extraFiles.put(file1, "/home/vsoc-01/test_file1.txt");
+        extraFiles.put(file2, "/home/vsoc-01/test_file2.txt");
+        try {
+            mOptions.setExtraFiles(extraFiles);
+            mGceManager =
+                    new GceManager(mMockDeviceDesc, mOptions, mMockBuildInfo) {
+                        @Override
+                        IRunUtil getRunUtil() {
+                            return mMockRunUtil;
+                        }
+                    };
+            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
+            List<String> result =
+                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
+            List<String> expected =
+                    ArrayUtil.list(
+                            mOptions.getAvdDriverBinary().getAbsolutePath(),
+                            "create",
+                            "--build-target",
+                            "TARGET",
+                            "--branch",
+                            "BRANCH",
+                            "--build-id",
+                            "BUILDID",
+                            "--extra-files",
+                            file1.getAbsolutePath() + ",/home/vsoc-01/test_file1.txt",
+                            file2.getAbsolutePath() + ",/home/vsoc-01/test_file2.txt",
+                            "--config_file",
+                            mGceManager.getAvdConfigFile().getAbsolutePath(),
+                            "--report_file",
+                            reportFile.getAbsolutePath(),
+                            "-v");
+            assertEquals(expected, result);
+        } finally {
+            FileUtil.deleteFile(reportFile);
+            FileUtil.deleteFile(file1);
+            FileUtil.deleteFile(file2);
+            mOptions.setExtraFiles(new MultiMap<>());
+        }
+    }
+
     /** Ensure exception is thrown after a timeout from the acloud command. */
     @Test
     public void testStartGce_timeout() throws Exception {
@@ -438,6 +553,8 @@ public class GceManagerTest {
                             File reportFile,
                             IBuildInfo b,
                             String ipDevice,
+                            String user,
+                            Integer offset,
                             MultiMap<String, String> attributes) {
                         List<String> tmp = new ArrayList<String>();
                         tmp.add("");
@@ -481,7 +598,8 @@ public class GceManagerTest {
             setter.setOptionValue("gce-driver-param", "--kernel-build-id");
             setter.setOptionValue("gce-driver-param", "KERNELBUILDID");
             reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result = mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null);
+            List<String> result =
+                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
             List<String> expected =
                     ArrayUtil.list(
                             mOptions.getAvdDriverBinary().getAbsolutePath(),
@@ -525,6 +643,8 @@ public class GceManagerTest {
                             File reportFile,
                             IBuildInfo b,
                             String ipDevice,
+                            String user,
+                            Integer offset,
                             MultiMap<String, String> attributes) {
                         String valid =
                                 " {\n"
@@ -581,6 +701,8 @@ public class GceManagerTest {
                             File reportFile,
                             IBuildInfo b,
                             String ipDevice,
+                            String user,
+                            Integer offset,
                             MultiMap<String, String> attributes) {
                         // We delete the potential report file to create an issue.
                         FileUtil.deleteFile(reportFile);
@@ -621,6 +743,8 @@ public class GceManagerTest {
                             File reportFile,
                             IBuildInfo b,
                             String ipDevice,
+                            String user,
+                            Integer offset,
                             MultiMap<String, String> attributes) {
                         String validFail =
                                 " {\n"
@@ -974,6 +1098,8 @@ public class GceManagerTest {
                             File reportFile,
                             IBuildInfo b,
                             String ipDevice,
+                            String user,
+                            Integer offset,
                             MultiMap<String, String> attributes) {
                         // We delete the potential report file to create an issue.
                         FileUtil.deleteFile(reportFile);

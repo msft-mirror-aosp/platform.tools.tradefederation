@@ -85,7 +85,8 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             "com.android.tradefed.testtype.ArtGTest",
                             "com.android.tradefed.testtype.mobly.MoblyBinaryHostTest",
                             // Others
-                            "com.google.android.deviceconfig.RebootTest"));
+                            "com.google.android.deviceconfig.RebootTest",
+                            "com.android.scenario.AppSetup"));
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {

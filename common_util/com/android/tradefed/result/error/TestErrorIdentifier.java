@@ -29,7 +29,9 @@ public enum TestErrorIdentifier implements ErrorIdentifier {
     OUTPUT_PARSER_ERROR(530_006, FailureStatus.TEST_FAILURE),
     TEST_BINARY_EXIT_CODE_ERROR(530_007, FailureStatus.TEST_FAILURE),
     TEST_BINARY_TIMED_OUT(530_008, FailureStatus.TIMED_OUT),
-    MODIFIED_FOLDABLE_STATE(530_009, FailureStatus.TEST_FAILURE);
+    MODIFIED_FOLDABLE_STATE(530_009, FailureStatus.TEST_FAILURE),
+    UNEXPECTED_MOBLY_CONFIG(530_010, FailureStatus.CUSTOMER_ISSUE),
+    UNEXPECTED_MOBLY_BEHAVIOR(530_011, FailureStatus.CUSTOMER_ISSUE);
 
     private final long code;
     private final @Nonnull FailureStatus status;

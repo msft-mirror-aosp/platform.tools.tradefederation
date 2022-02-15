@@ -2264,6 +2264,18 @@ public class HostTestTest {
         verify(mListener).testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
     }
 
+    /** Explicitly include only the class annotation should run all method inside it. */
+    @org.junit.Test
+    public void testRun_junit4style_included() throws Exception {
+        mHostTest.setClassName(Junit4TestLogClass.class.getName());
+        mHostTest.addIncludeAnnotation(MyAnnotation.class.getName());
+
+        mHostTest.run(mTestInfo, mListener);
+
+        verify(mListener).testRunStarted((String) Mockito.any(), Mockito.eq(2));
+        verify(mListener).testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
+    }
+
     /** Similar to {@link #testSplit_withExclude()} but with shard-unit set to method */
     @org.junit.Test
     public void testSplit_excludeTestCase_shardUnit_method() throws Exception {

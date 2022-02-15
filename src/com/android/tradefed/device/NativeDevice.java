@@ -408,6 +408,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public void setOptions(TestDeviceOptions options) {
         throwIfNull(options);
         mOptions = options;
+        if (mOptions.getFastbootBinary() != null) {
+            setFastbootPath(mOptions.getFastbootBinary().getAbsolutePath());
+        }
         mStateMonitor.setDefaultOnlineTimeout(options.getOnlineTimeout());
         mStateMonitor.setDefaultAvailableTimeout(options.getAvailableTimeout());
     }
@@ -2259,13 +2262,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             try {
                 return action.run();
             } catch (TimeoutException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, false);
             } catch (IOException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
             } catch (InstallException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
             } catch (SyncException e) {
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, true);
                 // a SyncException is not necessarily a device communication problem
                 // do additional diagnosis
                 if (!e.getErrorCode().equals(SyncError.BUFFER_OVERRUN) &&
@@ -2283,7 +2286,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                                     + " fastboot.");
                     return true;
                 }
-                logDeviceActionException(actionDescription, e);
+                logDeviceActionException(actionDescription, e, false);
             } catch (ShellCommandUnresponsiveException e) {
                 // ShellCommandUnresponsiveException is thrown when no output occurs within the
                 // timeout. It doesn't necessarily mean the device is offline.
@@ -2313,10 +2316,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      *
      * @param actionDescription the action's description
      * @param e the exception
+     * @param logFullTrace whether the full exception stack trace should be logged
      */
-    private void logDeviceActionException(String actionDescription, Exception e) {
+    private void logDeviceActionException(
+            String actionDescription, Exception e, boolean logFullTrace) {
         CLog.w("%s (%s) when attempting %s on device %s", e.getClass().getSimpleName(),
                 getExceptionMessage(e), actionDescription, getSerialNumber());
+        if (logFullTrace) {
+            CLog.w(e);
+        }
     }
 
     /**
@@ -2606,6 +2614,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         CLog.d("Api level above 24, using bugreportz instead.");
         File mainEntry = null;
         File bugreportzFile = null;
+        long startTime = System.currentTimeMillis();
         try {
             bugreportzFile = getBugreportzInternal();
             if (bugreportzFile == null) {
@@ -2628,6 +2637,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             CLog.e(e);
             return new ByteArrayInputStreamSource("corrupted bugreport.".getBytes());
         } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
             FileUtil.deleteFile(bugreportzFile);
             FileUtil.deleteFile(mainEntry);
         }
@@ -2714,29 +2726,36 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (apiLevel == UNKNOWN_API_LEVEL) {
             return null;
         }
-        if (apiLevel >= 24) {
-            CLog.d("Api level above 24, using bugreportz.");
-            bugreportFile = getBugreportzInternal();
-            if (bugreportFile != null) {
-                return new Bugreport(bugreportFile, true);
+        long startTime = System.currentTimeMillis();
+        try {
+            if (apiLevel >= 24) {
+                CLog.d("Api level above 24, using bugreportz.");
+                bugreportFile = getBugreportzInternal();
+                if (bugreportFile != null) {
+                    return new Bugreport(bugreportFile, true);
+                }
+                return null;
+            }
+            // fall back to regular bugreport
+            InputStreamSource bugreport = getBugreportInternal();
+            if (bugreport == null) {
+                CLog.e("Error when collecting the bugreport.");
+                return null;
+            }
+            try {
+                bugreportFile = FileUtil.createTempFile("bugreport", ".txt");
+                FileUtil.writeToFile(bugreport.createInputStream(), bugreportFile);
+                return new Bugreport(bugreportFile, false);
+            } catch (IOException e) {
+                CLog.e("Error when writing the bugreport file");
+                CLog.e(e);
             }
             return null;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
         }
-        // fall back to regular bugreport
-        InputStreamSource bugreport = getBugreportInternal();
-        if (bugreport == null) {
-            CLog.e("Error when collecting the bugreport.");
-            return null;
-        }
-        try {
-            bugreportFile = FileUtil.createTempFile("bugreport", ".txt");
-            FileUtil.writeToFile(bugreport.createInputStream(), bugreportFile);
-            return new Bugreport(bugreportFile, false);
-        } catch (IOException e) {
-            CLog.e("Error when writing the bugreport file");
-            CLog.e(e);
-        }
-        return null;
     }
 
     /**
@@ -2747,14 +2766,21 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (getApiLevelSafe() < 24) {
             return null;
         }
-        File bugreportZip = getBugreportzInternal();
-        if (bugreportZip == null) {
-            bugreportZip = bugreportzFallback();
+        long startTime = System.currentTimeMillis();
+        try {
+            File bugreportZip = getBugreportzInternal();
+            if (bugreportZip == null) {
+                bugreportZip = bugreportzFallback();
+            }
+            if (bugreportZip != null) {
+                return new FileInputStreamSource(bugreportZip, true);
+            }
+            return null;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
         }
-        if (bugreportZip != null) {
-            return new FileInputStreamSource(bugreportZip, true);
-        }
-        return null;
     }
 
     /** Internal Helper method to get the bugreportz zip file as a {@link File}. */
@@ -2887,44 +2913,53 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         int waitTime = 0;
         IWifiHelper wifi = createWifiHelper();
         long startTime = mClock.millis();
-        for (int i = 1; i <= mOptions.getWifiAttempts(); i++) {
-            CLog.i("Connecting to wifi network %s on %s", wifiSsid, getSerialNumber());
-            boolean success =
-                    wifi.connectToNetwork(wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
-            final Map<String, String> wifiInfo = wifi.getWifiInfo();
-            if (success) {
-                CLog.i(
-                        "Successfully connected to wifi network %s(%s) on %s",
-                        wifiSsid, wifiInfo.get("bssid"), getSerialNumber());
+        try {
+            for (int i = 1; i <= mOptions.getWifiAttempts(); i++) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.WIFI_CONNECT_RETRY_COUNT, 1);
+                CLog.i("Connecting to wifi network %s on %s", wifiSsid, getSerialNumber());
+                boolean success =
+                        wifi.connectToNetwork(
+                                wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
+                final Map<String, String> wifiInfo = wifi.getWifiInfo();
+                if (success) {
+                    CLog.i(
+                            "Successfully connected to wifi network %s(%s) on %s",
+                            wifiSsid, wifiInfo.get("bssid"), getSerialNumber());
 
-                mLastConnectedWifiSsid = wifiSsid;
-                mLastConnectedWifiPsk = wifiPsk;
+                    mLastConnectedWifiSsid = wifiSsid;
+                    mLastConnectedWifiPsk = wifiPsk;
 
-                return true;
-            } else {
-                CLog.w(
-                        "Failed to connect to wifi network %s(%s) on %s on attempt %d of %d",
-                        wifiSsid,
-                        wifiInfo.get("bssid"),
-                        getSerialNumber(),
-                        i,
-                        mOptions.getWifiAttempts());
-            }
-            if (mClock.millis() - startTime >= mOptions.getMaxWifiConnectTime()) {
-                CLog.e(
-                        "Failed to connect to wifi after %d ms. Aborting.",
-                        mOptions.getMaxWifiConnectTime());
-                break;
-            }
-            if (i < mOptions.getWifiAttempts()) {
-                if (mOptions.isWifiExpoRetryEnabled()) {
-                    // use binary exponential back-offs when retrying.
-                    waitTime = rnd.nextInt(backoffSlotCount) * slotTime;
-                    backoffSlotCount *= 2;
+                    return true;
+                } else {
+                    CLog.w(
+                            "Failed to connect to wifi network %s(%s) on %s on attempt %d of %d",
+                            wifiSsid,
+                            wifiInfo.get("bssid"),
+                            getSerialNumber(),
+                            i,
+                            mOptions.getWifiAttempts());
                 }
-                CLog.e("Waiting for %d ms before reconnecting to %s...", waitTime, wifiSsid);
-                getRunUtil().sleep(waitTime);
+                if (mClock.millis() - startTime >= mOptions.getMaxWifiConnectTime()) {
+                    CLog.e(
+                            "Failed to connect to wifi after %d ms. Aborting.",
+                            mOptions.getMaxWifiConnectTime());
+                    break;
+                }
+                if (i < mOptions.getWifiAttempts()) {
+                    if (mOptions.isWifiExpoRetryEnabled()) {
+                        // use binary exponential back-offs when retrying.
+                        waitTime = rnd.nextInt(backoffSlotCount) * slotTime;
+                        backoffSlotCount *= 2;
+                    }
+                    CLog.e("Waiting for %d ms before reconnecting to %s...", waitTime, wifiSsid);
+                    getRunUtil().sleep(waitTime);
+                }
             }
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.WIFI_CONNECT_TIME, mClock.millis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.WIFI_CONNECT_COUNT, 1);
         }
         return false;
     }

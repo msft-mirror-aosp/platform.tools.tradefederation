@@ -119,6 +119,11 @@ public class HostOptions implements IHostOptions {
             description = "The network interface used to connect to test devices.")
     private String mNetworkInterface = null;
 
+    @Option(
+            name = "preconfigured-virtual-device-pool",
+            description = "Preconfigured virtual device pool. (Value format: $hostname:$user.)")
+    private List<String> mPreconfiguredVirtualDevicePool = new ArrayList<>();
+
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
 
     /** {@inheritDoc} */
@@ -195,6 +200,12 @@ public class HostOptions implements IHostOptions {
 
     /** {@inheritDoc} */
     @Override
+    public Set<String> getKnownPreconfigureVirtualDevicePool() {
+        return new HashSet<>(mPreconfiguredVirtualDevicePool);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean getUseZip64InPartialDownload() {
         return mUseZip64InPartialDownload;
     }
@@ -260,13 +271,13 @@ public class HostOptions implements IHostOptions {
         if (!mConcurrentLocks.containsKey(type)) {
             return;
         }
-        CLog.i(
-                "Requesting a '%s' permit out of the max limit of %s. Current queue "
-                        + "length: %s",
-                        type,
-                        mConcurrentLimit.get(type),
-                        mConcurrentLocks.get(type).getQueueLength());
-        mConcurrentLocks.get(type).acquireUninterruptibly();
+        synchronized (mConcurrentLocks.get(type)) {
+            CLog.i(
+                    "Requesting a '%s' permit out of the max limit of %s. Current queue "
+                            + "length: %s",
+                    type, mConcurrentLimit.get(type), mConcurrentLocks.get(type).getQueueLength());
+            mConcurrentLocks.get(type).acquireUninterruptibly();
+        }
     }
 
     @Override

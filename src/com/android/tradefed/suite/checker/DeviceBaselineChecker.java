@@ -106,9 +106,7 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
                     && !mEnableExperimentDeviceBaselineSetters.contains(setter.getName())) {
                 continue;
             }
-            try {
-                setter.setBaseline(mDevice);
-            } catch (RuntimeException e) {
+            if (!setter.setBaseline(mDevice)) {
                 result.setStatus(CheckStatus.FAILED);
                 errorMessage.append(String.format("Failed to set baseline %s. ", setter.getName()));
             }

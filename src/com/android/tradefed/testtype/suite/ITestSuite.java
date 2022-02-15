@@ -327,6 +327,17 @@ public abstract class ITestSuite
             description = "Feature flag to test partial download via feature service.")
     private boolean mStageArtifactsViaFeature = true;
 
+    @Option(
+            name = "multi-devices-modules",
+            description = "Running strategy for modules that require multiple devices.")
+    private MultiDeviceModuleStrategy mMultiDevicesStrategy = MultiDeviceModuleStrategy.EXCLUDE_ALL;
+
+    public enum MultiDeviceModuleStrategy {
+        EXCLUDE_ALL,
+        RUN,
+        ONLY_MULTI_DEVICES
+    }
+
     private ITestDevice mDevice;
     private IBuildInfo mBuildInfo;
     private List<ISystemStatusChecker> mSystemStatusCheckers;
@@ -440,6 +451,22 @@ public abstract class ITestSuite
                 // execution.
                 continue;
             }
+            switch (mMultiDevicesStrategy) {
+                case EXCLUDE_ALL:
+                    if (config.getValue().getDeviceConfig().size() > 1) {
+                        // Exclude multi-devices configs
+                        continue;
+                    }
+                    break;
+                case ONLY_MULTI_DEVICES:
+                    if (config.getValue().getDeviceConfig().size() == 1) {
+                        // Exclude single devices configs
+                        continue;
+                    }
+                    break;
+                default:
+                    break;
+            }
             filterPreparers(config.getValue(), mAllowedPreparers);
 
             // Copy the CoverageOptions from the main configuration to the module configuration.
@@ -463,6 +490,9 @@ public abstract class ITestSuite
 
     /** Helper to download all artifacts for the given modules. */
     private void stageTestArtifacts(ITestDevice device, Set<String> modules) {
+        if (mBuildInfo.getRemoteFiles().isEmpty()) {
+            return;
+        }
         CLog.i(String.format("Start to stage test artifacts for %d modules.", modules.size()));
         long startTime = System.currentTimeMillis();
         // Include the file if its path contains a folder name matching any of the module.
@@ -479,6 +509,13 @@ public abstract class ITestSuite
                 args.put(ResolvePartialDownload.DESTINATION_DIR, getTestsDir().getAbsolutePath());
                 args.put(ResolvePartialDownload.INCLUDE_FILTERS, String.join(";", includeFilters));
                 args.put(ResolvePartialDownload.EXCLUDE_FILTERS, String.join(";", excludeFilters));
+                // Pass the remote paths
+                String remotePaths =
+                        mBuildInfo.getRemoteFiles().stream()
+                                .map(p -> p.toString())
+                                .collect(Collectors.joining(";"));
+                args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+
                 FeatureResponse rep =
                         client.triggerFeature(
                                 ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);
@@ -1517,5 +1554,9 @@ public abstract class ITestSuite
 
     protected boolean shouldModuleRun(ModuleDefinition module) {
         return true;
+    }
+
+    protected void setMultiDeviceStrategy(MultiDeviceModuleStrategy strategy) {
+        mMultiDevicesStrategy = strategy;
     }
 }

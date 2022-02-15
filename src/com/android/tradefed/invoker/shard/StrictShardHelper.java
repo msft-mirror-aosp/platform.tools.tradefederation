@@ -60,6 +60,10 @@ public class StrictShardHelper extends ShardHelper {
         if (shardCount == null) {
             throw new RuntimeException("shard-count is null while shard-index is " + shardIndex);
         }
+        // No sharding needed if shard-count=1
+        if (shardCount == 1) {
+            return false;
+        }
 
         // Split tests in place, without actually sharding.
         List<IRemoteTest> listAllTests = getAllTests(config, shardCount, testInfo, logger);

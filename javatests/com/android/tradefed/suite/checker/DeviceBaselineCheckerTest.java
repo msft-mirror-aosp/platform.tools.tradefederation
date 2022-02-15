@@ -17,7 +17,7 @@
 package com.android.tradefed.suite.checker;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -55,62 +55,60 @@ public class DeviceBaselineCheckerTest {
     @Test
     public void testSetBaselineSettings_inExperimentList() throws Exception {
         mOptionSetter.setOptionValue("enable-device-baseline-settings", "true");
-        mOptionSetter.setOptionValue("enable-experimental-device-baseline-setters", "test");
-        DeviceBaselineSetter setter_exp =
-                new SettingsBaselineSetter("test", "namespace", "key", "value") {
-                    @Override
-                    public boolean isExperimental() {
-                        return true;
-                    }
-                };
-        DeviceBaselineSetter setter_notExp =
-                new SettingsBaselineSetter("test", "namespace", "key", "value") {
-                    @Override
-                    public boolean isExperimental() {
-                        return false;
-                    }
-                };
+        mOptionSetter.setOptionValue("enable-experimental-device-baseline-setters", "test1");
+
+        DeviceBaselineSetter mockSetterExp = mock(SettingsBaselineSetter.class);
+        doReturn("test1").when(mockSetterExp).getName();
+        doReturn(true).when(mockSetterExp).isExperimental();
+        doReturn(true).when(mockSetterExp).setBaseline(mMockDevice);
+
+        DeviceBaselineSetter mockSetterNotExp = mock(SettingsBaselineSetter.class);
+        doReturn("test2").when(mockSetterNotExp).getName();
+        doReturn(false).when(mockSetterNotExp).isExperimental();
+        doReturn(true).when(mockSetterNotExp).setBaseline(mMockDevice);
+
         List<DeviceBaselineSetter> deviceBaselineSetters = new ArrayList<>();
-        deviceBaselineSetters.add(setter_exp);
-        deviceBaselineSetters.add(setter_notExp);
+        deviceBaselineSetters.add(mockSetterExp);
+        deviceBaselineSetters.add(mockSetterNotExp);
         mChecker.setDeviceBaselineSetters(deviceBaselineSetters);
+
         assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
-        verify(mMockDevice, times(2)).setSetting("namespace", "key", "value");
+        verify(mockSetterExp, times(1)).setBaseline(mMockDevice);
+        verify(mockSetterNotExp, times(1)).setBaseline(mMockDevice);
     }
 
     /** Test that the baseline setting is skipped when it is not included in the experiment list. */
     @Test
     public void testSetBaselineSettings_notInExperimentList() throws Exception {
         mOptionSetter.setOptionValue("enable-device-baseline-settings", "true");
-        DeviceBaselineSetter setter =
-                new SettingsBaselineSetter("test", "namespace", "key", "value") {
-                    @Override
-                    public boolean isExperimental() {
-                        return true;
-                    }
-                };
+
+        DeviceBaselineSetter mockSetter = mock(SettingsBaselineSetter.class);
+        doReturn("test").when(mockSetter).getName();
+        doReturn(true).when(mockSetter).isExperimental();
+        doReturn(true).when(mockSetter).setBaseline(mMockDevice);
+
         List<DeviceBaselineSetter> deviceBaselineSetters = new ArrayList<>();
-        deviceBaselineSetters.add(setter);
+        deviceBaselineSetters.add(mockSetter);
         mChecker.setDeviceBaselineSetters(deviceBaselineSetters);
+
         assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
-        verify(mMockDevice, times(0)).setSetting("namespace", "key", "value");
+        verify(mockSetter, times(0)).setBaseline(mMockDevice);
     }
 
     /** Test that the status is set to failed when an exception occurs. */
     @Test
     public void testFailToSetBaselineSettings() throws Exception {
         mOptionSetter.setOptionValue("enable-device-baseline-settings", "true");
-        DeviceBaselineSetter setter =
-                new SettingsBaselineSetter("test", "namespace", "key", "value") {
-                    @Override
-                    public boolean isExperimental() {
-                        return false;
-                    }
-                };
+
+        DeviceBaselineSetter mockSetter = mock(SettingsBaselineSetter.class);
+        doReturn("test").when(mockSetter).getName();
+        doReturn(false).when(mockSetter).isExperimental();
+        doReturn(false).when(mockSetter).setBaseline(mMockDevice);
+
         List<DeviceBaselineSetter> deviceBaselineSetters = new ArrayList<>();
-        deviceBaselineSetters.add(setter);
+        deviceBaselineSetters.add(mockSetter);
         mChecker.setDeviceBaselineSetters(deviceBaselineSetters);
-        doThrow(new RuntimeException()).when(mMockDevice).setSetting("namespace", "key", "value");
+
         assertEquals(CheckStatus.FAILED, mChecker.preExecutionCheck(mMockDevice).getStatus());
         assertEquals(
                 "Failed to set baseline test. ",
