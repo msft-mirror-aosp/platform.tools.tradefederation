@@ -362,101 +362,102 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
     protected Optional<String> executeCheckerTest(
             TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        // TODO: Encapsulate the device temp dir creation logic in its own method.
-        String tmpCheckerDir =
-                String.format("/data/local/tmp/%s", mRunTestName.replaceAll("/", "-"));
-        String mkdirCmd = String.format("mkdir -p \"%s\"", tmpCheckerDir);
-        CommandResult mkdirResult = mDevice.executeShellV2Command(mkdirCmd);
-        if (mkdirResult.getStatus() != CommandStatus.SUCCESS) {
-            String errorMessage =
-                    String.format(
-                            "Cannot create directory `%s` on device", mkdirResult.getStderr());
-            CLog.e(errorMessage);
-            return Optional.of(errorMessage);
-        }
 
-        String cfgPath = tmpCheckerDir + "/graph.cfg";
-        String oatPath = tmpCheckerDir + "/output.oat";
-        String abi = mAbi.getName();
-        String dex2oatBinary = "dex2oat" + AbiUtils.getBitness(abi);
-        Path dex2oatPath = Paths.get(ART_APEX_PATH.toString(), "bin", dex2oatBinary);
-        String dex2oatCmd =
-                String.format(
-                        "%s --dex-file=%s --oat-file=%s --dump-cfg=%s -j1 --compile-art-test",
-                        dex2oatPath, mClasspath.get(0), oatPath, cfgPath);
-        CommandResult dex2oatResult = mDevice.executeShellV2Command(dex2oatCmd);
-        if (dex2oatResult.getStatus() != CommandStatus.SUCCESS) {
-            String errorMessage =
-                    String.format("Error while running dex2oat: %s", dex2oatResult.getStderr());
-            CLog.e(errorMessage);
-            return Optional.of(errorMessage);
+        /**
+         * An internal exception class for errors related to the preparation and execution of the
+         * Checker tool.
+         */
+        class CheckerTestException extends Exception {
+            CheckerTestException(String format, Object... args) {
+                super(String.format(format, args));
+            }
         }
 
         // Temporary directory used to store files used in Checker test.
         File runTestDir = null;
 
         try {
-            runTestDir =
-                    Files.createTempDirectory(testInfo.dependenciesFolder().toPath(), mRunTestName)
-                            .toFile();
-        } catch (IOException e) {
-            String errorMessage = String.format("I/O error while creating test dir: %s", e);
+            // TODO: Encapsulate the device temp dir creation logic in its own method.
+            String tmpCheckerDir =
+                    String.format("/data/local/tmp/%s", mRunTestName.replaceAll("/", "-"));
+            String mkdirCmd = String.format("mkdir -p \"%s\"", tmpCheckerDir);
+            CommandResult mkdirResult = mDevice.executeShellV2Command(mkdirCmd);
+            if (mkdirResult.getStatus() != CommandStatus.SUCCESS) {
+                throw new CheckerTestException(
+                        "Cannot create directory `%s` on device", mkdirResult.getStderr());
+            }
+
+            String cfgPath = tmpCheckerDir + "/graph.cfg";
+            String oatPath = tmpCheckerDir + "/output.oat";
+            String abi = mAbi.getName();
+            String dex2oatBinary = "dex2oat" + AbiUtils.getBitness(abi);
+            Path dex2oatPath = Paths.get(ART_APEX_PATH.toString(), "bin", dex2oatBinary);
+            String dex2oatCmd =
+                    String.format(
+                            "%s --dex-file=%s --oat-file=%s --dump-cfg=%s -j1 --compile-art-test",
+                            dex2oatPath, mClasspath.get(0), oatPath, cfgPath);
+            CommandResult dex2oatResult = mDevice.executeShellV2Command(dex2oatCmd);
+            if (dex2oatResult.getStatus() != CommandStatus.SUCCESS) {
+                throw new CheckerTestException(
+                        "Error while running dex2oat: %s", dex2oatResult.getStderr());
+            }
+
+            try {
+                runTestDir =
+                        Files.createTempDirectory(
+                                        testInfo.dependenciesFolder().toPath(), mRunTestName)
+                                .toFile();
+            } catch (IOException e) {
+                throw new CheckerTestException("I/O error while creating test dir: %s", e);
+            }
+
+            File localCfgPath = new File(runTestDir, "graph.cfg");
+            if (localCfgPath.isFile()) {
+                localCfgPath.delete();
+            }
+
+            if (!mDevice.pullFile(cfgPath, localCfgPath)) {
+                throw new CheckerTestException("Cannot pull CFG file from the device");
+            }
+
+            File tempJar = new File(runTestDir, "temp.jar");
+            if (!mDevice.pullFile(mClasspath.get(0), tempJar)) {
+                throw new CheckerTestException("Cannot pull JAR file from the device");
+            }
+
+            try {
+                extractSourcesFromJar(runTestDir, tempJar);
+            } catch (IOException e) {
+                throw new CheckerTestException("Error unpacking test JAR file: %s", e);
+            }
+
+            String checkerArch = AbiUtils.getArchForAbi(mAbi.getName()).toUpperCase();
+
+            File checkerBinary = getCheckerBinaryPath(testInfo);
+
+            String[] checkerCommandLine = {
+                checkerBinary.getAbsolutePath(),
+                "--no-print-cfg",
+                "-q",
+                "--arch=" + checkerArch,
+                localCfgPath.getAbsolutePath(),
+                runTestDir.getAbsolutePath()
+            };
+
+            Optional<String> checkerError = runChecker(checkerCommandLine);
+            if (checkerError.isPresent()) {
+                listener.testLog(
+                        "graph.cfg", LogDataType.CFG, new FileInputStreamSource(localCfgPath));
+                CLog.i(checkerError.get());
+                return checkerError;
+            }
+        } catch (CheckerTestException e) {
+            String errorMessage = e.getMessage();
             CLog.e(errorMessage);
-            FileUtil.recursiveDelete(runTestDir);
             return Optional.of(errorMessage);
-        }
-
-        File localCfgPath = new File(runTestDir, "graph.cfg");
-        if (localCfgPath.isFile()) {
-            localCfgPath.delete();
-        }
-
-        if (!mDevice.pullFile(cfgPath, localCfgPath)) {
-            String errorMessage = "Cannot pull CFG file from the device";
-            CLog.e(errorMessage);
+        } finally {
             FileUtil.recursiveDelete(runTestDir);
-            return Optional.of(errorMessage);
         }
-
-        File tempJar = new File(runTestDir, "temp.jar");
-        if (!mDevice.pullFile(mClasspath.get(0), tempJar)) {
-            String errorMessage = "Cannot pull JAR file from the device";
-            CLog.e(errorMessage);
-            FileUtil.recursiveDelete(runTestDir);
-            return Optional.of(errorMessage);
-        }
-
-        try {
-            extractSourcesFromJar(runTestDir, tempJar);
-        } catch (IOException e) {
-            String errorMessage = String.format("Error unpacking test JAR file: %s", e);
-            CLog.e(errorMessage);
-            FileUtil.recursiveDelete(runTestDir);
-            return Optional.of(errorMessage);
-        }
-
-        String checkerArch = AbiUtils.getArchForAbi(mAbi.getName()).toUpperCase();
-
-        File checkerBinary = getCheckerBinaryPath(testInfo);
-
-        String[] checkerCommandLine = {
-            checkerBinary.getAbsolutePath(),
-            "--no-print-cfg",
-            "-q",
-            "--arch=" + checkerArch,
-            localCfgPath.getAbsolutePath(),
-            runTestDir.getAbsolutePath()
-        };
-
-        Optional<String> checkerError = runChecker(checkerCommandLine);
-        if (checkerError.isPresent()) {
-            listener.testLog("graph.cfg", LogDataType.CFG, new FileInputStreamSource(localCfgPath));
-            CLog.i(checkerError.get());
-            FileUtil.recursiveDelete(runTestDir);
-            return checkerError;
-        }
-
-        FileUtil.recursiveDelete(runTestDir);
         return Optional.empty();
     }
 
