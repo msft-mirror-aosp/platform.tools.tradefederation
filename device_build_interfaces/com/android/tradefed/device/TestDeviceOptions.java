@@ -202,6 +202,14 @@ public class TestDeviceOptions {
     )
     private List<String> mGceDriverParams = new ArrayList<>();
 
+    @Option(
+            name = "gce-driver-file-param",
+            description =
+                    "Additional file paths to pass to gce driver as parameters. For example, "
+                            + "local-image=/path/to/image is converted to "
+                            + "--local-image /path/to/image.")
+    private MultiMap<String, File> mGceDriverFileParams = new MultiMap<>();
+
     @Deprecated
     @Option(
         name = "gce-driver-build-id-param",
@@ -282,6 +290,7 @@ public class TestDeviceOptions {
                             + " form_factor=phone.")
     private List<String> mInvocationAttributeToMetadata = new ArrayList<>();
 
+    // TODO(b/216591507): Replace with gce-driver-file-param.
     @Option(
             name = "gce-local-image-path",
             description = "path of the prebuilt cuttlefish local image.")
@@ -629,6 +638,11 @@ public class TestDeviceOptions {
     /** Add a param to the gce driver params. */
     public void addGceDriverParams(String param) {
         mGceDriverParams.add(param);
+    }
+
+    /** Return the additional file paths as GCE driver parameters provided via option. */
+    public MultiMap<String, File> getGceDriverFileParams() {
+        return mGceDriverFileParams;
     }
 
     /** Set the GCE driver parameter that should be paired with the build id from build info */
