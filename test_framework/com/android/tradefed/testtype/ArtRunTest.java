@@ -392,7 +392,9 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             return Optional.of(errorMessage);
         }
 
-        File runTestDir;
+        // Temporary directory used to store files used in Checker test.
+        File runTestDir = null;
+
         try {
             runTestDir =
                     Files.createTempDirectory(testInfo.dependenciesFolder().toPath(), mRunTestName)
@@ -400,6 +402,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         } catch (IOException e) {
             String errorMessage = String.format("I/O error while creating test dir: %s", e);
             CLog.e(errorMessage);
+            FileUtil.recursiveDelete(runTestDir);
             return Optional.of(errorMessage);
         }
 
@@ -411,6 +414,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         if (!mDevice.pullFile(cfgPath, localCfgPath)) {
             String errorMessage = "Cannot pull CFG file from the device";
             CLog.e(errorMessage);
+            FileUtil.recursiveDelete(runTestDir);
             return Optional.of(errorMessage);
         }
 
@@ -418,6 +422,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         if (!mDevice.pullFile(mClasspath.get(0), tempJar)) {
             String errorMessage = "Cannot pull JAR file from the device";
             CLog.e(errorMessage);
+            FileUtil.recursiveDelete(runTestDir);
             return Optional.of(errorMessage);
         }
 
@@ -426,6 +431,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         } catch (IOException e) {
             String errorMessage = String.format("Error unpacking test JAR file: %s", e);
             CLog.e(errorMessage);
+            FileUtil.recursiveDelete(runTestDir);
             return Optional.of(errorMessage);
         }
 
@@ -446,6 +452,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         if (checkerError.isPresent()) {
             listener.testLog("graph.cfg", LogDataType.CFG, new FileInputStreamSource(localCfgPath));
             CLog.i(checkerError.get());
+            FileUtil.recursiveDelete(runTestDir);
             return checkerError;
         }
 
