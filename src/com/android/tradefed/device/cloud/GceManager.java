@@ -59,6 +59,7 @@ import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -342,8 +343,6 @@ public class GceManager {
         gceArgs.add(
                 TestDeviceOptions.getCreateCommandByInstanceType(
                         getTestDeviceOptions().getInstanceType()));
-        // Handle the build id related params
-        List<String> gceDriverParams = getTestDeviceOptions().getGceDriverParams();
 
         if (TestDeviceOptions.InstanceType.CHEEPS.equals(
                 getTestDeviceOptions().getInstanceType())) {
@@ -365,6 +364,9 @@ public class GceManager {
         arguments. Otherwise, generate gce args from device BuildInfo. Please refer to acloud
         arguments for the supported format:
         https://android.googlesource.com/platform/tools/acloud/+/refs/heads/master/create/create_args.py  */
+        List<String> gceDriverParams = getTestDeviceOptions().getGceDriverParams();
+        MultiMap<String, File> gceDriverFileParams =
+                getTestDeviceOptions().getGceDriverFileParams();
         if (getTestDeviceOptions().getAvdLocalImage() != null
                 && getTestDeviceOptions().getAvdCuttlefishHostPkg() != null) {
             CLog.i("Virtual device is created by specified prebuilt image files.");
@@ -373,7 +375,9 @@ public class GceManager {
             gceArgs.add("--local-image");
             gceArgs.add(getTestDeviceOptions().getAvdLocalImage().getAbsolutePath());
         } else if (!gceDriverParams.contains("--build-target")
-                && !gceDriverParams.contains("--build_target")) {
+                && !gceDriverParams.contains("--build_target")
+                && !(gceDriverFileParams.containsKey("local-image")
+                        && gceDriverFileParams.containsKey("cvd-host-package"))) {
             gceArgs.add("--build-target");
             if (b.getBuildAttributes().containsKey("build_target")) {
                 // If BuildInfo contains the attribute for a build target, use that.
@@ -385,6 +389,11 @@ public class GceManager {
             gceArgs.add(b.getBuildBranch());
             gceArgs.add("--build-id");
             gceArgs.add(b.getBuildId());
+        }
+
+        for (Map.Entry<String, File> entry : gceDriverFileParams.entries()) {
+            gceArgs.add("--" + entry.getKey());
+            gceArgs.add(entry.getValue().getAbsolutePath());
         }
 
         // process any info in the invocation context that should be passed onto GCE driver
