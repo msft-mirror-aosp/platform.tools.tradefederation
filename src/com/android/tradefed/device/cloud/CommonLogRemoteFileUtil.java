@@ -115,6 +115,9 @@ public class CommonLogRemoteFileUtil {
                         OXYGEN_RUNTIME_LOG_DIR + "launcher.log", null, LogDataType.TEXT));
         OXYGEN_LOG_FILES.add(
                 new KnownLogFileEntry(
+                        OXYGEN_RUNTIME_LOG_DIR + "vdl_stdout.txt", null, LogDataType.TEXT));
+        OXYGEN_LOG_FILES.add(
+                new KnownLogFileEntry(
                         OXYGEN_RUNTIME_LOG_DIR + "kernel.log", null, LogDataType.TEXT));
         OXYGEN_LOG_FILES.add(
                 new KnownLogFileEntry(OXYGEN_RUNTIME_LOG_DIR + "logcat", null, LogDataType.TEXT));
