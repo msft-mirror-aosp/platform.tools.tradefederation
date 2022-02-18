@@ -221,7 +221,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             }
 
             // Cleanup GCE first to make sure ssh tunnel has nowhere to go.
-            if (!getOptions().shouldSkipTearDown()) {
+            if (!getOptions().shouldSkipTearDown() && getGceHandler() != null) {
                 getGceHandler().shutdownGce();
             }
             // We are done with the gce related information, clean it to prevent re-entry.
