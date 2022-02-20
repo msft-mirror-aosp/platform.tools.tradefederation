@@ -221,8 +221,8 @@ public class ClusterCommandSchedulerTest {
         mMockClusterCommandConfigBuilder =
                 new ClusterCommandConfigBuilder() {
                     @Override
-                    IClusterOptions getClusterOptions() {
-                        return mMockClusterOptions;
+                    Map<String, String> getSystemEnvMap() {
+                        return new HashMap<String, String>();
                     }
                 };
 
