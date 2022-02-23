@@ -236,7 +236,7 @@ public class SparseImageUtil {
                     ret = 0;
                     break;
                 case SparseChunk.FILL:
-                    ret = mCur.mFill[(4 - ((int) mLeft & 0x3)) & 0x3];
+                    ret = Byte.toUnsignedInt(mCur.mFill[(4 - ((int) mLeft & 0x3)) & 0x3]);
                     break;
                 default:
                     throw new IOException("Unsupported Chunk:" + mCur);
