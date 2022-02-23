@@ -62,7 +62,8 @@ public class SparseImageUtil {
      */
     public static void unsparse(File imgFile, File destFile) throws IOException {
         try (FileInputStream in = new FileInputStream(imgFile)) {
-            SparseInputStream sis = new SparseInputStream(new BufferedInputStream(in));
+            SparseInputStream sis =
+                    new SparseInputStream(new BufferedInputStream(in), imgFile.length());
             if (!sis.isSparse()) {
                 throw new IOException("Not a sparse image: " + imgFile);
             }
@@ -96,7 +97,7 @@ public class SparseImageUtil {
      * SparseInputStream read from upstream and detects the data format. If the upstream is a valid
      * sparse data, it will unsparse it on the fly. Otherwise, it just passthrough as is.
      */
-    private static class SparseInputStream extends InputStream {
+    public static class SparseInputStream extends InputStream {
         private static final int FILE_HDR_SIZE = 28;
         private static final int CHUNK_HDR_SIZE = 12;
 
@@ -137,6 +138,7 @@ public class SparseImageUtil {
 
         private BufferedInputStream mIn;
         private boolean mIsSparse;
+        private long mOriginalSize;
         private long mBlockSize;
         private long mTotalBlocks;
         private long mTotalChunks;
@@ -144,11 +146,17 @@ public class SparseImageUtil {
         private long mLeft;
         private int mCurChunks;
 
-        public SparseInputStream(BufferedInputStream in) throws IOException {
+        public SparseInputStream(BufferedInputStream in, long originalSize) throws IOException {
             mIn = in;
+            mOriginalSize = originalSize;
             in.mark(FILE_HDR_SIZE * 2);
-            ByteBuffer buf = readBuffer(mIn, FILE_HDR_SIZE);
-            mIsSparse = (buf.getInt() == SPARSE_IMAGE_MAGIC);
+            ByteBuffer buf = null;
+            try {
+                buf = readBuffer(mIn, FILE_HDR_SIZE);
+                mIsSparse = (buf.getInt() == SPARSE_IMAGE_MAGIC);
+            } catch (IOException e) {
+                mIsSparse = false;
+            }
             if (!mIsSparse) {
                 mIn.reset();
                 return;
@@ -245,14 +253,19 @@ public class SparseImageUtil {
             return ret;
         }
 
+        @Override
+        public void close() throws IOException {
+            StreamUtil.close(mIn);
+        }
+
         /**
-         * Get the unsparse size
+         * Return the total number of bytes in the unsparsed image.
          *
-         * @return -1 if stream doesn't contain sparse image data.
+         * @return mOriginalSize if underlying stream is already non-sparse.
          */
-        public long getUnsparseSize() {
+        public long size() {
             if (!mIsSparse) {
-                return -1;
+                return mOriginalSize;
             }
             return mBlockSize * mTotalBlocks;
         }
