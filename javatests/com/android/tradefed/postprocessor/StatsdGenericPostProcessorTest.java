@@ -169,7 +169,7 @@ public class StatsdGenericPostProcessorTest {
                 REPORT_PREFIX_APP_START + "-report",
                 new LogFile(mAppStartupReportFile.getAbsolutePath(), "some.url", LogDataType.PB));
         mProcessor.processTestMetricsAndLogs(description, new HashMap<>(), testLogs);
-        String expectedTextPb = TextFormat.printToString(APP_STARTUP_REPORT);
+        String expectedTextPb = TextFormat.printer().printToString(APP_STARTUP_REPORT);
 
         verify(mListener, times(1))
                 .testLog(
@@ -520,7 +520,7 @@ public class StatsdGenericPostProcessorTest {
                 REPORT_PREFIX_APP_START + "-report",
                 new LogFile(mAppStartupReportFile.getAbsolutePath(), "some.url", LogDataType.PB));
         mProcessor.processRunMetricsAndLogs(new HashMap<>(), runLogs);
-        String expectedTextPb = TextFormat.printToString(APP_STARTUP_REPORT);
+        String expectedTextPb = TextFormat.printer().printToString(APP_STARTUP_REPORT);
         String expectedJson = JsonFormat.printer().print(APP_STARTUP_REPORT);
 
         verify(mListener, times(1))
