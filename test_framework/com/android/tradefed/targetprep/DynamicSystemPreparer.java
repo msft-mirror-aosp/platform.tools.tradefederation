@@ -41,11 +41,13 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 /**
  * An {@link ITargetPreparer} that sets up a system image on top of a device build with the Dynamic
@@ -55,8 +57,30 @@ import java.util.zip.ZipFile;
 public class DynamicSystemPreparer extends BaseTargetPreparer {
     static final int DSU_MAX_WAIT_SEC = 10 * 60;
 
+    private static final int ANDROID_API_R = 30;
+
     private static final String SYSTEM_IMAGE_NAME = "system.img";
+    private static final String SYSTEM_EXT_IMAGE_NAME = "system_ext.img";
+    private static final String PRODUCT_IMAGE_NAME = "product.img";
+
     private static final String DEST_PATH = "/sdcard/system.raw.gz";
+    private static final String DEST_ZIP_PATH = "/sdcard/system.zip";
+
+    private static final String DSU_COMMAND_TEMPLATE_Q =
+            "am start-activity"
+                    + " -n com.android.dynsystem/com.android.dynsystem.VerificationActivity"
+                    + " -a android.os.image.action.START_INSTALL"
+                    + " -d file://%s"
+                    + " --el KEY_USERDATA_SIZE %d"
+                    + " --el KEY_SYSTEM_SIZE %d"
+                    + " --ez KEY_ENABLE_WHEN_COMPLETED true";
+    private static final String DSU_COMMAND_TEMPLATE_R =
+            "am start-activity"
+                    + " -n com.android.dynsystem/com.android.dynsystem.VerificationActivity"
+                    + " -a android.os.image.action.START_INSTALL"
+                    + " -d file://%s"
+                    + " --el KEY_USERDATA_SIZE %d"
+                    + " --ez KEY_ENABLE_WHEN_COMPLETED true";
 
     @Option(
             name = "system-image-zip-name",
@@ -140,9 +164,10 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
 
         List<File> tempFiles = new ArrayList<File>();
         try {
-            long rawSize = 0;
-            File systemImageGZ = FileUtil.createTempFile("system", ".raw.gz");
-            tempFiles.add(systemImageGZ);
+            final long userdataSize = mUserDataSizeInGb << 30;
+            File dsuPushSrc;
+            String dsuPushDest;
+            String command;
             try (SparseInputStream systemImageStream =
                     getUnsparsedImageStream(systemImageZipFile, SYSTEM_IMAGE_NAME)) {
                 if (systemImageStream == null) {
@@ -153,37 +178,68 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
                             device.getDeviceDescriptor(),
                             InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
                 }
-                rawSize = systemImageStream.size();
-                try (FileOutputStream foStream = new FileOutputStream(systemImageGZ);
-                        BufferedOutputStream boStream = new BufferedOutputStream(foStream);
-                        GZIPOutputStream out = new GZIPOutputStream(boStream)) {
-                    StreamUtil.copyStreams(systemImageStream, out);
+                if (device.getApiLevel() < ANDROID_API_R) {
+                    // Android Q only support single system image gzip.
+                    File systemImageGZ = FileUtil.createTempFile("system", ".raw.gz");
+                    tempFiles.add(systemImageGZ);
+                    try (FileOutputStream foStream = new FileOutputStream(systemImageGZ);
+                            BufferedOutputStream boStream = new BufferedOutputStream(foStream);
+                            GZIPOutputStream out = new GZIPOutputStream(boStream)) {
+                        StreamUtil.copyStreams(systemImageStream, out);
+                    }
+
+                    dsuPushSrc = systemImageGZ;
+                    dsuPushDest = DEST_PATH;
+
+                    final long systemImageSize = systemImageStream.size();
+                    command =
+                            String.format(
+                                    DSU_COMMAND_TEMPLATE_Q,
+                                    dsuPushDest,
+                                    userdataSize,
+                                    systemImageSize);
+                } else {
+                    // Android R+, support DSU zip archive.
+                    File dsuImageZip = FileUtil.createTempFile("system", ".zip");
+                    tempFiles.add(dsuImageZip);
+                    try (FileOutputStream foStream = new FileOutputStream(dsuImageZip);
+                            BufferedOutputStream boStream = new BufferedOutputStream(foStream);
+                            ZipOutputStream out = new ZipOutputStream(boStream)) {
+                        out.putNextEntry(new ZipEntry(SYSTEM_IMAGE_NAME));
+                        StreamUtil.copyStreams(systemImageStream, out);
+                        out.closeEntry();
+                        // Also look for any system-like partition images.
+                        for (String imageName :
+                                Arrays.asList(SYSTEM_EXT_IMAGE_NAME, PRODUCT_IMAGE_NAME)) {
+                            try (SparseInputStream sis =
+                                    getUnsparsedImageStream(systemImageZipFile, imageName)) {
+                                if (sis != null) {
+                                    out.putNextEntry(new ZipEntry(imageName));
+                                    StreamUtil.copyStreams(sis, out);
+                                    out.closeEntry();
+                                }
+                            }
+                        }
+                    }
+
+                    dsuPushSrc = dsuImageZip;
+                    dsuPushDest = DEST_ZIP_PATH;
+
+                    command = String.format(DSU_COMMAND_TEMPLATE_R, dsuPushDest, userdataSize);
                 }
             }
 
-            CLog.i("Pushing %s to %s", systemImageGZ.getAbsolutePath(), DEST_PATH);
-            if (!device.pushFile(systemImageGZ, DEST_PATH)) {
+            CLog.i("Pushing %s to %s", dsuPushSrc.getAbsolutePath(), dsuPushDest);
+            if (!device.pushFile(dsuPushSrc, dsuPushDest)) {
                 throw new TargetSetupError(
                         String.format(
-                                "Failed to push %s to %s", systemImageGZ.getName(), DEST_PATH),
+                                "Failed to push %s to %s",
+                                dsuPushSrc.getAbsolutePath(), dsuPushDest),
                         device.getDeviceDescriptor(),
                         DeviceErrorIdentifier.FAIL_PUSH_FILE);
             }
-            device.setProperty("persist.sys.fflag.override.settings_dynamic_system", "true");
 
-            String command =
-                    "am start-activity "
-                            + "-n com.android.dynsystem/com.android.dynsystem.VerificationActivity "
-                            + "-a android.os.image.action.START_INSTALL "
-                            + "-d file://"
-                            + DEST_PATH
-                            + " "
-                            + "--el KEY_SYSTEM_SIZE "
-                            + rawSize
-                            + " "
-                            + "--el KEY_USERDATA_SIZE "
-                            + mUserDataSizeInGb * 1024 * 1024 * 1024
-                            + " --ez KEY_ENABLE_WHEN_COMPLETED true";
+            device.setProperty("persist.sys.fflag.override.settings_dynamic_system", "true");
             device.executeShellCommand(command);
             // Check if device shows as unavailable (as expected after the activity finished).
             if (!device.waitForDeviceNotAvailable(DSU_MAX_WAIT_SEC * 1000)) {
