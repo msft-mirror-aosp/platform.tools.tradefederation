@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.util.SparseImageUtil.SparseInputStream;
+
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -28,17 +30,22 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
-import com.android.tradefed.util.SparseImageUtil;
-import com.android.tradefed.util.ZipUtil;
-import com.android.tradefed.util.ZipUtil2;
+import com.android.tradefed.util.StreamUtil;
 
-import org.apache.commons.compress.archivers.zip.ZipFile;
-
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.GZIPOutputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
  * An {@link ITargetPreparer} that sets up a system image on top of a device build with the Dynamic
@@ -72,6 +79,52 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
         return receiver.getOutput().contains("running");
     }
 
+    /**
+     * Utility method to get a SparseInputStream to an image file.
+     *
+     * @return null if imageName is not found.
+     */
+    private SparseInputStream getUnsparsedImageStream(File imageZipFile, String imageName)
+            throws IOException {
+        InputStream is = null;
+        try {
+            long imageSize = 0;
+            if (imageZipFile.isDirectory()) {
+                File localImageFile = new File(imageZipFile, imageName);
+                if (!localImageFile.isFile()) {
+                    return null;
+                }
+                imageSize = localImageFile.length();
+                is = new FileInputStream(localImageFile);
+            } else {
+                ZipFile zipFile = new ZipFile(imageZipFile);
+                try {
+                    ZipEntry entry = zipFile.getEntry(imageName);
+                    if (entry == null) {
+                        StreamUtil.close(zipFile);
+                        return null;
+                    }
+                    imageSize = entry.getSize();
+                    is =
+                            new FilterInputStream(zipFile.getInputStream(entry)) {
+                                @Override
+                                public void close() throws IOException {
+                                    StreamUtil.close(in);
+                                    StreamUtil.close(zipFile);
+                                }
+                            };
+                } catch (IOException | RuntimeException e) {
+                    StreamUtil.close(zipFile);
+                    throw e;
+                }
+            }
+            return new SparseInputStream(new BufferedInputStream(is), imageSize);
+        } catch (IOException | RuntimeException e) {
+            StreamUtil.close(is);
+            throw e;
+        }
+    }
+
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
@@ -86,40 +139,28 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
         }
 
         List<File> tempFiles = new ArrayList<File>();
-        File systemImage = null;
-        File rawSystemImage = null;
-        File systemImageGZ = null;
         try {
-            if (systemImageZipFile.isDirectory()) {
-                systemImage = new File(systemImageZipFile, SYSTEM_IMAGE_NAME);
-            } else {
-                try (ZipFile zipFile = new ZipFile(systemImageZipFile)) {
-                    systemImage = ZipUtil2.extractFileFromZip(zipFile, SYSTEM_IMAGE_NAME);
+            long rawSize = 0;
+            File systemImageGZ = FileUtil.createTempFile("system", ".raw.gz");
+            tempFiles.add(systemImageGZ);
+            try (SparseInputStream systemImageStream =
+                    getUnsparsedImageStream(systemImageZipFile, SYSTEM_IMAGE_NAME)) {
+                if (systemImageStream == null) {
+                    throw new BuildError(
+                            String.format(
+                                    "Cannot find %s in %s.",
+                                    SYSTEM_IMAGE_NAME, mSystemImageZipName),
+                            device.getDeviceDescriptor(),
+                            InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
                 }
-                if (systemImage != null) {
-                    tempFiles.add(systemImage);
+                rawSize = systemImageStream.size();
+                try (FileOutputStream foStream = new FileOutputStream(systemImageGZ);
+                        BufferedOutputStream boStream = new BufferedOutputStream(foStream);
+                        GZIPOutputStream out = new GZIPOutputStream(boStream)) {
+                    StreamUtil.copyStreams(systemImageStream, out);
                 }
-            }
-            if (systemImage == null || !systemImage.isFile()) {
-                throw new BuildError(
-                        String.format(
-                                "Cannot find %s in %s.", SYSTEM_IMAGE_NAME, mSystemImageZipName),
-                        device.getDeviceDescriptor(),
-                        InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
             }
 
-            if (SparseImageUtil.isSparse(systemImage)) {
-                rawSystemImage = FileUtil.createTempFile("system", ".raw");
-                tempFiles.add(rawSystemImage);
-                SparseImageUtil.unsparse(systemImage, rawSystemImage);
-            } else {
-                // system.img is already non-sparse
-                rawSystemImage = systemImage;
-            }
-            systemImageGZ = FileUtil.createTempFile("system", ".raw.gz");
-            tempFiles.add(systemImageGZ);
-            long rawSize = rawSystemImage.length();
-            ZipUtil.gzipFile(rawSystemImage, systemImageGZ);
             CLog.i("Pushing %s to %s", systemImageGZ.getAbsolutePath(), DEST_PATH);
             if (!device.pushFile(systemImageGZ, DEST_PATH)) {
                 throw new TargetSetupError(
