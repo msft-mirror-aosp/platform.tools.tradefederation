@@ -112,7 +112,7 @@ public class HostOptions implements IHostOptions {
     @Option(
             name = "use-zip64-in-partial-download",
             description = "Whether to use zip64 format in partial download.")
-    private boolean mUseZip64InPartialDownload = false;
+    private boolean mUseZip64InPartialDownload = true;
 
     @Option(
             name = "use-network-interface",
