@@ -83,7 +83,7 @@ public final class LocalFileHeader {
      * @param startOffset the start offset of the block of data for a local file header.
      * @throws IOException
      */
-    public LocalFileHeader(File partialZipFile, int startOffset) throws IOException {
+    public LocalFileHeader(File partialZipFile, long startOffset) throws IOException {
         // Local file header:
         //    Offset   Length   Contents
         //      0      4 bytes  Local file header signature (0x04034b50)
