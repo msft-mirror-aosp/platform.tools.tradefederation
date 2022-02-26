@@ -124,6 +124,13 @@ public class HostOptions implements IHostOptions {
             description = "Preconfigured virtual device pool. (Value format: $hostname:$user.)")
     private List<String> mPreconfiguredVirtualDevicePool = new ArrayList<>();
 
+    @Option(
+            name = "enable-bridge-rpc",
+            description =
+                    "Flag to enable the bridge RPC service. Bridge Rpc provides TF test lifecycle"
+                            + " management. ")
+    private Boolean mEnableBridgeRpc = false;
+
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
 
     /** {@inheritDoc} */
@@ -148,6 +155,12 @@ public class HostOptions implements IHostOptions {
     @Override
     public boolean isFastbootdEnable() {
         return mEnableFastbootdMode;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isBridgeRpcEnable() {
+        return mEnableBridgeRpc;
     }
 
     /** {@inheritDoc} */
