@@ -18,6 +18,7 @@ package com.android.tradefed.targetprep;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.eq;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.IBuildInfo;
@@ -45,12 +46,16 @@ import org.mockito.stubbing.Answer;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.zip.ZipException;
+import java.util.zip.ZipFile;
 
 /** Unit tests for {@link DynamicSystemPreparer}. */
 @RunWith(JUnit4.class)
 public class DynamicSystemPreparerTest {
     // Input build info.
     private static final String SYSTEM_IMAGE_NAME = "system.img";
+    private static final String SYSTEM_EXT_IMAGE_NAME = "system_ext.img";
+    private static final String PRODUCT_IMAGE_NAME = "product.img";
     private static final String SYSTEM_IMAGE_ZIP_NAME = "system-img.zip";
 
     private IBuildInfo mBuildInfo;
@@ -58,17 +63,26 @@ public class DynamicSystemPreparerTest {
     private TestInformation mTestInfo;
     private File mSystemImageDir;
     private File mSystemImageZip;
+    private File mMultiSystemImageZip;
     // The object under test.
     private DynamicSystemPreparer mPreparer;
 
     @Before
     public void setUp() throws IOException {
         mMockDevice = Mockito.mock(ITestDevice.class);
-        mSystemImageDir = createImageDir(SYSTEM_IMAGE_NAME);
+        mSystemImageDir =
+                createImageDir(SYSTEM_IMAGE_NAME, SYSTEM_EXT_IMAGE_NAME, PRODUCT_IMAGE_NAME);
         mSystemImageZip =
                 ZipUtil.createZip(
                         Arrays.asList(new File(mSystemImageDir, SYSTEM_IMAGE_NAME)),
                         "DynamicSystem");
+        mMultiSystemImageZip =
+                ZipUtil.createZip(
+                        Arrays.asList(
+                                new File(mSystemImageDir, SYSTEM_IMAGE_NAME),
+                                new File(mSystemImageDir, SYSTEM_EXT_IMAGE_NAME),
+                                new File(mSystemImageDir, PRODUCT_IMAGE_NAME)),
+                        "DynamicSystem_multi");
         mBuildInfo = new BuildInfo();
 
         mPreparer = new DynamicSystemPreparer();
@@ -87,6 +101,7 @@ public class DynamicSystemPreparerTest {
         }
         FileUtil.recursiveDelete(mSystemImageDir);
         FileUtil.deleteFile(mSystemImageZip);
+        FileUtil.deleteFile(mMultiSystemImageZip);
     }
 
     private File createImageDir(String... fileNames) throws IOException {
@@ -189,5 +204,73 @@ public class DynamicSystemPreparerTest {
         } catch (TargetSetupError e) {
             Assert.assertEquals("Failed to boot into DSU", e.getMessage());
         }
+    }
+
+    @Test
+    public void testSetUp_dsuImageZip()
+            throws BuildError, DeviceNotAvailableException, IOException, TargetSetupError,
+                    ZipException {
+        mBuildInfo.setFile(SYSTEM_IMAGE_ZIP_NAME, mSystemImageZip, "0");
+        Mockito.when(mMockDevice.waitForDeviceNotAvailable(Mockito.anyLong())).thenReturn(true);
+        mockGsiToolStatus("running");
+        CommandResult res = new CommandResult();
+        res.setStdout("");
+        res.setStatus(CommandStatus.SUCCESS);
+        Mockito.when(mMockDevice.executeShellV2Command("gsi_tool enable")).thenReturn(res);
+        Mockito.when(mMockDevice.getApiLevel()).thenReturn(30);
+        doAnswer(
+                        new Answer<Boolean>() {
+                            @Override
+                            public Boolean answer(InvocationOnMock invocation)
+                                    throws IOException, ZipException {
+                                File dsuZip = (File) invocation.getArguments()[0];
+                                Assert.assertNotNull(dsuZip);
+                                try (ZipFile zipFile = new ZipFile(dsuZip)) {
+                                    Assert.assertNotNull(zipFile.getEntry(SYSTEM_IMAGE_NAME));
+                                }
+                                return true;
+                            }
+                        })
+                .when(mMockDevice)
+                .pushFile(Mockito.any(), Mockito.any());
+
+        mPreparer.setUp(mTestInfo);
+
+        Mockito.verify(mMockDevice).pushFile(Mockito.any(), eq("/sdcard/system.zip"));
+    }
+
+    @Test
+    public void testSetUp_dsuMultiImageZip()
+            throws BuildError, DeviceNotAvailableException, IOException, TargetSetupError,
+                    ZipException {
+        mBuildInfo.setFile(SYSTEM_IMAGE_ZIP_NAME, mMultiSystemImageZip, "0");
+        Mockito.when(mMockDevice.waitForDeviceNotAvailable(Mockito.anyLong())).thenReturn(true);
+        mockGsiToolStatus("running");
+        CommandResult res = new CommandResult();
+        res.setStdout("");
+        res.setStatus(CommandStatus.SUCCESS);
+        Mockito.when(mMockDevice.executeShellV2Command("gsi_tool enable")).thenReturn(res);
+        Mockito.when(mMockDevice.getApiLevel()).thenReturn(30);
+        doAnswer(
+                        new Answer<Boolean>() {
+                            @Override
+                            public Boolean answer(InvocationOnMock invocation)
+                                    throws IOException, ZipException {
+                                File dsuZip = (File) invocation.getArguments()[0];
+                                Assert.assertNotNull(dsuZip);
+                                try (ZipFile zipFile = new ZipFile(dsuZip)) {
+                                    Assert.assertNotNull(zipFile.getEntry(SYSTEM_IMAGE_NAME));
+                                    Assert.assertNotNull(zipFile.getEntry(SYSTEM_EXT_IMAGE_NAME));
+                                    Assert.assertNotNull(zipFile.getEntry(PRODUCT_IMAGE_NAME));
+                                }
+                                return true;
+                            }
+                        })
+                .when(mMockDevice)
+                .pushFile(Mockito.any(), Mockito.any());
+
+        mPreparer.setUp(mTestInfo);
+
+        Mockito.verify(mMockDevice).pushFile(Mockito.any(), eq("/sdcard/system.zip"));
     }
 }

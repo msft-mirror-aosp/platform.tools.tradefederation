@@ -112,7 +112,7 @@ public class HostOptions implements IHostOptions {
     @Option(
             name = "use-zip64-in-partial-download",
             description = "Whether to use zip64 format in partial download.")
-    private boolean mUseZip64InPartialDownload = false;
+    private boolean mUseZip64InPartialDownload = true;
 
     @Option(
             name = "use-network-interface",
@@ -123,6 +123,13 @@ public class HostOptions implements IHostOptions {
             name = "preconfigured-virtual-device-pool",
             description = "Preconfigured virtual device pool. (Value format: $hostname:$user.)")
     private List<String> mPreconfiguredVirtualDevicePool = new ArrayList<>();
+
+    @Option(
+            name = "enable-bridge-rpc",
+            description =
+                    "Flag to enable the bridge RPC service. Bridge Rpc provides TF test lifecycle"
+                            + " management. ")
+    private Boolean mEnableBridgeRpc = false;
 
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
 
@@ -148,6 +155,12 @@ public class HostOptions implements IHostOptions {
     @Override
     public boolean isFastbootdEnable() {
         return mEnableFastbootdMode;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isBridgeRpcEnable() {
+        return mEnableBridgeRpc;
     }
 
     /** {@inheritDoc} */
