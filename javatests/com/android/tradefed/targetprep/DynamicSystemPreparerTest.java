@@ -181,7 +181,9 @@ public class DynamicSystemPreparerTest {
         Mockito.when(mMockDevice.pushFile(Mockito.any(), Mockito.eq("/sdcard/system.raw.gz")))
                 .thenReturn(Boolean.TRUE);
         Mockito.when(mMockDevice.waitForDeviceNotAvailable(Mockito.anyLong())).thenReturn(true);
-        Mockito.doThrow(new DeviceNotAvailableException()).when(mMockDevice).waitForDeviceOnline();
+        Mockito.doThrow(new DeviceNotAvailableException())
+                .when(mMockDevice)
+                .waitForDeviceAvailable();
         try {
             mPreparer.setUp(mTestInfo);
             Assert.fail("setUp() should have thrown.");
