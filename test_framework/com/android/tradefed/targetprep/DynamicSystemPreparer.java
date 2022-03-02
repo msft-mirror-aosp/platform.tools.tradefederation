@@ -256,9 +256,7 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
             }
 
             try {
-                // waitForDeviceOnline() throws DeviceNotAvailableException if device does not
-                // become online within timeout.
-                device.waitForDeviceOnline();
+                device.waitForDeviceAvailable();
             } catch (DeviceNotAvailableException e) {
                 throw new TargetSetupError(
                         "Timed out booting into DSU", e, device.getDeviceDescriptor());
