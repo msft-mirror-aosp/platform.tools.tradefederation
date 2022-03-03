@@ -136,6 +136,7 @@ java_library_host {
         "tradefed-result-interfaces",
         "tradefed-device-build-interfaces",
         "tradefed-invocation-interfaces",
+        "tradefed-external-dependencies",
         "tradefed-service-grpc-lib",
         "protobuf-java-util-prebuilt-jar",
         "aoa-helper",

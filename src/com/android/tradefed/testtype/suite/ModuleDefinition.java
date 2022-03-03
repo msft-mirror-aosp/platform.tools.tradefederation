@@ -109,6 +109,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String MODULE_NAME = "module-name";
     public static final String MODULE_ABI = "module-abi";
     public static final String MODULE_PARAMETERIZATION = "module-param";
+    public static final String MODULE_EXTERNAL_DEPENDENCIES = "module-external-dependencies";
     /**
      * Module ID the name that will be used to identify uniquely the module during testRunStart. It
      * will usually be a combination of MODULE_ABI + MODULE_NAME.
