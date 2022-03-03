@@ -279,7 +279,8 @@ public class ClusterCommandConfigBuilder {
             final String url =
                     String.format(
                             "%s%s/%s/", baseUrl, mCommand.getCommandId(), mCommand.getAttemptId());
-            config.injectOptionValue("cluster:output-file-upload-url", url);
+            config.injectOptionValue(
+                    "cluster:output-file-upload-url", StringUtil.expand(url, envVars));
         }
         for (final String pattern : mTestEnvironment.getOutputFilePatterns()) {
             config.injectOptionValue("cluster:output-file-pattern", pattern);
