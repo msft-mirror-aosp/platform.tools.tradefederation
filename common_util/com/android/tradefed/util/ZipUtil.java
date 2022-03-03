@@ -106,12 +106,11 @@ public class ZipUtil {
     public static void extractZip(ZipFile zipFile, File destDir) throws IOException {
         Enumeration<? extends ZipEntry> entries = zipFile.entries();
         while (entries.hasMoreElements()) {
-
             ZipEntry entry = entries.nextElement();
             File childFile = new File(destDir, entry.getName());
             childFile.getParentFile().mkdirs();
             if (entry.isDirectory()) {
-                continue;
+                childFile.mkdirs();
             } else {
                 FileUtil.writeToFile(zipFile.getInputStream(entry), childFile);
             }
