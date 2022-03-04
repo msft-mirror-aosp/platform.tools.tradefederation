@@ -2033,9 +2033,10 @@ public class TestDevice extends NativeDevice {
     /**
      * Checks the preconditions to run a microdroid.
      *
+     * @param protectedVm true if microdroid is intended to run on protected VM.
      * @return returns true if the preconditions are satisfied, false otherwise.
      */
-    public boolean deviceSupportsMicrodroid() throws Exception {
+    public boolean deviceSupportsMicrodroid(boolean protectedVm) throws Exception {
         CommandResult result = executeShellV2Command("getprop ro.product.cpu.abi");
         if (result.getStatus() != CommandStatus.SUCCESS) {
             return false;
@@ -2047,23 +2048,40 @@ public class TestDevice extends NativeDevice {
             return false;
         }
 
-        if (!doesFileExist("/dev/kvm")) {
-            CLog.i("com.android.virt APEX was not pre-installed. Command Failed: 'ls /dev/kvm'");
-            return false;
+        if (protectedVm) {
+            // check if device supports protected virtual machines.
+            boolean pVMSupported =
+                    getBooleanProperty("ro.boot.hypervisor.protected_vm.supported", false);
+            if (!pVMSupported) {
+                CLog.i("Device does not support protected virtual machines.");
+                return false;
+            }
+        } else {
+            // check if device supports non protected virtual machines.
+            boolean nonProtectedVMSupported =
+                    getBooleanProperty("ro.boot.hypervisor.vm.supported", false);
+            if (!nonProtectedVMSupported) {
+                CLog.i("Device does not support non protected virtual machines.");
+                return false;
+            }
         }
-        if (!doesFileExist("/dev/vhost-vsock")) {
-            CLog.i(
-                    "com.android.virt APEX was not pre-installed. Command Failed: 'ls"
-                            + " /dev/vhost-vsock'");
-            return false;
-        }
-        if (!doesFileExist("/apex/com.android.virt/bin/crosvm")) {
+
+        if (!doesFileExist("/apex/com.android.virt")) {
             CLog.i(
                     "com.android.virt APEX was not pre-installed. Command Failed: 'ls"
                             + " /apex/com.android.virt/bin/crosvm'");
             return false;
         }
         return true;
+    }
+
+    /**
+     * Checks the preconditions to run a microdroid.
+     *
+     * @return returns true if the preconditions are satisfied, false otherwise.
+     */
+    public boolean deviceSupportsMicrodroid() throws Exception {
+        return deviceSupportsMicrodroid(false);
     }
 
     /**
@@ -2145,19 +2163,20 @@ public class TestDevice extends NativeDevice {
                 Strings.isNullOrEmpty(cpuAffinity) ? "" : "--cpu-affinity " + cpuAffinity;
 
         List<String> args =
-                Arrays.asList(
-                        VIRT_APEX + "bin/vm",
-                        "run-app",
-                        "--daemonize",
-                        "--log " + logPath,
-                        "--mem " + memoryMib,
-                        debugFlag,
-                        "--cpus " + numCpus,
-                        cpuAffinityFlag,
-                        apkPath,
-                        outApkIdsigPath,
-                        instanceImg,
-                        configPath);
+                new ArrayList<>(
+                        Arrays.asList(
+                                VIRT_APEX + "bin/vm",
+                                "run-app",
+                                "--daemonize",
+                                "--log " + logPath,
+                                "--mem " + memoryMib,
+                                debugFlag,
+                                "--cpus " + numCpus,
+                                cpuAffinityFlag,
+                                apkPath,
+                                outApkIdsigPath,
+                                instanceImg,
+                                configPath));
         for (String path : extraIdsigPaths) {
             args.add("--extra-idsig");
             args.add(path);
@@ -2431,7 +2450,7 @@ public class TestDevice extends NativeDevice {
 
         /** Adds extra idsig file to the list. */
         public MicrodroidBuilder addExtraIdsigPath(String extraIdsigPath) {
-            if (extraIdsigPath != null && !extraIdsigPath.isEmpty()) {
+            if (!Strings.isNullOrEmpty(extraIdsigPath)) {
                 mExtraIdsigPaths.add(extraIdsigPath);
             }
             return this;

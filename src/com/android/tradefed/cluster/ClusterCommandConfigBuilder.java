@@ -35,8 +35,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -165,16 +163,8 @@ public class ClusterCommandConfigBuilder {
     }
 
     @VisibleForTesting
-    IClusterOptions getClusterOptions() {
-        return ClusterHostUtil.getClusterOptions();
-    }
-
-    private String getHost(String url) {
-        try {
-            return new URL(url).getHost();
-        } catch (MalformedURLException e) {
-            return url;
-        }
+    Map<String, String> getSystemEnvMap() {
+        return System.getenv();
     }
 
     /**
@@ -206,12 +196,10 @@ public class ClusterCommandConfigBuilder {
         }
 
         Map<String, String> envVars = new TreeMap<>();
+        Map<String, String> systemEnvMap = getSystemEnvMap();
+        envVars.putAll(systemEnvMap);
+
         envVars.put("TF_WORK_DIR", mWorkDir.getAbsolutePath());
-        String serviceUrl = getClusterOptions().getServiceUrl();
-        if (serviceUrl != null) {
-            envVars.put("SERVICE_HOST", getHost(serviceUrl));
-            envVars.put("SERVICE_URL", serviceUrl);
-        }
         envVars.putAll(mTestEnvironment.getEnvVars());
         envVars.putAll(mTestContext.getEnvVars());
 
@@ -291,7 +279,8 @@ public class ClusterCommandConfigBuilder {
             final String url =
                     String.format(
                             "%s%s/%s/", baseUrl, mCommand.getCommandId(), mCommand.getAttemptId());
-            config.injectOptionValue("cluster:output-file-upload-url", url);
+            config.injectOptionValue(
+                    "cluster:output-file-upload-url", StringUtil.expand(url, envVars));
         }
         for (final String pattern : mTestEnvironment.getOutputFilePatterns()) {
             config.injectOptionValue("cluster:output-file-pattern", pattern);

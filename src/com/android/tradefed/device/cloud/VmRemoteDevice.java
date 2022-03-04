@@ -15,11 +15,11 @@
  */
 package com.android.tradefed.device.cloud;
 
-import com.android.tradefed.device.IConfigurableIp;
+import com.android.tradefed.device.IConfigurableVirtualDevice;
 import com.android.tradefed.device.StubDevice;
 
 /** A Remote virtual device that we will manage from inside the Virtual Machine. */
-public class VmRemoteDevice extends StubDevice implements IConfigurableIp {
+public class VmRemoteDevice extends StubDevice implements IConfigurableVirtualDevice {
 
     private String mKnownDeviceIp = null;
 
