@@ -106,6 +106,27 @@ public class ZipUtil2Test {
     }
 
     @Test
+    public void testExtractZipWithEmptyDir() throws Exception {
+        final File zip = getTestDataFile("empty_dir");
+
+        // Test extractZip(File toUnzip, File destDir)
+        File destDir = createTempDir("ZipUtil2Test");
+        ZipUtil2.extractZip(zip, destDir);
+        mTempFiles.add(destDir);
+
+        // Test extractZip(ZipFile zipFile, File destDir)
+        destDir = createTempDir("ZipUtil2Test");
+        ZipFile zipFile = null;
+        try {
+            zipFile = new ZipFile(zip);
+            ZipUtil2.extractZip(zipFile, destDir);
+            mTempFiles.add(destDir);
+        } finally {
+            ZipFile.closeQuietly(zipFile);
+        }
+    }
+
+    @Test
     public void testExtractZip() throws Exception {
         final File zip = getTestDataFile("permission-test");
         final File destDir = createTempDir("ZipUtil2Test");
