@@ -28,8 +28,6 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionCopier;
-import com.android.tradefed.dependencies.ExternalDependency;
-import com.android.tradefed.dependencies.IExternalDependency;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceProperties;
 import com.android.tradefed.device.ITestDevice;
@@ -757,31 +755,13 @@ public abstract class ITestSuite
                     continue;
                 }
 
-                // Populate the module context with devices, builds and external dependencies
-                Set<ExternalDependency> dependencies = new HashSet<>();
+                // Populate the module context with devices and builds
                 for (String deviceName : mContext.getDeviceConfigNames()) {
                     module.getModuleInvocationContext()
                             .addAllocatedDevice(deviceName, mContext.getDevice(deviceName));
                     module.getModuleInvocationContext()
                             .addDeviceBuildInfo(deviceName, mContext.getBuildInfo(deviceName));
-                    // Collect External Dependencies of this module for the device
-                    for (ITargetPreparer targetPreparer :
-                            module.getTargetPreparerForDevice(deviceName)) {
-                        if (targetPreparer instanceof IExternalDependency) {
-                            dependencies.addAll(
-                                    ((IExternalDependency) targetPreparer).getDependencies());
-                        }
-                    }
                 }
-                // Add External Dependencies of this module to the module context
-                final String dependencyStr =
-                        dependencies.stream()
-                                .map(dependency -> dependency.getClass().getName())
-                                .collect(Collectors.toList())
-                                .toString();
-                module.getModuleInvocationContext()
-                        .addInvocationAttribute(
-                                ModuleDefinition.MODULE_EXTERNAL_DEPENDENCIES, dependencyStr);
                 // Add isolation status before module start for reporting
                 if (!IsolationGrade.NOT_ISOLATED.equals(
                         CurrentInvocation.moduleCurrentIsolation())) {
