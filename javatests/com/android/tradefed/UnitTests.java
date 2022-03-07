@@ -249,6 +249,7 @@ import com.android.tradefed.targetprep.InstrumentationPreparerTest;
 import com.android.tradefed.targetprep.KnownFailurePreparerTest;
 import com.android.tradefed.targetprep.LocalEmulatorLaunchTest;
 import com.android.tradefed.targetprep.ModuleOemTargetPreparerTest;
+import com.android.tradefed.targetprep.ModulePusherTest;
 import com.android.tradefed.targetprep.PushFilePreparerTest;
 import com.android.tradefed.targetprep.PythonVirtualenvPreparerTest;
 import com.android.tradefed.targetprep.RebootTargetPreparerTest;
@@ -735,6 +736,7 @@ import org.junit.runners.Suite.SuiteClasses;
     KnownFailurePreparerTest.class,
     LocalEmulatorLaunchTest.class,
     ModuleOemTargetPreparerTest.class,
+    ModulePusherTest.class,
     PushFilePreparerTest.class,
     PythonVirtualenvPreparerTest.class,
     RebootTargetPreparerTest.class,
