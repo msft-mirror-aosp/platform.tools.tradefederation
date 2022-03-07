@@ -2081,7 +2081,8 @@ public class TestDevice extends NativeDevice {
      * @return returns true if the preconditions are satisfied, false otherwise.
      */
     public boolean deviceSupportsMicrodroid() throws Exception {
-        return deviceSupportsMicrodroid(false);
+        // Micrdroid can run on protected and non-protected VMs
+        return deviceSupportsMicrodroid(false) || deviceSupportsMicrodroid(true);
     }
 
     /**
