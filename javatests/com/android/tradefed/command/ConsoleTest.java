@@ -27,6 +27,7 @@ import com.android.tradefed.command.Console.CaptureList;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.RegexTrie;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.Pair;
 
 import org.junit.After;
 import org.junit.Before;
@@ -219,7 +220,7 @@ public class ConsoleTest {
         RegexTrie<Runnable> trie = mConsole.getCommandTrie();
 
         when(mMockScheduler.addCommand(AdditionalMatchers.aryEq(expected)))
-                .thenReturn(Boolean.TRUE);
+                .thenReturn(Pair.create(Boolean.TRUE, 1));
 
         Runnable runnable = trie.retrieve(captures, command);
         assertNotNull(
@@ -237,7 +238,7 @@ public class ConsoleTest {
         RegexTrie<Runnable> trie = mConsole.getCommandTrie();
 
         when(mMockScheduler.addCommand(AdditionalMatchers.aryEq(expected)))
-                .thenReturn(Boolean.TRUE);
+                .thenReturn(Pair.create(Boolean.TRUE, 1));
 
         Runnable runnable = trie.retrieve(captures, command);
         assertNotNull(
@@ -259,7 +260,7 @@ public class ConsoleTest {
         RegexTrie<Runnable> trie = mConsole.getCommandTrie();
 
         when(mMockScheduler.addCommand(AdditionalMatchers.aryEq(expected)))
-                .thenReturn(Boolean.TRUE);
+                .thenReturn(Pair.create(Boolean.TRUE, 1));
 
         Runnable runnable = trie.retrieve(captures, command);
         assertNotNull(

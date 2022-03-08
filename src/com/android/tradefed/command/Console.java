@@ -895,7 +895,7 @@ public class Console extends Thread {
                             flatArgs[i - 2] = args.get(i).get(0);
                         }
                         try {
-                            if (mScheduler.addCommand(flatArgs)) {
+                            if (mScheduler.addCommand(flatArgs).first) {
                                 mScheduler.shutdownOnEmpty();
                             }
                         } catch (ConfigurationException e) {
