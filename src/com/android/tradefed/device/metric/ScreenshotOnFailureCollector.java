@@ -28,9 +28,27 @@ import com.android.tradefed.result.TestDescription;
 public class ScreenshotOnFailureCollector extends BaseDeviceMetricCollector {
 
     private static final String NAME_FORMAT = "%s-%s-screenshot-on-failure";
+    private static final int THROTTLE_LIMIT_PER_RUN = 10;
+
+    private int mCurrentCount = 0;
+    private boolean mFirstThrottle = true;
+
+    @Override
+    public void onTestRunStart(DeviceMetricData runData) {
+        super.onTestRunStart(runData);
+        mCurrentCount = 0;
+        mFirstThrottle = true;
+    }
 
     @Override
     public void onTestFail(DeviceMetricData testData, TestDescription test) {
+        if (mCurrentCount > THROTTLE_LIMIT_PER_RUN) {
+            if (mFirstThrottle) {
+                CLog.w("Throttle capture of screenshot-on-failure due to too many failures.");
+                mFirstThrottle = false;
+            }
+            return;
+        }
         for (ITestDevice device : getRealDevices()) {
             if (!shouldCollect(device)) {
                 continue;
@@ -50,6 +68,7 @@ public class ScreenshotOnFailureCollector extends BaseDeviceMetricCollector {
                 device.setRecoveryMode(mode);
             }
         }
+        mCurrentCount++;
     }
 
     private boolean shouldCollect(ITestDevice device) {
