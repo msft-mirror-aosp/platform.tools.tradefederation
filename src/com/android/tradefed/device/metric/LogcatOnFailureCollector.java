@@ -49,11 +49,17 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
     private static final String LOGCAT_COLLECT_CMD_LEGACY = "logcat -t 5000";
     private static final int API_LIMIT = 20;
 
+    private static final int THROTTLE_LIMIT_PER_RUN = 10;
+
     private Map<ITestDevice, ILogcatReceiver> mLogcatReceivers = new HashMap<>();
     private Map<ITestDevice, Integer> mOffset = new HashMap<>();
+    private int mCurrentCount = 0;
+    private boolean mFirstThrottle = true;
 
     @Override
     public void onTestRunStart(DeviceMetricData runData) {
+        mCurrentCount = 0;
+        mFirstThrottle = true;
         for (ITestDevice device : getRealDevices()) {
             if (getApiLevelNoThrow(device) < API_LIMIT) {
                 continue;
@@ -78,9 +84,17 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
 
     @Override
     public void onTestFail(DeviceMetricData testData, TestDescription test) {
+        if (mCurrentCount > THROTTLE_LIMIT_PER_RUN) {
+            if (mFirstThrottle) {
+                CLog.w("Throttle capture of logcat-on-failure due to too many failures.");
+                mFirstThrottle = false;
+            }
+            return;
+        }
         // Delay slightly for the error to get in the logcat
         getRunUtil().sleep(100);
         collectAndLog(test.toString());
+        mCurrentCount++;
     }
 
     @Override
