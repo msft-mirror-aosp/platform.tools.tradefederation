@@ -271,7 +271,7 @@ public class GcovCodeCoverageCollectorTest {
         doReturn(tar).when(mMockDevice).pullFile(anyString());
 
         // Manually call logCoverageMeasurements().
-        mCodeCoverageListener.logCoverageMeasurements("manual");
+        mCodeCoverageListener.logCoverageMeasurements(mMockDevice, "manual");
 
         // Verify testLog(..) was called with the coverage file in a zip.
         List<ByteString> logs = mFakeListener.getLogs();
