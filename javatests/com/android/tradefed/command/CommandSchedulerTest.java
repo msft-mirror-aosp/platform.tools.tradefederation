@@ -69,6 +69,7 @@ import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.keystore.DryRunKeyStore;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
@@ -311,10 +312,15 @@ public class CommandSchedulerTest {
         setCreateConfigExpectations(args2);
 
         mScheduler.start();
-        assertFalse(mScheduler.addCommand(dryRunArgs));
+        Pair<Boolean, Integer> addCommandReturn = mScheduler.addCommand(dryRunArgs);
+        assertFalse(addCommandReturn.first);
+        assertTrue(addCommandReturn.second < 0);
         // the same config object is being used, so clear its state
         mCommandOptions.setDryRunMode(false);
-        assertTrue(mScheduler.addCommand(args2));
+
+        addCommandReturn = mScheduler.addCommand(args2);
+        assertTrue(addCommandReturn.first);
+        assertTrue(addCommandReturn.second >= 0);
         mScheduler.shutdownOnEmpty();
         mScheduler.join();
         verify(mMockInvocation, times(1))
@@ -350,7 +356,8 @@ public class CommandSchedulerTest {
         mFakeDeviceManager.setNumDevices(2);
 
         mScheduler.start();
-        assertFalse(mScheduler.addCommand(dryRunArgs));
+        assertFalse(mScheduler.addCommand(dryRunArgs).first);
+        assertTrue(mScheduler.addCommand(dryRunArgs).second < 0);
         mScheduler.shutdownOnEmpty();
         mScheduler.join();
 

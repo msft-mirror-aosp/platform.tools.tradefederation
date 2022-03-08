@@ -82,6 +82,7 @@ import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.retry.RetryRescheduler;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
@@ -1233,12 +1234,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public boolean addCommand(String[] args) throws ConfigurationException {
-        return internalAddCommand(args, null);
+    public Pair<Boolean, Integer> addCommand(String[] args) throws ConfigurationException {
+        Integer cmdTracker = internalAddCommand(args, null);
+        return Pair.create(cmdTracker >= 0, cmdTracker);
     }
 
     /** Returns true if {@link CommandOptions#USE_SANDBOX} is part of the command line. */
@@ -1399,7 +1399,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    private boolean internalAddCommand(String[] args, String cmdFilePath)
+    /**
+     * Adds a command.
+     *
+     * @param args the config arguments.
+     * @param cmdFilePath the filesystem path of command file
+     * @return Command tracker id (non-negative value) if the command was added successfully,
+     *     return 0 when command is added for all devices. Otherwise -1.
+     */
+    private Integer internalAddCommand(String[] args, String cmdFilePath)
             throws ConfigurationException {
         assertStarted();
         IConfiguration config = createConfiguration(args);
@@ -1417,17 +1425,17 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
         } else {
             config.validateOptions();
-
             if (config.getCommandOptions().runOnAllDevices()) {
                 addCommandForAllDevices(args, cmdFilePath);
+                return 0;
             } else {
                 CommandTracker cmdTracker = createCommandTracker(args, cmdFilePath);
                 ExecutableCommand cmdInstance = createExecutableCommand(cmdTracker, config, false);
                 addExecCommandToQueue(cmdInstance, 0);
+                return cmdTracker.getId();
             }
-            return true;
         }
-        return false;
+        return -1;
     }
 
     /**
