@@ -35,6 +35,7 @@ import com.android.tradefed.device.IDeviceManager;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
+import com.android.tradefed.util.Pair;
 
 import org.junit.After;
 import org.junit.Before;
@@ -107,7 +108,7 @@ public class RemoteManagerFuncTest {
     @Test
     public void testAddCommand() throws Exception {
         when(mMockScheduler.addCommand(AdditionalMatchers.aryEq(new String[] {"arg1", "arg2"})))
-                .thenReturn(true);
+                .thenReturn(Pair.create(true, 1));
 
         mRemoteMgr.connectAnyPort();
         mRemoteMgr.start();

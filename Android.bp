@@ -187,7 +187,16 @@ tradefed_doc_stubs_args = " -hide UnresolvedLink -hide HiddenSuperclass " +
 droidstubs_host {
     name: "tradefed-doc-stubs",
     srcs: [
+        // Keep in alphabetical order
+        "common_util/**/*.java",
+        "device_build_interfaces/**/*.java",
+        "global_configuration/**/*.java",
+        "invocation_interfaces/**/*.java",
+        "lite/**/*.java",
+        "remote/**/*.java",
         "src/**/*.java",
+        "test_framework/**/*.java",
+        "test_result_interfaces/**/*.java",
     ],
     libs: [
         "loganalysis",
