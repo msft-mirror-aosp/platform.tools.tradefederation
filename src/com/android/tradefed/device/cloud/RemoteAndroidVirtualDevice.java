@@ -25,7 +25,6 @@ import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.RemoteAvdIDevice;
-import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
@@ -162,14 +161,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     public void postInvocationTearDown(Throwable exception) {
         try {
             CLog.i("Invocation tear down for device %s", getSerialNumber());
-            // Log the last part of the logcat from the tear down.
-            if (!(getIDevice() instanceof StubDevice)) {
-                try (InputStreamSource logcatSource = getLogcat()) {
-                    clearLogcat();
-                    String name = "device_logcat_teardown_gce";
-                    mTestLogger.testLog(name, LogDataType.LOGCAT, logcatSource);
-                }
-            }
+            // Just clear the logcat, we don't need the teardown logcat
+            clearLogcat();
             stopLogcat();
             // Terminate SSH tunnel process.
             if (getGceSshMonitor() != null) {
