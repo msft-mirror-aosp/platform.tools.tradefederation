@@ -120,9 +120,9 @@ public class ModuleOemTargetPreparerTest {
         when(mMockDevice.executeShellV2Command("pm path " + APK_PACKAGE_NAME)).thenReturn(cr2);
         CommandResult cr3 =
                 getCommandResult(
-                        "package:/system/apps/com.android.SPLIT_FAKE_APK_PACKAGE_NAME/com.android.SPLIT_FAKE_APK_PACKAGE_NAME.apk\n"
-                            + "package:/system/apps/com.android"
-                            + ".SPLIT_FAKE_APK_PACKAGE_NAME/com.android.SPLIT_FAKE_APK_PACKAGE_NAME-hdpi.apk\n");
+                        String.format(
+                                "package:%s\npackage:%s\n",
+                                SPLIT_APK_PATH_ON_DEVICE, HDPI_PATH_ON_DEVICE));
         when(mMockDevice.executeShellV2Command("pm path " + SPLIT_APK_PACKAGE_NAME))
                 .thenReturn(cr3);
         CommandResult cr4 =
