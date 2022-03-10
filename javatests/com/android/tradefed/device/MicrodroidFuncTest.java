@@ -75,7 +75,7 @@ public class MicrodroidFuncTest implements IDeviceTest, ITestInformationReceiver
     @Before
     public void setup() throws Exception {
         mTestDevice.waitForDeviceAvailable();
-        assumeTrue(mTestDevice.deviceSupportsMicrodroid());
+        assumeTrue(mTestDevice.supportsMicrodroid());
         mTestDevice.executeShellV2Command("logcat -c");
     }
 
