@@ -55,7 +55,9 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         /** Use a placeholder for a remote device in virtualized environment. */
         REMOTE_DEVICE(VmRemoteDevice.class),
         /** Allocate a virtual device running on localhost. */
-        LOCAL_VIRTUAL_DEVICE(StubLocalAndroidVirtualDevice.class);
+        LOCAL_VIRTUAL_DEVICE(StubLocalAndroidVirtualDevice.class),
+        /** A real physical or virtual device already started, not a placeholder type. */
+        EXISTING_DEVICE(IDevice.class);
 
         private Class<?> mRequiredIDeviceClass;
 
@@ -643,13 +645,16 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
         if (mRequestedType != null) {
             Class<?> classNeeded = mRequestedType.getRequiredClass();
-            if (!device.getClass().equals(classNeeded)) {
-                addNoMatchReason(
-                        deviceSerial,
-                        String.format(
-                                "device is type (%s) while requested type was (%s)",
-                                device.getClass(), classNeeded));
-                return false;
+            // Don't match IDevice for real device
+            if (!DeviceRequestedType.EXISTING_DEVICE.equals(mRequestedType)) {
+                if (!device.getClass().equals(classNeeded)) {
+                    addNoMatchReason(
+                            deviceSerial,
+                            String.format(
+                                    "device is type (%s) while requested type was (%s)",
+                                    device.getClass(), classNeeded));
+                    return false;
+                }
             }
         } else {
             if (device.isEmulator() && (device instanceof StubDevice) && !stubEmulatorRequested()) {
