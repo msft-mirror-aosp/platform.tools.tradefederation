@@ -26,6 +26,7 @@ import com.android.tradefed.device.NoDeviceException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.ITestInvocation;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.util.Pair;
 
 import java.io.PrintWriter;
 import java.util.List;
@@ -71,20 +72,22 @@ public interface ICommandScheduler {
 
     /**
      * Adds a command to the scheduler.
-     * <p/>
-     * A command is essentially an instance of a configuration to run and its associated arguments.
-     * <p/>
-     * If "--help" argument is specified the help text for
-     * the config will be outputed to stdout. Otherwise, the config will be added to the queue to
-     * run.
+     *
+     * <p>A command is essentially an instance of a configuration to run and its associated
+     * arguments.
+     *
+     * <p>If "--help" argument is specified the help text for the config will be outputed to stdout.
+     * Otherwise, the config will be added to the queue to run.
      *
      * @param args the config arguments.
-     * @return <code>true</code> if command was added successfully
+     * @return A pair of values, first value is a Boolean <code>true</code> if command was added
+     *     successfully. Second value is the known command tracker id(non-negative value) if the
+     *     command was added successfully, return 0 when command is added for all devices, otherwise
+     *     -1.
      * @throws ConfigurationException if command could not be parsed
-     *
      * @see IConfigurationFactory#createConfigurationFromArgs(String[])
      */
-    public boolean addCommand(String[] args) throws ConfigurationException;
+    public Pair<Boolean, Integer> addCommand(String[] args) throws ConfigurationException;
 
     /**
      * Adds all commands from given file to the scheduler

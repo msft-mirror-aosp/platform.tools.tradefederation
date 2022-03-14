@@ -2036,7 +2036,7 @@ public class TestDevice extends NativeDevice {
      * @param protectedVm true if microdroid is intended to run on protected VM.
      * @return returns true if the preconditions are satisfied, false otherwise.
      */
-    public boolean deviceSupportsMicrodroid(boolean protectedVm) throws Exception {
+    public boolean supportsMicrodroid(boolean protectedVm) throws Exception {
         CommandResult result = executeShellV2Command("getprop ro.product.cpu.abi");
         if (result.getStatus() != CommandStatus.SUCCESS) {
             return false;
@@ -2080,8 +2080,9 @@ public class TestDevice extends NativeDevice {
      *
      * @return returns true if the preconditions are satisfied, false otherwise.
      */
-    public boolean deviceSupportsMicrodroid() throws Exception {
-        return deviceSupportsMicrodroid(false);
+    public boolean supportsMicrodroid() throws Exception {
+        // Micrdroid can run on protected and non-protected VMs
+        return supportsMicrodroid(false) || supportsMicrodroid(true);
     }
 
     /**

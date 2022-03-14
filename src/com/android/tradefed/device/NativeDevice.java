@@ -1442,19 +1442,28 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void deleteFile(String deviceFilePath) throws DeviceNotAvailableException {
-        if (isSdcardOrEmulated(deviceFilePath)) {
-            ContentProviderHandler handler = getContentProvider();
-            if (handler != null) {
-                if (handler.deleteFile(deviceFilePath)) {
-                    return;
+        long startTime = System.currentTimeMillis();
+        try {
+            if (isSdcardOrEmulated(deviceFilePath)) {
+                ContentProviderHandler handler = getContentProvider();
+                if (handler != null) {
+                    if (handler.deleteFile(deviceFilePath)) {
+                        return;
+                    }
                 }
             }
+            // Fallback to the direct command if content provider is unsuccessful
+            String path = StringEscapeUtils.escapeShell(deviceFilePath);
+            // Escape spaces to handle filename with spaces
+            path = path.replaceAll(" ", "\\ ");
+            executeShellCommand(String.format("rm -rf %s", StringEscapeUtils.escapeShell(path)));
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DELETE_DEVICE_FILE_TIME,
+                    System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DELETE_DEVICE_FILE_COUNT, 1);
         }
-        // Fallback to the direct command if content provider is unsuccessful
-        String path = StringEscapeUtils.escapeShell(deviceFilePath);
-        // Escape spaces to handle filename with spaces
-        path = path.replaceAll(" ", "\\ ");
-        executeShellCommand(String.format("rm -rf %s", StringEscapeUtils.escapeShell(path)));
     }
 
     /**
@@ -1739,19 +1748,26 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public boolean pushDir(
             File localFileDir, String deviceFilePath, Set<String> excludedDirectories)
             throws DeviceNotAvailableException {
-        if (isSdcardOrEmulated(deviceFilePath)) {
-            Integer currentUser = getCurrentUser();
-            if (currentUser != 0) {
-                ContentProviderHandler handler = getContentProvider();
-                if (handler != null) {
-                    return handler.pushDir(localFileDir, deviceFilePath, excludedDirectories);
+        long startTime = System.currentTimeMillis();
+        try {
+            if (isSdcardOrEmulated(deviceFilePath)) {
+                Integer currentUser = getCurrentUser();
+                if (currentUser != 0) {
+                    ContentProviderHandler handler = getContentProvider();
+                    if (handler != null) {
+                        return handler.pushDir(localFileDir, deviceFilePath, excludedDirectories);
+                    }
+                } else {
+                    // Remove the special handling when content provider performance is better
+                    CLog.d("Push without content provider for user '%s'", currentUser);
                 }
-            } else {
-                // Remove the special handling when content provider performance is better
-                CLog.d("Push without content provider for user '%s'", currentUser);
             }
+            return pushDirInternal(localFileDir, deviceFilePath, excludedDirectories);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PUSH_DIR_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PUSH_DIR_COUNT, 1);
         }
-        return pushDirInternal(localFileDir, deviceFilePath, excludedDirectories);
     }
 
     private boolean pushDirInternal(
@@ -1795,57 +1811,67 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public boolean pullDir(String deviceFilePath, File localDir)
             throws DeviceNotAvailableException {
-        if (isSdcardOrEmulated(deviceFilePath)) {
-            ContentProviderHandler handler = getContentProvider();
-            if (handler != null) {
-                return handler.pullDir(deviceFilePath, localDir);
+        long startTime = System.currentTimeMillis();
+        try {
+            if (isSdcardOrEmulated(deviceFilePath)) {
+                ContentProviderHandler handler = getContentProvider();
+                if (handler != null) {
+                    return handler.pullDir(deviceFilePath, localDir);
+                }
             }
-        }
 
-        if (!localDir.isDirectory()) {
-            CLog.e("Local path %s is not a directory", localDir.getAbsolutePath());
-            return false;
-        }
-        if (!doesFileExist(deviceFilePath)) {
-            CLog.e("Device path %s does not exists to be pulled.", deviceFilePath);
-        }
-        if (!isDirectory(deviceFilePath)) {
-            CLog.e("Device path %s is not a directory", deviceFilePath);
-            return false;
-        }
-        FileEntry entryRoot =
-                new FileEntry(null, deviceFilePath, FileListingService.TYPE_DIRECTORY, false);
-        IFileEntry entry = getFileEntry(entryRoot);
-        Collection<IFileEntry> children = entry.getChildren(false);
-        if (children.isEmpty()) {
-            CLog.i("Device path is empty, nothing to do.");
-            return true;
-        }
-        for (IFileEntry item : children) {
-            if (item.isDirectory()) {
-                // handle sub dir
-                File subDir = new File(localDir, item.getName());
-                if (!subDir.mkdir()) {
-                    CLog.w("Failed to create sub directory %s, aborting.",
-                            subDir.getAbsolutePath());
-                    return false;
-                }
-                String deviceSubDir = item.getFullPath();
-                if (!pullDir(deviceSubDir, subDir)) {
-                    CLog.w("Failed to pull sub directory %s from device, aborting", deviceSubDir);
-                    return false;
-                }
-            } else {
-                // handle regular file
-                File localFile = new File(localDir, item.getName());
-                String fullPath = item.getFullPath();
-                if (!pullFile(fullPath, localFile)) {
-                    CLog.w("Failed to pull file %s from device, aborting", fullPath);
-                    return false;
+            if (!localDir.isDirectory()) {
+                CLog.e("Local path %s is not a directory", localDir.getAbsolutePath());
+                return false;
+            }
+            if (!doesFileExist(deviceFilePath)) {
+                CLog.e("Device path %s does not exist to be pulled.", deviceFilePath);
+            }
+            if (!isDirectory(deviceFilePath)) {
+                CLog.e("Device path %s is not a directory", deviceFilePath);
+                return false;
+            }
+            FileEntry entryRoot =
+                    new FileEntry(null, deviceFilePath, FileListingService.TYPE_DIRECTORY, false);
+            IFileEntry entry = getFileEntry(entryRoot);
+            Collection<IFileEntry> children = entry.getChildren(false);
+            if (children.isEmpty()) {
+                CLog.i("Device path is empty, nothing to do.");
+                return true;
+            }
+            for (IFileEntry item : children) {
+                if (item.isDirectory()) {
+                    // handle sub dir
+                    File subDir = new File(localDir, item.getName());
+                    if (!subDir.mkdir()) {
+                        CLog.w(
+                                "Failed to create sub directory %s, aborting.",
+                                subDir.getAbsolutePath());
+                        return false;
+                    }
+                    String deviceSubDir = item.getFullPath();
+                    if (!pullDir(deviceSubDir, subDir)) {
+                        CLog.w(
+                                "Failed to pull sub directory %s from device, aborting",
+                                deviceSubDir);
+                        return false;
+                    }
+                } else {
+                    // handle regular file
+                    File localFile = new File(localDir, item.getName());
+                    String fullPath = item.getFullPath();
+                    if (!pullFile(fullPath, localFile)) {
+                        CLog.w("Failed to pull file %s from device, aborting", fullPath);
+                        return false;
+                    }
                 }
             }
+            return true;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PULL_DIR_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PULL_DIR_COUNT, 1);
         }
-        return true;
     }
 
     /** Checks whether path is external storage path. */
