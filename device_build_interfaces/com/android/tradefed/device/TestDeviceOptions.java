@@ -156,6 +156,14 @@ public class TestDeviceOptions {
     )
     private boolean mUseContentProvider = true;
 
+    /**
+     * Returns whether to use a workaround to get shell exit status on older devices without shell
+     * v2.
+     */
+    public boolean useExitStatusWorkaround() {
+        return mExitStatusWorkaround;
+    }
+
     // ====================== Options Related to Virtual Devices ======================
     @Option(
             name = INSTANCE_TYPE_OPTION,
@@ -559,6 +567,13 @@ public class TestDeviceOptions {
     public boolean shouldUseContentProvider() {
         return mUseContentProvider;
     }
+
+    @Option(
+            name = "exit-status-workaround",
+            description =
+                    "On older devices that do not support ADB shell v2, use a workaround "
+                            + "to get the exit status of shell commands")
+    private boolean mExitStatusWorkaround = false;
 
     // =========================== Getter and Setter for Virtual Devices
     /** Return the Gce Avd timeout for the instance to come online. */
