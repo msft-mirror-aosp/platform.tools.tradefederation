@@ -327,6 +327,11 @@ public class ClusterCommandLauncher
         cmdArgs.add(classpath);
         cmdArgs.addAll(mJvmOptions);
 
+        // Use separate tmp directory for the subprocess to prevent clashing with other tmp files.
+        File tmpDir = new File(mRootDir, "tmp");
+        tmpDir.mkdirs();
+        cmdArgs.add("-Djava.io.tmpdir=" + tmpDir.getAbsolutePath());
+
         // Pass Java properties as -D options.
         for (final Entry<String, String> entry : mJavaProperties.entrySet()) {
             cmdArgs.add(
