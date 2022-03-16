@@ -25,8 +25,8 @@ import com.android.tradefed.testtype.ITestFilterReceiver;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -34,11 +34,32 @@ import java.util.Set;
 /** Base class of RustBinaryHostTest and RustBinaryTest */
 @OptionClass(alias = "rust-test")
 public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
+    protected class EnvPair {
+        public String key;
+        public String val;
+
+        public EnvPair(String key, String val) {
+            this.key = key;
+            this.val = val;
+        }
+    }
+
+    protected class Invocation {
+        public String[] command;
+        public ArrayList<EnvPair> env;
+        public File workingDir;
+
+        public Invocation(String[] command, ArrayList<EnvPair> env, File workingDir) {
+            this.command = command;
+            this.env = env;
+            this.workingDir = workingDir;
+        }
+    }
 
     @Option(
             name = "native-test-flag",
             description = "Option string to be passed to the binary when running")
-    protected List<String> mTestOptions = new ArrayList<>();
+    private List<String> mTestOptions = new ArrayList<>();
 
     @Option(
             name = "test-timeout",
@@ -50,7 +71,7 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
             name = "is-benchmark",
             description =
                     "Set to true if module is a benchmark. Module is treated as test by default.")
-    protected boolean mIsBenchmark = false;
+    private boolean mIsBenchmark = false;
 
     @Option(name = "include-filter", description = "A substr filter of test case names to run.")
     private Set<String> mIncludeFilters = new LinkedHashSet<>();
@@ -60,9 +81,8 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
 
     // A wrapper that can be redefined in unit tests to create a (mocked) result parser.
     @VisibleForTesting
-    IShellOutputReceiver createParser(
-            ITestInvocationListener listener, String runName, boolean isBenchmark) {
-        if (!isBenchmark) {
+    IShellOutputReceiver createParser(ITestInvocationListener listener, String runName) {
+        if (!mIsBenchmark) {
             return new RustTestResultParser(listener, runName);
         } else {
             return new RustBenchmarkResultParser(listener, runName);
@@ -118,11 +138,10 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
     }
 
     /** Find test case names in testList and add them into foundTests. */
-    protected static void collectTestLines(
-            String[] testList, Set<String> foundTests, boolean isBenchmark) {
+    protected void collectTestLines(String[] testList, Set<String> foundTests) {
         // Rust test --list returns "testName: test" for each test.
         // In case of criterion benchmarks it's "benchName: bench".
-        final String tag = isBenchmark ? ": bench" : ": test";
+        final String tag = mIsBenchmark ? ": bench" : ": test";
         int counter = 0;
         for (String line : testList) {
             if (line.endsWith(tag)) {
@@ -134,19 +153,19 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
     }
 
     /** Convert TestBinaryName#TestCaseName to TestCaseName for Rust Test. */
-    protected String cleanFilter(String filter) {
+    private String cleanFilter(String filter) {
         return filter.replaceFirst(".*#", "");
     }
 
-    protected List<String> getListOfIncludeFilters() {
+    private List<String> getListOfIncludeFilters() {
         if (mIncludeFilters.isEmpty()) {
             // Run test only once without any include filter.
-            return new ArrayList<String>(Arrays.asList(""));
+            return new ArrayList<String>(List.of(""));
         }
         return new ArrayList<String>(mIncludeFilters);
     }
 
-    protected void addFiltersToArgs(List<String> args, String filter) {
+    private void addFiltersToArgs(List<String> args, String filter) {
         if (!"".equals(filter)) {
             args.add(cleanFilter(filter));
         }
@@ -157,12 +176,32 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
         }
     }
 
-    protected String addFiltersToCommand(String cmd, String filter) {
-        List<String> args = new ArrayList<>();
-        addFiltersToArgs(args, filter);
-        if (args.isEmpty()) {
-            return cmd;
+    protected List<Invocation> generateInvocations(File target) {
+        File workingDir = target.getParentFile();
+
+        ArrayList<String> commandTemplate = new ArrayList<>();
+        commandTemplate.add(target.getAbsolutePath());
+        commandTemplate.addAll(mTestOptions);
+        commandTemplate.add("-Zunstable-options");
+        commandTemplate.add("--report-time");
+
+        // Pass parameter to criterion so it performs the benchmarking.
+        if (mIsBenchmark) {
+            commandTemplate.add("--bench");
+            commandTemplate.add("--color");
+            commandTemplate.add("never");
         }
-        return cmd + " " + String.join(" ", args);
+
+        ArrayList<Invocation> out = new ArrayList<>();
+
+        for (String filter : getListOfIncludeFilters()) {
+            ArrayList<String> command = new ArrayList<>(commandTemplate);
+            addFiltersToArgs(command, filter);
+            ArrayList<EnvPair> env =
+                    new ArrayList<>(List.of(new EnvPair("RUST_BACKTRACE", "full")));
+            out.add(new Invocation(command.toArray(new String[0]), env, workingDir));
+        }
+
+        return out;
     }
 }
