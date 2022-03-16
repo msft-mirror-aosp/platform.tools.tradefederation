@@ -26,6 +26,7 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.device.FreeDeviceState;
 import com.android.tradefed.device.IDeviceManager;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.RunUtil;
 
 import org.junit.Before;
@@ -113,7 +114,7 @@ public class RemoteManagerTest {
     /** Test when sending a ADD_COMMAND that is added to the CommandScheduler */
     @Test
     public void testProcessClientOperations_addCommand() throws Exception {
-        doReturn(true).when(mMockScheduler).addCommand(Mockito.any());
+        doReturn(Pair.create(true, 1)).when(mMockScheduler).addCommand(Mockito.any());
         String buf = "{version:\"8\", type:\"ADD_COMMAND\", time:\"5\", commandArgs:[\"empty\"]}";
         InputStream data = new ByteArrayInputStream(buf.getBytes());
         BufferedReader in = new BufferedReader(new InputStreamReader(data));
@@ -129,7 +130,7 @@ public class RemoteManagerTest {
     /** Test when sending a ADD_COMMAND that is not added by the CommandScheduler */
     @Test
     public void testProcessClientOperations_addCommand_fail() throws Exception {
-        doReturn(false).when(mMockScheduler).addCommand(Mockito.any());
+        doReturn(Pair.create(false, -1)).when(mMockScheduler).addCommand(Mockito.any());
         String buf = "{version:\"8\", type:\"ADD_COMMAND\", time:\"5\", commandArgs:[\"empty\"]}";
         InputStream data = new ByteArrayInputStream(buf.getBytes());
         BufferedReader in = new BufferedReader(new InputStreamReader(data));

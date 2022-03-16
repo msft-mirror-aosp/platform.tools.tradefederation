@@ -1000,7 +1000,7 @@ public class InstrumentationTest
 
         if (mNativeCoverageListener != null) {
             mNativeCoverageListener.setCollectOnTestEnd(true);
-            mNativeCoverageListener.logCoverageMeasurements("rerun_merged");
+            mNativeCoverageListener.logCoverageMeasurements(mDevice, "rerun_merged");
         }
     }
 

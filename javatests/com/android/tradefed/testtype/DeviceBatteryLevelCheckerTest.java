@@ -141,6 +141,7 @@ public class DeviceBatteryLevelCheckerTest {
         context.addAllocatedDevice("device", mDevice);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
         when(mFakeTestDevice.getSerialNumber()).thenReturn("SERIAL");
+        when(mMockIDevice.supportsFeature(IDevice.Feature.SHELL_V2)).thenReturn(true);
     }
 
     @Test
