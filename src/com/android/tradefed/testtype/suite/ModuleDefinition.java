@@ -25,6 +25,8 @@ import com.android.tradefed.config.DeviceConfigurationHolder;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.dependencies.ExternalDependency;
+import com.android.tradefed.dependencies.IExternalDependency;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
@@ -89,12 +91,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Container for the test run configuration. This class is an helper to prepare and run the tests.
@@ -109,6 +113,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String MODULE_NAME = "module-name";
     public static final String MODULE_ABI = "module-abi";
     public static final String MODULE_PARAMETERIZATION = "module-param";
+    public static final String MODULE_EXTERNAL_DEPENDENCIES = "module-external-dependencies";
     /**
      * Module ID the name that will be used to identify uniquely the module during testRunStart. It
      * will usually be a combination of MODULE_ABI + MODULE_NAME.
@@ -230,6 +235,26 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         }
         // If there is no specific abi, module-id should be module-name
         mModuleInvocationContext.addInvocationAttribute(MODULE_ID, mId);
+
+        // Add External Dependencies of this module to the module context
+        if (preparersPerDevice != null) {
+            Set<ExternalDependency> externalDependencies = new LinkedHashSet<>();
+            for (String device : preparersPerDevice.keySet()) {
+                for (ITargetPreparer preparer : preparersPerDevice.get(device)) {
+                    if (preparer instanceof IExternalDependency) {
+                        externalDependencies.addAll(
+                                ((IExternalDependency) preparer).getDependencies());
+                    }
+                }
+            }
+            // Add External Dependencies of this module to the module context
+            final List<String> dependencyClassNames =
+                    externalDependencies.stream()
+                            .map(dependency -> dependency.getClass().getName())
+                            .collect(Collectors.toList());
+            mModuleInvocationContext.addInvocationAttribute(
+                    MODULE_EXTERNAL_DEPENDENCIES, String.join(", ", dependencyClassNames));
+        }
 
         mMultiPreparers.addAll(multiPreparers);
         mPreparersPerDevice = preparersPerDevice;
