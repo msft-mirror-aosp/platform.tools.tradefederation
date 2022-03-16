@@ -22,6 +22,8 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.testtype.IAbi;
+import com.android.tradefed.testtype.IAbiReceiver;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -33,7 +35,7 @@ import java.util.Set;
 
 /** Base class of RustBinaryHostTest and RustBinaryTest */
 @OptionClass(alias = "rust-test")
-public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
+public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver, IAbiReceiver {
     protected class EnvPair {
         public String key;
         public String val;
@@ -78,6 +80,41 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
 
     @Option(name = "exclude-filter", description = "A substr filter of test case names to skip.")
     private Set<String> mExcludeFilters = new LinkedHashSet<>();
+
+    @Option(
+            name = "ld-library-path",
+            description = "LD_LIBRARY_PATH value to include in the Rust test execution command.")
+    private String mLdLibraryPath = null;
+
+    @Option(
+            name = "ld-library-path-32",
+            description =
+                    "LD_LIBRARY_PATH value to include in the Rust test execution command "
+                            + "for 32-bit tests. If both `--ld-library-path` and "
+                            + "`--ld-library-path-32` are set, only the latter is honored "
+                            + "for 32-bit tests.")
+    private String mLdLibraryPath32 = null;
+
+    @Option(
+            name = "ld-library-path-64",
+            description =
+                    "LD_LIBRARY_PATH value to include in the Rust test execution command "
+                            + "for 64-bit tests. If both `--ld-library-path` and "
+                            + "`--ld-library-path-64` are set, only the latter is honored "
+                            + "for 64-bit tests.")
+    private String mLdLibraryPath64 = null;
+
+    private IAbi mAbi;
+
+    @Override
+    public void setAbi(IAbi abi) {
+        mAbi = abi;
+    }
+
+    @Override
+    public IAbi getAbi() {
+        return mAbi;
+    }
 
     // A wrapper that can be redefined in unit tests to create a (mocked) result parser.
     @VisibleForTesting
@@ -176,6 +213,18 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
         }
     }
 
+    private String ldLibraryPath() {
+        if (mLdLibraryPath32 != null && "32".equals(getAbi().getBitness())) {
+            return mLdLibraryPath32;
+        } else if (mLdLibraryPath64 != null && "64".equals(getAbi().getBitness())) {
+            return mLdLibraryPath64;
+        } else if (mLdLibraryPath != null) {
+            return mLdLibraryPath;
+        } else {
+            return null;
+        }
+    }
+
     protected List<Invocation> generateInvocations(File target) {
         File workingDir = target.getParentFile();
 
@@ -197,8 +246,11 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver {
         for (String filter : getListOfIncludeFilters()) {
             ArrayList<String> command = new ArrayList<>(commandTemplate);
             addFiltersToArgs(command, filter);
-            ArrayList<EnvPair> env =
-                    new ArrayList<>(List.of(new EnvPair("RUST_BACKTRACE", "full")));
+            ArrayList<EnvPair> env = new ArrayList<>();
+            env.add(new EnvPair("RUST_BACKTRACE", "full"));
+            if (ldLibraryPath() != null) {
+                env.add(new EnvPair("LD_LIBRARY_PATH", ldLibraryPath()));
+            }
             out.add(new Invocation(command.toArray(new String[0]), env, workingDir));
         }
 
