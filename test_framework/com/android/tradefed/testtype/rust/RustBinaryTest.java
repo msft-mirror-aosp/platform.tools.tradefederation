@@ -24,6 +24,7 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.device.CollectingOutputReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
@@ -109,78 +110,93 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
      * Executes all tests in a folder as well as in all subfolders recursively.
      *
      * @param root The root folder to begin searching for tests
-     * @param testDevice The device to run tests on
      * @param listener the {@link ITestInvocationListener}
      * @throws DeviceNotAvailableException
      */
-    private boolean doRunAllTestsInSubdirectory(
-            String root, ITestDevice testDevice, ITestInvocationListener listener)
+    private boolean doRunAllTestsInSubdirectory(String root, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         // returns true iff some test is found
-        if (testDevice.isDirectory(root)) {
+        if (mDevice.isDirectory(root)) {
             // recursively run tests in all subdirectories
-            CLog.d("Look into rust directory %s on %s", root, testDevice.getSerialNumber());
+            CLog.d("Look into rust directory %s on %s", root, mDevice.getSerialNumber());
             boolean found = false;
-            for (String child : testDevice.getChildren(root)) {
+            for (String child : mDevice.getChildren(root)) {
                 CLog.d("Look into child path %s", (root + "/" + child));
-                if (doRunAllTestsInSubdirectory(root + "/" + child, testDevice, listener)) {
+                if (doRunAllTestsInSubdirectory(root + "/" + child, listener)) {
                     found = true;
                 }
             }
             return found;
         } else if (shouldSkipFile(root)) {
-            CLog.d("Skip rust test %s on %s", root, testDevice.getSerialNumber());
+            CLog.d("Skip rust test %s on %s", root, mDevice.getSerialNumber());
             return false;
         } else {
-            CLog.d("To run rust test %s on %s", root, testDevice.getSerialNumber());
-            runTest(
-                    testDevice,
-                    listener,
-                    root);
+            CLog.d("To run rust test %s on %s", root, mDevice.getSerialNumber());
+            runTest(listener, root);
             return true;
         }
+    }
+
+    private void runInvocation(
+            final Invocation invocation, IShellOutputReceiver receiver, final String... extraArgs)
+            throws DeviceNotAvailableException {
+        StringBuilder commandBuilder = new StringBuilder();
+
+        for (EnvPair envPair : invocation.env) {
+            commandBuilder.append(envPair.key);
+            commandBuilder.append("=");
+            // TODO quote
+            commandBuilder.append(envPair.val);
+        }
+
+        commandBuilder.append(" cd ");
+        commandBuilder.append(invocation.workingDir);
+        commandBuilder.append(" && ");
+
+        for (String arg : invocation.command) {
+            // TODO quote
+            commandBuilder.append(arg);
+            commandBuilder.append(" ");
+        }
+
+        for (String arg : extraArgs) {
+            // TODO quote
+            commandBuilder.append(arg);
+            commandBuilder.append(" ");
+        }
+
+        commandBuilder.deleteCharAt(commandBuilder.length() - 1);
+
+        mDevice.executeShellCommand(
+                commandBuilder.toString(),
+                receiver,
+                mTestTimeout,
+                TimeUnit.MILLISECONDS,
+                0 /* retryAttempts */);
     }
 
     /**
      * Run the given Rust binary
      *
-     * @param testDevice the {@link ITestDevice}
      * @param fullPath absolute file system path to rust binary on device
      * @throws DeviceNotAvailableException
      */
     private void runTest(
-            final ITestDevice testDevice,
             final ITestInvocationListener listener,
             final String fullPath)
             throws DeviceNotAvailableException {
         CLog.d("RustBinaryTest runTest: " + fullPath);
         File file = new File(fullPath);
-        String dir = file.getParent();
-        String cmd = "cd " + dir + " && " + fullPath;
-        if (mTestOptions.size() > 0) {
-            cmd += " " + String.join(" ", mTestOptions);
-        }
-        cmd += " -Zunstable-options --report-time";
-
-        // Pass parameter to criterion to run benchmark. Parameter is required when listing tests.
-        // TODO(qtr): Explore using CRITERION_HOME for setting criterion output. Right now it's
-        // going to be put in the working directory (which is next to binary due to cd above).
-        if (mIsBenchmark) {
-            cmd += " --bench --color never";
-        }
-
-        // Rust binary does not support multiple inclusion filters,
-        // so we run the test once for each include filter.
-        List<String> includeFilters = getListOfIncludeFilters();
+        List<Invocation> invocations = generateInvocations(file);
 
         // Call with --list once per include filter to add up testCount.
         // Duplicated test cases selected by different include filters should not be counted.
         Set<String> foundTests = new HashSet<>();
-        for (String filter : includeFilters) {
-            String newCmd = addFiltersToCommand(cmd, filter);
+        for (Invocation invocation : invocations) {
             try {
-                String[] testList = testDevice.executeShellCommand(newCmd + " --list").split("\n");
-                collectTestLines(testList, foundTests, mIsBenchmark);
+                CollectingOutputReceiver receiver = new CollectingOutputReceiver();
+                runInvocation(invocation, receiver, "--list");
+                collectTestLines(receiver.getOutput().split("\n"), foundTests);
             } catch (DeviceNotAvailableException e) {
                 CLog.e("Could not retrieve tests list from device: %s", e.getMessage());
                 throw e;
@@ -191,22 +207,15 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
         long startTimeMs = System.currentTimeMillis();
         String name = new File(fullPath).getName();
         listener.testRunStarted(name, testCount, 0, startTimeMs);
-        for (String filter : includeFilters) {
-            String newCmd = "RUST_BACKTRACE=full " + addFiltersToCommand(cmd, filter);
-
+        for (Invocation invocation : invocations) {
             if (mConfiguration != null
                     && mConfiguration.getCoverageOptions().getCoverageToolchains().contains(GCOV)) {
-                newCmd = "GCOV_PREFIX=/data/misc/trace " + newCmd;
+                invocation.env.add(new EnvPair("GCOV_PREFIX", "/data/misc/trace"));
             }
 
-            IShellOutputReceiver resultParser = createParser(listener, name, mIsBenchmark);
+            IShellOutputReceiver resultParser = createParser(listener, name);
             try {
-                testDevice.executeShellCommand(
-                        newCmd,
-                        resultParser,
-                        mTestTimeout,
-                        TimeUnit.MILLISECONDS,
-                        0 /* retryAttempts */);
+                runInvocation(invocation, resultParser);
             } catch (DeviceNotAvailableException e) {
                 listener.testRunFailed(String.format("Device not available: %s", e.getMessage()));
             } finally {
@@ -242,7 +251,7 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
 
         CLog.d("To run tests in directory " + testPath);
 
-        if (!doRunAllTestsInSubdirectory(testPath, mDevice, listener)) {
+        if (!doRunAllTestsInSubdirectory(testPath, listener)) {
             wrongTestPath("No test found under ", testPath, listener);
         }
     }
