@@ -43,7 +43,7 @@ public enum LogDataType {
     PERFETTO(
             "perfetto-trace",
             "application/octet-stream",
-            true,
+            false, // Not compressed by default, so we can gzip them
             false), // binary proto perfetto trace file
     /* Specific text file types */
     BUGREPORT("txt", "text/plain", false, true),
