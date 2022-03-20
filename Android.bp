@@ -36,38 +36,21 @@ java_library_host {
     },
 }
 
-java_genrule_host {
-    name: "lab-resource-grpc-gen",
+java_library_host {
+    name: "lab-resource-grpc",
     srcs: [
         "proto/monitoring/server/lab_resource.proto",
     ],
-    tools: [
-        "aprotoc",
-        "protoc-gen-grpc-java-plugin",
-        "soong_zip",
-     ],
-     cmd: "$(location aprotoc) -Iexternal/protobuf/src" +
-        " -Itools/tradefederation/core/proto/monitoring/server" +
-        " --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-java-plugin) $(in)" +
-        " --grpc_out=$(genDir) && $(location soong_zip) -o $(out) -C $(genDir) -D $(genDir)",
-     out: ["tradefed-grpc.srcjar"],
-}
-
-java_genrule_host {
-    name: "tf-feature-grpc-gen",
-    srcs: [
-        "proto/feature/tradefed_service.proto",
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        plugin: "grpc-java-plugin",
+    },
+    libs: [
+        "tradefed-protos",
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
     ],
-    tools: [
-        "aprotoc",
-        "protoc-gen-grpc-java-plugin",
-        "soong_zip",
-     ],
-     cmd: "$(location aprotoc) -Iexternal/protobuf/src" +
-        " -Itools/tradefederation/core/proto/feature" +
-        " --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-java-plugin) $(in)" +
-        " --grpc_out=$(genDir) && $(location soong_zip) -o $(out) -C $(genDir) -D $(genDir)",
-     out: ["tradefed-service-grpc.srcjar"],
 }
 
 java_library_host {
@@ -76,16 +59,19 @@ java_library_host {
         "//tools/tradefederation/core",
     ],
     srcs: [
-        ":tf-feature-grpc-gen",
+        "proto/feature/tradefed_service.proto",
+    ],
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        plugin: "grpc-java-plugin",
+    },
+    libs: [
+        "tradefed-protos",
     ],
     static_libs: [
         "grpc-java",
-        "grpc-java-netty-shaded",
-        "libprotobuf-java-full",
-        "tradefed-protos",
-        "javax-annotation-api-prebuilt-host-jar",
         "guava",
-        "opencensus-java-api",
+        "javax-annotation-api-prebuilt-host-jar",
     ],
 }
 
@@ -128,7 +114,6 @@ java_library_host {
     srcs: [
         "src/**/*.java",
         "global_configuration/**/*.java",
-        ":lab-resource-grpc-gen",
     ],
     static_libs: [
         "tradefed-common-util",
@@ -136,7 +121,9 @@ java_library_host {
         "tradefed-result-interfaces",
         "tradefed-device-build-interfaces",
         "tradefed-invocation-interfaces",
+        "tradefed-external-dependencies",
         "tradefed-service-grpc-lib",
+        "lab-resource-grpc",
         "protobuf-java-util-prebuilt-jar",
         "aoa-helper",
         "error_prone_annotations-2.0.18",
@@ -158,12 +145,9 @@ java_library_host {
         "tradefed-protos",
         "tradefed-isolation-protos",
         "tradefed-lite",
-        "guava",
         "guava-testlib",
-        "grpc-java",
         "grpc-java-testing",
         "grpc-java-netty-shaded",
-        "javax-annotation-api-prebuilt-host-jar",
         "opencensus-java-api",
         "opencensus-java-contrib-grpc-metrics",
     ],

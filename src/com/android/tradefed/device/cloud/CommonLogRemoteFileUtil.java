@@ -162,7 +162,7 @@ public class CommonLogRemoteFileUtil {
         List<KnownLogFileEntry> toFetch = KNOWN_FILES_TO_FETCH.get(options.getInstanceType());
         if (options.useOxygen()) {
             // Override the list of logs to collect when the device is hosted by Oxygen service.
-            toFetch = OXYGEN_LOG_FILES;
+            toFetch = new ArrayList<>(OXYGEN_LOG_FILES);
             if (!RemoteFileUtil.doesRemoteFileExist(
                     gceAvd, options, runUtil, 60000, OXYGEN_CUTTLEFISH_LOG_DIR)) {
                 toFetch.addAll(OXYGEN_LOG_FILES_FALLBACK);

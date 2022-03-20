@@ -367,14 +367,7 @@ public class GceManager {
         List<String> gceDriverParams = getTestDeviceOptions().getGceDriverParams();
         MultiMap<String, File> gceDriverFileParams =
                 getTestDeviceOptions().getGceDriverFileParams();
-        if (getTestDeviceOptions().getAvdLocalImage() != null
-                && getTestDeviceOptions().getAvdCuttlefishHostPkg() != null) {
-            CLog.i("Virtual device is created by specified prebuilt image files.");
-            gceArgs.add("--cvd-host-package");
-            gceArgs.add(getTestDeviceOptions().getAvdCuttlefishHostPkg().getAbsolutePath());
-            gceArgs.add("--local-image");
-            gceArgs.add(getTestDeviceOptions().getAvdLocalImage().getAbsolutePath());
-        } else if (!gceDriverParams.contains("--build-target")
+        if (!gceDriverParams.contains("--build-target")
                 && !gceDriverParams.contains("--build_target")
                 && !(gceDriverFileParams.containsKey("local-image")
                         && gceDriverFileParams.containsKey("cvd-host-package"))) {
