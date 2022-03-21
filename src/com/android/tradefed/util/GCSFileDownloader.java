@@ -58,11 +58,20 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
             Collections.singleton("https://www.googleapis.com/auth/devstorage.read_only");
     private static final long LIST_BATCH_SIZE = 100;
 
+    // Allow downloader to create empty files instead of throwing exception.
+    private Boolean mCreateEmptyFile = false;
+
     public GCSFileDownloader(File jsonKeyFile) {
         super(jsonKeyFile);
     }
 
-    public GCSFileDownloader() {}
+    public GCSFileDownloader(Boolean createEmptyFile) {
+        mCreateEmptyFile = createEmptyFile;
+    }
+
+    public GCSFileDownloader() {
+        this(false);
+    }
 
     private Storage getStorage() throws IOException {
         return getStorage(SCOPES);
@@ -345,11 +354,18 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         CLog.d("Fetching gs://%s/%s to %s.", bucketName, remoteFilename, localFile.toString());
         StorageObject meta = getRemoteFileMetaData(bucketName, remoteFilename);
         if (meta == null || meta.getSize().equals(BigInteger.ZERO)) {
-            throw new BuildRetrievalError(
-                    String.format(
-                            "File (not folder) gs://%s/%s doesn't exist or is size 0.",
-                            bucketName, remoteFilename),
-                    InfraErrorIdentifier.GCS_ERROR);
+            if (!mCreateEmptyFile) {
+                throw new BuildRetrievalError(
+                        String.format(
+                                "File (not folder) gs://%s/%s doesn't exist or is size 0.",
+                                bucketName, remoteFilename),
+                        InfraErrorIdentifier.GCS_ERROR);
+            } else {
+                // Create the empty file.
+                CLog.d("GCS file is empty: gs://%s/%s", bucketName, remoteFilename);
+                localFile.createNewFile();
+                return;
+            }
         }
         try (OutputStream writeStream = new FileOutputStream(localFile)) {
             getStorage()
