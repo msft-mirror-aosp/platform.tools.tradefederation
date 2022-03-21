@@ -30,7 +30,6 @@
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/guice/guice/linux_glibc_common/combined/guice.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/junit-params/junit-params/linux_glibc_common/combined/junit-params.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/junit/junit/linux_glibc_common/combined/junit.jar"/>
-	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/platform_testing/libraries/aoa-helper/aoa-helper/linux_glibc_common/combined/aoa-helper.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/prebuilts/tools/common/google-api-services-compute/google-api-services-compute/linux_glibc_common/combined/google-api-services-compute.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/prebuilts/misc/common/frameworks/platformprotos-prebuilt.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/jacoco/jacoco-cli/linux_glibc_common/combined/jacoco-cli.jar"/>
