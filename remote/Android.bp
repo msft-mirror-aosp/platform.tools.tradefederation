@@ -34,6 +34,8 @@ tradefed_java_library_host {
     "sdklib-prebuilt",
     "guava",
     "ddmlib-prebuilt",
+    // ddmlib needs kotlin now
+    "kotlin-stdlib",
     "devtools-annotations-prebuilt",
   ],
 }
