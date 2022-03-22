@@ -15,6 +15,7 @@
  */
 package android.tradefed.contentprovider;
 
+import android.annotation.SuppressLint;
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -60,7 +61,7 @@ public class ManagedFileContentProvider extends ContentProvider {
                 COLUMN_METADATA
             };
 
-    private static final String TAG = "ManagedFileContentProvider";
+    private static final String TAG = "TradefedContentProvider";
     private static MimeTypeMap sMimeMap = MimeTypeMap.getSingleton();
 
     private Map<Uri, ContentValues> mFileTracker = new HashMap<>();
@@ -237,6 +238,7 @@ public class ManagedFileContentProvider extends ContentProvider {
         return "application/octet-stream";
     }
 
+    @SuppressLint("SdCardPath")
     private File getFileForUri(@NonNull Uri uri) {
         // TODO: apply the /sdcard resolution to query() too.
         String uriPath = uri.getPath();
