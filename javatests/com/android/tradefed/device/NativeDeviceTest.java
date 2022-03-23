@@ -135,6 +135,7 @@ public class NativeDeviceTest {
         mHostOptions = new HostOptions();
 
         when(mMockIDevice.getSerialNumber()).thenReturn(MOCK_DEVICE_SERIAL);
+        when(mMockIDevice.supportsFeature(IDevice.Feature.SHELL_V2)).thenReturn(true);
 
         // A TestDevice with a no-op recoverDevice() implementation
         mTestDevice =
@@ -3216,6 +3217,31 @@ public class NativeDeviceTest {
         } catch (DeviceNotAvailableException dnae) {
             // expected
         }
+    }
+
+    /**
+     * Test {@link NativeDevice#executeShellV2Command(String)} with workaround for devices without
+     * shell v2.
+     */
+    @Test
+    public void testExecuteShellV2Command_exit_status_workaround() throws Exception {
+        OutputStream stdout = null;
+        OutputStream stderr = null;
+        when(mMockIDevice.supportsFeature(IDevice.Feature.SHELL_V2)).thenReturn(false);
+        OptionSetter deviceOptionSetter = new OptionSetter(mTestDevice.getOptions());
+        deviceOptionSetter.setOptionValue("exit-status-workaround", "true");
+        CommandResult res = new CommandResult();
+        res.setStatus(CommandStatus.SUCCESS);
+        res.setStdout("foox1");
+        when(mMockRunUtil.runTimedCmd(
+                        100, stdout, stderr, "adb", "-s", "serial", "shell", "some", "command", ";",
+                        "echo", "x$?"))
+                .thenReturn(res);
+
+        CommandResult result = mTestDevice.executeShellV2Command("some command");
+        assertEquals(CommandStatus.FAILED, result.getStatus());
+        assertEquals(1, result.getExitCode().intValue());
+        assertEquals("foo", result.getStdout());
     }
 
     /** Unit test for {@link INativeDevice#setProperty(String, String)}. */

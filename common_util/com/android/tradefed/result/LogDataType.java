@@ -43,14 +43,14 @@ public enum LogDataType {
     PERFETTO(
             "perfetto-trace",
             "application/octet-stream",
-            true,
+            false, // Not compressed by default, so we can gzip them
             false), // binary proto perfetto trace file
     /* Specific text file types */
     BUGREPORT("txt", "text/plain", false, true),
     BUGREPORTZ("zip", "application/zip", true, false),
-    HOST_LOG("txt", "text/plain", false, true),
-    LOGCAT("txt", "text/plain", false, true),
-    KERNEL_LOG("txt", "text/plain", false, true),
+    HOST_LOG("txt", "text/plain", true, true),
+    LOGCAT("txt", "text/plain", true, true),
+    KERNEL_LOG("txt", "text/plain", true, true),
     MONKEY_LOG("txt", "text/plain", false, true),
     MUGSHOT_LOG("txt", "text/plain", false, true),
     PROCRANK("txt", "text/plain", false, true),
@@ -67,23 +67,25 @@ public enum LogDataType {
     KERNEL_TRACE("dat", "text/plain", false, false), // raw kernel ftrace buffer
     DIR("", "text/plain", false, false),
     CFG("cfg", "application/octet-stream", false, true),
-    TF_EVENTS("txt", "text/plain", false, true),
-    HARNESS_STD_LOG("txt", "text/plain", false, true),
-    HARNESS_CONFIG("xml", "text/xml", false, true),
-    ADB_HOST_LOG("txt", "text/plain", false, true),
-    PASSED_TESTS("txt", "text/plain", false, true),
+    TF_EVENTS("txt", "text/plain", true, true),
+    HARNESS_STD_LOG("txt", "text/plain", true, true),
+    HARNESS_CONFIG("xml", "text/xml", true, true),
+    ADB_HOST_LOG("txt", "text/plain", true, true),
+    PASSED_TESTS("txt", "text/plain", true, true),
     RECOVERY_MODE_LOG("txt", "text/plain", false, true),
     /* Unknown file type */
     UNKNOWN("dat", "text/plain", false, false);
 
-    private final String mFileExt;
+    private final String mFileExt; // Usual extension of the file type
     private final String mContentType;
-    private final boolean mIsCompressed;
+    // If the type is already compressed or should never be compressed
+    private final boolean mIsCompressedOrNeverCompress;
     private final boolean mIsText;
 
-    LogDataType(String fileExt, String contentType, boolean compressed, boolean text) {
+    LogDataType(
+            String fileExt, String contentType, boolean isCompressedOrNeverCompress, boolean text) {
         mFileExt = fileExt;
-        mIsCompressed = compressed;
+        mIsCompressedOrNeverCompress = isCompressedOrNeverCompress;
         mIsText = text;
         mContentType = contentType;
     }
@@ -97,10 +99,10 @@ public enum LogDataType {
     }
 
     /**
-     * @return <code>true</code> if data type is a compressed format.
+     * @return <code>true</code> if data type is a compressed format or should not be compressed.
      */
     public boolean isCompressed() {
-        return mIsCompressed;
+        return mIsCompressedOrNeverCompress;
     }
 
     /**

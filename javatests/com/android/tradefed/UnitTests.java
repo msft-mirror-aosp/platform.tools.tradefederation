@@ -48,7 +48,6 @@ import com.android.tradefed.command.CommandRunnerTest;
 import com.android.tradefed.command.CommandSchedulerTest;
 import com.android.tradefed.command.ConsoleTest;
 import com.android.tradefed.command.console.ConfigCompleterTest;
-import com.android.tradefed.command.remote.RemoteManagerTest;
 import com.android.tradefed.command.remote.RemoteOperationTest;
 import com.android.tradefed.config.ArgsOptionParserTest;
 import com.android.tradefed.config.ConfigurationDefTest;
@@ -94,6 +93,7 @@ import com.android.tradefed.device.cloud.GceRemoteCmdFormatterTest;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitorTest;
 import com.android.tradefed.device.cloud.ManagedRemoteDeviceTest;
 import com.android.tradefed.device.cloud.NestedRemoteDeviceTest;
+import com.android.tradefed.device.cloud.OxygenUtilTest;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDeviceTest;
 import com.android.tradefed.device.cloud.RemoteFileUtilTest;
 import com.android.tradefed.device.contentprovider.ContentProviderHandlerTest;
@@ -248,6 +248,8 @@ import com.android.tradefed.targetprep.InstallApkSetupTest;
 import com.android.tradefed.targetprep.InstrumentationPreparerTest;
 import com.android.tradefed.targetprep.KnownFailurePreparerTest;
 import com.android.tradefed.targetprep.LocalEmulatorLaunchTest;
+import com.android.tradefed.targetprep.ModuleOemTargetPreparerTest;
+import com.android.tradefed.targetprep.ModulePusherTest;
 import com.android.tradefed.targetprep.PushFilePreparerTest;
 import com.android.tradefed.targetprep.PythonVirtualenvPreparerTest;
 import com.android.tradefed.targetprep.RebootTargetPreparerTest;
@@ -491,7 +493,6 @@ import org.junit.runners.Suite.SuiteClasses;
     ConfigCompleterTest.class,
 
     // command.remote
-    RemoteManagerTest.class,
     RemoteOperationTest.class,
 
     // config
@@ -554,6 +555,7 @@ import org.junit.runners.Suite.SuiteClasses;
     GceSshTunnelMonitorTest.class,
     ManagedRemoteDeviceTest.class,
     NestedRemoteDeviceTest.class,
+    OxygenUtilTest.class,
     RemoteAndroidVirtualDeviceTest.class,
     RemoteFileUtilTest.class,
 
@@ -733,6 +735,8 @@ import org.junit.runners.Suite.SuiteClasses;
     InstrumentationPreparerTest.class,
     KnownFailurePreparerTest.class,
     LocalEmulatorLaunchTest.class,
+    ModuleOemTargetPreparerTest.class,
+    ModulePusherTest.class,
     PushFilePreparerTest.class,
     PythonVirtualenvPreparerTest.class,
     RebootTargetPreparerTest.class,

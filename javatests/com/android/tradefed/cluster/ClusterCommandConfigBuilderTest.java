@@ -54,6 +54,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -74,6 +75,7 @@ public class ClusterCommandConfigBuilderTest {
     private TestEnvironment mTestEnvironment;
     private List<TestResource> mTestResources;
     private TestContext mTestContext;
+    private Map<String, String> mSystemEnvMap;
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private IConfiguration mConfig;
@@ -91,12 +93,18 @@ public class ClusterCommandConfigBuilderTest {
         mTestEnvironment = new TestEnvironment();
         mTestResources = new ArrayList<>();
         mTestContext = new TestContext();
+        mSystemEnvMap = new HashMap<String, String>();
 
         builder =
                 new ClusterCommandConfigBuilder() {
                     @Override
                     IConfiguration initConfiguration() {
                         return mConfig;
+                    }
+
+                    @Override
+                    Map<String, String> getSystemEnvMap() {
+                        return mSystemEnvMap;
                     }
                 };
         builder.setWorkDir(mWorkDir)
@@ -232,6 +240,18 @@ public class ClusterCommandConfigBuilderTest {
                 .injectOptionValue(
                         "cluster:test-resource",
                         mTestContext.getTestResources().get(0).toJson().toString());
+    }
+
+    @Test
+    public void testBuild_testResourcesWithTemplatedUrl()
+            throws IOException, ConfigurationException, JSONException {
+        mSystemEnvMap.put("TEMPLATED_URL", "localhost:8000");
+        mTestResources.add(new TestResource("N1", "${TEMPLATED_URL}/tests"));
+        TestResource updatedTestResource = new TestResource("N1", "localhost:8000/tests");
+        builder.build();
+        verify(mConfig, times(1))
+                .injectOptionValue(
+                        "cluster:test-resource", updatedTestResource.toJson().toString());
     }
 
     @Test

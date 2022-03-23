@@ -156,6 +156,13 @@ public class TestDeviceOptions {
     )
     private boolean mUseContentProvider = true;
 
+    @Option(
+            name = "exit-status-workaround",
+            description =
+                    "On older devices that do not support ADB shell v2, use a workaround "
+                            + "to get the exit status of shell commands")
+    private boolean mExitStatusWorkaround = false;
+
     // ====================== Options Related to Virtual Devices ======================
     @Option(
             name = INSTANCE_TYPE_OPTION,
@@ -201,6 +208,14 @@ public class TestDeviceOptions {
         description = "Additional args to pass to gce driver as parameters."
     )
     private List<String> mGceDriverParams = new ArrayList<>();
+
+    @Option(
+            name = "gce-driver-file-param",
+            description =
+                    "Additional file paths to pass to gce driver as parameters. For example, "
+                            + "local-image=/path/to/image is converted to "
+                            + "--local-image /path/to/image.")
+    private MultiMap<String, File> mGceDriverFileParams = new MultiMap<>();
 
     @Deprecated
     @Option(
@@ -281,16 +296,6 @@ public class TestDeviceOptions {
                             + " context has form_factor=phone, it'll be added to GCE VM as metadata"
                             + " form_factor=phone.")
     private List<String> mInvocationAttributeToMetadata = new ArrayList<>();
-
-    @Option(
-            name = "gce-local-image-path",
-            description = "path of the prebuilt cuttlefish local image.")
-    private File mAvdLocalImage = null;
-
-    @Option(
-            name = "gce-cvd-host-package-path",
-            description = "path of the prebuilt cuttlefish host package.")
-    private File mAvdCuttlefishHostPkg = null;
 
     @Option(
             name = "gce-extra-files",
@@ -551,6 +556,14 @@ public class TestDeviceOptions {
         return mUseContentProvider;
     }
 
+    /**
+     * Returns whether to use a workaround to get shell exit status on older devices without shell
+     * v2.
+     */
+    public boolean useExitStatusWorkaround() {
+        return mExitStatusWorkaround;
+    }
+
     // =========================== Getter and Setter for Virtual Devices
     /** Return the Gce Avd timeout for the instance to come online. */
     public long getGceCmdTimeout() {
@@ -631,6 +644,11 @@ public class TestDeviceOptions {
         mGceDriverParams.add(param);
     }
 
+    /** Return the additional file paths as GCE driver parameters provided via option. */
+    public MultiMap<String, File> getGceDriverFileParams() {
+        return mGceDriverFileParams;
+    }
+
     /** Set the GCE driver parameter that should be paired with the build id from build info */
     public void setGceDriverBuildIdParam(String gceDriverBuildIdParam) {
         mGceDriverBuildIdParam = gceDriverBuildIdParam;
@@ -674,14 +692,24 @@ public class TestDeviceOptions {
         return mUseOxygen;
     }
 
-    /** Returns the instance type of GCE virtual device that should be created */
+    /** Returns the instance user of GCE virtual device that should be created */
     public String getInstanceUser() {
         return mInstanceUser;
+    }
+
+    /** Set the instance user of GCE virtual device that should be created. */
+    public void setInstanceUser(String instanceUser) {
+        mInstanceUser = instanceUser;
     }
 
     /** Returns the remote port in instance that the adb server listens to */
     public int getRemoteAdbPort() {
         return mRemoteAdbPort;
+    }
+
+    /** Set the remote port in instance that the adb server listens to */
+    public void setRemoteAdbPort(int remoteAdbPort) {
+        mRemoteAdbPort = remoteAdbPort;
     }
 
     /** Returns the base image name to be used for the current instance */
@@ -707,16 +735,6 @@ public class TestDeviceOptions {
     /** The file pointing to the directory of the Tradefed version to be pushed to the remote. */
     public File getRemoteTf() {
         return mRemoteTFVersion;
-    }
-
-    /** Return the path to the cuttlefish local image. */
-    public File getAvdLocalImage() {
-        return mAvdLocalImage;
-    }
-
-    /** Return the path to the cuttlefish host package. */
-    public File getAvdCuttlefishHostPkg() {
-        return mAvdCuttlefishHostPkg;
     }
 
     /** Return the extra files need to upload to GCE during acloud create. */

@@ -85,13 +85,12 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private String mBundletoolFilename;
 
     @Option(name = "train-path", description = "The absolute path of the train folder.")
-    private File mTrainFolderPath;
+    protected File mTrainFolderPath;
 
     @Option(
-        name = "apex-staging-wait-time",
-        description = "The time in ms to wait for apex staged session ready.",
-        isTimeVal = true
-    )
+            name = "apex-staging-wait-time",
+            description = "The time in ms to wait for apex staged session ready.",
+            isTimeVal = true)
     private long mApexStagingWaitTime = 1 * 60 * 1000;
 
     @Option(
@@ -103,8 +102,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
 
     @Option(
             name = "skip-apex-teardown",
-            description = "Skip teardown if all files to be installed are apex files. "
-                    + "Currently, this option is only used for Test Mapping use case.")
+            description =
+                    "Skip teardown if all files to be installed are apex files. "
+                            + "Currently, this option is only used for Test Mapping use case.")
     private boolean mSkipApexTearDown = false;
 
     @Override
@@ -187,6 +187,18 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             }
         }
 
+        checkApexActivation(device);
+    }
+
+    /**
+     * Check if all apexes are activated.
+     *
+     * @param device under test.
+     * @throws Exception if activation failed.
+     */
+    protected void checkApexActivation(ITestDevice device)
+            throws DeviceNotAvailableException, TargetSetupError {
+        Set<ApexInfo> activatedApexes;
         activatedApexes = device.getActiveApexes();
 
         if (activatedApexes.isEmpty()) {

@@ -195,12 +195,12 @@ public class GsiDeviceFlashPreparerTest {
         doGetSlotExpectation();
         when(mMockDevice.executeLongFastbootCommand("delete-logical-partition", "product_a"))
                 .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand("erase", "system_a"))
                 .thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         "flash", "system", mBuildInfo.getFile("gsi_system.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
 
         doSetupExpectations();
 
@@ -237,12 +237,12 @@ public class GsiDeviceFlashPreparerTest {
         doGetSlotExpectation();
         when(mMockDevice.executeLongFastbootCommand("delete-logical-partition", "product_a"))
                 .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand("erase", "system_a"))
                 .thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         "flash", "system", mBuildInfo.getFile("gsi_system.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
 
         doSetupExpectations();
 
@@ -281,12 +281,12 @@ public class GsiDeviceFlashPreparerTest {
         doGetSlotExpectation();
         when(mMockDevice.executeLongFastbootCommand("delete-logical-partition", "product_a"))
                 .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand("erase", "system_a"))
                 .thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         Mockito.eq("flash"), Mockito.eq("system"), Mockito.matches(".*system.img")))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
 
         doSetupExpectations();
 
@@ -326,12 +326,12 @@ public class GsiDeviceFlashPreparerTest {
         doGetSlotExpectation();
         when(mMockDevice.executeLongFastbootCommand("delete-logical-partition", "product_a"))
                 .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand("erase", "system_a"))
                 .thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         "flash", "system", mBuildInfo.getFile("gsi_system.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
 
         when(mMockDevice.executeLongFastbootCommand(
                         "flash", "boot", mBuildInfo.getFile("gki_boot.img").getAbsolutePath()))
@@ -379,6 +379,7 @@ public class GsiDeviceFlashPreparerTest {
         doGetSlotExpectation();
         when(mMockDevice.executeLongFastbootCommand("delete-logical-partition", "product_a"))
                 .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand("erase", "system_a"))
                 .thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
@@ -386,7 +387,6 @@ public class GsiDeviceFlashPreparerTest {
                         Mockito.eq("system"),
                         Mockito.matches(".*/system.img")))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
 
         when(mMockDevice.executeLongFastbootCommand(
                         Mockito.eq("flash"),
@@ -428,11 +428,11 @@ public class GsiDeviceFlashPreparerTest {
                         mBuildInfo.getFile("gsi_vbmeta.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
         doGetEmptySlotExpectation();
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand("erase", "system")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         "flash", "system", mBuildInfo.getFile("gsi_system.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
 
         doSetupExpectations();
 
@@ -468,6 +468,7 @@ public class GsiDeviceFlashPreparerTest {
         doGetSlotExpectation();
         when(mMockDevice.executeLongFastbootCommand("delete-logical-partition", "product_a"))
                 .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand("erase", "system_a"))
                 .thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
@@ -511,12 +512,12 @@ public class GsiDeviceFlashPreparerTest {
 
         when(mMockDevice.executeLongFastbootCommand("delete-logical-partition", "product_a"))
                 .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand("erase", "system_a"))
                 .thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         "flash", "system", mBuildInfo.getFile("gsi_system.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
 
         doThrow(new DeviceNotAvailableException("test", "serial"))
                 .when(mMockDevice)

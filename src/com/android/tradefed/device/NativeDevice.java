@@ -105,6 +105,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -195,6 +196,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private long mCmdTimeout = 2 * 60 * 1000L;
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
+
+    /**
+     * The delimiter that separates the actual shell output and the exit status.
+     *
+     * <p>Used to determine the exit status of the command run by adb shell for devices that do not
+     * support shell_v2.
+     */
+    private static final String EXIT_STATUS_DELIMITER = "x";
 
     private IConfiguration mConfiguration;
     private IDevice mIDevice;
@@ -958,7 +967,19 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             final TimeUnit timeUnit,
             int retryAttempts)
             throws DeviceNotAvailableException {
-        final String[] fullCmd = buildAdbShellCommand(cmd);
+        // If the device does not support the v2 shell features. Exit status will not be propagated
+        // and stdout/stderr will be merged in stdout.
+        //
+        // There's nothing we can do to separate the two streams, but we can alter the command to
+        // retrieve the exit status.
+        //
+        // Note that this does *not* call `adb features` on each invocation. ddmlib caches all the
+        // adb features on the first query.
+        boolean parseExitStatus =
+                !getIDevice().supportsFeature(IDevice.Feature.SHELL_V2)
+                        && getOptions().useExitStatusWorkaround();
+
+        final String[] fullCmd = buildAdbShellCommand(cmd, parseExitStatus);
         AdbShellAction adbActionV2 =
                 new AdbShellAction(
                         fullCmd,
@@ -967,7 +988,26 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                         pipeToError,
                         timeUnit.toMillis(maxTimeoutForCommand));
         performDeviceAction(String.format("adb %s", fullCmd[4]), adbActionV2, retryAttempts);
+        if (parseExitStatus) {
+            postProcessExitStatus(adbActionV2.mResult);
+        }
         return adbActionV2.mResult;
+    }
+
+    private void postProcessExitStatus(@Nonnull CommandResult result) {
+        String stdout = result.getStdout();
+        int delimiterIndex = stdout.lastIndexOf(EXIT_STATUS_DELIMITER);
+        if (delimiterIndex < 0) {
+            result.setStatus(CommandStatus.FAILED);
+            return;
+        }
+        String actualStdout = stdout.substring(0, delimiterIndex);
+        String exitStatusText = stdout.substring(delimiterIndex + 1);
+        result.setExitCode(Integer.parseUnsignedInt(exitStatusText.trim()));
+        result.setStdout(actualStdout);
+        if (result.getStatus() == CommandStatus.SUCCESS && result.getExitCode() != 0) {
+            result.setStatus(CommandStatus.FAILED);
+        }
     }
 
     /** {@inheritDoc} */
@@ -1442,19 +1482,28 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void deleteFile(String deviceFilePath) throws DeviceNotAvailableException {
-        if (isSdcardOrEmulated(deviceFilePath)) {
-            ContentProviderHandler handler = getContentProvider();
-            if (handler != null) {
-                if (handler.deleteFile(deviceFilePath)) {
-                    return;
+        long startTime = System.currentTimeMillis();
+        try {
+            if (isSdcardOrEmulated(deviceFilePath)) {
+                ContentProviderHandler handler = getContentProvider();
+                if (handler != null) {
+                    if (handler.deleteFile(deviceFilePath)) {
+                        return;
+                    }
                 }
             }
+            // Fallback to the direct command if content provider is unsuccessful
+            String path = StringEscapeUtils.escapeShell(deviceFilePath);
+            // Escape spaces to handle filename with spaces
+            path = path.replaceAll(" ", "\\ ");
+            executeShellCommand(String.format("rm -rf %s", StringEscapeUtils.escapeShell(path)));
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DELETE_DEVICE_FILE_TIME,
+                    System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DELETE_DEVICE_FILE_COUNT, 1);
         }
-        // Fallback to the direct command if content provider is unsuccessful
-        String path = StringEscapeUtils.escapeShell(deviceFilePath);
-        // Escape spaces to handle filename with spaces
-        path = path.replaceAll(" ", "\\ ");
-        executeShellCommand(String.format("rm -rf %s", StringEscapeUtils.escapeShell(path)));
     }
 
     /**
@@ -1739,19 +1788,26 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public boolean pushDir(
             File localFileDir, String deviceFilePath, Set<String> excludedDirectories)
             throws DeviceNotAvailableException {
-        if (isSdcardOrEmulated(deviceFilePath)) {
-            Integer currentUser = getCurrentUser();
-            if (currentUser != 0) {
-                ContentProviderHandler handler = getContentProvider();
-                if (handler != null) {
-                    return handler.pushDir(localFileDir, deviceFilePath, excludedDirectories);
+        long startTime = System.currentTimeMillis();
+        try {
+            if (isSdcardOrEmulated(deviceFilePath)) {
+                Integer currentUser = getCurrentUser();
+                if (currentUser != 0) {
+                    ContentProviderHandler handler = getContentProvider();
+                    if (handler != null) {
+                        return handler.pushDir(localFileDir, deviceFilePath, excludedDirectories);
+                    }
+                } else {
+                    // Remove the special handling when content provider performance is better
+                    CLog.d("Push without content provider for user '%s'", currentUser);
                 }
-            } else {
-                // Remove the special handling when content provider performance is better
-                CLog.d("Push without content provider for user '%s'", currentUser);
             }
+            return pushDirInternal(localFileDir, deviceFilePath, excludedDirectories);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PUSH_DIR_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PUSH_DIR_COUNT, 1);
         }
-        return pushDirInternal(localFileDir, deviceFilePath, excludedDirectories);
     }
 
     private boolean pushDirInternal(
@@ -1795,57 +1851,67 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public boolean pullDir(String deviceFilePath, File localDir)
             throws DeviceNotAvailableException {
-        if (isSdcardOrEmulated(deviceFilePath)) {
-            ContentProviderHandler handler = getContentProvider();
-            if (handler != null) {
-                return handler.pullDir(deviceFilePath, localDir);
+        long startTime = System.currentTimeMillis();
+        try {
+            if (isSdcardOrEmulated(deviceFilePath)) {
+                ContentProviderHandler handler = getContentProvider();
+                if (handler != null) {
+                    return handler.pullDir(deviceFilePath, localDir);
+                }
             }
-        }
 
-        if (!localDir.isDirectory()) {
-            CLog.e("Local path %s is not a directory", localDir.getAbsolutePath());
-            return false;
-        }
-        if (!doesFileExist(deviceFilePath)) {
-            CLog.e("Device path %s does not exists to be pulled.", deviceFilePath);
-        }
-        if (!isDirectory(deviceFilePath)) {
-            CLog.e("Device path %s is not a directory", deviceFilePath);
-            return false;
-        }
-        FileEntry entryRoot =
-                new FileEntry(null, deviceFilePath, FileListingService.TYPE_DIRECTORY, false);
-        IFileEntry entry = getFileEntry(entryRoot);
-        Collection<IFileEntry> children = entry.getChildren(false);
-        if (children.isEmpty()) {
-            CLog.i("Device path is empty, nothing to do.");
-            return true;
-        }
-        for (IFileEntry item : children) {
-            if (item.isDirectory()) {
-                // handle sub dir
-                File subDir = new File(localDir, item.getName());
-                if (!subDir.mkdir()) {
-                    CLog.w("Failed to create sub directory %s, aborting.",
-                            subDir.getAbsolutePath());
-                    return false;
-                }
-                String deviceSubDir = item.getFullPath();
-                if (!pullDir(deviceSubDir, subDir)) {
-                    CLog.w("Failed to pull sub directory %s from device, aborting", deviceSubDir);
-                    return false;
-                }
-            } else {
-                // handle regular file
-                File localFile = new File(localDir, item.getName());
-                String fullPath = item.getFullPath();
-                if (!pullFile(fullPath, localFile)) {
-                    CLog.w("Failed to pull file %s from device, aborting", fullPath);
-                    return false;
+            if (!localDir.isDirectory()) {
+                CLog.e("Local path %s is not a directory", localDir.getAbsolutePath());
+                return false;
+            }
+            if (!doesFileExist(deviceFilePath)) {
+                CLog.e("Device path %s does not exist to be pulled.", deviceFilePath);
+            }
+            if (!isDirectory(deviceFilePath)) {
+                CLog.e("Device path %s is not a directory", deviceFilePath);
+                return false;
+            }
+            FileEntry entryRoot =
+                    new FileEntry(null, deviceFilePath, FileListingService.TYPE_DIRECTORY, false);
+            IFileEntry entry = getFileEntry(entryRoot);
+            Collection<IFileEntry> children = entry.getChildren(false);
+            if (children.isEmpty()) {
+                CLog.i("Device path is empty, nothing to do.");
+                return true;
+            }
+            for (IFileEntry item : children) {
+                if (item.isDirectory()) {
+                    // handle sub dir
+                    File subDir = new File(localDir, item.getName());
+                    if (!subDir.mkdir()) {
+                        CLog.w(
+                                "Failed to create sub directory %s, aborting.",
+                                subDir.getAbsolutePath());
+                        return false;
+                    }
+                    String deviceSubDir = item.getFullPath();
+                    if (!pullDir(deviceSubDir, subDir)) {
+                        CLog.w(
+                                "Failed to pull sub directory %s from device, aborting",
+                                deviceSubDir);
+                        return false;
+                    }
+                } else {
+                    // handle regular file
+                    File localFile = new File(localDir, item.getName());
+                    String fullPath = item.getFullPath();
+                    if (!pullFile(fullPath, localFile)) {
+                        CLog.w("Failed to pull file %s from device, aborting", fullPath);
+                        return false;
+                    }
                 }
             }
+            return true;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PULL_DIR_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PULL_DIR_COUNT, 1);
         }
-        return true;
     }
 
     /** Checks whether path is external storage path. */
@@ -2223,15 +2289,24 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     }
 
     /** Builds the OS command for the given adb shell command session and args */
-    private String[] buildAdbShellCommand(String command) {
+    private String[] buildAdbShellCommand(String command, boolean forceExitStatusDetection) {
         // TODO: implement the shell v2 support in ddmlib itself.
         String[] commandArgs =
                 QuotationAwareTokenizer.tokenizeLine(
                         command,
                         /** No logging */
                         false);
+
+        String[] exitStatusProbe;
+        if (forceExitStatusDetection) {
+            exitStatusProbe = new String[] {";", "echo", EXIT_STATUS_DELIMITER + "$?"};
+        } else {
+            exitStatusProbe = new String[] {};
+        }
         return ArrayUtil.buildArray(
-                new String[] {"adb", "-s", getSerialNumber(), "shell"}, commandArgs);
+                new String[] {"adb", "-s", getSerialNumber(), "shell"},
+                commandArgs,
+                exitStatusProbe);
     }
 
     /**

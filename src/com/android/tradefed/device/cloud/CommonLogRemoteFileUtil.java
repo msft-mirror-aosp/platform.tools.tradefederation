@@ -48,10 +48,18 @@ public class CommonLogRemoteFileUtil {
 
     /** The directory where to find emulator logs from Oxygen service. */
     public static final String OXYGEN_EMULATOR_LOG_DIR = "/tmp/device_launcher/";
-    /** The directory where to find Oxygen device runtime logs. */
+    /** The directory where to find Oxygen device logs. */
+    public static final String OXYGEN_CUTTLEFISH_LOG_DIR =
+            "/tmp/cfbase/3/cuttlefish/instances/cvd-1/logs/";
+    /**
+     * The directory where to find Oxygen device runtime logs. Only use this if
+     * OXYGEN_CUTTLEFISH_LOG_DIR is not found.
+     */
     public static final String OXYGEN_RUNTIME_LOG_DIR = "/tmp/cfbase/3/cuttlefish_runtime/";
 
     public static final List<KnownLogFileEntry> OXYGEN_LOG_FILES = new ArrayList<>();
+    /** For older version of cuttlefish, log files only exists in cuttlefish_runtime directory. */
+    public static final List<KnownLogFileEntry> OXYGEN_LOG_FILES_FALLBACK = new ArrayList<>();
 
     public static final MultiMap<InstanceType, KnownLogFileEntry> KNOWN_FILES_TO_FETCH =
             new MultiMap<>();
@@ -104,19 +112,19 @@ public class CommonLogRemoteFileUtil {
                 InstanceType.EMULATOR,
                 new KnownLogFileEntry("/var/log/kern.log", "host_kernel.log", LogDataType.TEXT));
 
+        OXYGEN_LOG_FILES.add(new KnownLogFileEntry(OXYGEN_EMULATOR_LOG_DIR, null, LogDataType.DIR));
         OXYGEN_LOG_FILES.add(
-                new KnownLogFileEntry(
-                        OXYGEN_EMULATOR_LOG_DIR + "emulator_stderr.txt", null, LogDataType.TEXT));
-        OXYGEN_LOG_FILES.add(
-                new KnownLogFileEntry(
-                        OXYGEN_EMULATOR_LOG_DIR + "emulator_stdout.txt", null, LogDataType.TEXT));
-        OXYGEN_LOG_FILES.add(
+                new KnownLogFileEntry(OXYGEN_CUTTLEFISH_LOG_DIR, null, LogDataType.DIR));
+        OXYGEN_LOG_FILES_FALLBACK.add(
                 new KnownLogFileEntry(
                         OXYGEN_RUNTIME_LOG_DIR + "launcher.log", null, LogDataType.TEXT));
-        OXYGEN_LOG_FILES.add(
+        OXYGEN_LOG_FILES_FALLBACK.add(
+                new KnownLogFileEntry(
+                        OXYGEN_RUNTIME_LOG_DIR + "vdl_stdout.txt", null, LogDataType.TEXT));
+        OXYGEN_LOG_FILES_FALLBACK.add(
                 new KnownLogFileEntry(
                         OXYGEN_RUNTIME_LOG_DIR + "kernel.log", null, LogDataType.TEXT));
-        OXYGEN_LOG_FILES.add(
+        OXYGEN_LOG_FILES_FALLBACK.add(
                 new KnownLogFileEntry(OXYGEN_RUNTIME_LOG_DIR + "logcat", null, LogDataType.TEXT));
     }
 
@@ -154,7 +162,11 @@ public class CommonLogRemoteFileUtil {
         List<KnownLogFileEntry> toFetch = KNOWN_FILES_TO_FETCH.get(options.getInstanceType());
         if (options.useOxygen()) {
             // Override the list of logs to collect when the device is hosted by Oxygen service.
-            toFetch = OXYGEN_LOG_FILES;
+            toFetch = new ArrayList<>(OXYGEN_LOG_FILES);
+            if (!RemoteFileUtil.doesRemoteFileExist(
+                    gceAvd, options, runUtil, 60000, OXYGEN_CUTTLEFISH_LOG_DIR)) {
+                toFetch.addAll(OXYGEN_LOG_FILES_FALLBACK);
+            }
         }
         if (toFetch != null) {
             for (KnownLogFileEntry entry : toFetch) {

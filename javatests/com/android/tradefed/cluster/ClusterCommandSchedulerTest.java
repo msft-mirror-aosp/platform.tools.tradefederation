@@ -165,6 +165,7 @@ public class ClusterCommandSchedulerTest {
     @Mock IRestApiHelper mMockApiHelper;
     private IClusterClient mMockClusterClient;
     private ClusterOptions mMockClusterOptions;
+    private ClusterCommandConfigBuilder mMockClusterCommandConfigBuilder;
 
     @SuppressWarnings("unchecked")
     private IClusterEventUploader<ClusterCommandEvent> mMockEventUploader;
@@ -217,6 +218,14 @@ public class ClusterCommandSchedulerTest {
                     }
                 };
 
+        mMockClusterCommandConfigBuilder =
+                new ClusterCommandConfigBuilder() {
+                    @Override
+                    Map<String, String> getSystemEnvMap() {
+                        return new HashMap<String, String>();
+                    }
+                };
+
         mScheduler =
                 new ClusterCommandScheduler() {
                     @Override
@@ -232,6 +241,11 @@ public class ClusterCommandSchedulerTest {
                     @Override
                     protected IDeviceManager getDeviceManager() {
                         return mMockDeviceManager;
+                    }
+
+                    @Override
+                    protected ClusterCommandConfigBuilder getClusterCommandConfigBuilder() {
+                        return mMockClusterCommandConfigBuilder;
                     }
 
                     @Override

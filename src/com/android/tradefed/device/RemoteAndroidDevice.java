@@ -53,6 +53,8 @@ public class RemoteAndroidDevice extends TestDevice {
     private File mAdbConnectLogs = null;
     private String mInitialSerial;
     private String mInitialIpDevice;
+    private String mInitialUser;
+    private Integer mInitialDeviceNumOffset;
 
     /**
      * Creates a {@link RemoteAndroidDevice}.
@@ -64,8 +66,11 @@ public class RemoteAndroidDevice extends TestDevice {
     public RemoteAndroidDevice(IDevice device, IDeviceStateMonitor stateMonitor,
             IDeviceMonitor allocationMonitor) {
         super(device, stateMonitor, allocationMonitor);
-        if (getIDevice() instanceof IConfigurableIp) {
-            mInitialIpDevice = ((IConfigurableIp) getIDevice()).getKnownDeviceIp();
+        if (getIDevice() instanceof IConfigurableVirtualDevice) {
+            mInitialIpDevice = ((IConfigurableVirtualDevice) getIDevice()).getKnownDeviceIp();
+            mInitialUser = ((IConfigurableVirtualDevice) getIDevice()).getKnownUser();
+            mInitialDeviceNumOffset =
+                    ((IConfigurableVirtualDevice) getIDevice()).getDeviceNumOffset();
         }
         mInitialSerial = getSerialNumber();
     }
@@ -326,6 +331,16 @@ public class RemoteAndroidDevice extends TestDevice {
      */
     protected String getInitialIp() {
         return mInitialIpDevice;
+    }
+
+    /** Returns the initial known user if any. Returns null if no initial known user. */
+    protected String getInitialUser() {
+        return mInitialUser;
+    }
+
+    /** Returns the known device num offset if any. Returns null if not available. */
+    protected Integer getInitialDeviceNumOffset() {
+        return mInitialDeviceNumOffset;
     }
 
     /** Returns the initial serial name of the device. */

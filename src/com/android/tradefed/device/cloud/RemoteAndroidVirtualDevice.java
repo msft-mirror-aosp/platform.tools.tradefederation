@@ -25,7 +25,6 @@ import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.RemoteAvdIDevice;
-import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
@@ -162,14 +161,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     public void postInvocationTearDown(Throwable exception) {
         try {
             CLog.i("Invocation tear down for device %s", getSerialNumber());
-            // Log the last part of the logcat from the tear down.
-            if (!(getIDevice() instanceof StubDevice)) {
-                try (InputStreamSource logcatSource = getLogcat()) {
-                    clearLogcat();
-                    String name = "device_logcat_teardown_gce";
-                    mTestLogger.testLog(name, LogDataType.LOGCAT, logcatSource);
-                }
-            }
+            // Just clear the logcat, we don't need the teardown logcat
+            clearLogcat();
             stopLogcat();
             // Terminate SSH tunnel process.
             if (getGceSshMonitor() != null) {
@@ -221,14 +214,19 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             }
 
             // Cleanup GCE first to make sure ssh tunnel has nowhere to go.
-            if (!getOptions().shouldSkipTearDown()) {
+            if (!getOptions().shouldSkipTearDown() && getGceHandler() != null) {
                 getGceHandler().shutdownGce();
             }
             // We are done with the gce related information, clean it to prevent re-entry.
             mGceAvd = null;
 
             if (getInitialSerial() != null) {
-                setIDevice(new RemoteAvdIDevice(getInitialSerial(), getInitialIp()));
+                setIDevice(
+                        new RemoteAvdIDevice(
+                                getInitialSerial(),
+                                getInitialIp(),
+                                getInitialUser(),
+                                getInitialDeviceNumOffset()));
             }
             setFastbootEnabled(false);
 
@@ -272,7 +270,13 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         TargetSetupError exception = null;
         for (int attempt = 0; attempt < getOptions().getGceMaxAttempt(); attempt++) {
             try {
-                mGceAvd = getGceHandler().startGce(getInitialIp(), attributes);
+                mGceAvd =
+                        getGceHandler()
+                                .startGce(
+                                        getInitialIp(),
+                                        getInitialUser(),
+                                        getInitialDeviceNumOffset(),
+                                        attributes);
                 if (mGceAvd != null) {
                     break;
                 }
@@ -281,6 +285,11 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                         "Failed to start Gce with attempt: %s out of %s. With Exception: %s",
                         attempt + 1, getOptions().getGceMaxAttempt(), tse);
                 exception = tse;
+
+                if (getOptions().useOxygen()) {
+                    OxygenUtil util = new OxygenUtil();
+                    util.downloadLaunchFailureLogs(tse.getMessage(), mTestLogger);
+                }
             }
         }
         if (mGceAvd == null) {

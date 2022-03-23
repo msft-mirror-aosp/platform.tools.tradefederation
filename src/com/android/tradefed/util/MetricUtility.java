@@ -56,6 +56,7 @@ public class MetricUtility {
     private static final String STATS_KEY_MEDIAN = "median";
     private static final String STATS_KEY_TOTAL = "total";
     private static final String STATS_KEY_COUNT = "metric-count";
+    private static final String STATS_KEY_DIFF = "last-first-diff";
     private static final String STATS_KEY_PERCENTILE_PREFIX = "p";
     private static final String STATS_KEY_SEPARATOR = "-";
     private static final Joiner CLASS_METHOD_JOINER = Joiner.on("#").skipNulls();
@@ -251,7 +252,7 @@ public class MetricUtility {
      * @param percentiles stats to include in the final metrics.
      * @return aggregated values.
      */
-    public static Map<String, Double> getStats(Collection<Double> values,
+    public static Map<String, Double> getStats(List<Double> values,
             Set<Integer> percentiles) {
         Map<String, Double> stats = new LinkedHashMap<>();
         double sum = values.stream().mapToDouble(Double::doubleValue).sum();
@@ -268,6 +269,10 @@ public class MetricUtility {
         Map<Integer, Double> percentileStat = Quantiles.percentiles().indexes(updatedPercentile)
                 .compute(values);
         double median = percentileStat.get(50);
+        // Diff of last and first value from the list. Return the first value if only one value is
+        // present.
+        double diff = (values.size() > 1) ? (values.get(values.size() - 1) - values.get(0))
+                : values.get(0);
 
         stats.put(STATS_KEY_MIN, Collections.min(values));
         stats.put(STATS_KEY_MAX, Collections.max(values));
@@ -277,6 +282,7 @@ public class MetricUtility {
         stats.put(STATS_KEY_MEDIAN, median);
         stats.put(STATS_KEY_TOTAL, sum);
         stats.put(STATS_KEY_COUNT, count);
+        stats.put(STATS_KEY_DIFF, diff);
         percentileStat
                 .entrySet()
                 .stream()

@@ -122,20 +122,26 @@ public class RustBinaryHostTestTest {
 
     /** Add mocked call "binary --list" to count the number of tests. */
     private void mockCountTests(File binary, int numOfTest) throws Exception {
-        when(mMockRunUtil.runTimedCmdSilently(
+        when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
                         Mockito.eq(binary.getAbsolutePath()),
+                        Mockito.eq("-Zunstable-options"),
+                        Mockito.eq("--report-time"),
                         Mockito.eq("--exact"),
                         Mockito.eq("--list")))
                 .thenReturn(successResult("", runListOutput(numOfTest)));
     }
 
     private void mockCountBenchmarks(File binary, int numOfTest) throws Exception {
-        when(mMockRunUtil.runTimedCmdSilently(
+        when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
                         Mockito.eq(binary.getAbsolutePath()),
-                        Mockito.eq("--exact"),
+                        Mockito.eq("-Zunstable-options"),
+                        Mockito.eq("--report-time"),
                         Mockito.eq("--bench"),
+                        Mockito.eq("--color"),
+                        Mockito.eq("never"),
+                        Mockito.eq("--exact"),
                         Mockito.eq("--list")))
                 .thenReturn(successResult("", runListBenchmarksOutput(numOfTest)));
     }
@@ -181,10 +187,10 @@ public class RustBinaryHostTestTest {
                         Mockito.eq(binary.getAbsolutePath()),
                         Mockito.eq("-Zunstable-options"),
                         Mockito.eq("--report-time"),
-                        Mockito.eq("--exact"),
                         Mockito.eq("--bench"),
                         Mockito.eq("--color"),
-                        Mockito.eq("never")))
+                        Mockito.eq("never"),
+                        Mockito.eq("--exact")))
                 .thenReturn(successResult("", output));
     }
 
@@ -290,9 +296,11 @@ public class RustBinaryHostTestTest {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
             CommandResult listRes = newCommandResult(CommandStatus.FAILED, "", "");
-            when(mMockRunUtil.runTimedCmdSilently(
+            when(mMockRunUtil.runTimedCmd(
                             Mockito.anyLong(),
                             Mockito.eq(binary.getAbsolutePath()),
+                            Mockito.eq("-Zunstable-options"),
+                            Mockito.eq("--report-time"),
                             Mockito.eq("--exact"),
                             Mockito.eq("--list")))
                     .thenReturn(listRes);
@@ -344,9 +352,11 @@ public class RustBinaryHostTestTest {
             setter.setOptionValue("test-file", binary.getAbsolutePath());
             setter.setOptionValue("exclude-filter", "NotMe");
             setter.setOptionValue("exclude-filter", "Long");
-            when(mMockRunUtil.runTimedCmdSilently(
+            when(mMockRunUtil.runTimedCmd(
                             Mockito.anyLong(),
                             Mockito.eq(binary.getAbsolutePath()),
+                            Mockito.eq("-Zunstable-options"),
+                            Mockito.eq("--report-time"),
                             Mockito.eq("--exact"),
                             Mockito.eq("--skip"),
                             Mockito.eq("NotMe"),
@@ -395,9 +405,11 @@ public class RustBinaryHostTestTest {
             setter.setOptionValue("include-filter", "MyTest#OnlyMe");
             setter.setOptionValue("exclude-filter", "Other");
             // We always pass the include-filter before exclude-filter strings.
-            when(mMockRunUtil.runTimedCmdSilently(
+            when(mMockRunUtil.runTimedCmd(
                             Mockito.anyLong(),
                             Mockito.eq(binary.getAbsolutePath()),
+                            Mockito.eq("-Zunstable-options"),
+                            Mockito.eq("--report-time"),
                             Mockito.eq("OnlyMe"),
                             Mockito.eq("--exact"),
                             Mockito.eq("--skip"),
@@ -450,9 +462,11 @@ public class RustBinaryHostTestTest {
             setter.setOptionValue("include-filter", "Me2");
             // Multiple include filters are run one by one with --list.
             String[] selection1 = new String[] {"test1", "test2"};
-            when(mMockRunUtil.runTimedCmdSilently(
+            when(mMockRunUtil.runTimedCmd(
                             Mockito.anyLong(),
                             Mockito.eq(binary.getAbsolutePath()),
+                            Mockito.eq("-Zunstable-options"),
+                            Mockito.eq("--report-time"),
                             Mockito.eq("OnlyMe"),
                             Mockito.eq("--exact"),
                             Mockito.eq("--skip"),
@@ -462,9 +476,11 @@ public class RustBinaryHostTestTest {
                             Mockito.eq("--list")))
                     .thenReturn(successResult("", runListOutput(selection1)));
             String[] selection2 = new String[] {"test2", "test3", "test4"};
-            when(mMockRunUtil.runTimedCmdSilently(
+            when(mMockRunUtil.runTimedCmd(
                             Mockito.anyLong(),
                             Mockito.eq(binary.getAbsolutePath()),
+                            Mockito.eq("-Zunstable-options"),
+                            Mockito.eq("--report-time"),
                             Mockito.eq("Me2"),
                             Mockito.eq("--exact"),
                             Mockito.eq("--skip"),

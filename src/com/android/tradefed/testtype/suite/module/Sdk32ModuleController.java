@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,14 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.android.tradefed.testtype.suite.module;
 
-package com.android.tradefed.device;
-
-/** An interface to provide information about a possibly preconfigured IP */
-public interface IConfigurableIp {
-
-    /** Returns the known associated IP if available, returns null if no known ip. */
-    default String getKnownDeviceIp() {
-        return null;
+/**
+ * Only run tests if the device under test is SDK version 32 or above.
+ *
+ * <p>Use by adding this line to your AndroidTest.xml: <object type="module_controller"
+ * class="com.android.tradefed.testtype.suite.module.Sdk32ModuleController" />
+ */
+public class Sdk32ModuleController extends MinSdkModuleController {
+    public Sdk32ModuleController() {
+        super(32);
     }
 }

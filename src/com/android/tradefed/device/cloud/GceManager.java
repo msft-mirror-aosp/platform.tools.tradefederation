@@ -59,6 +59,7 @@ import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -151,11 +152,11 @@ public class GceManager {
     }
 
     public GceAvdInfo startGce() throws TargetSetupError {
-        return startGce(null, null);
+        return startGce(null, null, null, null);
     }
 
     /**
-     * Attempt to start a gce instance
+     * Attempt to start a gce instance.
      *
      * @param ipDevice the initial IP of the GCE instance to run AVD in, <code>null</code> if not
      *     applicable
@@ -165,6 +166,25 @@ public class GceManager {
      * @throws TargetSetupError
      */
     public GceAvdInfo startGce(String ipDevice, MultiMap<String, String> attributes)
+            throws TargetSetupError {
+        return startGce(ipDevice, null, null, attributes);
+    }
+
+    /**
+     * Attempt to start a gce instance
+     *
+     * @param ipDevice the initial IP of the GCE instance to run AVD in, <code>null</code> if not
+     *     applicable
+     * @param user the host running user of AVD, <code>null</code> if not applicable
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @param attributes attributes associated with current invocation, used for passing applicable
+     *     information down to the GCE instance to be added as VM metadata
+     * @return a {@link GceAvdInfo} describing the GCE instance. Could be a BOOT_FAIL instance.
+     * @throws TargetSetupError
+     */
+    public GceAvdInfo startGce(
+            String ipDevice, String user, Integer offset, MultiMap<String, String> attributes)
             throws TargetSetupError {
         mGceAvdInfo = null;
         // For debugging purposes bypass.
@@ -189,7 +209,12 @@ public class GceManager {
         File reportFile = null;
         try {
             reportFile = FileUtil.createTempFile("gce_avd_driver", ".json");
-            List<String> gceArgs = buildGceCmd(reportFile, mBuildInfo, ipDevice, attributes);
+            // Override the instance name by specified user
+            if (user != null) {
+                getTestDeviceOptions().setInstanceUser(user);
+            }
+            List<String> gceArgs =
+                    buildGceCmd(reportFile, mBuildInfo, ipDevice, user, offset, attributes);
 
             long driverTimeoutMs = getTestDeviceOptions().getGceCmdTimeout();
             if (!getTestDeviceOptions().allowGceCmdTimeoutOverride()) {
@@ -296,7 +321,12 @@ public class GceManager {
 
     /** Build and return the command to launch GCE. Exposed for testing. */
     protected List<String> buildGceCmd(
-            File reportFile, IBuildInfo b, String ipDevice, MultiMap<String, String> attributes) {
+            File reportFile,
+            IBuildInfo b,
+            String ipDevice,
+            String user,
+            Integer offset,
+            MultiMap<String, String> attributes) {
         File avdDriverFile = getTestDeviceOptions().getAvdDriverBinary();
         if (!avdDriverFile.exists()) {
             throw new HarnessRuntimeException(
@@ -313,8 +343,6 @@ public class GceManager {
         gceArgs.add(
                 TestDeviceOptions.getCreateCommandByInstanceType(
                         getTestDeviceOptions().getInstanceType()));
-        // Handle the build id related params
-        List<String> gceDriverParams = getTestDeviceOptions().getGceDriverParams();
 
         if (TestDeviceOptions.InstanceType.CHEEPS.equals(
                 getTestDeviceOptions().getInstanceType())) {
@@ -336,15 +364,13 @@ public class GceManager {
         arguments. Otherwise, generate gce args from device BuildInfo. Please refer to acloud
         arguments for the supported format:
         https://android.googlesource.com/platform/tools/acloud/+/refs/heads/master/create/create_args.py  */
-        if (getTestDeviceOptions().getAvdLocalImage() != null
-                && getTestDeviceOptions().getAvdCuttlefishHostPkg() != null) {
-            CLog.i("Virtual device is created by specified prebuilt image files.");
-            gceArgs.add("--cvd-host-package");
-            gceArgs.add(getTestDeviceOptions().getAvdCuttlefishHostPkg().getAbsolutePath());
-            gceArgs.add("--local-image");
-            gceArgs.add(getTestDeviceOptions().getAvdLocalImage().getAbsolutePath());
-        } else if (!gceDriverParams.contains("--build-target")
-                && !gceDriverParams.contains("--build_target")) {
+        List<String> gceDriverParams = getTestDeviceOptions().getGceDriverParams();
+        MultiMap<String, File> gceDriverFileParams =
+                getTestDeviceOptions().getGceDriverFileParams();
+        if (!gceDriverParams.contains("--build-target")
+                && !gceDriverParams.contains("--build_target")
+                && !(gceDriverFileParams.containsKey("local-image")
+                        && gceDriverFileParams.containsKey("cvd-host-package"))) {
             gceArgs.add("--build-target");
             if (b.getBuildAttributes().containsKey("build_target")) {
                 // If BuildInfo contains the attribute for a build target, use that.
@@ -356,6 +382,11 @@ public class GceManager {
             gceArgs.add(b.getBuildBranch());
             gceArgs.add("--build-id");
             gceArgs.add(b.getBuildId());
+        }
+
+        for (Map.Entry<String, File> entry : gceDriverFileParams.entries()) {
+            gceArgs.add("--" + entry.getKey());
+            gceArgs.add(entry.getValue().getAbsolutePath());
         }
 
         // process any info in the invocation context that should be passed onto GCE driver
@@ -394,16 +425,30 @@ public class GceManager {
             gceArgs.add("--service-account-json-private-key-path");
             gceArgs.add(getTestDeviceOptions().getServiceAccountJsonKeyFile().getAbsolutePath());
         }
+
         if (ipDevice != null) {
             gceArgs.add("--host");
             gceArgs.add(ipDevice);
             gceArgs.add("--host-user");
-            gceArgs.add(getTestDeviceOptions().getInstanceUser());
+            if (user != null) {
+                gceArgs.add(user);
+            } else {
+                gceArgs.add(getTestDeviceOptions().getInstanceUser());
+            }
             gceArgs.add("--host-ssh-private-key-path");
             gceArgs.add(getTestDeviceOptions().getSshPrivateKeyPath().getAbsolutePath());
         }
         gceArgs.add("--report_file");
         gceArgs.add(reportFile.getAbsolutePath());
+
+        // Add base-instance-num args with offset, and override the remote adb port.
+        // When offset is 1, base-instance-num=2 and virtual device adb forward port is 6521.
+        if (offset != null) {
+            getTestDeviceOptions().setRemoteAdbPort(6520 + offset);
+            gceArgs.add("--base-instance-num");
+            gceArgs.add(String.valueOf(offset + 1));
+            gceArgs.add("--launch-args=\"" + "--base_instance_num=" + (offset + 1) + "\"");
+        }
         switch (getTestDeviceOptions().getGceDriverLogLevel()) {
             case DEBUG:
                 gceArgs.add("-v");
@@ -700,9 +745,18 @@ public class GceManager {
             String remoteFilePath,
             LogDataType type,
             String baseName) {
-        File remoteFile =
-                RemoteFileUtil.fetchRemoteFile(
-                        gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
+        File remoteFile;
+        if (type == LogDataType.DIR) {
+            remoteFile =
+                    RemoteFileUtil.fetchRemoteDir(
+                            gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
+            // Default files under a directory to be text files.
+            type = LogDataType.TEXT;
+        } else {
+            remoteFile =
+                    RemoteFileUtil.fetchRemoteFile(
+                            gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
+        }
         if (remoteFile != null) {
             // If we happened to fetch a directory, log all the subfiles
             logFile(remoteFile, baseName, logger, type);
