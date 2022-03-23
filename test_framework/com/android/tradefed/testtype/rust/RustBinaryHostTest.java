@@ -42,6 +42,7 @@ import com.android.tradefed.util.RunUtil;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -132,15 +133,11 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     private void runSingleRustFile(ITestInvocationListener listener, File file) {
         CLog.d("Run single Rust File: %s", file.getAbsolutePath());
-        // Rust binary does not support multiple inclusion filters,
-        // so we run the test once for each include filter.
-        List<String> includeFilters = getListOfIncludeFilters();
+        List<Invocation> invocations = generateInvocations(file);
 
-        // Call with --list once per include filter to add up testCount.
-        // Duplicated test cases selected by different include filters should not be counted.
         Set<String> foundTests = new HashSet<>();
-        for (String filter : includeFilters) {
-            boolean success = countTests(file, filter, foundTests);
+        for (Invocation invocation : invocations) {
+            boolean success = countTests(invocation, foundTests);
             if (!success) {
                 FailureDescription failure =
                         FailureDescription.create(
@@ -157,9 +154,9 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         long startTimeMs = System.currentTimeMillis();
         listener.testRunStarted(file.getName(), testCount, 0, startTimeMs);
         if (testCount > 0) {
-            for (String filter : includeFilters) {
+            for (Invocation invocation : invocations) {
                 try {
-                    runTestWithFilter(listener, file, filter);
+                    runTest(listener, invocation, file.getName());
                 } catch (IOException e) {
                     listener.testRunFailed(e.getMessage());
                     long testTimeMs = System.currentTimeMillis() - startTimeMs;
@@ -172,61 +169,42 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         listener.testRunEnded(testTimeMs, new HashMap<String, Metric>());
     }
 
-    private boolean countTests(File file, String filter, Set<String> foundTests) {
-        CLog.d("Count with filter '%s' for Rust File: %s", filter, file.getAbsolutePath());
-        List<String> commandLine = new ArrayList<>();
-        commandLine.add(file.getAbsolutePath());
-        commandLine.addAll(mTestOptions);
-        addFiltersToArgs(commandLine, filter);
-
-        // Pass parameter to criterion so it performs the benchmarking.
-        if (mIsBenchmark) {
-            commandLine.add("--bench");
-        }
-
-        List<String> listCommandLine = new ArrayList<>(commandLine);
-        listCommandLine.add("--list");
-        CommandResult listResult =
-                getRunUtil()
-                        .runTimedCmdSilently(mTestTimeout, listCommandLine.toArray(new String[0]));
+    private boolean countTests(Invocation invocation, Set<String> foundTests) {
+        CommandResult listResult = runInvocation(invocation, "--list");
         // TODO: Do we want to handle non-standard test harnesses without a
         // --list param? Currently we will report 0 tests, which will cause an
         // overall failure, but we don't know how to parse arbitrary test
         // harness results.
         if (listResult.getStatus() == CommandStatus.SUCCESS) {
-            collectTestLines(listResult.getStdout().split("\n"), foundTests, mIsBenchmark);
+            collectTestLines(listResult.getStdout().split("\n"), foundTests);
             return true;
         } else {
             CLog.w(
                     "Could not run command '%s' to get test list.\nstdout: %s\nstderr: %s",
-                    String.join(" ", listCommandLine),
+                    String.join(" ", invocation.command) + " --list",
                     listResult.getStdout(),
                     listResult.getStderr());
             return false;
         }
     }
 
-    private void runTestWithFilter(ITestInvocationListener listener, File file, String filter)
-            throws IOException {
-        String runName = file.getName();
-        List<String> commandLine = new ArrayList<>();
-        commandLine.add(file.getAbsolutePath());
-        commandLine.addAll(mTestOptions);
-        commandLine.add("-Zunstable-options");
-        commandLine.add("--report-time");
-        addFiltersToArgs(commandLine, filter);
-
-        // Pass parameter to criterion so it performs the benchmarking.
-        if (mIsBenchmark) {
-            commandLine.add("--bench");
-            commandLine.add("--color");
-            commandLine.add("never");
+    private CommandResult runInvocation(final Invocation invocation, final String... extraArgs) {
+        IRunUtil runUtil = getRunUtil();
+        runUtil.setWorkingDir(invocation.workingDir);
+        for (EnvPair envPair : invocation.env) {
+            runUtil.setEnvVariable(envPair.key, envPair.val);
         }
+        ArrayList<String> command = new ArrayList<String>(Arrays.asList(invocation.command));
+        command.addAll(Arrays.asList(extraArgs));
+        return runUtil.runTimedCmd(mTestTimeout, command.toArray(new String[0]));
+    }
 
-        CLog.d("Running test with filter '%s'", filter);
-        getRunUtil().setWorkingDir(file.getParentFile());
-        CommandResult result =
-                getRunUtil().runTimedCmd(mTestTimeout, commandLine.toArray(new String[0]));
+    private void runTest(
+            ITestInvocationListener listener, final Invocation invocation, final String runName)
+            throws IOException {
+
+        CommandResult result = runInvocation(invocation);
+
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             String message =
                     String.format(
@@ -257,7 +235,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                             String.format(RUST_LOG_STDOUT_FORMAT, runName), LogDataType.TEXT, data);
                 }
             }
-            IShellOutputReceiver parser = createParser(listener, runName, mIsBenchmark);
+            IShellOutputReceiver parser = createParser(listener, runName);
             parser.addOutput(result.getStdout().getBytes(), 0, result.getStdout().length());
             parser.flush();
         } catch (RuntimeException e) {
@@ -271,10 +249,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
-        if (mRunUtil == null) {
-            mRunUtil = new RunUtil();
-            mRunUtil.setEnvVariable("RUST_BACKTRACE", "full");
-        }
-        return mRunUtil;
+        return new RunUtil();
     }
 }

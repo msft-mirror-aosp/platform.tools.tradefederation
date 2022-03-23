@@ -160,6 +160,7 @@ public class TestDeviceTest {
         MockitoAnnotations.initMocks(this);
 
         when(mMockIDevice.getSerialNumber()).thenReturn(MOCK_DEVICE_SERIAL);
+        when(mMockIDevice.supportsFeature(IDevice.Feature.SHELL_V2)).thenReturn(true);
 
         // A TestDevice with a no-op recoverDevice() implementation
         mTestDevice =
