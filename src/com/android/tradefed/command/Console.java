@@ -147,12 +147,6 @@ public class Console extends Thread {
      * shut down via the RegexTrie input handling mechanism.
      */
     private class QuitRunnable extends ArgRunnable<CaptureList> {
-        @Option(
-                name = "handover-port",
-                description =
-                        "Used to indicate that currently managed devices should be 'handed over'"
-                                + " to new tradefed process, which is listening on specified port")
-        private Integer mHandoverPort = null;
 
         @Option(
                 name = "wait-for-commands",
@@ -172,18 +166,11 @@ public class Console extends Thread {
                     parser.parse(optionArgs);
                 }
                 String exitMode = "invocations";
-                if (mHandoverPort == null) {
-                    if (mExitOnEmpty) {
-                        exitMode = "commands";
-                        mScheduler.shutdownOnEmpty();
-                    } else {
-                        mScheduler.shutdown();
-                    }
+                if (mExitOnEmpty) {
+                    exitMode = "commands";
+                    mScheduler.shutdownOnEmpty();
                 } else {
-                    if (!mScheduler.handoverShutdown(mHandoverPort)) {
-                        // failure message should already be logged
-                        return;
-                    }
+                    mScheduler.shutdown();
                 }
                 printLine("Signalling command scheduler for shutdown.");
                 printLine(

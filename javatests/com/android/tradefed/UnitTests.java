@@ -48,7 +48,6 @@ import com.android.tradefed.command.CommandRunnerTest;
 import com.android.tradefed.command.CommandSchedulerTest;
 import com.android.tradefed.command.ConsoleTest;
 import com.android.tradefed.command.console.ConfigCompleterTest;
-import com.android.tradefed.command.remote.RemoteManagerTest;
 import com.android.tradefed.command.remote.RemoteOperationTest;
 import com.android.tradefed.config.ArgsOptionParserTest;
 import com.android.tradefed.config.ConfigurationDefTest;
@@ -494,7 +493,6 @@ import org.junit.runners.Suite.SuiteClasses;
     ConfigCompleterTest.class,
 
     // command.remote
-    RemoteManagerTest.class,
     RemoteOperationTest.class,
 
     // config

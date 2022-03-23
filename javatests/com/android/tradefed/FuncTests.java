@@ -19,7 +19,6 @@ import com.android.tradefed.build.FileDownloadCacheFuncTest;
 import com.android.tradefed.cluster.ClusterCommandLauncherFuncTest;
 import com.android.tradefed.cluster.ClusterEventUploaderFuncTest;
 import com.android.tradefed.command.CommandSchedulerFuncTest;
-import com.android.tradefed.command.remote.RemoteManagerFuncTest;
 import com.android.tradefed.device.metric.DeviceMetricDataFuncTest;
 import com.android.tradefed.util.FileUtilFuncTest;
 import com.android.tradefed.util.GCSFileDownloaderFuncTest;
@@ -42,8 +41,6 @@ import org.junit.runners.Suite.SuiteClasses;
     ClusterEventUploaderFuncTest.class,
     // command
     CommandSchedulerFuncTest.class,
-    // command.remote
-    RemoteManagerFuncTest.class,
     // device.metric
     DeviceMetricDataFuncTest.class,
     // util
