@@ -1592,6 +1592,13 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         IConfiguration config = createConfiguration(cmdTracker.getArgs());
         config.validateOptions();
 
+        if (isShuttingDown()) {
+            // createConfiguration can be long for things like sandbox, so ensure we did not
+            // start a shutdown in the meantime.
+            CLog.w("Tradefed is shutting down, ignoring command.");
+            return;
+        }
+
         ExecutableCommand execCmd = createExecutableCommand(cmdTracker, config, false);
         context.setConfigurationDescriptor(config.getConfigurationDescription());
         DeviceAllocationResult allocationResults = allocateDevices(config, manager);
@@ -1618,6 +1625,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     /** {@inheritDoc} */
+    @Deprecated
     @Override
     public void execCommand(
             IScheduledInvocationListener listener, ITestDevice device, String[] args)
