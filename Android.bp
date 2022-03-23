@@ -82,6 +82,9 @@ tradefed_java_library_host {
     java_resource_dirs: [
         "res",
     ],
+    java_resources: [
+        ":TradefedContentProvider",
+    ],
     static_libs: [
         "tradefed-lib-core",
         "tradefed-test-framework",
