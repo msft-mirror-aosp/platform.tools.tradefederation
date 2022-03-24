@@ -222,8 +222,7 @@ public class GlobalConfigurationTest {
 
         File tmpXml = null;
         try {
-            tmpXml =
-                    spyGlobal.cloneConfigWithFilter(new String[] {"wtf_handler", "remote-manager"});
+            tmpXml = spyGlobal.cloneConfigWithFilter(new String[] {"wtf_handler"});
 
             // Load the filtered XML and confirm it has desired content.
             IGlobalConfiguration filteredGlobalConfig =
@@ -232,8 +231,6 @@ public class GlobalConfigurationTest {
                             nonGlobalArgs);
             assertNotNull(filteredGlobalConfig);
             assertNotNull(filteredGlobalConfig.getWtfHandler());
-            // We can dump and re-parse generic objects.
-            assertNotNull(filteredGlobalConfig.getConfigurationObject("remote-manager"));
             filteredGlobalConfig.validateOptions();
             // Fail if any configuration not in the white list presents.
             assertNull(filteredGlobalConfig.getDeviceMonitors());
@@ -251,10 +248,9 @@ public class GlobalConfigurationTest {
         @Override
         public InputStream getConfig(String name) throws ConfigurationException {
             String config =
-                    "<configuration description=\"gcs host config.\">"
-                            + "<key_store class=\"com.android.tradefed.util.keystore.JSONFileKeyStoreFactory\">"
-                            + "</key_store>"
-                            + "</configuration>";
+                    "<configuration description=\"gcs host config.\"><key_store"
+                        + " class=\"com.android.tradefed.util.keystore.JSONFileKeyStoreFactory\">"
+                        + "</key_store></configuration>";
             return new ByteArrayInputStream(config.getBytes());
         }
 

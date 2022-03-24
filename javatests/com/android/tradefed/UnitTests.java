@@ -48,8 +48,6 @@ import com.android.tradefed.command.CommandRunnerTest;
 import com.android.tradefed.command.CommandSchedulerTest;
 import com.android.tradefed.command.ConsoleTest;
 import com.android.tradefed.command.console.ConfigCompleterTest;
-import com.android.tradefed.command.remote.RemoteManagerTest;
-import com.android.tradefed.command.remote.RemoteOperationTest;
 import com.android.tradefed.config.ArgsOptionParserTest;
 import com.android.tradefed.config.ConfigurationDefTest;
 import com.android.tradefed.config.ConfigurationDescriptorTest;
@@ -130,6 +128,7 @@ import com.android.tradefed.device.recovery.RunConfigDeviceRecoveryTest;
 import com.android.tradefed.device.recovery.UsbResetMultiDeviceRecoveryTest;
 import com.android.tradefed.device.recovery.UsbResetRunConfigRecoveryTest;
 import com.android.tradefed.error.HarnessExceptionTest;
+import com.android.tradefed.external_dependency.ExternalDependencyTest;
 import com.android.tradefed.guice.InvocationScopeTest;
 import com.android.tradefed.host.LocalHostResourceManagerTest;
 import com.android.tradefed.host.gcs.GCSHostResourceManagerTest;
@@ -493,10 +492,6 @@ import org.junit.runners.Suite.SuiteClasses;
     // command.console
     ConfigCompleterTest.class,
 
-    // command.remote
-    RemoteManagerTest.class,
-    RemoteOperationTest.class,
-
     // config
     ArgsOptionParserTest.class,
     ConfigurationDefTest.class,
@@ -605,6 +600,9 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // error
     HarnessExceptionTest.class,
+
+    // external_dependency
+    ExternalDependencyTest.class,
 
     // Guice
     InvocationScopeTest.class,
