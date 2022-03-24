@@ -33,7 +33,7 @@ android_test {
         "androidx.test.runner",
     ],
 
-    dont_merge_manifests: true,
+    manifest: "java/android/tradefed/contentprovider/AndroidManifest.xml",
     sdk_version: "30",
     min_sdk_version: "24",
 
