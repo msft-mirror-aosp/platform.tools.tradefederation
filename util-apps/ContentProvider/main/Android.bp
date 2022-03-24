@@ -34,7 +34,6 @@ android_test {
     ],
 
     manifest: "java/android/tradefed/contentprovider/AndroidManifest.xml",
-    dont_merge_manifests: true,
     sdk_version: "30",
     min_sdk_version: "24",
 
