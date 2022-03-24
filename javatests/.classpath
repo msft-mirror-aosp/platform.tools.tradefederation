@@ -37,5 +37,6 @@
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/tools/asuite/atest/asuite_proto_java/linux_glibc_common/combined/asuite_proto_java.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/prebuilts/tools/common/google-api-java-client/1.31.3/google-api-java-client-assembly/linux_glibc_common/combined/google-api-java-client-assembly.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/jline/jline/linux_glibc_common/combined/jline.jar"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/tools/tradefederation/core/aoa_helper/aoa-helper/linux_glibc_common/combined/aoa-helper.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
