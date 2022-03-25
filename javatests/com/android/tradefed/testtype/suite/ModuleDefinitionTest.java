@@ -593,8 +593,9 @@ public class ModuleDefinitionTest {
         mModule.setBuild(mMockBuildInfo);
         mModule.setDevice(mMockDevice);
 
-        assertEquals(1, mModule.getRequiredTokens().size());
-        assertEquals(TokenProperty.SIM_CARD, mModule.getRequiredTokens().iterator().next());
+        assertEquals(1, mModule.getRequiredTokens(mModuleInfo).size());
+        assertEquals(
+                TokenProperty.SIM_CARD, mModule.getRequiredTokens(mModuleInfo).iterator().next());
     }
 
     /**
