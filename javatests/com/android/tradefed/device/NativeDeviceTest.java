@@ -370,6 +370,11 @@ public class NativeDeviceTest {
                             throws DeviceNotAvailableException {
                         return "drwxr-xr-x root     root    somedirectory";
                     }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
+                    }
                 };
         File dir = FileUtil.createTempDir("tf-test");
         Collection<IFileEntry> childrens = new ArrayList<>();
@@ -415,7 +420,7 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    protected boolean pullFileInternal(String remoteFilePath, File localFile)
                             throws DeviceNotAvailableException {
                         try {
                             // Just touch the file to make it appear.
@@ -424,6 +429,11 @@ public class NativeDeviceTest {
                             throw new RuntimeException(e);
                         }
                         return true;
+                    }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
                     }
                 };
         File dir = FileUtil.createTempDir("tf-test");
@@ -482,7 +492,7 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    protected boolean pullFileInternal(String remoteFilePath, File localFile)
                             throws DeviceNotAvailableException {
                         if (mFirstPull) {
                             mFirstPull = false;
@@ -496,6 +506,11 @@ public class NativeDeviceTest {
                         } else {
                             return false;
                         }
+                    }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
                     }
                 };
         File dir = FileUtil.createTempDir("tf-test");
@@ -548,6 +563,11 @@ public class NativeDeviceTest {
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "-rwxr-xr-x root     root    somefile";
+                    }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
                     }
                 };
         File dir = FileUtil.createTempDir("tf-test");
