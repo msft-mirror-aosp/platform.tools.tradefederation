@@ -1127,7 +1127,11 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         return mIsFailedModule;
     }
 
-    public Set<TokenProperty> getRequiredTokens() {
+    public Set<TokenProperty> getRequiredTokens(TestInformation testInfo) {
+        if (!RunStrategy.RUN.equals(shouldRunWithController(testInfo.getContext()))) {
+            // Bypass token since the module isn't expected to run
+            return null;
+        }
         return mRequiredTokens;
     }
 
@@ -1262,8 +1266,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         if (ctrlObjectList == null) {
             return RunStrategy.RUN;
         }
-        // We keep the most stringent strategy across controllers.
-        RunStrategy current = RunStrategy.RUN;
         for (Object ctrlObject : ctrlObjectList) {
             if (ctrlObject instanceof BaseModuleController) {
                 BaseModuleController controller = (BaseModuleController) ctrlObject;
@@ -1279,7 +1281,22 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 if (!controller.shouldCaptureScreenshot()) {
                     mRunMetricCollectors.removeIf(c -> (c instanceof ScreenshotOnFailureCollector));
                 }
-                RunStrategy strategy = controller.shouldRunModule(mModuleInvocationContext);
+            }
+        }
+        return shouldRunWithController(mModuleInvocationContext);
+    }
+
+    private RunStrategy shouldRunWithController(IInvocationContext context) {
+        List<?> ctrlObjectList = mModuleConfiguration.getConfigurationObjectList(MODULE_CONTROLLER);
+        if (ctrlObjectList == null) {
+            return RunStrategy.RUN;
+        }
+        // We keep the most stringent strategy across controllers.
+        RunStrategy current = RunStrategy.RUN;
+        for (Object ctrlObject : ctrlObjectList) {
+            if (ctrlObject instanceof BaseModuleController) {
+                BaseModuleController controller = (BaseModuleController) ctrlObject;
+                RunStrategy strategy = controller.shouldRunModule(context);
                 if (RunStrategy.FULL_MODULE_BYPASS.equals(strategy)) {
                     current = strategy;
                 } else if (RunStrategy.SKIP_MODULE_TESTCASES.equals(strategy)
