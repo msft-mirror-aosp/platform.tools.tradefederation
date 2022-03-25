@@ -43,6 +43,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.IWifiHelper.WifiConnectionResult;
 import com.android.tradefed.device.NativeDevice.RebootMode;
 import com.android.tradefed.host.HostOptions;
 import com.android.tradefed.host.IHostOptions;
@@ -785,7 +786,7 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         false))
-                .thenReturn(true);
+                .thenReturn(WifiConnectionResult.SUCCESS);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
         when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
@@ -804,7 +805,7 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         false))
-                .thenReturn(false);
+                .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
         when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
@@ -837,7 +838,7 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         false))
-                .thenReturn(false);
+                .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
         Mockito.when(mockClock.millis())
                 .thenReturn(Long.valueOf(0), Long.valueOf(6000), Long.valueOf(12000));
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
@@ -863,7 +864,7 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         true))
-                .thenReturn(true);
+                .thenReturn(WifiConnectionResult.SUCCESS);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
         when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
