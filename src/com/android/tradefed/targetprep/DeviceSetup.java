@@ -19,6 +19,12 @@ package com.android.tradefed.targetprep;
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.dependencies.ExternalDependency;
+import com.android.tradefed.dependencies.IExternalDependency;
+import com.android.tradefed.dependencies.connectivity.BluetoothDependency;
+import com.android.tradefed.dependencies.connectivity.EthernetDependency;
+import com.android.tradefed.dependencies.connectivity.NetworkDependency;
+import com.android.tradefed.dependencies.connectivity.TelephonyDependency;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.LocalAndroidVirtualDevice;
@@ -43,8 +49,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
 
 /**
@@ -55,7 +63,7 @@ import java.util.TimeZone;
  * <p>Should be performed <strong>after</strong> a new build is flashed.
  */
 @OptionClass(alias = "device-setup")
-public class DeviceSetup extends BaseTargetPreparer {
+public class DeviceSetup extends BaseTargetPreparer implements IExternalDependency {
 
     // Networking
     @Option(name = "airplane-mode",
@@ -1509,5 +1517,31 @@ public class DeviceSetup extends BaseTargetPreparer {
     @Deprecated
     protected void setDeprecatedSetProp(String prop) {
         mDeprecatedSetProps.add(prop);
+    }
+
+    @Override
+    public Set<ExternalDependency> getDependencies() {
+        Set<ExternalDependency> externalDependencies = new LinkedHashSet<>();
+        // check if we need mobile data
+        if (BinaryState.ON.equals(mData)) {
+            externalDependencies.add(new TelephonyDependency());
+        }
+        // check if we need wifi
+        if (!mSkipWifi && !(Strings.isNullOrEmpty(mWifiSsid) && mWifiSsidToPsk.isEmpty())) {
+            externalDependencies.add(new NetworkDependency());
+        }
+        // check if we need ethernet
+        if (BinaryState.ON.equals(mEthernet)) {
+            externalDependencies.add(new EthernetDependency());
+        }
+        // check if we need bluetooth
+        if (BinaryState.ON.equals(mBluetooth)) {
+            externalDependencies.add(new BluetoothDependency());
+        }
+        // check if we need location-network
+        if (BinaryState.ON.equals(mLocationNetwork)) {
+            externalDependencies.add(new NetworkDependency());
+        }
+        return externalDependencies;
     }
 }

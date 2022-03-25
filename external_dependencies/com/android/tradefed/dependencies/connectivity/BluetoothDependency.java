@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,22 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.tradefed.command.remote;
 
-/**
- * Represents a failure to execute a remote operation.
- */
-@SuppressWarnings("serial")
-public class RemoteException extends Exception {
-    public RemoteException(Throwable t) {
-        this(t.getMessage(), t);
-    }
+package com.android.tradefed.dependencies.connectivity;
 
-    public RemoteException(String msg) {
-        super(msg);
-    }
-
-    public RemoteException(String msg, Throwable e) {
-        super(msg, e);
-    }
-}
+/** Represents a Bluetooth Dependency. */
+public final class BluetoothDependency extends ConnectivityDependency {}

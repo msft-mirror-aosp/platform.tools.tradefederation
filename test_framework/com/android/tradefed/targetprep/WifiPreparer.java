@@ -17,6 +17,9 @@ package com.android.tradefed.targetprep;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.dependencies.ExternalDependency;
+import com.android.tradefed.dependencies.IExternalDependency;
+import com.android.tradefed.dependencies.connectivity.NetworkDependency;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.LocalAndroidVirtualDevice;
@@ -28,13 +31,18 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetr
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 
+import com.google.common.base.Strings;
+
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 /**
  * A {@link ITargetPreparer} that configures wifi on the device if necessary.
  *
  * <p>Unlike {@link DeviceSetup}, this preparer works when adb is not root aka user builds.
  */
 @OptionClass(alias = "wifi")
-public class WifiPreparer extends BaseTargetPreparer {
+public class WifiPreparer extends BaseTargetPreparer implements IExternalDependency {
 
     @Option(name="wifi-network", description="the name of wifi network to connect to.")
     private String mWifiNetwork = null;
@@ -127,5 +135,14 @@ public class WifiPreparer extends BaseTargetPreparer {
             }
             CLog.i("Successfully disconnected from wifi network on %s", device.getSerialNumber());
         }
+    }
+
+    @Override
+    public Set<ExternalDependency> getDependencies() {
+        Set<ExternalDependency> externalDependencies = new LinkedHashSet<>();
+        if (!mSkip && (mVerifyOnly || !Strings.isNullOrEmpty(mWifiNetwork))) {
+            externalDependencies.add(new NetworkDependency());
+        }
+        return externalDependencies;
     }
 }
