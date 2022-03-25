@@ -35,6 +35,7 @@ import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.device.IWifiHelper.WifiConnectionResult;
 import com.android.tradefed.device.contentprovider.ContentProviderHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
@@ -3007,11 +3008,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.WIFI_CONNECT_RETRY_COUNT, 1);
                 CLog.i("Connecting to wifi network %s on %s", wifiSsid, getSerialNumber());
-                boolean success =
+                WifiConnectionResult result =
                         wifi.connectToNetwork(
                                 wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
                 final Map<String, String> wifiInfo = wifi.getWifiInfo();
-                if (success) {
+                if (WifiConnectionResult.SUCCESS.equals(result)) {
                     CLog.i(
                             "Successfully connected to wifi network %s(%s) on %s",
                             wifiSsid, wifiInfo.get("bssid"), getSerialNumber());
@@ -3020,6 +3021,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     mLastConnectedWifiPsk = wifiPsk;
 
                     return true;
+                } else if (WifiConnectionResult.FAILED_TO_ENABLE.equals(result)) {
+                    CLog.w("Failed to enable wifi");
+                    // Do not sleep if case of wifi enabled failure.
+                    continue;
                 } else {
                     CLog.w(
                             "Failed to connect to wifi network %s(%s) on %s on attempt %d of %d",
