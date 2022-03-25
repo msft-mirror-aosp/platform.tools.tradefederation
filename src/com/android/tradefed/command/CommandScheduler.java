@@ -1625,7 +1625,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     /** {@inheritDoc} */
-    @Deprecated
     @Override
     public void execCommand(
             IScheduledInvocationListener listener, ITestDevice device, String[] args)
@@ -1645,6 +1644,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
 
         synchronized (this) {
+            if (isShuttingDown()) {
+                // Prevent scheduling if we are shutting down
+                throw new ConfigurationException("Tradefed shutting down, skip scheduling.");
+            }
             mExecutingCommands.add(execCmd);
         }
         IInvocationContext context = createInvocationContext();
