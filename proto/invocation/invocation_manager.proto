@@ -16,7 +16,6 @@
 syntax = "proto3";
 
 package tradefed.invocation.server;
-import "google/protobuf/empty.proto";
 
 option java_package = "com.proto.tradefed.invocation";
 option java_outer_classname = "TradefedInvocationService";
