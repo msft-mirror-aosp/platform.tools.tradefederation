@@ -43,6 +43,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.IWifiHelper.WifiConnectionResult;
 import com.android.tradefed.device.NativeDevice.RebootMode;
 import com.android.tradefed.host.HostOptions;
 import com.android.tradefed.host.IHostOptions;
@@ -370,6 +371,11 @@ public class NativeDeviceTest {
                             throws DeviceNotAvailableException {
                         return "drwxr-xr-x root     root    somedirectory";
                     }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
+                    }
                 };
         File dir = FileUtil.createTempDir("tf-test");
         Collection<IFileEntry> childrens = new ArrayList<>();
@@ -415,7 +421,7 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    protected boolean pullFileInternal(String remoteFilePath, File localFile)
                             throws DeviceNotAvailableException {
                         try {
                             // Just touch the file to make it appear.
@@ -424,6 +430,11 @@ public class NativeDeviceTest {
                             throw new RuntimeException(e);
                         }
                         return true;
+                    }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
                     }
                 };
         File dir = FileUtil.createTempDir("tf-test");
@@ -482,7 +493,7 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    protected boolean pullFileInternal(String remoteFilePath, File localFile)
                             throws DeviceNotAvailableException {
                         if (mFirstPull) {
                             mFirstPull = false;
@@ -496,6 +507,11 @@ public class NativeDeviceTest {
                         } else {
                             return false;
                         }
+                    }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
                     }
                 };
         File dir = FileUtil.createTempDir("tf-test");
@@ -548,6 +564,11 @@ public class NativeDeviceTest {
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "-rwxr-xr-x root     root    somefile";
+                    }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
                     }
                 };
         File dir = FileUtil.createTempDir("tf-test");
@@ -765,7 +786,7 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         false))
-                .thenReturn(true);
+                .thenReturn(WifiConnectionResult.SUCCESS);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
         when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
@@ -784,7 +805,7 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         false))
-                .thenReturn(false);
+                .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
         when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
@@ -817,7 +838,7 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         false))
-                .thenReturn(false);
+                .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
         Mockito.when(mockClock.millis())
                 .thenReturn(Long.valueOf(0), Long.valueOf(6000), Long.valueOf(12000));
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
@@ -843,7 +864,7 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         true))
-                .thenReturn(true);
+                .thenReturn(WifiConnectionResult.SUCCESS);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
         when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);

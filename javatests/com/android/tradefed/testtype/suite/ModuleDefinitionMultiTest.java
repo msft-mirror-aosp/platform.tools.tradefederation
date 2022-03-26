@@ -126,7 +126,6 @@ public class ModuleDefinitionMultiTest {
         when(mMockTargetPrep.isDisabled()).thenReturn(false);
 
         when(mMockTargetPrep.isTearDownDisabled()).thenReturn(true);
-
         mModule.run(moduleInfo, mListener, null, null, 1);
         verify(mMockTargetPrep, times(2)).isDisabled();
         verify(mListener)
@@ -168,7 +167,6 @@ public class ModuleDefinitionMultiTest {
         when(mMockTargetPrep.isDisabled()).thenReturn(false);
 
         when(mMockTargetPrep.isTearDownDisabled()).thenReturn(true);
-
         mModule.run(moduleInfo, mListener, null, null, 1);
         verify(mMockTargetPrep, times(2)).isDisabled();
         verify(mListener)

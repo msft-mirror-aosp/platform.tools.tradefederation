@@ -112,9 +112,10 @@ public class TestDeviceOptions {
             description = "default URL to be used for connectivity checks.")
     private String mConnCheckUrl = "http://www.google.com";
 
-    @Option(name = "wifi-attempts",
+    @Option(
+            name = "wifi-attempts",
             description = "default number of attempts to connect to wifi network.")
-    private int mWifiAttempts = 5;
+    private int mWifiAttempts = 4;
 
     @Option(name = "wifi-retry-wait-time",
             description = "the base wait time in ms between wifi connect retries. "
