@@ -127,6 +127,11 @@ public class NativeDeviceTest {
         IHostOptions getHostOptions() {
             return mHostOptions;
         }
+
+        @Override
+        public int getCurrentUser() throws DeviceNotAvailableException {
+            return 0;
+        }
     }
 
     @Before
@@ -2268,7 +2273,7 @@ public class NativeDeviceTest {
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    public boolean pullFile(String remoteFilePath, File localFile, int userId)
                             throws DeviceNotAvailableException {
                         return true;
                     }
@@ -2290,7 +2295,7 @@ public class NativeDeviceTest {
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    public boolean pullFile(String remoteFilePath, File localFile, int userId)
                             throws DeviceNotAvailableException {
                         return false;
                     }
@@ -2313,7 +2318,7 @@ public class NativeDeviceTest {
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    public boolean pullFile(String remoteFilePath, File localFile, int userId)
                             throws DeviceNotAvailableException {
                         return true;
                     }
@@ -2332,7 +2337,7 @@ public class NativeDeviceTest {
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    public boolean pullFile(String remoteFilePath, File localFile, int userId)
                             throws DeviceNotAvailableException {
                         return false;
                     }
