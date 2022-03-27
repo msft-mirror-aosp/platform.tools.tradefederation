@@ -285,6 +285,11 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                         "Failed to start Gce with attempt: %s out of %s. With Exception: %s",
                         attempt + 1, getOptions().getGceMaxAttempt(), tse);
                 exception = tse;
+
+                if (getOptions().useOxygen()) {
+                    OxygenUtil util = new OxygenUtil();
+                    util.downloadLaunchFailureLogs(tse.getMessage(), mTestLogger);
+                }
             }
         }
         if (mGceAvd == null) {

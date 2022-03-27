@@ -23,6 +23,7 @@ android_test {
     name: "TradefedContentProvider",
     // Restrict visibility to only those targets that need to access it.
     visibility: [
+        "//tools/tradefederation/core",
         "//tools/tradefederation/core/util-apps/ContentProvider/androidTest",
     ],
     defaults: ["tradefed_errorprone_defaults"],
@@ -32,6 +33,7 @@ android_test {
         "androidx.test.runner",
     ],
 
+    manifest: "java/android/tradefed/contentprovider/AndroidManifest.xml",
     sdk_version: "30",
     min_sdk_version: "24",
 

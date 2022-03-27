@@ -75,12 +75,32 @@ java_library_host {
     ],
 }
 
+java_library_host {
+    name: "tradefed-invocation-grpc",
+    srcs: [
+        "proto/invocation/invocation_manager.proto",
+    ],
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        plugin: "grpc-java-plugin",
+    },
+    libs: [
+        "tradefed-protos",
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
+    ],
+}
+
 // Main Target to build tradefed jar
 tradefed_java_library_host {
     name: "tradefed",
     defaults: ["tradefed_defaults"],
     java_resource_dirs: [
         "res",
+    ],
+    java_resources: [
+        ":TradefedContentProvider",
     ],
     static_libs: [
         "tradefed-lib-core",
@@ -124,6 +144,7 @@ java_library_host {
         "tradefed-external-dependencies",
         "tradefed-service-grpc-lib",
         "lab-resource-grpc",
+        "tradefed-invocation-grpc",
         "protobuf-java-util-prebuilt-jar",
         "aoa-helper",
         "error_prone_annotations-2.0.18",

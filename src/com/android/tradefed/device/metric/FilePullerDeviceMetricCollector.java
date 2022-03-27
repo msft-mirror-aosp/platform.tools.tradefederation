@@ -177,6 +177,17 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
             String pattern, final Map<String, String> currentMetrics) {
         Map<String, File> matchedFiles = new HashMap<>();
         Pattern p = Pattern.compile(pattern);
+
+        Map<ITestDevice, Integer> deviceUsers = new HashMap<>();
+        try {
+            for (ITestDevice device : getDevices()) {
+                deviceUsers.put(device, device.getCurrentUser());
+            }
+        } catch (DeviceNotAvailableException dnae) {
+            CLog.e(dnae);
+            return matchedFiles;
+        }
+
         for (Entry<String, String> entry : currentMetrics.entrySet()) {
             if (p.matcher(entry.getKey()).find()) {
                 for (ITestDevice device : getDevices()) {
@@ -188,7 +199,8 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
                         continue;
                     }
                     try {
-                        File attemptPull = retrieveFile(device, entry.getValue());
+                        File attemptPull =
+                                retrieveFile(device, entry.getValue(), deviceUsers.get(device));
                         if (attemptPull != null) {
                             if (mCleanUp) {
                                 device.deleteFile(entry.getValue());
@@ -220,12 +232,13 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
      *
      * @param device which has the file.
      * @param remoteFilePath location in the device.
+     * @param userId the user id to pull from
      * @return File retrieved from the given path in the device.
      * @throws DeviceNotAvailableException
      */
-    protected File retrieveFile(ITestDevice device, String remoteFilePath)
+    protected File retrieveFile(ITestDevice device, String remoteFilePath, int userId)
             throws DeviceNotAvailableException {
-        return device.pullFile(remoteFilePath);
+        return device.pullFile(remoteFilePath, userId);
     }
 
     /**

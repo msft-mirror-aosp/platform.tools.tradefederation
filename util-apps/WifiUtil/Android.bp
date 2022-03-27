@@ -20,4 +20,5 @@ android_test_helper_app {
     name: "WifiUtil",
     srcs: ["src/**/*.java"],
     min_sdk_version: "7",
+    manifest: "src/com/android/tradefed/utils/wifi/AndroidManifest.xml",
 }

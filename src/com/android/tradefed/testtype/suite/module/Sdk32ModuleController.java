@@ -13,20 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.android.tradefed.testtype.suite.module;
 
-package com.android.tradefed.dependencies;
-
-/** Base External Dependency class. */
-public abstract class ExternalDependency {
-    @Override
-    public int hashCode() {
-        // Information about a dependency class can be aggregated, regardless of the object
-        return this.getClass().getName().hashCode();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        // Used to create a Set of ExternalDependencies regardless of the object
-        return this.getClass().getName().equals(obj.getClass().getName());
+/**
+ * Only run tests if the device under test is SDK version 32 or above.
+ *
+ * <p>Use by adding this line to your AndroidTest.xml: <object type="module_controller"
+ * class="com.android.tradefed.testtype.suite.module.Sdk32ModuleController" />
+ */
+public class Sdk32ModuleController extends MinSdkModuleController {
+    public Sdk32ModuleController() {
+        super(32);
     }
 }
