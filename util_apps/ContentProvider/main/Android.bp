@@ -24,7 +24,7 @@ android_test {
     // Restrict visibility to only those targets that need to access it.
     visibility: [
         "//tools/tradefederation/core",
-        "//tools/tradefederation/core/util-apps/ContentProvider/androidTest",
+        "//tools/tradefederation/core/util_apps/ContentProvider/androidTest",
     ],
     defaults: ["tradefed_errorprone_defaults"],
 
