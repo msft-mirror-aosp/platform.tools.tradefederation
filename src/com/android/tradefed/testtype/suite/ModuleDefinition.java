@@ -255,8 +255,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     externalDependencies.stream()
                             .map(dependency -> dependency.getClass().getName())
                             .collect(Collectors.toList());
-            mModuleInvocationContext.addInvocationAttribute(
-                    MODULE_EXTERNAL_DEPENDENCIES, String.join(", ", dependencyClassNames));
+            if (!dependencyClassNames.isEmpty()) {
+                mModuleInvocationContext.addInvocationAttribute(
+                        MODULE_EXTERNAL_DEPENDENCIES, String.join(", ", dependencyClassNames));
+            }
         }
 
         mMultiPreparers.addAll(multiPreparers);
