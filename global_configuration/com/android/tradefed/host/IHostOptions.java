@@ -102,7 +102,4 @@ public interface IHostOptions {
 
     /** Returns the number of available permit of a given type */
     public Integer getAvailablePermits(PermitLimitType type);
-
-    /** Returns whether the bridge rpc service is enabled. */
-    public boolean isBridgeRpcEnable();
 }
