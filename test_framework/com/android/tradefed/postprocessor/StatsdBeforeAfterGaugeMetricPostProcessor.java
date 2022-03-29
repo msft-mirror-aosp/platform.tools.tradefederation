@@ -16,6 +16,7 @@
 package com.android.tradefed.postprocessor;
 
 import com.android.os.AtomsProto.Atom;
+import com.android.os.StatsLog.AggregatedAtomInfo;
 import com.android.os.StatsLog.ConfigMetricsReport;
 import com.android.os.StatsLog.ConfigMetricsReportList;
 import com.android.os.StatsLog.GaugeBucketInfo;
@@ -312,7 +313,14 @@ public class StatsdBeforeAfterGaugeMetricPostProcessor extends StatsdGenericPost
             GaugeBucketInfo bucket,
             Map<String, MultiMap<String, String>> metricsOutput,
             Map<String, Map<String, Set<String>>> keyToFormatterOutput) {
-        for (Atom atom : bucket.getAtomList()) {
+        List<Atom> atoms = bucket.getAtomList();
+        if (atoms.isEmpty()) {
+            atoms = new ArrayList<>();
+            for (AggregatedAtomInfo info : bucket.getAggregatedAtomInfoList()) {
+                atoms.add(info.getAtom());
+            }
+        }
+        for (Atom atom : atoms) {
             Map<FieldDescriptor, Object> atomFields = atom.getAllFields();
             for (FieldDescriptor field : atomFields.keySet()) {
                 if (!mMetricFormatters.containsKey(field.getName())) {

@@ -136,7 +136,7 @@ public final class TestsPoolPoller
                             // If the poller already rejected the tests once, do not re-evaluate.
                             continue;
                         }
-                        Set<TokenProperty> tokens = test.getRequiredTokens();
+                        Set<TokenProperty> tokens = test.getRequiredTokens(mTestInfo);
                         if (tokens == null || tokens.isEmpty() || isSupported(tokens)) {
                             // No Token can run anywhere, or supported can run
                             mTokenPool.remove(test);
