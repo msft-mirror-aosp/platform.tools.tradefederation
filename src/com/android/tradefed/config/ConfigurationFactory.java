@@ -660,7 +660,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                 }
             }
             throw new ConfigurationException(
-                    String.format("Unused template:map parameters: %s", uniqueMap.toString()));
+                    String.format("Unused template:map parameters: %s", uniqueMap.toString()),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         return configDef.createConfiguration(allowedObjects);
     }
@@ -687,8 +688,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                 for (String key : parserSettings.templateMap.keySet()) {
                     if (parserSettings.templateMap.get(key).size() > 1) {
                         throw new ConfigurationException(
-                                String.format(
-                                        "More than one template specified for key '%s'", key));
+                                String.format("More than one template specified for key '%s'", key),
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                     }
                 }
                 return parserSettings.templateMap.getUniqueMap();
@@ -773,7 +774,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                     default:
                         throw new ConfigurationException(
                                 String.format(
-                                        "The config format for %s is not supported.", configName));
+                                        "The config format for %s is not supported.", configName),
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 }
 
                 FileUtil.deleteFile(configFile);
@@ -842,7 +844,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                 Set<String> templateSeen)
                 throws ConfigurationException {
             throw new ConfigurationException(
-                    "Templates are not allowed in direct configuration contexts");
+                    "Templates are not allowed in direct configuration contexts",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         @Override
@@ -854,7 +857,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                 Set<String> templateSeen)
                 throws ConfigurationException {
             throw new ConfigurationException(
-                    "Templates are not allowed in direct configuration contexts");
+                    "Templates are not allowed in direct configuration contexts",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         @Override
