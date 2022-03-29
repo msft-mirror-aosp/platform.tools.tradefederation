@@ -558,8 +558,11 @@ public class ConfigurationFactory implements IConfigurationFactory {
             // (unconsumedArgs == null) is taken as a signal that the caller
             // expects all args to
             // be processed.
-            throw new ConfigurationException(String.format(
-                    "Invalid arguments provided. Unprocessed arguments: %s", tmpUnconsumedArgs));
+            throw new ConfigurationException(
+                    String.format(
+                            "Invalid arguments provided. Unprocessed arguments: %s",
+                            tmpUnconsumedArgs),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         } else if (unconsumedArgs != null) {
             // Return the unprocessed args
             unconsumedArgs.addAll(tmpUnconsumedArgs);
@@ -577,7 +580,9 @@ public class ConfigurationFactory implements IConfigurationFactory {
             TradefedDelegator delegator)
             throws ConfigurationException {
         if (arrayArgs.length == 0) {
-            throw new ConfigurationException("Configuration to run was not specified");
+            throw new ConfigurationException(
+                    "Configuration to run was not specified",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         List<String> listArgs = new ArrayList<String>(arrayArgs.length);
