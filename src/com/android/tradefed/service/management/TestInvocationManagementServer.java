@@ -18,14 +18,30 @@ package com.android.tradefed.service.management;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.command.ICommandScheduler;
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.proto.FileProtoResultReporter;
+import com.android.tradefed.util.FileUtil;
 
+import com.proto.tradefed.invocation.InvocationDetailRequest;
+import com.proto.tradefed.invocation.InvocationDetailResponse;
+import com.proto.tradefed.invocation.InvocationStatus;
+import com.proto.tradefed.invocation.InvocationStatus.Status;
+import com.proto.tradefed.invocation.NewTestCommandRequest;
+import com.proto.tradefed.invocation.NewTestCommandResponse;
 import com.proto.tradefed.invocation.TestInvocationManagementGrpc.TestInvocationManagementImplBase;
 
+import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.stub.StreamObserver;
 
 /**
  * GRPC server helping to management test invocation and their lifecycle. This service isn't
@@ -36,6 +52,7 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
 
     private Server mServer;
     private ICommandScheduler mCommandScheduler;
+    private Map<String, ScheduledInvocationForwarder> mTracker = new HashMap<>();
 
     /** Returns the port used by the server. */
     public static Integer getPort() {
@@ -74,5 +91,84 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
             mServer.shutdown();
             mServer.awaitTermination();
         }
+    }
+
+    @Override
+    public void submitTestCommand(
+            NewTestCommandRequest request,
+            StreamObserver<NewTestCommandResponse> responseObserver) {
+        NewTestCommandResponse.Builder responseBuilder = NewTestCommandResponse.newBuilder();
+        String[] command = request.getArgsList().toArray(new String[0]);
+        File record = null;
+        try {
+            record = FileUtil.createTempFile("test_record", ".pb");
+            CommandStatusHandler handler = new CommandStatusHandler();
+            FileProtoResultReporter fileReporter = new FileProtoResultReporter();
+            fileReporter.setOutputFile(record);
+            fileReporter.setDelimitedOutput(false);
+            fileReporter.setGranularResults(false);
+            ScheduledInvocationForwarder forwarder =
+                    new ScheduledInvocationForwarder(handler, fileReporter);
+            mCommandScheduler.execCommand(forwarder, command);
+            // TODO: Align trackerId with true invocation id
+            String trackerId = UUID.randomUUID().toString();
+            mTracker.put(trackerId, forwarder);
+            responseBuilder.setInvocationId(trackerId);
+        } catch (ConfigurationException | IOException e) {
+            // TODO: Expand proto to convey those errors
+            responseBuilder.setInvocationId(null);
+            FileUtil.deleteFile(record);
+        }
+        responseObserver.onNext(responseBuilder.build());
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getInvocationDetail(
+            InvocationDetailRequest request,
+            StreamObserver<InvocationDetailResponse> responseObserver) {
+        InvocationDetailResponse.Builder responseBuilder = InvocationDetailResponse.newBuilder();
+        String invocationId = request.getInvocationId();
+        if (mTracker.containsKey(invocationId)) {
+            responseBuilder.setInvocationStatus(
+                    createStatus(mTracker.get(invocationId).getListeners()));
+            if (responseBuilder.getInvocationStatus().getStatus().equals(Status.DONE)) {
+                responseBuilder.setTestRecordPath(
+                        getProtoPath(mTracker.get(invocationId).getListeners()));
+                // Finish the tracking after returning the first status done.
+                mTracker.remove(invocationId);
+            }
+        } else {
+            responseBuilder.setInvocationStatus(
+                    InvocationStatus.newBuilder()
+                            .setStatus(Status.UNKNOWN)
+                            .setStatusReason("invocation id is not tracked."));
+        }
+        responseObserver.onNext(responseBuilder.build());
+        responseObserver.onCompleted();
+    }
+
+    private InvocationStatus createStatus(List<ITestInvocationListener> listeners) {
+        InvocationStatus.Builder invocationStatusBuilder = InvocationStatus.newBuilder();
+        Status status = Status.UNKNOWN;
+        for (ITestInvocationListener listener : listeners) {
+            if (listener instanceof CommandStatusHandler) {
+                status = ((CommandStatusHandler) listener).getCurrentStatus();
+            }
+        }
+        invocationStatusBuilder.setStatus(status);
+        if (Status.UNKNOWN.equals(status)) {
+            invocationStatusBuilder.setStatusReason("Failed to find the CommandStatusHandler.");
+        }
+        return invocationStatusBuilder.build();
+    }
+
+    private String getProtoPath(List<ITestInvocationListener> listeners) {
+        for (ITestInvocationListener listener : listeners) {
+            if (listener instanceof FileProtoResultReporter) {
+                return ((FileProtoResultReporter) listener).getOutputFile().getAbsolutePath();
+            }
+        }
+        return null;
     }
 }
