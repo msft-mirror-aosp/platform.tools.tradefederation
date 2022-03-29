@@ -20,14 +20,15 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import org.junit.After;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 import com.android.tradefed.util.zip.CentralDirectoryInfo;
 import com.android.tradefed.util.zip.EndCentralDirectoryInfo;
 import com.android.tradefed.util.zip.LocalFileHeader;
+
+import org.junit.After;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -83,6 +84,11 @@ public class ZipUtilTest {
                 ZipUtil.isZipFileValid(getTestDataFile("truncated"), false));
         assertTrue("Unexpectedly detected 'normal.zip' test file as corrupt!  Hope?",
                 ZipUtil.isZipFileValid(getTestDataFile("corrupt"), false));
+    }
+
+    @Test
+    public void testIsValid_null() throws Exception {
+        assertFalse(ZipUtil.isZipFileValid(null, true));
     }
 
     /** Test that our _thorough_ corrupt zip detection heuristics work properly. */
