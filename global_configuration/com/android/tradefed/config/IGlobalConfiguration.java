@@ -31,6 +31,7 @@ import com.android.tradefed.log.ITerribleFailureHandler;
 import com.android.tradefed.monitoring.collector.IResourceMetricCollector;
 import com.android.tradefed.sandbox.ISandboxFactory;
 import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.service.management.TestInvocationManagementServer;
 import com.android.tradefed.util.hostmetric.IHostMonitor;
 import com.android.tradefed.util.keystore.IKeyStoreFactory;
 
@@ -233,6 +234,9 @@ public interface IGlobalConfiguration {
     /** Returns the {@link TradefedFeatureServer} or null if undefined. */
     public TradefedFeatureServer getFeatureServer();
 
+    /** Returns the {@link TestInvocationManagementServer} or null if undefined. */
+    public TestInvocationManagementServer getTestInvocationManagementSever();
+
     /**
      * Set the {@link IHostOptions}, replacing any existing values.
      *
@@ -284,6 +288,9 @@ public interface IGlobalConfiguration {
 
     /** Sets the {@link TradefedFeatureServer}. */
     public void setTradefedFeatureServer(TradefedFeatureServer server);
+
+    /** Sets the {@link TestInvocationManagementServer}. */
+    public void setInvocationServer(TestInvocationManagementServer server);
 
     /**
      * Generic method to set the config object with the given name, replacing any existing value.
