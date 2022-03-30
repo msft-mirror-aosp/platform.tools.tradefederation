@@ -50,8 +50,8 @@ import io.grpc.stub.StreamObserver;
 public class TestInvocationManagementServer extends TestInvocationManagementImplBase {
     private static final String TF_INVOCATION_SERVER_PORT = "TF_INVOCATION_SERVER_PORT";
 
-    private Server mServer;
-    private ICommandScheduler mCommandScheduler;
+    private final Server mServer;
+    private final ICommandScheduler mCommandScheduler;
     private Map<String, ScheduledInvocationForwarder> mTracker = new HashMap<>();
 
     /** Returns the port used by the server. */
@@ -61,17 +61,15 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
                 : null;
     }
 
-    public TestInvocationManagementServer(int port) {
-        this(ServerBuilder.forPort(port));
+    public TestInvocationManagementServer(int port, ICommandScheduler commandScheduler) {
+        this(ServerBuilder.forPort(port), commandScheduler);
     }
 
     @VisibleForTesting
-    public TestInvocationManagementServer(ServerBuilder<?> serverBuilder) {
+    public TestInvocationManagementServer(
+            ServerBuilder<?> serverBuilder, ICommandScheduler commandScheduler) {
         mServer = serverBuilder.addService(this).build();
-    }
-
-    public void setCommandScheduler(ICommandScheduler scheduler) {
-        mCommandScheduler = scheduler;
+        mCommandScheduler = commandScheduler;
     }
 
     /** Start the grpc server. */
@@ -114,7 +112,7 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
             String trackerId = UUID.randomUUID().toString();
             mTracker.put(trackerId, forwarder);
             responseBuilder.setInvocationId(trackerId);
-        } catch (ConfigurationException | IOException e) {
+        } catch (ConfigurationException | IOException | RuntimeException e) {
             // TODO: Expand proto to convey those errors
             responseBuilder.setInvocationId(null);
             FileUtil.deleteFile(record);
