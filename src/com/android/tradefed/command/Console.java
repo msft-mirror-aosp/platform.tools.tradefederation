@@ -1344,50 +1344,51 @@ public class Console extends Thread {
         try {
             server = new TradefedFeatureServer();
             server.start();
-
         } catch (RuntimeException e) {
             System.out.println(String.format("Error starting feature server: %s", e));
         }
         TestInvocationManagementServer invocationManagementServer = null;
-        // Gate the server starting to a port being explicitly defined
-        Integer port = TestInvocationManagementServer.getPort();
-        if (port != null) {
-            try {
-                invocationManagementServer = new TestInvocationManagementServer(port);
-                invocationManagementServer.start();
-            } catch (RuntimeException e) {
-                System.out.println(String.format("Error starting invocation server: %s", e));
+        try {
+            List<String> nonGlobalArgs = GlobalConfiguration.createGlobalConfiguration(args);
+            GlobalConfiguration.getInstance().setup();
+            if (server != null) {
+                GlobalConfiguration.getInstance().setTradefedFeatureServer(server);
             }
+            console.setArgs(nonGlobalArgs);
+            console.setCommandScheduler(GlobalConfiguration.getInstance().getCommandScheduler());
+            console.setKeyStoreFactory(GlobalConfiguration.getInstance().getKeyStoreFactory());
+            console.setDaemon(true);
+
+            GlobalConfiguration.getInstance().getCommandScheduler().setClearcutClient(client);
+            // Initialize the locks for the TF session
+            GlobalConfiguration.getInstance().getHostOptions().initConcurrentLocks();
+
+            console.start();
+
+            // Wait for the CommandScheduler to get started before we exit the main thread.  See
+            // full
+            // explanation near the top of #run()
+            console.awaitScheduler();
+            console.registerShutdownSignals();
+
+            // Gate the server starting to a port being explicitly defined
+            Integer port = TestInvocationManagementServer.getPort();
+            if (port != null) {
+                try {
+                    invocationManagementServer =
+                            new TestInvocationManagementServer(
+                                    port, GlobalConfiguration.getInstance().getCommandScheduler());
+                    GlobalConfiguration.getInstance()
+                            .setInvocationServer(invocationManagementServer);
+                    // Start the server last to ensure that command scheduler is started
+                    invocationManagementServer.start();
+                } catch (RuntimeException e) {
+                    System.out.println(String.format("Error starting invocation server: %s", e));
+                }
+            }
+        } finally {
+            Runtime.getRuntime()
+                    .addShutdownHook(new TerminateGRPCServers(server, invocationManagementServer));
         }
-        Runtime.getRuntime()
-                .addShutdownHook(new TerminateGRPCServers(server, invocationManagementServer));
-
-        List<String> nonGlobalArgs = GlobalConfiguration.createGlobalConfiguration(args);
-        GlobalConfiguration.getInstance().setup();
-        if (server != null) {
-            GlobalConfiguration.getInstance().setTradefedFeatureServer(server);
-        }
-        if (invocationManagementServer != null) {
-            // Have to set here to ensure GlobalConfiguration is created.
-            invocationManagementServer.setCommandScheduler(
-                    GlobalConfiguration.getInstance().getCommandScheduler());
-            GlobalConfiguration.getInstance().setInvocationServer(invocationManagementServer);
-        }
-
-        console.setArgs(nonGlobalArgs);
-        console.setCommandScheduler(GlobalConfiguration.getInstance().getCommandScheduler());
-        console.setKeyStoreFactory(GlobalConfiguration.getInstance().getKeyStoreFactory());
-        console.setDaemon(true);
-
-        GlobalConfiguration.getInstance().getCommandScheduler().setClearcutClient(client);
-        // Initialize the locks for the TF session
-        GlobalConfiguration.getInstance().getHostOptions().initConcurrentLocks();
-
-        console.start();
-
-        // Wait for the CommandScheduler to get started before we exit the main thread.  See full
-        // explanation near the top of #run()
-        console.awaitScheduler();
-        console.registerShutdownSignals();
     }
 }
