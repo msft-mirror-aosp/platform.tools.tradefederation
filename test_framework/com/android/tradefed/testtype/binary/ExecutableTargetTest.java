@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype.binary;
 
+import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -38,6 +39,9 @@ public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceT
 
     private ITestDevice mDevice = null;
 
+    @Option(name = "skip-binary-check", description = "Skip the binary check in findBinary().")
+    private boolean mSkipBinaryCheck = false;
+
     /** {@inheritDoc} */
     @Override
     public void setDevice(ITestDevice device) {
@@ -52,6 +56,9 @@ public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceT
 
     @Override
     public String findBinary(String binary) throws DeviceNotAvailableException {
+        if (mSkipBinaryCheck) {
+            return binary;
+        }
         for (String path : binary.split(" ")) {
             if (mDevice.isExecutable(path)) {
                 return binary;
