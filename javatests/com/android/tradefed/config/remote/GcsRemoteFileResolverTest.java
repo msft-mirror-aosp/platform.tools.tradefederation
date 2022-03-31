@@ -140,7 +140,7 @@ public class GcsRemoteFileResolverTest {
         }
     }
 
-    /** Test that if we request to unzip a non-zip file, nothing is done. */
+    /** Test that if we request to unzip a non-zip file it throws an exception. */
     @Test
     public void testResolve_notZip() throws Exception {
         File testFile = FileUtil.createTempFile("test-resolve-file", ".txt");
@@ -150,13 +150,13 @@ public class GcsRemoteFileResolverTest {
             query.put(DynamicRemoteFileResolver.UNZIP_KEY, /* Case doesn't matter */ "TrUe");
             RemoteFileResolverArgs args = new RemoteFileResolverArgs();
             args.setConsideredFile(new File("gs:/fake/file")).addQueryArgs(query);
-            ResolvedFile resolvedFile = mResolver.resolveRemoteFile(args);
-            // File was not unzipped since it's not one
-            assertEquals(testFile, resolvedFile.getResolvedFile());
-
-            Mockito.verify(mMockHelper).fetchTestResource("gs:/fake/file");
+            mResolver.resolveRemoteFile(args);
+            fail("Should have thrown an exception");
+        } catch (BuildRetrievalError expected) {
+            // Expected
         } finally {
             FileUtil.deleteFile(testFile);
         }
+        Mockito.verify(mMockHelper).fetchTestResource("gs:/fake/file");
     }
 }
