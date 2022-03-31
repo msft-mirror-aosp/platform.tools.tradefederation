@@ -389,7 +389,10 @@ public class DynamicRemoteFileResolver {
                 FileUtil.deleteFile(downloadedFile);
                 return extractedDir;
             } else {
-                CLog.w("%s was requested to be unzipped but is not a valid zip.", downloadedFile);
+                throw new IOException(
+                        String.format(
+                                "%s was requested to be unzipped but is not a valid zip.",
+                                downloadedFile));
             }
         }
         // Return the original file untouched
