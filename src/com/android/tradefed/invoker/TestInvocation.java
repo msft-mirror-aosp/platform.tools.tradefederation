@@ -689,7 +689,7 @@ public class TestInvocation implements ITestInvocation {
     private void logExpandedConfiguration(IConfiguration config, ITestLogger listener) {
         try (StringWriter configXmlWriter = new StringWriter();
                 PrintWriter wrapperWriter = new PrintWriter(configXmlWriter)) {
-            config.dumpXml(wrapperWriter);
+            config.dumpXml(wrapperWriter, new ArrayList<String>(), true, false);
             wrapperWriter.flush();
             // Specified UTF-8 encoding for an abundance of caution, but its possible we could want
             // something else in the future
@@ -698,6 +698,7 @@ public class TestInvocation implements ITestInvocation {
                 String configOutputName;
                 boolean isSandboxParent = config.getCommandOptions().shouldUseSandboxing();
                 boolean isSandboxChild = config.getConfigurationDescription().shouldUseSandbox();
+                boolean isShard = config.getCommandOptions().getShardIndex() != null;
                 if (isSandboxParent || isSandboxChild) {
                     // Either the parent or child of a sandbox so we need to tailor the config
                     // logging names
@@ -709,6 +710,9 @@ public class TestInvocation implements ITestInvocation {
                     }
 
                     configOutputName = String.format("%s-%s", prefix, TRADEFED_CONFIG_NAME);
+                } else if (isShard) {
+                    CLog.d("Skipping expanded config log for shard");
+                    return;
                 } else {
                     // No sandboxing involved (at least known), so use the default name
                     configOutputName = TRADEFED_CONFIG_NAME;
