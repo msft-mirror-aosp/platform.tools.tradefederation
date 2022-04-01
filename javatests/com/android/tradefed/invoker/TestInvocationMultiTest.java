@@ -226,8 +226,7 @@ public class TestInvocationMultiTest {
         verify(mProvider2).cleanUp(captured.capture());
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
-        verify(mMockConfig)
-                .dumpXml(Mockito.any(), Mockito.any(), Mockito.eq(true), Mockito.eq(false));
+        verify(mMockConfig).dumpXml(Mockito.any());
         verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.<FailureDescription>any());
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());
@@ -309,8 +308,7 @@ public class TestInvocationMultiTest {
         verify(mMockConfig).cleanConfigurationData();
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
-        verify(mMockConfig)
-                .dumpXml(Mockito.any(), Mockito.any(), Mockito.eq(true), Mockito.eq(false));
+        verify(mMockConfig).dumpXml(Mockito.any());
         verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.eq(failure));
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());
@@ -372,8 +370,7 @@ public class TestInvocationMultiTest {
         verify(mMockConfig).cleanConfigurationData();
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
-        verify(mMockConfig)
-                .dumpXml(Mockito.any(), Mockito.any(), Mockito.eq(true), Mockito.eq(false));
+        verify(mMockConfig).dumpXml(Mockito.any());
         verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.<FailureDescription>any());
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());
@@ -442,8 +439,7 @@ public class TestInvocationMultiTest {
         verify(mMockConfig).cleanConfigurationData();
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
-        verify(mMockConfig)
-                .dumpXml(Mockito.any(), Mockito.any(), Mockito.eq(true), Mockito.eq(false));
+        verify(mMockConfig).dumpXml(Mockito.any());
         verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.<FailureDescription>any());
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());
