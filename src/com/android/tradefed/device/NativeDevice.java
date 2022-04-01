@@ -1383,10 +1383,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         long startTime = System.currentTimeMillis();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PUSH_FILE_COUNT, 1);
         try {
-            if (!skipContentProvider && isSdcardOrEmulated(remoteFilePath)) {
-                ContentProviderHandler handler = getContentProvider();
-                if (handler != null) {
-                    return handler.pushFile(localFile, remoteFilePath);
+            if (!skipContentProvider) {
+                if (isSdcardOrEmulated(remoteFilePath) && getCurrentUser() != 0) {
+                    ContentProviderHandler handler = getContentProvider();
+                    if (handler != null) {
+                        return handler.pushFile(localFile, remoteFilePath);
+                    }
                 }
             }
 
