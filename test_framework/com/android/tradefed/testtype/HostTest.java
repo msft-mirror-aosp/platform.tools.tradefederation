@@ -28,6 +28,8 @@ import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.metric.IMetricCollector;
+import com.android.tradefed.device.metric.IMetricCollectorReceiver;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.TestInformation;
@@ -660,6 +662,11 @@ public class HostTest
                         String.format(
                                 "%s does not implement ITestCollector", test.getClass()));
             }
+        }
+        // Set collectors for completeness but this isn't really supported as part of HostTest.
+        if (test instanceof IMetricCollectorReceiver) {
+            ((IMetricCollectorReceiver) test)
+                    .setMetricCollectors(new ArrayList<IMetricCollector>());
         }
         test.run(mTestInfo, listener);
     }
