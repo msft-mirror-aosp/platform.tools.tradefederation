@@ -1130,7 +1130,22 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     }
 
     public Set<TokenProperty> getRequiredTokens(TestInformation testInfo) {
-        if (!RunStrategy.RUN.equals(shouldRunWithController(testInfo.getContext()))) {
+        // If there are no controllers just return directly
+        List<?> ctrlObjectList = mModuleConfiguration.getConfigurationObjectList(MODULE_CONTROLLER);
+        if (ctrlObjectList == null) {
+            return mRequiredTokens;
+        }
+        // Clone the module context to get its metadata and then provide the device information
+        // the same as ITestSuite would do during execution to run only the controllers
+        InvocationContext clonedContext =
+                InvocationContext.fromProto(mModuleInvocationContext.toProto());
+        for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
+            clonedContext.addAllocatedDevice(
+                    deviceName, testInfo.getContext().getDevice(deviceName));
+            clonedContext.addDeviceBuildInfo(
+                    deviceName, testInfo.getContext().getBuildInfo(deviceName));
+        }
+        if (!RunStrategy.RUN.equals(shouldRunWithController(clonedContext))) {
             // Bypass token since the module isn't expected to run
             return null;
         }
