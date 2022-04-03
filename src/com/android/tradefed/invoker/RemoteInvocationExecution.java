@@ -264,7 +264,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
                 return;
             }
             try (InputStreamSource source = new FileInputStreamSource(globalConfig)) {
-                listener.testLog(GLOBAL_REMOTE_CONFIG, LogDataType.XML, source);
+                listener.testLog(GLOBAL_REMOTE_CONFIG, LogDataType.HARNESS_CONFIG, source);
             }
             // Push the global configuration
             boolean resultPushGlobal =
@@ -711,6 +711,11 @@ public class RemoteInvocationExecution extends InvocationExecution {
             config.getCommandOptions().setReplicateSetup(true);
         }
 
+        // Lower the remote invocation timeout to trigger an interrupt
+        long invocationTimeout =
+                Math.max(config.getCommandOptions().getInvocationTimeout() - 120000L, 0L);
+        config.getCommandOptions().setInvocationTimeout(invocationTimeout);
+
         // Mark the remote invocation as subprocess
         config.getCommandOptions()
                 .getInvocationData()
@@ -746,7 +751,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
                 /* print deprecated */ true,
                 /* print unchanged*/ false);
         try (InputStreamSource source = new FileInputStreamSource(configFile)) {
-            logger.testLog(REMOTE_CONFIG, LogDataType.XML, source);
+            logger.testLog(REMOTE_CONFIG, LogDataType.HARNESS_CONFIG, source);
         }
         return configFile;
     }
@@ -823,7 +828,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
                         info, options, runUtil, PULL_RESULT_TIMEOUT, mRemoteTradefedDir + fileName);
         if (file != null) {
             try (InputStreamSource source = new FileInputStreamSource(file, false)) {
-                logger.testLog(logName, LogDataType.TEXT, source);
+                logger.testLog(logName, LogDataType.HARNESS_STD_LOG, source);
             }
         }
         return file;
