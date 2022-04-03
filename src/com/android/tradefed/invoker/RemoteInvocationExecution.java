@@ -711,6 +711,11 @@ public class RemoteInvocationExecution extends InvocationExecution {
             config.getCommandOptions().setReplicateSetup(true);
         }
 
+        // Lower the remote invocation timeout to trigger an interrupt
+        long invocationTimeout =
+                Math.max(config.getCommandOptions().getInvocationTimeout() - 120000L, 0L);
+        config.getCommandOptions().setInvocationTimeout(invocationTimeout);
+
         // Mark the remote invocation as subprocess
         config.getCommandOptions()
                 .getInvocationData()
