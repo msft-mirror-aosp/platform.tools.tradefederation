@@ -545,7 +545,8 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                                     "Mainline module %s is not preloaded on the device "
                                             + "but is in the input lists.",
                                     modulePackageName),
-                            device.getDeviceDescriptor());
+                            device.getDeviceDescriptor(),
+                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
                 }
                 CLog.i(
                         "The module package %s is not preloaded on the device but is included in "
