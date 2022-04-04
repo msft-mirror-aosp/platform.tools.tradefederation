@@ -112,9 +112,10 @@ public class TestDeviceOptions {
             description = "default URL to be used for connectivity checks.")
     private String mConnCheckUrl = "http://www.google.com";
 
-    @Option(name = "wifi-attempts",
+    @Option(
+            name = "wifi-attempts",
             description = "default number of attempts to connect to wifi network.")
-    private int mWifiAttempts = 5;
+    private int mWifiAttempts = 4;
 
     @Option(name = "wifi-retry-wait-time",
             description = "the base wait time in ms between wifi connect retries. "
@@ -156,13 +157,12 @@ public class TestDeviceOptions {
     )
     private boolean mUseContentProvider = true;
 
-    /**
-     * Returns whether to use a workaround to get shell exit status on older devices without shell
-     * v2.
-     */
-    public boolean useExitStatusWorkaround() {
-        return mExitStatusWorkaround;
-    }
+    @Option(
+            name = "exit-status-workaround",
+            description =
+                    "On older devices that do not support ADB shell v2, use a workaround "
+                            + "to get the exit status of shell commands")
+    private boolean mExitStatusWorkaround = false;
 
     // ====================== Options Related to Virtual Devices ======================
     @Option(
@@ -297,17 +297,6 @@ public class TestDeviceOptions {
                             + " context has form_factor=phone, it'll be added to GCE VM as metadata"
                             + " form_factor=phone.")
     private List<String> mInvocationAttributeToMetadata = new ArrayList<>();
-
-    // TODO(b/216591507): Replace with gce-driver-file-param.
-    @Option(
-            name = "gce-local-image-path",
-            description = "path of the prebuilt cuttlefish local image.")
-    private File mAvdLocalImage = null;
-
-    @Option(
-            name = "gce-cvd-host-package-path",
-            description = "path of the prebuilt cuttlefish host package.")
-    private File mAvdCuttlefishHostPkg = null;
 
     @Option(
             name = "gce-extra-files",
@@ -568,12 +557,13 @@ public class TestDeviceOptions {
         return mUseContentProvider;
     }
 
-    @Option(
-            name = "exit-status-workaround",
-            description =
-                    "On older devices that do not support ADB shell v2, use a workaround "
-                            + "to get the exit status of shell commands")
-    private boolean mExitStatusWorkaround = false;
+    /**
+     * Returns whether to use a workaround to get shell exit status on older devices without shell
+     * v2.
+     */
+    public boolean useExitStatusWorkaround() {
+        return mExitStatusWorkaround;
+    }
 
     // =========================== Getter and Setter for Virtual Devices
     /** Return the Gce Avd timeout for the instance to come online. */
@@ -746,16 +736,6 @@ public class TestDeviceOptions {
     /** The file pointing to the directory of the Tradefed version to be pushed to the remote. */
     public File getRemoteTf() {
         return mRemoteTFVersion;
-    }
-
-    /** Return the path to the cuttlefish local image. */
-    public File getAvdLocalImage() {
-        return mAvdLocalImage;
-    }
-
-    /** Return the path to the cuttlefish host package. */
-    public File getAvdCuttlefishHostPkg() {
-        return mAvdCuttlefishHostPkg;
     }
 
     /** Return the extra files need to upload to GCE during acloud create. */

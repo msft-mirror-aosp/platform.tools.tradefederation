@@ -1297,11 +1297,11 @@ public abstract class ITestSuite
     }
 
     @Override
-    public Set<TokenProperty> getRequiredTokens() {
+    public Set<TokenProperty> getRequiredTokens(TestInformation testInfo) {
         if (mDirectModule == null) {
             return null;
         }
-        return mDirectModule.getRequiredTokens();
+        return mDirectModule.getRequiredTokens(testInfo);
     }
 
     /**

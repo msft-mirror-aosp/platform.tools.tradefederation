@@ -35,6 +35,7 @@ import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.device.IWifiHelper.WifiConnectionResult;
 import com.android.tradefed.device.contentprovider.ContentProviderHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
@@ -1227,58 +1228,21 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for Package Manager's features");
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public boolean pullFile(final String remoteFilePath, final File localFile)
+    public boolean pullFile(final String remoteFilePath, final File localFile, int userId)
             throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PULL_FILE_COUNT, 1);
 
         try {
-            if (isSdcardOrEmulated(remoteFilePath)) {
+            if (isSdcardOrEmulated(remoteFilePath) && userId != 0) {
                 ContentProviderHandler handler = getContentProvider();
                 if (handler != null) {
                     return handler.pullFile(remoteFilePath, localFile);
                 }
             }
-
-            DeviceAction pullAction =
-                    new DeviceAction() {
-                        @Override
-                        public boolean run()
-                                throws TimeoutException, IOException, AdbCommandRejectedException,
-                                        SyncException {
-                            SyncService syncService = null;
-                            boolean status = false;
-                            try {
-                                syncService = getIDevice().getSyncService();
-                                syncService.pullFile(
-                                        interpolatePathVariables(remoteFilePath),
-                                        localFile.getAbsolutePath(),
-                                        SyncService.getNullProgressMonitor());
-                                status = true;
-                            } catch (SyncException e) {
-                                CLog.w(
-                                        "Failed to pull %s from %s to %s. Message %s",
-                                        remoteFilePath,
-                                        getSerialNumber(),
-                                        localFile.getAbsolutePath(),
-                                        e.getMessage());
-                                throw e;
-                            } finally {
-                                if (syncService != null) {
-                                    syncService.close();
-                                }
-                            }
-                            return status;
-                        }
-                    };
-            return performDeviceAction(
-                    String.format("pull %s to %s", remoteFilePath, localFile.getAbsolutePath()),
-                    pullAction,
-                    MAX_RETRY_ATTEMPTS);
+            return pullFileInternal(remoteFilePath, localFile);
         } finally {
             long totalTime = System.currentTimeMillis() - startTime;
             InvocationMetricLogger.addInvocationMetrics(
@@ -1286,16 +1250,21 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public File pullFile(String remoteFilePath) throws DeviceNotAvailableException {
+    public boolean pullFile(final String remoteFilePath, final File localFile)
+            throws DeviceNotAvailableException {
+        return pullFile(remoteFilePath, localFile, getCurrentUser());
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public File pullFile(String remoteFilePath, int userId) throws DeviceNotAvailableException {
         File localFile = null;
         boolean success = false;
         try {
             localFile = FileUtil.createTempFileForRemote(remoteFilePath, null);
-            if (pullFile(remoteFilePath, localFile)) {
+            if (pullFile(remoteFilePath, localFile, userId)) {
                 success = true;
                 return localFile;
             }
@@ -1308,6 +1277,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
         }
         return null;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public File pullFile(String remoteFilePath) throws DeviceNotAvailableException {
+        return pullFile(remoteFilePath, getCurrentUser());
     }
 
     /**
@@ -1340,6 +1315,45 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return pullFile(fullPath);
     }
 
+    protected boolean pullFileInternal(String remoteFilePath, File localFile)
+            throws DeviceNotAvailableException {
+        DeviceAction pullAction =
+                new DeviceAction() {
+                    @Override
+                    public boolean run()
+                            throws TimeoutException, IOException, AdbCommandRejectedException,
+                                    SyncException {
+                        SyncService syncService = null;
+                        boolean status = false;
+                        try {
+                            syncService = getIDevice().getSyncService();
+                            syncService.pullFile(
+                                    interpolatePathVariables(remoteFilePath),
+                                    localFile.getAbsolutePath(),
+                                    SyncService.getNullProgressMonitor());
+                            status = true;
+                        } catch (SyncException e) {
+                            CLog.w(
+                                    "Failed to pull %s from %s to %s. Message %s",
+                                    remoteFilePath,
+                                    getSerialNumber(),
+                                    localFile.getAbsolutePath(),
+                                    e.getMessage());
+                            throw e;
+                        } finally {
+                            if (syncService != null) {
+                                syncService.close();
+                            }
+                        }
+                        return status;
+                    }
+                };
+        return performDeviceAction(
+                String.format("pull %s to %s", remoteFilePath, localFile.getAbsolutePath()),
+                pullAction,
+                MAX_RETRY_ATTEMPTS);
+    }
+
     /**
      * Helper function that watches for the string "${EXTERNAL_STORAGE}" and replaces it with the
      * pathname of the EXTERNAL_STORAGE mountpoint.  Specifically intended to be used for pathnames
@@ -1369,10 +1383,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         long startTime = System.currentTimeMillis();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PUSH_FILE_COUNT, 1);
         try {
-            if (!skipContentProvider && isSdcardOrEmulated(remoteFilePath)) {
-                ContentProviderHandler handler = getContentProvider();
-                if (handler != null) {
-                    return handler.pushFile(localFile, remoteFilePath);
+            if (!skipContentProvider) {
+                if (isSdcardOrEmulated(remoteFilePath) && getCurrentUser() != 0) {
+                    ContentProviderHandler handler = getContentProvider();
+                    if (handler != null) {
+                        return handler.pushFile(localFile, remoteFilePath);
+                    }
                 }
             }
 
@@ -1451,7 +1467,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public boolean doesFileExist(String deviceFilePath) throws DeviceNotAvailableException {
-        return doesFileExist(deviceFilePath, 0);
+        return doesFileExist(deviceFilePath, getCurrentUser());
     }
 
     @Override
@@ -1485,10 +1501,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         long startTime = System.currentTimeMillis();
         try {
             if (isSdcardOrEmulated(deviceFilePath)) {
-                ContentProviderHandler handler = getContentProvider();
-                if (handler != null) {
-                    if (handler.deleteFile(deviceFilePath)) {
-                        return;
+                int currentUser = getCurrentUser();
+                if (currentUser != 0) {
+                    ContentProviderHandler handler = getContentProvider();
+                    if (handler != null) {
+                        if (handler.deleteFile(deviceFilePath)) {
+                            return;
+                        }
                     }
                 }
             }
@@ -1853,65 +1872,72 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         try {
+            int currentUser = getCurrentUser();
             if (isSdcardOrEmulated(deviceFilePath)) {
-                ContentProviderHandler handler = getContentProvider();
-                if (handler != null) {
-                    return handler.pullDir(deviceFilePath, localDir);
+                if (currentUser != 0) {
+                    ContentProviderHandler handler = getContentProvider();
+                    if (handler != null) {
+                        return handler.pullDir(deviceFilePath, localDir);
+                    }
                 }
             }
 
-            if (!localDir.isDirectory()) {
-                CLog.e("Local path %s is not a directory", localDir.getAbsolutePath());
-                return false;
-            }
-            if (!doesFileExist(deviceFilePath)) {
-                CLog.e("Device path %s does not exist to be pulled.", deviceFilePath);
-            }
-            if (!isDirectory(deviceFilePath)) {
-                CLog.e("Device path %s is not a directory", deviceFilePath);
-                return false;
-            }
-            FileEntry entryRoot =
-                    new FileEntry(null, deviceFilePath, FileListingService.TYPE_DIRECTORY, false);
-            IFileEntry entry = getFileEntry(entryRoot);
-            Collection<IFileEntry> children = entry.getChildren(false);
-            if (children.isEmpty()) {
-                CLog.i("Device path is empty, nothing to do.");
-                return true;
-            }
-            for (IFileEntry item : children) {
-                if (item.isDirectory()) {
-                    // handle sub dir
-                    File subDir = new File(localDir, item.getName());
-                    if (!subDir.mkdir()) {
-                        CLog.w(
-                                "Failed to create sub directory %s, aborting.",
-                                subDir.getAbsolutePath());
-                        return false;
-                    }
-                    String deviceSubDir = item.getFullPath();
-                    if (!pullDir(deviceSubDir, subDir)) {
-                        CLog.w(
-                                "Failed to pull sub directory %s from device, aborting",
-                                deviceSubDir);
-                        return false;
-                    }
-                } else {
-                    // handle regular file
-                    File localFile = new File(localDir, item.getName());
-                    String fullPath = item.getFullPath();
-                    if (!pullFile(fullPath, localFile)) {
-                        CLog.w("Failed to pull file %s from device, aborting", fullPath);
-                        return false;
-                    }
-                }
-            }
-            return true;
+            return pullDirInternal(deviceFilePath, localDir, currentUser);
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.PULL_DIR_TIME, System.currentTimeMillis() - startTime);
             InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PULL_DIR_COUNT, 1);
         }
+    }
+
+    private boolean pullDirInternal(String deviceFilePath, File localDir, int userId)
+            throws DeviceNotAvailableException {
+        if (!localDir.isDirectory()) {
+            CLog.e("Local path %s is not a directory", localDir.getAbsolutePath());
+            return false;
+        }
+        if (!doesFileExist(deviceFilePath, userId)) {
+            CLog.e("Device path %s does not exist to be pulled.", deviceFilePath);
+            return false;
+        }
+        if (!isDirectory(deviceFilePath)) {
+            CLog.e("Device path %s is not a directory", deviceFilePath);
+            return false;
+        }
+        FileEntry entryRoot =
+                new FileEntry(null, deviceFilePath, FileListingService.TYPE_DIRECTORY, false);
+        IFileEntry entry = getFileEntry(entryRoot);
+        Collection<IFileEntry> children = entry.getChildren(false);
+        if (children.isEmpty()) {
+            CLog.i("Device path is empty, nothing to do.");
+            return true;
+        }
+        for (IFileEntry item : children) {
+            if (item.isDirectory()) {
+                // handle sub dir
+                File subDir = new File(localDir, item.getName());
+                if (!subDir.mkdir()) {
+                    CLog.w(
+                            "Failed to create sub directory %s, aborting.",
+                            subDir.getAbsolutePath());
+                    return false;
+                }
+                String deviceSubDir = item.getFullPath();
+                if (!pullDirInternal(deviceSubDir, subDir, userId)) {
+                    CLog.w("Failed to pull sub directory %s from device, aborting", deviceSubDir);
+                    return false;
+                }
+            } else {
+                // handle regular file
+                File localFile = new File(localDir, item.getName());
+                String fullPath = item.getFullPath();
+                if (!pullFileInternal(fullPath, localFile)) {
+                    CLog.w("Failed to pull file %s from device, aborting", fullPath);
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /** Checks whether path is external storage path. */
@@ -2993,11 +3019,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.WIFI_CONNECT_RETRY_COUNT, 1);
                 CLog.i("Connecting to wifi network %s on %s", wifiSsid, getSerialNumber());
-                boolean success =
+                WifiConnectionResult result =
                         wifi.connectToNetwork(
                                 wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
                 final Map<String, String> wifiInfo = wifi.getWifiInfo();
-                if (success) {
+                if (WifiConnectionResult.SUCCESS.equals(result)) {
                     CLog.i(
                             "Successfully connected to wifi network %s(%s) on %s",
                             wifiSsid, wifiInfo.get("bssid"), getSerialNumber());
@@ -3006,6 +3032,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     mLastConnectedWifiPsk = wifiPsk;
 
                     return true;
+                } else if (WifiConnectionResult.FAILED_TO_ENABLE.equals(result)) {
+                    CLog.w("Failed to enable wifi");
+                    // Do not sleep if case of wifi enabled failure.
+                    continue;
                 } else {
                     CLog.w(
                             "Failed to connect to wifi network %s(%s) on %s on attempt %d of %d",
