@@ -108,7 +108,7 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
                 try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
                     getCoverageFlusher(device).resetCoverage();
                 } catch (DeviceNotAvailableException e) {
-                    throw new RuntimeException(e);
+                    throw new HarnessRuntimeException(e.getMessage(), e, e.getErrorId());
                 }
             }
         }
