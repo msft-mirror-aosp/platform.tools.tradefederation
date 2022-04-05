@@ -280,10 +280,22 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
         if (configurationTool != null) {
             return configurationTool;
         }
+        if (mLlvmProfileTool != null && mLlvmProfileTool.exists()) {
+            return mLlvmProfileTool;
+        }
 
         // Otherwise, try to download llvm-profdata.zip from the build and cache it.
         File profileToolZip = null;
+        for (IBuildInfo info : getBuildInfos()) {
+            if (info.getFile("llvm-profdata.zip") != null) {
+                profileToolZip = info.getFile("llvm-profdata.zip");
+                mLlvmProfileTool = ZipUtil.extractZipToTemp(profileToolZip, "llvm-profdata");
+                return mLlvmProfileTool;
+            }
+        }
         try {
+            // TODO: Delete this, we shouldn't have re-entry in the build
+            // provider this can cause quite a lot of overhead.
             IBuildInfo buildInfo = mConfiguration.getBuildProvider().getBuild();
             profileToolZip =
                     verifyNotNull(
