@@ -38,6 +38,7 @@ import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceRecovery;
 import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
@@ -926,5 +927,73 @@ public class RemoteAndroidVirtualDeviceTest {
         // Launch GCE before powerwash.
         mTestDevice.launchGce(mMockBuildInfo, null);
         mTestDevice.powerwashGce();
+    }
+
+    /** Test powerwash on multi-instance setup. */
+    @Test
+    public void testPowerwashMultiInstance() throws Exception {
+        String instanceUser = "vsoc-1";
+        mTestDevice =
+                new TestableRemoteAndroidVirtualDevice() {
+                    @Override
+                    public IDevice getIDevice() {
+                        return new RemoteAvdIDevice(
+                                MOCK_DEVICE_SERIAL, "127.0.0.1", instanceUser, 2);
+                    }
+
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+
+                    @Override
+                    void createGceSshMonitor(
+                            ITestDevice device,
+                            IBuildInfo buildInfo,
+                            HostAndPort hostAndPort,
+                            TestDeviceOptions deviceOptions) {
+                        // ignore
+                    }
+                };
+        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
+        String avdConnectHost = String.format("%s@127.0.0.1", instanceUser);
+        String powerwashCvdBinaryPath = String.format("/home/%s/bin/powerwash_cvd", instanceUser);
+        GceAvdInfo gceAvd =
+                new GceAvdInfo(
+                        instanceUser,
+                        HostAndPort.fromHost("127.0.0.1"),
+                        null,
+                        null,
+                        GceStatus.SUCCESS);
+        doReturn(gceAvd).when(mGceHandler).startGce("127.0.0.1", instanceUser, 2, null);
+        OutputStream stdout = null;
+        OutputStream stderr = null;
+        CommandResult powerwashCmdResult = new CommandResult(CommandStatus.SUCCESS);
+
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq(stdout),
+                        Mockito.eq(stderr),
+                        Mockito.eq("ssh"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("LogLevel=ERROR"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("UserKnownHostsFile=/dev/null"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("StrictHostKeyChecking=no"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("ServerAliveInterval=10"),
+                        Mockito.eq("-i"),
+                        Mockito.any(),
+                        Mockito.eq(avdConnectHost),
+                        Mockito.eq(powerwashCvdBinaryPath),
+                        Mockito.eq("--instance_num"),
+                        Mockito.eq("3")))
+                .thenReturn(powerwashCmdResult);
+        when(mMockStateMonitor.waitForDeviceAvailable(Mockito.anyLong())).thenReturn(mMockIDevice);
+
+        // Launch GCE before powerwash.
+        mTestDevice.launchGce(mMockBuildInfo, null);
+        mTestDevice.powerwashGce(instanceUser, 2);
     }
 }
