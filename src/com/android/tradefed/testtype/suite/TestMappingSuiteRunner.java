@@ -152,28 +152,33 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         Set<TestInfo> testInfosToRun = new HashSet<>();
         mBuildInfo = getBuildInfo();
         if (mTestGroup == null && includeFilter.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "At least one of the options, --test-mapping-test-group or --include-filter, "
-                            + "should be set.");
+                            + "should be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (mTestGroup == null && !mKeywords.isEmpty()) {
-            throw new RuntimeException(
-                    "Must specify --test-mapping-test-group when applying --test-mapping-keyword.");
+            throw new HarnessRuntimeException(
+                    "Must specify --test-mapping-test-group when applying --test-mapping-keyword.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (mTestGroup == null && !mTestModulesForced.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "Must specify --test-mapping-test-group when applying "
-                            + "--force-test-mapping-module.");
+                            + "--force-test-mapping-module.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (mTestGroup != null && !includeFilter.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "If options --test-mapping-test-group is set, option --include-filter should "
-                            + "not be set.");
+                            + "not be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (!includeFilter.isEmpty() && !mTestMappingPaths.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "If option --include-filter is set, option --test-mapping-path should "
-                            + "not be set.");
+                            + "not be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         if (mTestGroup != null) {
@@ -201,8 +206,9 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                 testInfosToRun = filterByAllowedTestLists(testInfosToRun);
             }
             if (testInfosToRun.isEmpty()) {
-                throw new RuntimeException(
-                        String.format("No test found for the given group: %s.", mTestGroup));
+                throw new HarnessRuntimeException(
+                        String.format("No test found for the given group: %s.", mTestGroup),
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             for (TestInfo testInfo : testInfosToRun) {
                 testNames.add(testInfo.getName());
