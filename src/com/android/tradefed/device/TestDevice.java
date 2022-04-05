@@ -2355,9 +2355,6 @@ public class TestDevice extends NativeDevice {
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
 
-        // See(b/192660485) for the reason of this wait.
-        getRunUtil().sleep(1000);
-
         // disconnect from microdroid
         getRunUtil()
                 .runTimedCmd(
