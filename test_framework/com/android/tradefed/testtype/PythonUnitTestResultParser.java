@@ -148,8 +148,8 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
                     Pattern.DOTALL);
     static final Pattern PATTERN_FAIL_MESSAGE =
             Pattern.compile("(FAIL|ERROR): (\\S*) \\((\\S*)\\)( \\(.*\\))?");
-    static final Pattern PATTERN_RUN_SUMMARY = Pattern.compile(
-            "Ran (\\d+) tests? in (\\d+(.\\d*)?)s");
+    static final Pattern PATTERN_RUN_SUMMARY =
+            Pattern.compile("Ran (\\d+) tests? in (\\d+(.\\d*)?)s(.*)");
 
     /** In case of error spanning over multiple lines. */
     static final Pattern MULTILINE_RESULT_WITH_WARNING =
