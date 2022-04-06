@@ -39,7 +39,7 @@ message NewTestCommandRequest {
 
 // Response for submitted test.
 message NewTestCommandResponse {
-  // Invocation id of the requested test, return null if the test request command could not be
+  // Invocation id of the requested test, unset if the test request command could not be
   // parsed or was not added successfully.
   string invocation_id = 1;
 }
