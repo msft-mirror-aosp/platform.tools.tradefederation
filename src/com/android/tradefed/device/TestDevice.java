@@ -2363,10 +2363,6 @@ public class TestDevice extends NativeDevice {
                         "disconnect",
                         microdroidDevice.getSerialNumber());
 
-        // Make sure we're connected to the host adb; this connection seems to get dropped when a VM
-        // exits.(b/195765441)
-        waitForDeviceAvailable();
-
         GlobalConfiguration.getDeviceManagerInstance()
                 .freeDevice(microdroidDevice, FreeDeviceState.AVAILABLE);
         startedMicrodroids.remove(cid);
