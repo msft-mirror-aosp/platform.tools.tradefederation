@@ -25,6 +25,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogcatCrashResultForwarder;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.ProcessInfo;
@@ -48,6 +49,8 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
     // Message from ddmlib for ShellCommandUnresponsiveException
     private static final String DDMLIB_SHELL_UNRESPONSIVE =
             "Failed to receive adb shell test output within";
+    // Message from ddmlib when there is a mismatch of test cases count
+    private static final String DDMLIB_UNEXPECTED_COUNT = "Instrumentation reported numtests=";
 
     private Set<TestDescription> mTests = new HashSet<>();
     private Set<TestDescription> mDuplicateTests = new HashSet<>();
@@ -154,6 +157,9 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
             error.setErrorMessage(wrapMessage);
             error.setFailureStatus(FailureStatus.TIMED_OUT);
             error.setErrorIdentifier(TestErrorIdentifier.INSTRUMENTATION_TIMED_OUT);
+        } else if (error.getErrorMessage().startsWith(DDMLIB_UNEXPECTED_COUNT)) {
+            error.setFailureStatus(FailureStatus.TEST_FAILURE);
+            error.setErrorIdentifier(InfraErrorIdentifier.EXPECTED_TESTS_MISMATCH);
         }
         super.testRunFailed(error);
         runLevelError = error.getErrorMessage();
