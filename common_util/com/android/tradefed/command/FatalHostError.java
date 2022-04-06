@@ -15,12 +15,28 @@
  */
 package com.android.tradefed.command;
 
+import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+
 /**
- * An exception that indicates a fatal unrecoverable error has occurred on the host machine
- * running TradeFederation, and that the TradeFederation instance should be shut down.
+ * An exception that indicates a fatal unrecoverable error has occurred on the host machine running
+ * TradeFederation, and that the TradeFederation instance should be shut down.
  */
 @SuppressWarnings("serial")
-public class FatalHostError extends RuntimeException {
+public class FatalHostError extends HarnessRuntimeException {
+
+    /**
+     * Creates a {@link FatalHostError}.
+     *
+     * @param msg the detailed message
+     * @param cause the original cause of the fatal host error.
+     * @param errorId the error identifier associated
+     * @see RuntimeException#RuntimeException(String, Throwable)
+     */
+    public FatalHostError(String msg, Throwable cause, ErrorIdentifier errorId) {
+        super(msg, cause, errorId);
+    }
 
     /**
      * Creates a {@link FatalHostError}.
@@ -31,7 +47,18 @@ public class FatalHostError extends RuntimeException {
      * @see RuntimeException#RuntimeException(String, Throwable)
      */
     public FatalHostError(String msg, Throwable cause) {
-        super(msg, cause);
+        super(msg, cause, InfraErrorIdentifier.UNDETERMINED);
+    }
+
+    /**
+     * Creates a {@link FatalHostError}.
+     *
+     * @param msg the detailed message
+     * @param errorId the error identifier associated
+     * @see RuntimeException#RuntimeException(String)
+     */
+    public FatalHostError(String msg, ErrorIdentifier errorId) {
+        super(msg, errorId);
     }
 
     /**
@@ -42,6 +69,6 @@ public class FatalHostError extends RuntimeException {
      * @see RuntimeException#RuntimeException(String)
      */
     public FatalHostError(String msg) {
-        super(msg);
+        super(msg, InfraErrorIdentifier.UNDETERMINED);
     }
 }
