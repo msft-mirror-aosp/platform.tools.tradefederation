@@ -81,7 +81,9 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
                                     name,
                                     objectValue.getString("namespace"),
                                     objectValue.getString("key"),
-                                    objectValue.getString("value"));
+                                    objectValue.getString("value"),
+                                    objectValue.has("experimental")
+                                            && objectValue.getBoolean("experimental"));
                     deviceBaselineSetters.add(deviceBaselineSetter);
                 }
             } catch (JSONException | IOException e) {
@@ -113,6 +115,7 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
         }
         if (result.getStatus() == CheckStatus.FAILED) {
             result.setErrorMessage(errorMessage.toString());
+            result.setBugreportNeeded(true);
         }
         return result;
     }
