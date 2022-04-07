@@ -64,7 +64,7 @@ import java.util.stream.Stream;
 public class AoaTargetPreparer extends BaseTargetPreparer {
 
     private static final String POINT = "(\\d{1,3}) (\\d{1,3})";
-    private static final Pattern KEY = Pattern.compile("\\s+(?:(\\d+)\\*)?([a-zA-Z0-9-_]+)");
+    private static final Pattern KEY = Pattern.compile("\\s+(?:(\\d+)\\*)?([a-zA-Z0-9@\\-_+.]+)");
 
     @FunctionalInterface
     private interface Action extends BiConsumer<AoaDevice, List<String>> {}
@@ -100,7 +100,7 @@ public class AoaTargetPreparer extends BaseTargetPreparer {
                                     .collect(Collectors.toList());
                     device.pressKeys(keys);
                 },
-                "write ([a-zA-Z0-9-_\\s]+)");
+                "write ([a-zA-Z0-9@\\-_+.\\s]+)");
         ACTIONS.put(
                 (device, args) -> {
                     List<AoaKey> keys = new ArrayList<>();
@@ -112,7 +112,7 @@ public class AoaTargetPreparer extends BaseTargetPreparer {
                     }
                     device.pressKeys(keys);
                 },
-                "key((?: (?:\\d+\\*)?[a-zA-Z0-9-_]+)+)");
+                "key((?: (?:\\d+\\*)?[a-zA-Z0-9@\\-_+.]+)+)");
 
         // other
         ACTIONS.put((device, args) -> device.wakeUp(), "wake");
@@ -244,7 +244,10 @@ public class AoaTargetPreparer extends BaseTargetPreparer {
         KEYS.put("left", new AoaKey(0x50));
         KEYS.put("down", new AoaKey(0x51));
         KEYS.put("up", new AoaKey(0x52));
+        KEYS.put("@", new AoaKey(0x1F, AoaKey.Modifier.SHIFT));
         KEYS.put("-", new AoaKey(0x2D));
         KEYS.put("_", new AoaKey(0x2D, AoaKey.Modifier.SHIFT));
+        KEYS.put("+", new AoaKey(0x2E, AoaKey.Modifier.SHIFT));
+        KEYS.put(".", new AoaKey(0x37));
     }
 }
