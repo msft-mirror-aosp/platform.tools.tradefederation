@@ -312,6 +312,7 @@ import com.android.tradefed.testtype.binary.ExecutableTargetTestTest;
 import com.android.tradefed.testtype.host.CoverageMeasurementForwarderTest;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4TestTest;
 import com.android.tradefed.testtype.junit4.DeviceParameterizedRunnerTest;
+import com.android.tradefed.testtype.junit4.JUnit4ResultForwarderTest;
 import com.android.tradefed.testtype.junit4.LongevityHostRunnerTest;
 import com.android.tradefed.testtype.mobly.MoblyBinaryHostTestTest;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultParserTest;
@@ -835,6 +836,7 @@ import org.junit.runners.Suite.SuiteClasses;
     BaseHostJUnit4TestTest.class,
     DeviceParameterizedRunnerTest.class,
     LongevityHostRunnerTest.class,
+    JUnit4ResultForwarderTest.class,
 
     // testtype/mobly
     MoblyBinaryHostTestTest.class,

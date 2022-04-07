@@ -2355,9 +2355,6 @@ public class TestDevice extends NativeDevice {
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
 
-        // See(b/192660485) for the reason of this wait.
-        getRunUtil().sleep(1000);
-
         // disconnect from microdroid
         getRunUtil()
                 .runTimedCmd(
@@ -2365,10 +2362,6 @@ public class TestDevice extends NativeDevice {
                         GlobalConfiguration.getDeviceManagerInstance().getAdbPath(),
                         "disconnect",
                         microdroidDevice.getSerialNumber());
-
-        // Make sure we're connected to the host adb; this connection seems to get dropped when a VM
-        // exits.(b/195765441)
-        waitForDeviceAvailable();
 
         GlobalConfiguration.getDeviceManagerInstance()
                 .freeDevice(microdroidDevice, FreeDeviceState.AVAILABLE);
