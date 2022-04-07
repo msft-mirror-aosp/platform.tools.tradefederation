@@ -52,6 +52,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * JUnit4 test runner that also accommodates {@link IDeviceTest}. Should be specified above JUnit4
@@ -296,45 +297,36 @@ public class DeviceJUnit4ClassRunner extends BlockJUnit4ClassRunner
      */
     public static class TestLogData extends ExternalResource {
         private Description mDescription;
-        private List<LogHolder> mLogs = new ArrayList<>();
+        /**
+         * Using synchronous Queue here to mitigate possible concurrency issues in {@link
+         * com.android.tradefed.testtype.junit4.JUnit4ResultForwarder} that consumes the logs
+         */
+        private LinkedBlockingQueue<LogHolder> mLogs = new LinkedBlockingQueue<>();
 
         @Override
         public Statement apply(Statement base, Description description) {
             mDescription = description;
+            // we inject a Description with an annotation carrying logs.
+            // We have to go around, since Description cannot be extended and RunNotifier
+            // does not give us a lot of flexibility to find our logs back.
+            mDescription.addChild(
+                    Description.createTestDescription("LOGS", "LOGS", new LogAnnotation(mLogs)));
             return super.apply(base, description);
-        }
-
-        @Override
-        protected void before() throws Throwable {
-            super.before();
-            mLogs = new ArrayList<>();
         }
 
         public final void addTestLog(
                 String dataName, LogDataType dataType, InputStreamSource dataStream) {
             mLogs.add(new LogHolder(dataName, dataType, dataStream));
         }
-
-        @Override
-        protected void after() {
-            // we inject a Description with an annotation carrying metrics.
-            // We have to go around, since Description cannot be extended and RunNotifier
-            // does not give us a lot of flexibility to find our metrics back.
-            if (!mLogs.isEmpty()) {
-                mDescription.addChild(
-                        Description.createTestDescription(
-                                "LOGS", "LOGS", new LogAnnotation(mLogs)));
-            }
-        }
     }
 
     /** Fake annotation meant to carry logs to the reporters. */
     public static class LogAnnotation implements Annotation {
 
-        public List<LogHolder> mLogs = new ArrayList<>();
+        public LinkedBlockingQueue<LogHolder> mLogs;
 
-        public LogAnnotation(List<LogHolder> logs) {
-            mLogs.addAll(logs);
+        public LogAnnotation(LinkedBlockingQueue<LogHolder> logs) {
+            mLogs = logs;
         }
 
         @Override
