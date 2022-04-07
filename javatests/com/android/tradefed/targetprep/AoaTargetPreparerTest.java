@@ -142,19 +142,22 @@ public class AoaTargetPreparerTest {
 
     @Test
     public void testWrite() {
-        mPreparer.execute(mDevice, "write Abc 0123");
+        mPreparer.execute(mDevice, "write Ab 01 @-_+.");
 
         verify(mDevice)
                 .pressKeys(
                         ImmutableList.of(
                                 new AoaKey(0x04, AoaKey.Modifier.SHIFT),
                                 new AoaKey(0x05),
-                                new AoaKey(0x06),
                                 new AoaKey(0x2C),
                                 new AoaKey(0x27),
                                 new AoaKey(0x1E),
-                                new AoaKey(0x1F),
-                                new AoaKey(0x20)));
+                                new AoaKey(0x2C),
+                                new AoaKey(0x1F, AoaKey.Modifier.SHIFT),
+                                new AoaKey(0x2D),
+                                new AoaKey(0x2D, AoaKey.Modifier.SHIFT),
+                                new AoaKey(0x2E, AoaKey.Modifier.SHIFT),
+                                new AoaKey(0x37)));
         verifyNoMoreInteractions(ignoreStubs(mDevice));
     }
 
