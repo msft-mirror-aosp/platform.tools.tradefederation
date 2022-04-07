@@ -16,6 +16,7 @@
 package com.android.tradefed.testtype;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doAnswer;
@@ -38,6 +39,7 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.util.FileUtil;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -49,6 +51,7 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -118,11 +121,14 @@ public class InstalledInstrumentationsTestTest {
         p.parse("--size", "small", "--force-abi", ABI);
         List<TestRunResult> previousResults = new ArrayList<>();
         TestRunResult result = new TestRunResult();
-        result.testRunStarted(TEST_PKG, 1);
+        result.testRunStarted(TEST_PKG, 2);
         TestDescription testDesc = new TestDescription("com.example.tests.class", "testMethod");
         result.testStarted(testDesc);
         result.testFailed(testDesc, "failed");
         result.testEnded(testDesc, new HashMap<String, Metric>());
+        TestDescription testDesc2 = new TestDescription("com.example.tests.class", "testMethod2");
+        result.testStarted(testDesc2);
+        result.testEnded(testDesc2, new HashMap<String, Metric>());
         result.testRunEnded(5L, new HashMap<String, Metric>());
         previousResults.add(result);
 
@@ -135,10 +141,18 @@ public class InstalledInstrumentationsTestTest {
         assertEquals(TEST_RUNNER, mockInstrumentationTest.getRunnerName());
         assertEquals("small", mockInstrumentationTest.getTestSize());
         assertEquals(ABI, mockInstrumentationTest.getForceAbi());
-        assertEquals(1, mockInstrumentationTest.getIncludeFilters().size());
-        assertTrue(mockInstrumentationTest.getIncludeFilters().contains(testDesc.toString()));
-        verifyShellResponse(
-                String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
+
+        File excludeFile = mockInstrumentationTest.getExcludeTestFile();
+        assertNotNull(excludeFile);
+        try {
+            String excludeContent = FileUtil.readStringFromFile(excludeFile);
+            assertTrue(excludeContent.contains(testDesc2.toString()));
+            verifyShellResponse(
+                    String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET),
+                    1);
+        } finally {
+            FileUtil.deleteFile(excludeFile);
+        }
     }
 
     @Test
@@ -206,8 +220,6 @@ public class InstalledInstrumentationsTestTest {
         assertEquals(TEST_RUNNER, mockInstrumentationTest.getRunnerName());
         assertEquals("small", mockInstrumentationTest.getTestSize());
         assertEquals(ABI, mockInstrumentationTest.getForceAbi());
-        assertEquals(1, mockInstrumentationTest.getIncludeFilters().size());
-        assertTrue(mockInstrumentationTest.getIncludeFilters().contains(testDesc.toString()));
 
         MockInstrumentationTest mockInstrumentationTest2 = mMockInstrumentationTests.get(1);
         assertEquals(mMockListener, mockInstrumentationTest2.getListener());
