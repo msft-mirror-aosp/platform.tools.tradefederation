@@ -1254,7 +1254,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public boolean pullFile(final String remoteFilePath, final File localFile)
             throws DeviceNotAvailableException {
-        return pullFile(remoteFilePath, localFile, getCurrentUser());
+        return pullFile(remoteFilePath, localFile, getCurrentUserCompatible());
     }
 
     /** {@inheritDoc} */
@@ -1282,7 +1282,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public File pullFile(String remoteFilePath) throws DeviceNotAvailableException {
-        return pullFile(remoteFilePath, getCurrentUser());
+        return pullFile(remoteFilePath, getCurrentUserCompatible());
     }
 
     /**
@@ -1384,7 +1384,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PUSH_FILE_COUNT, 1);
         try {
             if (!skipContentProvider) {
-                if (isSdcardOrEmulated(remoteFilePath) && getCurrentUser() != 0) {
+                if (isSdcardOrEmulated(remoteFilePath) && getCurrentUserCompatible() != 0) {
                     ContentProviderHandler handler = getContentProvider();
                     if (handler != null) {
                         return handler.pushFile(localFile, remoteFilePath);
@@ -1467,7 +1467,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public boolean doesFileExist(String deviceFilePath) throws DeviceNotAvailableException {
-        return doesFileExist(deviceFilePath, getCurrentUser());
+        return doesFileExist(deviceFilePath, getCurrentUserCompatible());
     }
 
     @Override
@@ -1501,7 +1501,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         long startTime = System.currentTimeMillis();
         try {
             if (isSdcardOrEmulated(deviceFilePath)) {
-                int currentUser = getCurrentUser();
+                int currentUser = getCurrentUserCompatible();
                 if (currentUser != 0) {
                     ContentProviderHandler handler = getContentProvider();
                     if (handler != null) {
@@ -1810,7 +1810,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         long startTime = System.currentTimeMillis();
         try {
             if (isSdcardOrEmulated(deviceFilePath)) {
-                Integer currentUser = getCurrentUser();
+                Integer currentUser = getCurrentUserCompatible();
                 if (currentUser != 0) {
                     ContentProviderHandler handler = getContentProvider();
                     if (handler != null) {
@@ -1872,7 +1872,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         try {
-            int currentUser = getCurrentUser();
+            int currentUser = getCurrentUserCompatible();
             if (isSdcardOrEmulated(deviceFilePath)) {
                 if (currentUser != 0) {
                     ContentProviderHandler handler = getContentProvider();
@@ -4606,6 +4606,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public Integer getPrimaryUserId() throws DeviceNotAvailableException {
         throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    /** Used internally to fallback to non-user logic */
+    private int getCurrentUserCompatible() throws DeviceNotAvailableException {
+        try {
+            return getCurrentUser();
+        } catch (RuntimeException e) {
+            return 0;
+        }
     }
 
     /**

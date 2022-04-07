@@ -17,6 +17,7 @@
 package com.android.tradefed.util;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.verify;
@@ -188,6 +189,7 @@ public class LogcatEventParserTest {
         receiver.flush();
 
         LogcatEventParser.LogcatEvent result = mParser.waitForEvent(EVENT_TIMEOUT_MS);
+        assertNotNull(result);
         assertEquals(LogcatEventType.UPDATE_COMPLETE, result.getEventType());
 
     }
