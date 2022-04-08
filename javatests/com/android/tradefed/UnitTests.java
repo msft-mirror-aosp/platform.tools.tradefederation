@@ -839,8 +839,8 @@ import org.junit.runners.Suite.SuiteClasses;
     // testtype/junit4
     BaseHostJUnit4TestTest.class,
     DeviceParameterizedRunnerTest.class,
-    LongevityHostRunnerTest.class,
     JUnit4ResultForwarderTest.class,
+    LongevityHostRunnerTest.class,
 
     // testtype/mobly
     MoblyBinaryHostTestTest.class,
