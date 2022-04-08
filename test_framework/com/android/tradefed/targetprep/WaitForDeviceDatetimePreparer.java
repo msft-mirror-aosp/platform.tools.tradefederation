@@ -23,6 +23,7 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.TimeUtil;
 
 /**
  * A {@link ITargetPreparer} that waits for datetime to be set on device
@@ -59,7 +60,10 @@ public class WaitForDeviceDatetimePreparer extends BaseTargetPreparer {
         ITestDevice device = testInfo.getDevice();
         if (!waitForDeviceDatetime(device, mForceDatetime)) {
             if (mForceSetupError) {
-                throw new TargetSetupError("datetime on device is incorrect after wait timeout",
+                throw new TargetSetupError(
+                        String.format(
+                                "datetime on device is incorrect after " + "wait timeout of '%s'",
+                                TimeUtil.formatElapsedTime(mDatetimeWaitTimeout)),
                         device.getDeviceDescriptor());
             } else {
                 CLog.w("datetime on device is incorrect after wait timeout.");
@@ -124,6 +128,7 @@ public class WaitForDeviceDatetimePreparer extends BaseTargetPreparer {
             if ((Math.abs(now - datetime) < DATETIME_MARGIN)) {
                 return true;
             }
+            CLog.d("device time: %s, host time: %s", datetime, now);
             getRunUtil().sleep(datetimeCheckInterval);
         }
         if (forceDatetime) {
