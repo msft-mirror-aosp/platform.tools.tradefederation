@@ -34,9 +34,13 @@ public enum LogDataType {
     TAR_GZ("tar.gz", "application/gzip", true, false),
     GZIP("gz", "application/gzip", true, false),
     HPROF("hprof", "application/octet-stream", true, false),
-    COVERAGE("ec", "text/plain", false, false), // Emma coverage file
+    COVERAGE("ec", "text/plain", true /* do not compress */, false), // Emma coverage file
     NATIVE_COVERAGE("zip", "application/zip", true, false), // gcov coverage archive
-    CLANG_COVERAGE("profdata", "text/plain", false, false), // LLVM indexed profile data
+    CLANG_COVERAGE(
+            "profdata",
+            "text/plain",
+            true /* do not compress */,
+            false), // LLVM indexed profile data
     PB("pb", "application/octet-stream", true, false), // Binary proto file
     TEXTPB("textproto", "text/plain", false, true), // Text proto file
     JSON("json", "application/json", false, true),
