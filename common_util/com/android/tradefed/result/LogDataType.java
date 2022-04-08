@@ -53,6 +53,11 @@ public enum LogDataType {
     KERNEL_LOG("txt", "text/plain", true, true),
     MONKEY_LOG("txt", "text/plain", false, true),
     MUGSHOT_LOG("txt", "text/plain", false, true),
+    CB_METRICS_FILE(
+            "txt",
+            "text/plain",
+            true /* TODO(b/228497046): Allow compression when supported */,
+            true),
     PROCRANK("txt", "text/plain", false, true),
     MEM_INFO("txt", "text/plain", false, true),
     TOP("txt", "text/plain", false, true),
