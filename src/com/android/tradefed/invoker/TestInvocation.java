@@ -317,8 +317,10 @@ public class TestInvocation implements ITestInvocation {
             // log a warning here so its captured before reportLogs is called
             CLog.e("Unexpected exception when running invocation: %s", t.toString());
             CLog.e(t);
-            reportFailure(createFailureFromException(t, FailureStatus.UNSET), listener);
-            throw t;
+            if (mStopCause == null) {
+                reportFailure(createFailureFromException(t, FailureStatus.UNSET), listener);
+                throw t;
+            }
         } finally {
             // Only capture logcat for TEST if we started the test phase.
             if (mTestStarted) {
