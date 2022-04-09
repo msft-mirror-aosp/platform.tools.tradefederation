@@ -213,6 +213,7 @@ import com.android.tradefed.sandbox.SandboxConfigDumpTest;
 import com.android.tradefed.sandbox.SandboxConfigUtilTest;
 import com.android.tradefed.sandbox.SandboxInvocationRunnerTest;
 import com.android.tradefed.sandbox.TradefedSandboxTest;
+import com.android.tradefed.service.management.TestInvocationManagementServerTest;
 import com.android.tradefed.suite.checker.ActivityStatusCheckerTest;
 import com.android.tradefed.suite.checker.DeviceBaselineCheckerTest;
 import com.android.tradefed.suite.checker.DeviceSettingCheckerTest;
@@ -778,6 +779,9 @@ import org.junit.runners.Suite.SuiteClasses;
     SandboxInvocationRunnerTest.class,
     TradefedSandboxTest.class,
 
+    // service.management
+    TestInvocationManagementServerTest.class,
+
     // suite/checker
     ActivityStatusCheckerTest.class,
     DeviceBaselineCheckerTest.class,
@@ -835,8 +839,8 @@ import org.junit.runners.Suite.SuiteClasses;
     // testtype/junit4
     BaseHostJUnit4TestTest.class,
     DeviceParameterizedRunnerTest.class,
-    LongevityHostRunnerTest.class,
     JUnit4ResultForwarderTest.class,
+    LongevityHostRunnerTest.class,
 
     // testtype/mobly
     MoblyBinaryHostTestTest.class,

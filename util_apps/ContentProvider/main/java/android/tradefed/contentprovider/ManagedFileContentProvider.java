@@ -23,8 +23,6 @@ import android.database.MatrixCursor;
 import android.net.Uri;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import android.util.Log;
 import android.webkit.MimeTypeMap;
 
@@ -85,14 +83,13 @@ public class ManagedFileContentProvider extends ContentProvider {
      *     for files and for directories it returns one row for each {@link File} returned by {@link
      *     File#listFiles()}.
      */
-    @Nullable
     @Override
     public Cursor query(
-            @NonNull Uri uri,
-            @Nullable String[] projection,
-            @Nullable String selection,
-            @Nullable String[] selectionArgs,
-            @Nullable String sortOrder) {
+            Uri uri,
+            String[] projection,
+            String selection,
+            String[] selectionArgs,
+            String sortOrder) {
         File file = getFileForUri(uri);
         if ("/".equals(file.getAbsolutePath())) {
             // Querying the root will list all the known file (inserted)
@@ -126,15 +123,13 @@ public class ManagedFileContentProvider extends ContentProvider {
         return cursor;
     }
 
-    @Nullable
     @Override
-    public String getType(@NonNull Uri uri) {
+    public String getType(Uri uri) {
         return getType(getFileForUri(uri));
     }
 
-    @Nullable
     @Override
-    public Uri insert(@NonNull Uri uri, @Nullable ContentValues contentValues) {
+    public Uri insert(Uri uri, ContentValues contentValues) {
         String extra = "";
         File file = getFileForUri(uri);
         if (!file.exists()) {
@@ -152,8 +147,7 @@ public class ManagedFileContentProvider extends ContentProvider {
     }
 
     @Override
-    public int delete(
-            @NonNull Uri uri, @Nullable String selection, @Nullable String[] selectionArgs) {
+    public int delete(Uri uri, String selection, String[] selectionArgs) {
         // Stop Tracking the File of directory if it was tracked and delete it from the disk
         mFileTracker.remove(uri);
         File file = getFileForUri(uri);
@@ -162,11 +156,7 @@ public class ManagedFileContentProvider extends ContentProvider {
     }
 
     @Override
-    public int update(
-            @NonNull Uri uri,
-            @Nullable ContentValues values,
-            @Nullable String selection,
-            @Nullable String[] selectionArgs) {
+    public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         File file = getFileForUri(uri);
         if (!file.exists()) {
             Log.e(TAG, String.format("Update - File from uri: '%s' does not exists.", uri));
@@ -184,8 +174,7 @@ public class ManagedFileContentProvider extends ContentProvider {
     }
 
     @Override
-    public ParcelFileDescriptor openFile(@NonNull Uri uri, @NonNull String mode)
-            throws FileNotFoundException {
+    public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
         final File file = getFileForUri(uri);
         final int fileMode = modeToMode(mode);
 
@@ -225,7 +214,7 @@ public class ManagedFileContentProvider extends ContentProvider {
         return value;
     }
 
-    private String getType(@NonNull File file) {
+    private String getType(File file) {
         final int lastDot = file.getName().lastIndexOf('.');
         if (lastDot >= 0) {
             final String extension = file.getName().substring(lastDot + 1);
@@ -239,7 +228,7 @@ public class ManagedFileContentProvider extends ContentProvider {
     }
 
     @SuppressLint("SdCardPath")
-    private File getFileForUri(@NonNull Uri uri) {
+    private File getFileForUri(Uri uri) {
         // TODO: apply the /sdcard resolution to query() too.
         String uriPath = uri.getPath();
         try {
