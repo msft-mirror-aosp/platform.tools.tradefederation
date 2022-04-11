@@ -48,6 +48,13 @@ public class TestDeviceOptions {
         CHEEPS,
     }
 
+    /** The size of the host which Oxygen virtual device will be running on. */
+    private enum DeviceSize {
+        STANDARD,
+        LARGE,
+        EXTRA_LARGE,
+    }
+
     public static final int DEFAULT_ADB_PORT = 5555;
     public static final String INSTANCE_TYPE_OPTION = "instance-type";
 
@@ -247,6 +254,31 @@ public class TestDeviceOptions {
             name = "use-oxygen",
             description = "Whether or not to use virtual devices created by Oxygen.")
     private boolean mUseOxygen = false;
+
+    @Option(
+            name = "use-oxygen-client",
+            description = "Whether or not to use Oxygen client tool to create virtual devices.")
+    private boolean mUseOxygenClient = false;
+
+    @Option(name = "oxygen-target-region", description = "Oxygen device target region.")
+    private String mOxygenTargetRegion = "us-west";
+
+    @Option(
+            name = "oxygen-lease-length",
+            description = "Oxygen device lease length.",
+            isTimeVal = true)
+    private long mOxygenLeaseLength = 600 * 60 * 1000;
+
+    @Option(
+            name = "oxygen-device-size",
+            description = "The size of the host which Oxygen virtual device will be running on.")
+    private DeviceSize mOxygenDeviceSize = DeviceSize.STANDARD;
+
+    @Option(name = "oxygen-service-address", description = "Oxygen service address.")
+    private String mOxygenServiceAddress = null;
+
+    @Option(name = "oxygen-accounting-user", description = "Oxygen account user.")
+    private String mOxygenAccountingUser = null;
 
     @Option(
             name = "wait-gce-teardown",
@@ -775,7 +807,39 @@ public class TestDeviceOptions {
         return Collections.emptyList();
     }
 
+    /** Returns true if we should block on GCE tear down completion before proceeding. */
     public List<String> getInvocationAttributeToMetadata() {
         return mInvocationAttributeToMetadata;
     }
+
+    /** Returns true if we want TradeFed directly call Oxygen to lease a device. */
+    public boolean useOxygenProxy() {
+        return mUseOxygenClient;
+    }
+
+    /** Returns the target region of the Oxygen device. */
+    public String getOxygenTargetRegion() {
+        return mOxygenTargetRegion;
+    }
+
+    /** Returns the length of leasing the Oxygen device in milliseconds. */
+    public long getOxygenLeaseLength() {
+        return mOxygenLeaseLength;
+    }
+
+    /** Returns The size of the host which Oxygen virtual device will be running on. */
+    public DeviceSize getOxygenDeviceSize() {
+        return mOxygenDeviceSize;
+    }
+
+    /** Returns the service address of the Oxygen device. */
+    public String getOxygenServiceAddress() {
+        return mOxygenServiceAddress;
+    }
+
+    /** Returns the accounting user of the Oxygen device. */
+    public String getOxygenAccountingUser() {
+        return mOxygenAccountingUser;
+    }
 }
+
