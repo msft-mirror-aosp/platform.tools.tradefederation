@@ -24,6 +24,8 @@ import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.TimeoutException;
 import com.android.tradefed.config.GlobalConfiguration;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -431,40 +433,49 @@ public class TestDevice extends NativeDevice {
     private String internalInstallPackages(
             final List<File> packageFiles, final boolean reinstall, final List<String> extraArgs)
             throws DeviceNotAvailableException {
-        // use array to store response, so it can be returned to caller
-        final String[] response = new String[1];
-        DeviceAction installAction =
-                new DeviceAction() {
-                    @Override
-                    public boolean run() throws InstallException {
-                        try {
-                            getIDevice()
-                                    .installPackages(
-                                            packageFiles,
-                                            reinstall,
-                                            extraArgs,
-                                            INSTALL_TIMEOUT_MINUTES,
-                                            TimeUnit.MINUTES);
-                            response[0] = null;
-                            return true;
-                        } catch (InstallException e) {
-                            response[0] = e.getMessage();
-                            if (response[0] == null) {
-                                response[0] =
-                                        String.format(
-                                                "InstallException: %s",
-                                                StreamUtil.getStackTrace(e));
+        long startTime = System.currentTimeMillis();
+        try {
+            // use array to store response, so it can be returned to caller
+            final String[] response = new String[1];
+            DeviceAction installAction =
+                    new DeviceAction() {
+                        @Override
+                        public boolean run() throws InstallException {
+                            try {
+                                getIDevice()
+                                        .installPackages(
+                                                packageFiles,
+                                                reinstall,
+                                                extraArgs,
+                                                INSTALL_TIMEOUT_MINUTES,
+                                                TimeUnit.MINUTES);
+                                response[0] = null;
+                                return true;
+                            } catch (InstallException e) {
+                                response[0] = e.getMessage();
+                                if (response[0] == null) {
+                                    response[0] =
+                                            String.format(
+                                                    "InstallException: %s",
+                                                    StreamUtil.getStackTrace(e));
+                                }
+                                return false;
                             }
-                            return false;
                         }
-                    }
-                };
-        performDeviceAction(
-                String.format("install %s", packageFiles.toString()),
-                installAction,
-                MAX_RETRY_ATTEMPTS);
-        allowLegacyStorageForApps(packageFiles);
-        return response[0];
+                    };
+            performDeviceAction(
+                    String.format("install %s", packageFiles.toString()),
+                    installAction,
+                    MAX_RETRY_ATTEMPTS);
+            allowLegacyStorageForApps(packageFiles);
+            return response[0];
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PACKAGE_INSTALL_COUNT, 1);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PACKAGE_INSTALL_TIME,
+                    System.currentTimeMillis() - startTime);
+        }
     }
 
     /**
@@ -2344,9 +2355,6 @@ public class TestDevice extends NativeDevice {
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
 
-        // See(b/192660485) for the reason of this wait.
-        getRunUtil().sleep(1000);
-
         // disconnect from microdroid
         getRunUtil()
                 .runTimedCmd(
@@ -2354,10 +2362,6 @@ public class TestDevice extends NativeDevice {
                         GlobalConfiguration.getDeviceManagerInstance().getAdbPath(),
                         "disconnect",
                         microdroidDevice.getSerialNumber());
-
-        // Make sure we're connected to the host adb; this connection seems to get dropped when a VM
-        // exits.(b/195765441)
-        waitForDeviceAvailable();
 
         GlobalConfiguration.getDeviceManagerInstance()
                 .freeDevice(microdroidDevice, FreeDeviceState.AVAILABLE);

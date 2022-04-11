@@ -38,6 +38,8 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.proto.FileProtoResultReporter;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.service.management.TestInvocationManagementServer;
+import com.android.tradefed.testtype.suite.TestSuiteInfo;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.QuotationAwareTokenizer;
@@ -49,7 +51,6 @@ import com.android.tradefed.util.VersionParser;
 import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.keystore.IKeyStoreFactory;
 import com.android.tradefed.util.keystore.KeyStoreException;
-import com.android.tradefed.testtype.suite.TestSuiteInfo;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -57,9 +58,6 @@ import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.impl.history.DefaultHistory;
 import org.jline.terminal.TerminalBuilder;
-
-import sun.misc.Signal;
-import sun.misc.SignalHandler;
 
 import java.io.File;
 import java.io.IOException;
@@ -76,6 +74,9 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
+
+import sun.misc.Signal;
+import sun.misc.SignalHandler;
 
 /**
  * Main TradeFederation console providing user with the interface to interact
@@ -1280,19 +1281,32 @@ public class Console extends Thread {
         mMainArgs = mainArgs;
     }
 
-    private static class TerminateFeatureServer extends Thread {
-        private final TradefedFeatureServer mClient;
+    private static class TerminateGRPCServers extends Thread {
+        private final TradefedFeatureServer mFeatureServer;
+        private final TestInvocationManagementServer mInvocationServer;
 
-        public TerminateFeatureServer(TradefedFeatureServer client) {
-            mClient = client;
+        public TerminateGRPCServers(
+                TradefedFeatureServer featureServer,
+                TestInvocationManagementServer invocationServer) {
+            mFeatureServer = featureServer;
+            mInvocationServer = invocationServer;
         }
 
         @Override
         public void run() {
-            try {
-                mClient.shutdown();
-            } catch (InterruptedException e) {
-                CLog.e(e);
+            if (mFeatureServer != null) {
+                try {
+                    mFeatureServer.shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
+            if (mInvocationServer != null) {
+                try {
+                    mInvocationServer.shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
             }
         }
     }
@@ -1330,30 +1344,51 @@ public class Console extends Thread {
         try {
             server = new TradefedFeatureServer();
             server.start();
-            Runtime.getRuntime().addShutdownHook(new TerminateFeatureServer(server));
         } catch (RuntimeException e) {
             System.out.println(String.format("Error starting feature server: %s", e));
         }
+        TestInvocationManagementServer invocationManagementServer = null;
+        try {
+            List<String> nonGlobalArgs = GlobalConfiguration.createGlobalConfiguration(args);
+            GlobalConfiguration.getInstance().setup();
+            if (server != null) {
+                GlobalConfiguration.getInstance().setTradefedFeatureServer(server);
+            }
+            console.setArgs(nonGlobalArgs);
+            console.setCommandScheduler(GlobalConfiguration.getInstance().getCommandScheduler());
+            console.setKeyStoreFactory(GlobalConfiguration.getInstance().getKeyStoreFactory());
+            console.setDaemon(true);
 
-        List<String> nonGlobalArgs = GlobalConfiguration.createGlobalConfiguration(args);
-        GlobalConfiguration.getInstance().setup();
-        if (server != null) {
-            GlobalConfiguration.getInstance().setTradefedFeatureServer(server);
+            GlobalConfiguration.getInstance().getCommandScheduler().setClearcutClient(client);
+            // Initialize the locks for the TF session
+            GlobalConfiguration.getInstance().getHostOptions().initConcurrentLocks();
+
+            console.start();
+
+            // Wait for the CommandScheduler to get started before we exit the main thread.  See
+            // full
+            // explanation near the top of #run()
+            console.awaitScheduler();
+            console.registerShutdownSignals();
+
+            // Gate the server starting to a port being explicitly defined
+            Integer port = TestInvocationManagementServer.getPort();
+            if (port != null) {
+                try {
+                    invocationManagementServer =
+                            new TestInvocationManagementServer(
+                                    port, GlobalConfiguration.getInstance().getCommandScheduler());
+                    GlobalConfiguration.getInstance()
+                            .setInvocationServer(invocationManagementServer);
+                    // Start the server last to ensure that command scheduler is started
+                    invocationManagementServer.start();
+                } catch (RuntimeException e) {
+                    System.out.println(String.format("Error starting invocation server: %s", e));
+                }
+            }
+        } finally {
+            Runtime.getRuntime()
+                    .addShutdownHook(new TerminateGRPCServers(server, invocationManagementServer));
         }
-        console.setArgs(nonGlobalArgs);
-        console.setCommandScheduler(GlobalConfiguration.getInstance().getCommandScheduler());
-        console.setKeyStoreFactory(GlobalConfiguration.getInstance().getKeyStoreFactory());
-        console.setDaemon(true);
-
-        GlobalConfiguration.getInstance().getCommandScheduler().setClearcutClient(client);
-        // Initialize the locks for the TF session
-        GlobalConfiguration.getInstance().getHostOptions().initConcurrentLocks();
-
-        console.start();
-
-        // Wait for the CommandScheduler to get started before we exit the main thread.  See full
-        // explanation near the top of #run()
-        console.awaitScheduler();
-        console.registerShutdownSignals();
     }
 }

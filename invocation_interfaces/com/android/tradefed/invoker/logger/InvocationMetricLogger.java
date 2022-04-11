@@ -87,6 +87,9 @@ public class InvocationMetricLogger {
         DELETE_DEVICE_FILE_COUNT("delete_device_file_count", true),
         DOES_FILE_EXISTS_TIME("does_file_exists_time_ms", true),
         DOES_FILE_EXISTS_COUNT("does_file_exists_count", true),
+        // Represents the time and count for installing packages
+        PACKAGE_INSTALL_TIME("package_install_time_ms", true),
+        PACKAGE_INSTALL_COUNT("package_install_count", true),
         // Capture the time spent isolating a retry with reset
         RESET_RETRY_ISOLATION_PAIR("reset_isolation_timestamp_pair", true),
         // Capture the time spent isolating a retry with reboot
@@ -122,6 +125,7 @@ public class InvocationMetricLogger {
         UNCAUGHT_TEST_CRASH_FAILURES("uncaught_test_crash_failures", true),
         DEVICE_RESET_COUNT("device_reset_count", true),
         DEVICE_RESET_MODULES("device_reset_modules", true),
+        DEVICE_RESET_MODULES_FOR_TARGET_PREPARER("device_reset_modules_for_target_preparer", true),
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
         INVOCATION_START("tf_invocation_start_timestamp", false),

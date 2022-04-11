@@ -389,7 +389,10 @@ public class DynamicRemoteFileResolver {
                 FileUtil.deleteFile(downloadedFile);
                 return extractedDir;
             } else {
-                CLog.w("%s was requested to be unzipped but is not a valid zip.", downloadedFile);
+                throw new IOException(
+                        String.format(
+                                "%s was requested to be unzipped but is not a valid zip.",
+                                downloadedFile));
             }
         }
         // Return the original file untouched
@@ -409,7 +412,8 @@ public class DynamicRemoteFileResolver {
             fileToResolve = new File(protocol + ":" + uri.getPath());
         } catch (URISyntaxException e) {
             CLog.e(e);
-            throw new BuildRetrievalError(e.getMessage(), e);
+            throw new BuildRetrievalError(
+                    e.getMessage(), e, InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         try {

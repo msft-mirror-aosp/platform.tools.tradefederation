@@ -24,17 +24,15 @@ android_test {
     // Restrict visibility to only those targets that need to access it.
     visibility: [
         "//tools/tradefederation/core",
-        "//tools/tradefederation/core/util-apps/ContentProvider/androidTest",
+        "//tools/tradefederation/core/util_apps/ContentProvider/androidTest",
     ],
     defaults: ["tradefed_errorprone_defaults"],
 
     srcs: ["java/**/*.java"],
-    static_libs: [
-        "androidx.test.runner",
-    ],
 
-    dont_merge_manifests: true,
-    sdk_version: "30",
+    manifest: "java/android/tradefed/contentprovider/AndroidManifest.xml",
+    // It's important to retain SDK support at 24 for backward compatibility
+    sdk_version: "24",
     min_sdk_version: "24",
 
     test_suites: ["general-tests"],

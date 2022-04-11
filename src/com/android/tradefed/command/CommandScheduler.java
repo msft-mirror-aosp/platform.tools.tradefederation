@@ -74,6 +74,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.suite.SuiteResultReporter;
 import com.android.tradefed.sandbox.ISandbox;
 import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.service.management.TestInvocationManagementServer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.retry.RetryRescheduler;
 import com.android.tradefed.util.ArrayUtil;
@@ -1018,6 +1019,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return GlobalConfiguration.getInstance().getFeatureServer();
     }
 
+    protected TestInvocationManagementServer getTestInvocationManagementServer() {
+        return GlobalConfiguration.getInstance().getTestInvocationManagementSever();
+    }
+
     /**
      * Fetches a {@link IKeyStoreClient} using the {@link IKeyStoreFactory}
      * declared in {@link IGlobalConfiguration} or null if none is defined.
@@ -1078,6 +1083,13 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             if (getFeatureServer() != null) {
                 try {
                     getFeatureServer().shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
+            if (getTestInvocationManagementServer() != null) {
+                try {
+                    getTestInvocationManagementServer().shutdown();
                 } catch (InterruptedException e) {
                     CLog.e(e);
                 }
@@ -1625,7 +1637,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     /** {@inheritDoc} */
-    @Deprecated
     @Override
     public void execCommand(
             IScheduledInvocationListener listener, ITestDevice device, String[] args)
@@ -1645,6 +1656,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
 
         synchronized (this) {
+            if (isShuttingDown()) {
+                // Prevent scheduling if we are shutting down
+                throw new ConfigurationException("Tradefed shutting down, skip scheduling.");
+            }
             mExecutingCommands.add(execCmd);
         }
         IInvocationContext context = createInvocationContext();

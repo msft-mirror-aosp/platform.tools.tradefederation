@@ -107,11 +107,11 @@ public class FileUtil {
     public static class LowDiskSpaceException extends FatalHostError {
 
         LowDiskSpaceException(String msg, Throwable cause) {
-            super(msg, cause);
+            super(msg, cause, InfraErrorIdentifier.LAB_HOST_FILESYSTEM_FULL);
         }
 
         LowDiskSpaceException(String msg) {
-            super(msg);
+            super(msg, InfraErrorIdentifier.LAB_HOST_FILESYSTEM_FULL);
         }
 
     }
