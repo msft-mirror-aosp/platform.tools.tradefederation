@@ -171,7 +171,7 @@ public class GceManager {
     }
 
     /**
-     * Attempt to start a gce instance
+     * Attempt to start a gce instance with either Acloud or Oxygen.
      *
      * @param ipDevice the initial IP of the GCE instance to run AVD in, <code>null</code> if not
      *     applicable
@@ -184,6 +184,58 @@ public class GceManager {
      * @throws TargetSetupError
      */
     public GceAvdInfo startGce(
+            String ipDevice, String user, Integer offset, MultiMap<String, String> attributes)
+            throws TargetSetupError {
+        // If ipDevice is specified, skip collecting serial log as the host may not be GCE instance
+        // If Oxygen cuttlefish is used, skip collecting serial log due to lack of access.
+        mSkipSerialLogCollection =
+                (!Strings.isNullOrEmpty(ipDevice) || getTestDeviceOptions().useOxygen());
+        if (getTestDeviceOptions().useOxygenProxy()) {
+            return startGceWithOxygenClient();
+        } else {
+            return startGceWithAcloud(ipDevice, user, offset, attributes);
+        }
+    }
+
+    /**
+     * Attempt to start a gce instance with Oxygen.
+     *
+     * @return a {@link GceAvdInfo} describing the GCE instance.
+     */
+    private GceAvdInfo startGceWithOxygenClient() throws TargetSetupError {
+        long startTime = System.currentTimeMillis();
+        try {
+            File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
+            OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
+            CommandResult res = oxygenClient.lease(mBuildInfo, getTestDeviceOptions());
+            GceAvdInfo oxygenDeviceInfo =
+                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(
+                            res, mDeviceOptions.getRemoteAdbPort());
+            mGceAvdInfo = oxygenDeviceInfo;
+            return oxygenDeviceInfo;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_DIRECT_LEASE_COUNT, 1);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_LAUNCH_CVD_TIME,
+                    (System.currentTimeMillis() - startTime) * 1000);
+        }
+    }
+
+    /**
+     * Attempt to start a gce instance with Acloud.
+     *
+     * @param ipDevice the initial IP of the GCE instance to run AVD in, <code>null</code> if not
+     *     applicable
+     * @param user the host running user of AVD, <code>null</code> if not applicable
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @param attributes attributes associated with current invocation, used for passing applicable
+     *     information down to the GCE instance to be added as VM metadata
+     * @return a {@link GceAvdInfo} describing the GCE instance. Could be a BOOT_FAIL instance.
+     * @throws TargetSetupError
+     */
+    private GceAvdInfo startGceWithAcloud(
             String ipDevice, String user, Integer offset, MultiMap<String, String> attributes)
             throws TargetSetupError {
         mGceAvdInfo = null;
@@ -199,11 +251,6 @@ public class GceManager {
         }
 
         mBuildInfo.addBuildAttribute(GCE_IP_PRECONFIGURED_KEY, Boolean.toString(ipDevice != null));
-
-        // If ipDevice is specified, skip collecting serial log as the host may not be GCE instance
-        // If Oxygen cuttlefish is used, skip collecting serial log due to lack of access.
-        mSkipSerialLogCollection =
-                (!Strings.isNullOrEmpty(ipDevice) || getTestDeviceOptions().useOxygen());
 
         // Add extra args.
         File reportFile = null;
@@ -466,6 +513,8 @@ public class GceManager {
         // Do not pass flags --logcat_file and --serial_log_file to collect logcat and serial logs.
 
         if (getTestDeviceOptions().useOxygen()) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_LEASE_THROUGH_ACLOUD_COUNT, 1);
             gceArgs.add("--oxygen");
         }
         return gceArgs;
@@ -477,6 +526,36 @@ public class GceManager {
      * @return returns true if gce shutdown was requested as non-blocking.
      */
     public boolean shutdownGce() {
+        if (getTestDeviceOptions().useOxygenProxy()) {
+            return shutdownGceWithOxygen();
+        } else {
+            return shutdownGceWithAcloud();
+        }
+    }
+
+    /**
+     * Shutdown the Oxygen Gce instance.
+     *
+     * @return returns true if gce shutdown was requested as non-blocking.
+     */
+    private boolean shutdownGceWithOxygen() {
+        try {
+            File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
+            OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
+            return oxygenClient.release(mGceAvdInfo, getTestDeviceOptions().getGceCmdTimeout());
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_DIRECT_RELEASE_COUNT, 1);
+            mGceAvdInfo = null;
+        }
+    }
+
+    /**
+     * Shutdown the Acloud Gce instance.
+     *
+     * @return returns true if gce shutdown was requested as non-blocking.
+     */
+    private boolean shutdownGceWithAcloud() {
         if (!getTestDeviceOptions().getAvdDriverBinary().canExecute()) {
             mGceAvdInfo = null;
             throw new HarnessRuntimeException(
@@ -539,6 +618,8 @@ public class GceManager {
                 CLog.w("`hostname` is needed for releasing Oxygen cuttlefish.");
                 return null;
             }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_RELEASE_THROUGH_ACLOUD_COUNT, 1);
             gceArgs.add("--oxygen");
             gceArgs.add("--ip");
             gceArgs.add(hostname);
