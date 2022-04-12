@@ -324,7 +324,7 @@ public final class TestsPoolPoller
                 String message =
                         String.format(
                                 "Test did not run. No token '%s' matching it on any device.",
-                                tokenTest.getRequiredTokens());
+                                tokenTest.getRequiredTokens(mTestInfo));
                 ((IReportNotExecuted) tokenTest).reportNotExecuted(listener, message);
             } else {
                 CLog.e(
