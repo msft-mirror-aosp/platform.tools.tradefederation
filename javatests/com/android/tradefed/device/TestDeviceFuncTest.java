@@ -850,7 +850,9 @@ public class TestDeviceFuncTest implements IDeviceTest {
     public void testLogcatCmd() throws DeviceNotAvailableException {
         CLog.i("testLogcatCmd");
         // Adding -d flag to dump the log and exit, to make this a non-blocking call
-        CommandResult result = mTestDevice.executeShellV2Command(LogcatReceiver.LOGCAT_CMD + " -d");
+        CommandResult result =
+                mTestDevice.executeShellV2Command(
+                        LogcatReceiver.getDefaultLogcatCmd(mTestDevice) + " -d");
         assertThat(result.getStatus()).isEqualTo(CommandStatus.SUCCESS);
     }
 
