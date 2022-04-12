@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.device;
 
+import com.android.tradefed.log.LogUtil;
 import com.android.tradefed.result.InputStreamSource;
 
 import com.google.errorprone.annotations.MustBeClosed;
@@ -27,7 +28,6 @@ public class LogcatReceiver implements ILogcatReceiver {
     private BackgroundDeviceAction mDeviceAction;
     private LargeOutputReceiver mReceiver;
 
-    static final String LOGCAT_CMD = "logcat -v threadtime,uid";
     private static final String LOGCAT_DESC = "logcat";
 
     /**
@@ -40,7 +40,6 @@ public class LogcatReceiver implements ILogcatReceiver {
      */
     public LogcatReceiver(ITestDevice device, String logcatCmd,
             long maxFileSize, int logStartDelay) {
-
         mReceiver = new LargeOutputReceiver(LOGCAT_DESC, device.getSerialNumber(),
                 maxFileSize);
         // FIXME: remove mLogStartDelay. Currently delay starting logcat, as starting
@@ -56,7 +55,7 @@ public class LogcatReceiver implements ILogcatReceiver {
      * @param logStartDelay the delay to wait after the device becomes online
      */
     public LogcatReceiver(ITestDevice device, long maxFileSize, int logStartDelay) {
-        this(device, LOGCAT_CMD, maxFileSize, logStartDelay);
+        this(device, getDefaultLogcatCmd(device), maxFileSize, logStartDelay);
     }
 
     @Override
@@ -91,5 +90,21 @@ public class LogcatReceiver implements ILogcatReceiver {
     @Override
     public void clear() {
         mReceiver.clear();
+    }
+
+    /** Get the default logcat command, only append uid format if api level > 24. */
+    public static String getDefaultLogcatCmd(ITestDevice device) {
+        String logcatCmd = "logcat -v threadtime";
+        // Logcat format support UID started from api level 24.
+        try {
+            if (device.getApiLevel() >= 24) {
+                logcatCmd = logcatCmd + ",uid";
+            }
+        } catch (DeviceNotAvailableException e) {
+            LogUtil.CLog.e("Use logcat command without UID format due to: ");
+            LogUtil.CLog.e(e);
+        }
+
+        return logcatCmd;
     }
 }
