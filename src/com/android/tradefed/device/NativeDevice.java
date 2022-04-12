@@ -2618,7 +2618,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                             "getLogcatSince",
                             getSerialNumber(),
                             getOptions().getMaxLogcatDataSize());
-            String command = String.format("%s -t '%s'", LogcatReceiver.LOGCAT_CMD, dateFormatted);
+            String command =
+                    String.format(
+                            "%s -t '%s'", LogcatReceiver.getDefaultLogcatCmd(this), dateFormatted);
             getIDevice().executeShellCommand(command, largeReceiver);
             return largeReceiver.getData();
         } catch (IOException|AdbCommandRejectedException|
@@ -2651,7 +2653,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             // add -d parameter to make this a non blocking call
             getIDevice()
                     .executeShellCommand(
-                            LogcatReceiver.LOGCAT_CMD + " -d",
+                            LogcatReceiver.getDefaultLogcatCmd(this) + " -d",
                             largeReceiver,
                             LOGCAT_DUMP_TIMEOUT,
                             TimeUnit.MILLISECONDS);
@@ -2693,9 +2695,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (logcatOptions == null) {
             return new LogcatReceiver(this, mOptions.getMaxLogcatDataSize(), mLogStartDelay);
         } else {
-            return new LogcatReceiver(this,
-                    String.format("%s %s", LogcatReceiver.LOGCAT_CMD, logcatOptions),
-                    mOptions.getMaxLogcatDataSize(), mLogStartDelay);
+            return new LogcatReceiver(
+                    this,
+                    String.format("%s %s", LogcatReceiver.getDefaultLogcatCmd(this), logcatOptions),
+                    mOptions.getMaxLogcatDataSize(),
+                    mLogStartDelay);
         }
     }
 
