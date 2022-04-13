@@ -4122,7 +4122,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 return;
             }
             mState = deviceState;
-            CLog.d("Device %s state is now %s", getSerialNumber(), deviceState);
+            CLog.logAndDisplay(
+                    LogLevel.DEBUG, "Device %s state is now %s", getSerialNumber(), deviceState);
             mStateMonitor.setState(deviceState);
         }
     }
