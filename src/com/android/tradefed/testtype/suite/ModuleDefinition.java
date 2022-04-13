@@ -1147,9 +1147,13 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             clonedContext.addDeviceBuildInfo(
                     deviceName, testInfo.getContext().getBuildInfo(deviceName));
         }
-        if (!RunStrategy.RUN.equals(shouldRunWithController(clonedContext))) {
-            // Bypass token since the module isn't expected to run
-            return null;
+        try {
+            if (!RunStrategy.RUN.equals(shouldRunWithController(clonedContext))) {
+                // Bypass token since the module isn't expected to run
+                return null;
+            }
+        } catch (RuntimeException e) {
+            CLog.e(e);
         }
         return mRequiredTokens;
     }
