@@ -1000,8 +1000,8 @@ public class TestDevice extends NativeDevice {
             CLog.i("framework reboot is not supported; when enable root is disabled");
             return false;
         }
-        enableAdbRoot();
-        if (getApiLevel() >= 18 && isAdbRoot()) {
+        boolean isRoot = enableAdbRoot();
+        if (getApiLevel() >= 18 && isRoot) {
             try {
                 // check framework running
                 String output = executeShellCommand("pm path android");
@@ -1015,11 +1015,8 @@ public class TestDevice extends NativeDevice {
                 CLog.v("framework reboot: device unresponsive to shell command, using fallback");
                 return false;
             }
-            boolean notAvailable = waitForDeviceNotAvailable(30 * 1000);
-            if (notAvailable) {
-                postAdbReboot();
-            }
-            return notAvailable;
+            postAdbReboot();
+            return true;
         } else {
             CLog.v("framework reboot: not supported");
             return false;
