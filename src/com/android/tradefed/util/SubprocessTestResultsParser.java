@@ -31,6 +31,8 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.SubprocessEventHelper.BaseTestEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.FailedTestEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.InvocationEndedEventInfo;
@@ -81,8 +83,9 @@ public class SubprocessTestResultsParser implements Closeable {
 
     private ITestInvocationListener mListener;
 
-    private TestDescription mCurrentTest = null;
+    private TestDescription mCurrentTestCase = null;
     private IInvocationContext mCurrentModuleContext = null;
+    private String mCurrentRunName = null;
     private InvocationFailedEventInfo mReportedInvocationFailedEventInfo = null;
 
     private Pattern mPattern = null;
@@ -365,8 +368,8 @@ public class SubprocessTestResultsParser implements Closeable {
     }
 
     private void checkCurrentTestId(String className, String testName) {
-        if (mCurrentTest == null) {
-            mCurrentTest = new TestDescription(className, testName);
+        if (mCurrentTestCase == null) {
+            mCurrentTestCase = new TestDescription(className, testName);
             CLog.w("Calling a test event without having called testStarted.");
         }
     }
@@ -388,6 +391,7 @@ public class SubprocessTestResultsParser implements Closeable {
             } else {
                 mListener.testRunStarted(rsi.mRunName, rsi.mTestCount);
             }
+            mCurrentRunName = rsi.mRunName;
         }
     }
 
@@ -412,7 +416,8 @@ public class SubprocessTestResultsParser implements Closeable {
                 mListener.testRunEnded(
                         rei.mTime, TfMetricProtoUtil.upgradeConvert(rei.mRunMetrics));
             } finally {
-                mCurrentTest = null;
+                mCurrentRunName = null;
+                mCurrentTestCase = null;
             }
         }
     }
@@ -435,11 +440,11 @@ public class SubprocessTestResultsParser implements Closeable {
         @Override
         public void handleEvent(String eventJson) throws JSONException {
             TestStartedEventInfo bti = new TestStartedEventInfo(new JSONObject(eventJson));
-            mCurrentTest = new TestDescription(bti.mClassName, bti.mTestName);
+            mCurrentTestCase = new TestDescription(bti.mClassName, bti.mTestName);
             if (bti.mStartTime != null) {
-                mListener.testStarted(mCurrentTest, bti.mStartTime);
+                mListener.testStarted(mCurrentTestCase, bti.mStartTime);
             } else {
-                mListener.testStarted(mCurrentTest);
+                mListener.testStarted(mCurrentTestCase);
             }
         }
     }
@@ -449,7 +454,7 @@ public class SubprocessTestResultsParser implements Closeable {
         public void handleEvent(String eventJson) throws JSONException {
             FailedTestEventInfo fti = new FailedTestEventInfo(new JSONObject(eventJson));
             checkCurrentTestId(fti.mClassName, fti.mTestName);
-            mListener.testFailed(mCurrentTest, fti.mFailure);
+            mListener.testFailed(mCurrentTestCase, fti.mFailure);
         }
     }
 
@@ -461,15 +466,15 @@ public class SubprocessTestResultsParser implements Closeable {
                 checkCurrentTestId(tei.mClassName, tei.mTestName);
                 if (tei.mEndTime != null) {
                     mListener.testEnded(
-                            mCurrentTest,
+                            mCurrentTestCase,
                             tei.mEndTime,
                             TfMetricProtoUtil.upgradeConvert(tei.mRunMetrics));
                 } else {
                     mListener.testEnded(
-                            mCurrentTest, TfMetricProtoUtil.upgradeConvert(tei.mRunMetrics));
+                            mCurrentTestCase, TfMetricProtoUtil.upgradeConvert(tei.mRunMetrics));
                 }
             } finally {
-                mCurrentTest = null;
+                mCurrentTestCase = null;
             }
         }
     }
@@ -479,7 +484,7 @@ public class SubprocessTestResultsParser implements Closeable {
         public void handleEvent(String eventJson) throws JSONException {
             BaseTestEventInfo baseTestIgnored = new BaseTestEventInfo(new JSONObject(eventJson));
             checkCurrentTestId(baseTestIgnored.mClassName, baseTestIgnored.mTestName);
-            mListener.testIgnored(mCurrentTest);
+            mListener.testIgnored(mCurrentTestCase);
         }
     }
 
@@ -489,7 +494,7 @@ public class SubprocessTestResultsParser implements Closeable {
             FailedTestEventInfo FailedAssumption =
                     new FailedTestEventInfo(new JSONObject(eventJson));
             checkCurrentTestId(FailedAssumption.mClassName, FailedAssumption.mTestName);
-            mListener.testAssumptionFailure(mCurrentTest, FailedAssumption.mTrace);
+            mListener.testAssumptionFailure(mCurrentTestCase, FailedAssumption.mTrace);
         }
     }
 
@@ -681,7 +686,7 @@ public class SubprocessTestResultsParser implements Closeable {
 
     /** Returns the test that is currently in progress. */
     public TestDescription getCurrentTest() {
-        return mCurrentTest;
+        return mCurrentTestCase;
     }
 
     /** Returns whether or not an invocation failed was reported. */
@@ -696,13 +701,31 @@ public class SubprocessTestResultsParser implements Closeable {
 
     /** Complete and close any left open events */
     public void completeModuleEvents() {
-        if (mCurrentModuleContext != null) {
-            // When this happens, mark a failure so retries don't incorrectly consider this module
-            // done.
-            mListener.testRunStarted("module_interrupted", 0);
-            mListener.testRunFailed(
-                    FailureDescription.create("module was interrupted. See invocation level."));
+        if (mCurrentRunName == null && mCurrentModuleContext != null) {
+            String moduleId =
+                    mCurrentModuleContext
+                            .getAttributes()
+                            .getUniqueMap()
+                            .get(ModuleDefinition.MODULE_ID);
+            mListener.testRunStarted(moduleId, 0);
+        }
+        if (mCurrentTestCase != null) {
+            FailureDescription failure =
+                    FailureDescription.create(
+                            "Run was interrupted after starting, results are incomplete.");
+            mListener.testFailed(mCurrentTestCase, failure);
+            mListener.testEnded(mCurrentTestCase, new HashMap<String, Metric>());
+        }
+        if (mCurrentModuleContext != null || mCurrentRunName != null) {
+            FailureDescription failure =
+                    FailureDescription.create(
+                            "Run was interrupted after starting, results are incomplete.",
+                            FailureStatus.INFRA_FAILURE);
+            mListener.testRunFailed(failure);
             mListener.testRunEnded(0L, new HashMap<String, Metric>());
+            mCurrentRunName = null;
+        }
+        if (mCurrentModuleContext != null) {
             mListener.testModuleEnded();
         }
     }
