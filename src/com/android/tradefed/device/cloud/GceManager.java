@@ -833,24 +833,37 @@ public class GceManager {
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
             // Default files under a directory to be text files.
             type = LogDataType.TEXT;
+            if (remoteFile != null) {
+                // If we happened to fetch a directory, log all the subfiles
+                logDirectory(remoteFile, baseName, logger, type);
+            }
         } else {
             remoteFile =
                     RemoteFileUtil.fetchRemoteFile(
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
+            if (remoteFile != null) {
+                logFile(remoteFile, baseName, logger, type);
+            }
         }
-        if (remoteFile != null) {
-            // If we happened to fetch a directory, log all the subfiles
-            logFile(remoteFile, baseName, logger, type);
+    }
+
+    private static void logDirectory(
+            File remoteDirectory, String baseName, ITestLogger logger, LogDataType type) {
+        for (File f : remoteDirectory.listFiles()) {
+            if (f.isFile()) {
+                LogDataType typeFromName = OxygenUtil.getDefaultLogType(f.getName());
+                if (!typeFromName.equals(LogDataType.UNKNOWN)) {
+                    type = typeFromName;
+                }
+                logFile(f, baseName, logger, type);
+            } else if (f.isDirectory()) {
+                logDirectory(f, baseName, logger, type);
+            }
         }
     }
 
     private static void logFile(
             File remoteFile, String baseName, ITestLogger logger, LogDataType type) {
-        if (remoteFile.isDirectory()) {
-            for (File f : remoteFile.listFiles()) {
-                logFile(f, null, logger, type);
-            }
-        } else {
             try (InputStreamSource remoteFileStream = new FileInputStreamSource(remoteFile, true)) {
                 String name = baseName;
                 if (name == null) {
@@ -858,7 +871,6 @@ public class GceManager {
                 }
                 logger.testLog(name, type, remoteFileStream);
             }
-        }
     }
 
     /**
