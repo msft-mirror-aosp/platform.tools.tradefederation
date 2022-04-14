@@ -617,6 +617,10 @@ public class RunUtil implements IRunUtil {
             if (Strings.isNullOrEmpty(result.getStderr())) {
                 result.setStderr(StreamUtil.getStackTrace(e));
             }
+            if (result.getExitCode() == null) {
+                // Set non-zero exit code
+                result.setExitCode(88);
+            }
         }
     }
 
