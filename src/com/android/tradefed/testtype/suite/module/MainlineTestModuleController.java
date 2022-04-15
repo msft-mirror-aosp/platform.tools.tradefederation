@@ -33,6 +33,8 @@ import com.android.tradefed.config.Option;
  */
 public class MainlineTestModuleController extends BaseModuleController {
 
+    protected static final String GO_APEX_PREFIX = "com.google.android.go.";
+
     @Option(name = "enable", description = "Enable or disable this module controller.")
     private boolean mControllerEnabled = false;
 
@@ -66,7 +68,13 @@ public class MainlineTestModuleController extends BaseModuleController {
                 boolean modulePreloaded = false;
                 mActiveApexes = device.getActiveApexes();
                 for (ITestDevice.ApexInfo ap : mActiveApexes) {
-                    if (mMainlineModules.contains(ap.name)) {
+                    String pkgName = ap.name;
+                    // Run the test when there is Go version mainline module preloaded on device.
+                    pkgName =
+                            pkgName.startsWith(GO_APEX_PREFIX)
+                                    ? pkgName.replace(".go.", ".")
+                                    : pkgName;
+                    if (mMainlineModules.contains(pkgName)) {
                         modulePreloaded = true;
                         break;
                     }
