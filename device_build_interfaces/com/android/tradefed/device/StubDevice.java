@@ -29,6 +29,7 @@ import com.android.ddmlib.SyncService;
 import com.android.ddmlib.TimeoutException;
 import com.android.ddmlib.log.LogReceiver;
 import com.android.sdklib.AndroidVersion;
+import com.android.tradefed.log.LogUtil.CLog;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
@@ -117,6 +118,7 @@ public class StubDevice implements IDevice, Serializable {
     /** {@inheritDoc} */
     @Override
     public String getProperty(String name) {
+        CLog.d("Querying getProperty(%s) from StubDevice.", name);
         return null;
     }
     /**
