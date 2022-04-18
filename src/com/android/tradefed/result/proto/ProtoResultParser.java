@@ -224,35 +224,32 @@ public class ProtoResultParser {
         return mInvocationFailed;
     }
 
-    /** If needed to ensure consistent reporting, complete the events of the module. */
+    /**
+     * If needed to ensure consistent reporting, complete the events of the module, run and methods.
+     */
     public void completeModuleEvents() {
-        if (getModuleInProgress() == null) {
-            if (mCurrentRunName != null) {
-                if (mCurrentTestCase != null) {
-                    FailureDescription failure =
-                            FailureDescription.create(
-                                    "Run was interrupted after starting, results are incomplete.");
-                    mListener.testFailed(mCurrentTestCase, failure);
-                    mListener.testEnded(mCurrentTestCase, new HashMap<String, Metric>());
-                }
-                FailureDescription failure =
-                        FailureDescription.create(
-                                "Run was interrupted after starting, results are incomplete.",
-                                FailureStatus.INFRA_FAILURE);
-                mListener.testRunFailed(failure);
-                mListener.testRunEnded(0L, new HashMap<String, Metric>());
-                mCurrentRunName = null;
-            }
-            return;
+        if (mCurrentRunName == null && getModuleInProgress() != null) {
+            mListener.testRunStarted(getModuleInProgress(), 0);
         }
-        mListener.testRunStarted(getModuleInProgress(), 0);
-        FailureDescription failure =
-                FailureDescription.create(
-                        "Module was interrupted after starting, results are incomplete.",
-                        FailureStatus.INFRA_FAILURE);
-        mListener.testRunFailed(failure);
-        mListener.testRunEnded(0L, new HashMap<String, Metric>());
-        mListener.testModuleEnded();
+        if (mCurrentTestCase != null) {
+            FailureDescription failure =
+                    FailureDescription.create(
+                            "Run was interrupted after starting, results are incomplete.");
+            mListener.testFailed(mCurrentTestCase, failure);
+            mListener.testEnded(mCurrentTestCase, new HashMap<String, Metric>());
+        }
+        if (getModuleInProgress() != null || mCurrentRunName != null) {
+            FailureDescription failure =
+                    FailureDescription.create(
+                            "Module was interrupted after starting, results are incomplete.",
+                            FailureStatus.INFRA_FAILURE);
+            mListener.testRunFailed(failure);
+            mListener.testRunEnded(0L, new HashMap<String, Metric>());
+            mCurrentRunName = null;
+        }
+        if (getModuleInProgress() != null) {
+            mListener.testModuleEnded();
+        }
     }
 
     private void evalChildrenProto(List<ChildReference> children, boolean isInRun) {
