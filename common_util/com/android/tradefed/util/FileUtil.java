@@ -270,8 +270,10 @@ public class FileUtil {
     protected static boolean chmodExists() {
         // Silence the scary process exception when chmod is missing, we will log instead.
         CommandResult result = RunUtil.getDefault().runTimedCmdSilently(10 * 1000, sChmod);
-        // Exit code 127 means “command not found”.
-        if (result.getExitCode() != null && result.getExitCode() != 127) {
+        // Exit code 127 means “command not found”. 88 is our internal error
+        if (result.getExitCode() != null
+                && result.getExitCode() != 127
+                && result.getExitCode() != 88) {
             return true;
         }
         CLog.w("Chmod is not supported by this OS.");

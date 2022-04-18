@@ -16,10 +16,17 @@
 package com.android.tradefed.targetprep;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,6 +51,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -175,6 +183,8 @@ public class InstallApexModuleTargetPreparerTest {
                                 return APEX2_PACKAGE_NAME;
                             } else if (testAppFile.getName().contains("fakeApex_3")) {
                                 return APEX3_PACKAGE_NAME;
+                            } else if (testAppFile.getName().contains("Split")) {
+                                return SPLIT_APEX_PACKAGE_NAME;
                             }
                             return APEX_PACKAGE_NAME;
                         }
@@ -1291,7 +1301,7 @@ public class InstallApexModuleTargetPreparerTest {
 
     @Test
     public void testSetupAndTearDown_ApkAndApks() throws Exception {
-        mMockBundletoolUtil = Mockito.mock(BundletoolUtil.class);
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
         mInstallApexModuleTargetPreparer.addTestFileName(APK_NAME);
         mInstallApexModuleTargetPreparer.addTestFileName(SPLIT_APK__APKS_NAME);
         mFakeApkApks = File.createTempFile("fakeApk", ".apks");
@@ -1318,7 +1328,7 @@ public class InstallApexModuleTargetPreparerTest {
 
             when(mMockBundletoolUtil.extractSplitsFromApks(
                             Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class)))
                     .thenReturn(fakeSplitApkApks);
@@ -1359,7 +1369,7 @@ public class InstallApexModuleTargetPreparerTest {
             Mockito.verify(mMockBundletoolUtil, times(2))
                     .extractSplitsFromApks(
                             Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
             verify(mMockDevice, times(1)).deleteFile(APEX_DATA_DIR + "*");
@@ -1490,7 +1500,7 @@ public class InstallApexModuleTargetPreparerTest {
 
     @Test
     public void testInstallUsingBundletool() throws Exception {
-        mMockBundletoolUtil = Mockito.mock(BundletoolUtil.class);
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
         mInstallApexModuleTargetPreparer.addTestFileName(SPLIT_APEX_APKS_NAME);
         mInstallApexModuleTargetPreparer.addTestFileName(SPLIT_APK__APKS_NAME);
         mFakeApexApks = File.createTempFile("fakeApex", ".apks");
@@ -1521,14 +1531,14 @@ public class InstallApexModuleTargetPreparerTest {
 
             when(mMockBundletoolUtil.extractSplitsFromApks(
                             Mockito.eq(mFakeApexApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class)))
                     .thenReturn(fakeSplitApexApks);
 
             when(mMockBundletoolUtil.extractSplitsFromApks(
                             Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class)))
                     .thenReturn(fakeSplitApkApks);
@@ -1574,13 +1584,13 @@ public class InstallApexModuleTargetPreparerTest {
             Mockito.verify(mMockBundletoolUtil, times(2))
                     .extractSplitsFromApks(
                             Mockito.eq(mFakeApexApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
             Mockito.verify(mMockBundletoolUtil, times(2))
                     .extractSplitsFromApks(
                             Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
             verify(mMockDevice, times(3)).reboot();
@@ -1602,7 +1612,7 @@ public class InstallApexModuleTargetPreparerTest {
 
     @Test
     public void testInstallUsingBundletool_AbsolutePath() throws Exception {
-        mMockBundletoolUtil = Mockito.mock(BundletoolUtil.class);
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
         mInstallApexModuleTargetPreparer.addTestFileName(SPLIT_APEX_APKS_NAME);
         mInstallApexModuleTargetPreparer.addTestFileName(SPLIT_APK__APKS_NAME);
         mFakeApexApks = File.createTempFile("fakeApex", ".apks");
@@ -1633,14 +1643,14 @@ public class InstallApexModuleTargetPreparerTest {
 
             when(mMockBundletoolUtil.extractSplitsFromApks(
                             Mockito.eq(mFakeApexApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class)))
                     .thenReturn(fakeSplitApexApks);
 
             when(mMockBundletoolUtil.extractSplitsFromApks(
                             Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class)))
                     .thenReturn(fakeSplitApkApks);
@@ -1686,13 +1696,13 @@ public class InstallApexModuleTargetPreparerTest {
             Mockito.verify(mMockBundletoolUtil, times(2))
                     .extractSplitsFromApks(
                             Mockito.eq(mFakeApexApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
             Mockito.verify(mMockBundletoolUtil, times(2))
                     .extractSplitsFromApks(
                             Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
             verify(mMockDevice, times(3)).reboot();
@@ -1714,7 +1724,7 @@ public class InstallApexModuleTargetPreparerTest {
 
     @Test
     public void testInstallUsingBundletool_TrainFolder() throws Exception {
-        mMockBundletoolUtil = Mockito.mock(BundletoolUtil.class);
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
         File trainFolder = File.createTempFile("tmpTrain", "");
         trainFolder.delete();
         trainFolder.mkdir();
@@ -1747,14 +1757,14 @@ public class InstallApexModuleTargetPreparerTest {
 
             when(mMockBundletoolUtil.extractSplitsFromApks(
                             Mockito.eq(mFakeApexApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class)))
                     .thenReturn(fakeSplitApexApks);
 
             when(mMockBundletoolUtil.extractSplitsFromApks(
                             Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class)))
                     .thenReturn(fakeSplitApkApks);
@@ -1800,13 +1810,13 @@ public class InstallApexModuleTargetPreparerTest {
             Mockito.verify(mMockBundletoolUtil, times(2))
                     .extractSplitsFromApks(
                             Mockito.eq(mFakeApexApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
             Mockito.verify(mMockBundletoolUtil, times(2))
                     .extractSplitsFromApks(
                             Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
             verify(mMockDevice, times(3)).reboot();
@@ -1830,7 +1840,7 @@ public class InstallApexModuleTargetPreparerTest {
 
     @Test
     public void testInstallUsingBundletool_AllFilesHaveAbsolutePath() throws Exception {
-        mMockBundletoolUtil = Mockito.mock(BundletoolUtil.class);
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
         mFakeApexApks = File.createTempFile("fakeApex", ".apks");
         mFakeApkApks = File.createTempFile("fakeApk", ".apks");
         mInstallApexModuleTargetPreparer.addTestFile(mFakeApexApks);
@@ -1861,14 +1871,14 @@ public class InstallApexModuleTargetPreparerTest {
 
             when(mMockBundletoolUtil.extractSplitsFromApks(
                             Mockito.eq(mFakeApexApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class)))
                     .thenReturn(fakeSplitApexApks);
 
             when(mMockBundletoolUtil.extractSplitsFromApks(
                             Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class)))
                     .thenReturn(fakeSplitApkApks);
@@ -1914,13 +1924,13 @@ public class InstallApexModuleTargetPreparerTest {
             Mockito.verify(mMockBundletoolUtil, times(2))
                     .extractSplitsFromApks(
                             Mockito.eq(mFakeApexApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
             Mockito.verify(mMockBundletoolUtil, times(2))
                     .extractSplitsFromApks(
                             Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
             verify(mMockDevice, times(3)).reboot();
@@ -1942,12 +1952,15 @@ public class InstallApexModuleTargetPreparerTest {
 
     @Test
     public void testInstallUsingBundletool_skipModuleNotPreloaded() throws Exception {
-        mMockBundletoolUtil = Mockito.mock(BundletoolUtil.class);
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
         mSetter.setOptionValue("ignore-if-module-not-preloaded", "true");
+        // Will skip this apex module
         mInstallApexModuleTargetPreparer.addTestFileName(SPLIT_APEX_APKS_NAME);
+        // Will install this apk module
         mInstallApexModuleTargetPreparer.addTestFileName(SPLIT_APK__APKS_NAME);
         mFakeApexApks = File.createTempFile("fakeApex", ".apks");
         mFakeApkApks = File.createTempFile("fakeApk", ".apks");
+        InOrder order = inOrder(mMockDevice, mMockBundletoolUtil);
 
         File fakeSplitApexApks = File.createTempFile("ApexSplits", "");
         fakeSplitApexApks.delete();
@@ -1970,34 +1983,28 @@ public class InstallApexModuleTargetPreparerTest {
             when(mMockBundletoolUtil.generateDeviceSpecFile(Mockito.any(ITestDevice.class)))
                     .thenReturn("serial.json");
 
-            assertTrue(fakeSplitApexApks != null);
-            assertTrue(fakeSplitApkApks != null);
-            assertTrue(mFakeApexApks != null);
-            assertTrue(mFakeApkApks != null);
+            assertNotNull(fakeSplitApexApks);
+            assertNotNull(fakeSplitApkApks);
+            assertNotNull(mFakeApexApks);
+            assertNotNull(mFakeApkApks);
             assertEquals(1, fakeSplitApexApks.listFiles().length);
             assertEquals(2, fakeSplitApkApks.listFiles().length);
 
             when(mMockBundletoolUtil.extractSplitsFromApks(
-                            Mockito.eq(mFakeApexApks),
-                            Mockito.anyString(),
-                            Mockito.any(ITestDevice.class),
-                            Mockito.any(IBuildInfo.class)))
+                            eq(mFakeApexApks),
+                            anyString(),
+                            any(ITestDevice.class),
+                            any(IBuildInfo.class)))
                     .thenReturn(fakeSplitApexApks);
 
             when(mMockBundletoolUtil.extractSplitsFromApks(
-                            Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
-                            Mockito.any(ITestDevice.class),
-                            Mockito.any(IBuildInfo.class)))
+                            eq(mFakeApkApks),
+                            anyString(),
+                            any(ITestDevice.class),
+                            any(IBuildInfo.class)))
                     .thenReturn(fakeSplitApkApks);
-
-            Set<ApexInfo> activatedApex = new HashSet<ApexInfo>();
-            activatedApex.add(
-                    new ApexInfo(
-                            SPLIT_APEX_PACKAGE_NAME,
-                            1,
-                            "/data/apex/active/com.android.FAKE_APEX_PACKAGE_NAME@1.apex"));
-            when(mMockDevice.getActiveApexes()).thenReturn(activatedApex);
+            // Split apex package is not preloaded in the device so should not be activated.
+            when(mMockDevice.getActiveApexes()).thenReturn(new HashSet<>());
             when(mMockDevice.uninstallPackage(SPLIT_APK_PACKAGE_NAME)).thenReturn(null);
             Set<String> installableModules = new HashSet<>();
             installableModules.add(SPLIT_APK_PACKAGE_NAME);
@@ -2006,28 +2013,33 @@ public class InstallApexModuleTargetPreparerTest {
 
             mInstallApexModuleTargetPreparer.setUp(mTestInfo);
             mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-            Mockito.verify(mMockBundletoolUtil, times(1))
+
+            order.verify(mMockDevice, times(1)).deleteFile(APEX_DATA_DIR + "*");
+            order.verify(mMockDevice, times(1)).deleteFile(STAGING_DATA_DIR + "*");
+            order.verify(mMockDevice, times(1)).deleteFile(SESSION_DATA_DIR + "*");
+            order.verify(mMockDevice, times(1)).reboot();
+            order.verify(mMockDevice, times(2)).getActiveApexes();
+            order.verify(mMockBundletoolUtil, times(1))
                     .generateDeviceSpecFile(Mockito.any(ITestDevice.class));
             // Extract splits 1 time to get the package name for the module, does not attempt to
             // install.
-            Mockito.verify(mMockBundletoolUtil, times(1))
+            order.verify(mMockBundletoolUtil, times(1))
                     .extractSplitsFromApks(
                             Mockito.eq(mFakeApexApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
-            Mockito.verify(mMockBundletoolUtil, times(2))
+            // The 1st time to exact the package name, the 2nd time to check if it is apex before
+            // installing.
+            order.verify(mMockBundletoolUtil, times(2))
                     .extractSplitsFromApks(
                             Mockito.eq(mFakeApkApks),
-                            Mockito.anyString(),
+                            anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
-            verify(mMockDevice, times(1)).deleteFile(APEX_DATA_DIR + "*");
-            verify(mMockDevice, times(1)).deleteFile(SESSION_DATA_DIR + "*");
-            verify(mMockDevice, times(1)).deleteFile(STAGING_DATA_DIR + "*");
-            verify(mMockDevice, times(1)).reboot();
-            verify(mMockDevice, times(2)).getActiveApexes();
-            verify(mMockDevice, times(1)).uninstallPackage(SPLIT_APK_PACKAGE_NAME);
+            order.verify(mMockBundletoolUtil, times(1))
+                    .installApks(eq(mFakeApkApks), eq(mMockDevice));
+            order.verify(mMockDevice, times(1)).uninstallPackage(SPLIT_APK_PACKAGE_NAME);
         } finally {
             FileUtil.deleteFile(mFakeApexApks);
             FileUtil.deleteFile(mFakeApkApks);
@@ -2035,6 +2047,75 @@ public class InstallApexModuleTargetPreparerTest {
             FileUtil.deleteFile(fakeSplitApexApks);
             FileUtil.recursiveDelete(fakeSplitApkApks);
             FileUtil.deleteFile(fakeSplitApkApks);
+            FileUtil.deleteFile(mBundletoolJar);
+        }
+    }
+
+    @Test
+    public void testInstallUsingBundletool_rebootAfterInstallSingleSplitApexApks()
+            throws Exception {
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
+        InOrder order = inOrder(mMockDevice, mMockBundletoolUtil);
+        mSetter.setOptionValue("ignore-if-module-not-preloaded", "true");
+        mBundletoolJar = File.createTempFile("bundletool", ".jar");
+        mInstallApexModuleTargetPreparer.addTestFileName(SPLIT_APEX_APKS_NAME);
+        mFakeApexApks = File.createTempFile("fakeApex", ".apks");
+        File fakeSplitApexApks = File.createTempFile("ApexSplits", "");
+        fakeSplitApexApks.delete();
+        fakeSplitApexApks.mkdir();
+        File splitApex = File.createTempFile("fakeSplitApex", ".apex", fakeSplitApexApks);
+
+        try {
+            CommandResult res = new CommandResult();
+            res.setStdout("test.apex");
+            when(mMockDevice.executeShellV2Command("ls " + APEX_DATA_DIR)).thenReturn(res);
+            when(mMockDevice.executeShellV2Command("ls " + SESSION_DATA_DIR)).thenReturn(res);
+            when(mMockDevice.executeShellV2Command("ls " + STAGING_DATA_DIR)).thenReturn(res);
+            when(mMockBundletoolUtil.generateDeviceSpecFile(Mockito.any(ITestDevice.class)))
+                    .thenReturn("serial.json");
+            assertNotNull(fakeSplitApexApks);
+            assertNotNull(mFakeApexApks);
+            assertEquals(1, fakeSplitApexApks.listFiles().length);
+            when(mMockBundletoolUtil.extractSplitsFromApks(
+                            Mockito.eq(mFakeApexApks),
+                            anyString(),
+                            Mockito.any(ITestDevice.class),
+                            Mockito.any(IBuildInfo.class)))
+                    .thenReturn(fakeSplitApexApks);
+            Set<ApexInfo> activatedApex = new HashSet<>();
+            activatedApex.add(
+                    new ApexInfo(
+                            SPLIT_APEX_PACKAGE_NAME,
+                            1,
+                            "/data/apex/active/com.android.FAKE_APEX_PACKAGE_NAME@1.apex"));
+            when(mMockDevice.getActiveApexes()).thenReturn(activatedApex);
+
+            mInstallApexModuleTargetPreparer.setUp(mTestInfo);
+
+            order.verify(mMockDevice, times(1)).deleteFile(APEX_DATA_DIR + "*");
+            order.verify(mMockDevice, times(1)).deleteFile(STAGING_DATA_DIR + "*");
+            order.verify(mMockDevice, times(1)).deleteFile(SESSION_DATA_DIR + "*");
+            order.verify(mMockDevice, times(1)).reboot();
+            order.verify(mMockDevice, times(1)).getActiveApexes();
+            order.verify(mMockDevice, times(1)).getActiveApexes();
+            order.verify(mMockBundletoolUtil, times(1))
+                    .generateDeviceSpecFile(any(ITestDevice.class));
+            // The 1st time to exact the package name, the 2nd time to extract apex for
+            // installation.
+            order.verify(mMockBundletoolUtil, times(2))
+                    .extractSplitsFromApks(
+                            Mockito.eq(mFakeApexApks),
+                            anyString(),
+                            any(ITestDevice.class),
+                            any(IBuildInfo.class));
+            order.verify(mMockDevice, times(1)).installPackage(eq(splitApex), anyBoolean(), any());
+            order.verify(mMockDevice, times(1)).reboot();
+            order.verify(mMockDevice, times(1)).getActiveApexes();
+        } finally {
+            FileUtil.deleteFile(mFakeApexApks);
+            FileUtil.deleteFile(splitApex);
+            FileUtil.recursiveDelete(fakeSplitApexApks);
+            FileUtil.deleteFile(fakeSplitApexApks);
             FileUtil.deleteFile(mBundletoolJar);
         }
     }
@@ -2226,7 +2307,7 @@ public class InstallApexModuleTargetPreparerTest {
 
     @Test
     public void testSetupAndTearDown_skipModulesThatFailToExtract() throws Exception {
-        mMockBundletoolUtil = Mockito.mock(BundletoolUtil.class);
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
         mInstallApexModuleTargetPreparer.addTestFileName(APK_NAME);
         mInstallApexModuleTargetPreparer.addTestFileName(SPLIT_APK__APKS_NAME);
         mFakeApkApks = File.createTempFile("fakeApk", ".apks");
@@ -2254,7 +2335,7 @@ public class InstallApexModuleTargetPreparerTest {
 
         when(mMockBundletoolUtil.extractSplitsFromApks(
                         Mockito.eq(mFakeApkApks),
-                        Mockito.anyString(),
+                        anyString(),
                         Mockito.any(ITestDevice.class),
                         Mockito.any(IBuildInfo.class)))
                 .thenReturn(null);
