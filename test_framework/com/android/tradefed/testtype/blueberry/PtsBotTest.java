@@ -290,7 +290,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
                     new BufferedReader(new InputStreamReader(process.getErrorStream()));
 
             Optional<String> lastLine =
-                    stdInput.lines().peek(CLog::i).reduce((last, value) -> value);
+                    stdInput.lines().peek(line -> CLog.i(line)).reduce((last, value) -> value);
             // Last line is providing success information.
             success =
                     lastLine.map(
@@ -307,7 +307,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
                             .orElse(false);
             stdInput.close();
 
-            stdError.lines().forEach(CLog::e);
+            stdError.lines().forEach(line -> CLog.e(line));
             stdError.close();
 
         } catch (Exception e) {
