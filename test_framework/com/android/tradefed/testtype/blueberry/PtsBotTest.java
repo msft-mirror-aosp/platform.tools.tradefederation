@@ -140,10 +140,12 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         // Forward Blueberry Server port.
         adbForwardPort(testDevice, BLUEBERRY_SERVER_PORT);
 
+        boolean isCuttlefish = testDevice.getProductType().equals("cutf");
+
         if (!physical) {
             // Check product type to determine Root Canal port.
-            hciPort = HCI_ROOTCANAL_PORT_CUTTLEFISH;
-            if (!testDevice.getProductType().equals("cutf")) {
+            if (isCuttlefish) hciPort = HCI_ROOTCANAL_PORT_CUTTLEFISH;
+            else {
                 hciPort = HCI_ROOTCANAL_PORT;
 
                 // Forward Root Canal port.
@@ -162,7 +164,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         // Remove forwarded ports.
         adbForwardRemovePort(testDevice, BLUEBERRY_SERVER_PORT);
-        if (!physical && !testDevice.getProductType().equals("cutf")) {
+        if (!physical && !isCuttlefish) {
             adbForwardRemovePort(testDevice, HCI_ROOTCANAL_PORT);
         }
     }
