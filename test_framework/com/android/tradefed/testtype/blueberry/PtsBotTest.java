@@ -286,20 +286,16 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
             Optional<String> lastLine =
                     stdInput.lines().peek(line -> CLog.i(line)).reduce((last, value) -> value);
+
             // Last line is providing success information.
-            success =
-                    lastLine.map(
-                                    (line) -> {
-                                        try {
-                                            return Integer.parseInt(
-                                                            line.split(", ")[1].substring(0, 1))
-                                                    == 1;
-                                        } catch (Exception e) {
-                                            CLog.e("Failed to parse success");
-                                            return false;
-                                        }
-                                    })
-                            .orElse(false);
+            if (lastLine.isPresent()) {
+                try {
+                    success = Integer.parseInt(lastLine.get().split(", ")[1].substring(0, 1)) == 1;
+                } catch (Exception e) {
+                    CLog.e("Failed to parse success");
+                }
+            }
+
             stdInput.close();
 
             stdError.lines().forEach(line -> CLog.e(line));
