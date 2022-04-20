@@ -232,25 +232,18 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
     }
 
     private boolean shouldSkipTest(String testName) {
-        for (String excludeFilter : excludeFilters) {
-            // If the test or one of its parent test group is included in
-            // exclude filters, then skip it.
-            if (testName.contains(excludeFilter)) {
-                return true;
-            }
-        }
-        if (!includeFilters.isEmpty()) {
-            for (String includeFilter : includeFilters) {
-                // If the test or one of its parent test group is included in
-                // include filters, then don't skip it.
-                if (testName.contains(includeFilter)) {
-                    return false;
-                }
-            }
-            // If include filters are provided, and if the test or one of its
-            // parent test group is not included, then skip it.
-            return true;
-        }
+        // If the test or one of its parent test group is included in
+        // exclude filters, then skip it.
+        if (excludeFilters.stream().anyMatch(testName::contains)) return true;
+
+        // If the test or one of its parent test group is included in
+        // include filters, then don't skip it.
+        if (includeFilters.stream().anyMatch(testName::contains)) return false;
+
+        // If include filters are provided, and if the test or one of its
+        // parent test group is not included, then skip it.
+        if (!includeFilters.isEmpty()) return true;
+
         return false;
     }
 
