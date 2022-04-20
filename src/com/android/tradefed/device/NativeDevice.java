@@ -494,13 +494,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     protected String internalGetProperty(String propName, String fastbootVar, String description)
             throws DeviceNotAvailableException, UnsupportedOperationException {
+        if (isStateBootloaderOrFastbootd() && fastbootVar != null) {
+            CLog.i("Device %s is in fastboot mode, re-querying with '%s' for %s", getSerialNumber(),
+                   fastbootVar, description);
+            return getFastbootVariable(fastbootVar);
+        }
         String propValue = getProperty(propName);
         if (propValue != null) {
             return propValue;
-        } else if (isStateBootloaderOrFastbootd() && fastbootVar != null) {
-            CLog.i("%s for device %s is null, re-querying in fastboot", description,
-                    getSerialNumber());
-            return getFastbootVariable(fastbootVar);
         } else {
             CLog.d(
                     "property collection '%s' for device %s is null.",
