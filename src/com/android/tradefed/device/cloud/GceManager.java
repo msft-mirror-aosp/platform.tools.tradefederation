@@ -217,8 +217,7 @@ public class GceManager {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.OXYGEN_DEVICE_DIRECT_LEASE_COUNT, 1);
             InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.CF_LAUNCH_CVD_TIME,
-                    (System.currentTimeMillis() - startTime) * 1000);
+                    InvocationMetricKey.CF_LAUNCH_CVD_TIME, System.currentTimeMillis() - startTime);
         }
     }
 
