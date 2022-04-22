@@ -366,12 +366,14 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException, AdbShellCommandException, IOException {
 
-        // Temporary directory used to store files used in Checker test.
+        // Temporary local directory used to store files used in Checker test.
         File runTestDir = null;
+        // Path to temporary remote directory used to store files used in Checker test.
+        String tmpCheckerDir = null;
 
         try {
             String template = String.format("%s.XXXXXXXXXX", mRunTestName.replaceAll("/", "-"));
-            String tmpCheckerDir = createTemporaryDirectoryOnDevice(template);
+            tmpCheckerDir = createTemporaryDirectoryOnDevice(template);
             CLog.d("Created temporary directory `%s` on device", tmpCheckerDir);
 
             String cfgPath = tmpCheckerDir + "/graph.cfg";
@@ -433,7 +435,11 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             CLog.e("Exception while running Checker test: " + e.getMessage());
             throw e;
         } finally {
+            // Clean up temporary directories on host and device.
             FileUtil.recursiveDelete(runTestDir);
+            if (tmpCheckerDir != null) {
+                mDevice.deleteFile(tmpCheckerDir);
+            }
         }
         return Optional.empty();
     }
