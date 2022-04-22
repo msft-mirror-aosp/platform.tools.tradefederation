@@ -366,16 +366,6 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException, AdbShellCommandException, IOException {
 
-        /**
-         * An internal exception class for errors related to the preparation and execution of the
-         * Checker tool.
-         */
-        class CheckerTestException extends Exception {
-            CheckerTestException(String format, Object... args) {
-                super(String.format(format, args));
-            }
-        }
-
         // Temporary directory used to store files used in Checker test.
         File runTestDir = null;
 
@@ -386,7 +376,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             String mkdirCmd = String.format("mkdir -p \"%s\"", tmpCheckerDir);
             CommandResult mkdirResult = mDevice.executeShellV2Command(mkdirCmd);
             if (mkdirResult.getStatus() != CommandStatus.SUCCESS) {
-                throw new CheckerTestException(
+                throw new AdbShellCommandException(
                         "Cannot create directory `%s` on device", mkdirResult.getStderr());
             }
 
@@ -401,18 +391,13 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                             dex2oatPath, mClasspath.get(0), oatPath, cfgPath);
             CommandResult dex2oatResult = mDevice.executeShellV2Command(dex2oatCmd);
             if (dex2oatResult.getStatus() != CommandStatus.SUCCESS) {
-                throw new CheckerTestException(
+                throw new AdbShellCommandException(
                         "Error while running dex2oat: %s", dex2oatResult.getStderr());
             }
 
-            try {
-                runTestDir =
-                        Files.createTempDirectory(
-                                        testInfo.dependenciesFolder().toPath(), mRunTestName)
-                                .toFile();
-            } catch (IOException e) {
-                throw new CheckerTestException("I/O error while creating test dir: %s", e);
-            }
+            runTestDir =
+                    Files.createTempDirectory(testInfo.dependenciesFolder().toPath(), mRunTestName)
+                            .toFile();
 
             File localCfgPath = new File(runTestDir, "graph.cfg");
             if (localCfgPath.isFile()) {
@@ -420,19 +405,15 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             }
 
             if (!pullAndCheckFile(cfgPath, localCfgPath)) {
-                throw new CheckerTestException("Cannot pull CFG file from the device");
+                throw new IOException("Cannot pull CFG file from the device");
             }
 
             File tempJar = new File(runTestDir, "temp.jar");
             if (!pullAndCheckFile(mClasspath.get(0), tempJar)) {
-                throw new CheckerTestException("Cannot pull JAR file from the device");
+                throw new IOException("Cannot pull JAR file from the device");
             }
 
-            try {
-                extractSourcesFromJar(runTestDir, tempJar);
-            } catch (IOException e) {
-                throw new CheckerTestException("Error unpacking test JAR file: %s", e);
-            }
+            extractSourcesFromJar(runTestDir, tempJar);
 
             String checkerArch = AbiUtils.getArchForAbi(mAbi.getName()).toUpperCase();
 
@@ -454,10 +435,9 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                 CLog.i(checkerError.get());
                 return checkerError;
             }
-        } catch (CheckerTestException e) {
-            String errorMessage = e.getMessage();
-            CLog.e(errorMessage);
-            return Optional.of(errorMessage);
+        } catch (AdbShellCommandException | IOException e) {
+            CLog.e("Exception while running Checker test: " + e.getMessage());
+            throw e;
         } finally {
             FileUtil.recursiveDelete(runTestDir);
         }
@@ -599,8 +579,8 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
      * command.
      */
     public static class AdbShellCommandException extends Exception {
-        AdbShellCommandException(String message) {
-            super(message);
+        AdbShellCommandException(String format, Object... args) {
+            super(String.format(format, args));
         }
     }
 
