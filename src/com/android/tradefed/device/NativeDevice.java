@@ -536,6 +536,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                             "Waited for device %s to be online but it is in state '%s', cannot "
                                     + "get property %s.",
                             getSerialNumber(), getDeviceState(), name);
+                    CLog.w(new RuntimeException("This is not an actual exception but to help"
+                                                + " debugging. If this happens deterministically, "
+                                                + " it means the caller has wrong assumption of "
+                                                + " device state and is wasting time in waiting."));
                     return null;
                 }
             }
@@ -4907,6 +4911,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
             // All the operations to create the descriptor need to be safe (should not trigger any
             // device side effects like recovery)
+            String sdkVersion = null;
+            String buildAlias = null;
+            String hardwareRev = null;
+            if (TestDeviceState.ONLINE.equals(getDeviceState())) {
+                sdkVersion = getPropertyWithRecovery(DeviceProperties.SDK_VERSION, false);
+                buildAlias = getPropertyWithRecovery(DeviceProperties.BUILD_ALIAS, false);
+                hardwareRev = getPropertyWithRecovery(DeviceProperties.HARDWARE_REVISION, false);
+            }
             return new DeviceDescriptor(
                     idevice.getSerialNumber(),
                     null,
@@ -4916,9 +4928,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     getDeviceState(),
                     getDisplayString(selector.getDeviceProductType(idevice)),
                     getDisplayString(selector.getDeviceProductVariant(idevice)),
-                    getDisplayString(idevice.getProperty(DeviceProperties.SDK_VERSION)),
-                    getDisplayString(idevice.getProperty(DeviceProperties.BUILD_ALIAS)),
-                    getDisplayString(idevice.getProperty(DeviceProperties.HARDWARE_REVISION)),
+                    getDisplayString(sdkVersion),
+                    getDisplayString(buildAlias),
+                    getDisplayString(hardwareRev),
                     getDisplayString(getBattery()),
                     getDeviceClass(),
                     getDisplayString(getMacAddress()),
@@ -4926,7 +4938,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     getDisplayString(getSimOperator()),
                     isTemporary,
                     idevice);
-        } catch (RuntimeException e) {
+        } catch (RuntimeException|DeviceNotAvailableException e) {
             CLog.e("Exception while building device '%s' description:", getSerialNumber());
             CLog.e(e);
         }
@@ -5275,15 +5287,39 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public String getSimState() {
-        // Use ddmlib getProperty directly to avoid possible recovery path
-        return getIDevice().getProperty(SIM_STATE_PROP);
+        if (getIDevice() instanceof StubDevice) {
+            // Do not query SIM state from stub devices.
+            return null;
+        }
+        if (!TestDeviceState.ONLINE.equals(mState)) {
+            // Only query SIM state from online devices.
+            return null;
+        }
+        try {
+            return getPropertyWithRecovery(SIM_STATE_PROP, false);
+        } catch (DeviceNotAvailableException dnae) {
+            CLog.w("DeviceNotAvailableException while fetching SIM state");
+            return null;
+        }
     }
 
     /** {@inheritDoc} */
     @Override
     public String getSimOperator() {
-        // Use ddmlib getProperty directly to avoid possible recovery path
-        return getIDevice().getProperty(SIM_OPERATOR_PROP);
+        if (getIDevice() instanceof StubDevice) {
+            // Do not query SIM operator from stub devices.
+            return null;
+        }
+        if (!TestDeviceState.ONLINE.equals(mState)) {
+            // Only query SIM operator from online devices.
+            return null;
+        }
+        try {
+            return getPropertyWithRecovery(SIM_OPERATOR_PROP, false);
+        } catch (DeviceNotAvailableException dnae) {
+            CLog.w("DeviceNotAvailableException while fetching SIM operator");
+            return null;
+        }
     }
 
     /** {@inheritDoc} */
