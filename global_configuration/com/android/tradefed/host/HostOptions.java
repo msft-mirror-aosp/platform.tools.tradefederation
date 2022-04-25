@@ -19,7 +19,9 @@ package com.android.tradefed.host;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 
 import java.io.File;
 import java.net.InetAddress;
@@ -141,7 +143,17 @@ public class HostOptions implements IHostOptions {
     /** {@inheritDoc} */
     @Override
     public File getFastbootTmpDir() {
-        return mFastbootTmpDir;
+        if (mFastbootTmpDir != null) {
+            if (!mFastbootTmpDir.exists() || !mFastbootTmpDir.isDirectory()) {
+                throw new HarnessRuntimeException(
+                        String.format(
+                                "Fastboot tmp dir '%s' is missing and was expected.",
+                                mFastbootTmpDir),
+                        InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
+            }
+            return mFastbootTmpDir;
+        }
+        return null;
     }
 
     /** {@inheritDoc} */
