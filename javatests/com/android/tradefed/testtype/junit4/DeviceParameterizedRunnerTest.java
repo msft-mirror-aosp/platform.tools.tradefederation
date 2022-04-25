@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import junitparams.Parameters;
+import junitparams.naming.TestCaseName;
 
 /** Unit tests for {@link DeviceParameterizedRunner}. */
 @RunWith(JUnit4.class)
@@ -65,6 +66,7 @@ public class DeviceParameterizedRunnerTest {
             assertNotNull(getBuild());
         }
 
+        @TestCaseName("{method}[{index}]")
         @Parameters(method = "getParams")
         @Test
         public void testTwo(String param) {
@@ -85,6 +87,7 @@ public class DeviceParameterizedRunnerTest {
         /** Ignored parameterized method. */
         @Ignore
         @Parameters(method = "getParams")
+        @TestCaseName("{method}[{index}]")
         @Test
         public void testTwo(String param) {
             assertNotNull(param);
