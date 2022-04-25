@@ -109,7 +109,6 @@ public class BootstrapBuildProvider implements IDeviceBuildProvider {
             DeviceNotAvailableException {
         IBuildInfo info = new DeviceBuildInfo(mBuildId, mBuildTargetName);
         addFiles(info, mExtraFiles);
-        info.setProperties(BuildInfoProperties.DO_NOT_COPY_ON_SHARDING);
         if (!(device.getIDevice() instanceof StubDevice)) {
             if (!device.waitForDeviceShell(mShellAvailableTimeout * 1000)) {
                 throw new DeviceNotAvailableException(
@@ -146,6 +145,9 @@ public class BootstrapBuildProvider implements IDeviceBuildProvider {
                         e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
             }
             ((IDeviceBuildInfo) info).setTestsDir(mTestsDir, "1");
+        } else {
+            // Do not copy if it's an existing tests dir.
+            info.setProperties(BuildInfoProperties.DO_NOT_COPY_ON_SHARDING);
         }
         if (getInvocationFiles() != null) {
             getInvocationFiles()
