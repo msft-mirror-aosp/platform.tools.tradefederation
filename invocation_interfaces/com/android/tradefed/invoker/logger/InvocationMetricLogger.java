@@ -33,6 +33,9 @@ public class InvocationMetricLogger {
         // Bugreport time and count
         BUGREPORT_TIME("bugreport_time", true),
         BUGREPORT_COUNT("bugreport_count", true),
+        // Logcat dump time and count
+        LOGCAT_DUMP_TIME("logcat_dump_time", true),
+        LOGCAT_DUMP_COUNT("logcat_dump_count", true),
         CLEARED_RUN_ERROR("cleared_run_error", true),
         FETCH_BUILD("fetch_build_time_ms", true),
         SETUP("setup_time_ms", true),
