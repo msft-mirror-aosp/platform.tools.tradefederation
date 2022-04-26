@@ -65,6 +65,17 @@ public class InvocationMetricLogger {
         ADB_REBOOT_TIME("adb_reboot_time", true),
         // Represents how often we attempt to reboot the device.
         ADB_REBOOT_ROUTINE_COUNT("adb_reboot_routine_count", true),
+        // Represents the time attempting to reboot a device into bootloader
+        BOOTLOADER_REBOOT_TIME("bootloader_reboot_time", true),
+        // Represents how often we attempt to reboot the device into bootloader
+        BOOTLOADER_REBOOT_COUNT("bootloader_reboot_count", true),
+        // Represents the time attempting to reboot a device into fastbootd
+        FASTBOOTD_REBOOT_TIME("fastbootd_reboot_time", true),
+        // Represents how often we attempt to reboot the device into fastbootd
+        FASTBOOTD_REBOOT_COUNT("fastbootd_reboot_count", true),
+        // Represents how often we reboot a device already in bootloader
+        BOOTLOADER_SAME_STATE_REBOOT("bootloader_same_state_reboot", true),
+
         // Represents the time we spend pulling file from device.
         PULL_FILE_TIME("pull_file_time_ms", true),
         // Represents how many times we pulled file from the device.

@@ -3350,33 +3350,52 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             throw new UnsupportedOperationException(
                     String.format("Fastboot is not available and cannot reboot into %s", mode));
         }
+        long startTime = System.currentTimeMillis();
 
-        // Update fastboot serial number before entering fastboot mode
-        mStateMonitor.setFastbootSerialNumber(getFastbootSerialNumber());
+        try {
+            // Update fastboot serial number before entering fastboot mode
+            mStateMonitor.setFastbootSerialNumber(getFastbootSerialNumber());
 
-        // If we go to bootloader, it's probably for flashing so ensure we re-check the provider
-        mShouldSkipContentProviderSetup = false;
-        CLog.i(
-                "Rebooting device %s in state %s into %s",
-                getSerialNumber(), getDeviceState(), mode);
-        if (isStateBootloaderOrFastbootd()) {
+            // If we go to bootloader, it's probably for flashing so ensure we re-check the provider
+            mShouldSkipContentProviderSetup = false;
             CLog.i(
-                    "device %s already in %s. Rebooting anyway",
-                    getSerialNumber(), getDeviceState());
-            executeFastbootCommand(String.format("reboot-%s", mode));
-        } else {
-            CLog.i("Booting device %s into %s", getSerialNumber(), mode);
-            doAdbReboot(mode, null);
-        }
-
-        if (RebootMode.REBOOT_INTO_FASTBOOTD.equals(mode) && getHostOptions().isFastbootdEnable()) {
-            if (!mStateMonitor.waitForDeviceFastbootd(
-                    getFastbootPath(), mOptions.getFastbootTimeout())) {
-                recoverDeviceFromFastbootd();
+                    "Rebooting device %s in state %s into %s",
+                    getSerialNumber(), getDeviceState(), mode);
+            if (isStateBootloaderOrFastbootd()) {
+                CLog.i(
+                        "device %s already in %s. Rebooting anyway",
+                        getSerialNumber(), getDeviceState());
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.BOOTLOADER_SAME_STATE_REBOOT, 1);
+                executeFastbootCommand(String.format("reboot-%s", mode));
+            } else {
+                CLog.i("Booting device %s into %s", getSerialNumber(), mode);
+                doAdbReboot(mode, null);
             }
-        } else {
-            if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
-                recoverDeviceFromBootloader();
+
+            if (RebootMode.REBOOT_INTO_FASTBOOTD.equals(mode)
+                    && getHostOptions().isFastbootdEnable()) {
+                if (!mStateMonitor.waitForDeviceFastbootd(
+                        getFastbootPath(), mOptions.getFastbootTimeout())) {
+                    recoverDeviceFromFastbootd();
+                }
+            } else {
+                if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
+                    recoverDeviceFromBootloader();
+                }
+            }
+        } finally {
+            long elapsedTime = System.currentTimeMillis() - startTime;
+            if (RebootMode.REBOOT_INTO_FASTBOOTD.equals(mode)) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FASTBOOTD_REBOOT_TIME, elapsedTime);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FASTBOOTD_REBOOT_COUNT, 1);
+            } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.BOOTLOADER_REBOOT_TIME, elapsedTime);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.BOOTLOADER_REBOOT_COUNT, 1);
             }
         }
     }
