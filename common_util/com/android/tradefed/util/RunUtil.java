@@ -272,6 +272,14 @@ public class RunUtil implements IRunUtil {
         CommandStatus status = runTimed(timeout, osRunnable, true);
         CommandResult result = osRunnable.getResult();
         result.setStatus(status);
+        // In case of error backfill, copy stderr to its file
+        if (result.getExitCode() == 88) {
+            try {
+                FileUtil.writeToFile(result.getStderr(), stderrFile, true);
+            } catch (IOException e) {
+                // Ignore
+            }
+        }
         return result;
     }
 
