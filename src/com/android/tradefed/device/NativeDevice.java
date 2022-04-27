@@ -2202,23 +2202,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
         final String[] fullCmd = buildFastbootCommand(cmdArgs);
         for (int i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
-            File fastbootTmpDir = getHostOptions().getFastbootTmpDir();
-            IRunUtil runUtil = null;
-            if (fastbootTmpDir != null) {
-                runUtil = new RunUtil();
-                runUtil.setEnvVariable("TMPDIR", fastbootTmpDir.getAbsolutePath());
-            } else {
-                runUtil = getRunUtil();
-            }
-            CommandResult result = new CommandResult(CommandStatus.EXCEPTION);
-            // block state changes while executing a fastboot command, since
-            // device will disappear from fastboot devices while command is being executed
-            mFastbootLock.lock();
-            try {
-                result = runUtil.runTimedCmd(timeout, fullCmd);
-            } finally {
-                mFastbootLock.unlock();
-            }
+            CommandResult result = simpleFastbootCommand(timeout, fullCmd);
             if (!isRecoveryNeeded(result)) {
                 return result;
             }
@@ -3384,9 +3368,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     recoverDeviceFromFastbootd();
                 }
             } else {
-                if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
-                    recoverDeviceFromBootloader();
-                }
+                waitForDeviceBootloader();
             }
         } finally {
             long elapsedTime = System.currentTimeMillis() - startTime;
@@ -5546,5 +5528,59 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** The log that contains all the {@link #executeShellCommand(String)} logs. */
     public final File getExecuteShellCommandLog() {
         return mExecuteShellCommandLogs;
+    }
+
+    private void waitForDeviceBootloader() throws DeviceNotAvailableException {
+        if (mOptions.useUpdatedBootloaderStatus()) {
+            CommandResult commandResult =
+                    simpleFastbootCommand(
+                            mOptions.getFastbootTimeout(),
+                            buildFastbootCommand("getvar", "product"));
+            if (!CommandStatus.SUCCESS.equals(commandResult.getStatus())) {
+                CLog.e(
+                        "Waiting for device in bootloader. Status: %s.\nstdout:%s\nstderr:%s",
+                        commandResult.getStatus(),
+                        commandResult.getStdout(),
+                        commandResult.getStderr());
+                recoverDeviceFromBootloader();
+            } else {
+                setDeviceState(TestDeviceState.FASTBOOT);
+            }
+        } else {
+            if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
+                recoverDeviceFromBootloader();
+            }
+        }
+    }
+
+    /** Executes a simple fastboot command and report the status of the command. */
+    @VisibleForTesting
+    protected CommandResult simpleFastbootCommand(final long timeout, String[] fullCmd)
+            throws UnsupportedOperationException {
+        if (!mFastbootEnabled) {
+            throw new UnsupportedOperationException(
+                    String.format(
+                            "Attempted to fastboot on device %s , but fastboot "
+                                    + "is disabled. Aborting.",
+                            getSerialNumber()));
+        }
+        File fastbootTmpDir = getHostOptions().getFastbootTmpDir();
+        IRunUtil runUtil = null;
+        if (fastbootTmpDir != null) {
+            runUtil = new RunUtil();
+            runUtil.setEnvVariable("TMPDIR", fastbootTmpDir.getAbsolutePath());
+        } else {
+            runUtil = getRunUtil();
+        }
+        CommandResult result = new CommandResult(CommandStatus.EXCEPTION);
+        // block state changes while executing a fastboot command, since
+        // device will disappear from fastboot devices while command is being executed
+        mFastbootLock.lock();
+        try {
+            result = runUtil.runTimedCmd(timeout, fullCmd);
+        } finally {
+            mFastbootLock.unlock();
+        }
+        return result;
     }
 }
