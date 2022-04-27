@@ -2646,6 +2646,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public InputStreamSource getLogcatDump() {
+        long startTime = System.currentTimeMillis();
         LargeOutputReceiver largeReceiver = null;
         try {
             // use IDevice directly because we don't want callers to handle
@@ -2676,6 +2677,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 largeReceiver.cancel();
                 largeReceiver.delete();
             }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.LOGCAT_DUMP_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.LOGCAT_DUMP_COUNT, 1);
         }
         return new ByteArrayInputStreamSource(new byte[0]);
     }
