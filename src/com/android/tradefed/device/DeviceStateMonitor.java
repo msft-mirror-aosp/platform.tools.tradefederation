@@ -72,11 +72,9 @@ public class DeviceStateMonitor extends NativeDeviceStateMonitor {
         return false;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    protected boolean postOnlineCheck(final long waitTime) {
+    protected boolean postOnlineCheck(final long waitTime) throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         if (!waitForPmResponsive(waitTime)) {
             return false;
