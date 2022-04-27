@@ -22,6 +22,7 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.util.RunInterruptedException;
 
 import java.io.File;
 import java.net.InetAddress;
@@ -288,7 +289,12 @@ public class HostOptions implements IHostOptions {
                     "Requesting a '%s' permit out of the max limit of %s. Current queue "
                             + "length: %s",
                     type, mConcurrentLimit.get(type), mConcurrentLocks.get(type).getQueueLength());
-            mConcurrentLocks.get(type).acquireUninterruptibly();
+            try {
+                mConcurrentLocks.get(type).acquire();
+            } catch (InterruptedException e) {
+                throw new RunInterruptedException(
+                        e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
+            }
         }
     }
 
