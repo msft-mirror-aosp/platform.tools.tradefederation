@@ -52,6 +52,15 @@ public class ClusterHostUtilTest {
         Assert.assertFalse(ClusterHostUtil.isLocalhostIpPort("192.168.0.1:22434"));
     }
 
+    @Test
+    public void testIsLocalhostIpPort_hostname() {
+        Assert.assertTrue(ClusterHostUtil.isLocalhostIpPort("localhost:101"));
+        Assert.assertTrue(ClusterHostUtil.isLocalhostIpPort("localhost"));
+        Assert.assertFalse(ClusterHostUtil.isLocalhostIpPort(DEVICE_SERIAL));
+        Assert.assertFalse(ClusterHostUtil.isLocalhostIpPort("localhost:notaport"));
+        Assert.assertFalse(ClusterHostUtil.isLocalhostIpPort("google.com:22434"));
+    }
+
     // Test a valid TF version
     @Test
     public void testToValidTfVersion() {
