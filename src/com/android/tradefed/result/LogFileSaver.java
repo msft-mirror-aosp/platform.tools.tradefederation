@@ -247,7 +247,7 @@ public class LogFileSaver {
             bufInput = new BufferedInputStream(dataStream);
             outStream = createGZipLogStream(logFile);
             StreamUtil.copyStreams(bufInput, outStream);
-            CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
+            CLog.i("Saved gzip log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
             return logFile;
         } finally {
             StreamUtil.close(bufInput);
@@ -283,7 +283,7 @@ public class LogFileSaver {
                     logFile), BUFFER_SIZE));
             outStream.putNextEntry(new ZipEntry(saneDataName + "." + dataType.getFileExt()));
             StreamUtil.copyStreams(bufInput, outStream);
-            CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
+            CLog.i("Saved zip log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
             return logFile;
         } finally {
             StreamUtil.close(bufInput);
