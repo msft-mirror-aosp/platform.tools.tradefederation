@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.tradefed.testtype.blueberry;
+package com.android.tradefed.testtype.pandora;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
@@ -50,7 +50,7 @@ import java.util.Set;
  */
 public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
-    private static final int BLUEBERRY_SERVER_PORT = 8999;
+    private static final int PANDORA_SERVER_PORT = 8999;
     private static final int HCI_ROOTCANAL_PORT_CUTTLEFISH = 7300;
     private static final int HCI_ROOTCANAL_PORT = 6211;
     private static final int HCI_PROXY_PORT = 1234;
@@ -137,8 +137,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         ITestDevice testDevice = testInfo.getDevice();
 
-        // Forward Blueberry Server port.
-        adbForwardPort(testDevice, BLUEBERRY_SERVER_PORT);
+        // Forward Pandora Server port.
+        adbForwardPort(testDevice, PANDORA_SERVER_PORT);
 
         boolean isCuttlefish = testDevice.getProductType().equals("cutf");
 
@@ -163,7 +163,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         }
 
         // Remove forwarded ports.
-        adbForwardRemovePort(testDevice, BLUEBERRY_SERVER_PORT);
+        adbForwardRemovePort(testDevice, PANDORA_SERVER_PORT);
         if (!physical && !isCuttlefish) {
             adbForwardRemovePort(testDevice, HCI_ROOTCANAL_PORT);
         }
