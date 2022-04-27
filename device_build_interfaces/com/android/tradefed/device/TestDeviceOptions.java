@@ -171,6 +171,12 @@ public class TestDeviceOptions {
                             + "to get the exit status of shell commands")
     private boolean mExitStatusWorkaround = false;
 
+    @Option(
+            name = "use-updated-bootloader-status",
+            description =
+                    "Feature flag to test out an updated approach to bootloader state status.")
+    private boolean mUpdatedBootloaderStatus = true;
+
     // ====================== Options Related to Virtual Devices ======================
     @Option(
             name = INSTANCE_TYPE_OPTION,
@@ -840,6 +846,11 @@ public class TestDeviceOptions {
     /** Returns the accounting user of the Oxygen device. */
     public String getOxygenAccountingUser() {
         return mOxygenAccountingUser;
+    }
+
+    /** Returns whether or not to use the newer bootloader state status. */
+    public boolean useUpdatedBootloaderStatus() {
+        return mUpdatedBootloaderStatus;
     }
 }
 
