@@ -642,8 +642,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     CLog.e("Invocation reached its timeout. Cleaning up.");
                 }
                 long elapsedTime = System.currentTimeMillis() - mStartTime;
-                CLog.i("Updating command %d with elapsed time %d ms",
-                       mCmd.getCommandTracker().getId(), elapsedTime);
+                CLog.logAndDisplay(
+                        LogLevel.INFO,
+                        "Updating command %d with elapsed time %d ms",
+                        mCmd.getCommandTracker().getId(),
+                        elapsedTime);
                 // remove invocation thread first so another invocation can be started on device
                 // when freed
                 removeInvocationThread(this);
