@@ -147,6 +147,10 @@ public class FileProtoResultReporter extends ProtoResultReporter {
         mOutputFile = outputFile;
     }
 
+    public File getOutputFile() {
+        return mOutputFile;
+    }
+
     public void setDelimitedOutput(boolean delimitedOutput) {
         mUseDelimitedApi = delimitedOutput;
     }

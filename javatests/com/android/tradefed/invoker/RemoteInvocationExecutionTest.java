@@ -126,7 +126,7 @@ public class RemoteInvocationExecutionTest {
         verify(mMockListener)
                 .testLog(
                         Mockito.eq(RemoteInvocationExecution.REMOTE_CONFIG),
-                        Mockito.eq(LogDataType.XML),
+                        Mockito.eq(LogDataType.HARNESS_CONFIG),
                         Mockito.any());
     }
 
@@ -157,7 +157,7 @@ public class RemoteInvocationExecutionTest {
         verify(mMockListener)
                 .testLog(
                         Mockito.eq(RemoteInvocationExecution.REMOTE_CONFIG),
-                        Mockito.eq(LogDataType.XML),
+                        Mockito.eq(LogDataType.HARNESS_CONFIG),
                         Mockito.any());
     }
 

@@ -40,6 +40,7 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     MISMATCHED_BUILD_DEVICE(500_012, FailureStatus.CUSTOMER_ISSUE),
     LAB_HOST_FILESYSTEM_ERROR(500_013, FailureStatus.INFRA_FAILURE),
     TRADEFED_SHUTTING_DOWN(500_014, FailureStatus.INFRA_FAILURE),
+    LAB_HOST_FILESYSTEM_FULL(500_015, FailureStatus.INFRA_FAILURE),
 
     // 500_501 - 501_000: Build, Artifacts download related errors
     ARTIFACT_REMOTE_PATH_NULL(500_501, FailureStatus.INFRA_FAILURE),
@@ -79,6 +80,8 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     OXYGEN_REQUEST_TIMEOUT(505_015, FailureStatus.INFRA_FAILURE),
     OXYGEN_RESOURCE_EXHAUSTED(505_016, FailureStatus.INFRA_FAILURE),
     OXYGEN_SERVER_CONNECTION_FAILURE(505_017, FailureStatus.INFRA_FAILURE),
+    OXYGEN_CLIENT_BINARY_TIMEOUT(505_018, FailureStatus.INFRA_FAILURE),
+    OXYGEN_CLIENT_BINARY_ERROR(505_019, FailureStatus.INFRA_FAILURE),
 
     // 505_251 - 505_300: Configuration errors
     INTERNAL_CONFIG_ERROR(505_251, FailureStatus.INFRA_FAILURE),

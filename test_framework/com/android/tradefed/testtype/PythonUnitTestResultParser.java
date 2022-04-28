@@ -17,6 +17,7 @@ package com.android.tradefed.testtype;
 
 import com.android.ddmlib.MultiLineReceiver;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
@@ -147,8 +148,8 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
                     Pattern.DOTALL);
     static final Pattern PATTERN_FAIL_MESSAGE =
             Pattern.compile("(FAIL|ERROR): (\\S*) \\((\\S*)\\)( \\(.*\\))?");
-    static final Pattern PATTERN_RUN_SUMMARY = Pattern.compile(
-            "Ran (\\d+) tests? in (\\d+(.\\d*)?)s");
+    static final Pattern PATTERN_RUN_SUMMARY =
+            Pattern.compile("Ran (\\d+) tests? in (\\d+(.\\d*)?)s(.*)");
 
     /** In case of error spanning over multiple lines. */
     static final Pattern MULTILINE_RESULT_WITH_WARNING =
@@ -249,6 +250,7 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
 
     /** Parse the next result line according to current parser state. */
     void parse(String line) throws PythonUnitTestParseException {
+        CLog.v(line);
         switch (mCurrentParseState) {
             case TEST_CASE:
                 processTestCase(line);

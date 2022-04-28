@@ -317,8 +317,10 @@ public class TestInvocation implements ITestInvocation {
             // log a warning here so its captured before reportLogs is called
             CLog.e("Unexpected exception when running invocation: %s", t.toString());
             CLog.e(t);
-            reportFailure(createFailureFromException(t, FailureStatus.UNSET), listener);
-            throw t;
+            if (mStopCause == null) {
+                reportFailure(createFailureFromException(t, FailureStatus.UNSET), listener);
+                throw t;
+            }
         } finally {
             // Only capture logcat for TEST if we started the test phase.
             if (mTestStarted) {
@@ -687,9 +689,16 @@ public class TestInvocation implements ITestInvocation {
      * @param listener the {@link ITestLogger} with which to register the log
      */
     private void logExpandedConfiguration(IConfiguration config, ITestLogger listener) {
+        boolean isShard = config.getConfigurationDescription().getShardIndex() != null;
+        if (isShard) {
+            // Bail out of logging the config if this is a local shard since it is problematic
+            // and redundant anyway.
+            CLog.d("Skipping expanded config log for shard.");
+            return;
+        }
         try (StringWriter configXmlWriter = new StringWriter();
                 PrintWriter wrapperWriter = new PrintWriter(configXmlWriter)) {
-            config.dumpXml(wrapperWriter);
+            config.dumpXml(wrapperWriter, new ArrayList<String>(), true, false);
             wrapperWriter.flush();
             // Specified UTF-8 encoding for an abundance of caution, but its possible we could want
             // something else in the future

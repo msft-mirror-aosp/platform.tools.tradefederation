@@ -25,15 +25,19 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.ITestFilterReceiver;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -44,7 +48,7 @@ import java.util.Set;
  * (see
  * https://www.bluetooth.com/develop-with-bluetooth/qualification-listing/qualification-test-tools/profile-tuning-suite/).
  */
-public class PtsBotTest implements IRemoteTest {
+public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
     private static final int BLUEBERRY_SERVER_PORT = 8999;
     private static final int HCI_ROOTCANAL_PORT_CUTTLEFISH = 7300;
@@ -69,7 +73,50 @@ public class PtsBotTest implements IRemoteTest {
             importance = Importance.ALWAYS)
     private boolean physical = false;
 
+    private final Set<String> includeFilters = new LinkedHashSet<>();
+    private final Set<String> excludeFilters = new LinkedHashSet<>();
+
     private int hciPort;
+
+    @Override
+    public void addIncludeFilter(String filter) {
+        includeFilters.add(filter);
+    }
+
+    @Override
+    public void addAllIncludeFilters(Set<String> filters) {
+        includeFilters.addAll(filters);
+    }
+
+    @Override
+    public void addExcludeFilter(String filter) {
+        excludeFilters.add(filter);
+    }
+
+    @Override
+    public void addAllExcludeFilters(Set<String> filters) {
+        excludeFilters.addAll(filters);
+    }
+
+    @Override
+    public Set<String> getIncludeFilters() {
+        return includeFilters;
+    }
+
+    @Override
+    public Set<String> getExcludeFilters() {
+        return excludeFilters;
+    }
+
+    @Override
+    public void clearIncludeFilters() {
+        includeFilters.clear();
+    }
+
+    @Override
+    public void clearExcludeFilters() {
+        excludeFilters.clear();
+    }
 
     @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
@@ -93,10 +140,12 @@ public class PtsBotTest implements IRemoteTest {
         // Forward Blueberry Server port.
         adbForwardPort(testDevice, BLUEBERRY_SERVER_PORT);
 
+        boolean isCuttlefish = testDevice.getProductType().equals("cutf");
+
         if (!physical) {
             // Check product type to determine Root Canal port.
-            hciPort = HCI_ROOTCANAL_PORT_CUTTLEFISH;
-            if (!testDevice.getProductType().equals("cutf")) {
+            if (isCuttlefish) hciPort = HCI_ROOTCANAL_PORT_CUTTLEFISH;
+            else {
                 hciPort = HCI_ROOTCANAL_PORT;
 
                 // Forward Root Canal port.
@@ -115,7 +164,7 @@ public class PtsBotTest implements IRemoteTest {
 
         // Remove forwarded ports.
         adbForwardRemovePort(testDevice, BLUEBERRY_SERVER_PORT);
-        if (!physical && !testDevice.getProductType().equals("cutf")) {
+        if (!physical && !isCuttlefish) {
             adbForwardRemovePort(testDevice, HCI_ROOTCANAL_PORT);
         }
     }
@@ -161,15 +210,43 @@ public class PtsBotTest implements IRemoteTest {
         } else {
             CLog.i("Available tests for %s: [%s]", profile, String.join(", ", tests));
         }
-        Map<String, String> runMetrics = new HashMap<>();
 
-        listener.testRunStarted(profile, tests.length);
-        long startTimestamp = System.currentTimeMillis();
+        List<String> filteredTests = new ArrayList();
         for (int i = 0; i < tests.length; i++) {
-            runPtsBotTest(profile, tests[i], listener);
+            String testName = tests[i];
+            if (!shouldSkipTest(testName)) {
+                filteredTests.add(testName);
+            }
         }
-        long endTimestamp = System.currentTimeMillis();
-        listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
+
+        if (!filteredTests.isEmpty()) {
+
+            Map<String, String> runMetrics = new HashMap<>();
+
+            listener.testRunStarted(profile, filteredTests.size());
+            long startTimestamp = System.currentTimeMillis();
+            for (String testName : filteredTests) {
+                runPtsBotTest(profile, testName, listener);
+            }
+            long endTimestamp = System.currentTimeMillis();
+            listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
+        }
+    }
+
+    private boolean shouldSkipTest(String testName) {
+        // If the test or one of its parent test group is included in
+        // exclude filters, then skip it.
+        if (excludeFilters.stream().anyMatch(testName::contains)) return true;
+
+        // If the test or one of its parent test group is included in
+        // include filters, then don't skip it.
+        if (includeFilters.stream().anyMatch(testName::contains)) return false;
+
+        // If include filters are provided, and if the test or one of its
+        // parent test group is not included, then skip it.
+        if (!includeFilters.isEmpty()) return true;
+
+        return false;
     }
 
     private boolean runPtsBotTest(
@@ -208,24 +285,20 @@ public class PtsBotTest implements IRemoteTest {
                     new BufferedReader(new InputStreamReader(process.getErrorStream()));
 
             Optional<String> lastLine =
-                    stdInput.lines().peek(CLog::i).reduce((last, value) -> value);
+                    stdInput.lines().peek(line -> CLog.i(line)).reduce((last, value) -> value);
+
             // Last line is providing success information.
-            success =
-                    lastLine.map(
-                                    (line) -> {
-                                        try {
-                                            return Integer.parseInt(
-                                                            line.split(", ")[1].substring(0, 1))
-                                                    == 1;
-                                        } catch (Exception e) {
-                                            CLog.e("Failed to parse success");
-                                            return false;
-                                        }
-                                    })
-                            .orElse(false);
+            if (lastLine.isPresent()) {
+                try {
+                    success = Integer.parseInt(lastLine.get().split(", ")[1].substring(0, 1)) == 1;
+                } catch (Exception e) {
+                    CLog.e("Failed to parse success");
+                }
+            }
+
             stdInput.close();
 
-            stdError.lines().forEach(CLog::e);
+            stdError.lines().forEach(line -> CLog.e(line));
             stdError.close();
 
         } catch (Exception e) {

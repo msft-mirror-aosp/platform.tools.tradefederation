@@ -1000,8 +1000,8 @@ public class TestDevice extends NativeDevice {
             CLog.i("framework reboot is not supported; when enable root is disabled");
             return false;
         }
-        enableAdbRoot();
-        if (getApiLevel() >= 18 && isAdbRoot()) {
+        boolean isRoot = enableAdbRoot();
+        if (getApiLevel() >= 18 && isRoot) {
             try {
                 // check framework running
                 String output = executeShellCommand("pm path android");
@@ -1015,11 +1015,8 @@ public class TestDevice extends NativeDevice {
                 CLog.v("framework reboot: device unresponsive to shell command, using fallback");
                 return false;
             }
-            boolean notAvailable = waitForDeviceNotAvailable(30 * 1000);
-            if (notAvailable) {
-                postAdbReboot();
-            }
-            return notAvailable;
+            postAdbReboot();
+            return true;
         } else {
             CLog.v("framework reboot: not supported");
             return false;
@@ -2355,9 +2352,6 @@ public class TestDevice extends NativeDevice {
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
 
-        // See(b/192660485) for the reason of this wait.
-        getRunUtil().sleep(1000);
-
         // disconnect from microdroid
         getRunUtil()
                 .runTimedCmd(
@@ -2365,10 +2359,6 @@ public class TestDevice extends NativeDevice {
                         GlobalConfiguration.getDeviceManagerInstance().getAdbPath(),
                         "disconnect",
                         microdroidDevice.getSerialNumber());
-
-        // Make sure we're connected to the host adb; this connection seems to get dropped when a VM
-        // exits.(b/195765441)
-        waitForDeviceAvailable();
 
         GlobalConfiguration.getDeviceManagerInstance()
                 .freeDevice(microdroidDevice, FreeDeviceState.AVAILABLE);

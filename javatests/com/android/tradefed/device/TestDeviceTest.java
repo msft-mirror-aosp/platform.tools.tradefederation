@@ -1127,13 +1127,13 @@ public class TestDeviceTest {
             }
             // expect to ignore this
             mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
-            assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
         } finally {
             synchronized (blockResult) {
                 blockResult.notifyAll();
             }
         }
         fastbootThread.join();
+        assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
         mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
         assertEquals(TestDeviceState.NOT_AVAILABLE, mTestDevice.getDeviceState());
         verify(mMockRecovery, times(2))

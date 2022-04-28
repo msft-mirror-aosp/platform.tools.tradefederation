@@ -24,14 +24,31 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GCSFileDownloader;
 
 import java.io.File;
+import java.util.AbstractMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** Utility to interact with Oxygen service. */
 public class OxygenUtil {
 
     private GCSFileDownloader mDownloader;
+
+    // TODO: Support more type of log data types
+    private static final Map<Pattern, LogDataType> REMOTE_LOG_NAME_PATTERN_TO_TYPE_MAP =
+            Stream.of(
+                            new AbstractMap.SimpleEntry<>(
+                                    Pattern.compile("^logcat.*"), LogDataType.LOGCAT),
+                            new AbstractMap.SimpleEntry<>(
+                                    Pattern.compile(".*kernel.*"), LogDataType.KERNEL_LOG),
+                            new AbstractMap.SimpleEntry<>(
+                                    Pattern.compile(".*bugreport.*zip"), LogDataType.BUGREPORTZ),
+                            new AbstractMap.SimpleEntry<>(
+                                    Pattern.compile(".*bugreport.*txt"), LogDataType.BUGREPORT))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /** Default constructor of OxygenUtil */
     public OxygenUtil() {
@@ -87,5 +104,28 @@ public class OxygenUtil {
             CLog.e("Failed to download Oxygen log from %s", remoteFilePath);
             CLog.e(e);
         }
+    }
+
+    /**
+     * Determine a log file's log data type based on its name.
+     *
+     * @param logFileName The remote log file's name.
+     * @return A {@link LogDataType} which the log file associates with. Will return the type
+     *     UNKNOWN if unable to determine the log data type based on its name.
+     */
+    public static LogDataType getDefaultLogType(String logFileName) {
+        for (Map.Entry<Pattern, LogDataType> entry :
+                REMOTE_LOG_NAME_PATTERN_TO_TYPE_MAP.entrySet()) {
+            Matcher matcher = entry.getKey().matcher(logFileName);
+            if (matcher.find()) {
+                return entry.getValue();
+            }
+        }
+        CLog.d(
+                String.format(
+                        "Unable to determine log type of the remote log file %s, log type is"
+                                + " UNKNOWN",
+                        logFileName));
+        return LogDataType.UNKNOWN;
     }
 }
