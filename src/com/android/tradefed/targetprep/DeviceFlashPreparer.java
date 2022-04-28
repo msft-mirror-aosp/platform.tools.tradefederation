@@ -193,8 +193,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
         buildInfo.addBuildAttribute(
                 "original_build_fingerprint", device.getProperty("ro.product.build.fingerprint"));
 
-        // don't allow interruptions during flashing operations.
-        getRunUtil().allowInterrupt(false);
         long queueTime = -1;
         long flashingTime = -1;
         long start = -1;
@@ -213,7 +211,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                         TimeUnit.MILLISECONDS.toSeconds(queueTime));
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
-
+                // don't allow interruptions during flashing operations.
+                getRunUtil().allowInterrupt(false);
                 flasher.overrideDeviceOptions(device);
                 flasher.setUserDataFlashOption(mUserDataFlashOption);
                 flasher.setForceSystemFlash(mForceSystemFlash);
