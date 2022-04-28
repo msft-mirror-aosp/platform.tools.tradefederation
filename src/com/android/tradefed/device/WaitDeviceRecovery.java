@@ -163,7 +163,7 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
         }
 
         if (!recoverUntilOnline) {
-            if (monitor.waitForDeviceAvailable(mWaitTime) == null) {
+            if (monitor.waitForDeviceAvailableInRecoverPath(mWaitTime) == null) {
                 // device is online but not responsive
                 handleDeviceUnresponsive(device, monitor);
             }
