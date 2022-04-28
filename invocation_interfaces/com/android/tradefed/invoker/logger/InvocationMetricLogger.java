@@ -69,12 +69,27 @@ public class InvocationMetricLogger {
         PULL_FILE_TIME("pull_file_time_ms", true),
         // Represents how many times we pulled file from the device.
         PULL_FILE_COUNT("pull_file_count", true),
+        // Represents the time we spend pulling dir from device.
+        PULL_DIR_TIME("pull_dir_time_ms", true),
+        // Represents how many times we pulled dir from the device.
+        PULL_DIR_COUNT("pull_dir_count", true),
         // Represents the time we spend pushing file from device.
         PUSH_FILE_TIME("push_file_time_ms", true),
         // Represents how many times we pushed file from the device.
         PUSH_FILE_COUNT("push_file_count", true),
+        // Represents the time we spend pushing dir from device.
+        PUSH_DIR_TIME("push_dir_time_ms", true),
+        // Represents how many times we pushing dir from the device.
+        PUSH_DIR_COUNT("push_dir_count", true),
+        // Represents the time we spent deleting file on device
+        DELETE_DEVICE_FILE_TIME("delete_device_file_time_ms", true),
+        // Represents how many times we call the delete file method
+        DELETE_DEVICE_FILE_COUNT("delete_device_file_count", true),
         DOES_FILE_EXISTS_TIME("does_file_exists_time_ms", true),
         DOES_FILE_EXISTS_COUNT("does_file_exists_count", true),
+        // Represents the time and count for installing packages
+        PACKAGE_INSTALL_TIME("package_install_time_ms", true),
+        PACKAGE_INSTALL_COUNT("package_install_count", true),
         // Capture the time spent isolating a retry with reset
         RESET_RETRY_ISOLATION_PAIR("reset_isolation_timestamp_pair", true),
         // Capture the time spent isolating a retry with reboot
@@ -110,9 +125,16 @@ public class InvocationMetricLogger {
         UNCAUGHT_TEST_CRASH_FAILURES("uncaught_test_crash_failures", true),
         DEVICE_RESET_COUNT("device_reset_count", true),
         DEVICE_RESET_MODULES("device_reset_modules", true),
+        DEVICE_RESET_MODULES_FOR_TARGET_PREPARER("device_reset_modules_for_target_preparer", true),
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
         INVOCATION_START("tf_invocation_start_timestamp", false),
+        // Track the way of requesting Oxygen device lease/release.
+        OXYGEN_DEVICE_LEASE_THROUGH_ACLOUD_COUNT("oxygen_device_lease_through_acloud_count", true),
+        OXYGEN_DEVICE_RELEASE_THROUGH_ACLOUD_COUNT(
+                "oxygen_device_release_through_acloud_count", true),
+        OXYGEN_DEVICE_DIRECT_LEASE_COUNT("oxygen_device_direct_lease_count", true),
+        OXYGEN_DEVICE_DIRECT_RELEASE_COUNT("oxygen_device_direct_release_count", true),
 
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),

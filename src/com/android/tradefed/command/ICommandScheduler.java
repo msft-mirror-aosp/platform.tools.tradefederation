@@ -163,29 +163,6 @@ public interface ICommandScheduler {
      */
     public void shutdownOnEmpty();
 
-    /**
-     * Initiates a {@link #shutdown()} and handover to another tradefed process on this same host.
-     * <p/>
-     * The scheduler will inform the remote tradefed process listening on that port of freed devices
-     * as they become available.
-     *
-     * @return <code>true</code> if handover initiation was successful, <code>false</code>
-     * otherwise
-     */
-    public boolean handoverShutdown(int handoverPort);
-
-    /**
-     * Informs the command scheduler that initial handover exchange of devices and commands in use
-     * is complete, and it can begin scheduling operation.
-     */
-    public void handoverInitiationComplete();
-
-    /**
-     * Informs the command scheduler that a initiated handover sequence is fully complete, and it
-     * should re-initialize its remote manager on the default port.
-     */
-    public void completeHandover();
-
     /** Attempt to forcefully shutdown the command scheduler. Same as shutdownHard(true). */
     public void shutdownHard();
 

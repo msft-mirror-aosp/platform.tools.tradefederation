@@ -67,7 +67,7 @@ public class RustBinaryTestTest {
                 new RustBinaryTest() {
                     @Override
                     IShellOutputReceiver createParser(
-                            ITestInvocationListener listener, String runName, boolean isBenchmark) {
+                            ITestInvocationListener listener, String runName) {
                         return mMockReceiver;
                     }
                 };

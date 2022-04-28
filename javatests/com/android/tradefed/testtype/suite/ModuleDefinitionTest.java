@@ -22,6 +22,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -62,9 +63,12 @@ import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.retry.IRetryDecision;
+import com.android.tradefed.retry.RetryPreparationDecision;
+import com.android.tradefed.retry.RetryStrategy;
 import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.ITargetPreparer;
@@ -120,7 +124,7 @@ public class ModuleDefinitionTest {
     // Extra mock for log saving testing
     @Mock ILogSaver mMockLogSaver;
     @Mock ILogSaverListener mMockLogSaverListener;
-
+    @Mock IRetryDecision mMockDecision;
     private IRetryDecision mDecision = new BaseRetryDecision();
 
     private interface ITestInterface
@@ -445,7 +449,7 @@ public class ModuleDefinitionTest {
                         });
         module.setEnableDynamicDownload(true);
         module.getModuleInvocationContext().addAllocatedDevice(DEFAULT_DEVICE_NAME, mMockDevice);
-
+        module.setRetryDecision(mDecision);
         module.run(mModuleInfo, mMockListener);
 
         ArgumentCaptor<FailureDescription> failureDescription =
@@ -589,8 +593,9 @@ public class ModuleDefinitionTest {
         mModule.setBuild(mMockBuildInfo);
         mModule.setDevice(mMockDevice);
 
-        assertEquals(1, mModule.getRequiredTokens().size());
-        assertEquals(TokenProperty.SIM_CARD, mModule.getRequiredTokens().iterator().next());
+        assertEquals(1, mModule.getRequiredTokens(mModuleInfo).size());
+        assertEquals(
+                TokenProperty.SIM_CARD, mModule.getRequiredTokens(mModuleInfo).iterator().next());
     }
 
     /**
@@ -675,7 +680,7 @@ public class ModuleDefinitionTest {
                 TestInformation.newBuilder()
                         .setInvocationContext(mModule.getModuleInvocationContext())
                         .build();
-
+        mModule.setRetryDecision(mDecision);
         mModule.run(mModuleInfo, mMockListener);
         verify(mMockListener)
                 .testRunStarted(
@@ -719,7 +724,7 @@ public class ModuleDefinitionTest {
                 TestInformation.newBuilder()
                         .setInvocationContext(mModule.getModuleInvocationContext())
                         .build();
-
+        mModule.setRetryDecision(mDecision);
         mModule.run(mModuleInfo, mMockListener);
         verify(mMockListener)
                 .testRunStarted(
@@ -760,7 +765,7 @@ public class ModuleDefinitionTest {
                 TestInformation.newBuilder()
                         .setInvocationContext(mModule.getModuleInvocationContext())
                         .build();
-
+        mModule.setRetryDecision(mDecision);
         mModule.run(mModuleInfo, mMockListener);
         verify(mMockListener)
                 .testRunStarted(
@@ -806,7 +811,7 @@ public class ModuleDefinitionTest {
                 TestInformation.newBuilder()
                         .setInvocationContext(mModule.getModuleInvocationContext())
                         .build();
-
+        mModule.setRetryDecision(mDecision);
         mModule.run(mModuleInfo, mMockListener, Arrays.asList(mockModuleListener), null);
         verify(mMockListener)
                 .testRunStarted(
@@ -852,6 +857,7 @@ public class ModuleDefinitionTest {
                         mMapDeviceTargetPreparer,
                         mMultiTargetPrepList,
                         new Configuration("", ""));
+        mModule.setRetryDecision(mDecision);
         mModule.getModuleInvocationContext().addAllocatedDevice(DEFAULT_DEVICE_NAME, mMockDevice);
         mModule.getModuleInvocationContext()
                 .addDeviceBuildInfo(DEFAULT_DEVICE_NAME, mMockBuildInfo);
@@ -877,6 +883,121 @@ public class ModuleDefinitionTest {
         verify(mMockListener)
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
 
+        assertTrue(captured.getValue().getErrorMessage().contains(exceptionMessage));
+    }
+
+    @Test
+    public void testRun_failPreparation_PassAfterModuleRetry() throws Exception {
+        final int testCount = 5;
+        List<IRemoteTest> testList = new ArrayList<>();
+        testList.add(new TestObject("run1", testCount, false));
+        final String exceptionMessage = "ouch I failed";
+        mTargetPrepList.clear();
+        mTargetPrepList.add(
+                new BaseTargetPreparer() {
+                    @Override
+                    public void setUp(TestInformation testInfo)
+                            throws TargetSetupError, BuildError, DeviceNotAvailableException {
+                        DeviceDescriptor nullDescriptor = null;
+                        throw new TargetSetupError(exceptionMessage, nullDescriptor);
+                    }
+                });
+        mModule =
+                new ModuleDefinition(
+                        MODULE_NAME,
+                        testList,
+                        mMapDeviceTargetPreparer,
+                        mMultiTargetPrepList,
+                        new Configuration("", ""));
+        mModule.getModuleInvocationContext().addAllocatedDevice(DEFAULT_DEVICE_NAME, mMockDevice);
+        mModule.getModuleInvocationContext()
+                .addDeviceBuildInfo(DEFAULT_DEVICE_NAME, mMockBuildInfo);
+        mModuleInfo =
+                TestInformation.newBuilder()
+                        .setInvocationContext(mModule.getModuleInvocationContext())
+                        .build();
+
+        // Indicate that the module retry succeed.
+        doReturn(new RetryPreparationDecision(false, false))
+                .when(mMockDecision)
+                .shouldRetryPreparation(Mockito.any(), Mockito.anyInt(), Mockito.anyInt());
+        when(mMockDecision.getRetryStrategy()).thenReturn(RetryStrategy.ITERATIONS);
+        mModule.setRetryDecision(mMockDecision);
+        mModule.run(mModuleInfo, mMockListener);
+        // At the first time, expect that it would report a set up failure.
+        verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq(MODULE_NAME), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
+        // At the second time, the device is recovered, so expect that it run test level tests.
+        verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq(MODULE_NAME),
+                        Mockito.eq(testCount),
+                        Mockito.eq(1),
+                        Mockito.anyLong());
+        ArgumentCaptor<FailureDescription> captured =
+                ArgumentCaptor.forClass(FailureDescription.class);
+        verify(mMockListener).testRunFailed(captured.capture());
+        verify(mMockListener, times(2))
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        assertTrue(captured.getValue().getErrorMessage().contains(exceptionMessage));
+    }
+
+    @Test
+    public void testRun_failPreparation_FailAfterModuleRetry() throws Exception {
+        final String exceptionMessage = "ouch I failed";
+        mTargetPrepList.clear();
+        mTargetPrepList.add(
+                new BaseTargetPreparer() {
+                    @Override
+                    public void setUp(TestInformation testInfo)
+                            throws TargetSetupError, BuildError, DeviceNotAvailableException {
+                        DeviceDescriptor nullDescriptor = null;
+                        throw new TargetSetupError(exceptionMessage, nullDescriptor);
+                    }
+                });
+        mModule =
+                new ModuleDefinition(
+                        MODULE_NAME,
+                        mTestList,
+                        mMapDeviceTargetPreparer,
+                        mMultiTargetPrepList,
+                        new Configuration("", ""));
+        mModule.getModuleInvocationContext().addAllocatedDevice(DEFAULT_DEVICE_NAME, mMockDevice);
+        mModule.getModuleInvocationContext()
+                .addDeviceBuildInfo(DEFAULT_DEVICE_NAME, mMockBuildInfo);
+        mModuleInfo =
+                TestInformation.newBuilder()
+                        .setInvocationContext(mModule.getModuleInvocationContext())
+                        .build();
+        TargetSetupError error =
+                new TargetSetupError(exceptionMessage, InfraErrorIdentifier.UNDETERMINED);
+        RetryPreparationDecision decision = new RetryPreparationDecision(true, false);
+        decision.setPreviousException(error);
+        RetryPreparationDecision decision2 = new RetryPreparationDecision(false, true);
+        doReturn(decision, decision, decision, decision2)
+                .when(mMockDecision)
+                .shouldRetryPreparation(Mockito.any(), Mockito.anyInt(), Mockito.anyInt());
+        when(mMockDecision.getRetryStrategy()).thenReturn(RetryStrategy.ITERATIONS);
+        mModule.setRetryDecision(mMockDecision);
+        mModule.run(mModuleInfo, mMockListener, null, null, 3);
+        verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq(MODULE_NAME), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
+        verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq(MODULE_NAME), Mockito.eq(1), Mockito.eq(1), Mockito.anyLong());
+        verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq(MODULE_NAME), Mockito.eq(1), Mockito.eq(2), Mockito.anyLong());
+        verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq(MODULE_NAME), Mockito.eq(1), Mockito.eq(3), Mockito.anyLong());
+        ArgumentCaptor<FailureDescription> captured =
+                ArgumentCaptor.forClass(FailureDescription.class);
+        verify(mMockListener, times(4)).testRunFailed(captured.capture());
+        verify(mMockListener, times(4))
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         assertTrue(captured.getValue().getErrorMessage().contains(exceptionMessage));
     }
 

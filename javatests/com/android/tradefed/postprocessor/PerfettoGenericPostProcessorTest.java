@@ -325,10 +325,10 @@ public class PerfettoGenericPostProcessorTest {
         Map<String, Metric.Builder> parsedMetrics = mProcessor
                 .processRunMetricsAndLogs(new HashMap<>(), testLogs);
 
-        assertMetricsContain(parsedMetrics,
+        assertMetricsContain(
+                parsedMetrics,
                 "perfetto_android_hwui_metric-process_info-process_name-com.android.systemui-all_mem_min",
                 15120269);
-
     }
 
     /** Test metrics enabled with key and integer value prefixing. */
@@ -448,6 +448,24 @@ public class PerfettoGenericPostProcessorTest {
         if (null != metricProtoFile) {
             metricProtoFile.delete();
         }
+    }
+
+    /** Test that post processor runtime is reported if metrics are present. */
+    @Test
+    public void testReportsRuntime() throws ConfigurationException, IOException {
+        setupPerfettoMetricFile(METRIC_FILE_FORMAT.text, true, true);
+        mOptionSetter.setOptionValue(PREFIX_OPTION, PREFIX_OPTION_VALUE);
+        mOptionSetter.setOptionValue(INDEX_OPTION, "perfetto.protos.AndroidStartupMetric.startup");
+        mOptionSetter.setOptionValue(REGEX_OPTION_VALUE, "android_startup-startup-1.*");
+        Map<String, LogFile> testLogs = new HashMap<>();
+        testLogs.put(
+                PREFIX_OPTION_VALUE,
+                new LogFile(
+                        perfettoMetricProtoFile.getAbsolutePath(), "some.url", LogDataType.TEXTPB));
+        Map<String, Metric.Builder> parsedMetrics =
+                mProcessor.processRunMetricsAndLogs(new HashMap<>(), testLogs);
+
+        assertTrue(parsedMetrics.containsKey(PerfettoGenericPostProcessor.RUNTIME_METRIC_KEY));
     }
 
     /**

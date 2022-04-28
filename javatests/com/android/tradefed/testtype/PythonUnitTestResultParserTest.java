@@ -53,6 +53,7 @@ public class PythonUnitTestResultParserTest {
     public static final String PYTHON_OUTPUT_FILE_1 = "python_output1.txt";
     public static final String PYTHON_OUTPUT_FILE_2 = "python_output2.txt";
     public static final String PYTHON_OUTPUT_FILE_3 = "python_output3.txt";
+    public static final String PYTHON_OUTPUT_FILE_4 = "python_output4.txt";
 
     private PythonUnitTestResultParser mParser;
     @Mock ITestInvocationListener mMockListener;
@@ -778,6 +779,23 @@ public class PythonUnitTestResultParserTest {
                                         "__main__.ServerTest", "test_handle_inheritance")),
                         (String) Mockito.any());
         verify(mMockListener).testRunEnded(10314, new HashMap<String, Metric>());
+    }
+
+    /**
+     * Ensure that we end up in a COMPLETE state and do not throw an exception when summary has some
+     * end-characters.
+     */
+    @Test
+    public void testParseSummary() {
+        Set<String> includeFilters = new LinkedHashSet<>();
+        Set<String> excludeFilters = new LinkedHashSet<>();
+        mParser =
+                new PythonUnitTestResultParser(
+                        ArrayUtil.list(mMockListener), "test", includeFilters, excludeFilters);
+
+        String[] contents = readInFile(PYTHON_OUTPUT_FILE_4);
+        // Shouldn't throw
+        mParser.processNewLines(contents);
     }
 
     /**

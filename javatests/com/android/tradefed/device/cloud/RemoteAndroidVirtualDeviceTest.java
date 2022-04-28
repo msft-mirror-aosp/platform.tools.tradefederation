@@ -66,7 +66,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /** Unit tests for {@link RemoteAndroidVirtualDevice}. */
 @RunWith(JUnit4.class)
@@ -357,15 +356,6 @@ public class RemoteAndroidVirtualDeviceTest {
         mTestDevice.postInvocationTearDown(null);
 
         verify(mMockStateMonitor).setIDevice(Mockito.any());
-        verify(mMockIDevice)
-                .executeShellCommand(
-                        Mockito.eq("logcat -v threadtime,uid -d"), Mockito.any(),
-                        Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS));
-        verify(mTestLogger)
-                .testLog(
-                        Mockito.eq("device_logcat_teardown_gce"),
-                        Mockito.eq(LogDataType.LOGCAT),
-                        Mockito.any());
 
         Mockito.verify(mGceSshMonitor).shutdown();
         Mockito.verify(mGceSshMonitor).joinMonitor();
@@ -463,16 +453,7 @@ public class RemoteAndroidVirtualDeviceTest {
         }
         mTestDevice.postInvocationTearDown(expectedException);
 
-        verify(mMockIDevice)
-                .executeShellCommand(
-                        Mockito.eq("logcat -v threadtime,uid -d"), Mockito.any(),
-                        Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS));
         verify(mMockStateMonitor).setIDevice(Mockito.any());
-        verify(mTestLogger)
-                .testLog(
-                        Mockito.eq("device_logcat_teardown_gce"),
-                        Mockito.eq(LogDataType.LOGCAT),
-                        Mockito.any());
     }
 
     /**
@@ -561,15 +542,6 @@ public class RemoteAndroidVirtualDeviceTest {
             assertNull(mTestDevice.getGceSshMonitor());
 
             verify(mMockStateMonitor, times(2)).setIDevice(Mockito.any());
-            verify(mMockIDevice, times(2))
-                    .executeShellCommand(
-                            Mockito.eq("logcat -v threadtime,uid -d"), Mockito.any(),
-                            Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS));
-            verify(mTestLogger, times(2))
-                    .testLog(
-                            Mockito.eq("device_logcat_teardown_gce"),
-                            Mockito.eq(LogDataType.LOGCAT),
-                            Mockito.any());
             verify(mMockStateMonitor, times(2)).waitForDeviceAvailable(Mockito.anyLong());
             verify(mMockIDevice, times(2)).getState();
             verify(mMockStateMonitor, times(2)).waitForDeviceNotAvailable(Mockito.anyLong());
@@ -652,15 +624,6 @@ public class RemoteAndroidVirtualDeviceTest {
             // shutdown was disabled, it should not have been called.
             verify(mGceHandler, never()).shutdownGce();
             verify(mMockStateMonitor).setIDevice(Mockito.any());
-            verify(mMockIDevice)
-                    .executeShellCommand(
-                            Mockito.eq("logcat -v threadtime,uid -d"), Mockito.any(),
-                            Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS));
-            verify(mTestLogger)
-                    .testLog(
-                            Mockito.eq("device_logcat_teardown_gce"),
-                            Mockito.eq(LogDataType.LOGCAT),
-                            Mockito.any());
         } finally {
             FileUtil.deleteFile(tmpKeyFile);
         }
@@ -759,15 +722,6 @@ public class RemoteAndroidVirtualDeviceTest {
                     .testLog(
                             Mockito.eq("bugreportz-ssh"),
                             Mockito.eq(LogDataType.BUGREPORTZ),
-                            Mockito.any());
-            verify(mMockIDevice)
-                    .executeShellCommand(
-                            Mockito.eq("logcat -v threadtime,uid -d"), Mockito.any(),
-                            Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS));
-            verify(mTestLogger)
-                    .testLog(
-                            Mockito.eq("device_logcat_teardown_gce"),
-                            Mockito.eq(LogDataType.LOGCAT),
                             Mockito.any());
         } finally {
             FileUtil.deleteFile(tmpKeyFile);

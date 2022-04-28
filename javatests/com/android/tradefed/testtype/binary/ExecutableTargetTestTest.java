@@ -399,4 +399,32 @@ public class ExecutableTargetTestTest {
             assertEquals(true, cmd1 != null || cmd2 != null || cmd3 != null);
         }
     }
+
+    /** Test skipping findBinary(). */
+    @Test
+    public void testRun_skipBinaryCheck()
+            throws DeviceNotAvailableException, ConfigurationException {
+        mExecutableTargetTest =
+                new ExecutableTargetTest() {
+                    @Override
+                    protected void checkCommandResult(
+                            CommandResult result,
+                            ITestInvocationListener listener,
+                            TestDescription description) {}
+                };
+        mExecutableTargetTest.setDevice(mMockITestDevice);
+        // Set test commands
+        OptionSetter setter = new OptionSetter(mExecutableTargetTest);
+        setter.setOptionValue("test-command-line", testName1, testCmd1);
+        setter.setOptionValue("skip-binary-check", "true");
+        mExecutableTargetTest.run(mTestInfo, mListener);
+        // run cmd1 test
+        TestDescription testDescription = new TestDescription(testName1, testName1);
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName1), eq(1));
+        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testEnded(
+                        Mockito.eq(testDescription),
+                        Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
+    }
 }

@@ -18,7 +18,6 @@ package com.android.tradefed.device.metric;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -177,18 +176,26 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
             String pattern, final Map<String, String> currentMetrics) {
         Map<String, File> matchedFiles = new HashMap<>();
         Pattern p = Pattern.compile(pattern);
+
+        Map<ITestDevice, Integer> deviceUsers = new HashMap<>();
+        try {
+            for (ITestDevice device : getRealDevices()) {
+                deviceUsers.put(device, device.getCurrentUser());
+            }
+        } catch (DeviceNotAvailableException dnae) {
+            CLog.e(dnae);
+            return matchedFiles;
+        }
+
         for (Entry<String, String> entry : currentMetrics.entrySet()) {
             if (p.matcher(entry.getKey()).find()) {
-                for (ITestDevice device : getDevices()) {
-                    // Skip StubDevices
-                    if (device.getIDevice() instanceof StubDevice) {
-                        continue;
-                    }
+                for (ITestDevice device : getRealDevices()) {
                     if (!shouldCollect(device)) {
                         continue;
                     }
                     try {
-                        File attemptPull = retrieveFile(device, entry.getValue());
+                        File attemptPull =
+                                retrieveFile(device, entry.getValue(), deviceUsers.get(device));
                         if (attemptPull != null) {
                             if (mCleanUp) {
                                 device.deleteFile(entry.getValue());
@@ -197,7 +204,7 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
                             // files pulled from the device.
                             matchedFiles.put(entry.getKey(), attemptPull);
                         }
-                    } catch (DeviceNotAvailableException e) {
+                    } catch (DeviceNotAvailableException | RuntimeException e) {
                         CLog.e(
                                 "Exception when pulling metric file '%s' from %s",
                                 entry.getValue(), device.getSerialNumber());
@@ -220,12 +227,13 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
      *
      * @param device which has the file.
      * @param remoteFilePath location in the device.
+     * @param userId the user id to pull from
      * @return File retrieved from the given path in the device.
      * @throws DeviceNotAvailableException
      */
-    protected File retrieveFile(ITestDevice device, String remoteFilePath)
+    protected File retrieveFile(ITestDevice device, String remoteFilePath, int userId)
             throws DeviceNotAvailableException {
-        return device.pullFile(remoteFilePath);
+        return device.pullFile(remoteFilePath, userId);
     }
 
     /**
@@ -239,11 +247,7 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
         try {
             File tmpDestDir =
                     FileUtil.createTempDir("metric_tmp", CurrentInvocation.getWorkFolder());
-            for (ITestDevice device : getDevices()) {
-                // Skip StubDevices
-                if (device.getIDevice() instanceof StubDevice) {
-                    continue;
-                }
+            for (ITestDevice device : getRealDevices()) {
                 if (!shouldCollect(device)) {
                     continue;
                 }
@@ -254,7 +258,7 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
                         }
                         return new SimpleEntry<String, File>(keyDirectory, tmpDestDir);
                     }
-                } catch (DeviceNotAvailableException e) {
+                } catch (DeviceNotAvailableException | RuntimeException e) {
                     CLog.e(
                             "Exception when pulling directory '%s' from %s",
                             keyDirectory, device.getSerialNumber());

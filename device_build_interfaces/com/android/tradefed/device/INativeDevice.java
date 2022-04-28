@@ -632,6 +632,20 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
+     * Retrieves a file off device.
+     *
+     * @param remoteFilePath the absolute path to file on device.
+     * @param localFile the local file to store contents in. If non-empty, contents will be
+     *     replaced.
+     * @param userId The user id to pull from
+     * @return <code>true</code> if file was retrieved successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pullFile(String remoteFilePath, File localFile, int userId)
+            throws DeviceNotAvailableException;
+
+    /**
      * Retrieves a file off device, stores it in a local temporary {@link File}, and returns that
      * {@code File}.
      *
@@ -642,6 +656,19 @@ public interface INativeDevice {
      *             recovered.
      */
     public File pullFile(String remoteFilePath) throws DeviceNotAvailableException;
+
+    /**
+     * Retrieves a file off device, stores it in a local temporary {@link File}, and returns that
+     * {@code File}.
+     *
+     * @param remoteFilePath the absolute path to file on device.
+     * @param userId The user id to pull from
+     * @return A {@link File} containing the contents of the device file, or {@code null} if the
+     *     copy failed for any reason (including problems with the host filesystem)
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public File pullFile(String remoteFilePath, int userId) throws DeviceNotAvailableException;
 
     /**
      * Retrieves a file off device, and returns the contents.

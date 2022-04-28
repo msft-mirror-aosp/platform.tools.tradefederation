@@ -262,7 +262,10 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
                         "Timed out booting into DSU", e, device.getDeviceDescriptor());
             }
             if (!isDSURunning(device)) {
-                throw new TargetSetupError("Failed to boot into DSU", device.getDeviceDescriptor());
+                throw new TargetSetupError(
+                        "Failed to boot into DSU",
+                        device.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
             CommandResult result = device.executeShellV2Command("gsi_tool enable");
             if (CommandStatus.SUCCESS.equals(result.getStatus())) {

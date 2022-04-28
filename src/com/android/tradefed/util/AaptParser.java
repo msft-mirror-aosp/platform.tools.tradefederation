@@ -50,7 +50,8 @@ public class AaptParser {
     private static final int MAX_NUM_NATIVE_CODE = 10;
 
     private static final Pattern NATIVE_CODE_PATTERN =
-            Pattern.compile("native-code: '(.*?)'" + Strings.repeat("( '.*?')?", MAX_NUM_NATIVE_CODE - 1));
+            Pattern.compile(
+                    "native-code: '(.*?)'" + Strings.repeat("( '.*?')?", MAX_NUM_NATIVE_CODE - 1));
 
     private static final Pattern REQUEST_LEGACY_STORAGE_PATTERN =
             Pattern.compile("requestLegacyExternalStorage.*=\\(.*\\)(.*)", Pattern.MULTILINE);
@@ -189,13 +190,13 @@ public class AaptParser {
 
         String stderr = result.getStderr();
         if (stderr != null && !stderr.isEmpty()) {
-            CLog.e("aapt dump badging stderr: %s", stderr);
+            CLog.e("%s dump badging stderr: %s", toolName(aaptVersion), stderr);
         }
         AaptParser p = new AaptParser();
         if (!CommandStatus.SUCCESS.equals(result.getStatus()) || !p.parse(result.getStdout())) {
             CLog.e(
-                    "Failed to run aapt on %s. stdout: %s",
-                    apkFile.getAbsoluteFile(), result.getStdout());
+                    "Failed to run %s on %s. stdout: %s",
+                    toolName(aaptVersion), apkFile.getAbsoluteFile(), result.getStdout());
             return null;
         }
         result =
@@ -208,14 +209,14 @@ public class AaptParser {
 
         stderr = result.getStderr();
         if (stderr != null && !stderr.isEmpty()) {
-            CLog.e("aapt dump xmltree AndroidManifest.xml stderr: %s", stderr);
+            CLog.e("%s dump xmltree AndroidManifest.xml stderr: %s", toolName(aaptVersion), stderr);
         }
 
         if (!CommandStatus.SUCCESS.equals(result.getStatus())
                 || !p.parseXmlTree(result.getStdout())) {
             CLog.e(
-                    "Failed to run aapt on %s. stdout: %s",
-                    apkFile.getAbsoluteFile(), result.getStdout());
+                    "Failed to run %s on %s. stdout: %s",
+                    toolName(aaptVersion), apkFile.getAbsoluteFile(), result.getStdout());
             return null;
         }
         return p;
@@ -270,5 +271,9 @@ public class AaptParser {
 
     public boolean isUsingPermissionManageExternalStorage() {
         return mUsesPermissionManageExternalStorage;
+    }
+
+    private static String toolName(AaptVersion version) {
+        return version.name().toLowerCase();
     }
 }

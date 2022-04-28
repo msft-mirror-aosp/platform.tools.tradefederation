@@ -23,6 +23,7 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.DeviceSelectionOptions;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.IRescheduler;
@@ -114,10 +115,24 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                     // started virtual device.
                     String deviceName = (config.getDeviceConfig().size() > 1) ?
                             String.format("{%s}", deviceConfig.getDeviceName()) : "";
-                    commandLine += String.format(" --%sno-gce-device --%sserial %s",
-                            deviceName,
-                            deviceName,
-                            context.getDevice(deviceConfig.getDeviceName()).getSerialNumber());
+                    commandLine +=
+                            String.format(
+                                    " --%sno-gce-device --%sserial %s",
+                                    deviceName,
+                                    deviceName,
+                                    context.getDevice(deviceConfig.getDeviceName())
+                                            .getSerialNumber());
+                    // If we are using the device-type selector, override it
+                    if (DeviceSelectionOptions.DeviceRequestedType.GCE_DEVICE.equals(
+                            ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
+                                    .getDeviceTypeRequested())) {
+                        commandLine +=
+                                String.format(
+                                        " --%sdevice-type %s",
+                                        deviceName,
+                                        DeviceSelectionOptions.DeviceRequestedType.EXISTING_DEVICE
+                                                .name());
+                    }
                 }
             }
             config.setCommandLine(QuotationAwareTokenizer.tokenizeLine(commandLine, false));

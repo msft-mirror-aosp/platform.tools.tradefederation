@@ -16,59 +16,111 @@
 package com.android.tradefed.targetprep;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.ITestDevice.ApexInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.util.CommandResult;
-import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 
-import org.junit.After;
+import com.google.common.collect.ImmutableMultimap;
+
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.File;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /** Unit test for {@link ModuleOemTargetPreparerTest} */
 @RunWith(JUnit4.class)
 public class ModuleOemTargetPreparerTest {
-    private static final String SERIAL = "serial";
-    private ModuleOemTargetPreparer mModuleOemTargetPreparer;
-    @Mock ITestDevice mMockDevice;
-    private TestInformation mTestInfo;
-    private File mFakeApex;
-    private File mFakeApk;
-
     private static final String APEX_PACKAGE_NAME = "com.android.FAKE_APEX_PACKAGE_NAME";
     private static final String APK_PACKAGE_NAME = "com.android.FAKE_APK_PACKAGE_NAME";
     private static final String APK_PACKAGE_NAME2 = "com.android.FAKE_APK_PACKAGE_NAME2";
     private static final String SPLIT_APK_PACKAGE_NAME = "com.android.SPLIT_FAKE_APK_PACKAGE_NAME";
-    private static final String APEX_NAME = "fakeApex.apex";
-    private static final String APEX_PATH = "/system/apex/com.android.FAKE_APEX_PACKAGE_NAME.apex";
-    private static final String APEX_PRELOAD_NAME = "com.android.FAKE_APEX_PACKAGE_NAME.apex";
+    private static final String APEX_PRELOAD_NAME = APEX_PACKAGE_NAME + ".apex";
+    private static final String APEX_PATH_ON_DEVICE = "/system/apex/" + APEX_PRELOAD_NAME;
+    private static final String TEST_APEX_NAME = "fakeApex.apex";
+    private static final String TEST_APK_NAME = "fakeApk.apk";
+    private static final String TEST_SPLIT_APK_APKS_NAME = "fakeApk.apks";
+    private static final String TEST_SPLIT_APK_NAME = "FakeSplit/base-master.apk";
+    private static final String TEST_HDPI_APK_NAME = "FakeSplit/base-hdpi.apk";
+
+    @Rule public TemporaryFolder testDir = new TemporaryFolder();
+    private ModuleOemTargetPreparer mModuleOemTargetPreparer;
+    @Mock ModulePusher mMockPusher;
+    @Mock ITestDevice mMockDevice;
+    private TestInformation mTestInfo;
+    private File mFakeApex;
+    private File mFakeApk;
+    private File mFakeApkApks;
+    private File mFakeSplitApk;
+    private File mFakeHdpiApk;
+    private File mFakeRecoverApex;
+    private File mFakeRecoverSplitApk;
+    private File mFakeRecoverHdpiApk;
+    private OptionSetter mOptionSetter;
+    private final ITestDevice.ApexInfo mFakeApexData =
+            new ITestDevice.ApexInfo(APEX_PACKAGE_NAME, 1, APEX_PATH_ON_DEVICE);
+    private File mRecoverRootDir;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
-        mFakeApex = FileUtil.createTempFile("fakeApex", ".apex");
-        mFakeApk = FileUtil.createTempFile("fakeApk", ".apk");
-
-        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL);
+        mFakeApex = testDir.newFile(TEST_APEX_NAME);
+        mFakeApk = testDir.newFile(TEST_APK_NAME);
+        mFakeApkApks = testDir.newFile(TEST_SPLIT_APK_APKS_NAME);
+        testDir.newFolder("FakeSplit");
+        mFakeSplitApk = testDir.newFile(TEST_SPLIT_APK_NAME);
+        mFakeHdpiApk = testDir.newFile(TEST_HDPI_APK_NAME);
+        mRecoverRootDir = testDir.newFolder();
+        testDir.newFolder(mRecoverRootDir.getName(), APEX_PACKAGE_NAME);
+        mFakeRecoverApex =
+                testDir.newFile(
+                        Paths.get(mRecoverRootDir.getName(), APEX_PACKAGE_NAME, TEST_APEX_NAME)
+                                .toString());
+        testDir.newFolder(mRecoverRootDir.getName(), SPLIT_APK_PACKAGE_NAME);
+        mFakeRecoverSplitApk =
+                testDir.newFile(
+                        Paths.get(
+                                        mRecoverRootDir.getName(),
+                                        SPLIT_APK_PACKAGE_NAME,
+                                        "base-master.apk")
+                                .toString());
+        mFakeRecoverHdpiApk =
+                testDir.newFile(
+                        Paths.get(
+                                        mRecoverRootDir.getName(),
+                                        SPLIT_APK_PACKAGE_NAME,
+                                        "base-hdpi.apk")
+                                .toString());
+        when(mMockDevice.getApiLevel()).thenReturn(30 /* Build.VERSION_CODES.R */);
         when(mMockDevice.getDeviceDescriptor()).thenReturn(null);
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockDevice);
@@ -81,141 +133,249 @@ public class ModuleOemTargetPreparerTest {
                         if (testAppFile.getName().endsWith(".apex")) {
                             return APEX_PACKAGE_NAME;
                         }
-                        if (testAppFile.getName().endsWith(".apk")
-                                && !testAppFile.getName().contains("Split")) {
+                        if (TEST_APK_NAME.equals(testAppFile.getName())) {
                             return APK_PACKAGE_NAME;
                         }
-                        if (testAppFile.getName().endsWith(".apk")
-                                && testAppFile.getName().contains("Split")) {
-                            return SPLIT_APK_PACKAGE_NAME;
-                        }
-                        if (testAppFile.getName().endsWith(".apks")
-                                && testAppFile.getName().contains("fakeApk")) {
-                            return SPLIT_APK_PACKAGE_NAME;
-                        }
-                        return null;
+                        return SPLIT_APK_PACKAGE_NAME;
                     }
 
                     @Override
-                    protected String[] getApkDirectory(ITestDevice device, String packageName) {
-                        return new String[] {APEX_PATH, APEX_PRELOAD_NAME};
+                    protected List<File> getSplitsForApks(
+                            TestInformation testInfo, File moduleFile) {
+                        List<File> result = new ArrayList<>();
+                        result.add(mFakeSplitApk);
+                        result.add(mFakeHdpiApk);
+                        return result;
                     }
 
                     @Override
-                    protected String renameFile(
-                            ITestDevice device, File moduleFile, String packageName) {
-                        String newName = APEX_PRELOAD_NAME;
-                        return newName;
-                    }
-
-                    @Override
-                    protected void setupDevice(TestInformation testInfo) {}
-
-                    @Override
-                    protected String getPackageVersioncode(
-                            ITestDevice device, String packageName, boolean isAPK) {
-                        String versionCode = "V2";
-                        return versionCode;
-                    }
-
-                    @Override
-                    protected ModuleInfo pushFile(File moduleFile, TestInformation testInfo) {
-                        ModuleInfo mi = new ModuleInfo(null, null, true);
-                        if (moduleFile.getName().endsWith("apex")) {
-                            mi = new ModuleInfo(APEX_PACKAGE_NAME, "V1", false);
-                        } else if (moduleFile.getName().endsWith("apk")) {
-                            mi = new ModuleInfo(APK_PACKAGE_NAME, "V1", true);
-                        }
-                        return mi;
+                    protected ModulePusher getPusher(ITestDevice device) {
+                        return mMockPusher;
                     }
                 };
+        mOptionSetter = new OptionSetter(mModuleOemTargetPreparer);
+        mOptionSetter.setOptionValue("ignore-if-module-not-preloaded", "true");
     }
 
-    @After
-    public void tearDown() throws Exception {
-        FileUtil.deleteFile(mFakeApex);
-        FileUtil.deleteFile(mFakeApk);
-    }
-
-    /** Test get apex module package name. */
+    /** Test getting apk modules on device. */
     @Test
-    public void testGetApexModulePackageName() throws Exception {
-        String expected = APEX_PACKAGE_NAME;
-        File moduleFile = File.createTempFile("fakeApex", ".apex");
-        when(mMockDevice.executeShellCommand(String.format("pm path %s", expected)))
-                .thenReturn("package:/system/apex/com.google.android.fake");
-
-        String result =
-                mModuleOemTargetPreparer.parsePackageName(
-                        moduleFile, mMockDevice.getDeviceDescriptor());
-        assertEquals(expected, result);
-    }
-
-    /** Test module could be remamed. */
-    @Test
-    public void testRenameModule() throws Exception {
-        File moduleFile = File.createTempFile("fakeApex", ".apex");
-        String newName =
-                mModuleOemTargetPreparer.renameFile(mMockDevice, moduleFile, APEX_PACKAGE_NAME);
-
-        String expect = APEX_PACKAGE_NAME + ".apex";
-        assertEquals(expect, newName);
-    }
-
-    /** Test could get apk modules on device. */
-    @Test
-    public void testGetApkModules() throws Exception {
-        ITestDevice.ApexInfo fakeApexData =
-                new ITestDevice.ApexInfo(APEX_PACKAGE_NAME, 1, APEX_PATH);
-
+    public void testGetApkModules() {
         Set<String> modules =
                 new HashSet<>(
                         Arrays.asList(APK_PACKAGE_NAME, APK_PACKAGE_NAME2, APEX_PACKAGE_NAME));
-        Set<ITestDevice.ApexInfo> apexes = new HashSet<>(Arrays.asList(fakeApexData));
+        Set<ITestDevice.ApexInfo> apexes = new HashSet<>(Collections.singletonList(mFakeApexData));
         Set<String> expected = new HashSet<>(Arrays.asList(APK_PACKAGE_NAME, APK_PACKAGE_NAME2));
+
         assertEquals(expected, mModuleOemTargetPreparer.getApkModules(modules, apexes));
     }
 
-    /** Test module pushed success. */
+    /** Test setup installs non-split packages. */
     @Test
-    public void testPushedModuleSuccess() throws Exception {
-        ApexInfo fakeApexData = new ApexInfo(APEX_PACKAGE_NAME, 1, APEX_PATH);
-        when(mMockDevice.getActiveApexes()).thenReturn(new HashSet<>(Arrays.asList(fakeApexData)));
-        CommandResult re = new CommandResult();
-        re.setStdout("Success");
-        when(mMockDevice.executeShellV2Command("push " + mFakeApex)).thenReturn(re);
-
-        Set<String> installableModules = new HashSet<>();
-        installableModules.add(APEX_PACKAGE_NAME);
-        installableModules.add(APK_PACKAGE_NAME);
-        when(mMockDevice.getInstalledPackageNames()).thenReturn(installableModules);
+    public void testSetupInstallModules() throws Exception {
+        addTestFiles(mFakeApk, mFakeApex);
+        addPreloadPackages(APK_PACKAGE_NAME);
+        ArgumentCaptor<ImmutableMultimap<String, File>> modulesCaptor =
+                ArgumentCaptor.forClass(ImmutableMultimap.class);
+        ImmutableMultimap<String, File> expectedArg =
+                ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeApex, APK_PACKAGE_NAME, mFakeApk);
 
         mModuleOemTargetPreparer.setUp(mTestInfo);
-        verify(mMockDevice, atLeastOnce()).getActiveApexes();
+
+        verify(mMockPusher).installModules(modulesCaptor.capture(), /*factory_reset=*/ eq(false));
+        assertContainSameElements(expectedArg, modulesCaptor.getValue());
     }
 
-    /** Test module pushed fail and throw exceptions. */
+    /** Test setup installs only preloaded packages. */
     @Test
-    public void testModulePushFail() throws Exception {
-        mModuleOemTargetPreparer.addTestFileName(APEX_NAME);
-        when(mMockDevice.getActiveApexes()).thenReturn(new HashSet<ITestDevice.ApexInfo>());
-        Set<String> installableModules = new HashSet<>();
-        installableModules.add(APEX_PACKAGE_NAME);
-        when(mMockDevice.getInstalledPackageNames()).thenReturn(installableModules);
+    public void testSetupInstallsPreloadedModules() throws Exception {
+        addTestFiles(mFakeApk, mFakeApex);
+        addPreloadPackages();
 
-        try {
-            mModuleOemTargetPreparer.setUp(mTestInfo);
-            fail("Should have thrown a TargetSetupError.");
-        } catch (TargetSetupError expected) {
-            // throw exceptions
-        } finally {
-        }
+        mModuleOemTargetPreparer.setUp(mTestInfo);
+
+        verify(mMockPusher)
+                .installModules(
+                        ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeApex),
+                        /*factory_reset=*/ false);
+    }
+
+    /** Test setup installs split apks. */
+    @Test
+    public void testSetupInstallApks() throws Exception {
+        addTestFiles(mFakeApex, mFakeApkApks);
+        addPreloadPackages(SPLIT_APK_PACKAGE_NAME);
+        ArgumentCaptor<ImmutableMultimap<String, File>> modulesCaptor =
+                ArgumentCaptor.forClass(ImmutableMultimap.class);
+        ImmutableMultimap<String, File> expecteds =
+                ImmutableMultimap.of(
+                        APEX_PACKAGE_NAME,
+                        mFakeApex,
+                        SPLIT_APK_PACKAGE_NAME,
+                        mFakeSplitApk,
+                        SPLIT_APK_PACKAGE_NAME,
+                        mFakeHdpiApk);
+
+        mModuleOemTargetPreparer.setUp(mTestInfo);
+
+        verify(mMockPusher).installModules(modulesCaptor.capture(), /*factory_reset=*/ eq(false));
+        assertContainSameElements(expecteds, modulesCaptor.getValue());
+    }
+
+    /** Test setup recovers packages. */
+    @Test
+    public void testSetupRecoverModule() throws Exception {
+        mOptionSetter.setOptionValue("push-test-modules", "false");
+        mOptionSetter.setOptionValue("recover-preload-modules", "true");
+        mOptionSetter.setOptionValue("recover-module-folder", mRecoverRootDir.getAbsolutePath());
+        addPreloadPackages(SPLIT_APK_PACKAGE_NAME);
+        ArgumentCaptor<ImmutableMultimap<String, File>> modulesCaptor =
+                ArgumentCaptor.forClass(ImmutableMultimap.class);
+        ImmutableMultimap<String, File> expecteds =
+                ImmutableMultimap.of(
+                        APEX_PACKAGE_NAME,
+                        mFakeRecoverApex,
+                        SPLIT_APK_PACKAGE_NAME,
+                        mFakeRecoverSplitApk,
+                        SPLIT_APK_PACKAGE_NAME,
+                        mFakeRecoverHdpiApk);
+        mModuleOemTargetPreparer.setUp(mTestInfo);
+
+        verify(mMockPusher).installModules(modulesCaptor.capture(), /*factory_reset=*/ eq(false));
+        assertContainSameElements(expecteds, modulesCaptor.getValue());
+    }
+
+    /** Test setup recovers only preloaded modules. */
+    @Test
+    public void testSetupRecoverPreloadedModules() throws Exception {
+        mOptionSetter.setOptionValue("push-test-modules", "false");
+        mOptionSetter.setOptionValue("recover-preload-modules", "true");
+        mOptionSetter.setOptionValue("recover-module-folder", mRecoverRootDir.getAbsolutePath());
+        addPreloadPackages();
+
+        mModuleOemTargetPreparer.setUp(mTestInfo);
+
+        verify(mMockPusher)
+                .installModules(
+                        ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeRecoverApex),
+                        /*factory_reset=*/ false);
+    }
+
+    /** Test setup recover and install packages. */
+    @Test
+    public void testSetupRecoverAndInstall() throws Exception {
+        mOptionSetter.setOptionValue("push-test-modules", "true");
+        mOptionSetter.setOptionValue("recover-preload-modules", "true");
+        mOptionSetter.setOptionValue("recover-module-folder", mRecoverRootDir.getAbsolutePath());
+        addTestFiles(mFakeApex, mFakeApkApks);
+        addPreloadPackages(SPLIT_APK_PACKAGE_NAME);
+        ArgumentCaptor<ImmutableMultimap<String, File>> modulesCaptor =
+                ArgumentCaptor.forClass(ImmutableMultimap.class);
+        ImmutableMultimap<String, File> expectedRecovers =
+                ImmutableMultimap.of(
+                        APEX_PACKAGE_NAME,
+                        mFakeRecoverApex,
+                        SPLIT_APK_PACKAGE_NAME,
+                        mFakeRecoverSplitApk,
+                        SPLIT_APK_PACKAGE_NAME,
+                        mFakeRecoverHdpiApk);
+        ImmutableMultimap<String, File> expectedTests =
+                ImmutableMultimap.of(
+                        APEX_PACKAGE_NAME,
+                        mFakeApex,
+                        SPLIT_APK_PACKAGE_NAME,
+                        mFakeSplitApk,
+                        SPLIT_APK_PACKAGE_NAME,
+                        mFakeHdpiApk);
+
+        mModuleOemTargetPreparer.setUp(mTestInfo);
+
+        verify(mMockPusher, times(2))
+                .installModules(modulesCaptor.capture(), /*factory_reset=*/ eq(false));
+        List<ImmutableMultimap<String, File>> capturedValues = modulesCaptor.getAllValues();
+        assertContainSameElements(expectedRecovers, capturedValues.get(0));
+        assertContainSameElements(expectedTests, capturedValues.get(1));
+    }
+
+    /** Throws TargetSetupError if install fails. */
+    @Test(expected = TargetSetupError.class)
+    public void testSetupFailureIfInstallModulesFailure() throws Exception {
+        addTestFiles(mFakeApex);
+        addPreloadPackages();
+        doThrow(
+                        new ModulePusher.ModulePushError(
+                                "Mock exception", DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE))
+                .when(mMockPusher)
+                .installModules(any(), eq(false));
+
+        mModuleOemTargetPreparer.setUp(mTestInfo);
+    }
+
+    /** Throws TargetSetupError if recover fails. */
+    @Test(expected = TargetSetupError.class)
+    public void testSetupFailureIfRecoverFailure() throws Exception {
+        mOptionSetter.setOptionValue("push-test-modules", "false");
+        mOptionSetter.setOptionValue("recover-preload-modules", "true");
+        mOptionSetter.setOptionValue("recover-module-folder", mRecoverRootDir.getAbsolutePath());
+        addPreloadPackages();
+        doThrow(
+                        new ModulePusher.ModulePushError(
+                                "Mock exception", DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE))
+                .when(mMockPusher)
+                .installModules(any(), eq(false));
+
+        mModuleOemTargetPreparer.setUp(mTestInfo);
+    }
+
+    /** Skip recovering if recover module folder is not set. */
+    @Test
+    public void testSetupSkipRecoveryWithoutModuleFolder() throws Exception {
+        mOptionSetter.setOptionValue("push-test-modules", "false");
+        mOptionSetter.setOptionValue("recover-preload-modules", "true");
+        addPreloadPackages(APEX_PACKAGE_NAME);
+
+        mModuleOemTargetPreparer.setUp(mTestInfo);
+        verify(mMockPusher, never()).installModules(any(), anyBoolean());
     }
 
     /** Test that teardown without setup does not cause a NPE. */
     @Test
     public void testTearDown() throws Exception {
-
         mModuleOemTargetPreparer.tearDown(mTestInfo, null);
+    }
+
+    private void addTestFiles(File... testFiles) throws Exception {
+        for (File testFile : testFiles) {
+            mOptionSetter.setOptionValue("test-file-name", testFile.getAbsolutePath());
+        }
+    }
+
+    private void addPreloadPackages(String... packageNames) throws DeviceNotAvailableException {
+        when(mMockDevice.getInstalledPackageNames())
+                .thenReturn(new HashSet<>(Arrays.asList(packageNames)));
+        when(mMockDevice.getActiveApexes())
+                .thenReturn(new HashSet<>(Collections.singletonList(mFakeApexData)));
+    }
+
+    /** Assert contain the same elements, regardless of the order. */
+    private <K extends Comparable<? super K>, V extends Comparable<? super V>>
+            void assertContainSameElements(
+                    ImmutableMultimap<K, V> expecteds, ImmutableMultimap<K, V> actuals) {
+        assertContainSameElements(expecteds.keys(), actuals.keys());
+        for (K key : expecteds.keySet()) {
+            assertContainSameElements(expecteds.get(key), actuals.get(key));
+        }
+    }
+
+    /** Assert contain the same elements, regardless of the order. */
+    private <T extends Comparable<? super T>> void assertContainSameElements(
+            Collection<T> expecteds, Collection<T> actuals) {
+        List<T> expectedList = new ArrayList<>(expecteds);
+        List<T> actualList = new ArrayList<>(actuals);
+        assertEquals(expectedList.size(), actualList.size());
+        Collections.sort(expectedList);
+        Collections.sort(actualList);
+        for (int i = 0; i < expectedList.size(); i++) {
+            assertEquals(expectedList.get(i), actualList.get(i));
+        }
     }
 }

@@ -66,6 +66,7 @@ public class FilePullerLogCollectorTest {
         mCollector = new FilePullerLogCollector();
         OptionSetter setter = new OptionSetter(mCollector);
         setter.setOptionValue("pull-pattern-keys", "log.*");
+        when(mMockDevice.getCurrentUser()).thenReturn(0);
     }
 
     /** Test that metrics and files are logged but nothing is pulled since it's a stub device. */
@@ -116,7 +117,8 @@ public class FilePullerLogCollectorTest {
         ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
 
         when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
-        when(mMockDevice.pullFile("/data/local/tmp/log1.txt")).thenReturn(new File("file"));
+        when(mMockDevice.pullFile(Mockito.eq("/data/local/tmp/log1.txt"), Mockito.eq(0)))
+                .thenReturn(new File("file"));
 
         listener.testRunStarted("runName", 1);
         listener.testStarted(test, 0L);
@@ -185,7 +187,8 @@ public class FilePullerLogCollectorTest {
         ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
 
         when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
-        when(mMockDevice.pullFile("/data/local/tmp/log1.txt")).thenReturn(new File("file"));
+        when(mMockDevice.pullFile(Mockito.eq("/data/local/tmp/log1.txt"), Mockito.eq(0)))
+                .thenReturn(new File("file"));
 
         listener.testRunStarted("runName", 1);
         listener.testStarted(test, 0L);
