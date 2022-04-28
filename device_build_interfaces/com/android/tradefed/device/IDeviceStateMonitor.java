@@ -101,6 +101,17 @@ public interface IDeviceStateMonitor {
     public IDevice waitForDeviceAvailable();
 
     /**
+     * Special variant of {@link #waitForDeviceAvailable(long)} to be called during recovery path to
+     * tailor the handling.
+     *
+     * @throws DeviceNotAvailableException if the device turns unavailable.
+     */
+    public default IDevice waitForDeviceAvailableInRecoverPath(final long waitTime)
+            throws DeviceNotAvailableException {
+        return waitForDeviceAvailable(waitTime);
+    }
+
+    /**
      * Waits for the device to be in bootloader.
      *
      * @param waitTime the maximum time in ms to wait
