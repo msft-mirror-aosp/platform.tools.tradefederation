@@ -1050,11 +1050,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         boolean result = performDeviceAction(String.format("run %s instrumentation tests",
                 runner.getPackageName()), runTestsAction, 0);
         if (failureListener.isRunFailure()) {
-            // run failed, might be system crash. Ensure device is up
-            if (mStateMonitor.waitForDeviceAvailable(5 * 1000) == null) {
-                // device isn't up, recover
-                recoverDevice();
-            }
+            waitForDeviceAvailable(5000);
         }
         return result;
     }
@@ -3415,13 +3411,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         setRecoveryMode(cachedRecoveryMode);
 
-        if (mStateMonitor.waitForDeviceAvailable(mOptions.getRebootTimeout()) != null) {
-            postBootSetup();
-            postBootWifiSetup();
-            return;
-        } else {
-            recoverDevice();
-        }
+        waitForDeviceAvailable(mOptions.getRebootTimeout());
+        postBootSetup();
+        postBootWifiSetup();
     }
 
     @Override
@@ -3440,12 +3432,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         setRecoveryMode(cachedRecoveryMode);
 
-        if (mStateMonitor.waitForDeviceAvailable(mOptions.getRebootTimeout()) != null) {
-            postBootSetup();
-            postBootWifiSetup();
-        } else {
-            recoverDevice();
-        }
+        waitForDeviceAvailable(mOptions.getRebootTimeout());
+        postBootSetup();
+        postBootWifiSetup();
     }
 
     @Override
