@@ -78,6 +78,14 @@ public class InvocationMetricLogger {
         FASTBOOTD_REBOOT_COUNT("fastbootd_reboot_count", true),
         // Represents how often we reboot a device already in bootloader
         BOOTLOADER_SAME_STATE_REBOOT("bootloader_same_state_reboot", true),
+        // Represents the time we spend during postboot setup
+        POSTBOOT_SETUP_TIME("postboot_setup_time", true),
+        // Represents how often we go through postboot setup
+        POSTBOOT_SETUP_COUNT("postboot_setup_count", true),
+        // Represents the time we spend during postboot wifi setup
+        POSTBOOT_WIFI_SETUP_TIME("postboot_wifi_setup_time", true),
+        // Represents how often we go through postboot wifi setup
+        POSTBOOT_WIFI_SETUP_COUNT("postboot_wifi_setup_count", true),
 
         // Represents the time we spend pulling file from device.
         PULL_FILE_TIME("pull_file_time_ms", true),
