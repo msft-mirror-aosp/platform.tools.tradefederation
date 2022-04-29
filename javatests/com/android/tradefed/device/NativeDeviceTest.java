@@ -1747,10 +1747,14 @@ public class NativeDeviceTest {
                     public String getFastbootSerialNumber() {
                         return MOCK_DEVICE_SERIAL;
                     }
+
+                    @Override
+                    protected CommandResult simpleFastbootCommand(long timeout, String[] fullCmd)
+                            throws UnsupportedOperationException {
+                        return new CommandResult(CommandStatus.SUCCESS);
+                    }
                 };
         String into = "bootloader";
-
-        when(mMockStateMonitor.waitForDeviceBootloader(Mockito.anyLong())).thenReturn(true);
 
         testDevice.rebootIntoBootloader();
         verify(mMockIDevice, times(1)).reboot(into);
@@ -1783,9 +1787,13 @@ public class NativeDeviceTest {
                     public String getFastbootSerialNumber() {
                         return MOCK_DEVICE_SERIAL;
                     }
-                };
 
-        when(mMockStateMonitor.waitForDeviceBootloader(Mockito.anyLong())).thenReturn(true);
+                    @Override
+                    protected CommandResult simpleFastbootCommand(long timeout, String[] fullCmd)
+                            throws UnsupportedOperationException {
+                        return new CommandResult(CommandStatus.SUCCESS);
+                    }
+                };
 
         testDevice.rebootIntoBootloader();
         assertTrue(testDevice.wasCalled);
@@ -3257,9 +3265,7 @@ public class NativeDeviceTest {
                 .thenReturn(res);
 
         try {
-            CommandResult result =
-                    mTestDevice.executeShellV2Command(
-                            "some command", 200L, TimeUnit.MILLISECONDS, 1);
+            mTestDevice.executeShellV2Command("some command", 200L, TimeUnit.MILLISECONDS, 1);
             fail("executeShellV2Command should have thrown a DeviceNotAvailableException");
         } catch (DeviceNotAvailableException dnae) {
             // expected
