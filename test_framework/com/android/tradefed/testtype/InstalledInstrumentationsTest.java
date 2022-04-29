@@ -27,22 +27,29 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.retry.IAutoRetriableTest;
 import com.android.tradefed.util.AbiFormatter;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ListInstrumentationParser;
 import com.android.tradefed.util.ListInstrumentationParser.InstrumentationTarget;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Runs all instrumentation found on current device. */
 @OptionClass(alias = "installed-instrumentation")
@@ -192,7 +199,7 @@ public class InstalledInstrumentationsTest
     private IConfiguration mConfiguration;
 
     private List<InstrumentationTest> mTests = null;
-    private Map<String, List<TestDescription>> mRunTestsFailureMap = null;
+    private Map<String, Set<TestDescription>> mRunTestsFailureMap = null;
 
     @Option(name = AbiFormatter.FORCE_ABI_STRING,
             description = AbiFormatter.FORCE_ABI_DESCRIPTION,
@@ -208,14 +215,11 @@ public class InstalledInstrumentationsTest
             if (run == null) {
                 continue;
             }
-            if (run.isRunFailure()) {
+            if (run.isRunFailure() || run.hasFailedTests()) {
                 retry = true;
-                // Retry the full run in case of run failure
-                mRunTestsFailureMap.put(run.getName(), new ArrayList<TestDescription>());
-            } else if (run.hasFailedTests()) {
-                retry = true;
+                // Exclude passed tests from rerunning
                 mRunTestsFailureMap.put(
-                        run.getName(), new ArrayList<TestDescription>(run.getFailedTests()));
+                        run.getName(), new LinkedHashSet<TestDescription>(run.getPassedTests()));
             } else {
                 // Set null if we should not rerun it
                 mRunTestsFailureMap.put(run.getName(), null);
@@ -340,24 +344,16 @@ public class InstalledInstrumentationsTest
                     t.setPackageName(targetPackageName);
                     if (mRunTestsFailureMap != null) {
                         // Don't retry if there was no failure in a particular instrumentation.
-                        if (mRunTestsFailureMap.containsKey(targetPackageName)
-                                && mRunTestsFailureMap.get(targetPackageName) == null) {
-                            CLog.d("Skipping %s at retry, nothing to do.", targetPackageName);
-                            continue;
-                        }
-                        // if possible reduce the scope of the retry to be more efficient.
-                        if (t instanceof AndroidJUnitTest) {
-                            AndroidJUnitTest filterable = (AndroidJUnitTest) t;
-                            if (mRunTestsFailureMap.containsKey(targetPackageName)) {
-                                List<TestDescription> tests =
-                                        mRunTestsFailureMap.get(targetPackageName);
-                                for (TestDescription test : tests) {
-                                    filterable.addIncludeFilter(
-                                            String.format(
-                                                    "%s#%s",
-                                                    test.getClassName(),
-                                                    test.getTestNameWithoutParams()));
-                                }
+                        if (mRunTestsFailureMap.containsKey(targetPackageName)) {
+                            if (mRunTestsFailureMap.get(targetPackageName) == null) {
+                                CLog.d("Skipping %s at retry, nothing to do.", targetPackageName);
+                                continue;
+                            }
+                            // if possible reduce the scope of the retry to be more efficient.
+                            if (t instanceof AndroidJUnitTest) {
+                                AndroidJUnitTest filterable = (AndroidJUnitTest) t;
+                                excludePassedTests(
+                                        filterable, mRunTestsFailureMap.get(targetPackageName));
                             }
                         }
                     }
@@ -369,6 +365,34 @@ public class InstalledInstrumentationsTest
                     }
                     mTests.add(t);
                 }
+            }
+        }
+    }
+
+    private void excludePassedTests(ITestFilterReceiver test, Set<TestDescription> passedTests) {
+        // Exclude all passed tests for the retry.
+        for (TestDescription testCase : passedTests) {
+            String filter = String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
+            if (!(test instanceof ITestFileFilterReceiver)) {
+                test.addExcludeFilter(filter);
+                continue;
+            }
+
+            File excludeFilterFile = ((ITestFileFilterReceiver) test).getExcludeTestFile();
+            if (excludeFilterFile == null) {
+                try {
+                    excludeFilterFile = FileUtil.createTempFile("exclude-filter", ".txt");
+                } catch (IOException e) {
+                    throw new HarnessRuntimeException(
+                            e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+                }
+                ((ITestFileFilterReceiver) test).setExcludeTestFile(excludeFilterFile);
+            }
+            try {
+                FileUtil.writeToFile(filter + "\n", excludeFilterFile, true);
+            } catch (IOException e) {
+                CLog.e(e);
+                continue;
             }
         }
     }
