@@ -153,6 +153,8 @@ public class InvocationMetricLogger {
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
         ARTIFACTS_UPLOAD_SIZE("tf_artifacts_upload_size_bytes", true),
+        LOG_SAVING_TIME("log_saving_time", true),
+        LOG_SAVING_COUNT("log_saving_count", true),
         // TODO: Delete start/end timestamp in favor of pair.
         FETCH_BUILD_START("tf_fetch_build_start_timestamp", false),
         FETCH_BUILD_END("tf_fetch_build_end_timestamp", false),
