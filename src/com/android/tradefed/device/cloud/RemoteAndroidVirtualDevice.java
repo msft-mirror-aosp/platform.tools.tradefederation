@@ -413,6 +413,11 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
     }
 
+    @Override
+    protected void postAdbReboot() throws DeviceNotAvailableException {
+        // Ignore super on purpose, since doAdbReboot already handle reconnect
+    }
+
     /**
      * Cuttlefish has a special feature that brings the tombstones to the remote host where we can
      * get them directly.
