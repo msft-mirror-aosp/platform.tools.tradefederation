@@ -70,6 +70,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.SizeLimitedOutputStream;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.StringEscapeUtils;
+import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
 
@@ -2860,6 +2861,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (getApiLevelSafe() < 24) {
             return null;
         }
+        CLog.d("Start getBugreportz()");
         long startTime = System.currentTimeMillis();
         try {
             File bugreportZip = getBugreportzInternal();
@@ -2871,6 +2873,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
             return null;
         } finally {
+            CLog.d("Done with getBugreportz()");
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
             InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
@@ -3247,10 +3250,21 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public void postBootSetup() throws DeviceNotAvailableException  {
-        enableAdbRoot();
-        prePostBootSetup();
-        for (String command : mOptions.getPostBootCommands()) {
-            executeShellCommand(command);
+        CLog.d("postBootSetup started");
+        long startTime = System.currentTimeMillis();
+        try {
+            enableAdbRoot();
+            prePostBootSetup();
+            for (String command : mOptions.getPostBootCommands()) {
+                executeShellCommand(command);
+            }
+        } finally {
+            long elapsed = System.currentTimeMillis() - startTime;
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POSTBOOT_SETUP_TIME, elapsed);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POSTBOOT_SETUP_COUNT, 1);
+            CLog.d("postBootSetup done: %s", TimeUtil.formatElapsedTime(elapsed));
         }
     }
 
@@ -3270,13 +3284,26 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * @throws DeviceNotAvailableException
      */
     void postBootWifiSetup() throws DeviceNotAvailableException {
-        if (mLastConnectedWifiSsid != null) {
-            reconnectToWifiNetwork();
-        }
-        if (mNetworkMonitorEnabled) {
-            if (!enableNetworkMonitor()) {
-                CLog.w("Failed to enable network monitor on %s after reboot", getSerialNumber());
+        CLog.d("postBootWifiSetup started");
+        long startTime = System.currentTimeMillis();
+        try {
+            if (mLastConnectedWifiSsid != null) {
+                reconnectToWifiNetwork();
             }
+            if (mNetworkMonitorEnabled) {
+                if (!enableNetworkMonitor()) {
+                    CLog.w(
+                            "Failed to enable network monitor on %s after reboot",
+                            getSerialNumber());
+                }
+            }
+        } finally {
+            long elapsed = System.currentTimeMillis() - startTime;
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POSTBOOT_WIFI_SETUP_TIME, elapsed);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POSTBOOT_WIFI_SETUP_COUNT, 1);
+            CLog.d("postBootWifiSetup done: %s", TimeUtil.formatElapsedTime(elapsed));
         }
     }
 
