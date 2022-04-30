@@ -33,6 +33,9 @@ public class InvocationMetricLogger {
         // Bugreport time and count
         BUGREPORT_TIME("bugreport_time", true),
         BUGREPORT_COUNT("bugreport_count", true),
+        // Logcat dump time and count
+        LOGCAT_DUMP_TIME("logcat_dump_time", true),
+        LOGCAT_DUMP_COUNT("logcat_dump_count", true),
         CLEARED_RUN_ERROR("cleared_run_error", true),
         FETCH_BUILD("fetch_build_time_ms", true),
         SETUP("setup_time_ms", true),
@@ -150,6 +153,8 @@ public class InvocationMetricLogger {
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
         ARTIFACTS_UPLOAD_SIZE("tf_artifacts_upload_size_bytes", true),
+        LOG_SAVING_TIME("log_saving_time", true),
+        LOG_SAVING_COUNT("log_saving_count", true),
         // TODO: Delete start/end timestamp in favor of pair.
         FETCH_BUILD_START("tf_fetch_build_start_timestamp", false),
         FETCH_BUILD_END("tf_fetch_build_end_timestamp", false),

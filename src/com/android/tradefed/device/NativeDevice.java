@@ -1050,11 +1050,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         boolean result = performDeviceAction(String.format("run %s instrumentation tests",
                 runner.getPackageName()), runTestsAction, 0);
         if (failureListener.isRunFailure()) {
-            // run failed, might be system crash. Ensure device is up
-            if (mStateMonitor.waitForDeviceAvailable(5 * 1000) == null) {
-                // device isn't up, recover
-                recoverDevice();
-            }
+            waitForDeviceAvailable(5000);
         }
         return result;
     }
@@ -2202,23 +2198,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
         final String[] fullCmd = buildFastbootCommand(cmdArgs);
         for (int i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
-            File fastbootTmpDir = getHostOptions().getFastbootTmpDir();
-            IRunUtil runUtil = null;
-            if (fastbootTmpDir != null) {
-                runUtil = new RunUtil();
-                runUtil.setEnvVariable("TMPDIR", fastbootTmpDir.getAbsolutePath());
-            } else {
-                runUtil = getRunUtil();
-            }
-            CommandResult result = new CommandResult(CommandStatus.EXCEPTION);
-            // block state changes while executing a fastboot command, since
-            // device will disappear from fastboot devices while command is being executed
-            mFastbootLock.lock();
-            try {
-                result = runUtil.runTimedCmd(timeout, fullCmd);
-            } finally {
-                mFastbootLock.unlock();
-            }
+            CommandResult result = simpleFastbootCommand(timeout, fullCmd);
             if (!isRecoveryNeeded(result)) {
                 return result;
             }
@@ -2646,6 +2626,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public InputStreamSource getLogcatDump() {
+        long startTime = System.currentTimeMillis();
         LargeOutputReceiver largeReceiver = null;
         try {
             // use IDevice directly because we don't want callers to handle
@@ -2676,6 +2657,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 largeReceiver.cancel();
                 largeReceiver.delete();
             }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.LOGCAT_DUMP_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.LOGCAT_DUMP_COUNT, 1);
         }
         return new ByteArrayInputStreamSource(new byte[0]);
     }
@@ -3380,9 +3364,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     recoverDeviceFromFastbootd();
                 }
             } else {
-                if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
-                    recoverDeviceFromBootloader();
-                }
+                waitForDeviceBootloader();
             }
         } finally {
             long elapsedTime = System.currentTimeMillis() - startTime;
@@ -3429,13 +3411,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         setRecoveryMode(cachedRecoveryMode);
 
-        if (mStateMonitor.waitForDeviceAvailable(mOptions.getRebootTimeout()) != null) {
-            postBootSetup();
-            postBootWifiSetup();
-            return;
-        } else {
-            recoverDevice();
-        }
+        waitForDeviceAvailable(mOptions.getRebootTimeout());
+        postBootSetup();
+        postBootWifiSetup();
     }
 
     @Override
@@ -3454,12 +3432,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         setRecoveryMode(cachedRecoveryMode);
 
-        if (mStateMonitor.waitForDeviceAvailable(mOptions.getRebootTimeout()) != null) {
-            postBootSetup();
-            postBootWifiSetup();
-        } else {
-            recoverDevice();
-        }
+        waitForDeviceAvailable(mOptions.getRebootTimeout());
+        postBootSetup();
+        postBootWifiSetup();
     }
 
     @Override
@@ -4142,8 +4117,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 return;
             }
             mState = deviceState;
-            CLog.logAndDisplay(
-                    LogLevel.DEBUG, "Device %s state is now %s", getSerialNumber(), deviceState);
+            if (!(getIDevice() instanceof StubDevice)) {
+                CLog.logAndDisplay(
+                        LogLevel.DEBUG,
+                        "Device %s state is now %s",
+                        getSerialNumber(),
+                        deviceState);
+            }
             mStateMonitor.setState(deviceState);
         }
     }
@@ -5537,5 +5517,59 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** The log that contains all the {@link #executeShellCommand(String)} logs. */
     public final File getExecuteShellCommandLog() {
         return mExecuteShellCommandLogs;
+    }
+
+    private void waitForDeviceBootloader() throws DeviceNotAvailableException {
+        if (mOptions.useUpdatedBootloaderStatus()) {
+            CommandResult commandResult =
+                    simpleFastbootCommand(
+                            mOptions.getFastbootTimeout(),
+                            buildFastbootCommand("getvar", "product"));
+            if (!CommandStatus.SUCCESS.equals(commandResult.getStatus())) {
+                CLog.e(
+                        "Waiting for device in bootloader. Status: %s.\nstdout:%s\nstderr:%s",
+                        commandResult.getStatus(),
+                        commandResult.getStdout(),
+                        commandResult.getStderr());
+                recoverDeviceFromBootloader();
+            } else {
+                setDeviceState(TestDeviceState.FASTBOOT);
+            }
+        } else {
+            if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
+                recoverDeviceFromBootloader();
+            }
+        }
+    }
+
+    /** Executes a simple fastboot command and report the status of the command. */
+    @VisibleForTesting
+    protected CommandResult simpleFastbootCommand(final long timeout, String[] fullCmd)
+            throws UnsupportedOperationException {
+        if (!mFastbootEnabled) {
+            throw new UnsupportedOperationException(
+                    String.format(
+                            "Attempted to fastboot on device %s , but fastboot "
+                                    + "is disabled. Aborting.",
+                            getSerialNumber()));
+        }
+        File fastbootTmpDir = getHostOptions().getFastbootTmpDir();
+        IRunUtil runUtil = null;
+        if (fastbootTmpDir != null) {
+            runUtil = new RunUtil();
+            runUtil.setEnvVariable("TMPDIR", fastbootTmpDir.getAbsolutePath());
+        } else {
+            runUtil = getRunUtil();
+        }
+        CommandResult result = new CommandResult(CommandStatus.EXCEPTION);
+        // block state changes while executing a fastboot command, since
+        // device will disappear from fastboot devices while command is being executed
+        mFastbootLock.lock();
+        try {
+            result = runUtil.runTimedCmd(timeout, fullCmd);
+        } finally {
+            mFastbootLock.unlock();
+        }
+        return result;
     }
 }

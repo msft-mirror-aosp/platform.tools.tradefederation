@@ -18,6 +18,8 @@ package com.android.tradefed.result;
 
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInvocation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.log.StdoutLogger;
@@ -118,8 +120,17 @@ public class LogSaverResultForwarder extends ResultForwarder implements ILogSave
                 CLog.w("Skip forwarding of '%s', data stream is null.", dataName);
                 return;
             }
-            LogFile logFile = mLogSaver.saveLogData(dataName, dataType,
-                    dataStream.createInputStream());
+            long startTime = System.currentTimeMillis();
+            LogFile logFile = null;
+            try {
+                logFile = mLogSaver.saveLogData(dataName, dataType, dataStream.createInputStream());
+            } finally {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.LOG_SAVING_TIME,
+                        System.currentTimeMillis() - startTime);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.LOG_SAVING_COUNT, 1);
+            }
             for (ITestInvocationListener listener : getListeners()) {
                 if (listener instanceof ILogSaverListener) {
                     ((ILogSaverListener) listener).testLogSaved(dataName, dataType,
