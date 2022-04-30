@@ -705,15 +705,32 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
-     * Push a file to device
+     * Push a file to device. By default using a content provider.
      *
      * @param localFile the local file to push
      * @param deviceFilePath the remote destination absolute file path
      * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
-     * recovered.
+     *     recovered.
      */
     public boolean pushFile(File localFile, String deviceFilePath)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Variant of {@link #pushFile(File, String)} which can optionally consider evaluating the need
+     * for the content provider.
+     *
+     * @param localFile the local file to push
+     * @param deviceFilePath the remote destination absolute file path
+     * @param evaluateContentProviderNeeded whether to check if we need the content provider
+     * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pushFile(
+            final File localFile,
+            final String deviceFilePath,
+            boolean evaluateContentProviderNeeded)
             throws DeviceNotAvailableException;
 
     /**
