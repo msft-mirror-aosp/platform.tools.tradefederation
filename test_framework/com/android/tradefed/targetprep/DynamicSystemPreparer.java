@@ -225,7 +225,7 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
             }
 
             CLog.i("Pushing %s to %s", dsuPushSrc.getAbsolutePath(), dsuPushDest);
-            if (!device.pushFile(dsuPushSrc, dsuPushDest)) {
+            if (!device.pushFile(dsuPushSrc, dsuPushDest, true)) {
                 throw new TargetSetupError(
                         String.format(
                                 "Failed to push %s to %s",

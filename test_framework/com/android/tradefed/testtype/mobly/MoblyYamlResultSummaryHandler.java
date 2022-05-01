@@ -22,19 +22,23 @@ import java.util.Map;
 public class MoblyYamlResultSummaryHandler implements IMoblyYamlResultHandler {
 
     private static final String EXECUTED = "Executed";
+    private static final String SKIPPED = "Skipped";
 
     @Override
     public Summary handle(Map<String, Object> docMap) {
         Summary.Builder builder = Summary.builder();
         builder.setExecuted(String.valueOf(docMap.get(EXECUTED)));
+        builder.setSkipped(String.valueOf(docMap.get(SKIPPED)));
         return builder.build();
     }
 
     public static class Summary implements ITestResult {
         private int mExecuted;
+        private int mSkipped;
 
-        private Summary(String executed) {
+        private Summary(String executed, String skipped) {
             mExecuted = Integer.parseInt(executed);
+            mSkipped = Integer.parseInt(skipped);
         }
 
         @Override
@@ -46,20 +50,30 @@ public class MoblyYamlResultSummaryHandler implements IMoblyYamlResultHandler {
             return mExecuted;
         }
 
+        public int getSkipped() {
+            return mSkipped;
+        }
+
         public static Builder builder() {
             return new Builder();
         }
 
         public static class Builder {
             private String mExecuted;
+            private String mSkipped;
 
             public Builder setExecuted(String executed) {
                 mExecuted = executed;
                 return this;
             }
 
+            public Builder setSkipped(String skipped) {
+                mSkipped = skipped;
+                return this;
+            }
+
             public Summary build() {
-                return new Summary(mExecuted);
+                return new Summary(mExecuted, mSkipped);
             }
         }
     }

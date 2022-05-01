@@ -16,18 +16,23 @@
 
 package com.android.tradefed.util;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.xml.AbstractXmlParser.ParseException;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -46,6 +51,7 @@ public class JUnitXmlParserTest {
     private static final String BAZEL_SH_TEST_XML = "JUnitXmlParserTest_bazelShTest.xml";
 
     @Mock ITestInvocationListener mMockListener;
+    @Captor ArgumentCaptor<FailureDescription> failureCaptor;
 
     @Before
     public void setUp() {
@@ -78,8 +84,9 @@ public class JUnitXmlParserTest {
         verify(mMockListener).testStarted(test2);
         verify(mMockListener).testEnded(test2, new HashMap<String, Metric>());
         verify(mMockListener).testStarted(test3);
-        verify(mMockListener)
-                .testFailed(Mockito.eq(test3), Mockito.contains("java.lang.NullPointerException"));
+        verify(mMockListener).testFailed(Mockito.eq(test3), failureCaptor.capture());
+        FailureDescription failure = failureCaptor.getValue();
+        assertTrue(failure.getErrorMessage().contains("java.lang.NullPointerException"));
         verify(mMockListener).testEnded(test3, new HashMap<String, Metric>());
         verify(mMockListener).testRunEnded(5000L, new HashMap<String, Metric>());
     }
@@ -92,6 +99,11 @@ public class JUnitXmlParserTest {
         TestDescription test3 = new TestDescription("ErrorTest", "testFail");
 
         new JUnitXmlParser(mMockListener).parse(extractTestXml(TEST_PARSE_FILE2));
+        FailureDescription failure =
+                FailureDescription.create(
+                        "java.lang.NullPointerException\n    "
+                                + "at FailTest.testFail:65\n        ",
+                        FailureStatus.TEST_FAILURE);
 
         verify(mMockListener).testRunStarted("suiteName", 3);
         verify(mMockListener).testStarted(test1);
@@ -100,12 +112,7 @@ public class JUnitXmlParserTest {
         verify(mMockListener).testIgnored(test2);
         verify(mMockListener).testEnded(test2, new HashMap<String, Metric>());
         verify(mMockListener).testStarted(test3);
-        verify(mMockListener)
-                .testFailed(
-                        Mockito.eq(test3),
-                        Mockito.eq(
-                                "java.lang.NullPointerException\n    "
-                                        + "at FailTest.testFail:65\n        "));
+        verify(mMockListener).testFailed(Mockito.eq(test3), Mockito.eq(failure));
         verify(mMockListener).testEnded(test3, new HashMap<String, Metric>());
         verify(mMockListener).testRunEnded(918686L, new HashMap<String, Metric>());
     }
@@ -115,11 +122,13 @@ public class JUnitXmlParserTest {
         TestDescription test1 = new TestDescription("JUnitXmlParser", "normal_integration_tests");
 
         new JUnitXmlParser(mMockListener).parse(extractTestXml(TEST_PARSE_FILE3));
+        FailureDescription failure =
+                FailureDescription.create(
+                        "exited with error code 134.", FailureStatus.TEST_FAILURE);
 
         verify(mMockListener).testRunStarted("normal_integration_tests", 1);
         verify(mMockListener).testStarted(test1);
-        verify(mMockListener)
-                .testFailed(Mockito.eq(test1), Mockito.eq("exited with error code 134."));
+        verify(mMockListener).testFailed(Mockito.eq(test1), Mockito.eq(failure));
         verify(mMockListener).testEnded(test1, new HashMap<String, Metric>());
         verify(mMockListener).testRunEnded(0L, new HashMap<String, Metric>());
     }
