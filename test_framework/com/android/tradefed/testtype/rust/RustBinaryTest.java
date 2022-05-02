@@ -46,8 +46,6 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
 
     static final String DEFAULT_TEST_PATH = "/data/local/tmp";
 
-    // TODO(chh): add "ld-library-path" option and set up LD_LIBRARY_PATH
-
     @Option(
             name = "test-device-path",
             description = "The path on the device where tests are located.")

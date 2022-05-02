@@ -1379,6 +1379,19 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return pushFileInternal(localFile, remoteFilePath, false);
     }
 
+    @Override
+    public boolean pushFile(
+            final File localFile,
+            final String remoteFilePath,
+            boolean evaluateContentProviderNeeded)
+            throws DeviceNotAvailableException {
+        boolean skipContentProvider = false;
+        if (evaluateContentProviderNeeded) {
+            skipContentProvider = getCurrentUserCompatible() == 0;
+        }
+        return pushFileInternal(localFile, remoteFilePath, skipContentProvider);
+    }
+
     @VisibleForTesting
     boolean pushFileInternal(final File localFile, final String remoteFilePath,
             boolean skipContentProvider) throws DeviceNotAvailableException {
@@ -3245,11 +3258,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return mStateMonitor;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void postBootSetup() throws DeviceNotAvailableException  {
+    public void postBootSetup() throws DeviceNotAvailableException {
         CLog.d("postBootSetup started");
         long startTime = System.currentTimeMillis();
         try {
@@ -3271,6 +3282,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /**
      * Allows each device type (AndroidNativeDevice, TestDevice) to override this method for
      * specific post boot setup.
+     *
      * @throws DeviceNotAvailableException
      */
     protected void prePostBootSetup() throws DeviceNotAvailableException {
