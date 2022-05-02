@@ -43,9 +43,23 @@ public class DeviceFailedToBootError extends BuildError {
      *
      * @param reason an error message giving more details about the boot failure
      * @param descriptor the descriptor of the device concerned by the exception
+     * @param errorId the error identifier for this error.
      */
     public DeviceFailedToBootError(
             String reason, DeviceDescriptor descriptor, ErrorIdentifier errorId) {
         super(reason, descriptor, errorId);
+    }
+
+    /**
+     * Constructs a new (@link DeviceFailedToBootError} with a detailed error message.
+     *
+     * @param reason an error message giving more details about the boot failure
+     * @param descriptor the descriptor of the device concerned by the exception
+     * @param cause The original cause of the exception
+     * @param errorId the error identifier for this error.
+     */
+    public DeviceFailedToBootError(
+            String reason, DeviceDescriptor descriptor, Throwable cause, ErrorIdentifier errorId) {
+        super(reason, descriptor, cause, errorId);
     }
 }
