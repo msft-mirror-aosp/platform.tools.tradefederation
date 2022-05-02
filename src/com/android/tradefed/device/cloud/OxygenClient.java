@@ -35,6 +35,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.google.common.base.Strings;
+
 /** A class that manages the use of Oxygen client binary to lease or release Oxygen device. */
 public class OxygenClient {
 
@@ -153,6 +155,13 @@ public class OxygenClient {
         oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
         oxygenClientArgs.add("-lease_length_secs");
         oxygenClientArgs.add(Long.toString(deviceOptions.getOxygenLeaseLength() / 1000));
+
+        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
+            oxygenClientArgs.add("-" + arg.getKey());
+            if (!Strings.isNullOrEmpty(arg.getValue())) {
+                oxygenClientArgs.add(arg.getValue());
+            }
+        }
 
         CLog.i("Leasing device from oxygen client with %s", oxygenClientArgs.toString());
         return runOxygenTimedCmd(
