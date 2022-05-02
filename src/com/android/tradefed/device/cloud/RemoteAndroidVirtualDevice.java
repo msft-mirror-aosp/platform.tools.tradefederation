@@ -20,6 +20,7 @@ import com.android.ddmlib.IDevice.DeviceState;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.ITestDevice;
@@ -118,6 +119,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             // Wait for device to be ready.
             RecoveryMode previousMode = getRecoveryMode();
             setRecoveryMode(RecoveryMode.NONE);
+            boolean unresponsive = true;
             try {
                 for (int i = 0; i < WAIT_TIME_DIVISION; i++) {
                     // We don't have a way to bail out of waitForDeviceAvailable if the Gce Avd
@@ -125,6 +127,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                     // thread is alive and we have an opportunity to abort and avoid wasting time.
                     if (getMonitor().waitForDeviceAvailable(remainingTime / WAIT_TIME_DIVISION)
                             != null) {
+                        unresponsive = false;
                         break;
                     }
                     waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
@@ -133,10 +136,16 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             } finally {
                 setRecoveryMode(previousMode);
             }
-            if (!DeviceState.ONLINE.equals(getIDevice().getState())) {
+            if (!DeviceState.ONLINE.equals(getIDevice().getState()) || unresponsive) {
                 if (mGceAvd != null && GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
                     // Update status to reflect that we were not able to connect to it.
                     mGceAvd.setStatus(GceStatus.DEVICE_OFFLINE);
+                }
+                if (unresponsive) {
+                    throw new DeviceUnresponsiveException(
+                            "AVD device booted to online but is unresponsive.",
+                            getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_UNRESPONSIVE);
                 }
                 throw new DeviceNotAvailableException(
                         String.format(
