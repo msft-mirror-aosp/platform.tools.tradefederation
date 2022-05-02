@@ -367,12 +367,6 @@ public class TestInvocation implements ITestInvocation {
                     }
                 }
                 reportRecoveryLogs(context.getDevices(), listener);
-                if (exception == null) {
-                    CLog.d("Checking that devices are online.");
-                    exception = checkDevicesAvailable(context.getDevices(), listener);
-                } else {
-                    CLog.d("Skip online check as an exception was already reported: %s", exception);
-                }
             }
             // Save the device executeShellCommand logs
             logExecuteShellCommand(context.getDevices(), listener);
@@ -382,6 +376,12 @@ public class TestInvocation implements ITestInvocation {
                     CLog.e("Found a test level only device unavailable exception:");
                     CLog.e(exception);
                 }
+            }
+            if (exception == null) {
+                CLog.d("Checking that devices are online.");
+                exception = checkDevicesAvailable(context.getDevices(), listener);
+            } else {
+                CLog.d("Skip online check as an exception was already reported: %s", exception);
             }
             mStatus = "tearing down";
             try {
