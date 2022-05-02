@@ -22,7 +22,6 @@ import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
-import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NullDevice;
@@ -260,13 +259,14 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             try {
                 device.setRecoveryMode(RecoveryMode.AVAILABLE);
                 device.waitForDeviceAvailable(mDeviceBootTime);
-            } catch (DeviceUnresponsiveException e) {
-                // assume this is a build problem
+            } catch (DeviceNotAvailableException e) {
+                // Assume this is a build problem
                 throw new DeviceFailedToBootError(
                         String.format(
                                 "Device %s did not become available after flashing %s",
                                 device.getSerialNumber(), deviceBuild.getDeviceBuildId()),
                         device.getDeviceDescriptor(),
+                        e,
                         DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
             }
             device.postBootSetup();
