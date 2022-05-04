@@ -233,6 +233,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 if (status == null) {
                     CLog.i("Skipped reporting metrics because system partitions were not flashed.");
                 } else {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_TIME, flashingTime);
                     reportFlashMetrics(buildInfo.getBuildBranch(), buildInfo.getBuildFlavor(),
                             buildInfo.getBuildId(), device.getSerialNumber(), queueTime,
                             flashingTime, status);
