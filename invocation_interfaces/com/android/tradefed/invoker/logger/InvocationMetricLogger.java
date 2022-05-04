@@ -172,6 +172,7 @@ public class InvocationMetricLogger {
         SETUP_END("tf_setup_end_timestamp", false),
         SETUP_PAIR("tf_setup_pair_timestamp", true),
         FLASHING_FROM_FASTBOOTD("flashing_from_fastbootd", true),
+        FLASHING_TIME("flashing_time_ms", true),
         FLASHING_PERMIT_LATENCY("flashing_permit_latency_ms", true),
         DOWNLOAD_PERMIT_LATENCY("download_permit_latency_ms", true),
         // Unzipping metrics
