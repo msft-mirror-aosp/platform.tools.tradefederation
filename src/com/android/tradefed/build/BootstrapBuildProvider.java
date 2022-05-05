@@ -96,6 +96,7 @@ public class BootstrapBuildProvider implements IDeviceBuildProvider {
     public void cleanUp(IBuildInfo info) {
         if (mCreatedTestDir) {
             FileUtil.recursiveDelete(mTestsDir);
+            info.cleanUp();
         }
     }
 
