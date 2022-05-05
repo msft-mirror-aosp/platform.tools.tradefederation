@@ -87,6 +87,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
 
     private String mRamdiskPartition = "root";
 
+    private String mSystemBuildId = null;
+    private String mSystemBuildFlavor = null;
+
     /**
      * {@inheritDoc}
      */
@@ -146,12 +149,10 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         mFlashOptions = flashOptions.stream().map(String::trim).collect(Collectors.toList());
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void flash(ITestDevice device, IDeviceBuildInfo deviceBuild) throws TargetSetupError,
-            DeviceNotAvailableException {
+    public void preFlashOperations(ITestDevice device, IDeviceBuildInfo deviceBuild)
+            throws TargetSetupError, DeviceNotAvailableException {
         boolean initialStateFastbootD =
                 supportsFlashingInFastbootD() &&
                 TestDeviceState.FASTBOOTD.equals(device.getDeviceState());
@@ -164,9 +165,8 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         CLog.i("Flashing device %s with build %s", device.getSerialNumber(),
                 deviceBuild.getDeviceBuildId());
 
-        // get system build id and build flavor before booting into fastboot
-        String systemBuildId = device.getBuildId();
-        String systemBuildFlavor = device.getBuildFlavor();
+        // Get system build id and build flavor before booting into fastboot
+        setSystemBuildInfo(device.getBuildId(), device.getBuildFlavor());
 
         if (!initialStateFastbootD) {
             device.rebootIntoBootloader();
@@ -180,11 +180,17 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 deviceBuild.addBuildAttribute(FASTBOOT_VERSION, fastbootVersion);
             }
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void flash(ITestDevice device, IDeviceBuildInfo deviceBuild)
+            throws TargetSetupError, DeviceNotAvailableException {
         handleUserDataFlashing(device, deviceBuild);
         checkAndFlashBootloader(device, deviceBuild);
         checkAndFlashBaseband(device, deviceBuild);
         flashExtraImages(device, deviceBuild);
-        checkAndFlashSystem(device, systemBuildId, systemBuildFlavor, deviceBuild);
+        checkAndFlashSystem(device, mSystemBuildId, mSystemBuildFlavor, deviceBuild);
     }
 
     private String[] buildFastbootCommand(String action, boolean skipReboot, String... args) {
@@ -967,5 +973,10 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                     deviceBuild.getRamdiskFile().getAbsolutePath());
             device.reboot();
         }
+    }
+
+    protected void setSystemBuildInfo(String systemBuildId, String systemBuildFlavor) {
+        mSystemBuildId = systemBuildId;
+        mSystemBuildFlavor = systemBuildFlavor;
     }
 }

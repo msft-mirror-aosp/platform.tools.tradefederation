@@ -24,7 +24,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -285,6 +287,11 @@ public class TestDeviceOptions {
 
     @Option(name = "oxygen-accounting-user", description = "Oxygen account user.")
     private String mOxygenAccountingUser = null;
+
+    @Option(
+            name = "extra-oxygen-args",
+            description = "Extra arguments passed to Oxygen client to lease a device.")
+    private Map<String, String> mExtraOxygenArgs = new LinkedHashMap<>();
 
     @Option(
             name = "wait-gce-teardown",
@@ -846,6 +853,11 @@ public class TestDeviceOptions {
     /** Returns the accounting user of the Oxygen device. */
     public String getOxygenAccountingUser() {
         return mOxygenAccountingUser;
+    }
+
+    /** Returns the extra arguments to lease an Oxygen device. */
+    public Map<String, String> getExtraOxygenArgs() {
+        return mExtraOxygenArgs;
     }
 
     /** Returns whether or not to use the newer bootloader state status. */
