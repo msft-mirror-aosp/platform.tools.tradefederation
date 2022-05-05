@@ -202,16 +202,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             flasher.setWipeTimeout(mWipeTimeout);
             // only surround fastboot related operations with flashing permit restriction
             try {
-                start = System.currentTimeMillis();
-                getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
-                queueTime = System.currentTimeMillis() - start;
-                CLog.v(
-                        "Flashing permit obtained after %ds",
-                        TimeUnit.MILLISECONDS.toSeconds(queueTime));
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
-                // don't allow interruptions during flashing operations.
-                getRunUtil().allowInterrupt(false);
                 flasher.overrideDeviceOptions(device);
                 flasher.setUserDataFlashOption(mUserDataFlashOption);
                 flasher.setForceSystemFlash(mForceSystemFlash);
@@ -223,6 +213,18 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 if (flasher instanceof FastbootDeviceFlasher) {
                     ((FastbootDeviceFlasher) flasher).setFlashOptions(mFastbootFlashOptions);
                 }
+                start = System.currentTimeMillis();
+                flasher.preFlashOperations(device, deviceBuild);
+                // Only #flash is included in the critical section
+                getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                queueTime = System.currentTimeMillis() - start;
+                CLog.v(
+                        "Flashing permit obtained after %ds",
+                        TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
+                // Don't allow interruptions during flashing operations.
+                getRunUtil().allowInterrupt(false);
                 start = System.currentTimeMillis();
                 flasher.flash(device, deviceBuild);
             } finally {
