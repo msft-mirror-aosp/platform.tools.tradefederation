@@ -73,7 +73,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
     private static final long CHECK_WAIT_DEVICE_AVAIL_MS = 30 * 1000;
     private static final long WAIT_FOR_TUNNEL_ONLINE = 2 * 60 * 1000;
-    private static final long WAIT_AFTER_REBOOT = 60 * 1000;
     private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
     private static final int WAIT_TIME_DIVISION = 4;
 
@@ -338,10 +337,10 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     /** {@inherit} */
     @Override
     public void postBootSetup() throws DeviceNotAvailableException {
-        // After reboot, restart the tunnel
         if (!getOptions().shouldDisableReboot()) {
             CLog.v("Performing post boot setup for GCE AVD %s", getSerialNumber());
-            getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
+            // Should already be connected at this point, but if something is
+            // missing, restart the tunnel
             if (!getGceSshMonitor().isTunnelAlive()) {
                 getGceSshMonitor().closeConnection();
                 getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
@@ -414,9 +413,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         // We catch that adb reboot is called to expect it from the tunnel.
         getGceSshMonitor().isAdbRebootCalled(true);
         super.doAdbReboot(rebootMode, reason);
-        // We allow a little time for instance to reboot and be reachable.
-        getRunUtil().sleep(WAIT_AFTER_REBOOT);
-        // after the reboot we wait for tunnel to be online and device to be reconnected
+        // After the reboot we wait for tunnel to be online and device to be reconnected
         getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
         waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
         waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
