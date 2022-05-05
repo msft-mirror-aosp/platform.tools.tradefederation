@@ -115,7 +115,7 @@ public class FastbootDeviceFlasherTest {
                     .when(mMockDevice)
                     .executeFastbootCommand((String) Mockito.any(), (String) Mockito.any());
 
-            mFlasher.flash(mMockDevice, mMockBuildInfo);
+            mFlasher.preFlashOperations(mMockDevice, mMockBuildInfo);
             fail("TargetSetupError not thrown");
         } catch (TargetSetupError e) {
             // expected
@@ -132,7 +132,7 @@ public class FastbootDeviceFlasherTest {
         when(mMockParser.getRequiredBoards()).thenReturn(null);
 
         try {
-            mFlasher.flash(mMockDevice, mMockBuildInfo);
+            mFlasher.preFlashOperations(mMockDevice, mMockBuildInfo);
             fail("TargetSetupError not thrown");
         } catch (TargetSetupError e) {
             // expected
