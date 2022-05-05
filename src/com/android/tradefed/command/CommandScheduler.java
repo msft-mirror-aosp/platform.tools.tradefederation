@@ -75,6 +75,7 @@ import com.android.tradefed.result.suite.SuiteResultReporter;
 import com.android.tradefed.sandbox.ISandbox;
 import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.service.management.TestInvocationManagementServer;
+import com.android.tradefed.targetprep.DeviceFailedToBootError;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.retry.RetryRescheduler;
 import com.android.tradefed.util.ArrayUtil;
@@ -861,6 +862,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             // Reset the recovery mode at the end of the invocation.
             device.setRecoveryMode(RecoveryMode.AVAILABLE);
+        }
+        // For releasing, also investigate cause for possible DNAE
+        if (e instanceof DeviceFailedToBootError
+                && e.getCause() instanceof DeviceNotAvailableException) {
+            e = e.getCause();
         }
 
         DeviceNotAvailableException dnae = null;
