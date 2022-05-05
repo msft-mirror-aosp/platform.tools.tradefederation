@@ -34,9 +34,13 @@ public enum LogDataType {
     TAR_GZ("tar.gz", "application/gzip", true, false),
     GZIP("gz", "application/gzip", true, false),
     HPROF("hprof", "application/octet-stream", true, false),
-    COVERAGE("ec", "text/plain", false, false), // Emma coverage file
+    COVERAGE("ec", "text/plain", true /* do not compress */, false), // Emma coverage file
     NATIVE_COVERAGE("zip", "application/zip", true, false), // gcov coverage archive
-    CLANG_COVERAGE("profdata", "text/plain", false, false), // LLVM indexed profile data
+    CLANG_COVERAGE(
+            "profdata",
+            "text/plain",
+            true /* do not compress */,
+            false), // LLVM indexed profile data
     PB("pb", "application/octet-stream", true, false), // Binary proto file
     TEXTPB("textproto", "text/plain", false, true), // Text proto file
     JSON("json", "application/json", false, true),
@@ -53,6 +57,11 @@ public enum LogDataType {
     KERNEL_LOG("txt", "text/plain", true, true),
     MONKEY_LOG("txt", "text/plain", false, true),
     MUGSHOT_LOG("txt", "text/plain", false, true),
+    CB_METRICS_FILE(
+            "txt",
+            "text/plain",
+            true /* TODO(b/228497046): Allow compression when supported */,
+            true),
     PROCRANK("txt", "text/plain", false, true),
     MEM_INFO("txt", "text/plain", false, true),
     TOP("txt", "text/plain", false, true),

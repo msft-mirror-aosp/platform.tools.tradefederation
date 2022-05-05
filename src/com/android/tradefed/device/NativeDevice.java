@@ -494,13 +494,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     protected String internalGetProperty(String propName, String fastbootVar, String description)
             throws DeviceNotAvailableException, UnsupportedOperationException {
+        if (isStateBootloaderOrFastbootd() && fastbootVar != null) {
+            CLog.i("Device %s is in fastboot mode, re-querying with '%s' for %s", getSerialNumber(),
+                   fastbootVar, description);
+            return getFastbootVariable(fastbootVar);
+        }
         String propValue = getProperty(propName);
         if (propValue != null) {
             return propValue;
-        } else if (isStateBootloaderOrFastbootd() && fastbootVar != null) {
-            CLog.i("%s for device %s is null, re-querying in fastboot", description,
-                    getSerialNumber());
-            return getFastbootVariable(fastbootVar);
         } else {
             CLog.d(
                     "property collection '%s' for device %s is null.",
@@ -1384,7 +1385,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PUSH_FILE_COUNT, 1);
         try {
             if (!skipContentProvider) {
-                if (isSdcardOrEmulated(remoteFilePath) && getCurrentUserCompatible() != 0) {
+                if (isSdcardOrEmulated(remoteFilePath)) {
                     ContentProviderHandler handler = getContentProvider();
                     if (handler != null) {
                         return handler.pushFile(localFile, remoteFilePath);
@@ -2618,7 +2619,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                             "getLogcatSince",
                             getSerialNumber(),
                             getOptions().getMaxLogcatDataSize());
-            String command = String.format("%s -t '%s'", LogcatReceiver.LOGCAT_CMD, dateFormatted);
+            String command =
+                    String.format(
+                            "%s -t '%s'", LogcatReceiver.getDefaultLogcatCmd(this), dateFormatted);
             getIDevice().executeShellCommand(command, largeReceiver);
             return largeReceiver.getData();
         } catch (IOException|AdbCommandRejectedException|
@@ -2651,7 +2654,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             // add -d parameter to make this a non blocking call
             getIDevice()
                     .executeShellCommand(
-                            LogcatReceiver.LOGCAT_CMD + " -d",
+                            LogcatReceiver.getDefaultLogcatCmd(this) + " -d",
                             largeReceiver,
                             LOGCAT_DUMP_TIMEOUT,
                             TimeUnit.MILLISECONDS);
@@ -2693,9 +2696,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (logcatOptions == null) {
             return new LogcatReceiver(this, mOptions.getMaxLogcatDataSize(), mLogStartDelay);
         } else {
-            return new LogcatReceiver(this,
-                    String.format("%s %s", LogcatReceiver.LOGCAT_CMD, logcatOptions),
-                    mOptions.getMaxLogcatDataSize(), mLogStartDelay);
+            return new LogcatReceiver(
+                    this,
+                    String.format("%s %s", LogcatReceiver.getDefaultLogcatCmd(this), logcatOptions),
+                    mOptions.getMaxLogcatDataSize(),
+                    mLogStartDelay);
         }
     }
 
@@ -3587,15 +3592,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                         getSerialNumber(), rebootMode.name(), reason);
             }
             doAdbReboot(rebootMode, reason);
-            // Check if device shows as unavailable (as expected after reboot).
-            boolean notAvailable = waitForDeviceNotAvailable(DEFAULT_UNAVAILABLE_TIMEOUT);
-            if (notAvailable) {
-                postAdbReboot();
-            } else {
-                CLog.w(
-                        "Did not detect device %s becoming unavailable after reboot",
-                        getSerialNumber());
-            }
+            postAdbReboot();
         }
     }
 
@@ -3605,7 +3602,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * @throws DeviceNotAvailableException
      */
     protected void postAdbReboot() throws DeviceNotAvailableException {
-        // Default implementation empty on purpose.
+        // Check if device shows as unavailable (as expected after reboot).
+        boolean notAvailable = waitForDeviceNotAvailable(DEFAULT_UNAVAILABLE_TIMEOUT);
+        if (!notAvailable) {
+            CLog.w("Did not detect device %s becoming unavailable after reboot", getSerialNumber());
+        }
     }
 
     /**
@@ -4118,7 +4119,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 return;
             }
             mState = deviceState;
-            CLog.d("Device %s state is now %s", getSerialNumber(), deviceState);
+            CLog.logAndDisplay(
+                    LogLevel.DEBUG, "Device %s state is now %s", getSerialNumber(), deviceState);
             mStateMonitor.setState(deviceState);
         }
     }

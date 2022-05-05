@@ -690,6 +690,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             appFilesAndPackages.put(
                     splits.get(0), parsePackageName(splits.get(0), device.getDeviceDescriptor()));
             super.installer(testInfo, appFilesAndPackages);
+            mTestApexInfoList = collectApexInfoFromApexModules(appFilesAndPackages, testInfo);
         } else {
             // Install .apks that contain apk module.
             getBundletoolUtil().installApks(apks, device);

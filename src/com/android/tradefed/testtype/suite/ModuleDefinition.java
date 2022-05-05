@@ -941,7 +941,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 | TargetSetupError
                 | DeviceNotAvailableException
                 | RuntimeException
-                | AssertionError e) {
+                | AssertionError
+                | LinkageError e) {
             // We catch all the TargetPreparer possible exception + RuntimeException to avoid
             // specific issues + AssertionError since it's widely used in tests and doesn't notify
             // something very wrong with the harness.
@@ -979,7 +980,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 | TargetSetupError
                 | DeviceNotAvailableException
                 | RuntimeException
-                | AssertionError e) {
+                | AssertionError
+                | LinkageError e) {
             // We catch all the MultiTargetPreparer possible exception + RuntimeException to avoid
             // specific issues + AssertionError since it's widely used in tests and doesn't notify
             // something very wrong with the harness.
@@ -1145,9 +1147,13 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             clonedContext.addDeviceBuildInfo(
                     deviceName, testInfo.getContext().getBuildInfo(deviceName));
         }
-        if (!RunStrategy.RUN.equals(shouldRunWithController(clonedContext))) {
-            // Bypass token since the module isn't expected to run
-            return null;
+        try {
+            if (!RunStrategy.RUN.equals(shouldRunWithController(clonedContext))) {
+                // Bypass token since the module isn't expected to run
+                return null;
+            }
+        } catch (RuntimeException e) {
+            CLog.e(e);
         }
         return mRequiredTokens;
     }

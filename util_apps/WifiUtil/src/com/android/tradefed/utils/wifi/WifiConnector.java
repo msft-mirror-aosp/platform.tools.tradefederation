@@ -22,6 +22,7 @@ import android.net.wifi.SupplicantState;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.SystemClock;
 import android.util.Log;
 
@@ -118,11 +119,17 @@ public class WifiConnector {
      *
      * @param ssid SSID of a Wi-Fi network
      * @param psk PSK(Pre-Shared Key) of a Wi-Fi network. This can be null if the given SSID is for
-     *            an open network.
+     *     an open network
+     * @param disableMacRandomization option to disable MAC address randomization, using the
+     *     device's hardware MAC address
      * @return the network ID of a new network configuration
      * @throws WifiException if the operation fails
      */
-    public int addNetwork(final String ssid, final String psk, final boolean scanSsid)
+    public int addNetwork(
+            final String ssid,
+            final String psk,
+            final boolean scanSsid,
+            final boolean disableMacRandomization)
             throws WifiException {
         // Skip adding network if it's already added in the device
         // TODO: Fix the permission issue for the APK to add/update already added network
@@ -146,6 +153,11 @@ public class WifiConnector {
         } else {
             config.preSharedKey = quote(psk);
         }
+
+        if (disableMacRandomization && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            config.macRandomizationSetting = WifiConfiguration.RANDOMIZATION_NONE;
+        }
+
         networkId = mWifiManager.addNetwork(config);
         if (-1 == networkId) {
             throw new WifiException("failed to add network");
@@ -221,13 +233,20 @@ public class WifiConnector {
      * @param ssid SSID of a Wi-Fi network
      * @param psk PSK of a Wi-Fi network
      * @param urlToCheck URL to use when checking connectivity
-     * @param connectTimeout duration in seconds to wait for connecting to the network or
-              {@code DEFAULT_TIMEOUT} millis if -1 is passed.
+     * @param connectTimeout duration in seconds to wait for connecting to the network or {@code
+     *     DEFAULT_TIMEOUT} millis if -1 is passed.
      * @param scanSsid whether to scan for hidden SSID for this network
+     * @param disableMacRandomization option to disable MAC address randomization, using the
+     *     device's hardware MAC address
      * @throws WifiException if the operation fails
      */
-    public void connectToNetwork(final String ssid, final String psk, final String urlToCheck,
-            long connectTimeout, final boolean scanSsid)
+    public void connectToNetwork(
+            final String ssid,
+            final String psk,
+            final String urlToCheck,
+            long connectTimeout,
+            final boolean scanSsid,
+            final boolean disableMacRandomization)
             throws WifiException {
         if (!mWifiManager.isWifiEnabled()) {
             throw new WifiException("wifi not enabled");
@@ -255,7 +274,7 @@ public class WifiConnector {
 
         removeAllNetworks(false);
 
-        final int networkId = addNetwork(ssid, psk, scanSsid);
+        final int networkId = addNetwork(ssid, psk, scanSsid, disableMacRandomization);
         if (!mWifiManager.enableNetwork(networkId, true)) {
             throw new WifiException(String.format("failed to enable network %s", ssid));
         }
@@ -296,14 +315,14 @@ public class WifiConnector {
      * @param ssid SSID of a Wi-Fi network
      * @param psk PSK of a Wi-Fi network
      * @param urlToCheck URL to use when checking connectivity
-     * @param connectTimeout duration in seconds to wait for connecting to the network or
-              {@code DEFAULT_TIMEOUT} millis if -1 is passed.
+     * @param connectTimeout duration in seconds to wait for connecting to the network or {@code
+     *     DEFAULT_TIMEOUT} millis if -1 is passed.
      * @throws WifiException if the operation fails
      */
-    public void connectToNetwork(final String ssid, final String psk, final String urlToCheck,
-            long connectTimeout)
+    public void connectToNetwork(
+            final String ssid, final String psk, final String urlToCheck, long connectTimeout)
             throws WifiException {
-        connectToNetwork(ssid, psk, urlToCheck, -1, false);
+        connectToNetwork(ssid, psk, urlToCheck, -1, false, false);
     }
 
     /**
@@ -376,7 +395,7 @@ public class WifiConnector {
         if (ssid == null) {
             throw new WifiException("No last connected network.");
         }
-        connectToNetwork(ssid, psk, urlToCheck, -1, scanSsid);
+        connectToNetwork(ssid, psk, urlToCheck, -1, scanSsid, false);
     }
 
     private void updateLastNetwork(final String ssid, final String psk, final boolean scanSsid) {

@@ -185,15 +185,23 @@ public class WifiUtil extends Instrumentation {
             if ("addOpenNetwork".equals(method)) {
                 final String ssid = expectString("ssid");
                 final boolean scanSsid = getBoolean("scan_ssid", false);
+                final boolean disableMacRandomization =
+                        getBoolean("disableMacRandomization", false);
 
-                result.putInt("result", connector.addNetwork(ssid, null, scanSsid));
+                result.putInt(
+                        "result",
+                        connector.addNetwork(ssid, null, scanSsid, disableMacRandomization));
 
             } else if ("addWpaPskNetwork".equals(method)) {
                 final String ssid = expectString("ssid");
                 final boolean scanSsid = getBoolean("scan_ssid", false);
                 final String psk = expectString("psk");
+                final boolean disableMacRandomization =
+                        getBoolean("disableMacRandomization", false);
 
-                result.putInt("result", connector.addNetwork(ssid, psk, scanSsid));
+                result.putInt(
+                        "result",
+                        connector.addNetwork(ssid, psk, scanSsid, disableMacRandomization));
 
             } else if ("associateNetwork".equals(method)) {
                 final int id = expectInteger("id");
@@ -262,7 +270,10 @@ public class WifiUtil extends Instrumentation {
                 final String psk = getString("psk", null);
                 final String pingUrl = getString("urlToCheck", DEFAULT_URL_TO_CHECK);
                 final long connectTimeout = getInteger("connectTimeout", -1);
-                connector.connectToNetwork(ssid, psk, pingUrl, connectTimeout, scanSsid);
+                final boolean disableMacRandomization =
+                        getBoolean("disableMacRandomization", false);
+                connector.connectToNetwork(
+                        ssid, psk, pingUrl, connectTimeout, scanSsid, disableMacRandomization);
 
                 result.putBoolean("result", true);
 

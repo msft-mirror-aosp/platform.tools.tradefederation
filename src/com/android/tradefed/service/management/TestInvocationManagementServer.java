@@ -72,6 +72,12 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
         mCommandScheduler = commandScheduler;
     }
 
+    @VisibleForTesting
+    public TestInvocationManagementServer(Server server, ICommandScheduler commandScheduler) {
+        mServer = server;
+        mCommandScheduler = commandScheduler;
+    }
+
     /** Start the grpc server. */
     public void start() {
         try {
@@ -114,7 +120,7 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
             responseBuilder.setInvocationId(trackerId);
         } catch (ConfigurationException | IOException | RuntimeException e) {
             // TODO: Expand proto to convey those errors
-            responseBuilder.setInvocationId(null);
+            // return a response without invocation id
             FileUtil.deleteFile(record);
         }
         responseObserver.onNext(responseBuilder.build());

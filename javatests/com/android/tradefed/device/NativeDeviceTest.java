@@ -3061,12 +3061,33 @@ public class NativeDeviceTest {
 
     /**
      * Test that when a {@link NativeDevice#getLogcatSince(long)} is requested a matching logcat
-     * command is generated.
+     * command is generated on sdk version 23.
      */
     @Test
-    public void testGetLogcatSince() throws Exception {
+    public void testGetLogcatSinceOnSdk23() throws Exception {
         long date = 1512990942000L; // 2017-12-11 03:15:42.015
         setGetPropertyExpectation("ro.build.version.sdk", "23");
+
+        SimpleDateFormat format = new SimpleDateFormat("MM-dd HH:mm:ss.mmm");
+        String dateFormatted = format.format(new Date(date));
+
+        InputStreamSource res = mTestDevice.getLogcatSince(date);
+        StreamUtil.close(res);
+
+        verify(mMockIDevice)
+                .executeShellCommand(
+                        Mockito.eq(String.format("logcat -v threadtime -t '%s'", dateFormatted)),
+                        Mockito.any());
+    }
+
+    /**
+     * Test that when a {@link NativeDevice#getLogcatSince(long)} is requested a matching logcat
+     * command is generated on sdk version 24.
+     */
+    @Test
+    public void testGetLogcatSinceOnSdkOver24() throws Exception {
+        long date = 1512990942000L; // 2017-12-11 03:15:42.015
+        setGetPropertyExpectation("ro.build.version.sdk", "24");
 
         SimpleDateFormat format = new SimpleDateFormat("MM-dd HH:mm:ss.mmm");
         String dateFormatted = format.format(new Date(date));

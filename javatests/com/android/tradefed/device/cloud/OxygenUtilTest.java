@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.device.cloud;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -65,5 +66,18 @@ public class OxygenUtilTest {
         } finally {
             FileUtil.recursiveDelete(tmpDir);
         }
+    }
+
+    /** Test getDefaultLogType. */
+    @Test
+    public void testGetDefaultLogType() {
+        assertEquals(OxygenUtil.getDefaultLogType("logcat_1234567.txt"), LogDataType.LOGCAT);
+        assertEquals(OxygenUtil.getDefaultLogType("kernel.log_12345.txt"), LogDataType.KERNEL_LOG);
+        assertEquals(
+                OxygenUtil.getDefaultLogType("invocation_ended_bugreport_123456.zip"),
+                LogDataType.BUGREPORTZ);
+        assertEquals(
+                OxygenUtil.getDefaultLogType("invocation_started_bugreport_123456.txt"),
+                LogDataType.BUGREPORT);
     }
 }
