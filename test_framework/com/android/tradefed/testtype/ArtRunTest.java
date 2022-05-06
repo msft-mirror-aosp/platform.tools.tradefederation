@@ -370,15 +370,9 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         File runTestDir = null;
 
         try {
-            // TODO: Encapsulate the device temp dir creation logic in its own method.
-            String tmpCheckerDir =
-                    String.format("/data/local/tmp/%s", mRunTestName.replaceAll("/", "-"));
-            String mkdirCmd = String.format("mkdir -p \"%s\"", tmpCheckerDir);
-            CommandResult mkdirResult = mDevice.executeShellV2Command(mkdirCmd);
-            if (mkdirResult.getStatus() != CommandStatus.SUCCESS) {
-                throw new AdbShellCommandException(
-                        "Cannot create directory `%s` on device", mkdirResult.getStderr());
-            }
+            String template = String.format("%s.XXXXXXXXXX", mRunTestName.replaceAll("/", "-"));
+            String tmpCheckerDir = createTemporaryDirectoryOnDevice(template);
+            CLog.d("Created temporary directory `%s` on device", tmpCheckerDir);
 
             String cfgPath = tmpCheckerDir + "/graph.cfg";
             String oatPath = tmpCheckerDir + "/output.oat";
@@ -691,5 +685,24 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             throw new AdbShellCommandException(message);
         }
         return result;
+    }
+
+    /**
+     * Create a temporary directory on device.
+     *
+     * @param template String from which the name of the directory is created. This template must
+     *     include at least three consecutive <code>X</code>s in the last component (e.g.
+     *     <code>tmp.XXX</code>).
+     * @return The path to the created directory on device.
+     * @throws DeviceNotAvailableException If connection with device is lost and cannot be
+     *     recovered.
+     * @throws AdbShellCommandException If the <code>mktemp</code> ADB shell command failed.
+     */
+    private String createTemporaryDirectoryOnDevice(String template)
+            throws DeviceNotAvailableException, AdbShellCommandException {
+        long maxMktempCmdTimeInMs = 10 * 1000; // 10 seconds.
+        String mktempCmd = String.format("mktemp -d -p /data/local/tmp %s", template);
+        CommandResult mktempResult = executeAndCheckShellCommand(mktempCmd, maxMktempCmdTimeInMs);
+        return mktempResult.getStdout().strip();
     }
 }
