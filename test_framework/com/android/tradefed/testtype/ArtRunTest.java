@@ -500,8 +500,9 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
 
             Optional<String> checkerError = runChecker(checkerCommandLine);
             if (checkerError.isPresent()) {
-                listener.testLog(
-                        "graph.cfg", LogDataType.CFG, new FileInputStreamSource(localCfgPath));
+                try (FileInputStreamSource source = new FileInputStreamSource(localCfgPath)) {
+                    listener.testLog("graph.cfg", LogDataType.CFG, source);
+                }
                 CLog.i(checkerError.get());
                 return checkerError;
             }
