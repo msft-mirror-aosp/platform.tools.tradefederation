@@ -251,7 +251,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                             /* outputPrettyName */ "standard error");
             stderrError.ifPresent(e -> errors.add(e));
 
-            // If the test us a Checker test, run Checker and check its output.
+            // If the test is a Checker test, run Checker and check its output.
             if (mRunTestName.contains("-checker-")) {
                 Optional<String> checkerError = executeCheckerTest(testInfo, listener);
                 checkerError.ifPresent(e -> errors.add(e));
@@ -262,6 +262,9 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                 String errorMessage = String.join("\n", errors);
                 listener.testFailed(testId, errorMessage);
             }
+        } catch (AdbShellCommandException | IOException e) {
+            listener.testFailed(testId, String.format("Error in `ArtRunTest` test runner: %s", e));
+            throw new RuntimeException(e);
         } finally {
             HashMap<String, Metric> emptyTestMetrics = new HashMap<>();
             listener.testEnded(testId, emptyTestMetrics);
@@ -361,7 +364,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
      */
     protected Optional<String> executeCheckerTest(
             TestInformation testInfo, ITestInvocationListener listener)
-            throws DeviceNotAvailableException {
+            throws DeviceNotAvailableException, AdbShellCommandException, IOException {
 
         /**
          * An internal exception class for errors related to the preparation and execution of the
@@ -416,12 +419,12 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                 localCfgPath.delete();
             }
 
-            if (!mDevice.pullFile(cfgPath, localCfgPath)) {
+            if (!pullAndCheckFile(cfgPath, localCfgPath)) {
                 throw new CheckerTestException("Cannot pull CFG file from the device");
             }
 
             File tempJar = new File(runTestDir, "temp.jar");
-            if (!mDevice.pullFile(mClasspath.get(0), tempJar)) {
+            if (!pullAndCheckFile(mClasspath.get(0), tempJar)) {
                 throw new CheckerTestException("Cannot pull JAR file from the device");
             }
 
@@ -589,5 +592,124 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         } catch (Throwable e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * An exception class to report an error that occurred during the execution of an ADB shell
+     * command.
+     */
+    public static class AdbShellCommandException extends Exception {
+        AdbShellCommandException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Retrieve a file off device and verify that file was transferred correctly by comparing the
+     * sizes and MD5 digests of the original file (on device) and its (local) copy.
+     *
+     * <p>This method is essentially a wrapper around {@link
+     * com.android.tradefed.device.INativeDevice#pullFile}, which has its own way to signal that a
+     * file was retrieved successfully or not via its return value -- which is preserved in this
+     * method. The additional checks, if they fail, are signaled via exceptions.
+     *
+     * @see com.android.tradefed.device.INativeDevice#pullFile
+     * @param remoteFilePath The absolute path to file on device.
+     * @param localFile The local file to store contents in. If non-empty, contents will be
+     *     replaced.
+     * @return <code>true</code> if file was retrieved successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException If connection with device is lost and cannot be
+     *     recovered.
+     * @throws AdbShellCommandException If any of the ADB shell commands used to extract information
+     *     from the device failed.
+     * @throws IOException If the file size check or the MD5 digest check failed.
+     */
+    private boolean pullAndCheckFile(String remoteFilePath, File localFile)
+            throws DeviceNotAvailableException, AdbShellCommandException, IOException {
+        // Get the size of the remote file on device.
+        long maxStatCmdTimeInMs = 10 * 1000; // 10 seconds.
+        String statCmd = String.format("stat --format %%s %s", remoteFilePath);
+        CommandResult statResult = executeAndCheckShellCommand(statCmd, maxStatCmdTimeInMs);
+        String remoteFileSizeStr = statResult.getStdout().strip();
+        long remoteFileSize = Long.parseLong(remoteFileSizeStr);
+        CLog.d("Size of remote file `%s` is %d bytes", remoteFilePath, remoteFileSize);
+
+        // Compute the MD5 digest of the remote file on device.
+        long maxMd5sumCmdTimeInMs = 60 * 1000; // 1 minute.
+        // Note: On Android, Toybox's implementation of `md5sum` interprets option `-b` as "emit a
+        // brief output" ("hash only, no filename") -- which is the behavior we want here -- while
+        // the GNU coreutils' implementation interprets option `-b` as "read input in binary mode".
+        String md5sumCmd = String.format("md5sum -b %s", remoteFilePath);
+        CommandResult md5sumResult = executeAndCheckShellCommand(md5sumCmd, maxMd5sumCmdTimeInMs);
+        String remoteMd5Digest = md5sumResult.getStdout().strip();
+        CLog.d("MD5 digest of remote file `%s` is %s", remoteFilePath, remoteMd5Digest);
+
+        // Pull the file.
+        boolean result = mDevice.pullFile(remoteFilePath, localFile);
+
+        // Get the size of the local file.
+        long localFileSize = localFile.length();
+        CLog.d("Size of local file `%s` is %d bytes", localFile, localFileSize);
+
+        // Compute the MD5 digest of the local file.
+        String localMd5Digest = FileUtil.calculateMd5(localFile);
+        CLog.d("MD5 digest of local file `%s` is %s", localFile, localMd5Digest);
+
+        // Check that the size of local file matches the size of the remote file.
+        if (localFileSize != remoteFileSize) {
+            String message =
+                    String.format(
+                            "Size of local file `%s` does not match size of remote file `%s` "
+                                    + "pulled from device: %d bytes vs %d bytes",
+                            localFile, remoteFilePath, localFileSize, remoteFileSize);
+            CLog.e(message);
+            throw new IOException(message);
+        }
+
+        // Check that the MD5 digest of the local file matches the MD5 digest of the remote file.
+        if (!localMd5Digest.equals(remoteMd5Digest)) {
+            String message =
+                    String.format(
+                            "MD5 digest of local file `%s` does not match MD5 digest of remote "
+                                    + "file `%s` pulled from device: %s vs %s",
+                            localFile, remoteFilePath, localMd5Digest, remoteMd5Digest);
+            CLog.e(message);
+            throw new IOException(message);
+        }
+
+        return result;
+    }
+
+    /**
+     * Helper function to execute an ADB shell command.
+     *
+     * @see com.android.tradefed.device.INativeDevice#executeShellV2Command
+     * @param command The ADB shell command to run
+     * @param maxTimeoutForCommandInMs The maximum timeout for the command to complete expressed in
+     *     milliseconds.
+     * @return The {@link CommandResult} object returned by the {@link #executeShellV2Command}
+     *     invocation.
+     * @throws DeviceNotAvailableException If connection with device is lost and cannot be
+     *     recovered.
+     * @throws AdbShellCommandException If the ADB shell command failed.
+     */
+    private CommandResult executeAndCheckShellCommand(
+            String command, final long maxTimeoutForCommandInMs)
+            throws DeviceNotAvailableException, AdbShellCommandException {
+        CommandResult result =
+                mDevice.executeShellV2Command(
+                        command,
+                        maxTimeoutForCommandInMs,
+                        TimeUnit.MILLISECONDS,
+                        /* retryAttempts */ 0);
+        if (result.getStatus() != CommandStatus.SUCCESS || result.getExitCode() != 0) {
+            String message =
+                    String.format(
+                            "Command `%s` failed with status %s: %s",
+                            command, result.getStatus(), result);
+            CLog.e(message);
+            throw new AdbShellCommandException(message);
+        }
+        return result;
     }
 }
