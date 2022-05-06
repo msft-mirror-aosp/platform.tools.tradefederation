@@ -64,7 +64,10 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
 
     private static final String DALVIKVM_CMD =
             "dalvikvm|#BITNESS#| -Xcompiler-option --compile-art-test -classpath |#CLASSPATH#| "
-                    + "|#MAINCLASS#|";
+                    + "|#MAINCLASS#| >|#STDOUT#| 2>|#STDERR#|";
+
+    private static final String STDOUT_FILE_NAME = "stdout.txt";
+    private static final String STDERR_FILE_NAME = "stderr.txt";
 
     // Name of the Checker Python Archive (PAR) file.
     public static final String CHECKER_PAR_FILENAME = "art-run-test-checker";
@@ -199,7 +202,26 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         listener.testRunStarted(runName, testCount);
         listener.testStarted(testId);
 
+        // Temporary local directory used to store files used in test.
+        File tmpTestLocalDir = null;
+        // Path to temporary remote directory used to store files used in test.
+        String tmpTestRemoteDirPath = null;
+
         try {
+            // Create remote temporary directory and set redirections in test command.
+            String tmpTestRemoteDirPathTemplate =
+                    String.format("%s.XXXXXXXXXX", mRunTestName.replaceAll("/", "-"));
+            tmpTestRemoteDirPath = createTemporaryDirectoryOnDevice(tmpTestRemoteDirPathTemplate);
+            CLog.d("Created temporary remote directory `%s` for test", tmpTestRemoteDirPath);
+
+            String remoteStdoutFilePath =
+                    String.format("%s/%s", tmpTestRemoteDirPath, STDOUT_FILE_NAME);
+            testCmd = testCmd.replace("|#STDOUT#|", remoteStdoutFilePath);
+
+            String remoteStderrFilePath =
+                    String.format("%s/%s", tmpTestRemoteDirPath, STDERR_FILE_NAME);
+            testCmd = testCmd.replace("|#STDERR#|", remoteStderrFilePath);
+
             // TODO: The "run" step should be configurable, as is the case in current ART
             // `run-test` scripts).
 
@@ -218,10 +240,28 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             }
             Integer exitCode = testResult.getExitCode();
             CLog.v("`%s` on %s returned exit code: %d", testCmd, deviceSerialNumber, exitCode);
-            String actualStdoutText = testResult.getStdout();
-            CLog.v("`%s` on %s returned stdout: %s", testCmd, deviceSerialNumber, actualStdoutText);
-            String actualStderrText = testResult.getStderr();
-            CLog.v("`%s` on %s returned stderr: %s", testCmd, deviceSerialNumber, actualStderrText);
+
+            // Create local temporary directory and pull test's outputs from the device.
+            tmpTestLocalDir = createTestLocalTempDirectory(testInfo);
+            CLog.d("Created temporary local directory `%s` for test", tmpTestLocalDir);
+
+            File localStdoutFile = new File(tmpTestLocalDir, STDOUT_FILE_NAME);
+            if (!pullAndCheckFile(remoteStdoutFilePath, localStdoutFile)) {
+                throw new IOException(
+                        String.format(
+                                "Error while pulling remote file `%s` to local file `%s`",
+                                remoteStdoutFilePath, localStdoutFile));
+            }
+            String actualStdoutText = FileUtil.readStringFromFile(localStdoutFile);
+
+            File localStderrFile = new File(tmpTestLocalDir, STDERR_FILE_NAME);
+            if (!pullAndCheckFile(remoteStderrFilePath, localStderrFile)) {
+                throw new IOException(
+                        String.format(
+                                "Error while pulling remote file `%s` to local file `%s`",
+                                remoteStderrFilePath, localStderrFile));
+            }
+            String actualStderrText = FileUtil.readStringFromFile(localStderrFile);
 
             // TODO: The "check" step should be configurable, as is the case in current ART
             // `run-test` scripts).
@@ -240,7 +280,12 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                             actualStdoutText,
                             /* outputShortName */ "stdout",
                             /* outputPrettyName */ "standard output");
-            stdoutError.ifPresent(e -> errors.add(e));
+            if (stdoutError.isPresent()) {
+                errors.add(stdoutError.get());
+                try (FileInputStreamSource source = new FileInputStreamSource(localStdoutFile)) {
+                    listener.testLog(STDOUT_FILE_NAME, LogDataType.TEXT, source);
+                }
+            }
 
             // Check the test's standard error.
             Optional<String> stderrError =
@@ -249,7 +294,12 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                             actualStderrText,
                             /* outputShortName */ "stderr",
                             /* outputPrettyName */ "standard error");
-            stderrError.ifPresent(e -> errors.add(e));
+            if (stderrError.isPresent()) {
+                errors.add(stderrError.get());
+                try (FileInputStreamSource source = new FileInputStreamSource(localStderrFile)) {
+                    listener.testLog(STDERR_FILE_NAME, LogDataType.TEXT, source);
+                }
+            }
 
             // If the test is a Checker test, run Checker and check its output.
             if (mRunTestName.contains("-checker-")) {
@@ -271,7 +321,26 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             HashMap<String, Metric> emptyTestRunMetrics = new HashMap<>();
             // TODO: Pass an actual value as `elapsedTimeMillis` argument.
             listener.testRunEnded(/* elapsedTimeMillis*/ 0, emptyTestRunMetrics);
+
+            // Clean up temporary directories on host and device.
+            FileUtil.recursiveDelete(tmpTestLocalDir);
+            if (tmpTestRemoteDirPath != null) {
+                mDevice.deleteFile(tmpTestRemoteDirPath);
+            }
         }
+    }
+
+    /**
+     * Create a local temporary directory within the test's dependencies folder, to collect test
+     * outputs pulled from the device-under-test.
+     *
+     * @param testInfo The {@link TestInformation} object associated to the executed test
+     * @return The {@link File} object pointing to the created temporary directory.
+     * @throws IOException If the creation of the temporary directory failed.
+     */
+    protected File createTestLocalTempDirectory(TestInformation testInfo) throws IOException {
+        return Files.createTempDirectory(testInfo.dependenciesFolder().toPath(), mRunTestName)
+                .toFile();
     }
 
     /**
