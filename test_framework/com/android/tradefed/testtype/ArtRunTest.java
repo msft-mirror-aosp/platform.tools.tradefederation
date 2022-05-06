@@ -367,17 +367,21 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             throws DeviceNotAvailableException, AdbShellCommandException, IOException {
 
         // Temporary local directory used to store files used in Checker test.
-        File runTestDir = null;
+        File tmpCheckerLocalDir = null;
         // Path to temporary remote directory used to store files used in Checker test.
-        String tmpCheckerDir = null;
+        String tmpCheckerRemoteDirPath = null;
 
         try {
-            String template = String.format("%s.XXXXXXXXXX", mRunTestName.replaceAll("/", "-"));
-            tmpCheckerDir = createTemporaryDirectoryOnDevice(template);
-            CLog.d("Created temporary directory `%s` on device", tmpCheckerDir);
+            String tmpCheckerRemoteDirPathTemplate =
+                    String.format("%s.checker.XXXXXXXXXX", mRunTestName.replaceAll("/", "-"));
+            tmpCheckerRemoteDirPath =
+                    createTemporaryDirectoryOnDevice(tmpCheckerRemoteDirPathTemplate);
+            CLog.d(
+                    "Created temporary remote directory `%s` for Checker test",
+                    tmpCheckerRemoteDirPath);
 
-            String cfgPath = tmpCheckerDir + "/graph.cfg";
-            String oatPath = tmpCheckerDir + "/output.oat";
+            String cfgPath = tmpCheckerRemoteDirPath + "/graph.cfg";
+            String oatPath = tmpCheckerRemoteDirPath + "/output.oat";
             String abi = mAbi.getName();
             String dex2oatBinary = "dex2oat" + AbiUtils.getBitness(abi);
             Path dex2oatPath = Paths.get(ART_APEX_PATH.toString(), "bin", dex2oatBinary);
@@ -391,11 +395,12 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                         "Error while running dex2oat: %s", dex2oatResult.getStderr());
             }
 
-            runTestDir =
+            tmpCheckerLocalDir =
                     Files.createTempDirectory(testInfo.dependenciesFolder().toPath(), mRunTestName)
                             .toFile();
+            CLog.d("Created temporary local directory `%s` for Checker test", tmpCheckerLocalDir);
 
-            File localCfgPath = new File(runTestDir, "graph.cfg");
+            File localCfgPath = new File(tmpCheckerLocalDir, "graph.cfg");
             if (localCfgPath.isFile()) {
                 localCfgPath.delete();
             }
@@ -404,12 +409,12 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                 throw new IOException("Cannot pull CFG file from the device");
             }
 
-            File tempJar = new File(runTestDir, "temp.jar");
+            File tempJar = new File(tmpCheckerLocalDir, "temp.jar");
             if (!pullAndCheckFile(mClasspath.get(0), tempJar)) {
                 throw new IOException("Cannot pull JAR file from the device");
             }
 
-            extractSourcesFromJar(runTestDir, tempJar);
+            extractSourcesFromJar(tmpCheckerLocalDir, tempJar);
 
             String checkerArch = AbiUtils.getArchForAbi(mAbi.getName()).toUpperCase();
 
@@ -421,7 +426,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                 "-q",
                 "--arch=" + checkerArch,
                 localCfgPath.getAbsolutePath(),
-                runTestDir.getAbsolutePath()
+                tmpCheckerLocalDir.getAbsolutePath()
             };
 
             Optional<String> checkerError = runChecker(checkerCommandLine);
@@ -436,9 +441,9 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             throw e;
         } finally {
             // Clean up temporary directories on host and device.
-            FileUtil.recursiveDelete(runTestDir);
-            if (tmpCheckerDir != null) {
-                mDevice.deleteFile(tmpCheckerDir);
+            FileUtil.recursiveDelete(tmpCheckerLocalDir);
+            if (tmpCheckerRemoteDirPath != null) {
+                mDevice.deleteFile(tmpCheckerRemoteDirPath);
             }
         }
         return Optional.empty();
@@ -493,10 +498,10 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         return Optional.empty();
     }
 
-    /** Extract src directory from given jar file to given directory */
-    protected void extractSourcesFromJar(File runTestDir, File jar) throws IOException {
+    /** Extract src directory from given jar file to given directory. */
+    protected void extractSourcesFromJar(File tmpCheckerLocalDir, File jar) throws IOException {
         try (ZipFile archive = new ZipFile(jar)) {
-            File srcFile = new File(runTestDir, "src");
+            File srcFile = new File(tmpCheckerLocalDir, "src");
             if (srcFile.exists()) {
                 FileUtil.recursiveDelete(srcFile);
             }
@@ -508,7 +513,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
 
             for (ZipEntry entry : entries) {
                 if (entry.getName().startsWith("src")) {
-                    Path entryDest = runTestDir.toPath().resolve(entry.getName());
+                    Path entryDest = tmpCheckerLocalDir.toPath().resolve(entry.getName());
                     if (entry.isDirectory()) {
                         Files.createDirectory(entryDest);
                     } else {
