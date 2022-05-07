@@ -79,6 +79,8 @@ public class DeviceSetupTest {
 
         mMockBuildInfo = new DeviceBuildInfo("0", "");
         mDeviceSetup = new DeviceSetup();
+        OptionSetter setter = new OptionSetter(mDeviceSetup);
+        setter.setOptionValue("optimized-property-setting", Boolean.toString(false));
         mTmpDir = FileUtil.createTempDir("tmp");
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockDevice);
