@@ -419,7 +419,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             name = "optimized-property-setting",
             description =
                     "If a property is already set to the desired value, don't reboot the device")
-    protected boolean mOptimizedPropertySetting = false;
+    protected boolean mOptimizedPropertySetting = true;
 
     // Deprecated options follow
     /**
