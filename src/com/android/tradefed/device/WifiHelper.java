@@ -19,6 +19,8 @@ import com.android.ddmlib.MultiLineReceiver;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
@@ -172,7 +174,12 @@ public class WifiHelper implements IWifiHelper {
      */
     @Override
     public boolean enableWifi() throws DeviceNotAvailableException {
-        mDevice.executeShellCommand(ENABLE_WIFI_CMD);
+        CommandResult result = mDevice.executeShellV2Command(ENABLE_WIFI_CMD);
+        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+            CLog.e(
+                    "Failed to enable wifi. status: %s\nstdout: %s\nstderr: %s",
+                    result.getStatus(), result.getStdout(), result.getStderr());
+        }
         // shell command does not produce any message to indicate success/failure, wait for state
         // change to complete.
         return waitForWifiEnabled(120000L);
@@ -455,24 +462,23 @@ public class WifiHelper implements IWifiHelper {
     @Override
     public boolean connectToNetwork(String ssid, String psk, String urlToCheck)
             throws DeviceNotAvailableException {
-        return connectToNetwork(ssid, psk, urlToCheck, false);
+        return WifiConnectionResult.SUCCESS == connectToNetwork(ssid, psk, urlToCheck, false);
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public boolean connectToNetwork(String ssid, String psk, String urlToCheck,
-            boolean scanSsid) throws DeviceNotAvailableException {
+    public WifiConnectionResult connectToNetwork(
+            String ssid, String psk, String urlToCheck, boolean scanSsid)
+            throws DeviceNotAvailableException {
         if (!enableWifi()) {
             CLog.e("Failed to enable wifi");
-            return false;
+            return WifiConnectionResult.FAILED_TO_ENABLE;
         }
         if (!asBool(runWifiUtil("connectToNetwork", "ssid", ssid, "psk", psk, "urlToCheck",
                 urlToCheck, "scan_ssid", Boolean.toString(scanSsid)))) {
-            return false;
+            return WifiConnectionResult.FAILED_TO_CONNECT;
         }
-        return true;
+        return WifiConnectionResult.SUCCESS;
     }
 
     /**

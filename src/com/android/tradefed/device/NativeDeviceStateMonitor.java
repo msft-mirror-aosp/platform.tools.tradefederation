@@ -22,6 +22,7 @@ import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.TimeoutException;
 import com.android.tradefed.device.IDeviceManager.IFastbootListener;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunInterruptedException;
@@ -247,6 +248,28 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
      */
     @Override
     public IDevice waitForDeviceAvailable(final long waitTime) {
+        try {
+            return internalWaitForDeviceAvailable(waitTime);
+        } catch (DeviceNotAvailableException e) {
+            return null;
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public IDevice waitForDeviceAvailable() {
+        return waitForDeviceAvailable(mDefaultAvailableTimeout);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public IDevice waitForDeviceAvailableInRecoverPath(final long waitTime)
+            throws DeviceNotAvailableException {
+        return internalWaitForDeviceAvailable(waitTime);
+    }
+
+    private IDevice internalWaitForDeviceAvailable(final long waitTime)
+            throws DeviceNotAvailableException {
         // A device is currently considered "available" if and only if four events are true:
         // 1. Device is online aka visible via DDMS/adb
         // 2. Device has dev.bootcomplete flag set
@@ -272,14 +295,6 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
             return null;
         }
         return device;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public IDevice waitForDeviceAvailable() {
-        return waitForDeviceAvailable(mDefaultAvailableTimeout);
     }
 
     /**
@@ -320,10 +335,10 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
      * Additional checks to be done on an Online device
      *
      * @param waitTime time in ms to wait before giving up
-     * @return <code>true</code> if checks are successful before waitTime expires.
-     * <code>false</code> otherwise
+     * @return <code>true</code> if checks are successful before waitTime expires. <code>false
+     *     </code> otherwise
      */
-    protected boolean postOnlineCheck(final long waitTime) {
+    protected boolean postOnlineCheck(final long waitTime) throws DeviceNotAvailableException {
         return waitForStoreMount(waitTime);
     }
 
@@ -331,10 +346,10 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
      * Waits for the device's external store to be mounted.
      *
      * @param waitTime time in ms to wait before giving up
-     * @return <code>true</code> if external store is mounted before waitTime expires.
-     * <code>false</code> otherwise
+     * @return <code>true</code> if external store is mounted before waitTime expires. <code>false
+     *     </code> otherwise
      */
-    protected boolean waitForStoreMount(final long waitTime) {
+    protected boolean waitForStoreMount(final long waitTime) throws DeviceNotAvailableException {
         CLog.i("Waiting %d ms for device %s external store", waitTime, getSerialNumber());
         long startTime = System.currentTimeMillis();
         int counter = 0;
@@ -396,19 +411,24 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
                 } else if (output.contains(PERM_DENIED_ERROR_PATTERN)
                         && --retryOnPermissionDenied < 0) {
                     CLog.w(
-                            "Device %s mount check returned Permision Denied, "
+                            "Device %s mount check returned Permission Denied, "
                                     + "issue with mounting.",
                             getSerialNumber());
                     return false;
                 }
             } catch (IOException
-                    | AdbCommandRejectedException
                     | ShellCommandUnresponsiveException e) {
                 CLog.i("%s on device %s failed:", cmd, getSerialNumber());
                 CLog.e(e);
             } catch (TimeoutException e) {
                 CLog.i("%s on device %s failed: timeout", cmd, getSerialNumber());
                 CLog.e(e);
+            } catch (AdbCommandRejectedException e) {
+                String message =
+                        String.format("%s on device %s was rejected:", cmd, getSerialNumber());
+                CLog.i(message);
+                CLog.e(e);
+                rejectToUnavailable(message, e);
             }
         }
         CLog.w("Device %s external storage is not mounted after %d ms",
@@ -649,17 +669,23 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
         return System.currentTimeMillis();
     }
 
-    private String getFileSystem(String externalStorePath) {
+    private String getFileSystem(String externalStorePath) throws DeviceNotAvailableException {
         final CollectingOutputReceiver receiver = new CollectingOutputReceiver();
         String statCommand = "stat -f -c \"%t\" " + externalStorePath;
         try {
             getIDevice().executeShellCommand(statCommand, receiver, 10000, TimeUnit.MILLISECONDS);
         } catch (TimeoutException
-                | AdbCommandRejectedException
                 | ShellCommandUnresponsiveException
                 | IOException e) {
             CLog.e("Exception while attempting to read filesystem of '%s'", externalStorePath);
             CLog.e(e);
+            return null;
+        } catch (AdbCommandRejectedException e) {
+            rejectToUnavailable(
+                    String.format(
+                            "Exception while attempting to read filesystem of '%s'",
+                            externalStorePath),
+                    e);
             return null;
         }
         String output = receiver.getOutput().trim();
@@ -700,5 +726,17 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
         CONTINUE_WAITING,
         ABORT,
         SUCCESS,
+    }
+
+    /** Translate a reject adb command exception into DeviceNotAvailableException */
+    private void rejectToUnavailable(String command, AdbCommandRejectedException e)
+            throws DeviceNotAvailableException {
+        if (e.isDeviceOffline() || e.wasErrorDuringDeviceSelection()) {
+            throw new DeviceNotAvailableException(
+                    String.format("%s: %s", command, e.getMessage()),
+                    e,
+                    getSerialNumber(),
+                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+        }
     }
 }

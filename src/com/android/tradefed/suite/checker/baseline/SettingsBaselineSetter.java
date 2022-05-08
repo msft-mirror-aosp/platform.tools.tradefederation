@@ -26,16 +26,19 @@ public class SettingsBaselineSetter extends DeviceBaselineSetter {
     private final String mNamespace;
     private final String mKey;
     private final String mValue;
+    private final boolean mExperimental;
 
-    public SettingsBaselineSetter(String name, String namespace, String key, String value) {
+    public SettingsBaselineSetter(
+            String name, String namespace, String key, String value, boolean experimental) {
         mName = name;
         mNamespace = namespace;
         mKey = key;
         mValue = value;
+        mExperimental = experimental;
     }
 
     @Override
-    public Boolean setBaseline(ITestDevice mDevice) throws DeviceNotAvailableException {
+    public boolean setBaseline(ITestDevice mDevice) throws DeviceNotAvailableException {
         mDevice.setSetting(mNamespace, mKey, mValue);
         String settingValue = mDevice.getSetting(mNamespace, mKey);
         return settingValue != null && settingValue.equals(mValue);
@@ -48,6 +51,6 @@ public class SettingsBaselineSetter extends DeviceBaselineSetter {
 
     @Override
     public boolean isExperimental() {
-        return true;
+        return mExperimental;
     }
 }

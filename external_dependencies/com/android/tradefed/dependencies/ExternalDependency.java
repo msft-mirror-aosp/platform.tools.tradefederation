@@ -17,4 +17,16 @@
 package com.android.tradefed.dependencies;
 
 /** Base External Dependency class. */
-public abstract class ExternalDependency {}
+public abstract class ExternalDependency {
+    @Override
+    public int hashCode() {
+        // Information about a dependency class can be aggregated, regardless of the object
+        return this.getClass().getName().hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        // Used to create a Set of ExternalDependencies regardless of the object
+        return this.getClass().getName().equals(obj.getClass().getName());
+    }
+}

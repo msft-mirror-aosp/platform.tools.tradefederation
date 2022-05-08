@@ -160,6 +160,7 @@ public class TestDeviceTest {
         MockitoAnnotations.initMocks(this);
 
         when(mMockIDevice.getSerialNumber()).thenReturn(MOCK_DEVICE_SERIAL);
+        when(mMockIDevice.supportsFeature(IDevice.Feature.SHELL_V2)).thenReturn(true);
 
         // A TestDevice with a no-op recoverDevice() implementation
         mTestDevice =
@@ -1126,13 +1127,13 @@ public class TestDeviceTest {
             }
             // expect to ignore this
             mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
-            assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
         } finally {
             synchronized (blockResult) {
                 blockResult.notifyAll();
             }
         }
         fastbootThread.join();
+        assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
         mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
         assertEquals(TestDeviceState.NOT_AVAILABLE, mTestDevice.getDeviceState());
         verify(mMockRecovery, times(2))

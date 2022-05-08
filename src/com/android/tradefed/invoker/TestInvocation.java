@@ -317,8 +317,10 @@ public class TestInvocation implements ITestInvocation {
             // log a warning here so its captured before reportLogs is called
             CLog.e("Unexpected exception when running invocation: %s", t.toString());
             CLog.e(t);
-            reportFailure(createFailureFromException(t, FailureStatus.UNSET), listener);
-            throw t;
+            if (mStopCause == null) {
+                reportFailure(createFailureFromException(t, FailureStatus.UNSET), listener);
+                throw t;
+            }
         } finally {
             // Only capture logcat for TEST if we started the test phase.
             if (mTestStarted) {
@@ -365,12 +367,6 @@ public class TestInvocation implements ITestInvocation {
                     }
                 }
                 reportRecoveryLogs(context.getDevices(), listener);
-                if (exception == null) {
-                    CLog.d("Checking that devices are online.");
-                    checkDevicesAvailable(context.getDevices(), listener);
-                } else {
-                    CLog.d("Skip online check as an exception was already reported: %s", exception);
-                }
             }
             // Save the device executeShellCommand logs
             logExecuteShellCommand(context.getDevices(), listener);
@@ -380,6 +376,12 @@ public class TestInvocation implements ITestInvocation {
                     CLog.e("Found a test level only device unavailable exception:");
                     CLog.e(exception);
                 }
+            }
+            if (exception == null) {
+                CLog.d("Checking that devices are online.");
+                exception = checkDevicesAvailable(context.getDevices(), listener);
+            } else {
+                CLog.d("Skip online check as an exception was already reported: %s", exception);
             }
             mStatus = "tearing down";
             try {
@@ -687,9 +689,16 @@ public class TestInvocation implements ITestInvocation {
      * @param listener the {@link ITestLogger} with which to register the log
      */
     private void logExpandedConfiguration(IConfiguration config, ITestLogger listener) {
+        boolean isShard = config.getConfigurationDescription().getShardIndex() != null;
+        if (isShard) {
+            // Bail out of logging the config if this is a local shard since it is problematic
+            // and redundant anyway.
+            CLog.d("Skipping expanded config log for shard.");
+            return;
+        }
         try (StringWriter configXmlWriter = new StringWriter();
                 PrintWriter wrapperWriter = new PrintWriter(configXmlWriter)) {
-            config.dumpXml(wrapperWriter);
+            config.dumpXml(wrapperWriter, new ArrayList<String>(), true, false);
             wrapperWriter.flush();
             // Specified UTF-8 encoding for an abundance of caution, but its possible we could want
             // something else in the future
@@ -1483,8 +1492,9 @@ public class TestInvocation implements ITestInvocation {
      * If no previous exception occurred, report if the device is not available anymore after tests
      * finish running.
      */
-    private void checkDevicesAvailable(
+    private DeviceNotAvailableException checkDevicesAvailable(
             List<ITestDevice> devices, ITestInvocationListener listener) {
+        DeviceNotAvailableException dnae = null;
         for (ITestDevice device : devices) {
             if (device == null) {
                 continue;
@@ -1492,8 +1502,10 @@ public class TestInvocation implements ITestInvocation {
             if (device.getIDevice() instanceof StubDevice) {
                 continue;
             }
+            RecoveryMode current = device.getRecoveryMode();
+            device.setRecoveryMode(RecoveryMode.NONE);
             try {
-                device.waitForDeviceOnline();
+                device.waitForDeviceAvailable();
             } catch (DeviceNotAvailableException e) {
                 String msg =
                         String.format("Device was left offline after tests: %s", e.getMessage());
@@ -1501,8 +1513,12 @@ public class TestInvocation implements ITestInvocation {
                         new DeviceNotAvailableException(msg, e, e.getSerial(), e.getErrorId());
                 reportFailure(
                         createFailureFromException(wrap, FailureStatus.INFRA_FAILURE), listener);
+                dnae = e;
+            } finally {
+                device.setRecoveryMode(current);
             }
         }
+        return dnae;
     }
 
     /**

@@ -36,6 +36,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -58,11 +59,20 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
             Collections.singleton("https://www.googleapis.com/auth/devstorage.read_only");
     private static final long LIST_BATCH_SIZE = 100;
 
+    // Allow downloader to create empty files instead of throwing exception.
+    private Boolean mCreateEmptyFile = false;
+
     public GCSFileDownloader(File jsonKeyFile) {
         super(jsonKeyFile);
     }
 
-    public GCSFileDownloader() {}
+    public GCSFileDownloader(Boolean createEmptyFile) {
+        mCreateEmptyFile = createEmptyFile;
+    }
+
+    public GCSFileDownloader() {
+        this(false);
+    }
 
     private Storage getStorage() throws IOException {
         return getStorage(SCOPES);
@@ -71,14 +81,23 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
     @VisibleForTesting
     StorageObject getRemoteFileMetaData(String bucketName, String remoteFilename)
             throws IOException {
-        try {
-            return getStorage().objects().get(bucketName, remoteFilename).execute();
-        } catch (GoogleJsonResponseException e) {
-            if (e.getStatusCode() == 404) {
-                return null;
+        int i = 0;
+        do {
+            i++;
+            try {
+                return getStorage().objects().get(bucketName, remoteFilename).execute();
+            } catch (GoogleJsonResponseException e) {
+                if (e.getStatusCode() == 404) {
+                    return null;
+                }
+                throw e;
+            } catch (SocketTimeoutException e) {
+                // Allow one retry in case of flaky connection.
+                if (i >= 2) {
+                    throw e;
+                }
             }
-            throw e;
-        }
+        } while (true);
     }
 
     /**
@@ -199,7 +218,7 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
             remoteFilename = sanitizeDirectoryName(remoteFilename);
             return recursiveCheckFolderFreshness(bucketName, remoteFilename, localFile);
         } catch (IOException e) {
-            throw new BuildRetrievalError(e.getMessage(), e);
+            throw new BuildRetrievalError(e.getMessage(), e, InfraErrorIdentifier.GCS_ERROR);
         }
     }
 
@@ -345,11 +364,18 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         CLog.d("Fetching gs://%s/%s to %s.", bucketName, remoteFilename, localFile.toString());
         StorageObject meta = getRemoteFileMetaData(bucketName, remoteFilename);
         if (meta == null || meta.getSize().equals(BigInteger.ZERO)) {
-            throw new BuildRetrievalError(
-                    String.format(
-                            "File (not folder) gs://%s/%s doesn't exist or is size 0.",
-                            bucketName, remoteFilename),
-                    InfraErrorIdentifier.GCS_ERROR);
+            if (!mCreateEmptyFile) {
+                throw new BuildRetrievalError(
+                        String.format(
+                                "File (not folder) gs://%s/%s doesn't exist or is size 0.",
+                                bucketName, remoteFilename),
+                        InfraErrorIdentifier.GCS_ERROR);
+            } else {
+                // Create the empty file.
+                CLog.d("GCS file is empty: gs://%s/%s", bucketName, remoteFilename);
+                localFile.createNewFile();
+                return;
+            }
         }
         try (OutputStream writeStream = new FileOutputStream(localFile)) {
             getStorage()

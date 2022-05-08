@@ -71,7 +71,11 @@ public class ZipUtil {
      * @return {@code false} if the file appears to be corrupt; {@code true} otherwise
      */
     public static boolean isZipFileValid(File zipFile, boolean thorough) throws IOException {
-        if (zipFile != null && !zipFile.exists()) {
+        if (zipFile == null) {
+            CLog.d("isZipFileValid received a null file reference.");
+            return false;
+        }
+        if (!zipFile.exists()) {
             CLog.d("Zip file does not exist: %s", zipFile.getAbsolutePath());
             return false;
         }

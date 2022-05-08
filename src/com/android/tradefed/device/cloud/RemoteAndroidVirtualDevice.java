@@ -20,12 +20,12 @@ import com.android.ddmlib.IDevice.DeviceState;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.RemoteAvdIDevice;
-import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
@@ -73,7 +73,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
     private static final long CHECK_WAIT_DEVICE_AVAIL_MS = 30 * 1000;
     private static final long WAIT_FOR_TUNNEL_ONLINE = 2 * 60 * 1000;
-    private static final long WAIT_AFTER_REBOOT = 60 * 1000;
     private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
     private static final int WAIT_TIME_DIVISION = 4;
 
@@ -119,6 +118,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             // Wait for device to be ready.
             RecoveryMode previousMode = getRecoveryMode();
             setRecoveryMode(RecoveryMode.NONE);
+            boolean unresponsive = true;
             try {
                 for (int i = 0; i < WAIT_TIME_DIVISION; i++) {
                     // We don't have a way to bail out of waitForDeviceAvailable if the Gce Avd
@@ -126,6 +126,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                     // thread is alive and we have an opportunity to abort and avoid wasting time.
                     if (getMonitor().waitForDeviceAvailable(remainingTime / WAIT_TIME_DIVISION)
                             != null) {
+                        unresponsive = false;
                         break;
                     }
                     waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
@@ -134,10 +135,16 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             } finally {
                 setRecoveryMode(previousMode);
             }
-            if (!DeviceState.ONLINE.equals(getIDevice().getState())) {
+            if (!DeviceState.ONLINE.equals(getIDevice().getState()) || unresponsive) {
                 if (mGceAvd != null && GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
                     // Update status to reflect that we were not able to connect to it.
                     mGceAvd.setStatus(GceStatus.DEVICE_OFFLINE);
+                }
+                if (unresponsive) {
+                    throw new DeviceUnresponsiveException(
+                            "AVD device booted to online but is unresponsive.",
+                            getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_UNRESPONSIVE);
                 }
                 throw new DeviceNotAvailableException(
                         String.format(
@@ -162,14 +169,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     public void postInvocationTearDown(Throwable exception) {
         try {
             CLog.i("Invocation tear down for device %s", getSerialNumber());
-            // Log the last part of the logcat from the tear down.
-            if (!(getIDevice() instanceof StubDevice)) {
-                try (InputStreamSource logcatSource = getLogcat()) {
-                    clearLogcat();
-                    String name = "device_logcat_teardown_gce";
-                    mTestLogger.testLog(name, LogDataType.LOGCAT, logcatSource);
-                }
-            }
+            // Just clear the logcat, we don't need the teardown logcat
+            clearLogcat();
             stopLogcat();
             // Terminate SSH tunnel process.
             if (getGceSshMonitor() != null) {
@@ -292,6 +293,11 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                         "Failed to start Gce with attempt: %s out of %s. With Exception: %s",
                         attempt + 1, getOptions().getGceMaxAttempt(), tse);
                 exception = tse;
+
+                if (getOptions().useOxygen()) {
+                    OxygenUtil util = new OxygenUtil();
+                    util.downloadLaunchFailureLogs(tse.getMessage(), mTestLogger);
+                }
             }
         }
         if (mGceAvd == null) {
@@ -331,10 +337,10 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     /** {@inherit} */
     @Override
     public void postBootSetup() throws DeviceNotAvailableException {
-        // After reboot, restart the tunnel
         if (!getOptions().shouldDisableReboot()) {
             CLog.v("Performing post boot setup for GCE AVD %s", getSerialNumber());
-            getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
+            // Should already be connected at this point, but if something is
+            // missing, restart the tunnel
             if (!getGceSshMonitor().isTunnelAlive()) {
                 getGceSshMonitor().closeConnection();
                 getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
@@ -407,12 +413,15 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         // We catch that adb reboot is called to expect it from the tunnel.
         getGceSshMonitor().isAdbRebootCalled(true);
         super.doAdbReboot(rebootMode, reason);
-        // We allow a little time for instance to reboot and be reachable.
-        getRunUtil().sleep(WAIT_AFTER_REBOOT);
-        // after the reboot we wait for tunnel to be online and device to be reconnected
+        // After the reboot we wait for tunnel to be online and device to be reconnected
         getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
         waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
         waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
+    }
+
+    @Override
+    protected void postAdbReboot() throws DeviceNotAvailableException {
+        // Ignore super on purpose, since doAdbReboot already handle reconnect
     }
 
     /**

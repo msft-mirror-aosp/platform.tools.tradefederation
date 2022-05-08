@@ -17,4 +17,4 @@
 package com.android.tradefed.dependencies.connectivity;
 
 /** Represents a Network Dependency. */
-public class NetworkDependency extends ConnectivityDependency {}
+public final class NetworkDependency extends ConnectivityDependency {}

@@ -384,9 +384,10 @@ public class ArgsOptionParser extends OptionSetter {
                     key = parts[0].replaceAll("\\\\=", "=");
                     value = parts[1].replaceAll("\\\\=", "=");
                 } else if (parts.length > 2) {
-                    throw new ConfigurationException(String.format(
-                            "option '%s' has an invalid format for value %s:w",
-                            name, tmp));
+                    throw new ConfigurationException(
+                            String.format(
+                                    "option '%s' has an invalid format for value %s:w", name, tmp),
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 } else {
                     key = tmp.replaceAll("\\\\=", "=");
                     value = grabNextValue(args, name, "for its value").replaceAll("\\\\=", "=");

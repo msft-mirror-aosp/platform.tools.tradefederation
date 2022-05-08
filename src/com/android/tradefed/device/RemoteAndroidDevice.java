@@ -106,6 +106,7 @@ public class RemoteAndroidDevice extends TestDevice {
     /** {@inheritDoc} */
     @Override
     protected void postAdbReboot() throws DeviceNotAvailableException {
+        // This should waitForDevice NOT_AVAILABLE as expected then we reconnect
         super.postAdbReboot();
         // A remote nested device does not loose the ssh bridge when rebooted only adb connect is
         // required.
@@ -125,6 +126,7 @@ public class RemoteAndroidDevice extends TestDevice {
         // device in use will not be of the TcpDevice type.
         if (!(getIDevice() instanceof TcpDevice)) {
             // Before attempting standard recovery, reconnect the device.
+            CLog.i("Reconnecting to %s:%s for recovery", getHostName(), getPortNum());
             adbTcpConnect(getHostName(), getPortNum());
             waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
         }

@@ -17,6 +17,7 @@
 package com.android.tradefed.device.metric;
 
 import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.GCOV;
+
 import static com.google.common.base.Verify.verifyNotNull;
 
 import com.android.tradefed.config.IConfiguration;
@@ -76,11 +77,13 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
         super.init(context, listener);
 
         if (isGcovCoverageEnabled()) {
-            // Clear coverage measurements on the device.
-            try (AdbRootElevator adbRoot = new AdbRootElevator(getDevices().get(0))) {
-                getCoverageFlusher().resetCoverage();
-            } catch (DeviceNotAvailableException e) {
-                throw new RuntimeException(e);
+            for (ITestDevice device : getRealDevices()) {
+                // Clear coverage measurements on the device.
+                try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
+                    getCoverageFlusher(device).resetCoverage();
+                } catch (DeviceNotAvailableException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
 
@@ -106,12 +109,11 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
                 && mConfiguration.getCoverageOptions().getCoverageToolchains().contains(GCOV);
     }
 
-    private NativeCodeCoverageFlusher getCoverageFlusher() {
+    private NativeCodeCoverageFlusher getCoverageFlusher(ITestDevice device) {
         if (mFlusher == null) {
             mFlusher =
                     new NativeCodeCoverageFlusher(
-                            getDevices().get(0),
-                            mConfiguration.getCoverageOptions().getCoverageProcesses());
+                            device, mConfiguration.getCoverageOptions().getCoverageProcesses());
             mFlusher.setRunUtil(mRunUtil);
         }
         return mFlusher;
@@ -134,21 +136,22 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
         }
 
         if (mCollectCoverageOnTestEnd) {
-            logCoverageMeasurements(getRunName());
+            for (ITestDevice device : getRealDevices()) {
+                logCoverageMeasurements(device, getRunName());
+            }
         }
     }
 
     /** Pulls native coverage measurements from the device and logs them. */
-    public void logCoverageMeasurements(String runName) {
+    public void logCoverageMeasurements(ITestDevice device, String runName) {
         File coverageTar = null;
         File coverageZip = null;
-        ITestDevice device = getRealDevices().get(0);
 
         // Enable abd root on the device, otherwise the following commands will fail.
         try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
             // Flush cross-process coverage.
             if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
-                getCoverageFlusher().forceCoverageFlush();
+                getCoverageFlusher(device).forceCoverageFlush();
             }
 
             // Compress coverage measurements on the device before pulling.

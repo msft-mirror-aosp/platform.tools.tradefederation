@@ -17,6 +17,7 @@
 package com.android.tradefed.device.metric;
 
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
@@ -61,6 +62,7 @@ public class ShowmapPullerMetricCollectorTest {
         mShowmapMetricCollector = Mockito.spy(new ShowmapPullerMetricCollector());
         mShowmapMetricCollector.init(mContext, mMockListener);
         mTmpFile = File.createTempFile("showmap_granular", "");
+        when(mMockDevice.getCurrentUser()).thenReturn(0);
     }
 
     @After
@@ -92,7 +94,9 @@ public class ShowmapPullerMetricCollectorTest {
         currentMetrics.put(
                 "showmap_output_file",
                 TfMetricProtoUtil.stringToMetric("/sdcard/test_results/showmap.txt"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/sdcard/test_results/showmap.txt")))
+        Mockito.when(
+                        mMockDevice.pullFile(
+                                Mockito.eq("/sdcard/test_results/showmap.txt"), Mockito.eq(0)))
                 .thenReturn(mTmpFile);
 
         mShowmapMetricCollector.testEnded(testDesc, currentMetrics);
@@ -130,7 +134,9 @@ public class ShowmapPullerMetricCollectorTest {
         currentMetrics.put(
                 "showmap_output_file",
                 TfMetricProtoUtil.stringToMetric("/sdcard/test_results/showmap.txt"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/sdcard/test_results/showmap.txt")))
+        Mockito.when(
+                        mMockDevice.pullFile(
+                                Mockito.eq("/sdcard/test_results/showmap.txt"), Mockito.eq(0)))
                 .thenReturn(mTmpFile);
 
         mShowmapMetricCollector.testEnded(testDesc, currentMetrics);
@@ -169,7 +175,9 @@ public class ShowmapPullerMetricCollectorTest {
         currentMetrics.put(
                 "showmap_output_file",
                 TfMetricProtoUtil.stringToMetric("/sdcard/test_results/showmap.txt"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/sdcard/test_results/showmap.txt")))
+        Mockito.when(
+                        mMockDevice.pullFile(
+                                Mockito.eq("/sdcard/test_results/showmap.txt"), Mockito.eq(0)))
                 .thenReturn(mTmpFile);
 
         mShowmapMetricCollector.testEnded(testDesc, currentMetrics);
@@ -212,7 +220,9 @@ public class ShowmapPullerMetricCollectorTest {
         currentMetrics.put(
                 "showmap_output_file",
                 TfMetricProtoUtil.stringToMetric("/sdcard/test_results/showmap.txt"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/sdcard/test_results/showmap.txt")))
+        Mockito.when(
+                        mMockDevice.pullFile(
+                                Mockito.eq("/sdcard/test_results/showmap.txt"), Mockito.eq(0)))
                 .thenReturn(mTmpFile);
 
         mShowmapMetricCollector.testEnded(testDesc, currentMetrics);

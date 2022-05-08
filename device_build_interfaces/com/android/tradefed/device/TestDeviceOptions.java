@@ -24,7 +24,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -46,6 +48,13 @@ public class TestDeviceOptions {
         EMULATOR,
         /** Chrome OS VM (betty) */
         CHEEPS,
+    }
+
+    /** The size of the host which Oxygen virtual device will be running on. */
+    private enum DeviceSize {
+        STANDARD,
+        LARGE,
+        EXTRA_LARGE,
     }
 
     public static final int DEFAULT_ADB_PORT = 5555;
@@ -112,9 +121,10 @@ public class TestDeviceOptions {
             description = "default URL to be used for connectivity checks.")
     private String mConnCheckUrl = "http://www.google.com";
 
-    @Option(name = "wifi-attempts",
+    @Option(
+            name = "wifi-attempts",
             description = "default number of attempts to connect to wifi network.")
-    private int mWifiAttempts = 5;
+    private int mWifiAttempts = 4;
 
     @Option(name = "wifi-retry-wait-time",
             description = "the base wait time in ms between wifi connect retries. "
@@ -155,6 +165,19 @@ public class TestDeviceOptions {
                         + "This results in falling back to standard adb push/pull."
     )
     private boolean mUseContentProvider = true;
+
+    @Option(
+            name = "exit-status-workaround",
+            description =
+                    "On older devices that do not support ADB shell v2, use a workaround "
+                            + "to get the exit status of shell commands")
+    private boolean mExitStatusWorkaround = false;
+
+    @Option(
+            name = "use-updated-bootloader-status",
+            description =
+                    "Feature flag to test out an updated approach to bootloader state status.")
+    private boolean mUpdatedBootloaderStatus = true;
 
     // ====================== Options Related to Virtual Devices ======================
     @Option(
@@ -241,6 +264,36 @@ public class TestDeviceOptions {
     private boolean mUseOxygen = false;
 
     @Option(
+            name = "use-oxygen-client",
+            description = "Whether or not to use Oxygen client tool to create virtual devices.")
+    private boolean mUseOxygenClient = false;
+
+    @Option(name = "oxygen-target-region", description = "Oxygen device target region.")
+    private String mOxygenTargetRegion = "us-west";
+
+    @Option(
+            name = "oxygen-lease-length",
+            description = "Oxygen device lease length.",
+            isTimeVal = true)
+    private long mOxygenLeaseLength = 600 * 60 * 1000;
+
+    @Option(
+            name = "oxygen-device-size",
+            description = "The size of the host which Oxygen virtual device will be running on.")
+    private DeviceSize mOxygenDeviceSize = DeviceSize.STANDARD;
+
+    @Option(name = "oxygen-service-address", description = "Oxygen service address.")
+    private String mOxygenServiceAddress = null;
+
+    @Option(name = "oxygen-accounting-user", description = "Oxygen account user.")
+    private String mOxygenAccountingUser = null;
+
+    @Option(
+            name = "extra-oxygen-args",
+            description = "Extra arguments passed to Oxygen client to lease a device.")
+    private Map<String, String> mExtraOxygenArgs = new LinkedHashMap<>();
+
+    @Option(
             name = "wait-gce-teardown",
             description = "Whether or not to block on gce teardown before proceeding.")
     private boolean mWaitForGceTearDown = false;
@@ -289,17 +342,6 @@ public class TestDeviceOptions {
                             + " context has form_factor=phone, it'll be added to GCE VM as metadata"
                             + " form_factor=phone.")
     private List<String> mInvocationAttributeToMetadata = new ArrayList<>();
-
-    // TODO(b/216591507): Replace with gce-driver-file-param.
-    @Option(
-            name = "gce-local-image-path",
-            description = "path of the prebuilt cuttlefish local image.")
-    private File mAvdLocalImage = null;
-
-    @Option(
-            name = "gce-cvd-host-package-path",
-            description = "path of the prebuilt cuttlefish host package.")
-    private File mAvdCuttlefishHostPkg = null;
 
     @Option(
             name = "gce-extra-files",
@@ -560,6 +602,14 @@ public class TestDeviceOptions {
         return mUseContentProvider;
     }
 
+    /**
+     * Returns whether to use a workaround to get shell exit status on older devices without shell
+     * v2.
+     */
+    public boolean useExitStatusWorkaround() {
+        return mExitStatusWorkaround;
+    }
+
     // =========================== Getter and Setter for Virtual Devices
     /** Return the Gce Avd timeout for the instance to come online. */
     public long getGceCmdTimeout() {
@@ -733,16 +783,6 @@ public class TestDeviceOptions {
         return mRemoteTFVersion;
     }
 
-    /** Return the path to the cuttlefish local image. */
-    public File getAvdLocalImage() {
-        return mAvdLocalImage;
-    }
-
-    /** Return the path to the cuttlefish host package. */
-    public File getAvdCuttlefishHostPkg() {
-        return mAvdCuttlefishHostPkg;
-    }
-
     /** Return the extra files need to upload to GCE during acloud create. */
     public MultiMap<File, String> getExtraFiles() {
         return mGceExtraFiles;
@@ -780,7 +820,49 @@ public class TestDeviceOptions {
         return Collections.emptyList();
     }
 
+    /** Returns true if we should block on GCE tear down completion before proceeding. */
     public List<String> getInvocationAttributeToMetadata() {
         return mInvocationAttributeToMetadata;
     }
+
+    /** Returns true if we want TradeFed directly call Oxygen to lease a device. */
+    public boolean useOxygenProxy() {
+        return mUseOxygenClient;
+    }
+
+    /** Returns the target region of the Oxygen device. */
+    public String getOxygenTargetRegion() {
+        return mOxygenTargetRegion;
+    }
+
+    /** Returns the length of leasing the Oxygen device in milliseconds. */
+    public long getOxygenLeaseLength() {
+        return mOxygenLeaseLength;
+    }
+
+    /** Returns The size of the host which Oxygen virtual device will be running on. */
+    public DeviceSize getOxygenDeviceSize() {
+        return mOxygenDeviceSize;
+    }
+
+    /** Returns the service address of the Oxygen device. */
+    public String getOxygenServiceAddress() {
+        return mOxygenServiceAddress;
+    }
+
+    /** Returns the accounting user of the Oxygen device. */
+    public String getOxygenAccountingUser() {
+        return mOxygenAccountingUser;
+    }
+
+    /** Returns the extra arguments to lease an Oxygen device. */
+    public Map<String, String> getExtraOxygenArgs() {
+        return mExtraOxygenArgs;
+    }
+
+    /** Returns whether or not to use the newer bootloader state status. */
+    public boolean useUpdatedBootloaderStatus() {
+        return mUpdatedBootloaderStatus;
+    }
 }
+

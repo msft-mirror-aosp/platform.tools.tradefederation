@@ -48,8 +48,6 @@ import com.android.tradefed.command.CommandRunnerTest;
 import com.android.tradefed.command.CommandSchedulerTest;
 import com.android.tradefed.command.ConsoleTest;
 import com.android.tradefed.command.console.ConfigCompleterTest;
-import com.android.tradefed.command.remote.RemoteManagerTest;
-import com.android.tradefed.command.remote.RemoteOperationTest;
 import com.android.tradefed.config.ArgsOptionParserTest;
 import com.android.tradefed.config.ConfigurationDefTest;
 import com.android.tradefed.config.ConfigurationDescriptorTest;
@@ -94,6 +92,8 @@ import com.android.tradefed.device.cloud.GceRemoteCmdFormatterTest;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitorTest;
 import com.android.tradefed.device.cloud.ManagedRemoteDeviceTest;
 import com.android.tradefed.device.cloud.NestedRemoteDeviceTest;
+import com.android.tradefed.device.cloud.OxygenUtilTest;
+import com.android.tradefed.device.cloud.OxygenClientTest;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDeviceTest;
 import com.android.tradefed.device.cloud.RemoteFileUtilTest;
 import com.android.tradefed.device.contentprovider.ContentProviderHandlerTest;
@@ -129,6 +129,7 @@ import com.android.tradefed.device.recovery.RunConfigDeviceRecoveryTest;
 import com.android.tradefed.device.recovery.UsbResetMultiDeviceRecoveryTest;
 import com.android.tradefed.device.recovery.UsbResetRunConfigRecoveryTest;
 import com.android.tradefed.error.HarnessExceptionTest;
+import com.android.tradefed.external_dependency.ExternalDependencyTest;
 import com.android.tradefed.guice.InvocationScopeTest;
 import com.android.tradefed.host.LocalHostResourceManagerTest;
 import com.android.tradefed.host.gcs.GCSHostResourceManagerTest;
@@ -213,6 +214,7 @@ import com.android.tradefed.sandbox.SandboxConfigDumpTest;
 import com.android.tradefed.sandbox.SandboxConfigUtilTest;
 import com.android.tradefed.sandbox.SandboxInvocationRunnerTest;
 import com.android.tradefed.sandbox.TradefedSandboxTest;
+import com.android.tradefed.service.management.TestInvocationManagementServerTest;
 import com.android.tradefed.suite.checker.ActivityStatusCheckerTest;
 import com.android.tradefed.suite.checker.DeviceBaselineCheckerTest;
 import com.android.tradefed.suite.checker.DeviceSettingCheckerTest;
@@ -248,6 +250,8 @@ import com.android.tradefed.targetprep.InstallApkSetupTest;
 import com.android.tradefed.targetprep.InstrumentationPreparerTest;
 import com.android.tradefed.targetprep.KnownFailurePreparerTest;
 import com.android.tradefed.targetprep.LocalEmulatorLaunchTest;
+import com.android.tradefed.targetprep.ModuleOemTargetPreparerTest;
+import com.android.tradefed.targetprep.ModulePusherTest;
 import com.android.tradefed.targetprep.PushFilePreparerTest;
 import com.android.tradefed.targetprep.PythonVirtualenvPreparerTest;
 import com.android.tradefed.targetprep.RebootTargetPreparerTest;
@@ -310,6 +314,7 @@ import com.android.tradefed.testtype.binary.ExecutableTargetTestTest;
 import com.android.tradefed.testtype.host.CoverageMeasurementForwarderTest;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4TestTest;
 import com.android.tradefed.testtype.junit4.DeviceParameterizedRunnerTest;
+import com.android.tradefed.testtype.junit4.JUnit4ResultForwarderTest;
 import com.android.tradefed.testtype.junit4.LongevityHostRunnerTest;
 import com.android.tradefed.testtype.mobly.MoblyBinaryHostTestTest;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultParserTest;
@@ -490,10 +495,6 @@ import org.junit.runners.Suite.SuiteClasses;
     // command.console
     ConfigCompleterTest.class,
 
-    // command.remote
-    RemoteManagerTest.class,
-    RemoteOperationTest.class,
-
     // config
     ArgsOptionParserTest.class,
     ConfigurationDefTest.class,
@@ -554,6 +555,8 @@ import org.junit.runners.Suite.SuiteClasses;
     GceSshTunnelMonitorTest.class,
     ManagedRemoteDeviceTest.class,
     NestedRemoteDeviceTest.class,
+    OxygenClientTest.class,
+    OxygenUtilTest.class,
     RemoteAndroidVirtualDeviceTest.class,
     RemoteFileUtilTest.class,
 
@@ -601,6 +604,9 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // error
     HarnessExceptionTest.class,
+
+    // external_dependency
+    ExternalDependencyTest.class,
 
     // Guice
     InvocationScopeTest.class,
@@ -733,6 +739,8 @@ import org.junit.runners.Suite.SuiteClasses;
     InstrumentationPreparerTest.class,
     KnownFailurePreparerTest.class,
     LocalEmulatorLaunchTest.class,
+    ModuleOemTargetPreparerTest.class,
+    ModulePusherTest.class,
     PushFilePreparerTest.class,
     PythonVirtualenvPreparerTest.class,
     RebootTargetPreparerTest.class,
@@ -772,6 +780,9 @@ import org.junit.runners.Suite.SuiteClasses;
     SandboxedInvocationExecutionTest.class,
     SandboxInvocationRunnerTest.class,
     TradefedSandboxTest.class,
+
+    // service.management
+    TestInvocationManagementServerTest.class,
 
     // suite/checker
     ActivityStatusCheckerTest.class,
@@ -830,6 +841,7 @@ import org.junit.runners.Suite.SuiteClasses;
     // testtype/junit4
     BaseHostJUnit4TestTest.class,
     DeviceParameterizedRunnerTest.class,
+    JUnit4ResultForwarderTest.class,
     LongevityHostRunnerTest.class,
 
     // testtype/mobly

@@ -120,18 +120,6 @@ public class ConfigurationFactoryTest {
             String jarName = configAndJar.get(configName);
             ConfigurationDef cDef = entry.getValue();
             if (JAR_TO_CHECK.contains(jarName)) {
-                if (cDef.getObjectClassMap().containsKey(Configuration.LAB_PREPARER_TYPE_NAME)) {
-                    // Work around the one exception we will clean.
-                    if (!configName.equals("google/template/preparers/cros-artifacts-lab")) {
-                        exceptionConfigJar.add(
-                                String.format(
-                                        "%s config contains a lab_preparer ('%s') which is"
-                                                + " reserved for core.",
-                                        configName,
-                                        cDef.getObjectClassMap()
-                                                .get(Configuration.LAB_PREPARER_TYPE_NAME)));
-                    }
-                }
                 continue;
             }
 

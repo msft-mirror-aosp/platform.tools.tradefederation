@@ -70,7 +70,10 @@ public class ContentProviderHandler {
     public static final String PACKAGE_NAME = "android.tradefed.contentprovider";
     public static final String CONTENT_PROVIDER_URI = "content://android.tradefed.contentprovider";
     private static final String APK_NAME = "TradefedContentProvider.apk";
-    private static final String CONTENT_PROVIDER_APK_RES = "/apks/contentprovider/" + APK_NAME;
+    private static final String CONTENT_PROVIDER_APK_RES = "/" + APK_NAME;
+    private static final String CONTENT_PROVIDER_APK_RES_FALLBACK =
+            "/android/tradefed/contentprovider/" + APK_NAME;
+
     private static final String PROPERTY_RESULT = "LEGACY_STORAGE: allow";
     private static final String ERROR_MESSAGE_TAG = "[ERROR]";
     // Error thrown by device if the content provider is not installed for any reason.
@@ -299,9 +302,17 @@ public class ContentProviderHandler {
     /** Helper method to extract the content provider apk. */
     private File extractResourceApk() throws IOException {
         File apkTempFile = FileUtil.createTempFile(APK_NAME, ".apk");
-        InputStream apkStream =
-                ContentProviderHandler.class.getResourceAsStream(CONTENT_PROVIDER_APK_RES);
-        FileUtil.writeToFile(apkStream, apkTempFile);
+        try {
+            InputStream apkStream =
+                    ContentProviderHandler.class.getResourceAsStream(CONTENT_PROVIDER_APK_RES);
+            FileUtil.writeToFile(apkStream, apkTempFile);
+        } catch (IOException e) {
+            // Fallback to new path
+            InputStream apkStream =
+                    ContentProviderHandler.class.getResourceAsStream(
+                            CONTENT_PROVIDER_APK_RES_FALLBACK);
+            FileUtil.writeToFile(apkStream, apkTempFile);
+        }
         return apkTempFile;
     }
 

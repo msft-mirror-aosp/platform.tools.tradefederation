@@ -428,22 +428,21 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
         return new TraceProcessorResult(metricOutputFile, runtime, STATUS_SUCCESS);
     }
 
-
     /**
      * Pull the file from the specified path in the device. Pull the compressed content of the
      * perfetto file if the compress perfetto option is enabled.
      *
      * @param device which has the file.
      * @param remoteFilePath location in the device.
-     * @return compressed or decompressed version of perfetto file based on mCompressPerfetto
-     *         option is set or not.
+     * @return compressed or decompressed version of perfetto file based on mCompressPerfetto option
+     *     is set or not.
      * @throws DeviceNotAvailableException
      */
     @Override
-    protected File retrieveFile(ITestDevice device, String remoteFilePath)
+    protected File retrieveFile(ITestDevice device, String remoteFilePath, int userId)
             throws DeviceNotAvailableException {
         if (!mCompressPerfetto) {
-            return super.retrieveFile(device, remoteFilePath);
+            return super.retrieveFile(device, remoteFilePath, userId);
         }
         File perfettoCompressedFile = null;
         try {

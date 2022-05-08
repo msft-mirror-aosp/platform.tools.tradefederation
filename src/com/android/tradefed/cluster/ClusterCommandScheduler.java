@@ -463,6 +463,10 @@ public class ClusterCommandScheduler extends CommandScheduler {
                                     .map(IInvocationContext::getInvocationId)
                                     .map(Ints::tryParse)
                                     .ifPresent(invocationId -> stopInvocation(invocationId, cause));
+                        } else if (ClusterCommand.State.COMPLETED.equals(
+                                commandStatus.getState())) {
+                            CLog.d("Invocation completed, skip reporting heartbeat.");
+                            return;
                         }
                     }
 

@@ -33,6 +33,9 @@ public class InvocationMetricLogger {
         // Bugreport time and count
         BUGREPORT_TIME("bugreport_time", true),
         BUGREPORT_COUNT("bugreport_count", true),
+        // Logcat dump time and count
+        LOGCAT_DUMP_TIME("logcat_dump_time", true),
+        LOGCAT_DUMP_COUNT("logcat_dump_count", true),
         CLEARED_RUN_ERROR("cleared_run_error", true),
         FETCH_BUILD("fetch_build_time_ms", true),
         SETUP("setup_time_ms", true),
@@ -65,16 +68,50 @@ public class InvocationMetricLogger {
         ADB_REBOOT_TIME("adb_reboot_time", true),
         // Represents how often we attempt to reboot the device.
         ADB_REBOOT_ROUTINE_COUNT("adb_reboot_routine_count", true),
+        // Represents the time attempting to reboot a device into bootloader
+        BOOTLOADER_REBOOT_TIME("bootloader_reboot_time", true),
+        // Represents how often we attempt to reboot the device into bootloader
+        BOOTLOADER_REBOOT_COUNT("bootloader_reboot_count", true),
+        // Represents the time attempting to reboot a device into fastbootd
+        FASTBOOTD_REBOOT_TIME("fastbootd_reboot_time", true),
+        // Represents how often we attempt to reboot the device into fastbootd
+        FASTBOOTD_REBOOT_COUNT("fastbootd_reboot_count", true),
+        // Represents how often we reboot a device already in bootloader
+        BOOTLOADER_SAME_STATE_REBOOT("bootloader_same_state_reboot", true),
+        // Represents the time we spend during postboot setup
+        POSTBOOT_SETUP_TIME("postboot_setup_time", true),
+        // Represents how often we go through postboot setup
+        POSTBOOT_SETUP_COUNT("postboot_setup_count", true),
+        // Represents the time we spend during postboot wifi setup
+        POSTBOOT_WIFI_SETUP_TIME("postboot_wifi_setup_time", true),
+        // Represents how often we go through postboot wifi setup
+        POSTBOOT_WIFI_SETUP_COUNT("postboot_wifi_setup_count", true),
+
         // Represents the time we spend pulling file from device.
         PULL_FILE_TIME("pull_file_time_ms", true),
         // Represents how many times we pulled file from the device.
         PULL_FILE_COUNT("pull_file_count", true),
+        // Represents the time we spend pulling dir from device.
+        PULL_DIR_TIME("pull_dir_time_ms", true),
+        // Represents how many times we pulled dir from the device.
+        PULL_DIR_COUNT("pull_dir_count", true),
         // Represents the time we spend pushing file from device.
         PUSH_FILE_TIME("push_file_time_ms", true),
         // Represents how many times we pushed file from the device.
         PUSH_FILE_COUNT("push_file_count", true),
+        // Represents the time we spend pushing dir from device.
+        PUSH_DIR_TIME("push_dir_time_ms", true),
+        // Represents how many times we pushing dir from the device.
+        PUSH_DIR_COUNT("push_dir_count", true),
+        // Represents the time we spent deleting file on device
+        DELETE_DEVICE_FILE_TIME("delete_device_file_time_ms", true),
+        // Represents how many times we call the delete file method
+        DELETE_DEVICE_FILE_COUNT("delete_device_file_count", true),
         DOES_FILE_EXISTS_TIME("does_file_exists_time_ms", true),
         DOES_FILE_EXISTS_COUNT("does_file_exists_count", true),
+        // Represents the time and count for installing packages
+        PACKAGE_INSTALL_TIME("package_install_time_ms", true),
+        PACKAGE_INSTALL_COUNT("package_install_count", true),
         // Capture the time spent isolating a retry with reset
         RESET_RETRY_ISOLATION_PAIR("reset_isolation_timestamp_pair", true),
         // Capture the time spent isolating a retry with reboot
@@ -110,13 +147,22 @@ public class InvocationMetricLogger {
         UNCAUGHT_TEST_CRASH_FAILURES("uncaught_test_crash_failures", true),
         DEVICE_RESET_COUNT("device_reset_count", true),
         DEVICE_RESET_MODULES("device_reset_modules", true),
+        DEVICE_RESET_MODULES_FOR_TARGET_PREPARER("device_reset_modules_for_target_preparer", true),
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
         INVOCATION_START("tf_invocation_start_timestamp", false),
+        // Track the way of requesting Oxygen device lease/release.
+        OXYGEN_DEVICE_LEASE_THROUGH_ACLOUD_COUNT("oxygen_device_lease_through_acloud_count", true),
+        OXYGEN_DEVICE_RELEASE_THROUGH_ACLOUD_COUNT(
+                "oxygen_device_release_through_acloud_count", true),
+        OXYGEN_DEVICE_DIRECT_LEASE_COUNT("oxygen_device_direct_lease_count", true),
+        OXYGEN_DEVICE_DIRECT_RELEASE_COUNT("oxygen_device_direct_release_count", true),
 
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
         ARTIFACTS_UPLOAD_SIZE("tf_artifacts_upload_size_bytes", true),
+        LOG_SAVING_TIME("log_saving_time", true),
+        LOG_SAVING_COUNT("log_saving_count", true),
         // TODO: Delete start/end timestamp in favor of pair.
         FETCH_BUILD_START("tf_fetch_build_start_timestamp", false),
         FETCH_BUILD_END("tf_fetch_build_end_timestamp", false),
@@ -126,6 +172,7 @@ public class InvocationMetricLogger {
         SETUP_END("tf_setup_end_timestamp", false),
         SETUP_PAIR("tf_setup_pair_timestamp", true),
         FLASHING_FROM_FASTBOOTD("flashing_from_fastbootd", true),
+        FLASHING_TIME("flashing_time_ms", true),
         FLASHING_PERMIT_LATENCY("flashing_permit_latency_ms", true),
         DOWNLOAD_PERMIT_LATENCY("download_permit_latency_ms", true),
         // Unzipping metrics

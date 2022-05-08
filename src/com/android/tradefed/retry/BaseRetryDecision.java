@@ -120,6 +120,14 @@ public class BaseRetryDecision
             description = "Feature flag to use the updated filtering logic.")
     private boolean mUpdatedFiltering = true;
 
+    @Option(
+            name = "module-preparation-retry",
+            description = "Whether or not to retry any module-level target preparation errors." +
+                    "This flag is for feature testing, and eventualy it's all controlled under " +
+                    "retry strategy."
+    )
+    private boolean mModulePreparationRetry = false;
+
     private IInvocationContext mContext;
     private IConfiguration mConfiguration;
     private TestInformation mTestInformation;
@@ -149,6 +157,43 @@ public class BaseRetryDecision
     @Override
     public int getMaxRetryCount() {
         return mMaxRetryAttempts;
+    }
+
+    @Override
+    public RetryPreparationDecision shouldRetryPreparation(
+            ModuleDefinition module,
+            int attempt,
+            int maxAttempt) {
+        RetryPreparationDecision decision = new RetryPreparationDecision(false, true);
+        switch (mRetryStrategy) {
+            case NO_RETRY:
+                // Currently, do not retry if RetryStrategy is NO_RETRY.
+                return decision;
+            default:
+                // Continue the logic for retry the failures.
+                break;
+        }
+        if (!mModulePreparationRetry) {
+            // No need to retry if `module-preparation-retry` is not set.
+            return decision;
+        }
+        if (attempt == maxAttempt) {
+            // No need to retry if it reaches the maximum retry count.
+            return decision;
+        }
+
+        try {
+            recoverStateOfDevices(getDevices(), attempt, module);
+        } catch (DeviceNotAvailableException e) {
+            // Retried failed, set the exception and return the decision.
+            decision = new RetryPreparationDecision(true, false);
+            decision.setPreviousException(e.getCause());
+            return decision;
+        }
+        // Retried successfully, no exception will be caught, return the decision.
+        decision = new RetryPreparationDecision(false, false);
+        decision.setPreviousException(null);
+        return decision;
     }
 
     @Override

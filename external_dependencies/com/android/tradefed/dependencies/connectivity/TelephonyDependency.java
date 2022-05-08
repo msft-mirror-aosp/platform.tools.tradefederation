@@ -16,5 +16,4 @@
 
 package com.android.tradefed.dependencies.connectivity;
 
-/** Represents a Telephony Dependency. */
-public class TelephonyDependency extends ConnectivityDependency {}
+public final class TelephonyDependency extends ConnectivityDependency {}

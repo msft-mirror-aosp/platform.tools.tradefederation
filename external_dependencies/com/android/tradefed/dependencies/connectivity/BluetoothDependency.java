@@ -17,4 +17,4 @@
 package com.android.tradefed.dependencies.connectivity;
 
 /** Represents a Bluetooth Dependency. */
-public class BluetoothDependency extends ConnectivityDependency {}
+public final class BluetoothDependency extends ConnectivityDependency {}
