@@ -15,9 +15,12 @@
  */
 package com.android.tradefed.testtype.junit4;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -28,12 +31,15 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.HostTest;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -49,6 +55,9 @@ public class DeviceParameterizedRunnerTest {
     @RunWith(DeviceParameterizedRunner.class)
     public static class TestJUnitParamsClass extends BaseHostJUnit4Test {
 
+        @Option(name = "test-option")
+        private int mOption = 5;
+
         /** Not all test cases have to be parameterized. */
         @Test
         public void testOne() {
@@ -62,6 +71,7 @@ public class DeviceParameterizedRunnerTest {
             assertNotNull(param);
             assertNotNull(getDevice());
             assertNotNull(getBuild());
+            assertEquals(10, mOption);
         }
 
         public List<String> getParams() {
@@ -88,16 +98,15 @@ public class DeviceParameterizedRunnerTest {
     }
 
     private HostTest mTest;
-    private ITestDevice mDevice;
-    private IBuildInfo mBuild;
+    @Mock ITestDevice mDevice;
+    @Mock IBuildInfo mBuild;
     private TestInformation mTestInfo;
-    private ITestInvocationListener mListener;
+    @Mock ITestInvocationListener mListener;
 
     @Before
     public void setUp() throws Exception {
-        mDevice = EasyMock.createMock(ITestDevice.class);
-        mBuild = EasyMock.createMock(IBuildInfo.class);
-        mListener = EasyMock.createMock(ITestInvocationListener.class);
+        MockitoAnnotations.initMocks(this);
+
         mTest = new HostTest();
         mTest.setDevice(mDevice);
         mTest.setBuild(mBuild);
@@ -115,28 +124,31 @@ public class DeviceParameterizedRunnerTest {
     public void testRun() throws Exception {
         OptionSetter setter = new OptionSetter(mTest);
         setter.setOptionValue("class", TestJUnitParamsClass.class.getName());
+        setter.setOptionValue("set-option", "test-option:10");
 
-        mListener.testRunStarted(TestJUnitParamsClass.class.getName(), 3);
         TestDescription test1 =
                 new TestDescription(TestJUnitParamsClass.class.getName(), "testOne");
-        mListener.testStarted(test1);
-        mListener.testEnded(test1, new HashMap<String, Metric>());
 
         TestDescription test2_p1 =
                 new TestDescription(TestJUnitParamsClass.class.getName(), "testTwo[0]");
-        mListener.testStarted(test2_p1);
-        mListener.testEnded(test2_p1, new HashMap<String, Metric>());
 
         TestDescription test2_2 =
                 new TestDescription(TestJUnitParamsClass.class.getName(), "testTwo[1]");
-        mListener.testStarted(test2_2);
-        mListener.testEnded(test2_2, new HashMap<String, Metric>());
 
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mDevice, mBuild, mListener);
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mDevice, mBuild, mListener);
+
+        InOrder inOrder = Mockito.inOrder(mListener);
+        inOrder.verify(mListener).testRunStarted(TestJUnitParamsClass.class.getName(), 3);
+        inOrder.verify(mListener).testStarted(test1);
+        inOrder.verify(mListener).testEnded(test1, new HashMap<String, Metric>());
+        inOrder.verify(mListener).testStarted(test2_p1);
+        inOrder.verify(mListener).testEnded(test2_p1, new HashMap<String, Metric>());
+        inOrder.verify(mListener).testStarted(test2_2);
+        inOrder.verify(mListener).testEnded(test2_2, new HashMap<String, Metric>());
+        inOrder.verify(mListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verifyNoMoreInteractions();
+        Mockito.verifyNoMoreInteractions(mListener);
     }
 
     /** Test running the parameterized tests in collect-tests-only mode. */
@@ -146,27 +158,25 @@ public class DeviceParameterizedRunnerTest {
         setter.setOptionValue("class", TestJUnitParamsClass.class.getName());
         mTest.setCollectTestsOnly(true);
 
-        mListener.testRunStarted(TestJUnitParamsClass.class.getName(), 3);
         TestDescription test1 =
                 new TestDescription(TestJUnitParamsClass.class.getName(), "testOne");
-        mListener.testStarted(test1);
-        mListener.testEnded(test1, new HashMap<String, Metric>());
 
         TestDescription test2_p1 =
                 new TestDescription(TestJUnitParamsClass.class.getName(), "testTwo[0]");
-        mListener.testStarted(test2_p1);
-        mListener.testEnded(test2_p1, new HashMap<String, Metric>());
 
         TestDescription test2_2 =
                 new TestDescription(TestJUnitParamsClass.class.getName(), "testTwo[1]");
-        mListener.testStarted(test2_2);
-        mListener.testEnded(test2_2, new HashMap<String, Metric>());
 
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mDevice, mBuild, mListener);
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mDevice, mBuild, mListener);
+
+        verify(mListener).testRunStarted(TestJUnitParamsClass.class.getName(), 3);
+        verify(mListener).testStarted(test1);
+        verify(mListener).testEnded(test1, new HashMap<String, Metric>());
+        verify(mListener).testStarted(test2_p1);
+        verify(mListener).testEnded(test2_p1, new HashMap<String, Metric>());
+        verify(mListener).testStarted(test2_2);
+        verify(mListener).testEnded(test2_2, new HashMap<String, Metric>());
+        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     /** Test running the parameterized tests when targetting a particular parameterized method. */
@@ -176,18 +186,15 @@ public class DeviceParameterizedRunnerTest {
         setter.setOptionValue("class", TestJUnitParamsClass.class.getName());
         setter.setOptionValue("method", "testTwo[0]");
 
-        mListener.testRunStarted(TestJUnitParamsClass.class.getName(), 1);
-
         TestDescription test2_p1 =
                 new TestDescription(TestJUnitParamsClass.class.getName(), "testTwo[0]");
-        mListener.testStarted(test2_p1);
-        mListener.testEnded(test2_p1, new HashMap<String, Metric>());
 
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mDevice, mBuild, mListener);
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mDevice, mBuild, mListener);
+
+        verify(mListener).testRunStarted(TestJUnitParamsClass.class.getName(), 1);
+        verify(mListener).testStarted(test2_p1);
+        verify(mListener).testEnded(test2_p1, new HashMap<String, Metric>());
+        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     /** Test running the parameterized tests when targetting a particular parameterized method. */
@@ -198,18 +205,15 @@ public class DeviceParameterizedRunnerTest {
         setter.setOptionValue("method", "testTwo[0]");
         mTest.setCollectTestsOnly(true);
 
-        mListener.testRunStarted(TestJUnitParamsClass.class.getName(), 1);
-
         TestDescription test2_p1 =
                 new TestDescription(TestJUnitParamsClass.class.getName(), "testTwo[0]");
-        mListener.testStarted(test2_p1);
-        mListener.testEnded(test2_p1, new HashMap<String, Metric>());
 
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mDevice, mBuild, mListener);
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mDevice, mBuild, mListener);
+
+        verify(mListener).testRunStarted(TestJUnitParamsClass.class.getName(), 1);
+        verify(mListener).testStarted(test2_p1);
+        verify(mListener).testEnded(test2_p1, new HashMap<String, Metric>());
+        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     /** Test running the parameterized tests when excluding a particular parameterized method. */
@@ -219,22 +223,20 @@ public class DeviceParameterizedRunnerTest {
         setter.setOptionValue("class", TestJUnitParamsClass.class.getName());
         mTest.addExcludeFilter(TestJUnitParamsClass.class.getName() + "#testTwo[0]");
 
-        mListener.testRunStarted(TestJUnitParamsClass.class.getName(), 2);
         TestDescription test1 =
                 new TestDescription(TestJUnitParamsClass.class.getName(), "testOne");
-        mListener.testStarted(test1);
-        mListener.testEnded(test1, new HashMap<String, Metric>());
 
         TestDescription test2_2 =
                 new TestDescription(TestJUnitParamsClass.class.getName(), "testTwo[1]");
-        mListener.testStarted(test2_2);
-        mListener.testEnded(test2_2, new HashMap<String, Metric>());
 
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mDevice, mBuild, mListener);
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mDevice, mBuild, mListener);
+
+        verify(mListener).testRunStarted(TestJUnitParamsClass.class.getName(), 2);
+        verify(mListener).testStarted(test1);
+        verify(mListener).testEnded(test1, new HashMap<String, Metric>());
+        verify(mListener).testStarted(test2_2);
+        verify(mListener).testEnded(test2_2, new HashMap<String, Metric>());
+        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     /**
@@ -246,18 +248,15 @@ public class DeviceParameterizedRunnerTest {
         OptionSetter setter = new OptionSetter(mTest);
         setter.setOptionValue("class", TestJUnitParamsClassWithIgnored.class.getName());
 
-        mListener.testRunStarted(TestJUnitParamsClassWithIgnored.class.getName(), 1);
-
         TestDescription test2_p1 =
                 new TestDescription(TestJUnitParamsClassWithIgnored.class.getName(), "testTwo");
-        mListener.testStarted(test2_p1);
-        mListener.testIgnored(test2_p1);
-        mListener.testEnded(test2_p1, new HashMap<String, Metric>());
 
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        EasyMock.replay(mDevice, mBuild, mListener);
         mTest.run(mTestInfo, mListener);
-        EasyMock.verify(mDevice, mBuild, mListener);
+
+        verify(mListener).testRunStarted(TestJUnitParamsClassWithIgnored.class.getName(), 1);
+        verify(mListener).testStarted(test2_p1);
+        verify(mListener).testIgnored(test2_p1);
+        verify(mListener).testEnded(test2_p1, new HashMap<String, Metric>());
+        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 }

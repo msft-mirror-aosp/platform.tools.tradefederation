@@ -16,16 +16,19 @@
 package com.android.tradefed.postprocessor;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.mockito.Mockito.argThat;
+
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.MockitoAnnotations.initMocks;
+
 import static java.util.stream.Collectors.toMap;
 
 import com.android.os.AtomsProto.Atom;
 import com.android.os.AtomsProto.OnDevicePowerMeasurement;
 import com.android.os.AtomsProto.RemainingBatteryCapacity;
+import com.android.os.StatsLog.AggregatedAtomInfo;
 import com.android.os.StatsLog.ConfigMetricsReport;
 import com.android.os.StatsLog.ConfigMetricsReportList;
 import com.android.os.StatsLog.GaugeBucketInfo;
@@ -40,13 +43,16 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
 
@@ -60,8 +66,15 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /** Unit tests for {@link StatsdBeforeAfterGaugeMetricPostProcessor}. */
-@RunWith(JUnit4.class)
+@RunWith(Parameterized.class)
 public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
+    @Parameters
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][] {{false}, {true}});
+    }
+
+    @Parameter public boolean mUseAggregatedAtomInfo;
+
     @Rule public TemporaryFolder testDir = new TemporaryFolder();
 
     @Mock private ITestInvocationListener mListener;
@@ -98,6 +111,7 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
     private static final String METRIC_PREFIX_BATTERY =
             STATSD_REPORT_PREFIX_BATTERY + "-gauge-" + ATOM_NAME_BATTERY;
     private static final String METRIC_FORMATTER_BATTERY = "=[charge_micro_ampere_hour]";
+    private static final String METRIC_FORMATTER_BATTERY_ALT = "=[charge_micro_amp_hours]";
 
     // Test data related to testing multiple metrics within one report.
     private static final String STATSD_REPORT_PREFIX_MULTI = "statsd-metric-multi";
@@ -121,7 +135,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_1_BEFORE, TEST_ATOM_ODPM_RAIL_2_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_2_AFTER, TEST_ATOM_ODPM_RAIL_1_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_2_AFTER, TEST_ATOM_ODPM_RAIL_1_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -149,7 +164,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_1_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -180,7 +196,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_1_BEFORE, TEST_ATOM_ODPM_RAIL_2_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_2_AFTER, TEST_ATOM_ODPM_RAIL_1_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_2_AFTER, TEST_ATOM_ODPM_RAIL_1_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -214,7 +231,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_1_BEFORE, TEST_ATOM_ODPM_RAIL_2_BEFORE),
-                        null);
+                        null,
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -235,7 +253,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_1_BEFORE, TEST_ATOM_ODPM_RAIL_2_BEFORE),
-                        null);
+                        null,
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -265,7 +284,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_2_BEFORE, TEST_ATOM_ODPM_RAIL_3_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER, TEST_ATOM_ODPM_RAIL_3_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER, TEST_ATOM_ODPM_RAIL_3_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -291,7 +311,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_2_BEFORE, TEST_ATOM_ODPM_RAIL_3_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER, TEST_ATOM_ODPM_RAIL_3_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER, TEST_ATOM_ODPM_RAIL_3_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -327,7 +348,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_2_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -364,7 +386,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
                         Arrays.asList(
                                 TEST_ATOM_ODPM_RAIL_1_AFTER,
                                 TEST_ATOM_ODPM_RAIL_2_AFTER,
-                                TEST_ATOM_ODPM_RAIL_2_AFTER));
+                                TEST_ATOM_ODPM_RAIL_2_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -393,7 +416,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
                         Arrays.asList(
                                 TEST_ATOM_ODPM_RAIL_1_AFTER,
                                 TEST_ATOM_ODPM_RAIL_2_AFTER,
-                                TEST_ATOM_ODPM_RAIL_2_AFTER));
+                                TEST_ATOM_ODPM_RAIL_2_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -430,7 +454,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
                         Arrays.asList(
                                 TEST_ATOM_ODPM_RAIL_1_AFTER,
                                 TEST_ATOM_ODPM_RAIL_2_AFTER,
-                                TEST_ATOM_ODPM_RAIL_2_AFTER));
+                                TEST_ATOM_ODPM_RAIL_2_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -473,7 +498,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_1_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -501,7 +527,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_1_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -527,7 +554,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_1_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_ODPM, report));
 
@@ -554,7 +582,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList report =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_BATTERY_BEFORE),
-                        Arrays.asList(TEST_ATOM_BATTERY_AFTER));
+                        Arrays.asList(TEST_ATOM_BATTERY_AFTER),
+                        mUseAggregatedAtomInfo);
         Map<String, LogFile> runLogs =
                 setUpTestData(ImmutableMap.of(STATSD_REPORT_PREFIX_BATTERY, report));
 
@@ -562,6 +591,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
 
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY);
+        mOptionSetter.setOptionValue(
+                "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY_ALT);
 
         Map<String, String> metrics =
                 getSingleStringMetrics(
@@ -581,11 +612,13 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList odpmReport =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_1_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER),
+                        mUseAggregatedAtomInfo);
         ConfigMetricsReportList batteryReport =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_BATTERY_BEFORE),
-                        Arrays.asList(TEST_ATOM_BATTERY_AFTER));
+                        Arrays.asList(TEST_ATOM_BATTERY_AFTER),
+                        mUseAggregatedAtomInfo);
 
         Map<String, LogFile> runLogs =
                 setUpTestData(
@@ -601,6 +634,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
                 "metric-formatter", ATOM_NAME_ODPM, METRIC_FORMATTER_ODPM_SUBSYSTEM_RAIL);
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY);
+        mOptionSetter.setOptionValue(
+                "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY_ALT);
 
         Map<String, String> metrics =
                 getSingleStringMetrics(
@@ -622,11 +657,13 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList odpmReport =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_1_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER),
+                        mUseAggregatedAtomInfo);
         ConfigMetricsReportList batteryReport =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_BATTERY_BEFORE),
-                        Arrays.asList(TEST_ATOM_BATTERY_AFTER));
+                        Arrays.asList(TEST_ATOM_BATTERY_AFTER),
+                        mUseAggregatedAtomInfo);
         ConfigMetricsReportList multiReport =
                 odpmReport.toBuilder().addReports(batteryReport.getReports(0)).build();
 
@@ -637,6 +674,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
 
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_ODPM, METRIC_FORMATTER_ODPM_SUBSYSTEM_RAIL);
+        mOptionSetter.setOptionValue(
+                "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY_ALT);
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY);
 
@@ -667,11 +706,13 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
         ConfigMetricsReportList odpmReport =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_ODPM_RAIL_1_BEFORE),
-                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER));
+                        Arrays.asList(TEST_ATOM_ODPM_RAIL_1_AFTER),
+                        mUseAggregatedAtomInfo);
         ConfigMetricsReportList batteryReport =
                 createTestReportList(
                         Arrays.asList(TEST_ATOM_BATTERY_BEFORE),
-                        Arrays.asList(TEST_ATOM_BATTERY_AFTER));
+                        Arrays.asList(TEST_ATOM_BATTERY_AFTER),
+                        mUseAggregatedAtomInfo);
         ConfigMetricsReportList multiReport =
                 ConfigMetricsReportList.newBuilder()
                         .addReports(
@@ -687,6 +728,8 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
 
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_ODPM, METRIC_FORMATTER_ODPM_SUBSYSTEM_RAIL);
+        mOptionSetter.setOptionValue(
+                "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY_ALT);
         mOptionSetter.setOptionValue(
                 "metric-formatter", ATOM_NAME_BATTERY, METRIC_FORMATTER_BATTERY);
 
@@ -723,30 +766,31 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
     }
 
     private static Atom createTestBatteryAtom(int chargeMicroAmpereHour) {
+        // Use the field number due to naming difference in proto libs
+        FieldDescriptor chargeMicroAmpHour =
+                RemainingBatteryCapacity.getDescriptor().findFieldByNumber(1);
         return Atom.newBuilder()
                 .setRemainingBatteryCapacity(
                         RemainingBatteryCapacity.newBuilder()
-                                .setChargeMicroAmpereHour(chargeMicroAmpereHour))
+                                .setField(
+                                        chargeMicroAmpHour, Integer.valueOf(chargeMicroAmpereHour))
+                                .build())
                 .build();
     }
 
     /**
      * Create a {@code ConfigMetricsReportList} for test from the supplied atoms. If either {@code
-     * before} or {@code after} is {@code null}, the corresponding bucket will be omitted.
+     * befores} or {@code afters} is {@code null}, the corresponding bucket will be omitted.
      */
     private static ConfigMetricsReportList createTestReportList(
-            Collection<Atom> befores, Collection<Atom> afters) {
+            Collection<Atom> befores, Collection<Atom> afters, boolean useAggregatedAtomInfo) {
         ConfigMetricsReportList.Builder reportListBuilder = ConfigMetricsReportList.newBuilder();
         GaugeMetricData.Builder gaugeMetricBuilder = GaugeMetricData.newBuilder();
         if (befores != null) {
-            GaugeBucketInfo.Builder bucketBuilder = GaugeBucketInfo.newBuilder();
-            befores.stream().forEach(atom -> bucketBuilder.addAtom(atom));
-            gaugeMetricBuilder.addBucketInfo(bucketBuilder.build());
+            gaugeMetricBuilder.addBucketInfo(buildBucket(befores, useAggregatedAtomInfo));
         }
         if (afters != null) {
-            GaugeBucketInfo.Builder bucketBuilder = GaugeBucketInfo.newBuilder();
-            afters.stream().forEach(atom -> bucketBuilder.addAtom(atom));
-            gaugeMetricBuilder.addBucketInfo(bucketBuilder.build());
+            gaugeMetricBuilder.addBucketInfo(buildBucket(afters, useAggregatedAtomInfo));
         }
         return reportListBuilder
                 .addReports(
@@ -760,6 +804,22 @@ public class StatsdBeforeAfterGaugeMetricPostProcessorTest {
                                                 .build())
                                 .build())
                 .build();
+    }
+
+    /** Build {@code GaugeBucketInfo} from a supplied list of {@code Atom}s. */
+    private static GaugeBucketInfo buildBucket(
+            Collection<Atom> atoms, boolean useAggregatedAtomInfo) {
+        GaugeBucketInfo.Builder builder = GaugeBucketInfo.newBuilder();
+        if (useAggregatedAtomInfo) {
+            atoms.stream()
+                    .forEach(
+                            atom ->
+                                    builder.addAggregatedAtomInfo(
+                                            AggregatedAtomInfo.newBuilder().setAtom(atom).build()));
+        } else {
+            atoms.stream().forEach(atom -> builder.addAtom(atom));
+        }
+        return builder.build();
     }
 
     /** Convert the metrics reported as Metric.Builder to String for simpler assertions. */

@@ -19,8 +19,8 @@ package com.android.tradefed.testtype;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.verify;
 
-import com.android.ddmlib.Log;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.TestAppConstants;
 import com.android.tradefed.config.OptionSetter;
@@ -29,17 +29,21 @@ import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.util.RunUtil;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -48,7 +52,6 @@ import java.util.HashMap;
 @RunWith(DeviceJUnit4ClassRunner.class)
 public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformationReceiver {
 
-    private static final String LOG_TAG = "InstrumentationTestFuncTest";
     private static final long SHELL_TIMEOUT = 2500;
     private static final int TEST_TIMEOUT = 2000;
     private static final long WAIT_FOR_DEVICE_AVAILABLE = 5 * 60 * 1000;
@@ -59,7 +62,7 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
     /** The {@link InstrumentationTest} under test */
     private InstrumentationTest mInstrumentationTest;
 
-    private ITestInvocationListener mMockListener;
+    @Mock ITestInvocationListener mMockListener;
 
     @Override
     public void setTestInformation(TestInformation testInformation) {
@@ -83,6 +86,8 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
 
     @Before
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mInstrumentationTest = new InstrumentationTest();
         mInstrumentationTest.setPackageName(TestAppConstants.TESTAPP_PACKAGE);
         mInstrumentationTest.setDevice(getDevice());
@@ -90,7 +95,7 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
         mInstrumentationTest.setShellTimeout(-1);
         // set to no rerun by default
         mInstrumentationTest.setRerunMode(false);
-        mMockListener = EasyMock.createStrictMock(ITestInvocationListener.class);
+
         getDevice().disableKeyguard();
     }
 
@@ -98,7 +103,7 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
     @Ignore
     @Test
     public void testRun() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testRun");
+        CLog.i("testRun");
         TestDescription expectedTest =
                 new TestDescription(
                         TestAppConstants.TESTAPP_CLASS, TestAppConstants.PASSED_TEST_METHOD);
@@ -106,22 +111,29 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
         mInstrumentationTest.setMethodName(TestAppConstants.PASSED_TEST_METHOD);
         mInstrumentationTest.setTestTimeout(TEST_TIMEOUT);
         mInstrumentationTest.setShellTimeout(SHELL_TIMEOUT);
-        mMockListener.testRunStarted(TestAppConstants.TESTAPP_PACKAGE, 1);
-        mMockListener.testStarted(EasyMock.eq(expectedTest));
-        mMockListener.testEnded(
-                EasyMock.eq(expectedTest), EasyMock.<HashMap<String, Metric>>anyObject());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        EasyMock.replay(mMockListener);
+
         mInstrumentationTest.run(getTestInformation(), mMockListener);
-        EasyMock.verify(mMockListener);
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).testRunStarted(TestAppConstants.TESTAPP_PACKAGE, 1);
+        inOrder.verify(mMockListener).testStarted(Mockito.eq(expectedTest));
+        inOrder.verify(mMockListener)
+                .testEnded(Mockito.eq(expectedTest), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+
+        verify(mMockListener).testRunStarted(TestAppConstants.TESTAPP_PACKAGE, 1);
+        verify(mMockListener).testStarted(Mockito.eq(expectedTest));
+        verify(mMockListener)
+                .testEnded(Mockito.eq(expectedTest), Mockito.<HashMap<String, Metric>>any());
+        verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     /** Test normal run scenario with a single failed test result. */
     @Ignore
     @Test
     public void testRun_testFailed() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testRun_testFailed");
+        CLog.i("testRun_testFailed");
         mInstrumentationTest.setClassName(TestAppConstants.TESTAPP_CLASS);
         mInstrumentationTest.setMethodName(TestAppConstants.FAILED_TEST_METHOD);
         mInstrumentationTest.setTestTimeout(TEST_TIMEOUT);
@@ -144,7 +156,7 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
     @Ignore
     @Test
     public void testRun_testCrash() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testRun_testCrash");
+        CLog.i("testRun_testCrash");
         TestDescription expectedTest =
                 new TestDescription(
                         TestAppConstants.TESTAPP_CLASS, TestAppConstants.CRASH_TEST_METHOD);
@@ -152,30 +164,55 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
         mInstrumentationTest.setMethodName(TestAppConstants.CRASH_TEST_METHOD);
         mInstrumentationTest.setTestTimeout(TEST_TIMEOUT);
         mInstrumentationTest.setShellTimeout(SHELL_TIMEOUT);
-        mMockListener.testRunStarted(TestAppConstants.TESTAPP_PACKAGE, 1);
-        mMockListener.testStarted(EasyMock.eq(expectedTest));
-        if (getDevice().getApiLevel() <= 23) {
-            // Before N handling of instrumentation crash is slightly different.
-            mMockListener.testFailed(
-                    EasyMock.eq(expectedTest), EasyMock.contains("RuntimeException"));
-            mMockListener.testEnded(
-                    EasyMock.eq(expectedTest), EasyMock.<HashMap<String, Metric>>anyObject());
-            mMockListener.testRunFailed(
-                    EasyMock.eq("Instrumentation run failed due to 'java.lang.RuntimeException'"));
-        } else {
-            mMockListener.testFailed(
-                    EasyMock.eq(expectedTest), EasyMock.contains("Process crashed."));
-            mMockListener.testEnded(
-                    EasyMock.eq(expectedTest), EasyMock.<HashMap<String, Metric>>anyObject());
-            mMockListener.testRunFailed(
-                    EasyMock.eq("Instrumentation run failed due to 'Process crashed.'"));
-        }
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
+
         try {
-            EasyMock.replay(mMockListener);
             mInstrumentationTest.run(getTestInformation(), mMockListener);
-            EasyMock.verify(mMockListener);
+            InOrder inOrder = Mockito.inOrder(mMockListener);
+            inOrder.verify(mMockListener).testRunStarted(TestAppConstants.TESTAPP_PACKAGE, 1);
+            inOrder.verify(mMockListener).testStarted(Mockito.eq(expectedTest));
+            if (getDevice().getApiLevel() <= 23) {
+                // Before N handling of instrumentation crash is slightly different.
+                inOrder.verify(mMockListener)
+                        .testFailed(Mockito.eq(expectedTest), Mockito.contains("RuntimeException"));
+                inOrder.verify(mMockListener)
+                        .testEnded(Mockito.eq(expectedTest), Mockito.<HashMap<String, Metric>>any());
+                inOrder.verify(mMockListener)
+                        .testRunFailed(
+                                Mockito.eq(
+                                        "Instrumentation run failed due to"
+                                            + " 'java.lang.RuntimeException'"));
+            } else {
+                inOrder.verify(mMockListener)
+                        .testFailed(Mockito.eq(expectedTest), Mockito.contains("Process crashed."));
+                inOrder.verify(mMockListener)
+                        .testEnded(Mockito.eq(expectedTest), Mockito.<HashMap<String, Metric>>any());
+                inOrder.verify(mMockListener)
+                        .testRunFailed(
+                                Mockito.eq("Instrumentation run failed due to 'Process crashed.'"));
+            }
+            inOrder.verify(mMockListener)
+                    .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+
+            verify(mMockListener).testRunStarted(TestAppConstants.TESTAPP_PACKAGE, 1);
+            verify(mMockListener).testStarted(Mockito.eq(expectedTest));
+            verify(mMockListener)
+                    .testFailed(Mockito.eq(expectedTest), Mockito.contains("RuntimeException"));
+            verify(mMockListener)
+                    .testEnded(Mockito.eq(expectedTest), Mockito.<HashMap<String, Metric>>any());
+            verify(mMockListener)
+                    .testRunFailed(
+                            Mockito.eq(
+                                    "Instrumentation run failed due to"
+                                        + " 'java.lang.RuntimeException'"));
+            verify(mMockListener)
+                    .testFailed(Mockito.eq(expectedTest), Mockito.contains("Process crashed."));
+            verify(mMockListener)
+                    .testEnded(Mockito.eq(expectedTest), Mockito.<HashMap<String, Metric>>any());
+            verify(mMockListener)
+                    .testRunFailed(
+                            Mockito.eq("Instrumentation run failed due to 'Process crashed.'"));
+            verify(mMockListener)
+                    .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         } finally {
             getDevice().waitForDeviceAvailable();
         }
@@ -185,7 +222,7 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
     @Ignore
     @Test
     public void testRun_testTimeout() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "testRun_testTimeout");
+        CLog.i("testRun_testTimeout");
         RecoveryMode initMode = getDevice().getRecoveryMode();
         getDevice().setRecoveryMode(RecoveryMode.NONE);
         try {
@@ -219,14 +256,14 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
     @Ignore
     @Test
     public void testRun_deviceReboot() throws Exception {
-        Log.i(LOG_TAG, "testRun_deviceReboot");
+        CLog.i("testRun_deviceReboot");
         mInstrumentationTest.setClassName(TestAppConstants.TESTAPP_CLASS);
         mInstrumentationTest.setMethodName(TestAppConstants.TIMEOUT_TEST_METHOD);
         mInstrumentationTest.setShellTimeout(0);
         mInstrumentationTest.setTestTimeout(0);
         // Set a max timeout to avoid hanging forever for safety
-        //OptionSetter setter = new OptionSetter(mInstrumentationTest);
-        //setter.setOptionValue("max-timeout", "600000");
+        // OptionSetter setter = new OptionSetter(mInstrumentationTest);
+        // setter.setOptionValue("max-timeout", "600000");
 
         // fork off a thread to do the reboot
         Thread rebootThread =
@@ -239,9 +276,9 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
                             Thread.sleep(2000);
                             getDevice().reboot();
                         } catch (InterruptedException e) {
-                            Log.w(LOG_TAG, "interrupted");
+                            CLog.w("interrupted");
                         } catch (DeviceNotAvailableException dnae) {
-                            Log.w(LOG_TAG, "Device did not come back online after reboot");
+                            CLog.w("Device did not come back online after reboot");
                         }
                     }
                 };
@@ -271,7 +308,7 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
     @Ignore
     @Test
     public void testRun_maxTimeout() throws Exception {
-        Log.i(LOG_TAG, "testRun_maxTimeout");
+        CLog.i("testRun_maxTimeout");
         mInstrumentationTest.setClassName(TestAppConstants.TESTAPP_CLASS);
         mInstrumentationTest.setMethodName(TestAppConstants.TIMEOUT_TEST_METHOD);
         mInstrumentationTest.setShellTimeout(0);
@@ -297,7 +334,7 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
     @Test
     @Ignore
     public void testRun_deviceRuntimeReset() throws Exception {
-        Log.i(LOG_TAG, "testRun_deviceRuntimeReset");
+        CLog.i("testRun_deviceRuntimeReset");
         mInstrumentationTest.setShellTimeout(SHELL_TIMEOUT);
         mInstrumentationTest.setTestTimeout(TEST_TIMEOUT);
         mInstrumentationTest.setClassName(TestAppConstants.TESTAPP_CLASS);
@@ -323,9 +360,9 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
                                                     "adb -s %s shell start",
                                                     getDevice().getIDevice().getSerialNumber()));
                         } catch (InterruptedException e) {
-                            Log.w(LOG_TAG, "interrupted");
+                            CLog.w("interrupted");
                         } catch (IOException e) {
-                            Log.w(LOG_TAG, "IOException when rebooting");
+                            CLog.w("IOException when rebooting");
                         }
                     }
                 };
@@ -361,7 +398,7 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
     @Ignore
     @Test
     public void testRun_rerun() throws Exception {
-        Log.i(LOG_TAG, "testRun_rerun");
+        CLog.i("testRun_rerun");
         // run all tests in class
         RecoveryMode initMode = getDevice().getRecoveryMode();
         getDevice().setRecoveryMode(RecoveryMode.NONE);
@@ -391,7 +428,7 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
     @Ignore
     @Test
     public void testRun_rerunCrash() throws Exception {
-        Log.i(LOG_TAG, "testRun_rerunCrash");
+        CLog.i("testRun_rerunCrash");
         mInstrumentationTest.setClassName(TestAppConstants.CRASH_ON_INIT_TEST_CLASS);
         mInstrumentationTest.setMethodName(TestAppConstants.CRASH_ON_INIT_TEST_METHOD);
         mInstrumentationTest.setRerunMode(false);
@@ -414,7 +451,7 @@ public class InstrumentationTestFuncTest implements IDeviceTest, ITestInformatio
     @Ignore
     @Test
     public void testRun_rerunHang() throws Exception {
-        Log.i(LOG_TAG, "testRun_rerunHang");
+        CLog.i("testRun_rerunHang");
         RecoveryMode initMode = getDevice().getRecoveryMode();
         getDevice().setRecoveryMode(RecoveryMode.NONE);
         try {

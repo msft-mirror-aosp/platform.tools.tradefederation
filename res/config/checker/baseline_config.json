@@ -1,0 +1,12 @@
+{
+  "keep_screen_on": {
+    "namespace": "global",
+    "key": "stay_on_while_plugged_in",
+    "value": "7"
+  },
+  "disable_os_auto_update": {
+    "namespace": "global",
+    "key": "ota_disable_automatic_update",
+    "value": "1"
+  }
+}

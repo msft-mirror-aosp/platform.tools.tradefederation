@@ -19,6 +19,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.config.ConfigurationDef;
@@ -40,12 +42,15 @@ import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
-import org.easymock.Capture;
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.util.HashMap;
@@ -58,7 +63,7 @@ public class ProtoResultParserTest {
     private static final String TEST_KEY = "late-attribute";
 
     private ProtoResultParser mParser;
-    private ILogSaverListener mMockListener;
+    @Mock ILogSaverListener mMockListener;
     private TestProtoParser mTestParser;
     private FinalTestProtoParser mFinalTestParser;
     private IInvocationContext mInvocationContext;
@@ -121,7 +126,8 @@ public class ProtoResultParserTest {
 
     @Before
     public void setUp() {
-        mMockListener = EasyMock.createStrictMock(ILogSaverListener.class);
+        MockitoAnnotations.initMocks(this);
+
         mMainInvocationContext = new InvocationContext();
         mParser = new ProtoResultParser(mMockListener, mMainInvocationContext, true);
         mTestParser = new TestProtoParser();
@@ -130,9 +136,9 @@ public class ProtoResultParserTest {
         mInvocationContext.setConfigurationDescriptor(new ConfigurationDescriptor());
         BuildInfo info = new BuildInfo();
         mInvocationContext.addAllocatedDevice(
-                ConfigurationDef.DEFAULT_DEVICE_NAME, EasyMock.createMock(ITestDevice.class));
+                ConfigurationDef.DEFAULT_DEVICE_NAME, mock(ITestDevice.class));
         mMainInvocationContext.addAllocatedDevice(
-                ConfigurationDef.DEFAULT_DEVICE_NAME, EasyMock.createMock(ITestDevice.class));
+                ConfigurationDef.DEFAULT_DEVICE_NAME, mock(ITestDevice.class));
         mInvocationContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, info);
         mMainInvocationContext.addDeviceBuildInfo(
                 ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
@@ -146,34 +152,14 @@ public class ProtoResultParserTest {
         metrics.put("metric1", TfMetricProtoUtil.stringToMetric("value1"));
         LogFile logFile = new LogFile("path", "url", false, LogDataType.TEXT, 5);
         Throwable failure = new RuntimeException("invoc failure");
-        Capture<LogFile> capture = new Capture<>();
+        ArgumentCaptor<LogFile> capture = ArgumentCaptor.forClass(LogFile.class);
 
         // Verify Mocks
-        mMockListener.invocationStarted(EasyMock.anyObject());
 
-        mMockListener.testModuleStarted(EasyMock.anyObject());
-        mMockListener.testRunStarted(
-                EasyMock.eq("run1"), EasyMock.eq(2), EasyMock.eq(0), EasyMock.anyLong());
-        mMockListener.testStarted(test1, 5L);
-        mMockListener.testEnded(test1, 10L, new HashMap<String, Metric>());
-
-        mMockListener.testStarted(test2, 11L);
-        mMockListener.testFailed(test2, FailureDescription.create("I failed"));
-        mMockListener.logAssociation(EasyMock.eq("subprocess-log1"), EasyMock.capture(capture));
-        mMockListener.testEnded(test2, 60L, metrics);
-        mMockListener.logAssociation(EasyMock.eq("subprocess-run_log1"), EasyMock.anyObject());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        mMockListener.logAssociation(EasyMock.eq("subprocess-module_log1"), EasyMock.anyObject());
-        mMockListener.testModuleEnded();
-        mMockListener.logAssociation(
-                EasyMock.eq("subprocess-invocation_log1"), EasyMock.anyObject());
         // Invocation failure is replayed
-        Capture<FailureDescription> captureInvocFailure = new Capture<>();
-        mMockListener.invocationFailed(EasyMock.capture(captureInvocFailure));
-        mMockListener.invocationEnded(500L);
+        ArgumentCaptor<FailureDescription> captureInvocFailure =
+                ArgumentCaptor.forClass(FailureDescription.class);
 
-        EasyMock.replay(mMockListener);
         // Invocation start
         mInvocationContext.getBuildInfos().get(0).addBuildAttribute("early_key", "build_value");
         mInvocationContext.addInvocationAttribute("early_context_key", "context_value");
@@ -220,7 +206,30 @@ public class ProtoResultParserTest {
                 "invocation_log1", new LogFile("path", "url", false, LogDataType.LOGCAT, 5));
         // Invocation ends
         mTestParser.invocationEnded(500L);
-        EasyMock.verify(mMockListener);
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).invocationStarted(Mockito.any());
+        inOrder.verify(mMockListener).testModuleStarted(Mockito.any());
+        inOrder.verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("run1"), Mockito.eq(2), Mockito.eq(0), Mockito.anyLong());
+        inOrder.verify(mMockListener).testStarted(test1, 5L);
+        inOrder.verify(mMockListener).testEnded(test1, 10L, new HashMap<String, Metric>());
+        inOrder.verify(mMockListener).testStarted(test2, 11L);
+        inOrder.verify(mMockListener).testFailed(test2, FailureDescription.create("I failed"));
+        inOrder.verify(mMockListener)
+                .logAssociation(Mockito.eq("subprocess-log1"), capture.capture());
+        inOrder.verify(mMockListener).testEnded(test2, 60L, metrics);
+        inOrder.verify(mMockListener)
+                .logAssociation(Mockito.eq("subprocess-run_log1"), Mockito.any());
+        inOrder.verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener)
+                .logAssociation(Mockito.eq("subprocess-module_log1"), Mockito.any());
+        inOrder.verify(mMockListener).testModuleEnded();
+        inOrder.verify(mMockListener)
+                .logAssociation(Mockito.eq("subprocess-invocation_log1"), Mockito.any());
+        inOrder.verify(mMockListener).invocationFailed(captureInvocFailure.capture());
+        inOrder.verify(mMockListener).invocationEnded(500L);
 
         // Check capture
         LogFile capturedFile = capture.getValue();
@@ -256,13 +265,11 @@ public class ProtoResultParserTest {
                         .setOrigin("origin");
 
         // Verify Mocks
-        mMockListener.invocationStarted(EasyMock.anyObject());
-        // Invocation failure is replayed
-        Capture<FailureDescription> captureInvocFailure = new Capture<>();
-        mMockListener.invocationFailed(EasyMock.capture(captureInvocFailure));
-        mMockListener.invocationEnded(500L);
 
-        EasyMock.replay(mMockListener);
+        // Invocation failure is replayed
+        ArgumentCaptor<FailureDescription> captureInvocFailure =
+                ArgumentCaptor.forClass(FailureDescription.class);
+
         // Invocation start
         mInvocationContext.getBuildInfos().get(0).addBuildAttribute("early_key", "build_value");
         mInvocationContext.addInvocationAttribute("early_context_key", "context_value");
@@ -270,7 +277,10 @@ public class ProtoResultParserTest {
         mTestParser.invocationFailed(invocFailure);
         // Invocation ends
         mTestParser.invocationEnded(500L);
-        EasyMock.verify(mMockListener);
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).invocationStarted(Mockito.any());
+        inOrder.verify(mMockListener).invocationFailed(captureInvocFailure.capture());
+        inOrder.verify(mMockListener).invocationEnded(500L);
 
         // Check capture
         FailureDescription invocFailureCaptured = captureInvocFailure.getValue();
@@ -297,13 +307,11 @@ public class ProtoResultParserTest {
                         .setOrigin("origin");
 
         // Verify Mocks
-        mMockListener.invocationStarted(EasyMock.anyObject());
-        // Invocation failure is replayed
-        Capture<FailureDescription> captureInvocFailure = new Capture<>();
-        mMockListener.invocationFailed(EasyMock.capture(captureInvocFailure));
-        mMockListener.invocationEnded(500L);
 
-        EasyMock.replay(mMockListener);
+        // Invocation failure is replayed
+        ArgumentCaptor<FailureDescription> captureInvocFailure =
+                ArgumentCaptor.forClass(FailureDescription.class);
+
         // Invocation start
         mInvocationContext.getBuildInfos().get(0).addBuildAttribute("early_key", "build_value");
         mInvocationContext.addInvocationAttribute("early_context_key", "context_value");
@@ -311,7 +319,10 @@ public class ProtoResultParserTest {
         mTestParser.invocationFailed(invocFailure);
         // Invocation ends
         mTestParser.invocationEnded(500L);
-        EasyMock.verify(mMockListener);
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).invocationStarted(Mockito.any());
+        inOrder.verify(mMockListener).invocationFailed(captureInvocFailure.capture());
+        inOrder.verify(mMockListener).invocationEnded(500L);
 
         // Check capture
         FailureDescription invocFailureCaptured = captureInvocFailure.getValue();
@@ -328,20 +339,7 @@ public class ProtoResultParserTest {
         TestDescription test1 = new TestDescription("class1", "test1");
 
         // Verify Mocks
-        mMockListener.invocationStarted(EasyMock.anyObject());
 
-        mMockListener.testRunStarted(
-                EasyMock.eq("run1"), EasyMock.eq(2), EasyMock.eq(0), EasyMock.anyLong());
-        mMockListener.testStarted(test1, 5L);
-        mMockListener.testEnded(test1, 10L, new HashMap<String, Metric>());
-
-        mMockListener.testRunFailed(FailureDescription.create("run failure"));
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        mMockListener.invocationEnded(500L);
-
-        EasyMock.replay(mMockListener);
         mTestParser.invocationStarted(mInvocationContext);
         // Run modules
         mTestParser.testRunStarted("run1", 2);
@@ -355,7 +353,17 @@ public class ProtoResultParserTest {
         mTestParser.testRunEnded(50L, new HashMap<String, Metric>());
         // Invocation ends
         mTestParser.invocationEnded(500L);
-        EasyMock.verify(mMockListener);
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).invocationStarted(Mockito.any());
+        inOrder.verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("run1"), Mockito.eq(2), Mockito.eq(0), Mockito.anyLong());
+        inOrder.verify(mMockListener).testStarted(test1, 5L);
+        inOrder.verify(mMockListener).testEnded(test1, 10L, new HashMap<String, Metric>());
+        inOrder.verify(mMockListener).testRunFailed(FailureDescription.create("run failure"));
+        inOrder.verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener).invocationEnded(500L);
     }
 
     @Test
@@ -368,27 +376,7 @@ public class ProtoResultParserTest {
         LogFile logModuleFile = new LogFile("path", "url", false, LogDataType.TEXT, 5);
 
         // Verify Mocks
-        mMockListener.invocationStarted(EasyMock.anyObject());
 
-        mMockListener.testModuleStarted(EasyMock.anyObject());
-        mMockListener.testRunStarted(
-                EasyMock.eq("run1"), EasyMock.eq(2), EasyMock.eq(0), EasyMock.anyLong());
-        mMockListener.testStarted(test1, 5L);
-        mMockListener.testEnded(test1, 10L, new HashMap<String, Metric>());
-
-        mMockListener.testStarted(test2, 11L);
-        mMockListener.testFailed(test2, FailureDescription.create("I failed"));
-        mMockListener.logAssociation(EasyMock.eq("subprocess-log1"), EasyMock.anyObject());
-        mMockListener.testEnded(test2, 60L, metrics);
-        mMockListener.logAssociation(EasyMock.eq("subprocess-run_log1"), EasyMock.anyObject());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        mMockListener.logAssociation(EasyMock.eq("subprocess-log-module"), EasyMock.anyObject());
-        mMockListener.testModuleEnded();
-
-        mMockListener.invocationEnded(500L);
-
-        EasyMock.replay(mMockListener);
         // Invocation start
         mFinalTestParser.invocationStarted(mInvocationContext);
         // Run modules
@@ -415,7 +403,26 @@ public class ProtoResultParserTest {
 
         // Invocation ends
         mFinalTestParser.invocationEnded(500L);
-        EasyMock.verify(mMockListener);
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).invocationStarted(Mockito.any());
+        inOrder.verify(mMockListener).testModuleStarted(Mockito.any());
+        inOrder.verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("run1"), Mockito.eq(2), Mockito.eq(0), Mockito.anyLong());
+        inOrder.verify(mMockListener).testStarted(test1, 5L);
+        inOrder.verify(mMockListener).testEnded(test1, 10L, new HashMap<String, Metric>());
+        inOrder.verify(mMockListener).testStarted(test2, 11L);
+        inOrder.verify(mMockListener).testFailed(test2, FailureDescription.create("I failed"));
+        inOrder.verify(mMockListener).logAssociation(Mockito.eq("subprocess-log1"), Mockito.any());
+        inOrder.verify(mMockListener).testEnded(test2, 60L, metrics);
+        inOrder.verify(mMockListener)
+                .logAssociation(Mockito.eq("subprocess-run_log1"), Mockito.any());
+        inOrder.verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener)
+                .logAssociation(Mockito.eq("subprocess-log-module"), Mockito.any());
+        inOrder.verify(mMockListener).testModuleEnded();
+        inOrder.verify(mMockListener).invocationEnded(500L);
     }
 
     /** Test that a run failure occurring inside a test case pair is handled properly. */
@@ -424,20 +431,7 @@ public class ProtoResultParserTest {
         TestDescription test1 = new TestDescription("class1", "test1");
 
         // Verify Mocks
-        mMockListener.invocationStarted(EasyMock.anyObject());
 
-        mMockListener.testRunStarted(
-                EasyMock.eq("run1"), EasyMock.eq(2), EasyMock.eq(0), EasyMock.anyLong());
-        mMockListener.testStarted(test1, 5L);
-        mMockListener.testEnded(test1, 10L, new HashMap<String, Metric>());
-
-        mMockListener.testRunFailed(FailureDescription.create("run failure"));
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        mMockListener.invocationEnded(500L);
-
-        EasyMock.replay(mMockListener);
         mFinalTestParser.invocationStarted(mInvocationContext);
         // Run modules
         mFinalTestParser.testRunStarted("run1", 2);
@@ -451,7 +445,17 @@ public class ProtoResultParserTest {
         mFinalTestParser.testRunEnded(50L, new HashMap<String, Metric>());
         // Invocation ends
         mFinalTestParser.invocationEnded(500L);
-        EasyMock.verify(mMockListener);
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).invocationStarted(Mockito.any());
+        inOrder.verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("run1"), Mockito.eq(2), Mockito.eq(0), Mockito.anyLong());
+        inOrder.verify(mMockListener).testStarted(test1, 5L);
+        inOrder.verify(mMockListener).testEnded(test1, 10L, new HashMap<String, Metric>());
+        inOrder.verify(mMockListener).testRunFailed(FailureDescription.create("run failure"));
+        inOrder.verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener).invocationEnded(500L);
     }
 
     /** Ensure that the FailureDescription is properly populated. */
@@ -460,24 +464,7 @@ public class ProtoResultParserTest {
         TestDescription test1 = new TestDescription("class1", "test1");
 
         // Verify Mocks
-        mMockListener.invocationStarted(EasyMock.anyObject());
 
-        mMockListener.testRunStarted(
-                EasyMock.eq("run1"), EasyMock.eq(2), EasyMock.eq(0), EasyMock.anyLong());
-        mMockListener.testStarted(test1, 5L);
-        mMockListener.testEnded(test1, 10L, new HashMap<String, Metric>());
-
-        mMockListener.testRunFailed(
-                FailureDescription.create("run failure")
-                        .setFailureStatus(FailureStatus.INFRA_FAILURE)
-                        .setActionInProgress(ActionInProgress.TEST)
-                        .setDebugHelpMessage("help message"));
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        mMockListener.invocationEnded(500L);
-
-        EasyMock.replay(mMockListener);
         mFinalTestParser.invocationStarted(mInvocationContext);
         // Run modules
         mFinalTestParser.testRunStarted("run1", 2);
@@ -495,7 +482,22 @@ public class ProtoResultParserTest {
         mFinalTestParser.testRunEnded(50L, new HashMap<String, Metric>());
         // Invocation ends
         mFinalTestParser.invocationEnded(500L);
-        EasyMock.verify(mMockListener);
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).invocationStarted(Mockito.any());
+        inOrder.verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("run1"), Mockito.eq(2), Mockito.eq(0), Mockito.anyLong());
+        inOrder.verify(mMockListener).testStarted(test1, 5L);
+        inOrder.verify(mMockListener).testEnded(test1, 10L, new HashMap<String, Metric>());
+        inOrder.verify(mMockListener)
+                .testRunFailed(
+                        FailureDescription.create("run failure")
+                                .setFailureStatus(FailureStatus.INFRA_FAILURE)
+                                .setActionInProgress(ActionInProgress.TEST)
+                                .setDebugHelpMessage("help message"));
+        inOrder.verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener).invocationEnded(500L);
     }
 
     /**
@@ -507,27 +509,7 @@ public class ProtoResultParserTest {
         TestDescription test1 = new TestDescription("class1", "test1");
 
         // Verify Mocks
-        mMockListener.invocationStarted(EasyMock.anyObject());
 
-        mMockListener.testRunStarted(
-                EasyMock.eq("run1"), EasyMock.eq(2), EasyMock.eq(0), EasyMock.anyLong());
-        mMockListener.testStarted(test1, 5L);
-        mMockListener.testEnded(test1, 10L, new HashMap<String, Metric>());
-
-        mMockListener.testRunFailed(FailureDescription.create("run failure"));
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        mMockListener.testRunStarted(
-                EasyMock.eq("run1"), EasyMock.eq(1), EasyMock.eq(1), EasyMock.anyLong());
-        mMockListener.testStarted(test1, 5L);
-        mMockListener.testEnded(test1, 10L, new HashMap<String, Metric>());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-
-        mMockListener.invocationEnded(500L);
-
-        EasyMock.replay(mMockListener);
         mTestParser.invocationStarted(mInvocationContext);
         // Run modules
         mTestParser.testRunStarted("run1", 2);
@@ -543,7 +525,24 @@ public class ProtoResultParserTest {
         mTestParser.testRunEnded(50L, new HashMap<String, Metric>());
         // Invocation ends
         mTestParser.invocationEnded(500L);
-        EasyMock.verify(mMockListener);
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).invocationStarted(Mockito.any());
+        inOrder.verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("run1"), Mockito.eq(2), Mockito.eq(0), Mockito.anyLong());
+        inOrder.verify(mMockListener).testStarted(test1, 5L);
+        inOrder.verify(mMockListener).testEnded(test1, 10L, new HashMap<String, Metric>());
+        inOrder.verify(mMockListener).testRunFailed(FailureDescription.create("run failure"));
+        inOrder.verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("run1"), Mockito.eq(1), Mockito.eq(1), Mockito.anyLong());
+        inOrder.verify(mMockListener).testStarted(test1, 5L);
+        inOrder.verify(mMockListener).testEnded(test1, 10L, new HashMap<String, Metric>());
+        inOrder.verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener).invocationEnded(500L);
     }
 
     /**
@@ -560,36 +559,10 @@ public class ProtoResultParserTest {
         HashMap<String, Metric> metrics = new HashMap<String, Metric>();
         metrics.put("metric1", TfMetricProtoUtil.stringToMetric("value1"));
         LogFile logFile = new LogFile("path", "url", false, LogDataType.TEXT, 5);
-        Capture<LogFile> capture = new Capture<>();
+        ArgumentCaptor<LogFile> capture = ArgumentCaptor.forClass(LogFile.class);
 
         // Verify Mocks - No Invocation Start and End
-        mMockListener.testModuleStarted(EasyMock.anyObject());
-        mMockListener.testRunStarted(
-                EasyMock.eq("run1"), EasyMock.eq(2), EasyMock.eq(0), EasyMock.anyLong());
-        mMockListener.testStarted(test1, 5L);
-        mMockListener.testEnded(test1, 10L, new HashMap<String, Metric>());
 
-        mMockListener.testStarted(test2, 11L);
-        mMockListener.testFailed(test2, FailureDescription.create("I failed"));
-        mMockListener.logAssociation(EasyMock.eq("subprocess-log1"), EasyMock.capture(capture));
-        mMockListener.testEnded(test2, 60L, metrics);
-        mMockListener.logAssociation(EasyMock.eq("subprocess-run_log1"), EasyMock.anyObject());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        mMockListener.logAssociation(EasyMock.eq("subprocess-module_log1"), EasyMock.anyObject());
-        mMockListener.testModuleEnded();
-        mMockListener.logAssociation(
-                EasyMock.eq("subprocess-invocation_log1"), EasyMock.anyObject());
-        mMockListener.testLog(
-                EasyMock.eq("subprocess-host_log"),
-                EasyMock.eq(LogDataType.TEXT),
-                EasyMock.anyObject());
-        mMockListener.testLog(
-                EasyMock.eq("subprocess-host_log_zip"),
-                EasyMock.eq(LogDataType.ZIP),
-                EasyMock.anyObject());
-
-        EasyMock.replay(mMockListener);
         // Invocation start
         mTestParser.invocationStarted(mInvocationContext);
         // Run modules
@@ -627,7 +600,37 @@ public class ProtoResultParserTest {
                     new LogFile(tmpZipLogFile.getAbsolutePath(), "", false, LogDataType.TEXT, 5));
             // Invocation ends
             mTestParser.invocationEnded(500L);
-            EasyMock.verify(mMockListener);
+            InOrder inOrder = Mockito.inOrder(mMockListener);
+            inOrder.verify(mMockListener).testModuleStarted(Mockito.any());
+            inOrder.verify(mMockListener)
+                    .testRunStarted(
+                            Mockito.eq("run1"), Mockito.eq(2), Mockito.eq(0), Mockito.anyLong());
+            inOrder.verify(mMockListener).testStarted(test1, 5L);
+            inOrder.verify(mMockListener).testEnded(test1, 10L, new HashMap<String, Metric>());
+            inOrder.verify(mMockListener).testStarted(test2, 11L);
+            inOrder.verify(mMockListener).testFailed(test2, FailureDescription.create("I failed"));
+            inOrder.verify(mMockListener)
+                    .logAssociation(Mockito.eq("subprocess-log1"), capture.capture());
+            inOrder.verify(mMockListener).testEnded(test2, 60L, metrics);
+            inOrder.verify(mMockListener)
+                    .logAssociation(Mockito.eq("subprocess-run_log1"), Mockito.any());
+            inOrder.verify(mMockListener)
+                    .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+            inOrder.verify(mMockListener)
+                    .logAssociation(Mockito.eq("subprocess-module_log1"), Mockito.any());
+            inOrder.verify(mMockListener).testModuleEnded();
+            inOrder.verify(mMockListener)
+                    .logAssociation(Mockito.eq("subprocess-invocation_log1"), Mockito.any());
+            inOrder.verify(mMockListener)
+                    .testLog(
+                            Mockito.eq("subprocess-host_log"),
+                            Mockito.eq(LogDataType.TEXT),
+                            Mockito.any());
+            inOrder.verify(mMockListener)
+                    .testLog(
+                            Mockito.eq("subprocess-host_log_zip"),
+                            Mockito.eq(LogDataType.ZIP),
+                            Mockito.any());
 
             // Check capture
             LogFile capturedFile = capture.getValue();
@@ -659,28 +662,9 @@ public class ProtoResultParserTest {
         LogFile logModuleFile = new LogFile("path", "url", false, LogDataType.TEXT, 5);
 
         // Verify Mocks
-        mMockListener.invocationStarted(EasyMock.anyObject());
 
-        mMockListener.testModuleStarted(EasyMock.anyObject());
-        mMockListener.testRunStarted(
-                EasyMock.eq("run1"), EasyMock.eq(2), EasyMock.eq(0), EasyMock.anyLong());
-        mMockListener.testStarted(test1, 5L);
-        mMockListener.testEnded(test1, 10L, new HashMap<String, Metric>());
-
-        mMockListener.testStarted(test2, 11L);
-        mMockListener.testFailed(test2, FailureDescription.create("I failed"));
-        mMockListener.logAssociation(EasyMock.eq("subprocess-log1"), EasyMock.anyObject());
-        mMockListener.testEnded(test2, 60L, metrics);
-        mMockListener.logAssociation(EasyMock.eq("subprocess-run_log1"), EasyMock.anyObject());
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), EasyMock.<HashMap<String, Metric>>anyObject());
-        mMockListener.logAssociation(EasyMock.eq("subprocess-log-module"), EasyMock.anyObject());
         // We complete the missing event
-        mMockListener.testModuleEnded();
 
-        mMockListener.invocationEnded(500L);
-
-        EasyMock.replay(mMockListener);
         // Invocation start
         mFinalTestParser.invocationStarted(mInvocationContext);
         // Run modules
@@ -704,11 +688,52 @@ public class ProtoResultParserTest {
         mFinalTestParser.testRunEnded(50L, new HashMap<String, Metric>());
 
         // Missing testModuleEnded due to a timeout for example
-        //mFinalTestParser.testModuleEnded();
+        // mFinalTestParser.testModuleEnded();
 
         // Invocation ends
         mFinalTestParser.invocationEnded(500L);
-        EasyMock.verify(mMockListener);
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).invocationStarted(Mockito.any());
+        inOrder.verify(mMockListener).testModuleStarted(Mockito.any());
+        inOrder.verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("run1"), Mockito.eq(2), Mockito.eq(0), Mockito.anyLong());
+        inOrder.verify(mMockListener).testStarted(test1, 5L);
+        inOrder.verify(mMockListener).testEnded(test1, 10L, new HashMap<String, Metric>());
+        inOrder.verify(mMockListener).testStarted(test2, 11L);
+        inOrder.verify(mMockListener).testFailed(test2, FailureDescription.create("I failed"));
+        inOrder.verify(mMockListener).logAssociation(Mockito.eq("subprocess-log1"), Mockito.any());
+        inOrder.verify(mMockListener).testEnded(test2, 60L, metrics);
+        inOrder.verify(mMockListener)
+                .logAssociation(Mockito.eq("subprocess-run_log1"), Mockito.any());
+        inOrder.verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener)
+                .logAssociation(Mockito.eq("subprocess-log-module"), Mockito.any());
+        inOrder.verify(mMockListener).testModuleEnded();
+        inOrder.verify(mMockListener).invocationEnded(500L);
+    }
+
+    @Test
+    public void testIncompleteModule() throws Exception {
+        ArgumentCaptor<FailureDescription> capture =
+                ArgumentCaptor.forClass(FailureDescription.class);
+        mTestParser.invocationStarted(mInvocationContext);
+        // Run modules
+        mTestParser.testModuleStarted(createModuleContext("arm64 module1"));
+        // It stops unexpectedly
+        mParser.completeModuleEvents();
+
+        verify(mMockListener).invocationStarted(Mockito.any());
+        verify(mMockListener).testModuleStarted(Mockito.any());
+        verify(mMockListener).testRunStarted(Mockito.eq("arm64 module1"), Mockito.eq(0));
+        verify(mMockListener).testRunFailed(capture.capture());
+        verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        verify(mMockListener).testModuleEnded();
+        assertEquals(
+                "Module was interrupted after starting, results are incomplete.",
+                capture.getValue().getErrorMessage());
     }
 
     /** Helper to create a module context. */

@@ -60,7 +60,7 @@ public class SubprocessExceptionParser {
             throws DeviceNotAvailableException {
         String stderr = result.getStderr();
         String filePath = getPathFromStderr(stderr);
-        int exitCode = result.getExitCode();
+        Integer exitCode = result.getExitCode();
         String message =
                 String.format(
                         "Subprocess finished with error exit code: %s.\nStderr: %s",

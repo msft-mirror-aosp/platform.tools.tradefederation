@@ -19,10 +19,19 @@ package com.android.tradefed.targetprep;
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.dependencies.ExternalDependency;
+import com.android.tradefed.dependencies.IExternalDependency;
+import com.android.tradefed.dependencies.connectivity.BluetoothDependency;
+import com.android.tradefed.dependencies.connectivity.EthernetDependency;
+import com.android.tradefed.dependencies.connectivity.NetworkDependency;
+import com.android.tradefed.dependencies.connectivity.TelephonyDependency;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.LocalAndroidVirtualDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceState;
+import com.android.tradefed.device.cloud.NestedRemoteDevice;
+import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -40,8 +49,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TimeZone;
 
 /**
  * A {@link ITargetPreparer} that configures a device for testing based on provided {@link Option}s.
@@ -51,7 +63,7 @@ import java.util.Map;
  * <p>Should be performed <strong>after</strong> a new build is flashed.
  */
 @OptionClass(alias = "device-setup")
-public class DeviceSetup extends BaseTargetPreparer {
+public class DeviceSetup extends BaseTargetPreparer implements IExternalDependency {
 
     // Networking
     @Option(name = "airplane-mode",
@@ -85,6 +97,11 @@ public class DeviceSetup extends BaseTargetPreparer {
     //      svc wifi enable
     // OFF: settings put global wifi_off 0
     //      svc wifi disable
+
+    @Option(
+            name = "skip-wifi-connection",
+            description = "Whether or not to completely skip connecting to wifi.")
+    private boolean mSkipWifi = false;
 
     @Option(name = "wifi-network",
             description = "The SSID of the network to connect to. Will only attempt to " +
@@ -256,12 +273,18 @@ public class DeviceSetup extends BaseTargetPreparer {
     // OFF: settings put global auto_timezone 0
 
     @Option(
-        name = "set-timezone",
-        description =
-                "Set timezone property by TZ name "
-                        + "(http://en.wikipedia.org/wiki/List_of_tz_database_time_zones)"
-    )
+            name = "set-timezone",
+            description =
+                    "Set timezone property by TZ name "
+                            + "(http://en.wikipedia.org/wiki/List_of_tz_database_time_zones)")
     protected String mTimezone = null;
+
+    @Option(name = "sync-timezone-with-host",
+            description =
+                    "Turn on or off that make the time zone of device sync with host")
+    protected BinaryState mSyncTimezoneWithHost = BinaryState.IGNORE;
+    // ON:  settings put global sync_timezone 1
+    // OFF: settings put global sync_timezone 0
 
     // Calling
     @Option(name = "disable-dialing",
@@ -425,6 +448,11 @@ public class DeviceSetup extends BaseTargetPreparer {
     @Deprecated
     private Collection<String> mDeprecatedSetProps = new ArrayList<String>();
 
+    @Option(
+            name = "skip-virtual-device-teardown",
+            description = "Whether or not to skip the teardown if it's a virtual device.")
+    private boolean mSkipVirtualDeviceTeardown = true;
+
     private static final String PERSIST_PREFIX = "persist.";
 
     public ITestDevice getDevice(TestInformation testInfo) {
@@ -478,17 +506,23 @@ public class DeviceSetup extends BaseTargetPreparer {
         if (device.getIDevice() instanceof StubDevice) {
             return;
         }
-
-        CLog.i("Performing teardown on %s", device.getSerialNumber());
-
+        if (device instanceof RemoteAndroidVirtualDevice && mSkipVirtualDeviceTeardown) {
+            CLog.d("Skipping teardown on virtual device that will be deleted.");
+            return;
+        }
         if (e instanceof DeviceFailedToBootError) {
             CLog.d("boot failure: skipping teardown");
+            return;
+        }
+        if (e instanceof DeviceNotAvailableException) {
+            CLog.d("device not available: skipping teardown");
             return;
         }
         if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
             CLog.d("device offline: skipping teardown");
             return;
         }
+        CLog.i("Performing teardown on %s", device.getSerialNumber());
 
         // Only try to disconnect if wifi ssid is set since isWifiEnabled() is a heavy operation
         // which should be avoided when possible
@@ -673,7 +707,18 @@ public class DeviceSetup extends BaseTargetPreparer {
 
         setSettingForBinaryState(mAutoUpdateTimezone, mGlobalSettings, "auto_timezone", "1", "0");
 
+        if (BinaryState.ON.equals(mSyncTimezoneWithHost)) {
+            if (mTimezone != null) {
+                throw new TargetSetupError("Option set-timezone cannot be set when " +
+                                               "sync-timezone-with-host is set to ON",
+                                           device.getDeviceDescriptor(),
+                                           InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+            } else {
+                mTimezone = TimeZone.getDefault().getID();
+            }
+        }
         if (mTimezone != null) {
+            CLog.i("The actual timezone we set here is  %s", mTimezone);
             mSetProps.put("persist.sys.timezone", mTimezone);
         }
 
@@ -730,7 +775,8 @@ public class DeviceSetup extends BaseTargetPreparer {
                             "Cannot set system props %s on %s without adb root. Setting "
                                     + "'force-skip-system-props' or 'enable-root' to avoid error",
                             mSetProps.toString(), device.getSerialNumber()),
-                    device.getDeviceDescriptor());
+                    device.getDeviceDescriptor(),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         // Set persistent props and build a map of all the nonpersistent ones
@@ -960,6 +1006,10 @@ public class DeviceSetup extends BaseTargetPreparer {
         if ((mWifiSsid == null || mWifiSsid.isEmpty()) && mWifiSsidToPsk.isEmpty()) {
             return;
         }
+        if (mSkipWifi) {
+            CLog.d("Skipping wifi connection due to skip-wifi-connection");
+            return;
+        }
 
         String wifiPsk = Strings.emptyToNull(mWifiPsk);
         if (mWifiSsid != null && device.connectToWifiNetwork(mWifiSsid, wifiPsk)) {
@@ -978,12 +1028,19 @@ public class DeviceSetup extends BaseTargetPreparer {
 
         if (mWifiSsid != null || !mWifiSsidToPsk.isEmpty()) {
             String network = (mWifiSsid == null) ? mWifiSsidToPsk.toString() : mWifiSsid;
+            InfraErrorIdentifier errorIdentifier = InfraErrorIdentifier.WIFI_FAILED_CONNECT;
+            if (device instanceof RemoteAndroidVirtualDevice
+                    || device instanceof NestedRemoteDevice
+                    || device instanceof LocalAndroidVirtualDevice) {
+                // Error identifier for virtual devices.
+                errorIdentifier = InfraErrorIdentifier.VIRTUAL_WIFI_FAILED_CONNECT;
+            }
             throw new TargetSetupError(
                     String.format(
                             "Failed to connect to wifi network %s on %s",
                             network, device.getSerialNumber()),
                     device.getDeviceDescriptor(),
-                    InfraErrorIdentifier.WIFI_FAILED_CONNECT);
+                    errorIdentifier);
         }
     }
 
@@ -1102,6 +1159,10 @@ public class DeviceSetup extends BaseTargetPreparer {
     /** Exposed for unit testing */
     protected void setForceSkipSystemProps(boolean force) {
         mForceSkipSystemProps = force;
+    }
+
+    public boolean isForceSkipSystemProps() {
+        return mForceSkipSystemProps;
     }
 
     /**
@@ -1456,5 +1517,31 @@ public class DeviceSetup extends BaseTargetPreparer {
     @Deprecated
     protected void setDeprecatedSetProp(String prop) {
         mDeprecatedSetProps.add(prop);
+    }
+
+    @Override
+    public Set<ExternalDependency> getDependencies() {
+        Set<ExternalDependency> externalDependencies = new LinkedHashSet<>();
+        // check if we need mobile data
+        if (BinaryState.ON.equals(mData)) {
+            externalDependencies.add(new TelephonyDependency());
+        }
+        // check if we need wifi
+        if (!mSkipWifi && !(Strings.isNullOrEmpty(mWifiSsid) && mWifiSsidToPsk.isEmpty())) {
+            externalDependencies.add(new NetworkDependency());
+        }
+        // check if we need ethernet
+        if (BinaryState.ON.equals(mEthernet)) {
+            externalDependencies.add(new EthernetDependency());
+        }
+        // check if we need bluetooth
+        if (BinaryState.ON.equals(mBluetooth)) {
+            externalDependencies.add(new BluetoothDependency());
+        }
+        // check if we need location-network
+        if (BinaryState.ON.equals(mLocationNetwork)) {
+            externalDependencies.add(new NetworkDependency());
+        }
+        return externalDependencies;
     }
 }

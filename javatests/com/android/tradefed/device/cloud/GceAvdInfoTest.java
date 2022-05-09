@@ -23,14 +23,21 @@ import static org.junit.Assert.fail;
 
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.json.JSONObject;
-import org.json.JSONArray;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.util.Map;
 
@@ -46,7 +53,17 @@ public class GceAvdInfoTest {
                         + "      \"devices\": [\n"
                         + "        {\n"
                         + "          \"ip\": \"104.154.62.236\",\n"
-                        + "          \"instance_name\": \"gce-x86-phone-userdebug-2299773-22cf\"\n"
+                        + "          \"instance_name\": \"gce-x86-phone-userdebug-2299773-22cf\",\n"
+                        + "          \"logs\": [\n"
+                        + "            {\n"
+                        + "              \"path\": \"/text/log\",\n"
+                        + "              \"type\": \"TEXT\"\n"
+                        + "            },\n"
+                        + "            {\n"
+                        + "              \"path\": \"/unknown/log\",\n"
+                        + "              \"type\": \"invalid\"\n"
+                        + "            }\n"
+                        + "          ]\n"
                         + "        }\n"
                         + "      ]\n"
                         + "    },\n"
@@ -58,6 +75,10 @@ public class GceAvdInfoTest {
         assertNotNull(avd);
         assertEquals(avd.hostAndPort().getHost(), "104.154.62.236");
         assertEquals(avd.instanceName(), "gce-x86-phone-userdebug-2299773-22cf");
+        Map<String, LogDataType> logs = avd.getLogs();
+        assertEquals(logs.size(), 2);
+        assertEquals(logs.get("/text/log"), LogDataType.TEXT);
+        assertEquals(logs.get("/unknown/log"), LogDataType.UNKNOWN);
         assertTrue(avd.getBuildVars().isEmpty());
     }
 
@@ -84,6 +105,7 @@ public class GceAvdInfoTest {
         assertNotNull(avd);
         assertEquals(avd.hostAndPort().getHost(), "104.154.62.236");
         assertEquals(avd.instanceName(), "gce-x86-phone-userdebug-2299773-22cf");
+        assertTrue(avd.getLogs().isEmpty());
         assertEquals(avd.getBuildVars().get("branch"), "git_main");
         assertEquals(avd.getBuildVars().get("build_id"), "5230832");
         assertEquals(avd.getBuildVars().get("build_target"), "cf_x86_phone-userdebug");
@@ -214,8 +236,6 @@ public class GceAvdInfoTest {
     /**
      * In case of failure to boot in expected time, we need to parse the error to get the instance
      * name and stop it.
-     *
-     * @throws Exception
      */
     @Test
     public void testValidGceJsonParsingFail() throws Exception {
@@ -241,8 +261,6 @@ public class GceAvdInfoTest {
 
     /**
      * On a quota error No GceAvd information is created because the instance was not created.
-     *
-     * @throws Exception
      */
     @Test
     public void testValidGceJsonParsingFailQuota() throws Exception {
@@ -267,8 +285,6 @@ public class GceAvdInfoTest {
     /**
      * In case of failure to boot in expected time, we need to parse the error to get the instance
      * name and stop it.
-     *
-     * @throws Exception
      */
     @Test
     public void testParseJson_Boot_Fail() throws Exception {
@@ -433,8 +449,10 @@ public class GceAvdInfoTest {
 
     @Test
     public void testDetermineAcloudErrorType() {
-        assertEquals(GceAvdInfo.determineAcloudErrorType(null), null);
-        assertEquals(GceAvdInfo.determineAcloudErrorType(""), null);
+        assertEquals(GceAvdInfo.determineAcloudErrorType(null),
+                InfraErrorIdentifier.ACLOUD_UNRECOGNIZED_ERROR_TYPE);
+        assertEquals(GceAvdInfo.determineAcloudErrorType(""),
+                InfraErrorIdentifier.ACLOUD_UNRECOGNIZED_ERROR_TYPE);
         assertEquals(
                 GceAvdInfo.determineAcloudErrorType("invalid error type"),
                 InfraErrorIdentifier.ACLOUD_UNRECOGNIZED_ERROR_TYPE);
@@ -454,4 +472,181 @@ public class GceAvdInfoTest {
                 GceAvdInfo.determineAcloudErrorType("GCE_QUOTA_ERROR"),
                 InfraErrorIdentifier.GCE_QUOTA_ERROR);
     }
+
+    /** Test handling succeeded Oxygen device lease request. */
+    @Test
+    public void testOxygenClientSucceedResponse() {
+        String output =
+                "debug info lease result: session_id:\"6a6a744e-0653-4926-b7b8-535d121a2fc9\"\n"
+                    + " server_url:\"10.0.80.227\"\n"
+                    + " ports:{type:test value:12345}\n"
+                    + " random_key:\"this-is-12345678\"\n"
+                    + " leased_device_spec:{type:TESTTYPE build_artifacts:{build_id:\"P1234567\""
+                    + " build_target:\"target\" build_branch:\"testBranch\"}}"
+                    + " debug_info:{reserved_cores:1 region:\"test-region\" environment:\"test\"}";
+        CommandResult res = Mockito.mock(CommandResult.class);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return CommandStatus.SUCCESS;
+                            }
+                        })
+                .when(res)
+                .getStatus();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return "";
+                            }
+                        })
+                .when(res)
+                .getStdout();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return output;
+                            }
+                        })
+                .when(res)
+                .getStderr();
+        try {
+            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+            assertEquals(gceAvdInfo.getStatus(), GceAvdInfo.GceStatus.SUCCESS);
+            assertEquals(gceAvdInfo.instanceName(), "6a6a744e-0653-4926-b7b8-535d121a2fc9");
+            assertEquals(gceAvdInfo.hostAndPort().getHost(), "10.0.80.227");
+        } catch (TargetSetupError e) {
+            e.printStackTrace();
+        }
+    }
+
+    /** Test handling corrupted Oxygen device lease request. */
+    @Test
+    public void testOxygenClientCorruptedResponse() {
+        String corruptedOutput =
+                "debug info lease result: leased_device_spec:{type:TESTTYPE"
+                        + " build_artifacts:{build_id:\"P1234567\" build_target:\"target\""
+                        + " build_branch:\"testBranch\"}} debug_info:{reserved_cores:1"
+                        + " region:\"test-region\" environment:\"test\"}";
+        CommandResult res = Mockito.mock(CommandResult.class);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return CommandStatus.SUCCESS;
+                            }
+                        })
+                .when(res)
+                .getStatus();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return "";
+                            }
+                        })
+                .when(res)
+                .getStdout();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return corruptedOutput;
+                            }
+                        })
+                .when(res)
+                .getStderr();
+        try {
+            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+            Assert.fail();
+        } catch (TargetSetupError expected) {
+            assertEquals(
+                    "Oxygen error: OXYGEN_CLIENT_BINARY_ERROR. Failed to parse the output: debug "
+                            + "info lease result: leased_device_spec:{type:TESTTYPE "
+                            + "build_artifacts:{build_id:\"P1234567\" build_target:\"target\" "
+                            + "build_branch:\"testBranch\"}} debug_info:{reserved_cores:1 "
+                            + "region:\"test-region\" environment:\"test\"}",
+                    expected.getMessage());
+        }
+    }
+
+    /** Test handling timed out Oxygen device lease request. */
+    @Test
+    public void testOxygenClientTimeOut() {
+        CommandResult res = Mockito.mock(CommandResult.class);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return CommandStatus.TIMED_OUT;
+                            }
+                        })
+                .when(res)
+                .getStatus();
+        try {
+            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+            assertEquals(gceAvdInfo.getStatus(), GceAvdInfo.GceStatus.FAIL);
+            assertEquals(
+                    gceAvdInfo.getErrorType(), InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_TIMEOUT);
+        } catch (TargetSetupError e) {
+            e.printStackTrace();
+        }
+    }
+
+    /** Test parsing failed Oxygen device lease request. */
+    @Test
+    public void testOxygenClientFailedResponse() {
+        String output =
+                "[Oxygen error: OXYGEN_CLIENT_BINARY_ERROR, CommandStatus: FAILED, output:  Error"
+                        + " received while trying to lease device: rpc error: code = Internal "
+                        + "desc = Internal error encountered. details = [type_url:\"this.random"
+                        + ".com/try.rpc.DebugInfo\" value:\"\\x12\\x34\\x56[ORIGINAL ERROR] "
+                        + "generic::internal: (length 6684)\"]";
+
+        CommandResult res = Mockito.mock(CommandResult.class);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return CommandStatus.FAILED;
+                            }
+                        })
+                .when(res)
+                .getStatus();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return "";
+                            }
+                        })
+                .when(res)
+                .getStdout();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return output;
+                            }
+                        })
+                .when(res)
+                .getStderr();
+        try {
+            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+            Assert.fail();
+        } catch (TargetSetupError expected) {
+            assertEquals(
+                    "Oxygen error: OXYGEN_CLIENT_BINARY_ERROR, CommandStatus: FAILED, output:  "
+                            + "[Oxygen error: OXYGEN_CLIENT_BINARY_ERROR, CommandStatus: FAILED, "
+                            + "output:  Error received while trying to lease device: rpc error: "
+                            + "code = Internal desc = Internal error encountered. details = "
+                            + "[type_url:\"this.random.com/try.rpc.DebugInfo\" "
+                            + "value:\"\\x12\\x34\\x56[ORIGINAL ERROR] generic::internal: (length"
+                            + " 6684)\"]",
+                    expected.getMessage());
+        }
+    }
 }
+

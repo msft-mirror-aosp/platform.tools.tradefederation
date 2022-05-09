@@ -58,6 +58,12 @@ import java.util.Map.Entry;
 public class ModuleSplitter {
 
     /**
+     * Set an upper limit to how much a given module can be sharded. This can avoid over-granular
+     * intra-module sharding.
+     */
+    private static final int MAX_MODULE_LOCAL_SHARDING = 8;
+
+    /**
      * Create a List of executable unit {@link ModuleDefinition}s based on the map of configuration
      * that was loaded.
      *
@@ -147,13 +153,14 @@ public class ModuleSplitter {
         // If configuration is possibly shardable we attempt to shard it.
         for (IRemoteTest test : tests) {
             if (test instanceof IShardableTest) {
+                int shard = Math.min(MAX_MODULE_LOCAL_SHARDING, shardCount);
                 Collection<IRemoteTest> shardedTests =
-                        ((IShardableTest) test).split(shardCount, testInfo);
+                        ((IShardableTest) test).split(shard, testInfo);
                 if (shardedTests != null) {
                     // Test did shard we put the shard pool in ModuleDefinition which has a polling
                     // behavior on the pool.
                     if (dynamicModule) {
-                        for (int i = 0; i < shardCount; i++) {
+                        for (int i = 0; i < shardedTests.size(); i++) {
                             ModuleDefinition module =
                                     new ModuleDefinition(
                                             moduleName,

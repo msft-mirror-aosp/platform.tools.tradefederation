@@ -15,12 +15,12 @@
  */
 package com.android.tradefed.targetprep;
 
-import com.android.ddmlib.Log;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
 
 /** Placeholder empty implementation of a {@link ITargetPreparer}. */
 @OptionClass(alias = "stub-preparer")
@@ -37,7 +37,7 @@ public class StubTargetPreparer extends BaseTargetPreparer implements IConfigura
     /** {@inheritDoc} */
     @Override
     public void setUp(TestInformation testInfo) throws TargetSetupError {
-        Log.d("TargetPreparer", "skipping target prepare step");
+        CLog.d("skipping target prepare step");
     }
 
     /** {@inheritDoc} */

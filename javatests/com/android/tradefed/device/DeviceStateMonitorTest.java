@@ -19,6 +19,17 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.CollectingOutputReceiver;
 import com.android.ddmlib.IDevice;
@@ -28,13 +39,15 @@ import com.android.tradefed.util.RunUtil;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 /** Unit tests for {@link DeviceStateMonitorTest}. */
@@ -46,23 +59,25 @@ public class DeviceStateMonitorTest {
     private static final int POLL_TIME_MS = 10;
 
     private static final String SERIAL_NUMBER = "1";
-    private IDevice mMockDevice;
+    @Mock IDevice mMockDevice;
     private DeviceStateMonitor mMonitor;
-    private IDeviceManager mMockMgr;
+    @Mock IDeviceManager mMockMgr;
+    private AtomicBoolean mAtomicBoolean = new AtomicBoolean(false);
     private String mStubValue = "not found";
 
     @Before
     public void setUp() {
+        MockitoAnnotations.initMocks(this);
+
         mStubValue = "not found";
-        mMockMgr = EasyMock.createMock(IDeviceManager.class);
-        EasyMock.expect(mMockMgr.isFileSystemMountCheckEnabled()).andReturn(false).anyTimes();
-        mMockMgr.addFastbootListener(EasyMock.anyObject());
-        mMockMgr.removeFastbootListener(EasyMock.anyObject());
-        EasyMock.replay(mMockMgr);
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        EasyMock.replay(mMockDevice);
+
+        when(mMockMgr.isFileSystemMountCheckEnabled()).thenReturn(false);
+        mMockMgr.addFastbootListener(any());
+        mMockMgr.removeFastbootListener(any());
+
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
         mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true);
     }
 
@@ -75,18 +90,19 @@ public class DeviceStateMonitorTest {
     /** Test {@link DeviceStateMonitor#waitForDeviceOnline()} when device becomes online */
     @Test
     public void testWaitForDeviceOnline() {
-        mMonitor.setState(TestDeviceState.NOT_AVAILABLE);
-        Thread test =
-                new Thread() {
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public void run() {
-                        RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mMonitor.setState(TestDeviceState.ONLINE);
+                    public TestDeviceState getDeviceState() {
+                        if (mAtomicBoolean.get()) {
+                            return TestDeviceState.ONLINE;
+                        } else {
+                            mAtomicBoolean.set(true);
+                            return TestDeviceState.NOT_AVAILABLE;
+                        }
                     }
                 };
-        test.setName(getClass().getCanonicalName() + "#testWaitForDeviceOnline");
-        test.start();
-        assertEquals(mMockDevice, mMonitor.waitForDeviceOnline());
+        assertEquals(mMockDevice, mMonitor.waitForDeviceOnline(50));
     }
 
     /**
@@ -102,10 +118,10 @@ public class DeviceStateMonitorTest {
     /** Test {@link DeviceStateMonitor#isAdbTcp()} with a USB serial number. */
     @Test
     public void testIsAdbTcp_usb() {
-        IDevice mockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mockDevice.getSerialNumber()).andStubReturn("2345asdf");
-        EasyMock.expect(mockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.replay(mockDevice);
+        IDevice mockDevice = mock(IDevice.class);
+        when(mockDevice.getSerialNumber()).thenReturn("2345asdf");
+        when(mockDevice.getState()).thenReturn(DeviceState.ONLINE);
+
         DeviceStateMonitor monitor = new DeviceStateMonitor(mMockMgr, mockDevice, true);
         assertFalse(monitor.isAdbTcp());
     }
@@ -113,10 +129,10 @@ public class DeviceStateMonitorTest {
     /** Test {@link DeviceStateMonitor#isAdbTcp()} with a TCP serial number. */
     @Test
     public void testIsAdbTcp_tcp() {
-        IDevice mockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mockDevice.getSerialNumber()).andStubReturn("192.168.1.1:5555");
-        EasyMock.expect(mockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.replay(mockDevice);
+        IDevice mockDevice = mock(IDevice.class);
+        when(mockDevice.getSerialNumber()).thenReturn("192.168.1.1:5555");
+        when(mockDevice.getState()).thenReturn(DeviceState.ONLINE);
+
         DeviceStateMonitor monitor = new DeviceStateMonitor(mMockMgr, mockDevice, true);
         assertTrue(monitor.isAdbTcp());
     }
@@ -137,17 +153,18 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForDeviceOffline() {
-        mMonitor.setState(TestDeviceState.ONLINE);
-        Thread test =
-                new Thread() {
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public void run() {
-                        RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mMonitor.setState(TestDeviceState.NOT_AVAILABLE);
+                    public TestDeviceState getDeviceState() {
+                        if (mAtomicBoolean.get()) {
+                            return TestDeviceState.NOT_AVAILABLE;
+                        } else {
+                            mAtomicBoolean.set(true);
+                            return TestDeviceState.ONLINE;
+                        }
                     }
                 };
-        test.setName(getClass().getCanonicalName() + "#testWaitForDeviceOffline");
-        test.start();
         boolean res = mMonitor.waitForDeviceNotAvailable(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
     }
@@ -166,67 +183,74 @@ public class DeviceStateMonitorTest {
     /** Test {@link DeviceStateMonitor#waitForDeviceShell(long)} when shell is available. */
     @Test
     public void testWaitForShellAvailable() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject(), EasyMock.anyInt(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            protected CollectingOutputReceiver createOutputReceiver() {
-                return new CollectingOutputReceiver() {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public String getOutput() {
-                        return "/system/bin/adb";
+                    protected CollectingOutputReceiver createOutputReceiver() {
+                        return new CollectingOutputReceiver() {
+                            @Override
+                            public String getOutput() {
+                                return "/system/bin/adb";
+                            }
+                        };
                     }
                 };
-            }
-        };
         boolean res = mMonitor.waitForDeviceShell(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
+        verify(mMockDevice, times(1))
+                .executeShellCommand(
+                        (String) any(),
+                        (CollectingOutputReceiver) any(),
+                        anyLong(),
+                        eq(TimeUnit.MILLISECONDS));
     }
 
     /** Test {@link DeviceStateMonitor#waitForDeviceShell(long)} when shell become available. */
     @Test
     public void testWaitForShell_becomeAvailable() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject(), EasyMock.anyInt(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall().anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            protected CollectingOutputReceiver createOutputReceiver() {
-                return new CollectingOutputReceiver() {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+        mMockDevice.executeShellCommand(
+                (String) any(),
+                (CollectingOutputReceiver) any(),
+                anyInt(),
+                eq(TimeUnit.MILLISECONDS));
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public String getOutput() {
-                        return mStubValue;
+                    protected CollectingOutputReceiver createOutputReceiver() {
+                        return new CollectingOutputReceiver() {
+                            @Override
+                            public String getOutput() {
+                                if (mAtomicBoolean.get()) {
+                                  return "/system/bin/adb";
+                                }
+                                return "not found";
+                            }
+                        };
+                    }
+
+                    @Override
+                    protected long getCheckPollTime() {
+                        return POLL_TIME_MS;
                     }
                 };
-            }
-            @Override
-            protected long getCheckPollTime() {
-                return POLL_TIME_MS;
-            }
-        };
         Thread test =
                 new Thread() {
                     @Override
                     public void run() {
                         RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mStubValue = "/system/bin/adb";
+                        mAtomicBoolean.set(true);
                     }
                 };
         test.setName(getClass().getCanonicalName() + "#testWaitForShell_becomeAvailable");
         test.start();
         boolean res = mMonitor.waitForDeviceShell(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
+        test.join();
     }
 
     /**
@@ -234,29 +258,31 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForShell_timeout() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject(), EasyMock.anyInt(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall().anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            protected CollectingOutputReceiver createOutputReceiver() {
-                return new CollectingOutputReceiver() {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+        mMockDevice.executeShellCommand(
+                (String) any(),
+                (CollectingOutputReceiver) any(),
+                anyInt(),
+                eq(TimeUnit.MILLISECONDS));
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public String getOutput() {
-                        return mStubValue;
+                    protected CollectingOutputReceiver createOutputReceiver() {
+                        return new CollectingOutputReceiver() {
+                            @Override
+                            public String getOutput() {
+                                return mStubValue;
+                            }
+                        };
+                    }
+
+                    @Override
+                    protected long getCheckPollTime() {
+                        return POLL_TIME_MS;
                     }
                 };
-            }
-            @Override
-            protected long getCheckPollTime() {
-                return POLL_TIME_MS;
-            }
-        };
         boolean res = mMonitor.waitForDeviceShell(WAIT_TIMEOUT_REACHED_MS);
         assertFalse(res);
     }
@@ -283,28 +309,32 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForBoot_becomeComplete() throws Exception {
-        mStubValue = "0";
         IDevice mFakeDevice =
                 new StubDevice("serial") {
                     @Override
                     public ListenableFuture<String> getSystemProperty(String name) {
                         SettableFuture<String> f = SettableFuture.create();
-                        f.set(mStubValue);
+                        if (mAtomicBoolean.get()) {
+                            f.set("1");
+                        } else {
+                            f.set("0");
+                        }
                         return f;
                     }
                 };
-        mMonitor = new DeviceStateMonitor(mMockMgr, mFakeDevice, true) {
-            @Override
-            protected long getCheckPollTime() {
-                return POLL_TIME_MS;
-            }
-        };
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mFakeDevice, true) {
+                    @Override
+                    protected long getCheckPollTime() {
+                        return POLL_TIME_MS;
+                    }
+                };
         Thread test =
                 new Thread() {
                     @Override
                     public void run() {
                         RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mStubValue = "1";
+                        mAtomicBoolean.set(true);
                     }
                 };
         test.setName(getClass().getCanonicalName() + "#testWaitForBoot_becomeComplete");
@@ -326,12 +356,13 @@ public class DeviceStateMonitorTest {
                         return f;
                     }
                 };
-        mMonitor = new DeviceStateMonitor(mMockMgr, mFakeDevice, true) {
-            @Override
-            protected long getCheckPollTime() {
-                return POLL_TIME_MS;
-            }
-        };
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mFakeDevice, true) {
+                    @Override
+                    protected long getCheckPollTime() {
+                        return POLL_TIME_MS;
+                    }
+                };
         boolean res = mMonitor.waitForBootComplete(WAIT_TIMEOUT_REACHED_MS);
         assertFalse(res);
     }
@@ -342,27 +373,29 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForPmResponsive() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject(), EasyMock.anyInt(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            protected CollectingOutputReceiver createOutputReceiver() {
-                return new CollectingOutputReceiver() {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public String getOutput() {
-                        return "package:com.android.awesomeclass";
+                    protected CollectingOutputReceiver createOutputReceiver() {
+                        return new CollectingOutputReceiver() {
+                            @Override
+                            public String getOutput() {
+                                return "package:com.android.awesomeclass";
+                            }
+                        };
                     }
                 };
-            }
-        };
         boolean res = mMonitor.waitForPmResponsive(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
+        verify(mMockDevice, times(1))
+                .executeShellCommand(
+                        (String) any(),
+                        (CollectingOutputReceiver) any(),
+                        anyLong(),
+                        eq(TimeUnit.MILLISECONDS));
     }
 
     /**
@@ -371,41 +404,42 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForPm_becomeResponsive() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject(), EasyMock.anyInt(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall().anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            protected CollectingOutputReceiver createOutputReceiver() {
-                return new CollectingOutputReceiver() {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public String getOutput() {
-                        return mStubValue;
+                    protected CollectingOutputReceiver createOutputReceiver() {
+                        return new CollectingOutputReceiver() {
+                            @Override
+                            public String getOutput() {
+                                if (mAtomicBoolean.get()) {
+                                    return "package:com.android.awesomeclass";
+                                }
+                                return "not found";
+                            }
+                        };
+                    }
+
+                    @Override
+                    protected long getCheckPollTime() {
+                        return POLL_TIME_MS;
                     }
                 };
-            }
-            @Override
-            protected long getCheckPollTime() {
-                return POLL_TIME_MS;
-            }
-        };
         Thread test =
                 new Thread() {
                     @Override
                     public void run() {
                         RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mStubValue = "package:com.android.awesomeclass";
+                        mAtomicBoolean.set(true);
                     }
                 };
         test.setName(getClass().getCanonicalName() + "#testWaitForPm_becomeResponsive");
         test.start();
         boolean res = mMonitor.waitForPmResponsive(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
+        test.join();
     }
 
     /**
@@ -414,29 +448,26 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForPm_timeout() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject(), EasyMock.anyInt(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall().anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            protected CollectingOutputReceiver createOutputReceiver() {
-                return new CollectingOutputReceiver() {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public String getOutput() {
-                        return mStubValue;
+                    protected CollectingOutputReceiver createOutputReceiver() {
+                        return new CollectingOutputReceiver() {
+                            @Override
+                            public String getOutput() {
+                                return mStubValue;
+                            }
+                        };
+                    }
+
+                    @Override
+                    protected long getCheckPollTime() {
+                        return POLL_TIME_MS;
                     }
                 };
-            }
-            @Override
-            protected long getCheckPollTime() {
-                return POLL_TIME_MS;
-            }
-        };
         boolean res = mMonitor.waitForPmResponsive(WAIT_TIMEOUT_REACHED_MS);
         assertFalse(res);
     }
@@ -445,12 +476,10 @@ public class DeviceStateMonitorTest {
     @Test
     public void testgetMountPoint() throws Exception {
         String expectedMountPoint = "NOT NULL";
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        EasyMock.expect(mMockDevice.getMountPoint((String) EasyMock.anyObject()))
-                .andStubReturn(expectedMountPoint);
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+        when(mMockDevice.getMountPoint((String) any())).thenReturn(expectedMountPoint);
+
         mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true);
         assertEquals(expectedMountPoint, mMonitor.getMountPoint(""));
     }
@@ -461,25 +490,23 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testgetMountPoint_nonCached() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        EasyMock.expect(mMockDevice.getMountPoint((String) EasyMock.anyObject()))
-                .andStubReturn(null);
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject());
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            protected CollectingOutputReceiver createOutputReceiver() {
-                return new CollectingOutputReceiver() {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+        when(mMockDevice.getMountPoint((String) any())).thenReturn(null);
+        mMockDevice.executeShellCommand((String) any(), (CollectingOutputReceiver) any());
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public String getOutput() {
-                        return "NONCACHED";
+                    protected CollectingOutputReceiver createOutputReceiver() {
+                        return new CollectingOutputReceiver() {
+                            @Override
+                            public String getOutput() {
+                                return "NONCACHED";
+                            }
+                        };
                     }
                 };
-            }
-        };
         assertEquals("NONCACHED", mMonitor.getMountPoint(""));
     }
 
@@ -488,33 +515,31 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForStoreMount() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject(), EasyMock.anyInt(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall().anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            protected CollectingOutputReceiver createOutputReceiver() {
-                return new CollectingOutputReceiver() {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public String getOutput() {
-                        return "number 10 one";
+                    protected CollectingOutputReceiver createOutputReceiver() {
+                        return new CollectingOutputReceiver() {
+                            @Override
+                            public String getOutput() {
+                                return "number 10 one";
+                            }
+                        };
+                    }
+
+                    @Override
+                    protected long getCurrentTime() {
+                        return 10;
+                    }
+
+                    @Override
+                    public String getMountPoint(String mountName) {
+                        return "";
                     }
                 };
-            }
-            @Override
-            protected long getCurrentTime() {
-                return 10;
-            }
-            @Override
-            public String getMountPoint(String mountName) {
-                return "";
-            }
-        };
         boolean res = mMonitor.waitForStoreMount(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
     }
@@ -524,45 +549,47 @@ public class DeviceStateMonitorTest {
      * denied should return directly false.
      */
     @Test
-    public void testWaitForStoreMount_PermDenied() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE).anyTimes();
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject(), EasyMock.anyInt(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall().anyTimes();
-        EasyMock.replay(mMockDevice);
+    public void testWaitForStoreMount_permDenied() throws Exception {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
 
         Function<Integer, DeviceStateMonitor> creator =
-                (Integer count) -> new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            private int mCount = count;
-            @Override
-            protected CollectingOutputReceiver createOutputReceiver() {
-                String output = --mCount >= 0
-                        ? "/system/bin/sh: cat: /sdcard/1459376318045: Permission denied"
-                        : "number 10 one";
-                return new CollectingOutputReceiver() {
-                    @Override
-                    public String getOutput() {
-                        return output;
-                    }
-                };
-            }
-            @Override
-            protected long getCurrentTime() {
-                return 10;
-            }
-            @Override
-            protected long getCheckPollTime() {
-                // Set retry interval to 0 so #waitForStoreMount won't fail due to timeout
-                return 0;
-            }
-            @Override
-            public String getMountPoint(String mountName) {
-                return "";
-            }
-        };
+                (Integer count) ->
+                        new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
+                            private int mCount = count;
+
+                            @Override
+                            protected CollectingOutputReceiver createOutputReceiver() {
+                                String output =
+                                        --mCount >= 0
+                                                ? "/system/bin/sh: cat: /sdcard/1459376318045:"
+                                                        + " Permission denied"
+                                                : "number 10 one";
+                                return new CollectingOutputReceiver() {
+                                    @Override
+                                    public String getOutput() {
+                                        return output;
+                                    }
+                                };
+                            }
+
+                            @Override
+                            protected long getCurrentTime() {
+                                return 10;
+                            }
+
+                            @Override
+                            protected long getCheckPollTime() {
+                                // Set retry interval to 0 so #waitForStoreMount won't fail due to
+                                // timeout
+                                return 0;
+                            }
+
+                            @Override
+                            public String getMountPoint(String mountName) {
+                                return "";
+                            }
+                        };
 
         // 'Permission denied' is never returned. #waitForStoreMount should return true.
         mMonitor = creator.apply(0);
@@ -580,50 +607,52 @@ public class DeviceStateMonitorTest {
     /** Test {@link DeviceStateMonitor#waitForStoreMount(long)} when mount point become available */
     @Test
     public void testWaitForStoreMount_becomeAvailable() throws Exception {
-        mStubValue = null;
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject(), EasyMock.anyInt(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall().anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            protected CollectingOutputReceiver createOutputReceiver() {
-                return new CollectingOutputReceiver() {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public String getOutput() {
-                        return "number 10 one";
+                    protected CollectingOutputReceiver createOutputReceiver() {
+                        return new CollectingOutputReceiver() {
+                            @Override
+                            public String getOutput() {
+                                return "number 10 one";
+                            }
+                        };
+                    }
+
+                    @Override
+                    protected long getCurrentTime() {
+                        return 10;
+                    }
+
+                    @Override
+                    protected long getCheckPollTime() {
+                        return POLL_TIME_MS;
+                    }
+
+                    @Override
+                    public String getMountPoint(String mountName) {
+                        if (mAtomicBoolean.get()) {
+                            return "NOT NULL";
+                        }
+                        return null;
                     }
                 };
-            }
-            @Override
-            protected long getCurrentTime() {
-                return 10;
-            }
-            @Override
-            protected long getCheckPollTime() {
-                return POLL_TIME_MS;
-            }
-            @Override
-            public String getMountPoint(String mountName) {
-                return mStubValue;
-            }
-        };
         Thread test =
                 new Thread() {
                     @Override
                     public void run() {
                         RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mStubValue = "NOT NULL";
+                        mAtomicBoolean.set(true);
                     }
                 };
         test.setName(getClass().getCanonicalName() + "#testWaitForStoreMount_becomeAvailable");
         test.start();
         boolean res = mMonitor.waitForStoreMount(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
+        test.join();
     }
 
     /**
@@ -632,74 +661,73 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForStoreMount_outputBecomeValid() throws Exception {
-        mStubValue = "INVALID";
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject(), EasyMock.anyInt(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall().anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            protected CollectingOutputReceiver createOutputReceiver() {
-                return new CollectingOutputReceiver() {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
-                    public String getOutput() {
-                        return mStubValue;
+                    protected CollectingOutputReceiver createOutputReceiver() {
+                        return new CollectingOutputReceiver() {
+                            @Override
+                            public String getOutput() {
+                                if (mAtomicBoolean.get()) {
+                                    return "number 10 one";
+                                }
+                                return "INVALID";
+                            }
+                        };
+                    }
+
+                    @Override
+                    protected long getCurrentTime() {
+                        return 10;
+                    }
+
+                    @Override
+                    protected long getCheckPollTime() {
+                        return POLL_TIME_MS;
+                    }
+
+                    @Override
+                    public String getMountPoint(String mountName) {
+                        return "NOT NULL";
                     }
                 };
-            }
-            @Override
-            protected long getCurrentTime() {
-                return 10;
-            }
-            @Override
-            protected long getCheckPollTime() {
-                return POLL_TIME_MS;
-            }
-            @Override
-            public String getMountPoint(String mountName) {
-                return "NOT NULL";
-            }
-        };
         Thread test =
                 new Thread() {
                     @Override
                     public void run() {
                         RunUtil.getDefault().sleep(WAIT_STATE_CHANGE_MS);
-                        mStubValue = "number 10 one";
+                        mAtomicBoolean.set(true);
                     }
                 };
         test.setName(getClass().getCanonicalName() + "#testWaitForStoreMount_outputBecomeValid");
         test.start();
         boolean res = mMonitor.waitForStoreMount(WAIT_TIMEOUT_NOT_REACHED_MS);
         assertTrue(res);
+        test.join();
     }
 
     /** Test {@link DeviceStateMonitor#waitForStoreMount(long)} when mount point check timeout */
     @Test
     public void testWaitForStoreMount_timeout() throws Exception {
         mStubValue = null;
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        mMockDevice.executeShellCommand((String) EasyMock.anyObject(),
-                (CollectingOutputReceiver)EasyMock.anyObject(), EasyMock.anyInt(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall().anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            protected long getCheckPollTime() {
-                return POLL_TIME_MS;
-            }
-            @Override
-            public String getMountPoint(String mountName) {
-                return mStubValue;
-            }
-        };
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
+                    @Override
+                    protected long getCheckPollTime() {
+                        return POLL_TIME_MS;
+                    }
+
+                    @Override
+                    public String getMountPoint(String mountName) {
+                        return mStubValue;
+                    }
+                };
         boolean res = mMonitor.waitForStoreMount(WAIT_TIMEOUT_REACHED_MS);
         assertFalse(res);
     }
@@ -710,86 +738,76 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForDeviceAvailable() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE).anyTimes();
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            public IDevice waitForDeviceOnline(long waitTime) {
-                return mMockDevice;
-            }
-            @Override
-            public boolean waitForBootComplete(long waitTime) {
-                return true;
-            }
-            @Override
-            protected boolean waitForPmResponsive(long waitTime) {
-                return true;
-            }
-            @Override
-            protected boolean waitForStoreMount(long waitTime) {
-                return true;
-            }
-        };
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
+                    @Override
+                    public IDevice waitForDeviceOnline(long waitTime) {
+                        return mMockDevice;
+                    }
+
+                    @Override
+                    public boolean waitForBootComplete(long waitTime) {
+                        return true;
+                    }
+
+                    @Override
+                    protected boolean waitForPmResponsive(long waitTime) {
+                        return true;
+                    }
+
+                    @Override
+                    protected boolean waitForStoreMount(long waitTime) {
+                        return true;
+                    }
+                };
         assertEquals(mMockDevice, mMonitor.waitForDeviceAvailable(WAIT_TIMEOUT_NOT_REACHED_MS));
     }
 
     @Test
     public void testWaitForDeviceAvailable_mounted() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE).anyTimes();
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        EasyMock.expect(mMockDevice.getMountPoint((String) EasyMock.anyObject()))
-                .andStubReturn("/sdcard");
-        mMockDevice.executeShellCommand(
-                EasyMock.eq("stat -f -c \"%t\" /sdcard"),
-                EasyMock.anyObject(),
-                EasyMock.anyLong(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall()
-                .andAnswer(
-                        () -> {
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+        when(mMockDevice.getMountPoint((String) any())).thenReturn("/sdcard");
+        doAnswer(
+                        invocation -> {
                             CollectingOutputReceiver stat =
-                                    (CollectingOutputReceiver) EasyMock.getCurrentArguments()[1];
+                                    (CollectingOutputReceiver) invocation.getArguments()[1];
                             String statOutput = "65735546\n"; // Fuse magic number
                             stat.addOutput(statOutput.getBytes(), 0, statOutput.length());
                             return null;
-                        });
+                        })
+                .when(mMockDevice)
+                .executeShellCommand(
+                        eq("stat -f -c \"%t\" /sdcard"),
+                        any(),
+                        anyLong(),
+                        eq(TimeUnit.MILLISECONDS));
         String[] input = new String[1];
-        mMockDevice.executeShellCommand(
-                EasyMock.contains("echo"),
-                EasyMock.anyObject(),
-                EasyMock.anyLong(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall()
-                .andAnswer(
-                        () -> {
-                            input[0] = (String) EasyMock.getCurrentArguments()[0];
+        doAnswer(
+                        invocation -> {
+                            input[0] = (String) invocation.getArguments()[0];
                             return null;
-                        });
-        mMockDevice.executeShellCommand(
-                EasyMock.contains("cat"),
-                EasyMock.anyObject(),
-                EasyMock.anyLong(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.expectLastCall()
-                .andAnswer(
-                        () -> {
+                        })
+                .when(mMockDevice)
+                .executeShellCommand(contains("echo"), any(), anyLong(), eq(TimeUnit.MILLISECONDS));
+        doAnswer(
+                        invocation -> {
                             CollectingOutputReceiver output =
-                                    (CollectingOutputReceiver) EasyMock.getCurrentArguments()[1];
+                                    (CollectingOutputReceiver) invocation.getArguments()[1];
                             output.addOutput(input[0].getBytes(), 0, input[0].length());
                             return null;
-                        });
+                        })
+                .when(mMockDevice)
+                .executeShellCommand(contains("cat"), any(), anyLong(), eq(TimeUnit.MILLISECONDS));
         mMockDevice.executeShellCommand(
-                EasyMock.contains("rm"),
-                EasyMock.anyObject(),
-                EasyMock.anyLong(),
-                EasyMock.eq(TimeUnit.MILLISECONDS));
-        EasyMock.replay(mMockDevice);
-        EasyMock.reset(mMockMgr);
-        EasyMock.expect(mMockMgr.isFileSystemMountCheckEnabled()).andReturn(true);
-        EasyMock.replay(mMockMgr);
+                contains("rm"), any(), anyLong(), eq(TimeUnit.MILLISECONDS));
+
+        reset(mMockMgr);
+        when(mMockMgr.isFileSystemMountCheckEnabled()).thenReturn(true);
+
         mMonitor =
                 new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
                     @Override
@@ -813,16 +831,16 @@ public class DeviceStateMonitorTest {
     /** Test {@link DeviceStateMonitor#waitForDeviceAvailable(long)} when device is not online. */
     @Test
     public void testWaitForDeviceAvailable_notOnline() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE).anyTimes();
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            public IDevice waitForDeviceOnline(long waitTime) {
-                return null;
-            }
-        };
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
+                    @Override
+                    public IDevice waitForDeviceOnline(long waitTime) {
+                        return null;
+                    }
+                };
         assertNull(mMonitor.waitForDeviceAvailable(WAIT_TIMEOUT_NOT_REACHED_MS));
     }
 
@@ -832,44 +850,47 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForDeviceAvailable_notBootComplete() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE).anyTimes();
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            public IDevice waitForDeviceOnline(long waitTime) {
-                return mMockDevice;
-            }
-            @Override
-            public boolean waitForBootComplete(long waitTime) {
-                return false;
-            }
-        };
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
+                    @Override
+                    public IDevice waitForDeviceOnline(long waitTime) {
+                        return mMockDevice;
+                    }
+
+                    @Override
+                    public boolean waitForBootComplete(long waitTime) {
+                        return false;
+                    }
+                };
         assertNull(mMonitor.waitForDeviceAvailable(WAIT_TIMEOUT_REACHED_MS));
     }
 
     /** Test {@link DeviceStateMonitor#waitForDeviceAvailable(long)} when pm is not responsive. */
     @Test
     public void testWaitForDeviceAvailable_pmNotResponsive() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE).anyTimes();
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            public IDevice waitForDeviceOnline(long waitTime) {
-                return mMockDevice;
-            }
-            @Override
-            public boolean waitForBootComplete(long waitTime) {
-                return true;
-            }
-            @Override
-            protected boolean waitForPmResponsive(long waitTime) {
-                return false;
-            }
-        };
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
+                    @Override
+                    public IDevice waitForDeviceOnline(long waitTime) {
+                        return mMockDevice;
+                    }
+
+                    @Override
+                    public boolean waitForBootComplete(long waitTime) {
+                        return true;
+                    }
+
+                    @Override
+                    protected boolean waitForPmResponsive(long waitTime) {
+                        return false;
+                    }
+                };
         assertNull(mMonitor.waitForDeviceAvailable(WAIT_TIMEOUT_REACHED_MS));
     }
 
@@ -878,38 +899,40 @@ public class DeviceStateMonitorTest {
      */
     @Test
     public void testWaitForDeviceAvailable_notMounted() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.ONLINE).anyTimes();
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        EasyMock.replay(mMockDevice);
-        mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
-            @Override
-            public IDevice waitForDeviceOnline(long waitTime) {
-                return mMockDevice;
-            }
-            @Override
-            public boolean waitForBootComplete(long waitTime) {
-                return true;
-            }
-            @Override
-            protected boolean waitForPmResponsive(long waitTime) {
-                return true;
-            }
-            @Override
-            protected boolean waitForStoreMount(long waitTime) {
-                return false;
-            }
-        };
+        when(mMockDevice.getState()).thenReturn(DeviceState.ONLINE);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
+        mMonitor =
+                new DeviceStateMonitor(mMockMgr, mMockDevice, true) {
+                    @Override
+                    public IDevice waitForDeviceOnline(long waitTime) {
+                        return mMockDevice;
+                    }
+
+                    @Override
+                    public boolean waitForBootComplete(long waitTime) {
+                        return true;
+                    }
+
+                    @Override
+                    protected boolean waitForPmResponsive(long waitTime) {
+                        return true;
+                    }
+
+                    @Override
+                    protected boolean waitForStoreMount(long waitTime) {
+                        return false;
+                    }
+                };
         assertNull(mMonitor.waitForDeviceAvailable(WAIT_TIMEOUT_REACHED_MS));
     }
 
     /** Test {@link DeviceStateMonitor#waitForDeviceInSideload(long)} */
     @Test
     public void testWaitForDeviceInSideload() throws Exception {
-        mMockDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mMockDevice.getState()).andReturn(DeviceState.SIDELOAD).anyTimes();
-        EasyMock.expect(mMockDevice.getSerialNumber()).andReturn(SERIAL_NUMBER).anyTimes();
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getState()).thenReturn(DeviceState.SIDELOAD);
+        when(mMockDevice.getSerialNumber()).thenReturn(SERIAL_NUMBER);
+
         mMonitor = new DeviceStateMonitor(mMockMgr, mMockDevice, true);
         assertTrue(mMonitor.waitForDeviceInSideload(WAIT_TIMEOUT_NOT_REACHED_MS));
     }

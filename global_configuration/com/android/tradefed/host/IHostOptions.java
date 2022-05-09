@@ -32,6 +32,14 @@ import java.util.Set;
 public interface IHostOptions {
 
     /**
+     * Enum describing the possible permit limiters
+     */
+    public enum PermitLimitType {
+        CONCURRENT_FLASHER,
+        CONCURRENT_DOWNLOAD;
+    }
+
+    /**
      * Returns the max number of concurrent flashing to allow. Used by {@link DeviceFlashPreparer}.
      *
      * @return the concurrent flasher limit.
@@ -71,9 +79,27 @@ public interface IHostOptions {
     /** Known gce-device associated with a specific IP. */
     Set<String> getKnownGceDeviceIpPool();
 
+    /** Known remote-device associated with a specific IP. */
+    Set<String> getKnownRemoteDeviceIpPool();
+
+    /** Known preconfigured virtual device pool. */
+    Set<String> getKnownPreconfigureVirtualDevicePool();
+
     /** Check if it should use the zip64 format in partial download or not. */
     boolean getUseZip64InPartialDownload();
 
     /** Returns the network interface used to connect to remote test devices. */
     String getNetworkInterface();
+
+    /** Initializes the concurrent locks */
+    public void initConcurrentLocks();
+
+    /** Takes a permit of the given type */
+    public void takePermit(PermitLimitType type);
+
+    /** Returns a permit of the given type */
+    public void returnPermit(PermitLimitType type);
+
+    /** Returns the number of available permit of a given type */
+    public Integer getAvailablePermits(PermitLimitType type);
 }

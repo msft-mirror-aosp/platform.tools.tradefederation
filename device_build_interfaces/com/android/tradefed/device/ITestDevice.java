@@ -674,15 +674,6 @@ public interface ITestDevice extends INativeDevice {
     public int createUser(String name) throws DeviceNotAvailableException, IllegalStateException;
 
     /**
-     * Create a user with a given name and default flags 0.
-     *
-     * @param name of the user to create on the device
-     * @return the integer for the user id created or -1 for error.
-     * @throws DeviceNotAvailableException
-     */
-    public int createUserNoThrow(String name) throws DeviceNotAvailableException;
-
-    /**
      * Create a user with a given name and the provided flags
      *
      * @param name of the user to create on the device
@@ -693,6 +684,15 @@ public interface ITestDevice extends INativeDevice {
      */
     public int createUser(String name, boolean guest, boolean ephemeral)
             throws DeviceNotAvailableException, IllegalStateException;
+
+    /**
+     * Create a user with a given name and default flags 0.
+     *
+     * @param name of the user to create on the device
+     * @return the integer for the user id created or -1 for error.
+     * @throws DeviceNotAvailableException
+     */
+    public int createUserNoThrow(String name) throws DeviceNotAvailableException;
 
     /**
      * Remove a given user from the device.
@@ -977,4 +977,31 @@ public interface ITestDevice extends INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public Set<Long> listDisplayIds() throws DeviceNotAvailableException;
+
+    /**
+     * Returns the list of foldable states on the device. Can be obtained with
+     * "cmd device_state print-states".
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public Set<DeviceFoldableState> getFoldableStates() throws DeviceNotAvailableException;
+
+    /**
+     * Returns the current foldable state of the device or null if some issues occurred.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public DeviceFoldableState getCurrentFoldableState() throws DeviceNotAvailableException;
+
+    /**
+     * Helper method to determine if file on device exists for a given user.
+     *
+     * @param deviceFilePath the absolute path of file on device to check
+     * @param userId The user id against which to check file existence
+     * @return <code>true</code> if file exists, <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean doesFileExist(String deviceFilePath, int userId)
+            throws DeviceNotAvailableException;
 }

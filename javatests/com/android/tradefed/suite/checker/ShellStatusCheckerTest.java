@@ -18,17 +18,19 @@ package com.android.tradefed.suite.checker;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.suite.checker.StatusCheckerResult.CheckStatus;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 /**
  * Unit tests for {@link ShellStatusChecker}.
@@ -43,7 +45,7 @@ import org.junit.runners.JUnit4;
 public class ShellStatusCheckerTest {
 
     private ShellStatusChecker mChecker;
-    private ITestDevice mMockDevice;
+    @Mock ITestDevice mMockDevice;
     private static final String FAIL_STRING = "Reset failed";
 
     /* The expected root state at pre- and post-check. */
@@ -51,7 +53,8 @@ public class ShellStatusCheckerTest {
 
     @Before
     public void setUp() {
-        mMockDevice = EasyMock.createMock(ITestDevice.class);
+        MockitoAnnotations.initMocks(this);
+
         mChecker = new ShellStatusChecker();
     }
 
@@ -72,27 +75,32 @@ public class ShellStatusCheckerTest {
         CheckStatus preState = CheckStatus.SUCCESS;
         CheckStatus postState = CheckStatus.SUCCESS;
 
-        EasyMock.expect(mMockDevice.isAdbRoot()).andReturn(preRoot);
-        if (preRoot != mExpectRoot) {
+        if (preRoot != mExpectRoot && postRoot != mExpectRoot) {
             preState = CheckStatus.FAILED;
-            if (mExpectRoot) {
-                EasyMock.expect(mMockDevice.enableAdbRoot()).andReturn(preRevertOk);
-            } else {
-                EasyMock.expect(mMockDevice.disableAdbRoot()).andReturn(preRevertOk);
-            }
-        }
-
-        EasyMock.expect(mMockDevice.isAdbRoot()).andReturn(postRoot);
-        if (postRoot != mExpectRoot) {
             postState = CheckStatus.FAILED;
             if (mExpectRoot) {
-                EasyMock.expect(mMockDevice.enableAdbRoot()).andReturn(postRevertOk);
+                when(mMockDevice.enableAdbRoot()).thenReturn(preRevertOk).thenReturn(postRevertOk);
             } else {
-                EasyMock.expect(mMockDevice.disableAdbRoot()).andReturn(postRevertOk);
+                when(mMockDevice.disableAdbRoot()).thenReturn(preRevertOk).thenReturn(postRevertOk);
             }
+        } else if (preRoot != mExpectRoot) {
+            preState = CheckStatus.FAILED;
+            if (mExpectRoot) {
+                when(mMockDevice.enableAdbRoot()).thenReturn(preRevertOk);
+            } else {
+                when(mMockDevice.disableAdbRoot()).thenReturn(preRevertOk);
+            }
+        } else if (postRoot != mExpectRoot) {
+            postState = CheckStatus.FAILED;
+            if (mExpectRoot) {
+                when(mMockDevice.enableAdbRoot()).thenReturn(postRevertOk);
+            } else {
+                when(mMockDevice.disableAdbRoot()).thenReturn(postRevertOk);
+            }
+        } else {
         }
 
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.isAdbRoot()).thenReturn(preRoot).thenReturn(postRoot);
 
         StatusCheckerResult res = mChecker.preExecutionCheck(mMockDevice);
         assertEquals("preExecutionCheck1", preState, res.getStatus());
@@ -114,8 +122,6 @@ public class ShellStatusCheckerTest {
         } else {
             assertNull("postExecutionCheck4", msg);
         }
-
-        EasyMock.verify(mMockDevice);
     }
 
     /** Test the system checker if the non-expected state does not change. */

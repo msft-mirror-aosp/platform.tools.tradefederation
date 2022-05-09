@@ -15,6 +15,15 @@
  */
 package com.android.tradefed.result;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.BugreportCollector.Filter;
@@ -25,10 +34,16 @@ import com.android.tradefed.result.BugreportCollector.Relation;
 import com.android.tradefed.result.BugreportCollector.SubPredicate;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
-import junit.framework.TestCase;
-
-import org.easymock.Capture;
-import org.easymock.EasyMock;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -36,13 +51,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 /** Unit tests for {@link BugreportCollector} */
-public class BugreportCollectorTest extends TestCase {
+@RunWith(JUnit4.class)
+public class BugreportCollectorTest {
     private BugreportCollector mCollector = null;
-    private ITestDevice mMockDevice = null;
-    private ITestInvocationListener mMockListener = null;
+    @Mock ITestDevice mMockDevice;
+    @Mock ITestInvocationListener mMockListener;
     private InputStreamSource mBugreportISS = null;
-    private Capture<HashMap<String, Metric>> mTestCapture = new Capture<>();
-    private Capture<HashMap<String, Metric>> mRunCapture = new Capture<>();
+    @Captor ArgumentCaptor<HashMap<String, Metric>> mTestCapture;
+    @Captor ArgumentCaptor<HashMap<String, Metric>> mRunCapture;
 
     private static final String TEST_KEY = "key";
     private static final String RUN_KEY = "key2";
@@ -66,26 +82,23 @@ public class BugreportCollectorTest extends TestCase {
         }
     }
 
-    @Override
+    @Before
     public void setUp() throws Exception {
-        super.setUp();
-        mMockDevice = EasyMock.createStrictMock(ITestDevice.class);
-        mMockListener = EasyMock.createMock(ITestInvocationListener.class);
+        MockitoAnnotations.initMocks(this);
 
         mBugreportISS = new BugreportISS();
 
-        EasyMock.expect(mMockDevice.getBugreport()).andStubReturn(mBugreportISS);
+        when(mMockDevice.getBugreport()).thenReturn(mBugreportISS);
         mCollector = new BugreportCollector(mMockListener, mMockDevice);
-
-        mTestCapture = new Capture<>();
-        mRunCapture = new Capture<>();
     }
 
+    @Test
     public void testCreatePredicate() throws Exception {
         Predicate foo = new Predicate(Relation.AFTER, Freq.EACH, Noun.TESTCASE);
         assertEquals("AFTER_EACH_TESTCASE", foo.toString());
     }
 
+    @Test
     public void testPredicateEquals() throws Exception {
         Predicate foo = new Predicate(Relation.AFTER, Freq.EACH, Noun.TESTCASE);
         Predicate bar = new Predicate(Relation.AFTER, Freq.EACH, Noun.TESTCASE);
@@ -97,20 +110,25 @@ public class BugreportCollectorTest extends TestCase {
         assertFalse(baz.equals(bar));
     }
 
+    @Test
     public void testPredicatePartialMatch() throws Exception {
         Predicate shortP = new Predicate(Relation.AFTER, Freq.EACH, Noun.INVOCATION);
-        Predicate longP = new Predicate(Relation.AFTER, Freq.EACH, Noun.INVOCATION,
-                Filter.WITH_ANY, Noun.TESTCASE);
+        Predicate longP =
+                new Predicate(
+                        Relation.AFTER, Freq.EACH, Noun.INVOCATION, Filter.WITH_ANY, Noun.TESTCASE);
         assertTrue(longP.partialMatch(shortP));
         assertTrue(shortP.partialMatch(longP));
     }
 
+    @Test
     public void testPredicateFullMatch() throws Exception {
         Predicate shortP = new Predicate(Relation.AFTER, Freq.EACH, Noun.INVOCATION);
-        Predicate longP = new Predicate(Relation.AFTER, Freq.EACH, Noun.INVOCATION,
-                Filter.WITH_ANY, Noun.TESTCASE);
-        Predicate longP2 = new Predicate(Relation.AFTER, Freq.EACH, Noun.INVOCATION,
-                Filter.WITH_ANY, Noun.TESTCASE);
+        Predicate longP =
+                new Predicate(
+                        Relation.AFTER, Freq.EACH, Noun.INVOCATION, Filter.WITH_ANY, Noun.TESTCASE);
+        Predicate longP2 =
+                new Predicate(
+                        Relation.AFTER, Freq.EACH, Noun.INVOCATION, Filter.WITH_ANY, Noun.TESTCASE);
         assertFalse(longP.fullMatch(shortP));
         assertFalse(shortP.fullMatch(longP));
 
@@ -118,32 +136,34 @@ public class BugreportCollectorTest extends TestCase {
         assertTrue(longP2.fullMatch(longP));
     }
 
-    /**
-     * A test to verify that invalid predicates are rejected
-     */
+    /** A test to verify that invalid predicates are rejected */
+    @Test
     public void testInvalidPredicate() throws Exception {
-        SubPredicate[][] predicates = new SubPredicate[][] {
-                // AT_START_OF (Freq) FAILED_(Noun)
-                {Relation.AT_START_OF, Freq.EACH, Noun.FAILED_TESTCASE},
-                {Relation.AT_START_OF, Freq.EACH, Noun.FAILED_TESTRUN},
-                {Relation.AT_START_OF, Freq.EACH, Noun.FAILED_INVOCATION},
-                {Relation.AT_START_OF, Freq.FIRST, Noun.FAILED_TESTCASE},
-                {Relation.AT_START_OF, Freq.FIRST, Noun.FAILED_TESTRUN},
-                {Relation.AT_START_OF, Freq.FIRST, Noun.FAILED_INVOCATION},
-                // (Relation) FIRST [FAILED_]INVOCATION
-                {Relation.AT_START_OF, Freq.FIRST, Noun.INVOCATION},
-                {Relation.AT_START_OF, Freq.FIRST, Noun.FAILED_INVOCATION},
-                {Relation.AFTER, Freq.FIRST, Noun.INVOCATION},
-                {Relation.AFTER, Freq.FIRST, Noun.FAILED_INVOCATION},
+        SubPredicate[][] predicates =
+                new SubPredicate[][] {
+                    // AT_START_OF (Freq) FAILED_(Noun)
+                    {Relation.AT_START_OF, Freq.EACH, Noun.FAILED_TESTCASE},
+                    {Relation.AT_START_OF, Freq.EACH, Noun.FAILED_TESTRUN},
+                    {Relation.AT_START_OF, Freq.EACH, Noun.FAILED_INVOCATION},
+                    {Relation.AT_START_OF, Freq.FIRST, Noun.FAILED_TESTCASE},
+                    {Relation.AT_START_OF, Freq.FIRST, Noun.FAILED_TESTRUN},
+                    {Relation.AT_START_OF, Freq.FIRST, Noun.FAILED_INVOCATION},
+                    // (Relation) FIRST [FAILED_]INVOCATION
+                    {Relation.AT_START_OF, Freq.FIRST, Noun.INVOCATION},
+                    {Relation.AT_START_OF, Freq.FIRST, Noun.FAILED_INVOCATION},
+                    {Relation.AFTER, Freq.FIRST, Noun.INVOCATION},
+                    {Relation.AFTER, Freq.FIRST, Noun.FAILED_INVOCATION},
                 };
 
         for (SubPredicate[] pred : predicates) {
             try {
                 assertEquals(3, pred.length);
-                new Predicate((Relation)pred[0], (Freq)pred[1], (Noun)pred[2]);
-                fail(String.format(
-                        "Expected IllegalArgumentException for invalid predicate [%s %s %s]",
-                        pred[0], pred[1], pred[2]));
+                new Predicate((Relation) pred[0], (Freq) pred[1], (Noun) pred[2]);
+                fail(
+                        String.format(
+                                "Expected IllegalArgumentException for invalid predicate [%s %s"
+                                        + " %s]",
+                                pred[0], pred[1], pred[2]));
             } catch (IllegalArgumentException e) {
                 // expected
                 // FIXME: validate message
@@ -151,155 +171,213 @@ public class BugreportCollectorTest extends TestCase {
         }
     }
 
-    /**
-     * Make sure that BugreportCollector passes events through to its child listener
-     */
+    /** Make sure that BugreportCollector passes events through to its child listener */
+    @Test
     public void testPassThrough() throws Exception {
-        setListenerTestRunExpectations(mMockListener, "runName", "testName");
-        replayMocks();
         injectTestRun("runName", "testName", "value");
-        verifyMocks();
+
+        InOrder testOrder = inOrder(mMockListener);
+        verifyListenerTestRunExpectations(mMockListener, "runName", "testName", testOrder);
+
         assertEquals(
                 "value", mTestCapture.getValue().get("key").getMeasurements().getSingleString());
         assertEquals(
                 "value", mRunCapture.getValue().get("key2").getMeasurements().getSingleString());
     }
 
+    @Test
     public void testTestFailed() throws Exception {
         Predicate pred = new Predicate(Relation.AFTER, Freq.EACH, Noun.FAILED_TESTCASE);
         mCollector.addPredicate(pred);
-        mMockDevice.waitForDeviceOnline(EasyMock.anyLong());
-        EasyMock.expectLastCall().times(2);
-        setListenerTestRunExpectations(mMockListener, "runName1", "testName1", true /*failed*/);
-        mMockListener.testLog(EasyMock.contains("bug-FAILED-FooTest__testName1."),
-                EasyMock.eq(LogDataType.BUGREPORT), EasyMock.eq(mBugreportISS));
-        setListenerTestRunExpectations(mMockListener, "runName2", "testName2", true /*failed*/);
-        mMockListener.testLog(EasyMock.contains("bug-FAILED-FooTest__testName2."),
-                EasyMock.eq(LogDataType.BUGREPORT), EasyMock.eq(mBugreportISS));
-        replayMocks();
+
         injectTestRun("runName1", "testName1", "value", true /*failed*/);
         injectTestRun("runName2", "testName2", "value", true /*failed*/);
-        verifyMocks();
+
+        InOrder testOrder = inOrder(mMockListener);
+
+        verifyListenerTestRunExpectations(
+                mMockListener, "runName1", "testName1", true /*failed*/, testOrder);
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains("bug-FAILED-FooTest__testName1."),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+        verifyListenerTestRunExpectations(
+                mMockListener, "runName2", "testName2", true /*failed*/, testOrder);
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains("bug-FAILED-FooTest__testName2."),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+
         assertEquals(
                 "value", mTestCapture.getValue().get("key").getMeasurements().getSingleString());
         assertEquals(
                 "value", mRunCapture.getValue().get("key2").getMeasurements().getSingleString());
+        verify(mMockDevice, times(2)).waitForDeviceOnline(Mockito.anyLong());
     }
 
+    @Test
     public void testTestEnded() throws Exception {
         Predicate pred = new Predicate(Relation.AFTER, Freq.EACH, Noun.TESTCASE);
         mCollector.addPredicate(pred);
-        mMockDevice.waitForDeviceOnline(EasyMock.anyLong());
-        EasyMock.expectLastCall().times(2);
-        setListenerTestRunExpectations(mMockListener, "runName1", "testName1");
-        mMockListener.testLog(EasyMock.contains("bug-FooTest__testName1."),
-                EasyMock.eq(LogDataType.BUGREPORT), EasyMock.eq(mBugreportISS));
-        setListenerTestRunExpectations(mMockListener, "runName2", "testName2");
-        mMockListener.testLog(EasyMock.contains("bug-FooTest__testName2."),
-                EasyMock.eq(LogDataType.BUGREPORT), EasyMock.eq(mBugreportISS));
-        replayMocks();
+
         injectTestRun("runName1", "testName1", "value");
         injectTestRun("runName2", "testName2", "value");
-        verifyMocks();
+
+        InOrder testOrder = inOrder(mMockListener);
+
+        verifyListenerTestRunExpectations(mMockListener, "runName1", "testName1", testOrder);
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains("bug-FooTest__testName1."),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+        verifyListenerTestRunExpectations(mMockListener, "runName2", "testName2", testOrder);
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains("bug-FooTest__testName2."),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+
         assertEquals(
                 "value", mTestCapture.getValue().get("key").getMeasurements().getSingleString());
         assertEquals(
                 "value", mRunCapture.getValue().get("key2").getMeasurements().getSingleString());
+        verify(mMockDevice, times(2)).waitForDeviceOnline(Mockito.anyLong());
     }
 
+    @Test
     public void testWaitForDevice() throws Exception {
         Predicate pred = new Predicate(Relation.AFTER, Freq.EACH, Noun.TESTCASE);
         mCollector.addPredicate(pred);
         mCollector.setDeviceWaitTime(1);
 
-        mMockDevice.waitForDeviceOnline(1000);
-        EasyMock.expectLastCall().times(2);  // Once per ending test method
-        setListenerTestRunExpectations(mMockListener, "runName1", "testName1");
-        mMockListener.testLog(EasyMock.contains("bug-FooTest__testName1."),
-                EasyMock.eq(LogDataType.BUGREPORT), EasyMock.eq(mBugreportISS));
-        setListenerTestRunExpectations(mMockListener, "runName2", "testName2");
-        mMockListener.testLog(EasyMock.contains("bug-FooTest__testName2."),
-                EasyMock.eq(LogDataType.BUGREPORT), EasyMock.eq(mBugreportISS));
-        replayMocks();
         injectTestRun("runName1", "testName1", "value");
         injectTestRun("runName2", "testName2", "value");
-        verifyMocks();
+
+        InOrder testOrder = inOrder(mMockListener);
+
+        verify(mMockDevice, times(2)).waitForDeviceOnline(1000); // Once per ending test method
+        verifyListenerTestRunExpectations(mMockListener, "runName1", "testName1", testOrder);
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains("bug-FooTest__testName1."),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+        verifyListenerTestRunExpectations(mMockListener, "runName2", "testName2", testOrder);
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains("bug-FooTest__testName2."),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+
         assertEquals(
                 "value", mTestCapture.getValue().get("key").getMeasurements().getSingleString());
         assertEquals(
                 "value", mRunCapture.getValue().get("key2").getMeasurements().getSingleString());
     }
 
+    @Test
     public void testTestEnded_firstCase() throws Exception {
         Predicate pred = new Predicate(Relation.AFTER, Freq.FIRST, Noun.TESTCASE);
         mCollector.addPredicate(pred);
-        mMockDevice.waitForDeviceOnline(EasyMock.anyLong());
-        EasyMock.expectLastCall().times(2);
-        setListenerTestRunExpectations(mMockListener, "runName1", "testName1");
-        mMockListener.testLog(EasyMock.contains("bug-FooTest__testName1."),
-                EasyMock.eq(LogDataType.BUGREPORT), EasyMock.eq(mBugreportISS));
-        setListenerTestRunExpectations(mMockListener, "runName2", "testName2");
-        mMockListener.testLog(EasyMock.contains("bug-FooTest__testName2."),
-                EasyMock.eq(LogDataType.BUGREPORT), EasyMock.eq(mBugreportISS));
-        replayMocks();
+
         injectTestRun("runName1", "testName1", "value");
         injectTestRun("runName2", "testName2", "value");
-        verifyMocks();
+
+        InOrder testOrder = inOrder(mMockListener);
+
+        verifyListenerTestRunExpectations(mMockListener, "runName1", "testName1", testOrder);
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains("bug-FooTest__testName1."),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+        verifyListenerTestRunExpectations(mMockListener, "runName2", "testName2", testOrder);
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains("bug-FooTest__testName2."),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+
         assertEquals(
                 "value", mTestCapture.getValue().get("key").getMeasurements().getSingleString());
         assertEquals(
                 "value", mRunCapture.getValue().get("key2").getMeasurements().getSingleString());
+        verify(mMockDevice, times(2)).waitForDeviceOnline(Mockito.anyLong());
     }
 
+    @Test
     public void testTestEnded_firstRun() throws Exception {
         Predicate pred = new Predicate(Relation.AFTER, Freq.FIRST, Noun.TESTRUN);
         mCollector.addPredicate(pred);
-        mMockDevice.waitForDeviceOnline(EasyMock.anyLong());
-        // Note: only one testLog
-        setListenerTestRunExpectations(mMockListener, "runName", "testName");
-        mMockListener.testLog(EasyMock.contains(pred.toString()),
-                EasyMock.eq(LogDataType.BUGREPORT), EasyMock.eq(mBugreportISS));
-        setListenerTestRunExpectations(mMockListener, "runName2", "testName2");
-        replayMocks();
+
         injectTestRun("runName", "testName", "value");
         injectTestRun("runName2", "testName2", "value");
-        verifyMocks();
+
+        InOrder testOrder = inOrder(mMockListener);
+
+        verify(mMockDevice).waitForDeviceOnline(Mockito.anyLong());
+        // Note: only one testLog
+        verifyListenerTestRunExpectations(mMockListener, "runName", "testName", testOrder);
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains(pred.toString()),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+        verifyListenerTestRunExpectations(mMockListener, "runName2", "testName2", testOrder);
+
         assertEquals(
                 "value", mTestCapture.getValue().get("key").getMeasurements().getSingleString());
         assertEquals(
                 "value", mRunCapture.getValue().get("key2").getMeasurements().getSingleString());
     }
 
+    @Test
     public void testTestRunEnded() throws Exception {
         Predicate pred = new Predicate(Relation.AFTER, Freq.EACH, Noun.TESTRUN);
         mCollector.addPredicate(pred);
-        mMockDevice.waitForDeviceOnline(EasyMock.anyLong());
-        setListenerTestRunExpectations(mMockListener, "runName", "testName");
-        mMockListener.testLog(EasyMock.contains(pred.toString()),
-                EasyMock.eq(LogDataType.BUGREPORT), EasyMock.eq(mBugreportISS));
-        replayMocks();
+
         injectTestRun("runName", "testName", "value");
-        verifyMocks();
+
+        InOrder testOrder = inOrder(mMockListener);
+
+        verify(mMockDevice).waitForDeviceOnline(Mockito.anyLong());
+        verifyListenerTestRunExpectations(mMockListener, "runName", "testName", testOrder);
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains(pred.toString()),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+
         assertEquals(
                 "value", mTestCapture.getValue().get("key").getMeasurements().getSingleString());
         assertEquals(
                 "value", mRunCapture.getValue().get("key2").getMeasurements().getSingleString());
     }
 
+    @Test
     public void testDescriptiveName() throws Exception {
         final String normalName = "AT_START_OF_FIRST_TESTCASE";
         final String descName = "custom_descriptive_name";
-        mMockDevice.waitForDeviceOnline(EasyMock.anyLong());
-        EasyMock.expectLastCall().times(2);
-        mMockListener.testLog(EasyMock.contains(normalName), EasyMock.eq(LogDataType.BUGREPORT),
-                EasyMock.eq(mBugreportISS));
-        mMockListener.testLog(EasyMock.contains(descName), EasyMock.eq(LogDataType.BUGREPORT),
-                EasyMock.eq(mBugreportISS));
-        replayMocks();
+
         mCollector.grabBugreport(normalName);
         mCollector.setDescriptiveName(descName);
         mCollector.grabBugreport(normalName);
-        verifyMocks();
+
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains(normalName),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+        verify(mMockListener)
+                .testLog(
+                        Mockito.contains(descName),
+                        Mockito.eq(LogDataType.BUGREPORT),
+                        Mockito.eq(mBugreportISS));
+
+        verify(mMockDevice, times(2)).waitForDeviceOnline(Mockito.anyLong());
     }
 
     /**
@@ -336,36 +414,24 @@ public class BugreportCollectorTest extends TestCase {
         return test;
     }
 
-    private void setListenerTestRunExpectations(
-            ITestInvocationListener listener, String runName, String testName) {
-        setListenerTestRunExpectations(listener, runName, testName, false);
+    private void verifyListenerTestRunExpectations(
+            ITestInvocationListener listener, String runName, String testName, InOrder io) {
+        verifyListenerTestRunExpectations(listener, runName, testName, false, io);
     }
 
-    @SuppressWarnings("unchecked")
-    private void setListenerTestRunExpectations(
-            ITestInvocationListener listener, String runName, String testName, boolean shouldFail) {
-        listener.testRunStarted(EasyMock.eq(runName), EasyMock.eq(1));
+    private void verifyListenerTestRunExpectations(
+            ITestInvocationListener listener,
+            String runName,
+            String testName,
+            boolean shouldFail,
+            InOrder io) {
+        io.verify(listener).testRunStarted(Mockito.eq(runName), Mockito.eq(1));
         final TestDescription test = new TestDescription("FooTest", testName);
-        listener.testStarted(EasyMock.eq(test));
+        io.verify(listener).testStarted(Mockito.eq(test));
         if (shouldFail) {
-            listener.testFailed(EasyMock.eq(test), EasyMock.eq(STACK_TRACE));
+            io.verify(listener).testFailed(Mockito.eq(test), Mockito.eq(STACK_TRACE));
         }
-        listener.testEnded(EasyMock.eq(test), EasyMock.capture(mTestCapture));
-        listener.testRunEnded(EasyMock.anyInt(), EasyMock.capture(mRunCapture));
-    }
-
-    /**
-     * Convenience method to replay all mocks
-     */
-    private void replayMocks() {
-        EasyMock.replay(mMockDevice, mMockListener);
-    }
-
-    /**
-     * Convenience method to verify all mocks
-     */
-    private void verifyMocks() {
-        EasyMock.verify(mMockDevice, mMockListener);
+        io.verify(listener).testEnded(Mockito.eq(test), mTestCapture.capture());
+        io.verify(listener).testRunEnded(Mockito.anyLong(), mRunCapture.capture());
     }
 }
-

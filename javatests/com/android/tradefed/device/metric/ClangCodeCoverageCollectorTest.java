@@ -17,16 +17,16 @@
 package com.android.tradefed.device.metric;
 
 import static com.google.common.truth.Truth.assertThat;
-
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyObject;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.IBuildInfo;
@@ -47,25 +47,9 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
-
-import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
-import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.mockito.InOrder;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
-import org.mockito.Spy;
-
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -80,6 +64,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import org.mockito.Spy;
 
 /** Unit tests for {@link ClangCodeCoverageListener}. */
 @RunWith(JUnit4.class)
@@ -441,6 +438,18 @@ public class ClangCodeCoverageCollectorTest {
         inOrder.verify(mMockDevice).disableAdbRoot();
     }
 
+    @Test
+    public void testInitNoReset_noop() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("reset-coverage-before-test", "false");
+        mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
+
+        // Call init(...).
+        mListener.init(mMockContext, mFakeListener);
+
+        // Verify nothing was executed on the device.
+        verifyNoMoreInteractions(mMockDevice);
+    }
+
     abstract static class CommandArgumentCaptor implements IRunUtil {
         private List<String> mCommand = new ArrayList<>();
         private CommandResult mResult = new CommandResult(CommandStatus.SUCCESS);
@@ -459,6 +468,10 @@ public class ClangCodeCoverageCollectorTest {
         List<String> getCommand() {
             return mCommand;
         }
+
+        /** Ignores sleep calls. */
+        @Override
+        public void sleep(long ms) {}
     }
 
     /** An {@link ITestInvocationListener} which reads test log data streams for verification. */
@@ -493,10 +506,10 @@ public class ClangCodeCoverageCollectorTest {
                 .when(device)
                 .executeShellV2Command(
                         anyString(),
-                        (File) anyObject(),
-                        (OutputStream) anyObject(),
+                        (File) any(),
+                        (OutputStream) any(),
                         anyLong(),
-                        anyObject(),
+                        any(),
                         anyInt());
     }
 

@@ -38,7 +38,7 @@ public class TestOption implements Comparable<TestOption> {
     /** {@inheritDoc} */
     @Override
     public int compareTo(TestOption option) {
-        return (mName.compareTo(option.getName()));
+        return mName.compareTo(option.getName());
     }
 
     /**

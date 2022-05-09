@@ -17,18 +17,24 @@ package com.android.tradefed.cluster;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import com.android.tradefed.util.FileUtil;
-import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IRunUtil;
 
-import org.junit.After;
+import java.nio.file.Files;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import static org.mockito.Mockito.*;
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,6 +44,8 @@ import java.net.URL;
 @RunWith(JUnit4.class)
 public class TestOutputUploaderTest {
 
+    @Rule public final TemporaryFolder tmpDir = new TemporaryFolder();
+
     private IRunUtil mMockRunUtil;
     private TestOutputUploader mTestOutputUploader;
     private File mOutputFile;
@@ -45,7 +53,8 @@ public class TestOutputUploaderTest {
     @Before
     public void setUp() throws IOException {
         mMockRunUtil = mock(IRunUtil.class);
-        when(mMockRunUtil.runTimedCmdRetry(anyLong(), anyLong(), anyInt(), anyVararg()))
+        when(mMockRunUtil.runTimedCmdRetry(
+                        Mockito.anyLong(), Mockito.anyLong(), Mockito.anyInt(), any()))
                 .thenReturn(new CommandResult(CommandStatus.SUCCESS));
         mTestOutputUploader =
                 new TestOutputUploader() {
@@ -54,76 +63,69 @@ public class TestOutputUploaderTest {
                         return mMockRunUtil;
                     }
                 };
-        mOutputFile = File.createTempFile(this.getClass().getName(), ".log");
-    }
-
-    @After
-    public void tearDown() {
-        mOutputFile.delete();
+        mOutputFile = tmpDir.newFile("test_file");
+        Files.writeString(mOutputFile.toPath(), "hello world");
     }
 
     @Test
     public void testUploadFile_fileProtocol_rootPath() throws IOException {
-        File destFolder = null;
-        try {
-            destFolder = FileUtil.createTempDir(this.getClass().getName());
-            final String uploadUrl = "file://" + destFolder.getAbsolutePath();
-            mTestOutputUploader.setUploadUrl(uploadUrl);
+        File destDir = tmpDir.newFolder();
+        String uploadUrl = "file://" + destDir.getAbsolutePath();
+        mTestOutputUploader.setUploadUrl(uploadUrl);
 
-            final String outputFileUrl = mTestOutputUploader.uploadFile(mOutputFile, null);
-
-            assertEquals(uploadUrl + "/" + mOutputFile.getName(), outputFileUrl);
-            final File uploadedFile = new File(new URL(outputFileUrl).getPath());
-            assertTrue(uploadedFile.exists());
-            assertTrue(FileUtil.compareFileContents(mOutputFile, uploadedFile));
-        } finally {
-            if (destFolder != null) {
-                FileUtil.recursiveDelete(destFolder);
-            }
-        }
+        String outputFileUrl = mTestOutputUploader.uploadFile(mOutputFile, null);
+        assertEquals(uploadUrl + "/test_file", outputFileUrl);
+        File uploadedFile = new File(new URL(outputFileUrl).getPath());
+        assertTrue(uploadedFile.exists());
+        assertTrue(FileUtil.compareFileContents(mOutputFile, uploadedFile));
     }
 
     @Test
     public void testUploadFile_fileProtocol_withDestPath() throws IOException {
-        File destRootFolder = null;
-        try {
-            destRootFolder = FileUtil.createTempDir(this.getClass().getName());
-            final String uploadUrl = "file://" + destRootFolder.getAbsolutePath();
-            mTestOutputUploader.setUploadUrl(uploadUrl);
-            
-            final String outputFileUrl = mTestOutputUploader.uploadFile(mOutputFile, "sub_dir");
+        File destDir = tmpDir.newFolder();
+        String uploadUrl = "file://" + destDir.getAbsolutePath();
+        mTestOutputUploader.setUploadUrl(uploadUrl);
 
-            assertEquals(uploadUrl + "/" + "sub_dir" + "/" + mOutputFile.getName(), outputFileUrl);
-            final File uploadedFile = new File(new URL(outputFileUrl).getPath());
-            assertTrue(uploadedFile.exists());
-            assertTrue(FileUtil.compareFileContents(mOutputFile, uploadedFile));
-        } finally {
-            if (destRootFolder != null) {
-                FileUtil.recursiveDelete(destRootFolder);
-            }
-        }
+        String outputFileUrl = mTestOutputUploader.uploadFile(mOutputFile, "sub_dir");
+        assertEquals(uploadUrl + "/sub_dir/test_file", outputFileUrl);
+        File uploadedFile = new File(new URL(outputFileUrl).getPath());
+        assertTrue(uploadedFile.exists());
+        assertTrue(FileUtil.compareFileContents(mOutputFile, uploadedFile));
     }
 
     @Test
-    public void testUploadFile_httpProtocol_withDestPath() throws IOException {
-        final String uploadUrl = "http://test.hostname.com";
-        mTestOutputUploader.setUploadUrl(uploadUrl);
+    public void testUploadFile_httpProtocol_rootPath() throws IOException {
+        mTestOutputUploader.setUploadUrl("http://test.hostname.com/");
 
-        final String outputFileUrl = mTestOutputUploader.uploadFile(mOutputFile, "sub_dir");
-
-        assertEquals(uploadUrl + "/" + "sub_dir" + "/" + mOutputFile.getName(), outputFileUrl);
+        String outputFileUrl = mTestOutputUploader.uploadFile(mOutputFile, null);
+        assertEquals("http://test.hostname.com/test_file", outputFileUrl);
         verify(mMockRunUtil)
                 .runTimedCmdRetry(
                         TestOutputUploader.UPLOAD_TIMEOUT_MS,
                         TestOutputUploader.RETRY_INTERVAL_MS,
                         TestOutputUploader.MAX_RETRY_COUNT,
-                        new String[] {
-                            "curl",
-                            "-X",
-                            "POST",
-                            "-F file=@" + mOutputFile.getAbsolutePath(),
-                            "-fL",
-                            outputFileUrl
-                        });
+                        "curl",
+                        "--request",
+                        "POST",
+                        "--form",
+                        "file=@" + mOutputFile.getAbsolutePath(),
+                        "--fail",
+                        "--location",
+                        outputFileUrl);
+    }
+
+    @Test
+    public void testUploadFile_httpProtocol_withDestPath() throws IOException {
+        mTestOutputUploader.setUploadUrl("http://test.hostname.com/");
+        String outputFileUrl = mTestOutputUploader.uploadFile(mOutputFile, "sub_dir");
+        assertEquals("http://test.hostname.com/sub_dir/test_file", outputFileUrl);
+    }
+
+    @Test
+    public void testUploadFile_httpProtocol_encoded() throws IOException {
+        mOutputFile = tmpDir.newFile("\"_ _#");
+        mTestOutputUploader.setUploadUrl("http://test.hostname.com/");
+        String outputFileUrl = mTestOutputUploader.uploadFile(mOutputFile, "/{_%_}/");
+        assertEquals("http://test.hostname.com/%7B_%25_%7D/%22_%20_%23", outputFileUrl);
     }
 }

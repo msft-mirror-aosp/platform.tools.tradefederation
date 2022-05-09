@@ -16,11 +16,10 @@
 
 package com.android.tradefed.result;
 
-import com.android.ddmlib.Log;
-import com.android.ddmlib.Log.LogLevel;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.StreamUtil;
 
@@ -35,7 +34,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
 
@@ -58,7 +56,6 @@ import java.util.TimeZone;
 @OptionClass(alias = "metricsreporter")
 public class MetricsXMLResultReporter extends CollectingTestListener {
 
-    private static final String TAG = "MetricsXMLResultReporter";
     private static final String METRICS_PREFIX = "metrics-";
     private static final String TAG_TESTSUITE = "testsuite";
     private static final String TAG_TESTCASE = "testcase";
@@ -84,7 +81,7 @@ public class MetricsXMLResultReporter extends CollectingTestListener {
     public void invocationEnded(long elapsedTime) {
         super.invocationEnded(elapsedTime);
         if (mFolder == null) {
-            Log.w(TAG, "metrics-folder not specified, unable to record metrics");
+            CLog.w("metrics-folder not specified, unable to record metrics");
             return;
         }
         generateResults(elapsedTime);
@@ -106,18 +103,12 @@ public class MetricsXMLResultReporter extends CollectingTestListener {
             printRunResults(serializer, timestamp, elapsedTime);
             serializer.endDocument();
             if (mLog != null) {
-                String msg =
-                        String.format(
-                                Locale.US,
-                                "XML metrics report generated at %s. "
-                                        + "Total tests %d, Failed %d",
-                                mLog.getPath(),
-                                getNumTotalTests(),
-                                getNumAllFailedTests());
-                Log.logAndDisplay(LogLevel.INFO, TAG, msg);
+                CLog.i(
+                        "XML metrics report generated at %s. " + "Total tests %d, Failed %d",
+                        mLog.getPath(), getNumTotalTests(), getNumAllFailedTests());
             }
         } catch (IOException e) {
-            Log.e(TAG, "Failed to generate XML metric report");
+            CLog.e("Failed to generate XML metric report");
             throw new RuntimeException(e);
         } finally {
             StreamUtil.close(os);
