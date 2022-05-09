@@ -469,6 +469,41 @@ public interface ITestDevice extends INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
+     * Connects to a wifi network.
+     *
+     * <p>Turns on wifi and blocks until a successful connection is made with one of the wifi
+     * networks given in the wifiSsidToPsk map. Once a connection is made, the instance will try to
+     * restore the connection after every reboot until {@link ITestDevice#disconnectFromWifi()} or
+     * {@link ITestDevice#clearLastConnectedWifiNetwork()} is called.
+     *
+     * @param wifiSsidToPsk A map of wifi SSIDs to passwords.
+     * @return <code>true</code> if connected to wifi network successfully. <code>false</code>
+     *     otherwise
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Connects to a wifi network.
+     *
+     * <p>Turns on wifi and blocks until a successful connection is made with one of the wifi
+     * networks given in the wifiSsidToPsk map. Once a connection is made, the instance will try to
+     * restore the connection after every reboot until {@link ITestDevice#disconnectFromWifi()} or
+     * {@link ITestDevice#clearLastConnectedWifiNetwork()} is called.
+     *
+     * @param wifiSsidToPsk A map of wifi SSIDs to passwords.
+     * @param scanSsid whether to scan for hidden SSIDs for this network.
+     * @return <code>true</code> if connected to wifi network successfully. <code>false</code>
+     *     otherwise
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk, boolean scanSsid)
+            throws DeviceNotAvailableException;
+
+    /**
      * A variant of {@link #connectToWifiNetwork(String, String)} that only connects if device
      * currently does not have network connectivity.
      *
