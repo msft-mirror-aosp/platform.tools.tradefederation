@@ -315,10 +315,11 @@ public class ClusterCommandScheduler extends CommandScheduler {
         @Override
         public void invocationComplete(
                 IInvocationContext metadata, Map<ITestDevice, FreeDeviceState> devicesStates) {
+            CLog.d("ClusterCommand invocationComplete start.");
             if (mWorkDir != null) {
                 FileUtil.recursiveDelete(mWorkDir);
             }
-            
+
             // TODO: handle multi-device where only one of the build could be missing.
             ErrorIdentifier errorId = null;
             if (getPrimaryBuildInfo() == null && mError == null) {
@@ -402,6 +403,7 @@ public class ClusterCommandScheduler extends CommandScheduler {
             final ClusterCommandEvent event = eventBuilder.build();
             getClusterClient().getCommandEventUploader().postEvent(event);
             getClusterClient().getCommandEventUploader().flush();
+            CLog.d("ClusterCommand invocationComplete done.");
         }
 
         /** {@inheritDoc} */
