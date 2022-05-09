@@ -668,18 +668,19 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     setLastInvocationExitCode(
                             instance.getExitInfo().mExitCode, instance.getExitInfo().mStack);
                 }
-                if (config.getCommandOptions().reportInvocationComplete()) {
-                    LogSaverResultForwarder.reportEndHostLog(
-                            config.getLogSaver(), TestInvocation.TRADEFED_INVOC_COMPLETE_HOST_LOG);
-                    config.getLogOutput().closeLog();
-                    LogRegistry.getLogRegistry().unregisterLogger();
-                }
                 if (getFeatureServer() != null) {
                     getFeatureServer().unregisterInvocation(config);
                 }
                 mCmd.commandFinished(elapsedTime);
                 logInvocationEndedEvent(
                         mCmd.getCommandTracker().getId(), elapsedTime, mInvocationContext);
+                CLog.d("Finalizing the logger and invocation.");
+                if (config.getCommandOptions().reportInvocationComplete()) {
+                    LogSaverResultForwarder.reportEndHostLog(
+                            config.getLogSaver(), TestInvocation.TRADEFED_INVOC_COMPLETE_HOST_LOG);
+                    config.getLogOutput().closeLog();
+                    LogRegistry.getLogRegistry().unregisterLogger();
+                }
             }
         }
 
