@@ -1090,13 +1090,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             // potentially create more invocations.
             manager.terminateDeviceRecovery();
             manager.terminateDeviceMonitor();
-            if (getFeatureServer() != null) {
-                try {
-                    getFeatureServer().shutdown();
-                } catch (InterruptedException e) {
-                    CLog.e(e);
-                }
-            }
             if (getTestInvocationManagementServer() != null) {
                 try {
                     getTestInvocationManagementServer().shutdown();
@@ -1109,6 +1102,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             exit(manager);
             cleanUp();
             CLog.logAndDisplay(LogLevel.INFO, "All done");
+            // Stop Feature Server after invocations are completed in case
+            // they still need it during shutdown.
+            if (getFeatureServer() != null) {
+                try {
+                    getFeatureServer().shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
             if (mClient != null) {
                 mClient.stop();
             }
