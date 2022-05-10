@@ -37,6 +37,7 @@ public class DeviceDescriptor implements Serializable {
     private final String mProductVariant;
     private final String mSdkVersion;
     private final String mBuildId;
+    private final String mHardwareRevision;
     private final String mBatteryLevel;
     private final String mDeviceClass;
     private final String mMacAddress;
@@ -71,6 +72,7 @@ public class DeviceDescriptor implements Serializable {
                 productVariant,
                 sdkVersion,
                 buildId,
+                null,
                 batteryLevel,
                 deviceClass,
                 macAddress,
@@ -105,6 +107,7 @@ public class DeviceDescriptor implements Serializable {
                 productVariant,
                 sdkVersion,
                 buildId,
+                null,
                 batteryLevel,
                 deviceClass,
                 macAddress,
@@ -140,6 +143,7 @@ public class DeviceDescriptor implements Serializable {
                 productVariant,
                 sdkVersion,
                 buildId,
+                null,
                 batteryLevel,
                 deviceClass,
                 macAddress,
@@ -160,6 +164,7 @@ public class DeviceDescriptor implements Serializable {
             String productVariant,
             String sdkVersion,
             String buildId,
+            String hardwareRevision,
             String batteryLevel,
             String deviceClass,
             String macAddress,
@@ -177,6 +182,7 @@ public class DeviceDescriptor implements Serializable {
         mProductVariant = productVariant;
         mSdkVersion = sdkVersion;
         mBuildId = buildId;
+        mHardwareRevision = hardwareRevision;
         mBatteryLevel = batteryLevel;
         mDeviceClass = deviceClass;
         mMacAddress = macAddress;
@@ -199,6 +205,7 @@ public class DeviceDescriptor implements Serializable {
                 d.getProductVariant(),
                 d.getSdkVersion(),
                 d.getBuildId(),
+                null,
                 d.getBatteryLevel(),
                 d.getDeviceClass(),
                 d.getMacAddress(),
@@ -221,6 +228,7 @@ public class DeviceDescriptor implements Serializable {
                 d.getProductVariant(),
                 d.getSdkVersion(),
                 d.getBuildId(),
+                null,
                 d.getBatteryLevel(),
                 d.getDeviceClass(),
                 d.getMacAddress(),
@@ -275,6 +283,10 @@ public class DeviceDescriptor implements Serializable {
 
     public String getBuildId() {
         return mBuildId;
+    }
+
+    public String getHardwareRevision() {
+        return mHardwareRevision;
     }
 
     public String getBatteryLevel() {

@@ -43,7 +43,9 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 /** Client that allows reporting usage metrics to clearcut. */
@@ -68,6 +70,7 @@ public class ClearcutClient {
     private final int mLogSource;
     private final String mUrl;
     private final UserType mUserType;
+    private final String mSubToolName;
 
     // Consider synchronized list
     private List<LogRequest> mExternalEventQueue;
@@ -76,15 +79,15 @@ public class ClearcutClient {
     // Whether the clearcut client should be inop
     private boolean mDisabled = false;
 
-    public ClearcutClient() {
-        this(null);
+    public ClearcutClient(String subToolName) {
+        this(null, subToolName);
     }
 
     /**
      * Create Client with customized posting URL and forcing whether it's internal or external user.
      */
     @VisibleForTesting
-    protected ClearcutClient(String url) {
+    protected ClearcutClient(String url, String subToolName) {
         mDisabled = isClearcutDisabled();
 
         // We still have to set the 'final' variable so go through the assignments before returning
@@ -102,6 +105,7 @@ public class ClearcutClient {
         }
         mRunId = UUID.randomUUID().toString();
         mExternalEventQueue = new ArrayList<>();
+        mSubToolName = subToolName;
 
         if (mDisabled) {
             return;
@@ -111,7 +115,18 @@ public class ClearcutClient {
         System.out.println(NoticeMessageUtil.getNoticeMessage(mUserType));
 
         // Executor to actually send the events.
-        mExecutor = new ScheduledThreadPoolExecutor(1);
+        mExecutor =
+                new ScheduledThreadPoolExecutor(
+                        1,
+                        new ThreadFactory() {
+                            @Override
+                            public Thread newThread(Runnable r) {
+                                Thread t = Executors.defaultThreadFactory().newThread(r);
+                                t.setDaemon(true);
+                                t.setName("clearcut-client-thread");
+                                return t;
+                            }
+                        });
         Runnable command =
                 new Runnable() {
                     @Override
@@ -135,7 +150,8 @@ public class ClearcutClient {
         LogEvent.Builder logEvent = LogEvent.newBuilder();
         logEvent.setEventTimeMs(System.currentTimeMillis());
         logEvent.setSourceExtension(
-                ClearcutEventHelper.createStartEvent(getGroupingKey(), mRunId, mUserType));
+                ClearcutEventHelper.createStartEvent(
+                        getGroupingKey(), mRunId, mUserType, mSubToolName));
         request.addLogEvent(logEvent);
         queueEvent(request.build());
     }
@@ -149,7 +165,8 @@ public class ClearcutClient {
         LogEvent.Builder logEvent = LogEvent.newBuilder();
         logEvent.setEventTimeMs(System.currentTimeMillis());
         logEvent.setSourceExtension(
-                ClearcutEventHelper.createRunStartEvent(getGroupingKey(), mRunId, mUserType));
+                ClearcutEventHelper.createRunStartEvent(
+                        getGroupingKey(), mRunId, mUserType, mSubToolName));
         request.addLogEvent(logEvent);
         queueEvent(request.build());
     }
@@ -208,7 +225,7 @@ public class ClearcutClient {
 
     /** Returns True if clearcut is disabled, False otherwise. */
     @VisibleForTesting
-    boolean isClearcutDisabled() {
+    public boolean isClearcutDisabled() {
         return "1".equals(System.getenv(DISABLE_CLEARCUT_KEY));
     }
 

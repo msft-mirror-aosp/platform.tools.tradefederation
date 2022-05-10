@@ -36,6 +36,7 @@ import com.android.tradefed.result.IShardableListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.retry.IRetryDecision;
+import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.IDeviceTest;
@@ -82,6 +83,8 @@ public class ShardHelper implements IShardHelper {
         CONFIG_OBJ_TO_CLONE.add(Configuration.LOG_SAVER_TYPE_NAME);
         // Deep clone RetryDecision to ensure each shard retry independently
         CONFIG_OBJ_TO_CLONE.add(Configuration.RETRY_DECISION_TYPE_NAME);
+        // Deep clone ConfigurationDescriptor
+        CONFIG_OBJ_TO_CLONE.add(Configuration.CONFIGURATION_DESCRIPTION_TYPE_NAME);
     }
 
     /**
@@ -185,11 +188,14 @@ public class ShardHelper implements IShardHelper {
                 }
             }
         }
-        // clean up original builds
-        for (String deviceName : context.getDeviceConfigNames()) {
-            config.getDeviceConfigByName(deviceName)
-                    .getBuildProvider()
-                    .cleanUp(context.getBuildInfo(deviceName));
+        // If we are sharding inside sandbox, don't clean, let the parent do it.
+        if (!config.getConfigurationDescription().shouldUseSandbox()) {
+            // clean up original builds
+            for (String deviceName : context.getDeviceConfigNames()) {
+                config.getDeviceConfigByName(deviceName)
+                        .getBuildProvider()
+                        .cleanUp(context.getBuildInfo(deviceName));
+            }
         }
         return true;
     }
@@ -218,6 +224,7 @@ public class ShardHelper implements IShardHelper {
         // Make sure we don't run as sandboxed in shards, only parent invocation needs to
         // run as sandboxed
         shardConfig.getConfigurationDescription().setSandboxed(false);
+        shardConfig.getConfigurationDescription().setShardIndex(index);
         rescheduler.scheduleConfig(shardConfig);
     }
 
@@ -261,6 +268,9 @@ public class ShardHelper implements IShardHelper {
             deepCopy.getCommandOptions().setShardCount(null);
             deepCopy.getConfigurationDescription()
                     .addMetadata(ConfigurationDescriptor.LOCAL_SHARDED_KEY, "true");
+            // Remove parent shard server reference from the copy.
+            deepCopy.getConfigurationDescription().removeMetadata(
+                    TradefedFeatureServer.SERVER_REFERENCE);
             return deepCopy;
         } catch (ConfigurationException e) {
             throw new RuntimeException(
@@ -300,9 +310,8 @@ public class ShardHelper implements IShardHelper {
             }
 
             IShardableTest shardableTest = (IShardableTest) test;
-            Collection<IRemoteTest> shards = null;
             // Give the shardCount hint to tests if they need it.
-            shards = shardableTest.split(shardCount, testInfo);
+            Collection<IRemoteTest> shards = shardableTest.split(shardCount, testInfo);
             if (shards != null) {
                 shardableTests.addAll(shards);
                 isSharded = true;
@@ -338,7 +347,7 @@ public class ShardHelper implements IShardHelper {
      * shard collector.
      */
     private static List<ITestInvocationListener> buildShardListeners(
-            ITestInvocationListener resultCollector,
+            ShardMainResultForwarder resultCollector,
             IConfiguration config,
             List<ITestInvocationListener> origListeners) {
         List<ITestInvocationListener> shardListeners = new ArrayList<ITestInvocationListener>();

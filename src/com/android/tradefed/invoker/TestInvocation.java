@@ -28,6 +28,7 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.filter.OptionFetcher;
 import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.device.DeviceManager;
@@ -44,6 +45,7 @@ import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.cloud.ManagedRemoteDevice;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
+import com.android.tradefed.device.internal.DeviceReleaseReporter;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.guice.InvocationScope;
@@ -65,12 +67,15 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.log.StdoutLogger;
 import com.android.tradefed.postprocessor.IPostProcessor;
 import com.android.tradefed.result.ActionInProgress;
+import com.android.tradefed.result.ByteArrayInputStreamSource;
+import com.android.tradefed.result.EventsLoggerListener;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogSaverResultForwarder;
+import com.android.tradefed.result.ReportPassedTests;
 import com.android.tradefed.result.ResultAndLogForwarder;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -78,10 +83,13 @@ import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.ResultAggregator;
 import com.android.tradefed.retry.RetryStrategy;
+import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.DeviceFailedToBootError;
 import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.testtype.ITestInformationReceiver;
 import com.android.tradefed.testtype.SubprocessTfLauncher;
+import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.PrettyPrintDelimiter;
@@ -92,11 +100,12 @@ import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -127,7 +136,9 @@ public class TestInvocation implements ITestInvocation {
 
     public static final String TRADEFED_LOG_NAME = "host_log";
     public static final String TRADEFED_END_HOST_LOG = "end_host_log";
+    public static final String TRADEFED_INVOC_COMPLETE_HOST_LOG = "invoc_complete_host_log";
     private static final String TRADEFED_DELEGATED_LOG_NAME = "delegated_parent_log";
+    public static final String TRADEFED_CONFIG_NAME = "tradefed-expanded-config";
     /** Suffix used on host_log for the part before sharding occurs. */
     static final String BEFORE_SHARDING_SUFFIX = "_before_sharding";
     static final String DEVICE_LOG_NAME_PREFIX = "device_logcat_";
@@ -137,6 +148,7 @@ public class TestInvocation implements ITestInvocation {
     static final String INVOCATION_ENDED_BUGREPORT_NAME = "invocation_ended_bugreport";
     static final String TARGET_SETUP_ERROR_BUGREPORT_NAME = "target_setup_error_bugreport";
     static final String BATT_TAG = "[battery level]";
+    static final String RECOVERY_LOG_DEVICE_PATH = "/tmp/recovery.log";
 
     public enum Stage {
         ERROR("error"),
@@ -166,12 +178,16 @@ public class TestInvocation implements ITestInvocation {
 
     private String mStatus = "(not invoked)";
     private String mStopCause = null;
+    private ErrorIdentifier mStopErrorId = null;
     private Long mStopRequestTime = null;
     private boolean mTestStarted = false;
     private boolean mInvocationFailed = false;
     private boolean mDelegatedInvocation = false;
     private List<IScheduledInvocationListener> mSchedulerListeners = new ArrayList<>();
     private DeviceUnavailableMonitor mUnavailableMonitor = new DeviceUnavailableMonitor();
+    private ExitCode mExitCode = ExitCode.NO_ERROR;
+    private Throwable mExitStack = null;
+    private EventsLoggerListener mEventsLogger = null;
 
     /**
      * Display a log message informing the user of a invocation being started.
@@ -235,9 +251,7 @@ public class TestInvocation implements ITestInvocation {
             logDeviceBatteryLevel(context, "initial");
             // Run the preInvocationSetup on devices.
             if (!devicePreSetupDone) {
-                if (!config.getCommandOptions().shouldUseSandboxing()) {
-                    invocationPath.runDevicePreInvocationSetup(context, config, listener);
-                }
+                invocationPath.runDevicePreInvocationSetup(context, config, listener);
             }
             // Then run the regular setup and run
             prepareAndRun(config, testInfo, invocationPath, listener);
@@ -303,8 +317,10 @@ public class TestInvocation implements ITestInvocation {
             // log a warning here so its captured before reportLogs is called
             CLog.e("Unexpected exception when running invocation: %s", t.toString());
             CLog.e(t);
-            reportFailure(createFailureFromException(t, FailureStatus.UNSET), listener);
-            throw t;
+            if (mStopCause == null) {
+                reportFailure(createFailureFromException(t, FailureStatus.UNSET), listener);
+                throw t;
+            }
         } finally {
             // Only capture logcat for TEST if we started the test phase.
             if (mTestStarted) {
@@ -339,6 +355,8 @@ public class TestInvocation implements ITestInvocation {
                         for (ITestDevice device : context.getDevices()) {
                             Callable<Boolean> callableTask =
                                     () -> {
+                                        CLog.d("Start taking bugreport on '%s'",
+                                                device.getSerialNumber());
                                         takeBugreport(device, listener, reportName);
                                         return true;
                                     };
@@ -348,6 +366,7 @@ public class TestInvocation implements ITestInvocation {
                         executor.invokeAll(callableTasks, 5, TimeUnit.MINUTES);
                     }
                 }
+                reportRecoveryLogs(context.getDevices(), listener);
                 if (exception == null) {
                     CLog.d("Checking that devices are online.");
                     checkDevicesAvailable(context.getDevices(), listener);
@@ -357,7 +376,13 @@ public class TestInvocation implements ITestInvocation {
             }
             // Save the device executeShellCommand logs
             logExecuteShellCommand(context.getDevices(), listener);
-
+            if (exception == null) {
+                exception = mUnavailableMonitor.getUnavailableException();
+                if (exception != null) {
+                    CLog.e("Found a test level only device unavailable exception:");
+                    CLog.e(exception);
+                }
+            }
             mStatus = "tearing down";
             try {
                 invocationPath.doTeardown(testInfo, config, listener, exception);
@@ -379,16 +404,30 @@ public class TestInvocation implements ITestInvocation {
             }
             mStatus = "done running tests";
             CurrentInvocation.setActionInProgress(ActionInProgress.FREE_RESOURCES);
-            // Track the timestamp when we are done with devices
-            addInvocationMetric(
-                    InvocationMetricKey.DEVICE_DONE_TIMESTAMP, System.currentTimeMillis());
-            if (exception == null) {
-                exception = mUnavailableMonitor.getUnavailableException();
-                if (exception != null) {
-                    CLog.e("Found a test level only device unavailable exception:");
-                    CLog.e(exception);
+
+            // Only log the device done metrics if the delegatedEarlyDeviceRelease feature is turned
+            // off. If the feature is turned on, logging is done in the EarlyDeviceReleaseFeature.
+            // Note: When this flag is enabled by default, logging should not be performed if
+            // running as a parent or delegate object.
+            if (!config.getCommandOptions().delegatedEarlyDeviceRelease()) {
+                // Log count of allocated devices for test accounting
+                addInvocationMetric(
+                        InvocationMetricKey.DEVICE_COUNT, context.getNumDevicesAllocated());
+                // Track the timestamp when we are done with devices
+                addInvocationMetric(
+                        InvocationMetricKey.DEVICE_DONE_TIMESTAMP, System.currentTimeMillis());
+            }
+
+            // Ensure we always deregister the logger
+            for (String deviceName : context.getDeviceConfigNames()) {
+                if (!(context.getDevice(deviceName).getIDevice() instanceof StubDevice)) {
+                    context.getDevice(deviceName).stopLogcat();
+                    CLog.i(
+                            "Done stopping logcat for %s",
+                            context.getDevice(deviceName).getSerialNumber());
                 }
             }
+
             Map<ITestDevice, FreeDeviceState> devicesStates =
                     handleAndLogReleaseState(context, exception, tearDownException);
             if (config.getCommandOptions().earlyDeviceRelease()) {
@@ -406,12 +445,13 @@ public class TestInvocation implements ITestInvocation {
                                     "Invocation was interrupted due to: %s, results will be "
                                             + "affected.",
                                     mStopCause);
+                    if (mStopErrorId == null) {
+                        mStopErrorId = InfraErrorIdentifier.INVOCATION_CANCELLED;
+                    }
                     FailureDescription failure =
-                            FailureDescription.create(message, FailureStatus.CANCELLED);
-                    failure.setErrorIdentifier(InfraErrorIdentifier.INVOCATION_CANCELLED);
-                    failure.setCause(
-                            new HarnessRuntimeException(
-                                    message, InfraErrorIdentifier.INVOCATION_CANCELLED));
+                            FailureDescription.create(message)
+                                    .setErrorIdentifier(mStopErrorId)
+                                    .setCause(new HarnessRuntimeException(message, mStopErrorId));
                     reportFailure(failure, listener);
                     PrettyPrintDelimiter.printStageDelimiter(message);
                     if (mStopRequestTime != null) {
@@ -426,6 +466,17 @@ public class TestInvocation implements ITestInvocation {
                 // If host_log is reported, remove the hook
                 Runtime.getRuntime().removeShutdownHook(reportThread);
 
+                // Measure teardown disk usage before clean up
+                Long size = measureWorkFolderSize(config, testInfo);
+                if (size != null) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.TEAR_DOWN_DISK_USAGE, size);
+                }
+                // Only log Invocation ended in parent
+                if (!isSubprocess(config)) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.INVOCATION_END, System.currentTimeMillis());
+                }
                 elapsedTime = System.currentTimeMillis() - startTime;
                 reportInvocationEnded(config, context, listener, elapsedTime);
             } finally {
@@ -472,6 +523,7 @@ public class TestInvocation implements ITestInvocation {
             ITestInvocationListener listener) {
         logStartInvocation(context, config);
         listener.invocationStarted(context);
+        logExpandedConfiguration(config, listener);
     }
 
     /** Report the exception failure as an invocation failure. */
@@ -492,7 +544,7 @@ public class TestInvocation implements ITestInvocation {
      * @param defaultStatus The status to use by default if the exception is not a {@link
      *     IHarnessException}.
      */
-    private FailureDescription createFailureFromException(
+    public static FailureDescription createFailureFromException(
             Throwable exception, FailureStatus defaultStatus) {
         ErrorIdentifier id = null;
         if (exception instanceof IHarnessException) {
@@ -503,12 +555,9 @@ public class TestInvocation implements ITestInvocation {
             message = "No error message";
         }
         FailureDescription failure =
-                CurrentInvocation.createFailure(message, id)
-                        .setCause(exception)
-                        .setFailureStatus(defaultStatus);
-        if (id != null) {
-            failure.setErrorIdentifier(id);
-            failure.setFailureStatus(id.status());
+                CurrentInvocation.createFailure(message, id).setCause(exception);
+        if (id == null) {
+            failure.setFailureStatus(defaultStatus);
         }
         return failure;
     }
@@ -552,11 +601,13 @@ public class TestInvocation implements ITestInvocation {
             return;
         }
         if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
-            CLog.d("Skipping bugreportz on %s. Device is offline.");
+            CLog.d("Skipping bugreportz on %s. Device is offline.", device.getSerialNumber());
             return;
         }
         // logBugreport will report a regular bugreport if bugreportz is not supported.
+        RecoveryMode recovery = device.getRecoveryMode();
         try {
+            device.setRecoveryMode(RecoveryMode.NONE);
             boolean res =
                     device.logBugreport(
                             String.format("%s_%s", bugreportName, device.getSerialNumber()),
@@ -567,6 +618,8 @@ public class TestInvocation implements ITestInvocation {
         } catch (RuntimeException e) {
             CLog.e("Harness Exception while collecting bugreport");
             CLog.e(e);
+        } finally {
+            device.setRecoveryMode(recovery);
         }
     }
 
@@ -630,6 +683,54 @@ public class TestInvocation implements ITestInvocation {
     }
 
     /**
+     * Log the invocation configuration as one large XML detailing all settings in use.
+     *
+     * @param config the {@link IConfiguration} of this test run
+     * @param listener the {@link ITestLogger} with which to register the log
+     */
+    private void logExpandedConfiguration(IConfiguration config, ITestLogger listener) {
+        boolean isShard = config.getConfigurationDescription().getShardIndex() != null;
+        if (isShard) {
+            // Bail out of logging the config if this is a local shard since it is problematic
+            // and redundant anyway.
+            CLog.d("Skipping expanded config log for shard.");
+            return;
+        }
+        try (StringWriter configXmlWriter = new StringWriter();
+                PrintWriter wrapperWriter = new PrintWriter(configXmlWriter)) {
+            config.dumpXml(wrapperWriter, new ArrayList<String>(), true, false);
+            wrapperWriter.flush();
+            // Specified UTF-8 encoding for an abundance of caution, but its possible we could want
+            // something else in the future
+            byte[] configXmlByteArray = configXmlWriter.toString().getBytes("UTF-8");
+            try (InputStreamSource source = new ByteArrayInputStreamSource(configXmlByteArray)) {
+                String configOutputName;
+                boolean isSandboxParent = config.getCommandOptions().shouldUseSandboxing();
+                boolean isSandboxChild = config.getConfigurationDescription().shouldUseSandbox();
+                if (isSandboxParent || isSandboxChild) {
+                    // Either the parent or child of a sandbox so we need to tailor the config
+                    // logging names
+                    String prefix;
+                    if (isSandboxChild) {
+                        prefix = "child-sandbox";
+                    } else {
+                        prefix = "parent-sandbox";
+                    }
+
+                    configOutputName = String.format("%s-%s", prefix, TRADEFED_CONFIG_NAME);
+                } else {
+                    // No sandboxing involved (at least known), so use the default name
+                    configOutputName = TRADEFED_CONFIG_NAME;
+                }
+
+                listener.testLog(configOutputName, LogDataType.HARNESS_CONFIG, source);
+            }
+        } catch (IOException e) {
+            CLog.e(e);
+        }
+    }
+
+    /**
      * Invoke {@link IInvocationExecution#fetchBuild(TestInformation, IConfiguration, IRescheduler,
      * ITestInvocationListener)} and handles the output as well as failures.
      *
@@ -667,6 +768,14 @@ public class TestInvocation implements ITestInvocation {
             buildException = e;
         }
         setExitCode(ExitCode.NO_BUILD, buildException);
+        // If somehow we don't have builds
+        if (testInfo.getContext().getBuildInfos().isEmpty()) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BACKFILL_BUILD_INFO, "true");
+            IBuildInfo info = backFillBuildInfoForReporting(config.getCommandLine());
+            testInfo.getContext()
+                    .addDeviceBuildInfo(testInfo.getContext().getDeviceConfigNames().get(0), info);
+        }
         // Report an empty invocation, so this error is sent to listeners
         startInvocation(config, testInfo.getContext(), listener);
         reportFailure(
@@ -685,8 +794,6 @@ public class TestInvocation implements ITestInvocation {
      *
      * @param context the {@link IInvocationContext} of the invocation.
      * @param config the {@link IConfiguration} of this test run.
-     * @param rescheduler the {@link IRescheduler}, for rescheduling portions of the invocation for
-     *     execution on another resource(s)
      * @param listener the {@link ITestInvocation} to report build download failures.
      * @param invocationPath the {@link IInvocationExecution} driving the invocation.
      * @param mode The current {@link RunMode} of the invocation.
@@ -695,7 +802,6 @@ public class TestInvocation implements ITestInvocation {
     private boolean invokeRemoteDynamic(
             IInvocationContext context,
             IConfiguration config,
-            IRescheduler rescheduler,
             ITestInvocationListener listener,
             IInvocationExecution invocationPath,
             RunMode mode) {
@@ -741,8 +847,38 @@ public class TestInvocation implements ITestInvocation {
             IRescheduler rescheduler,
             ITestInvocationListener... extraListeners)
             throws DeviceNotAvailableException, Throwable {
+        if (!config.getInopOptions().isEmpty()) {
+            context.addInvocationAttribute(
+                    "inop-options", Joiner.on(",").join(config.getInopOptions()));
+        }
+        // Carry the reference of the server so it can be used within the same process.
+        if (config.getConfigurationDescription().getAllMetaData().getUniqueMap()
+                .containsKey(TradefedFeatureServer.SERVER_REFERENCE)) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.SERVER_REFERENCE,
+                    config.getConfigurationDescription().getAllMetaData().getUniqueMap()
+                        .get(TradefedFeatureServer.SERVER_REFERENCE));
+        }
+        // Only log invocation_start in parent
+        boolean isSuprocess = isSubprocess(config);
+        if (!isSuprocess) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INVOCATION_START, System.currentTimeMillis());
+        } else {
+            CLog.d("Fetching options from parent.");
+            // Get options from the parent process
+            try (OptionFetcher fetchOtpions = new OptionFetcher()) {
+                fetchOtpions.fetchParentOptions(config);
+            }
+        }
         // Handle the automated reporting
         applyAutomatedReporters(config);
+
+        if (config.getCommandOptions().delegatedEarlyDeviceRelease()
+                && System.getenv(DelegatedInvocationExecution.DELEGATED_MODE_VAR) != null) {
+            // If in a subprocess, add the early device release feature as a listener.
+            mSchedulerListeners.add(new DeviceReleaseReporter());
+        }
 
         for (ITestInvocationListener listener : extraListeners) {
             if (listener instanceof IScheduledInvocationListener) {
@@ -761,13 +897,15 @@ public class TestInvocation implements ITestInvocation {
             info = TestInformation.createModuleTestInfo(sharedTestInfo, context);
         }
         if (info == null) {
-            File mWorkFolder = FileUtil.createTempDir("tradefed-invocation-workfolder");
+            File mWorkFolder = FileUtil.createTempDir("tf-workfolder");
             info =
                     TestInformation.newBuilder()
                             .setInvocationContext(context)
                             .setDependenciesFolder(mWorkFolder)
                             .build();
         }
+        // Register the test info to the configuration to be usable.
+        config.setConfigurationObject(TradefedFeatureServer.TEST_INFORMATION_OBJECT, info);
         CurrentInvocation.addInvocationInfo(InvocationInfo.WORK_FOLDER, info.dependenciesFolder());
 
         CleanUpInvocationFiles cleanUpThread = new CleanUpInvocationFiles(info, config);
@@ -776,6 +914,15 @@ public class TestInvocation implements ITestInvocation {
 
         List<ITestInvocationListener> allListeners =
                 new ArrayList<>(config.getTestInvocationListeners().size() + extraListeners.length);
+        // If it's not a subprocess, report the passed tests.
+        ReportPassedTests reportPass = null;
+        if (config.getConfigurationObject(TradefedDelegator.DELEGATE_OBJECT) == null
+                && config.getCommandOptions().reportPassedTests()
+                && !isSubprocess(config)) {
+            reportPass = new ReportPassedTests();
+            reportPass.setConfiguration(config);
+            allListeners.add(reportPass);
+        }
         allListeners.addAll(config.getTestInvocationListeners());
         allListeners.addAll(Arrays.asList(extraListeners));
         allListeners.add(mUnavailableMonitor);
@@ -785,16 +932,26 @@ public class TestInvocation implements ITestInvocation {
         IRetryDecision decision = config.getRetryDecision();
         ResultAggregator aggregator = null;
         decision.setInvocationContext(context);
+        if (decision instanceof ITestInformationReceiver) {
+            ((ITestInformationReceiver) decision).setTestInformation(info);
+        }
         // We don't need the aggregator in the subprocess because the parent will take care of it.
         if (!config.getCommandOptions()
-                        .getInvocationData()
-                        .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)
-                && decision.isAutoRetryEnabled()
-                && decision.getMaxRetryCount() > 1
-                && !RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())) {
-            CLog.d("Auto-retry enabled, using the ResultAggregator to handle multiple retries.");
-            aggregator = new ResultAggregator(allListeners, decision.getRetryStrategy());
-            allListeners = Arrays.asList(aggregator);
+                .getInvocationData()
+                .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)) {
+            if (decision.isAutoRetryEnabled()
+                    && decision.getMaxRetryCount() > 1
+                    && !RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())) {
+                CLog.d(
+                        "Auto-retry enabled, using the ResultAggregator to handle multiple"
+                                + " retries.");
+                aggregator = new ResultAggregator(allListeners, decision.getRetryStrategy());
+                aggregator.setUpdatedReporting(decision.useUpdatedReporting());
+                allListeners = Arrays.asList(aggregator);
+            } else {
+                mEventsLogger = new EventsLoggerListener("all-events");
+                allListeners.add(mEventsLogger);
+            }
         }
 
         if (!config.getPostProcessors().isEmpty()) {
@@ -810,6 +967,9 @@ public class TestInvocation implements ITestInvocation {
             listener = new LogSaverResultForwarder(config.getLogSaver(), Arrays.asList(forwarder));
         } else {
             listener = new LogSaverResultForwarder(config.getLogSaver(), allListeners);
+        }
+        if (reportPass != null) {
+            reportPass.setLogger(listener);
         }
 
         RunMode mode = RunMode.REGULAR;
@@ -844,9 +1004,13 @@ public class TestInvocation implements ITestInvocation {
             }
             getLogRegistry().registerLogger(leveledLogOutput);
             mStatus = "resolving dynamic options";
+            long startDynamic = System.currentTimeMillis();
             boolean resolverSuccess =
-                    invokeRemoteDynamic(
-                            context, config, rescheduler, listener, invocationPath, mode);
+                    invokeRemoteDynamic(context, config, listener, invocationPath, mode);
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
+                    startDynamic,
+                    System.currentTimeMillis());
             if (!resolverSuccess) {
                 return;
             }
@@ -871,9 +1035,15 @@ public class TestInvocation implements ITestInvocation {
             }
 
             long start = System.currentTimeMillis();
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.FETCH_BUILD_START, start);
             boolean providerSuccess =
                     invokeFetchBuild(info, config, rescheduler, listener, invocationPath);
-            long fetchBuildDuration = System.currentTimeMillis() - start;
+            long end = System.currentTimeMillis();
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.FETCH_BUILD_END, end);
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.FETCH_BUILD_PAIR, start, end);
+            long fetchBuildDuration = end - start;
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.FETCH_BUILD, fetchBuildDuration);
             CLog.d("Fetch build duration: %s", TimeUtil.formatElapsedTime(fetchBuildDuration));
@@ -894,9 +1064,11 @@ public class TestInvocation implements ITestInvocation {
                 // devices (Remote devices for example) require extra preparation step to be
                 // available, but sharding requires the device to be available in some cases. So
                 // we call the device setup early to meet all the requirements.
+                boolean startInvocationCalled = false;
                 if (shardCount != null && shardIndex != null) {
                     deviceInit = true;
                     startInvocation(config, context, listener);
+                    startInvocationCalled = true;
                     try {
                         invocationPath.runDevicePreInvocationSetup(context, config, listener);
                     } catch (DeviceNotAvailableException | TargetSetupError e) {
@@ -919,20 +1091,35 @@ public class TestInvocation implements ITestInvocation {
                                 invocationPath.reportLogs(device, listener, Stage.ERROR);
                             }
                             reportHostLog(listener, config);
-                            listener.invocationEnded(0L);
+                            reportInvocationEnded(config, context, listener, 0L);
                         }
                         return;
                     }
                 }
 
+                // Apply global filters before sharding so they are taken into account.
+                config.getGlobalFilters().setUpFilters(config);
+
                 try {
                     sharding = invocationPath.shardConfig(config, info, rescheduler, listener);
                 } catch (RuntimeException unexpected) {
+                    CLog.e("Exception during sharding.");
+                    CLog.e(unexpected);
                     if (deviceInit) {
                         // If we did an early setup, do the tear down.
-                        invocationPath.runDevicePostInvocationTearDown(context, config, null);
+                        invocationPath.runDevicePostInvocationTearDown(context, config, unexpected);
                     }
-                    throw unexpected;
+                    // Call the reporting to get debugging infos.
+                    if (!startInvocationCalled) {
+                        startInvocation(config, context, listener);
+                    }
+                    reportFailure(
+                            createFailureFromException(unexpected, FailureStatus.INFRA_FAILURE)
+                                    .setActionInProgress(ActionInProgress.TEST),
+                            listener);
+                    reportHostLog(listener, config);
+                    listener.invocationEnded(0L);
+                    return;
                 }
                 if (sharding) {
                     CLog.i(
@@ -961,6 +1148,9 @@ public class TestInvocation implements ITestInvocation {
                     // If we did an early setup, do the tear down.
                     invocationPath.runDevicePostInvocationTearDown(context, config, null);
                 }
+                if (mEventsLogger != null) {
+                    logEventsFile(mEventsLogger.getLoggedEvents(), listener);
+                }
                 listener.invocationEnded(0L);
                 return;
             }
@@ -971,29 +1161,22 @@ public class TestInvocation implements ITestInvocation {
             CLog.e(e);
         } finally {
             scope.exit();
-            // Measure teardown disk usage before clean up
-            Long size = measureWorkFolderSize(config, info.dependenciesFolder());
-            if (size != null) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.TEAR_DOWN_DISK_USAGE, size);
-            }
             // Ensure build infos are always cleaned up at the end of invocation.
+            CLog.i("Cleaning up builds");
             invocationPath.cleanUpBuilds(context, config);
-            // ensure we always deregister the logger
-            for (String deviceName : context.getDeviceConfigNames()) {
-                if (!(context.getDevice(deviceName).getIDevice() instanceof StubDevice)) {
-                    context.getDevice(deviceName).stopLogcat();
-                }
-            }
             if (!sharding) {
                 // If we are the parent shard, we do not delete the test information
                 deleteInvocationFiles(info, config);
             }
-            // save remaining logs contents to global log
-            getLogRegistry().dumpToGlobalLog(config.getLogOutput());
-            // Ensure log is unregistered and closed
-            getLogRegistry().unregisterLogger();
-            config.getLogOutput().closeLog();
+
+            if (!config.getCommandOptions().reportInvocationComplete()) {
+                // save remaining logs contents to global log
+                getLogRegistry().dumpToGlobalLog(config.getLogOutput());
+                // Ensure log is unregistered and closed
+                getLogRegistry().unregisterLogger();
+                config.getLogOutput().closeLog();
+            }
+
             config.cleanConfigurationData();
 
             Runtime.getRuntime().removeShutdownHook(cleanUpThread);
@@ -1015,8 +1198,8 @@ public class TestInvocation implements ITestInvocation {
      * Helper to set the exit code. Exposed for testing.
      */
     protected void setExitCode(ExitCode code, Throwable stack) {
-        GlobalConfiguration.getInstance().getCommandScheduler()
-                .setLastInvocationExitCode(code, stack);
+        mExitCode = code;
+        mExitStack = stack;
     }
 
     protected void addInvocationMetric(InvocationMetricKey key, long value) {
@@ -1036,8 +1219,9 @@ public class TestInvocation implements ITestInvocation {
     }
 
     @Override
-    public void notifyInvocationStopped(String message) {
+    public void notifyInvocationStopped(String message, ErrorIdentifier errorId) {
         mStopCause = message;
+        mStopErrorId = errorId;
         if (mStopRequestTime == null) {
             mStopRequestTime = System.currentTimeMillis();
         }
@@ -1097,6 +1281,15 @@ public class TestInvocation implements ITestInvocation {
                         source);
             }
         }
+    }
+
+    private void logEventsFile(File eventsLog, ITestLogger logger) {
+        if (eventsLog != null && eventsLog.length() > 0) {
+            try (FileInputStreamSource source = new FileInputStreamSource(eventsLog, true)) {
+                logger.testLog("event-logs", LogDataType.TF_EVENTS, source);
+            }
+        }
+        FileUtil.deleteFile(eventsLog);
     }
 
     /**
@@ -1199,12 +1392,53 @@ public class TestInvocation implements ITestInvocation {
                         ((DeviceManager) GlobalConfiguration.getDeviceManagerInstance())
                                 .executeGlobalAdbCommand("devices");
                 CLog.e("'adb devices' output:\n%s", adbOutput);
+
+                CommandResult fastbootResult =
+                        getRunUtil()
+                                .runTimedCmdSilently(
+                                        60000L,
+                                        GlobalConfiguration.getDeviceManagerInstance()
+                                                .getFastbootPath(),
+                                        "devices");
+                CLog.d("'fastboot devices' output:\n%s", fastbootResult.getStdout());
             }
         } else if (countVirtualLost > 0) {
             CLog.e("Counting as virtual_device_lost.");
             addInvocationMetric(InvocationMetricKey.VIRTUAL_DEVICE_LOST_DETECTED, countVirtualLost);
         }
         return devicesStates;
+    }
+
+    private void reportRecoveryLogs(List<ITestDevice> devices, ITestInvocationListener listener) {
+        for (ITestDevice device : devices) {
+            if (device == null) {
+                continue;
+            }
+            if (device.getIDevice() instanceof StubDevice) {
+                continue;
+            }
+            if (device.getDeviceState() != TestDeviceState.RECOVERY) {
+                continue;
+            }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.ATTEMPT_RECOVERY_LOG_COUNT, 1);
+            try {
+                // We need root to access the recovery logs so attempt to set it
+                device.enableAdbRoot();
+                File recovery_log = device.pullFile(RECOVERY_LOG_DEVICE_PATH);
+                if (recovery_log == null) {
+                    return;
+                }
+                try (FileInputStreamSource fis = new FileInputStreamSource(recovery_log)) {
+                    listener.testLog(
+                            String.format("recovery_log_%s.txt", device.getSerialNumber()),
+                            LogDataType.RECOVERY_MODE_LOG,
+                            fis);
+                }
+            } catch (DeviceNotAvailableException e) {
+                CLog.i("Device unavailable, can't pull recovery.log");
+            }
+        }
     }
 
     private void reportInvocationEnded(
@@ -1226,6 +1460,9 @@ public class TestInvocation implements ITestInvocation {
         try {
             // Copy the invocation metrics to the context
             ((InvocationContext) context).logInvocationMetrics();
+            if (mEventsLogger != null) {
+                logEventsFile(mEventsLogger.getLoggedEvents(), listener);
+            }
             listener.invocationEnded(elapsedTime);
         } finally {
             InvocationMetricLogger.clearInvocationMetrics();
@@ -1233,6 +1470,21 @@ public class TestInvocation implements ITestInvocation {
                 endHostLog.closeLog();
                 getLogRegistry().unregisterLogger();
             }
+        }
+        if (!config.getCommandOptions().reportInvocationComplete()) {
+            return;
+        }
+        if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
+            config.getCommandOptions().setReportInvocationComplete(false);
+            return;
+        }
+        // Re-init for invocationComplete logs
+        try {
+            endHostLog.init();
+            getLogRegistry().registerLogger(endHostLog);
+        } catch (IOException e) {
+            CLog.e(e);
+            config.getCommandOptions().setReportInvocationComplete(false);
         }
     }
 
@@ -1320,27 +1572,46 @@ public class TestInvocation implements ITestInvocation {
     }
 
     /** Measure the size of the work folder. */
-    private Long measureWorkFolderSize(IConfiguration config, File workFolder) {
-        if (workFolder == null) {
+    private Long measureWorkFolderSize(IConfiguration config, TestInformation testInfo) {
+        if (testInfo == null) {
+            return null;
+        }
+        File workFolder = testInfo.dependenciesFolder();
+        CLog.d("Measuring size of %s", workFolder);
+        if (workFolder == null || !workFolder.exists()) {
             return null;
         }
         // Only measure in parent process
-        if (config.getCommandOptions()
-                .getInvocationData()
-                .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)) {
+        if (isSubprocess(config)) {
+            CLog.d("Skip measuring size since we are in subprocess");
             return null;
         }
-        Path folder = workFolder.toPath();
-        try {
-            long size =
-                    Files.walk(folder)
-                            .filter(p -> p.toFile().isFile())
-                            .mapToLong(p -> p.toFile().length())
-                            .sum();
-            return size;
-        } catch (IOException | RuntimeException e) {
-            CLog.e(e);
+
+        Object obj = config.getConfigurationObject(ShardHelper.LAST_SHARD_DETECTOR);
+        if (obj != null) {
+            LastShardDetector lastShardDetector = (LastShardDetector) obj;
+            if (!lastShardDetector.isLastShardDone()) {
+                return null;
+            }
         }
-        return null;
+        return FileUtil.sizeOfDirectory(workFolder);
+    }
+
+    @Override
+    public ExitInformation getExitInfo() {
+        ExitInformation info = new ExitInformation();
+        info.mExitCode = this.mExitCode;
+        info.mStack = this.mExitStack;
+        return info;
+    }
+
+    /** Returns true if the invocation is currently within a subprocess scope. */
+    public static boolean isSubprocess(IConfiguration config) {
+        if (System.getenv(DelegatedInvocationExecution.DELEGATED_MODE_VAR) != null) {
+            return true;
+        }
+        return config.getCommandOptions()
+                .getInvocationData()
+                .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME);
     }
 }

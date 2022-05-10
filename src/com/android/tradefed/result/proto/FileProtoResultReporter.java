@@ -18,6 +18,7 @@ package com.android.tradefed.result.proto;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.proto.TestRecordProto.ChildReference;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.StreamUtil;
@@ -82,6 +83,15 @@ public class FileProtoResultReporter extends ProtoResultReporter {
         writeProto(finalRecord);
     }
 
+    @Override
+    protected ChildReference createModuleChildReference(TestRecord record) {
+        // Do not keep a copy of module record in invocation level
+        if (isPeriodicWriting()) {
+            return null;
+        }
+        return super.createModuleChildReference(record);
+    }
+
     /** Sets the file where to output the result. */
     public void setFileOutput(File output) {
         mOutputFile = output;
@@ -131,5 +141,17 @@ public class FileProtoResultReporter extends ProtoResultReporter {
 
     private void nextOutputFile() {
         mIndex++;
+    }
+
+    public void setOutputFile(File outputFile) {
+        mOutputFile = outputFile;
+    }
+
+    public File getOutputFile() {
+        return mOutputFile;
+    }
+
+    public void setDelimitedOutput(boolean delimitedOutput) {
+        mUseDelimitedApi = delimitedOutput;
     }
 }

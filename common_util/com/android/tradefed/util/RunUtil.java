@@ -19,6 +19,7 @@ package com.android.tradefed.util;
 import com.android.annotations.Nullable;
 import com.android.tradefed.command.CommandInterrupter;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.ErrorIdentifier;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -60,6 +61,7 @@ public class RunUtil implements IRunUtil {
     private Set<String> mUnsetEnvVariables = new HashSet<String>();
     private EnvPriority mEnvVariablePriority = EnvPriority.UNSET;
     private boolean mRedirectStderr = false;
+    private boolean mLinuxInterruptProcess = false;
 
     private final CommandInterrupter mInterrupter;
 
@@ -383,7 +385,7 @@ public class RunUtil implements IRunUtil {
         mInterrupter.checkInterrupted();
         RunnableNotifier runThread = new RunnableNotifier(runnable, logErrors);
         if (logErrors) {
-            if (timeout > 0l) {
+            if (timeout > 0L) {
                 CLog.d(
                         "Running command %s with timeout: %s",
                         runnable.getCommand(), TimeUtil.formatElapsedTime(timeout));
@@ -550,7 +552,13 @@ public class RunUtil implements IRunUtil {
     /** {@inheritDoc} */
     @Override
     public synchronized void interrupt(Thread thread, String message) {
-        mInterrupter.interrupt(thread, message);
+        interrupt(thread, message, null);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public synchronized void interrupt(Thread thread, String message, ErrorIdentifier errorId) {
+        mInterrupter.interrupt(thread, message, errorId);
         mInterrupter.checkInterrupted();
     }
 
@@ -608,6 +616,10 @@ public class RunUtil implements IRunUtil {
             }
             if (Strings.isNullOrEmpty(result.getStderr())) {
                 result.setStderr(StreamUtil.getStackTrace(e));
+            }
+            if (result.getExitCode() == null) {
+                // Set non-zero exit code
+                result.setExitCode(88);
             }
         }
     }
@@ -791,7 +803,19 @@ public class RunUtil implements IRunUtil {
                 if (mProcess == null || !mProcess.isAlive()) {
                     return;
                 }
-                CLog.d("Cancelling the process execution");
+                CLog.d("Cancelling the process execution.");
+                if (mLinuxInterruptProcess) {
+                    long pid = mProcess.pid();
+                    CommandResult killRes = RunUtil.getDefault().runTimedCmd(
+                            60000L, "kill", "-2", "" + pid);
+                    CLog.d("status=%s. stdout=%s . stderr=%s",
+                            killRes.getStatus(), killRes.getStdout(), killRes.getStderr());
+                    // Just give a little bit of time to terminate.
+                    if (mProcess.isAlive()) {
+                        RunUtil.getDefault().sleep(1000L);
+                    }
+                }
+                // Always destroy to ensure it terminates.
                 mProcess.destroy();
                 try {
                     // Only allow to continue if the Stdout has been read
@@ -849,8 +873,19 @@ public class RunUtil implements IRunUtil {
     @Override
     public void setEnvVariablePriority(EnvPriority priority) {
         if (this.equals(sDefaultInstance)) {
-            throw new UnsupportedOperationException("Cannot setWorkingDir on default RunUtil");
+            throw new UnsupportedOperationException(
+                    "Cannot setEnvVariablePriority on default RunUtil");
         }
         mEnvVariablePriority = priority;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setLinuxInterruptProcess(boolean interrupt) {
+        if (this.equals(sDefaultInstance)) {
+            throw new UnsupportedOperationException(
+                    "Cannot setLinuxInterruptProcess on default RunUtil");
+        }
+        mLinuxInterruptProcess = interrupt;
     }
 }

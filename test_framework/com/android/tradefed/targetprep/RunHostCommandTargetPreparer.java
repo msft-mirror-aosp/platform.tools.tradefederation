@@ -16,12 +16,14 @@
 
 package com.android.tradefed.targetprep;
 
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
-import com.android.tradefed.device.IDeviceManager;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.host.IHostOptions;
+import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -32,8 +34,8 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
-import com.android.tradefed.build.IBuildInfo;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -43,10 +45,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Target preparer to run arbitrary host commands before and after running the test. */
 @OptionClass(alias = "run-host-command")
@@ -164,12 +165,12 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
         replaceExtraFile(mSetUpCommands, buildInfo);
         try {
             if (mUseFlashingPermit) {
-                getDeviceManager().takeFlashingPermit();
+                getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
             }
             runCommandList(mSetUpCommands, device);
         } finally {
             if (mUseFlashingPermit) {
-                getDeviceManager().returnFlashingPermit();
+                getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
             }
         }
 
@@ -191,14 +192,14 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
         replaceExtraFile(mTearDownCommands, testInfo.getBuildInfo());
         try {
             if (mUseFlashingPermit) {
-                getDeviceManager().takeFlashingPermit();
+                getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
             }
             runCommandList(mTearDownCommands, device);
         } catch (TargetSetupError tse) {
             CLog.e(tse);
         } finally {
             if (mUseFlashingPermit) {
-                getDeviceManager().returnFlashingPermit();
+                getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
             }
         }
 
@@ -229,7 +230,10 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
             throws TargetSetupError {
         for (final String command : commands) {
             final CommandResult result =
-                    getRunUtil().runTimedCmd(mTimeout.toMillis(), command.split("\\s+"));
+                    getRunUtil()
+                            .runTimedCmd(
+                                    mTimeout.toMillis(),
+                                    QuotationAwareTokenizer.tokenizeLine(command));
             switch (result.getStatus()) {
                 case SUCCESS:
                     CLog.i(
@@ -272,7 +276,7 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
             Process process =
                     getRunUtil()
                             .runCmdInBackground(
-                                    Arrays.asList(command.split("\\s+")),
+                                    List.of(QuotationAwareTokenizer.tokenizeLine(command)),
                                     bgCommandLogs.get(i).getOutputStream());
             if (process == null) {
                 CLog.e("Failed to run command: %s", command);
@@ -337,10 +341,10 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
         return mRunUtil;
     }
 
-    /** @return {@link IDeviceManager} instance used for flashing permits */
+    /** @return {@link IHostOptions} instance used for flashing permits */
     @VisibleForTesting
-    IDeviceManager getDeviceManager() {
-        return GlobalConfiguration.getDeviceManagerInstance();
+    IHostOptions getHostOptions() {
+        return GlobalConfiguration.getInstance().getHostOptions();
     }
 
     /**

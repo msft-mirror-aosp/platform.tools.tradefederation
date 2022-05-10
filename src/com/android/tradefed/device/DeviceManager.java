@@ -18,7 +18,6 @@ package com.android.tradefed.device;
 
 import com.android.ddmlib.AndroidDebugBridge.IDeviceChangeListener;
 import com.android.ddmlib.DdmPreferences;
-import com.android.ddmlib.EmulatorConsole;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.IDevice.DeviceState;
 import com.android.ddmlib.Log.LogLevel;
@@ -67,7 +66,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -115,15 +113,6 @@ public class DeviceManager implements IDeviceManager {
      * <p>serial2 offline
      */
     private static final String DEVICE_LIST_PATTERN = ".*\n(%s)\\s+(device|offline|recovery).*";
-
-    private Semaphore mConcurrentFlashLock = null;
-
-    /**
-     * This serves both as an indication of whether the flash lock should be used, and as an
-     * indicator of whether or not the flash lock has been initialized -- if this is true
-     * and {@code mConcurrentFlashLock} is {@code null}, then it has not yet been initialized.
-     */
-    private Boolean mShouldCheckFlashLock = true;
 
     protected DeviceMonitorMultiplexer mDvcMon = new DeviceMonitorMultiplexer();
     private Boolean mDvcMonRunning = false;
@@ -507,10 +496,10 @@ public class DeviceManager implements IDeviceManager {
      */
     private void addEmulators() {
         // TODO currently this means 'additional emulators not already running'
-        int port = 5554;
+        // start at a high port to limit chances of potential port conflicts with existing emulators
+        int port = 5586;
         for (int i = 0; i < mNumEmulatorSupported; i++) {
-            addAvailableDevice(new StubDevice(String.format("%s-%d", EMULATOR_SERIAL_PREFIX, port),
-                    true));
+            addAvailableDevice(new EmulatorDevice(port));
             port += 2;
         }
     }
@@ -541,19 +530,45 @@ public class DeviceManager implements IDeviceManager {
     }
 
     private void addNetworkDevices() {
-        int index = mNumTcpDevicesSupported;
         for (String ip : getGlobalConfig().getHostOptions().getKnownTcpDeviceIpPool()) {
             addAvailableDevice(
-                    new TcpDevice(String.format("%s-%d", TCP_DEVICE_SERIAL_PREFIX, index), ip));
-            index++;
+                    new TcpDevice(String.format("%s-%s", TCP_DEVICE_SERIAL_PREFIX, ip), ip));
         }
 
-        index = mNumGceDevicesSupported;
         for (String ip : getGlobalConfig().getHostOptions().getKnownGceDeviceIpPool()) {
             addAvailableDevice(
                     new RemoteAvdIDevice(
-                            String.format("%s-%d", GCE_DEVICE_SERIAL_PREFIX, index), ip));
-            index++;
+                            String.format("%s-%s", GCE_DEVICE_SERIAL_PREFIX, ip), ip));
+        }
+
+        Map<String, List<String>> preconfigureHostUsers = new HashMap<>();
+        for (String preconfigureDevice :
+                getGlobalConfig().getHostOptions().getKnownPreconfigureVirtualDevicePool()) {
+            // Expect the preconfigureDevice string in a certain format($hostname:$user).
+            //  hostname.google.com:vsoc-1
+            String[] parts = preconfigureDevice.split(":", 2);
+            preconfigureHostUsers.putIfAbsent(parts[0], new ArrayList<>());
+            preconfigureHostUsers.get(parts[0]).add(parts[1]);
+        }
+        for (Map.Entry<String, List<String>> hostUsers : preconfigureHostUsers.entrySet()) {
+            for (int i = 0; i < hostUsers.getValue().size(); i++) {
+                addAvailableDevice(
+                        new RemoteAvdIDevice(
+                                String.format(
+                                        "%s-%s-%s",
+                                        GCE_DEVICE_SERIAL_PREFIX,
+                                        hostUsers.getKey(),
+                                        hostUsers.getValue().get(i)),
+                                hostUsers.getKey(),
+                                hostUsers.getValue().get(i),
+                                i));
+            }
+        }
+
+        for (String ip : getGlobalConfig().getHostOptions().getKnownRemoteDeviceIpPool()) {
+            addAvailableDevice(
+                    new VmRemoteDevice(
+                            String.format("%s-%s", REMOTE_DEVICE_SERIAL_PREFIX, ip), ip));
         }
     }
 
@@ -600,6 +615,22 @@ public class DeviceManager implements IDeviceManager {
 
         public boolean isFastbootD() {
             return mIsFastbootd;
+        }
+    }
+
+    /** Represents a 'stub' unlaunched emulator */
+    private static class EmulatorDevice extends StubDevice {
+
+        private final int mPort;
+
+        public EmulatorDevice(int port) {
+            super(String.format("emulator-%d", port), true);
+            mPort = port;
+        }
+
+        public EmulatorDevice(String serial) {
+            super(serial, true);
+            mPort = Integer.valueOf(serial.substring("emulator-".length()));
         }
     }
 
@@ -698,11 +729,8 @@ public class DeviceManager implements IDeviceManager {
                 // stop emulator output log
                 device.stopEmulatorOutput();
                 // emulator killed - return a stub device
-                // TODO: this is a bit of a hack. Consider having DeviceManager inject a StubDevice
-                // when deviceDisconnected event is received
-                ideviceToReturn = new StubDevice(ideviceToReturn.getSerialNumber(), true);
+                ideviceToReturn = device.getIDevice();
                 deviceState = FreeDeviceState.AVAILABLE;
-                managedDevice.setIDevice(ideviceToReturn);
             } catch (DeviceNotAvailableException e) {
                 CLog.e(e);
                 deviceState = FreeDeviceState.UNAVAILABLE;
@@ -779,7 +807,16 @@ public class DeviceManager implements IDeviceManager {
         synchronized (device) {
             if (!device.getAllocationState().equals(DeviceAllocationState.Available)) {
                 CommandResult result = new CommandResult(CommandStatus.FAILED);
-                result.setStderr("The device is not available to execute the command");
+                result.setStderr(
+                        String.format(
+                                "The device '%s' is not available to execute the command", serial));
+                return result;
+            }
+            if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                CommandResult result = new CommandResult(CommandStatus.FAILED);
+                result.setStderr(
+                        String.format(
+                                "The device '%s' is not online to execute the command", serial));
                 return result;
             }
             try {
@@ -799,9 +836,10 @@ public class DeviceManager implements IDeviceManager {
     public void launchEmulator(ITestDevice device, long bootTimeout, IRunUtil runUtil,
             List<String> emulatorArgs)
             throws DeviceNotAvailableException {
-        if (!device.getIDevice().isEmulator()) {
-            throw new IllegalStateException(String.format("Device %s is not an emulator",
-                    device.getSerialNumber()));
+        if (!(device.getIDevice() instanceof EmulatorDevice)) {
+            throw new IllegalStateException(
+                    String.format(
+                            "Device %s is not stub emulator device", device.getSerialNumber()));
         }
         if (!device.getDeviceState().equals(TestDeviceState.NOT_AVAILABLE)) {
             throw new IllegalStateException(String.format(
@@ -809,6 +847,9 @@ public class DeviceManager implements IDeviceManager {
                     device.getDeviceState(), TestDeviceState.NOT_AVAILABLE));
         }
         List<String> fullArgs = new ArrayList<String>(emulatorArgs);
+        EmulatorDevice emulatorDevice = (EmulatorDevice) device.getIDevice();
+        fullArgs.add("-port");
+        fullArgs.add(Integer.toString(emulatorDevice.mPort));
 
         try {
             CLog.i("launching emulator with %s", fullArgs.toString());
@@ -850,28 +891,33 @@ public class DeviceManager implements IDeviceManager {
      */
     @Override
     public void killEmulator(ITestDevice device) throws DeviceNotAvailableException {
-        EmulatorConsole console = EmulatorConsole.getConsole(device.getIDevice());
-        if (console != null) {
-            console.kill();
+        try {
+            device.executeAdbCommand("emu", "kill");
+
             // check and wait for device to become not avail
-            device.waitForDeviceNotAvailable(5 * 1000);
+            device.waitForDeviceNotAvailable(10 * 1000);
             // lets ensure process is killed too - fall through
-        } else {
-            CLog.w("Could not get emulator console for %s", device.getSerialNumber());
-        }
-        // lets try killing the process
-        Process emulatorProcess = ((IManagedTestDevice) device).getEmulatorProcess();
-        if (emulatorProcess != null) {
-            emulatorProcess.destroy();
-            if (emulatorProcess.isAlive()) {
-                CLog.w("Emulator process still running after destroy for %s",
-                        device.getSerialNumber());
-                forceKillProcess(emulatorProcess, device.getSerialNumber());
+
+            // lets try killing the process
+            Process emulatorProcess = ((IManagedTestDevice) device).getEmulatorProcess();
+            if (emulatorProcess != null) {
+                emulatorProcess.destroy();
+                if (emulatorProcess.isAlive()) {
+                    CLog.w(
+                            "Emulator process still running after destroy for %s",
+                            device.getSerialNumber());
+                    forceKillProcess(emulatorProcess, device.getSerialNumber());
+                }
             }
-        }
-        if (!device.waitForDeviceNotAvailable(20 * 1000)) {
-            throw new DeviceNotAvailableException(String.format("Failed to kill emulator %s",
-                    device.getSerialNumber()), device.getSerialNumber());
+            if (!device.waitForDeviceNotAvailable(20 * 1000)) {
+                throw new DeviceNotAvailableException(
+                        String.format("Failed to kill emulator %s", device.getSerialNumber()),
+                        device.getSerialNumber());
+            }
+        } finally {
+            // TODO: a more robust solution might be to have the DeviceManager
+            //  do this when deviceDisconnected event is received
+            ((IManagedTestDevice) device).setIDevice(new EmulatorDevice(device.getSerialNumber()));
         }
     }
 
@@ -1048,6 +1094,7 @@ public class DeviceManager implements IDeviceManager {
     @Override
     public synchronized void terminateDeviceMonitor() {
         mDvcMon.stop();
+        mDvcMonRunning = false;
     }
 
     /** {@inheritDoc} */
@@ -1567,86 +1614,6 @@ public class DeviceManager implements IDeviceManager {
             return "fastboot";
         }
         return mFastbootFile.getAbsolutePath();
-    }
-
-    /**
-     * Set the state of the concurrent flash limit implementation
-     *
-     * Exposed for unit testing
-     */
-    void setConcurrentFlashSettings(Semaphore flashLock, boolean shouldCheck) {
-        synchronized (mShouldCheckFlashLock) {
-            mConcurrentFlashLock = flashLock;
-            mShouldCheckFlashLock = shouldCheck;
-        }
-    }
-
-    Semaphore getConcurrentFlashLock() {
-        return mConcurrentFlashLock;
-    }
-
-    /** Initialize the concurrent flash lock semaphore **/
-    private void initConcurrentFlashLock() {
-        if (!mShouldCheckFlashLock) return;
-        // The logic below is to avoid multi-thread race conditions while initializing
-        // mConcurrentFlashLock when we hit this condition.
-        if (mConcurrentFlashLock == null) {
-            // null with mShouldCheckFlashLock == true means initialization hasn't been done yet
-            synchronized(mShouldCheckFlashLock) {
-                // Check all state again, since another thread might have gotten here first
-                if (!mShouldCheckFlashLock) return;
-
-                IHostOptions hostOptions = getHostOptions();
-                Integer concurrentFlashingLimit = hostOptions.getConcurrentFlasherLimit();
-
-                if (concurrentFlashingLimit == null) {
-                    mShouldCheckFlashLock = false;
-                    return;
-                }
-
-                if (mConcurrentFlashLock == null) {
-                    mConcurrentFlashLock = new Semaphore(concurrentFlashingLimit, true /* fair */);
-                }
-            }
-        }
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public int getAvailableFlashingPermits() {
-        initConcurrentFlashLock();
-        if (mConcurrentFlashLock != null) {
-            return mConcurrentFlashLock.availablePermits();
-        }
-        IHostOptions hostOptions = getHostOptions();
-        if (hostOptions.getConcurrentFlasherLimit() != null) {
-            return hostOptions.getConcurrentFlasherLimit();
-        }
-        return Integer.MAX_VALUE;
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public void takeFlashingPermit() {
-        initConcurrentFlashLock();
-        if (!mShouldCheckFlashLock) return;
-
-        IHostOptions hostOptions = getHostOptions();
-        Integer concurrentFlashingLimit = hostOptions.getConcurrentFlasherLimit();
-        CLog.i(
-                "Requesting a flashing permit out of the max limit of %s. Current queue "
-                        + "length: %s",
-                concurrentFlashingLimit,
-                mConcurrentFlashLock.getQueueLength());
-        mConcurrentFlashLock.acquireUninterruptibly();
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public void returnFlashingPermit() {
-        if (mConcurrentFlashLock != null) {
-            mConcurrentFlashLock.release();
-        }
     }
 
     /** {@inheritDoc} */

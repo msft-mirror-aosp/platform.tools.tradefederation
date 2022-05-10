@@ -113,7 +113,9 @@ public class FakeTest implements IDeviceTest, IRemoteTest {
      * {@code null} to {@code defValue}.
      */
     int toIntOrDefault(String number, int defValue) throws IllegalArgumentException {
-        if (number == null) return defValue;
+        if (number == null) {
+            return defValue;
+        }
         try {
             return Integer.parseInt(number);
         } catch (NumberFormatException e) {

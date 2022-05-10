@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.zip.DataFormatException;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.Inflater;
@@ -70,7 +71,11 @@ public class ZipUtil {
      * @return {@code false} if the file appears to be corrupt; {@code true} otherwise
      */
     public static boolean isZipFileValid(File zipFile, boolean thorough) throws IOException {
-        if (zipFile != null && !zipFile.exists()) {
+        if (zipFile == null) {
+            CLog.d("isZipFileValid received a null file reference.");
+            return false;
+        }
+        if (!zipFile.exists()) {
             CLog.d("Zip file does not exist: %s", zipFile.getAbsolutePath());
             return false;
         }
@@ -105,13 +110,33 @@ public class ZipUtil {
     public static void extractZip(ZipFile zipFile, File destDir) throws IOException {
         Enumeration<? extends ZipEntry> entries = zipFile.entries();
         while (entries.hasMoreElements()) {
-
             ZipEntry entry = entries.nextElement();
             File childFile = new File(destDir, entry.getName());
             childFile.getParentFile().mkdirs();
             if (entry.isDirectory()) {
-                continue;
+                childFile.mkdirs();
             } else {
+                FileUtil.writeToFile(zipFile.getInputStream(entry), childFile);
+            }
+        }
+    }
+
+    /**
+     * Utility method to extract contents of zip file into given directory
+     *
+     * @param zipFile the {@link ZipFile} to extract
+     * @param destDir the local dir to extract file to
+     * @param shouldExtract the predicate to dermine if an ZipEntry should be extracted
+     * @throws IOException if failed to extract file
+     */
+    public static void extractZip(ZipFile zipFile, File destDir, Predicate<ZipEntry> shouldExtract)
+            throws IOException {
+        Enumeration<? extends ZipEntry> entries = zipFile.entries();
+        while (entries.hasMoreElements()) {
+            ZipEntry entry = entries.nextElement();
+            File childFile = new File(destDir, entry.getName());
+            childFile.getParentFile().mkdirs();
+            if (!entry.isDirectory() && shouldExtract.test(entry)) {
                 FileUtil.writeToFile(zipFile.getInputStream(entry), childFile);
             }
         }
@@ -532,10 +557,10 @@ public class ZipUtil {
             }
 
             File zipFile = targetFile;
-            if (zipEntry.getCompressionMethod() != COMPRESSION_METHOD_STORED)
+            if (zipEntry.getCompressionMethod() != COMPRESSION_METHOD_STORED) {
                 // Create a temp file to store the compressed data, then unzip it.
                 zipFile = FileUtil.createTempFile(PARTIAL_ZIP_DATA, ZIP_EXTENSION);
-            else {
+            } else {
                 // The file is not compressed, stream it directly to the target.
                 zipFile.getParentFile().mkdirs();
                 zipFile.createNewFile();

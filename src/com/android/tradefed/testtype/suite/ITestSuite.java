@@ -41,8 +41,11 @@ import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.invoker.shard.token.ITokenRequest;
 import com.android.tradefed.invoker.shard.token.TokenProperty;
 import com.android.tradefed.log.ITestLogger;
@@ -57,6 +60,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryStrategy;
+import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.suite.checker.ISystemStatusCheckerReceiver;
 import com.android.tradefed.suite.checker.StatusCheckerResult;
@@ -81,6 +85,7 @@ import com.android.tradefed.util.TimeUtil;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
+import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -137,7 +142,6 @@ public abstract class ITestSuite
     public static final String MODULE_METADATA_INCLUDE_FILTER = "module-metadata-include-filter";
     public static final String MODULE_METADATA_EXCLUDE_FILTER = "module-metadata-exclude-filter";
     public static final String RANDOM_SEED = "random-seed";
-    public static final String REBOOT_BEFORE_TEST = "reboot-before-test";
 
     private static final String PRODUCT_CPU_ABI_KEY = "ro.product.cpu.abi";
 
@@ -182,12 +186,6 @@ public abstract class ITestSuite
     // Options for suite runner behavior
     @Option(name = "reboot-per-module", description = "Reboot the device before every module run.")
     private boolean mRebootPerModule = false;
-
-    @Option(
-        name = REBOOT_BEFORE_TEST,
-        description = "Reboot the device before the test suite starts."
-    )
-    private boolean mRebootBeforeTest = false;
 
     @Option(name = "skip-all-system-status-check",
             description = "Whether all system status check between modules should be skipped")
@@ -309,16 +307,6 @@ public abstract class ITestSuite
     /** @deprecated to be deleted when next version is deployed */
     @Deprecated
     @Option(
-        name = "max-testcase-run-count",
-        description =
-                "If the IRemoteTest can have its testcases run multiple times, "
-                        + "the max number of runs for each testcase."
-    )
-    private int mMaxRunLimit = 1;
-
-    /** @deprecated to be deleted when next version is deployed */
-    @Deprecated
-    @Option(
         name = "retry-strategy",
         description =
                 "The retry strategy to be used when re-running some tests with "
@@ -333,6 +321,22 @@ public abstract class ITestSuite
     )
     private boolean mMergeAttempts = true;
     // end [Options relate to module retry and intra-module retry]
+
+    @Option(
+            name = "partial-download-via-feature",
+            description = "Feature flag to test partial download via feature service.")
+    private boolean mStageArtifactsViaFeature = true;
+
+    @Option(
+            name = "multi-devices-modules",
+            description = "Running strategy for modules that require multiple devices.")
+    private MultiDeviceModuleStrategy mMultiDevicesStrategy = MultiDeviceModuleStrategy.EXCLUDE_ALL;
+
+    public enum MultiDeviceModuleStrategy {
+        EXCLUDE_ALL,
+        RUN,
+        ONLY_MULTI_DEVICES
+    }
 
     private ITestDevice mDevice;
     private IBuildInfo mBuildInfo;
@@ -447,6 +451,22 @@ public abstract class ITestSuite
                 // execution.
                 continue;
             }
+            switch (mMultiDevicesStrategy) {
+                case EXCLUDE_ALL:
+                    if (config.getValue().getDeviceConfig().size() > 1) {
+                        // Exclude multi-devices configs
+                        continue;
+                    }
+                    break;
+                case ONLY_MULTI_DEVICES:
+                    if (config.getValue().getDeviceConfig().size() == 1) {
+                        // Exclude single devices configs
+                        continue;
+                    }
+                    break;
+                default:
+                    break;
+            }
             filterPreparers(config.getValue(), mAllowedPreparers);
 
             // Copy the CoverageOptions from the main configuration to the module configuration.
@@ -470,6 +490,9 @@ public abstract class ITestSuite
 
     /** Helper to download all artifacts for the given modules. */
     private void stageTestArtifacts(ITestDevice device, Set<String> modules) {
+        if (mBuildInfo.getRemoteFiles().isEmpty()) {
+            return;
+        }
         CLog.i(String.format("Start to stage test artifacts for %d modules.", modules.size()));
         long startTime = System.currentTimeMillis();
         // Include the file if its path contains a folder name matching any of the module.
@@ -480,25 +503,52 @@ public abstract class ITestSuite
         List<String> includeFilters = Arrays.asList(moduleRegex);
         // Ignore config file as it's part of config zip artifact that's staged already.
         List<String> excludeFilters = Arrays.asList("[.]config$");
-        mDynamicResolver.setDevice(device);
-        mDynamicResolver.addExtraArgs(
-                mMainConfiguration.getCommandOptions().getDynamicDownloadArgs());
-        for (File remoteFile : mBuildInfo.getRemoteFiles()) {
-            try {
-                mDynamicResolver.resolvePartialDownloadZip(
-                        getTestsDir(), remoteFile.toString(), includeFilters, excludeFilters);
-            } catch (BuildRetrievalError | FileNotFoundException e) {
-                String message =
-                        String.format(
-                                "Failed to download partial zip from %s for modules: %s",
-                                remoteFile, String.join(", ", modules));
-                CLog.e(message);
-                CLog.e(e);
-                if (e instanceof IHarnessException) {
-                    throw new HarnessRuntimeException(message, (IHarnessException) e);
+        if (mStageArtifactsViaFeature) {
+            try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+                Map<String, String> args = new HashMap<>();
+                args.put(ResolvePartialDownload.DESTINATION_DIR, getTestsDir().getAbsolutePath());
+                args.put(ResolvePartialDownload.INCLUDE_FILTERS, String.join(";", includeFilters));
+                args.put(ResolvePartialDownload.EXCLUDE_FILTERS, String.join(";", excludeFilters));
+                // Pass the remote paths
+                String remotePaths =
+                        mBuildInfo.getRemoteFiles().stream()
+                                .map(p -> p.toString())
+                                .collect(Collectors.joining(";"));
+                args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+
+                FeatureResponse rep =
+                        client.triggerFeature(
+                                ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);
+                if (rep.hasErrorInfo()) {
+                    throw new HarnessRuntimeException(
+                            rep.getErrorInfo().getErrorTrace(),
+                            InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
                 }
+            } catch (FileNotFoundException e) {
                 throw new HarnessRuntimeException(
-                        message, e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+                        e.getMessage(), e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+            }
+        } else {
+            mDynamicResolver.setDevice(device);
+            mDynamicResolver.addExtraArgs(
+                    mMainConfiguration.getCommandOptions().getDynamicDownloadArgs());
+            for (File remoteFile : mBuildInfo.getRemoteFiles()) {
+                try {
+                    mDynamicResolver.resolvePartialDownloadZip(
+                            getTestsDir(), remoteFile.toString(), includeFilters, excludeFilters);
+                } catch (BuildRetrievalError | FileNotFoundException e) {
+                    String message =
+                            String.format(
+                                    "Failed to download partial zip from %s for modules: %s",
+                                    remoteFile, String.join(", ", modules));
+                    CLog.e(message);
+                    CLog.e(e);
+                    if (e instanceof IHarnessException) {
+                        throw new HarnessRuntimeException(message, (IHarnessException) e);
+                    }
+                    throw new HarnessRuntimeException(
+                            message, e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+                }
             }
         }
         long elapsedTime = System.currentTimeMillis() - startTime;
@@ -633,8 +683,9 @@ public abstract class ITestSuite
         for (IDeviceConfiguration holder : config.getDeviceConfig()) {
             List<ITargetPreparer> preparers = new ArrayList<>();
             for (ITargetPreparer preparer : holder.getTargetPreparers()) {
-                if (allowedSuitePreparers.contains(preparer.getClass().getCanonicalName()))
+                if (allowedSuitePreparers.contains(preparer.getClass().getCanonicalName())) {
                     preparers.add(preparer);
+                }
             }
             res.put(holder.getDeviceName(), preparers);
         }
@@ -673,18 +724,6 @@ public abstract class ITestSuite
             }
         }
 
-        // If requested reboot each device before the testing starts.
-        if (mRebootBeforeTest) {
-            for (ITestDevice device : mContext.getDevices()) {
-                if (!(device.getIDevice() instanceof StubDevice)) {
-                    CLog.d(
-                            "Rebooting device '%s' before test starts as requested.",
-                            device.getSerialNumber());
-                    mDevice.reboot();
-                }
-            }
-        }
-
         /** Setup a special listener to take actions on test failures. */
         TestFailureListener failureListener =
                 new TestFailureListener(
@@ -706,6 +745,10 @@ public abstract class ITestSuite
         try {
             while (!mRunModules.isEmpty()) {
                 ModuleDefinition module = mRunModules.remove(0);
+
+                if (!shouldModuleRun(module)) {
+                    continue;
+                }
                 // Before running the module we ensure it has tests at this point or skip completely
                 // to avoid running SystemCheckers and preparation for nothing.
                 if (module.hasTests()) {
@@ -718,6 +761,14 @@ public abstract class ITestSuite
                             .addAllocatedDevice(deviceName, mContext.getDevice(deviceName));
                     module.getModuleInvocationContext()
                             .addDeviceBuildInfo(deviceName, mContext.getBuildInfo(deviceName));
+                }
+                // Add isolation status before module start for reporting
+                if (!IsolationGrade.NOT_ISOLATED.equals(
+                        CurrentInvocation.moduleCurrentIsolation())) {
+                    module.getModuleInvocationContext()
+                            .addInvocationAttribute(
+                                    ModuleDefinition.MODULE_ISOLATED,
+                                    CurrentInvocation.moduleCurrentIsolation().toString());
                 }
                 listener.testModuleStarted(module.getModuleInvocationContext());
                 mModuleInProgress = module;
@@ -736,6 +787,8 @@ public abstract class ITestSuite
                     // execution
                     listener.testModuleEnded();
                     mModuleInProgress = null;
+                    // Following modules will not be isolated if no action is taken
+                    CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
                 }
                 // Module isolation routine
                 moduleIsolation(mContext, listener);
@@ -836,6 +889,10 @@ public abstract class ITestSuite
         module.setMergeAttemps(mMergeAttempts);
         // Pass the retry decision to be used.
         module.setRetryDecision(decision);
+        // Restore the config, as the setter might have override it with module config.
+        if (decision instanceof IConfigurationReceiver) {
+            ((IConfigurationReceiver) decision).setConfiguration(mMainConfiguration);
+        }
 
         module.setEnableDynamicDownload(mEnableDynamicDownload);
         module.transferSuiteLevelOptions(mMainConfiguration);
@@ -867,6 +924,8 @@ public abstract class ITestSuite
         Map<String, String> failures = new LinkedHashMap<>();
         boolean bugreportNeeded = false;
         for (ISystemStatusChecker checker : checkers) {
+            // Track usage of the checker
+            TfObjectTracker.countWithParents(checker.getClass());
             // Check if the status checker should be skipped.
             if (mSystemStatusCheckBlacklist.contains(checker.getClass().getName())) {
                 CLog.d(
@@ -1173,7 +1232,7 @@ public abstract class ITestSuite
                     TimeUtil.formatElapsedTime(mDirectModule.getRuntimeHint()));
             return mDirectModule.getRuntimeHint();
         }
-        return 0l;
+        return 0L;
     }
 
     /** {@inheritDoc} */
@@ -1238,11 +1297,11 @@ public abstract class ITestSuite
     }
 
     @Override
-    public Set<TokenProperty> getRequiredTokens() {
+    public Set<TokenProperty> getRequiredTokens(TestInformation testInfo) {
         if (mDirectModule == null) {
             return null;
         }
-        return mDirectModule.getRequiredTokens();
+        return mDirectModule.getRequiredTokens(testInfo);
     }
 
     /**
@@ -1374,11 +1433,6 @@ public abstract class ITestSuite
         return mInjector;
     }
 
-    /** Sets reboot-before-test to true. */
-    public final void enableRebootBeforeTest() {
-        mRebootBeforeTest = true;
-    }
-
     /**
      * Apply the metadata filter to the config and see if the config should run.
      *
@@ -1496,5 +1550,13 @@ public abstract class ITestSuite
 
     public final void setAbis(Set<IAbi> abis) {
         mAbis.addAll(abis);
+    }
+
+    protected boolean shouldModuleRun(ModuleDefinition module) {
+        return true;
+    }
+
+    protected void setMultiDeviceStrategy(MultiDeviceModuleStrategy strategy) {
+        mMultiDevicesStrategy = strategy;
     }
 }
