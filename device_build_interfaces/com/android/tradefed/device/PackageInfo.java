@@ -39,6 +39,7 @@ public class PackageInfo {
     private boolean mIsUpdatedSystemApp;
     private boolean mIsPersistentApp;
     private Map<String, String> mAttributes = new HashMap<String, String>();
+    private Map<Integer, String> mPerUserFirstInstallTime = new HashMap<>();
 
     PackageInfo(String pkgName) {
         mPackageName = pkgName;
@@ -81,6 +82,14 @@ public class PackageInfo {
         return mAttributes.get("versionName");
     }
 
+    /**
+     * Returns the version name of the application. Note: this will return <code>null</code> if
+     * 'versionCode' attribute was not found
+     */
+    public String getVersionCode() {
+        return mAttributes.get("versionCode");
+    }
+
     /** Returns where the package is located in the filesystem. */
     public String getCodePath() {
         return mAttributes.get("codePath");
@@ -121,5 +130,15 @@ public class PackageInfo {
         }
         return false;
     }
-}
 
+    public void addPerUserAttribute(int userId, String attr, String value) {
+        if (!attr.equals("firstInstallTime")) {
+            return;
+        }
+        mPerUserFirstInstallTime.put(userId, value);
+    }
+
+    public String getFirstInstallTime(int userId) {
+        return mPerUserFirstInstallTime.get(userId);
+    }
+}

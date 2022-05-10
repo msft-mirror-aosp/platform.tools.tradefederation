@@ -16,7 +16,6 @@
 package com.android.tradefed.testtype.python;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.ddmlib.Log;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -42,13 +41,15 @@ import com.android.tradefed.util.AdbUtils;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.IRunUtil.EnvPriority;
 import com.android.tradefed.util.RunUtil;
-import com.android.tradefed.util.SubprocessTestResultsParser;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -59,6 +60,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Host test meant to run a python binary file from the Android Build system (Soong)
@@ -72,8 +74,6 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
 
     protected static final String ANDROID_SERIAL_VAR = "ANDROID_SERIAL";
     protected static final String LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
-    protected static final String PATH_VAR = "PATH";
-    protected static final long PATH_TIMEOUT_MS = 60000L;
 
     @VisibleForTesting static final String USE_TEST_OUTPUT_FILE_OPTION = "use-test-output-file";
     static final String TEST_OUTPUT_FILE_FLAG = "test-output-file";
@@ -193,16 +193,15 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
         if (testDir == null || !testDir.exists()) {
             testDir = mTestInfo.executionFiles().get(FilesKey.TESTS_DIRECTORY);
         }
+        List<String> ldLibraryPath = new ArrayList<>();
         if (testDir != null && testDir.exists()) {
-            File libDir = new File(testDir, "lib");
-            List<String> ldLibraryPath = new ArrayList<>();
-            if (libDir.exists()) {
-                ldLibraryPath.add(libDir.getAbsolutePath());
-            }
-
-            File lib64Dir = new File(testDir, "lib64");
-            if (lib64Dir.exists()) {
-                ldLibraryPath.add(lib64Dir.getAbsolutePath());
+            List<String> libPaths =
+                    Arrays.asList("lib", "lib64", "host/testcases/lib", "host/testcases/lib64");
+            for (String path : libPaths) {
+                File libDir = new File(testDir, path);
+                if (libDir.exists()) {
+                    ldLibraryPath.add(libDir.getAbsolutePath());
+                }
             }
             if (!ldLibraryPath.isEmpty()) {
                 mLdLibraryPath = Joiner.on(":").join(ldLibraryPath);
@@ -216,8 +215,16 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
                         pyFile.getAbsolutePath());
                 continue;
             }
+            // Complete the LD_LIBRARY_PATH with possible libs
+            String path = mLdLibraryPath;
+            List<String> paths = findAllSubdir(pyFile.getParentFile(), ldLibraryPath);
+            if (mLdLibraryPath != null) {
+                paths.add(0, mLdLibraryPath);
+            }
+            mLdLibraryPath = Joiner.on(":").join(paths);
             pyFile.setExecutable(true);
             runSinglePythonFile(listener, testInfo, pyFile);
+            mLdLibraryPath = path;
         }
     }
 
@@ -248,6 +255,18 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
             commandLine.add("-s");
             commandLine.add(mTestInfo.getDevice().getSerialNumber());
         }
+        // Set the process working dir as the directory of the main binary
+        getRunUtil().setWorkingDir(pyFile.getParentFile());
+        // Set the parent dir on the PATH
+        String separator = System.getProperty("path.separator");
+        List<String> paths = new ArrayList<>();
+        // Bundle binaries / dependencies have priorities over existing PATH
+        paths.addAll(findAllSubdir(pyFile.getParentFile(), new ArrayList<>()));
+        paths.add(System.getenv("PATH"));
+        String path = paths.stream().distinct().collect(Collectors.joining(separator));
+        CLog.d("Using updated $PATH: %s", path);
+        getRunUtil().setEnvVariablePriority(EnvPriority.SET);
+        getRunUtil().setEnvVariable("PATH", path);
 
         if (mLdLibraryPath != null) {
             getRunUtil().setEnvVariable(LD_LIBRARY_PATH, mLdLibraryPath);
@@ -272,71 +291,63 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
         AdbUtils.updateAdb(testInfo, getRunUtil(), getAdbPath());
         // Add all the other options
         commandLine.addAll(mTestOptions);
-        CommandResult result =
-                getRunUtil().runTimedCmd(mTestTimeout, commandLine.toArray(new String[0]));
+
+        // Prepare the parser if needed
         String runName = pyFile.getName();
         PythonForwarder forwarder = new PythonForwarder(listener, runName);
-        if (result.getStdout() != null) {
-            CLog.logAndDisplay(Log.LogLevel.INFO, "\nstdout:\n%s", result.getStdout());
-            try (InputStreamSource data =
-                    new ByteArrayInputStreamSource(result.getStdout().getBytes())) {
-                listener.testLog(
-                        String.format(PYTHON_LOG_STDOUT_FORMAT, runName), LogDataType.TEXT, data);
-            }
+        ITestInvocationListener receiver = forwarder;
+        if (mTestCaseTimeout.toMillis() > 0L) {
+            receiver =
+                    new TestTimeoutEnforcer(
+                            mTestCaseTimeout.toMillis(), TimeUnit.MILLISECONDS, receiver);
         }
-        if (result.getStderr() != null) {
-            CLog.logAndDisplay(Log.LogLevel.INFO, "\nstderr:\n%s", result.getStderr());
-        }
+        PythonUnitTestResultParser pythonParser =
+                new PythonUnitTestResultParser(
+                        Arrays.asList(receiver), "python-run", mIncludeFilters, mExcludeFilters);
+
+        CommandResult result = null;
         File stderrFile = null;
         try {
-            // Note that we still log stderr when parsing results from a test-written output file
-            // since it most likely contains useful debugging information.
             stderrFile = FileUtil.createTempFile("python-res", ".txt");
-            FileUtil.writeToFile(result.getStderr(), stderrFile);
-            testLogFile(listener, String.format(PYTHON_LOG_STDERR_FORMAT, runName), stderrFile);
+            if (mUseTestOutputFile) {
+                result = getRunUtil().runTimedCmd(mTestTimeout, commandLine.toArray(new String[0]));
+            } else {
+                try (FileOutputStream fileOutputParser = new FileOutputStream(stderrFile)) {
+                    result =
+                            getRunUtil()
+                                    .runTimedCmd(
+                                            mTestTimeout,
+                                            null,
+                                            fileOutputParser,
+                                            commandLine.toArray(new String[0]));
+                    fileOutputParser.flush();
+                }
+            }
+
+            if (!Strings.isNullOrEmpty(result.getStdout())) {
+                CLog.i("\nstdout:\n%s", result.getStdout());
+                try (InputStreamSource data =
+                        new ByteArrayInputStreamSource(result.getStdout().getBytes())) {
+                    listener.testLog(
+                            String.format(PYTHON_LOG_STDOUT_FORMAT, runName),
+                            LogDataType.TEXT,
+                            data);
+                }
+            }
+            if (!Strings.isNullOrEmpty(result.getStderr())) {
+                CLog.i("\nstderr:\n%s", result.getStderr());
+            }
 
             File testOutputFile = stderrFile;
-            String testOutput = result.getStderr();
-
             if (mUseTestOutputFile) {
                 testOutputFile = tempTestOutputFile;
-                // This assumes that the output file is encoded using the same charset as the
-                // currently configured default.
-                testOutput = FileUtil.readStringFromFile(testOutputFile);
                 testLogFile(
                         listener,
                         String.format(PYTHON_LOG_TEST_OUTPUT_FORMAT, runName),
                         testOutputFile);
             }
-
-            // If it doesn't have the std output TEST_RUN_STARTED, use regular parser.
-            if (!testOutput.contains("TEST_RUN_STARTED")) {
-                ITestInvocationListener receiver = forwarder;
-                if (mTestCaseTimeout.toMillis() > 0L) {
-                    receiver =
-                            new TestTimeoutEnforcer(
-                                    mTestCaseTimeout.toMillis(), TimeUnit.MILLISECONDS, receiver);
-                }
-                // Attempt to parse the pure python output
-                PythonUnitTestResultParser pythonParser =
-                        new PythonUnitTestResultParser(
-                                Arrays.asList(receiver),
-                                "python-run",
-                                mIncludeFilters,
-                                mExcludeFilters);
-                pythonParser.processNewLines(testOutput.split("\n"));
-            } else {
-                if (!mIncludeFilters.isEmpty() || !mExcludeFilters.isEmpty()) {
-                    throw new RuntimeException(
-                            "Non-unittest python test does not support using filters in "
-                                    + "PythonBinaryHostTest. Please use test runner "
-                                    + "ExecutableHostTest instead.");
-                }
-                try (SubprocessTestResultsParser parser =
-                        new SubprocessTestResultsParser(forwarder, mTestInfo.getContext())) {
-                    parser.parseFile(testOutputFile);
-                }
-            }
+            String testOutput = FileUtil.readStringFromFile(testOutputFile);
+            pythonParser.processNewLines(testOutput.split("\n"));
         } catch (RuntimeException e) {
             StringBuilder message = new StringBuilder();
             message.append(
@@ -360,6 +371,19 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
         } catch (IOException e) {
             throw new RuntimeException(e);
         } finally {
+            if (stderrFile != null) {
+                // Note that we still log stderr when parsing results from a test-written output
+                // file since it most likely contains useful debugging information.
+                try {
+                    if (mUseTestOutputFile) {
+                        FileUtil.writeToFile(result.getStderr(), stderrFile);
+                    }
+                    testLogFile(
+                            listener, String.format(PYTHON_LOG_STDERR_FORMAT, runName), stderrFile);
+                } catch (IOException e) {
+                    CLog.e(e);
+                }
+            }
             FileUtil.deleteFile(stderrFile);
             FileUtil.deleteFile(tempTestOutputFile);
         }
@@ -376,6 +400,22 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
     @VisibleForTesting
     String getAdbPath() {
         return GlobalConfiguration.getDeviceManagerInstance().getAdbPath();
+    }
+
+    private List<String> findAllSubdir(File parentDir, List<String> knownPaths) {
+        List<String> subDir = new ArrayList<>();
+        subDir.add(parentDir.getAbsolutePath());
+        if (parentDir.listFiles() == null) {
+            return subDir;
+        }
+        for (File child : parentDir.listFiles()) {
+            if (child != null
+                    && child.isDirectory()
+                    && !knownPaths.contains(child.getAbsolutePath())) {
+                subDir.addAll(findAllSubdir(child, knownPaths));
+            }
+        }
+        return subDir;
     }
 
     private void reportFailure(

@@ -16,8 +16,8 @@
 package com.android.tradefed.testtype;
 
 import com.android.ddmlib.IShellOutputReceiver;
-import com.android.ddmlib.Log;
 import com.android.ddmlib.MultiLineReceiver;
+import com.android.tradefed.log.LogUtil.CLog;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -38,8 +38,6 @@ import java.util.regex.Pattern;
 * where 'X' refers to the iteration number
 */
 public class NativeStressTestParser extends MultiLineReceiver {
-
-    private final static String LOG_TAG = "NativeStressTestParser";
 
     private final static Pattern ITERATION_COMPLETE_PATTERN = Pattern.compile(
             "^====\\s*Completed\\s*pass:\\s*(\\d+)");
@@ -77,11 +75,11 @@ public class NativeStressTestParser extends MultiLineReceiver {
     private void parseIterationValue(String line, String iterationString) {
         try {
             int currentIteration = Integer.parseInt(iterationString);
-            Log.i(LOG_TAG, String.format("%s: pass %d", mTestRunName, currentIteration));
+            CLog.i("%s: pass %d", mTestRunName, currentIteration);
             mTotalIterations++;
         } catch (NumberFormatException e) {
             // this should never happen, since regular expression matches on digits
-            Log.e(LOG_TAG, String.format("Unexpected iteration content %s", line));
+            CLog.e("Unexpected iteration content %s", line);
         }
     }
 

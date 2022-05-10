@@ -129,19 +129,37 @@ public interface IRemoteFileResolver {
 
         @Override
         public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (obj == null) return false;
-            if (getClass() != obj.getClass()) return false;
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
             RemoteFileResolverArgs other = (RemoteFileResolverArgs) obj;
             if (mConsideredFile == null) {
-                if (other.mConsideredFile != null) return false;
-            } else if (!mConsideredFile.equals(other.mConsideredFile)) return false;
+                if (other.mConsideredFile != null) {
+                    return false;
+                }
+            } else if (!mConsideredFile.equals(other.mConsideredFile)) {
+                return false;
+            }
             if (mDestinationDir == null) {
-                if (other.mDestinationDir != null) return false;
-            } else if (!mDestinationDir.equals(other.mDestinationDir)) return false;
+                if (other.mDestinationDir != null) {
+                    return false;
+                }
+            } else if (!mDestinationDir.equals(other.mDestinationDir)) {
+                return false;
+            }
             if (mQueryArgs == null) {
-                if (other.mQueryArgs != null) return false;
-            } else if (!mQueryArgs.equals(other.mQueryArgs)) return false;
+                if (other.mQueryArgs != null) {
+                    return false;
+                }
+            } else if (!mQueryArgs.equals(other.mQueryArgs)) {
+                return false;
+            }
             return true;
         }
     }

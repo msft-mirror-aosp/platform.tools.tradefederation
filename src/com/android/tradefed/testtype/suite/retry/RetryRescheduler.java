@@ -40,7 +40,6 @@ import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.TextResultReporter;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
-import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.QuotationAwareTokenizer;
@@ -92,13 +91,6 @@ public final class RetryRescheduler implements IRemoteTest, IConfigurationReceiv
         importance = Importance.ALWAYS
     )
     private Set<String> mExcludeFilters = new HashSet<>();
-
-    // Carry some options from suites that are convenient and don't impact the tests selection.
-    @Option(
-        name = ITestSuite.REBOOT_BEFORE_TEST,
-        description = "Reboot the device before the test suite starts."
-    )
-    private boolean mRebootBeforeTest = false;
 
     public static final String PREVIOUS_LOADER_NAME = "previous_loader";
 
@@ -158,10 +150,11 @@ public final class RetryRescheduler implements IRemoteTest, IConfigurationReceiv
 
             // Transfer log level from retry to subconfig
             ILeveledLogOutput originalLogger = originalConfig.getLogOutput();
-            originalLogger.setLogLevel(mConfiguration.getLogOutput().getLogLevel());
-            if (originalLogger instanceof FileLogger) {
+            ILeveledLogOutput retryLogger = mConfiguration.getLogOutput();
+            originalLogger.setLogLevel(retryLogger.getLogLevel());
+            if (originalLogger instanceof FileLogger && retryLogger instanceof FileLogger) {
                 ((FileLogger) originalLogger)
-                        .setLogLevelDisplay(mConfiguration.getLogOutput().getLogLevel());
+                        .setLogLevelDisplay(((FileLogger) retryLogger).getLogLevelDisplay());
             }
 
             handleExtraResultReporter(originalConfig, mConfiguration);
@@ -185,10 +178,6 @@ public final class RetryRescheduler implements IRemoteTest, IConfigurationReceiv
         updateConfiguration(originalConfig, replayer);
         // Do the customization of the configuration for specialized use cases.
         customizeConfig(previousLoader, originalConfig);
-
-        if (mRebootBeforeTest) {
-            suite.enableRebootBeforeTest();
-        }
 
         mRescheduledConfiguration = originalConfig;
 

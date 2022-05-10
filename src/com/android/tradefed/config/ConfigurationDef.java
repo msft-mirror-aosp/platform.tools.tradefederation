@@ -69,7 +69,7 @@ public class ConfigurationDef {
     private boolean mMultiDeviceMode = false;
     private boolean mFilteredObjects = false;
     private Map<String, Boolean> mExpectedDevices = new LinkedHashMap<>();
-    private static final Pattern MULTI_PATTERN = Pattern.compile("(.*)(:)(.*)");
+    private static final Pattern MULTI_PATTERN = Pattern.compile("(.*):(.*)");
     public static final String DEFAULT_DEVICE_NAME = "DEFAULT_DEVICE";
 
     /** the unique name of the configuration definition */
@@ -300,7 +300,7 @@ public class ConfigurationDef {
                         deviceObjectList.add(multiDev);
                     }
                     // We reference the original object to the device and not to the flat list.
-                    multiDev.addSpecificConfig(configObject);
+                    multiDev.addSpecificConfig(configObject, matcher.group(2));
                     multiDev.addFrequency(configObject, configDef.mAppearanceNum);
                 } else {
                     if (Configuration.doesBuiltInObjSupportMultiDevice(entryName)) {
@@ -321,11 +321,11 @@ public class ConfigurationDef {
                                                         + "device while expecting one only.",
                                                 realDevice.size()));
                             }
-                            realDevice.get(0).addSpecificConfig(configObject);
+                            realDevice.get(0).addSpecificConfig(configObject, entryName);
                             realDevice.get(0).addFrequency(configObject, configDef.mAppearanceNum);
                         } else {
                             // Regular handling of object for single device situation.
-                            defaultDeviceConfig.addSpecificConfig(configObject);
+                            defaultDeviceConfig.addSpecificConfig(configObject, entryName);
                             defaultDeviceConfig.addFrequency(
                                     configObject, configDef.mAppearanceNum);
                         }
@@ -449,7 +449,7 @@ public class ConfigurationDef {
         try {
             Class<?> objectClass = getClassForObject(objectTypeName, className);
             Object configObject = objectClass.getDeclaredConstructor().newInstance();
-            checkObjectValid(objectTypeName, configObject);
+            checkObjectValid(objectTypeName, className, configObject);
             return configObject;
         } catch (InstantiationException | InvocationTargetException | NoSuchMethodException e) {
             throw new ConfigurationException(String.format(
@@ -496,11 +496,19 @@ public class ConfigurationDef {
      * in the invocation.
      *
      * @param objectTypeName The type of the object declared in the xml.
+     * @param className The string classname that was instantiated
      * @param configObject The instantiated object.
      * @throws ConfigurationException if we find an incoherence in the object.
      */
-    private void checkObjectValid(String objectTypeName, Object configObject)
+    private void checkObjectValid(String objectTypeName, String className, Object configObject)
             throws ConfigurationException {
+        if (configObject == null) {
+            throw new ConfigurationException(
+                    String.format(
+                            "Class %s for type %s didn't instantiate properly",
+                            className, objectTypeName),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
         if (Configuration.RESULT_REPORTER_TYPE_NAME.equals(objectTypeName)
                 && configObject instanceof IMetricCollector) {
             // we do not allow IMetricCollector as result_reporter.
@@ -508,7 +516,8 @@ public class ConfigurationDef {
                     String.format(
                             "Object of type %s was declared as %s.",
                             Configuration.DEVICE_METRICS_COLLECTOR_TYPE_NAME,
-                            Configuration.RESULT_REPORTER_TYPE_NAME));
+                            Configuration.RESULT_REPORTER_TYPE_NAME),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
     }
 }

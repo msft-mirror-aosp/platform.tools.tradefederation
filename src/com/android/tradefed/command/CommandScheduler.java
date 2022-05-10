@@ -25,10 +25,6 @@ import com.android.tradefed.command.CommandFileParser.CommandLine;
 import com.android.tradefed.command.CommandFileWatcher.ICommandFileListener;
 import com.android.tradefed.command.CommandRunner.ExitCode;
 import com.android.tradefed.command.remote.DeviceDescriptor;
-import com.android.tradefed.command.remote.IRemoteClient;
-import com.android.tradefed.command.remote.RemoteClient;
-import com.android.tradefed.command.remote.RemoteException;
-import com.android.tradefed.command.remote.RemoteManager;
 import com.android.tradefed.config.ArgsOptionParser;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationDescriptor;
@@ -58,6 +54,7 @@ import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NoDeviceException;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceState;
+import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.ITestInvocation;
@@ -67,15 +64,22 @@ import com.android.tradefed.invoker.shard.ParentShardReplicate;
 import com.android.tradefed.log.ILogRegistry.EventType;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.ConsoleResultReporter;
+import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.ResultForwarder;
+import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.suite.SuiteResultReporter;
 import com.android.tradefed.sandbox.ISandbox;
+import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.service.management.TestInvocationManagementServer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.retry.RetryRescheduler;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
@@ -140,16 +144,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     /** timer for scheduling commands to be re-queued for execution */
     private ScheduledThreadPoolExecutor mCommandTimer;
 
-    private IRemoteClient mRemoteClient = null;
-    private RemoteManager mRemoteManager = null;
-
     private CommandFileWatcher mCommandFileWatcher = null;
 
     /** latch used to notify other threads that this thread is running */
     private final CountDownLatch mRunLatch;
-
-    /** maximum time to wait for handover initiation to complete */
-    private static final long MAX_HANDOVER_INIT_TIME = 2 * 60 * 1000;
 
     /** Maximum time to wait for adb to initialize and get the physical devices discovered */
     private static final long ADB_INIT_TIME_MS = 500;
@@ -161,11 +159,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     private boolean mShutdownOnEmpty = false;
 
     private boolean mStarted = false;
-
-    // flag to indicate this scheduler is currently handing over control to another remote TF
-    private boolean mPerformingHandover = false;
-
-    private WaitObj mHandoverHandshake = new WaitObj();
 
     private WaitObj mCommandProcessWait = new WaitObj();
 
@@ -239,6 +232,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         private final int mId;
         private final String[] mArgs;
         private final String mCommandFilePath;
+        private long mCount;
 
         /** the total amount of time this command was executing. Used to prioritize */
         private long mTotalExecTime = 0;
@@ -247,6 +241,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             mId = id;
             mArgs = args;
             mCommandFilePath = commandFilePath;
+            mCount = 0;
         }
 
         synchronized void incrementExecTime(long execTime) {
@@ -276,6 +271,14 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
          */
         String getCommandFilePath() {
             return mCommandFilePath;
+        }
+
+        public void incrementScheduledCount() {
+            mCount++;
+        }
+
+        public long getScheduledCount() {
+            return mCount;
         }
     }
 
@@ -339,6 +342,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
         public boolean isLoopMode() {
             return mConfig.getCommandOptions().isLoopMode();
+        }
+
+        public long getMaxLoopCount() {
+            return mConfig.getCommandOptions().getMaxLoopCount();
         }
 
         public Long getSleepTime() {
@@ -491,7 +498,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             for (ITestDevice device : context.getDevices()) {
                 mDeviceManager.freeDevice(device, devicesStates.get(device));
-                remoteFreeDevice(device);
                 if (device instanceof IManagedTestDevice) {
                     // This quite an important setting so we do make sure it's reset.
                     ((IManagedTestDevice)device).setFastbootPath(mDeviceManager.getFastbootPath());
@@ -593,6 +599,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
 
             Exception trackDeviceException = null;
+            boolean lastInvocationSet = false;
             try {
                 // Copy the command options invocation attributes to the invocation if it has not
                 // been already done.
@@ -613,17 +620,21 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 CLog.w("Device %s is unresponsive. Reason: %s", e.getSerial(), e.getMessage());
                 trackDeviceException = e;
                 setLastInvocationExitCode(ExitCode.DEVICE_UNRESPONSIVE, e);
+                lastInvocationSet = true;
             } catch (DeviceNotAvailableException e) {
                 CLog.w("Device %s is not available. Reason: %s", e.getSerial(), e.getMessage());
                 trackDeviceException = e;
                 setLastInvocationExitCode(ExitCode.DEVICE_UNAVAILABLE, e);
+                lastInvocationSet = true;
             } catch (FatalHostError e) {
                 CLog.wtf(String.format("Fatal error occurred: %s, shutting down", e.getMessage()),
                         e);
                 setLastInvocationExitCode(ExitCode.FATAL_HOST_ERROR, e);
+                lastInvocationSet = true;
                 shutdown();
             } catch (Throwable e) {
                 setLastInvocationExitCode(ExitCode.THROWABLE_EXCEPTION, e);
+                lastInvocationSet = true;
                 CLog.e(e);
             } finally {
                 mExecutionTimer.cancel();
@@ -648,6 +659,19 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         CLog.e("Exception caught while calling invocationComplete:");
                         CLog.e(anyException);
                     }
+                }
+                if (!lastInvocationSet && instance.getExitInfo() != null) {
+                    setLastInvocationExitCode(
+                            instance.getExitInfo().mExitCode, instance.getExitInfo().mStack);
+                }
+                if (config.getCommandOptions().reportInvocationComplete()) {
+                    LogSaverResultForwarder.reportEndHostLog(
+                            config.getLogSaver(), TestInvocation.TRADEFED_INVOC_COMPLETE_HOST_LOG);
+                    config.getLogOutput().closeLog();
+                    LogRegistry.getLogRegistry().unregisterLogger();
+                }
+                if (getFeatureServer() != null) {
+                    getFeatureServer().unregisterInvocation(config);
                 }
                 mCmd.commandFinished(elapsedTime);
                 logInvocationEndedEvent(
@@ -713,7 +737,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
          * invocations.
          */
         public void stopInvocation(String message) {
-            getInvocation().notifyInvocationStopped(message);
+            stopInvocation(message, null);
+        }
+
+        /**
+         * Stops a running invocation. {@link CommandScheduler#shutdownHard()} will stop all running
+         * invocations.
+         */
+        public void stopInvocation(String message, ErrorIdentifier errorId) {
+            getInvocation().notifyInvocationStopped(message, errorId);
             for (ITestDevice device : mInvocationContext.getDevices()) {
                 if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
                     // Kill all running processes on device.
@@ -738,7 +770,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             if (getShutdownTimeout() != 0) {
                 RunUtil.getDefault().setInterruptibleInFuture(this, getShutdownTimeout());
             }
-            RunUtil.getDefault().interrupt(this, message);
+            RunUtil.getDefault().interrupt(this, message, errorId);
         }
 
         /**
@@ -901,11 +933,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         mRunLatch = new CountDownLatch(1);
     }
 
-    /**
-     * Starts the scheduler including setting up of logging, init of {@link DeviceManager} etc
-     */
+    /** Starts the scheduler including setting up of logging, init of {@link DeviceManager} etc */
     @Override
-    public void start() {
+    public synchronized void start() {
         synchronized (this) {
             if (mStarted) {
                 throw new IllegalStateException("scheduler has already been started");
@@ -963,14 +993,18 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return GlobalConfiguration.getDeviceManagerInstance();
     }
 
-     /**
-      * Factory method for getting a reference to the {@link IHostMonitor}
-      *
-      * @return the {@link IHostMonitor} to use
-      */
-     List<IHostMonitor> getHostMonitor() {
-         return GlobalConfiguration.getHostMonitorInstances();
-     }
+    protected IHostOptions getHostOptions() {
+        return GlobalConfiguration.getInstance().getHostOptions();
+    }
+
+    /**
+     * Factory method for getting a reference to the {@link IHostMonitor}
+     *
+     * @return the {@link IHostMonitor} to use
+     */
+    List<IHostMonitor> getHostMonitor() {
+        return GlobalConfiguration.getHostMonitorInstances();
+    }
 
     /**
      * Factory method for getting a reference to the {@link IConfigurationFactory}
@@ -979,6 +1013,14 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
      */
     protected IConfigurationFactory getConfigFactory() {
         return ConfigurationFactory.getInstance();
+    }
+
+    protected TradefedFeatureServer getFeatureServer() {
+        return GlobalConfiguration.getInstance().getFeatureServer();
+    }
+
+    protected TestInvocationManagementServer getTestInvocationManagementServer() {
+        return GlobalConfiguration.getInstance().getTestInvocationManagementSever();
     }
 
     /**
@@ -1013,8 +1055,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         try {
             IDeviceManager manager = getDeviceManager();
 
-            startRemoteManager();
-
             // Notify other threads that we're running.
             mRunLatch.countDown();
 
@@ -1040,12 +1080,22 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             // potentially create more invocations.
             manager.terminateDeviceRecovery();
             manager.terminateDeviceMonitor();
+            if (getFeatureServer() != null) {
+                try {
+                    getFeatureServer().shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
+            if (getTestInvocationManagementServer() != null) {
+                try {
+                    getTestInvocationManagementServer().shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
             CLog.i("Waiting for invocation threads to complete");
             waitForAllInvocationThreads();
-            closeRemoteClient();
-            if (mRemoteManager != null) {
-                mRemoteManager.cancelAndWait();
-            }
             exit(manager);
             cleanUp();
             CLog.logAndDisplay(LogLevel.INFO, "All done");
@@ -1117,7 +1167,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             ExecutableCommand cmd = cmdDeviceEntry.getKey();
             startInvocation(cmdDeviceEntry.getValue(), cmd,
                     new FreeDeviceHandler(getDeviceManager()));
-            if (cmd.isLoopMode()) {
+            cmd.getCommandTracker().incrementScheduledCount();
+            if (cmd.isLoopMode()
+                    && cmd.getCommandTracker().getScheduledCount() < cmd.getMaxLoopCount()) {
                 addNewExecCommandToQueue(cmd.getCommandTracker());
             }
         }
@@ -1131,17 +1183,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     public void await() throws InterruptedException {
         while (mRunLatch.getCount() > 0) {
             mRunLatch.await();
-        }
-    }
-
-    private void closeRemoteClient() {
-        if (mRemoteClient != null) {
-            try {
-                mRemoteClient.sendHandoverComplete();
-                mRemoteClient.close();
-            } catch (RemoteException e) {
-                CLog.e(e);
-            }
         }
     }
 
@@ -1172,12 +1213,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public boolean addCommand(String[] args) throws ConfigurationException {
-        return internalAddCommand(args, null);
+    public Pair<Boolean, Integer> addCommand(String[] args) throws ConfigurationException {
+        Integer cmdTracker = internalAddCommand(args, null);
+        return Pair.create(cmdTracker >= 0, cmdTracker);
     }
 
     /** Returns true if {@link CommandOptions#USE_SANDBOX} is part of the command line. */
@@ -1210,7 +1250,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         .createPartialConfigurationFromArgs(
                                 originalArgs,
                                 getKeyStoreClient(),
-                                ImmutableSet.of(ProxyConfiguration.PROXY_CONFIG_TYPE_KEY));
+                                ImmutableSet.of(ProxyConfiguration.PROXY_CONFIG_TYPE_KEY),
+                                null);
         try {
             config.resolveDynamicOptions(new DynamicRemoteFileResolver());
         } catch (BuildRetrievalError e) {
@@ -1261,8 +1302,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                                                 Configuration.DEVICE_REQUIREMENTS_TYPE_NAME,
                                                 Configuration.LOGGER_TYPE_NAME,
                                                 Configuration.LOG_SAVER_TYPE_NAME,
-                                                Configuration.RESULT_REPORTER_TYPE_NAME));
-                config.setConfigurationObject(TradefedDelegator.DELEGATE_OBJECT, delegator);
+                                                Configuration.RESULT_REPORTER_TYPE_NAME),
+                                        delegator);
                 setDelegateLevelReporting(config);
                 return config;
             }
@@ -1316,18 +1357,36 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     private void setDelegateLevelReporting(IConfiguration config) {
         List<ITestInvocationListener> delegateReporters = new ArrayList<>();
         // For debugging in the console, add a printer
+        delegateReporters.add(new ConsoleResultReporter());
         delegateReporters.add(new SuiteResultReporter());
-        for (ITestInvocationListener listener : config.getTestInvocationListeners()) {
-            // Add infra reporter if configured.
-            if ("com.google.android.tradefed.result.teststorage.ResultReporter"
-                    .equals(listener.getClass().getCanonicalName())) {
-                delegateReporters.add(listener);
-            }
+        try {
+            Class<?> objectClass =
+                    Class.forName("com.google.android.tradefed.result.teststorage.ResultReporter");
+            Object infraReporter = objectClass.getDeclaredConstructor().newInstance();
+            delegateReporters.add((ITestInvocationListener) infraReporter);
+        } catch (Exception e) {
+            CLog.e(e);
         }
         config.setTestInvocationListeners(delegateReporters);
+        try {
+            Class<?> objectClass =
+                    Class.forName("com.google.android.tradefed.result.AndroidBuildApiLogSaver");
+            Object infraLogger = objectClass.getDeclaredConstructor().newInstance();
+            config.setLogSaver((ILogSaver) infraLogger);
+        } catch (Exception e) {
+            CLog.e(e);
+        }
     }
 
-    private boolean internalAddCommand(String[] args, String cmdFilePath)
+    /**
+     * Adds a command.
+     *
+     * @param args the config arguments.
+     * @param cmdFilePath the filesystem path of command file
+     * @return Command tracker id (non-negative value) if the command was added successfully,
+     *     return 0 when command is added for all devices. Otherwise -1.
+     */
+    private Integer internalAddCommand(String[] args, String cmdFilePath)
             throws ConfigurationException {
         assertStarted();
         IConfiguration config = createConfiguration(args);
@@ -1345,17 +1404,17 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
         } else {
             config.validateOptions();
-
             if (config.getCommandOptions().runOnAllDevices()) {
                 addCommandForAllDevices(args, cmdFilePath);
+                return 0;
             } else {
                 CommandTracker cmdTracker = createCommandTracker(args, cmdFilePath);
                 ExecutableCommand cmdInstance = createExecutableCommand(cmdTracker, config, false);
                 addExecCommandToQueue(cmdInstance, 0);
+                return cmdTracker.getId();
             }
-            return true;
         }
-        return false;
+        return -1;
     }
 
     /**
@@ -1403,7 +1462,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 }
             }
         } catch (IOException e) {
-            throw new ConfigurationException("Failed to read file " + cmdFile.getAbsolutePath(), e);
+            throw new ConfigurationException(
+                    "Failed to read file " + cmdFile.getAbsolutePath(),
+                    e,
+                    InfraErrorIdentifier.CONFIGURATION_NOT_FOUND);
         }
     }
 
@@ -1542,6 +1604,13 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         IConfiguration config = createConfiguration(cmdTracker.getArgs());
         config.validateOptions();
 
+        if (isShuttingDown()) {
+            // createConfiguration can be long for things like sandbox, so ensure we did not
+            // start a shutdown in the meantime.
+            CLog.w("Tradefed is shutting down, ignoring command.");
+            return;
+        }
+
         ExecutableCommand execCmd = createExecutableCommand(cmdTracker, config, false);
         context.setConfigurationDescriptor(config.getConfigurationDescription());
         DeviceAllocationResult allocationResults = allocateDevices(config, manager);
@@ -1561,8 +1630,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             CLog.e("'adb devices' output:\n%s", adbOutput);
             throw new NoDeviceException(
                     String.format(
-                            "no devices is available for command: %s\n%s",
-                            Arrays.asList(args), allocationResults.formattedReason()),
+                            "No device match for allocation. Reason: %s.\ncommand: %s",
+                            allocationResults.formattedReason(), Arrays.asList(args)),
                     InfraErrorIdentifier.SCHEDULER_ALLOCATION_ERROR);
         }
     }
@@ -1587,6 +1656,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
 
         synchronized (this) {
+            if (isShuttingDown()) {
+                // Prevent scheduling if we are shutting down
+                throw new ConfigurationException("Tradefed shutting down, skip scheduling.");
+            }
             mExecutingCommands.add(execCmd);
         }
         IInvocationContext context = createInvocationContext();
@@ -1686,6 +1759,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         // Name invocation with first device serial
         final String invocationName = String.format("Invocation-%s",
                 context.getSerials().get(0));
+        if (getFeatureServer() != null) {
+            getFeatureServer().registerInvocation(cmd.getConfiguration(), Arrays.asList(listeners));
+        }
         InvocationThread invocationThread = new InvocationThread(invocationName, context, cmd,
                 listeners);
         // Link context and command
@@ -1775,7 +1851,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
      */
     @Override
     public synchronized void shutdownOnEmpty() {
-        assertStarted();
+        if (!mStarted) {
+            CLog.w("Scheduler was not started, yet shutdownOnEmpty was called.");
+            return;
+        }
         setHostState(HostState.QUITTING);
         if (!isShuttingDown()) {
             CLog.d("initiating shutdown on empty");
@@ -1835,43 +1914,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     /**
-     * {@inheritDoc}
-     */
-    @Override
-    public synchronized boolean handoverShutdown(int handoverPort) {
-        assertStarted();
-        if (mRemoteClient != null || mPerformingHandover) {
-            CLog.e("A handover has already been initiated");
-            return false;
-        }
-        mPerformingHandover = true;
-        try {
-            mRemoteClient = RemoteClient.connect(handoverPort);
-            CLog.d("Connected to remote manager at %d", handoverPort);
-            handoverDevices(mRemoteClient);
-            CLog.i("Done with device handover.");
-            mRemoteClient.sendHandoverInitComplete();
-            shutdown();
-            return true;
-        } catch (RemoteException e) {
-            CLog.e(e);
-            // TODO: reset state and recover
-        }
-        return false;
-    }
-
-    /** Informs remote manager of the physical devices we are still using. */
-    private void handoverDevices(IRemoteClient client) throws RemoteException {
-        for (DeviceDescriptor deviceDesc : getDeviceManager().listAllDevices()) {
-            if (DeviceAllocationState.Allocated.equals(deviceDesc.getState())
-                    && !deviceDesc.isStubDevice()) {
-                client.sendAllocateDevice(deviceDesc.getSerial());
-                CLog.d("Sent filter device %s command", deviceDesc.getSerial());
-            }
-        }
-    }
-
-    /**
      * @return the list of active {@link CommandTracker}. 'Active' here means all commands added
      * to the scheduler that are either executing, waiting for a device to execute on, or looping.
      */
@@ -1885,38 +1927,30 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     /**
-     * Inform the remote listener of the freed device. Has no effect if there is no remote listener.
-     *
-     * @param device the freed {@link ITestDevice}
-     */
-    private void remoteFreeDevice(ITestDevice device) {
-        // TODO: send freed device state too
-        if (mPerformingHandover && mRemoteClient != null) {
-            try {
-                mRemoteClient.sendFreeDevice(device.getSerialNumber());
-            } catch (RemoteException e) {
-                CLog.e("Failed to send unfilter device %s to remote manager",
-                        device.getSerialNumber());
-                CLog.e(e);
-                // TODO: send handover failed op?
-            }
-        }
-    }
-
-    /**
      * {@inheritDoc}
      */
     @Override
     public synchronized void shutdownHard() {
+        shutdownHard(true);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public synchronized void shutdownHard(boolean killAdb) {
         setHostState(HostState.KILLING);
         doShutdown();
         CLog.logAndDisplay(LogLevel.WARN, "Stopping invocation threads...");
+        String reason = "Tradefed is shutting down";
         for (InvocationThread thread : mInvocationThreadMap.values()) {
             thread.disableReporters();
             // TODO(b/118891716): Improve tear down
-            thread.stopInvocation("Tradefed is shutting down");
+            thread.stopInvocation(reason, InfraErrorIdentifier.TRADEFED_SHUTTING_DOWN);
         }
-        getDeviceManager().terminateHard();
+        if (killAdb) {
+            getDeviceManager().terminateHard(reason);
+        } else {
+            getDeviceManager().terminate();
+        }
     }
 
     /**
@@ -2142,64 +2176,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     /**
-     * Starts remote manager to listen to remote commands.
-     *
-     * <p>TODO: refactor to throw exception on failure
-     */
-    private void startRemoteManager() {
-        if (mRemoteManager != null && !mRemoteManager.isCanceled()) {
-            String error = String.format("A remote manager is already running at port %d",
-                    mRemoteManager.getPort());
-            throw new IllegalStateException(error);
-        }
-        mRemoteManager = new RemoteManager(getDeviceManager(), this);
-        // Read the args that were set by the global config.
-        boolean startRmtMgrOnBoot = mRemoteManager.getStartRemoteMgrOnBoot();
-        int defaultRmtMgrPort = mRemoteManager.getRemoteManagerPort();
-        boolean autoHandover = mRemoteManager.getAutoHandover();
-
-        if (!startRmtMgrOnBoot) {
-            mRemoteManager = null;
-            return;
-        }
-        if (mRemoteManager.connect()) {
-            mRemoteManager.start();
-            CLog.logAndDisplay(LogLevel.INFO, "Started remote manager at port %d",
-                    mRemoteManager.getPort());
-            return;
-        }
-        CLog.logAndDisplay(LogLevel.INFO, "Failed to start remote manager at port %d",
-                defaultRmtMgrPort);
-        if (!autoHandover) {
-           if (mRemoteManager.connectAnyPort()) {
-               mRemoteManager.start();
-               CLog.logAndDisplay(LogLevel.INFO,
-                       "Started remote manager at port %d with no handover",
-                       mRemoteManager.getPort());
-               return;
-           } else {
-               CLog.logAndDisplay(LogLevel.ERROR, "Failed to auto start a remote manager on boot.");
-               return;
-           }
-        }
-        try {
-            CLog.logAndDisplay(LogLevel.INFO, "Initiating handover with remote TF instance!");
-            mHandoverHandshake.reset();
-            initiateHandover(defaultRmtMgrPort);
-            waitForHandoverHandshake();
-            CLog.logAndDisplay(LogLevel.INFO, "Handover initiation complete.");
-        } catch (RemoteException e) {
-            CLog.e(e);
-        }
-    }
-
-    private void waitForHandoverHandshake() {
-        // block and wait to receive all the commands and 'device still in use' messages from remote
-        mHandoverHandshake.waitForEvent(MAX_HANDOVER_INIT_TIME);
-        // TODO: throw exception if not received
-    }
-
-    /**
      * Helper object for allowing multiple threads to synchronize on an event.
      *
      * <p>Basically a modest wrapper around Object's wait and notify methods, that supports
@@ -2269,64 +2245,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    @Override
-    public void handoverInitiationComplete() {
-        mHandoverHandshake.signalEventReceived();
-    }
-
-    @Override
-    public void completeHandover() {
-        CLog.logAndDisplay(LogLevel.INFO, "Completing handover.");
-        if (mRemoteClient != null) {
-            mRemoteClient.close();
-            mRemoteClient = null;
-        } else {
-            CLog.e("invalid state: received handover complete when remote client is null");
-        }
-
-        if (mRemoteManager != null) {
-            mRemoteManager.cancelAndWait();
-            mRemoteManager = null;
-        } else {
-            CLog.e("invalid state: received handover complete when remote manager is null");
-        }
-
-        // Start a new remote manager and attempt to capture the original default port.
-        mRemoteManager = new RemoteManager(getDeviceManager(), this);
-        boolean success = false;
-        for (int i=0; i < 10 && !success; i++) {
-            try {
-                sleep(2000);
-            } catch (InterruptedException e) {
-                CLog.e(e);
-                return;
-            }
-            success = mRemoteManager.connect();
-        }
-        if (!success) {
-            CLog.e("failed to connect to default remote manager port");
-            return;
-        }
-
-        mRemoteManager.start();
-        CLog.logAndDisplay(LogLevel.INFO,
-                "Successfully started remote manager after handover on port %d",
-                mRemoteManager.getPort());
-    }
-
-    private void initiateHandover(int port) throws RemoteException {
-        mRemoteClient = RemoteClient.connect(port);
-        CLog.i("Connecting local client with existing remote TF at %d - Attempting takeover", port);
-        // Start up a temporary local remote manager for handover.
-        if (mRemoteManager.connectAnyPort()) {
-            mRemoteManager.start();
-            CLog.logAndDisplay(LogLevel.INFO,
-                    "Started local tmp remote manager for handover at port %d",
-                    mRemoteManager.getPort());
-            mRemoteClient.sendStartHandover(mRemoteManager.getPort());
-        }
-    }
-
     private synchronized void assertStarted() {
         if(!mStarted) {
             throw new IllegalStateException("start() must be called before this method");
@@ -2393,8 +2311,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return mLastInvocationThrowable;
     }
 
-    @Override
-    public void setLastInvocationExitCode(ExitCode code, Throwable throwable) {
+    private void setLastInvocationExitCode(ExitCode code, Throwable throwable) {
         mLastInvocationExitCode = code;
         mLastInvocationThrowable = throwable;
     }

@@ -19,17 +19,21 @@ import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.proto.BuildInformation;
 import com.android.tradefed.build.proto.BuildInformation.BuildFile;
 import com.android.tradefed.build.proto.BuildInformation.KeyBuildFilePair;
-import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.service.TradefedFeatureClient;
+import com.android.tradefed.testtype.suite.ResolvePartialDownload;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.UniqueMultiMap;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
+import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,11 +43,13 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Generic implementation of a {@link IBuildInfo} that should be associated
@@ -184,7 +190,15 @@ public class BuildInfo implements IBuildInfo {
      */
     @Override
     public void addBuildAttribute(String attributeName, String attributeValue) {
+        if (attributeValue == null) {
+            attributeValue = "";
+        }
         mBuildAttributes.put(attributeName, attributeValue);
+    }
+
+    @Override
+    public void removeBuildAttribute(String attributeName) {
+        mBuildAttributes.remove(attributeName);
     }
 
     /** {@inheritDoc} */
@@ -224,7 +238,7 @@ public class BuildInfo implements IBuildInfo {
             File copyFile;
             if (origFile.isDirectory()) {
                 copyFile = FileUtil.createTempDir(fileEntry.getKey());
-                FileUtil.recursiveHardlink(origFile, copyFile);
+                FileUtil.recursiveHardlink(origFile, copyFile, false);
             } else {
                 // Only using createTempFile to create a unique dest filename
                 copyFile = FileUtil.createTempFile(fileEntry.getKey(),
@@ -357,6 +371,10 @@ public class BuildInfo implements IBuildInfo {
      */
     @Override
     public void setFile(String name, File file, String version) {
+        if (file == null) {
+            CLog.w("Tried to add to build info file name '%s' which is null.", name);
+            return;
+        }
         if (!mVersionedFileMap.containsKey(name)) {
             mVersionedFileMap.put(name, new VersionedFile(file, version));
         }
@@ -630,8 +648,10 @@ public class BuildInfo implements IBuildInfo {
             // Restore the original type of build info.
             try {
                 buildInfo =
-                        (BuildInfo)
-                                Class.forName(buildClass).getDeclaredConstructor().newInstance();
+                        Class.forName(buildClass)
+                                .asSubclass(BuildInfo.class)
+                                .getDeclaredConstructor()
+                                .newInstance();
             } catch (InstantiationException
                     | IllegalAccessException
                     | ClassNotFoundException
@@ -653,8 +673,8 @@ public class BuildInfo implements IBuildInfo {
             buildInfo.setBuildBranch(protoBuild.getBranch());
         }
         // Attributes
-        for (String key : protoBuild.getAttributes().keySet()) {
-            buildInfo.addBuildAttribute(key, protoBuild.getAttributes().get(key));
+        for (String key : protoBuild.getAttributesMap().keySet()) {
+            buildInfo.addBuildAttribute(key, protoBuild.getAttributesMap().get(key));
         }
         // Versioned File
         for (KeyBuildFilePair filePair : protoBuild.getVersionedFileList()) {
@@ -684,23 +704,35 @@ public class BuildInfo implements IBuildInfo {
     /** {@inheritDoc} */
     @Override
     public File stageRemoteFile(String fileName, File workingDir) {
+        if (getRemoteFiles().isEmpty()) {
+            return null;
+        }
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.STAGE_TESTS_INDIVIDUAL_DOWNLOADS, fileName);
-        List<String> includeFilters = Arrays.asList(String.format("/%s$", fileName));
-        for (File file : getRemoteFiles()) {
-            try {
-                new DynamicRemoteFileResolver()
-                        .resolvePartialDownloadZip(
-                                workingDir, file.toString(), includeFilters, null);
-            } catch (BuildRetrievalError e) {
-                throw new RuntimeException(e);
-            }
+        List<String> includeFilters = Arrays.asList(String.format("/%s?($|/)", fileName));
 
-            File stagedFile = FileUtil.findFile(workingDir, fileName);
-            if (stagedFile != null) {
-                return stagedFile;
+        try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+            Map<String, String> args = new HashMap<>();
+            args.put(ResolvePartialDownload.DESTINATION_DIR, workingDir.getAbsolutePath());
+            args.put(ResolvePartialDownload.INCLUDE_FILTERS, String.join(";", includeFilters));
+            // TODO: Remove exclude filter when we support not specifying it. For now put a
+            // placeholder that will exclude nothing.
+            args.put(ResolvePartialDownload.EXCLUDE_FILTERS, "doesntmatch");
+            String remotePaths =
+                    getRemoteFiles().stream()
+                            .map(p -> p.toString())
+                            .collect(Collectors.joining(";"));
+            args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+            FeatureResponse rep =
+                    client.triggerFeature(
+                            ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);
+            if (rep.hasErrorInfo()) {
+                throw new HarnessRuntimeException(
+                        rep.getErrorInfo().getErrorTrace(),
+                        InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
             }
         }
-        return null;
+
+        return FileUtil.findFile(workingDir, fileName);
     }
 }

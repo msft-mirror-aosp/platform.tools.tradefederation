@@ -34,7 +34,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.math.BigInteger;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -57,11 +59,67 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
             Collections.singleton("https://www.googleapis.com/auth/devstorage.read_only");
     private static final long LIST_BATCH_SIZE = 100;
 
+    // Allow downloader to create empty files instead of throwing exception.
+    private Boolean mCreateEmptyFile = false;
+
     public GCSFileDownloader(File jsonKeyFile) {
         super(jsonKeyFile);
     }
 
-    public GCSFileDownloader() {}
+    public GCSFileDownloader(Boolean createEmptyFile) {
+        mCreateEmptyFile = createEmptyFile;
+    }
+
+    public GCSFileDownloader() {
+        this(false);
+    }
+
+    private Storage getStorage() throws IOException {
+        return getStorage(SCOPES);
+    }
+
+    @VisibleForTesting
+    StorageObject getRemoteFileMetaData(String bucketName, String remoteFilename)
+            throws IOException {
+        int i = 0;
+        do {
+            i++;
+            try {
+                return getStorage().objects().get(bucketName, remoteFilename).execute();
+            } catch (GoogleJsonResponseException e) {
+                if (e.getStatusCode() == 404) {
+                    return null;
+                }
+                throw e;
+            } catch (SocketTimeoutException e) {
+                // Allow one retry in case of flaky connection.
+                if (i >= 2) {
+                    throw e;
+                }
+            }
+        } while (true);
+    }
+
+    /**
+     * Download file from GCS.
+     *
+     * <p>Right now only support GCS path.
+     *
+     * @param remoteFilePath gs://bucket/file/path format GCS path.
+     * @return local file
+     * @throws BuildRetrievalError
+     */
+    @Override
+    public File downloadFile(String remoteFilePath) throws BuildRetrievalError {
+        File destFile = createTempFile(remoteFilePath, null);
+        try {
+            downloadFile(remoteFilePath, destFile);
+            return destFile;
+        } catch (BuildRetrievalError e) {
+            FileUtil.recursiveDelete(destFile);
+            throw e;
+        }
+    }
 
     /**
      * Download a file from a GCS bucket file.
@@ -86,48 +144,45 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         }
     }
 
-    private Storage getStorage() throws IOException {
-        return getStorage(SCOPES);
-    }
-
-    @VisibleForTesting
-    StorageObject getRemoteFileMetaData(String bucketName, String remoteFilename)
-            throws IOException {
-        try {
-            return getStorage().objects().get(bucketName, remoteFilename).execute();
-        } catch (GoogleJsonResponseException e) {
-            if (e.getStatusCode() == 404) {
-                return null;
-            }
-            throw e;
-        }
-    }
-
-    /**
-     * Download file from GCS.
-     *
-     * <p>Right now only support GCS path.
-     *
-     * @param remoteFilePath gs://bucket/file/path format GCS path.
-     * @return local file
-     * @throws BuildRetrievalError
-     */
-    @Override
-    public File downloadFile(String remoteFilePath) throws BuildRetrievalError {
-        File destFile = createTempFile(remoteFilePath, null);
-        try {
-            downloadFile(remoteFilePath, destFile);
-            return destFile;
-        } catch (BuildRetrievalError e) {
-            FileUtil.recursiveDelete(destFile);
-            throw e;
-        }
-    }
-
     @Override
     public void downloadFile(String remotePath, File destFile) throws BuildRetrievalError {
         String[] pathParts = parseGcsPath(remotePath);
         downloadFile(pathParts[0], pathParts[1], destFile);
+    }
+
+    @VisibleForTesting
+    void downloadFile(String bucketName, String remoteFilename, File localFile)
+            throws BuildRetrievalError {
+        int i = 0;
+        try {
+            do {
+                i++;
+                try {
+                    if (!isRemoteFolder(bucketName, remoteFilename)) {
+                        fetchRemoteFile(bucketName, remoteFilename, localFile);
+                        return;
+                    }
+                    remoteFilename = sanitizeDirectoryName(remoteFilename);
+                    recursiveDownloadFolder(bucketName, remoteFilename, localFile);
+                    return;
+                } catch (SocketException se) {
+                    // Allow one retry in case of flaky connection.
+                    if (i >= 2) {
+                        throw se;
+                    }
+                    CLog.e(
+                            "Error '%s' while downloading gs://%s/%s. retrying.",
+                            se.getMessage(), bucketName, remoteFilename);
+                }
+            } while (true);
+        } catch (IOException e) {
+            String message =
+                    String.format(
+                            "Failed to download gs://%s/%s due to: %s",
+                            bucketName, remoteFilename, e.getMessage());
+            CLog.e(message);
+            throw new BuildRetrievalError(message, e, InfraErrorIdentifier.GCS_ERROR);
+        }
     }
 
     private boolean isFileFresh(File localFile, StorageObject remoteFile) throws IOException {
@@ -163,7 +218,7 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
             remoteFilename = sanitizeDirectoryName(remoteFilename);
             return recursiveCheckFolderFreshness(bucketName, remoteFilename, localFile);
         } catch (IOException e) {
-            throw new BuildRetrievalError(e.getMessage(), e);
+            throw new BuildRetrievalError(e.getMessage(), e, InfraErrorIdentifier.GCS_ERROR);
         }
     }
 
@@ -223,9 +278,19 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
             }
             Objects objects = listOperation.execute();
             if (objects.getItems() != null && !objects.getItems().isEmpty()) {
-                subFiles.addAll(objects.getItems());
+                for (int i = 0; i < objects.getItems().size(); i++) {
+                    if (objects.getItems().get(i).getName().equals(folder)) {
+                        // If the folder is created from UI, the folder itself
+                        // is a size 0 text file and its name will be
+                        // the folder's name, we should ignore this file.
+                        continue;
+                    }
+                    subFiles.add(objects.getItems().get(i));
+                }
             }
             if (objects.getPrefixes() != null && !objects.getPrefixes().isEmpty()) {
+                // size 0 sub-folders will also be listed under the prefix.
+                // So this includes all the sub-folders.
                 subFolders.addAll(objects.getPrefixes());
             }
             pageToken = objects.getNextPageToken();
@@ -257,7 +322,18 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         return name;
     }
 
-    /** check given filename is a folder or not. */
+    /**
+     * Check given filename is a folder or not.
+     *
+     * <p>There 2 types of folders in gcs: 1. Created explicitly from UI. The folder is a size 0
+     * text file (it's an object). 2. When upload a file, all its parent folders will be created,
+     * but these folders doesn't exist (not objects) in gcs. This function work for both cases. But
+     * we should not try to download the size 0 folders.
+     *
+     * @param bucketName is the gcs bucket name.
+     * @param filename is the relative path to the bucket.
+     * @return true if the filename is a folder, otherwise false.
+     */
     @VisibleForTesting
     boolean isRemoteFolder(String bucketName, String filename) throws IOException {
         filename = sanitizeDirectoryName(filename);
@@ -267,54 +343,40 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
                         .list(bucketName)
                         .setPrefix(filename)
                         .setDelimiter(PATH_SEP)
-                        .setMaxResults(1l)
+                        .setMaxResults(1L)
                         .execute();
         if (objects.getItems() != null && !objects.getItems().isEmpty()) {
+            // The filename is end with '/', if there are objects use filename as prefix
+            // then filename must be a folder.
             return true;
         }
         if (objects.getPrefixes() != null && !objects.getPrefixes().isEmpty()) {
+            // This will happen when the folder only contains folders but no objects.
+            // objects.getItems() will be empty, but objects.getPrefixes will list
+            // sub-folders.
             return true;
         }
         return false;
     }
 
-    @VisibleForTesting
-    void downloadFile(String bucketName, String remoteFilename, File localFile)
-            throws BuildRetrievalError {
-        int i = 0;
-        try {
-            do {
-                i++;
-                try {
-                    if (!isRemoteFolder(bucketName, remoteFilename)) {
-                        fetchRemoteFile(bucketName, remoteFilename, localFile);
-                        return;
-                    }
-                    remoteFilename = sanitizeDirectoryName(remoteFilename);
-                    recursiveDownloadFolder(bucketName, remoteFilename, localFile);
-                    return;
-                } catch (SocketException se) {
-                    // Allow one retry in case of flaky connection.
-                    if (i >= 2) {
-                        throw se;
-                    }
-                    CLog.e(
-                            "Error '%s' while downloading gs://%s/%s. retrying.",
-                            se.getMessage(), bucketName, remoteFilename);
-                }
-            } while (true);
-        } catch (IOException e) {
-            String message =
-                    String.format(
-                            "Failed to download gs://%s/%s due to: %s",
-                            bucketName, remoteFilename, e.getMessage());
-            CLog.e(message);
-            throw new BuildRetrievalError(message, e, InfraErrorIdentifier.GCS_ERROR);
-        }
-    }
-
     private void fetchRemoteFile(String bucketName, String remoteFilename, File localFile)
-            throws IOException {
+            throws IOException, BuildRetrievalError {
+        CLog.d("Fetching gs://%s/%s to %s.", bucketName, remoteFilename, localFile.toString());
+        StorageObject meta = getRemoteFileMetaData(bucketName, remoteFilename);
+        if (meta == null || meta.getSize().equals(BigInteger.ZERO)) {
+            if (!mCreateEmptyFile) {
+                throw new BuildRetrievalError(
+                        String.format(
+                                "File (not folder) gs://%s/%s doesn't exist or is size 0.",
+                                bucketName, remoteFilename),
+                        InfraErrorIdentifier.GCS_ERROR);
+            } else {
+                // Create the empty file.
+                CLog.d("GCS file is empty: gs://%s/%s", bucketName, remoteFilename);
+                localFile.createNewFile();
+                return;
+            }
+        }
         try (OutputStream writeStream = new FileOutputStream(localFile)) {
             getStorage()
                     .objects()
@@ -330,9 +392,11 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
      * @param remoteFolderName remote folder name, must end with "/"
      * @param localFolder local folder
      * @throws IOException
+     * @throws BuildRetrievalError
      */
     private void recursiveDownloadFolder(
-            String bucketName, String remoteFolderName, File localFolder) throws IOException {
+            String bucketName, String remoteFolderName, File localFolder)
+            throws IOException, BuildRetrievalError {
         CLog.d("Downloading folder gs://%s/%s.", bucketName, remoteFolderName);
         if (!localFolder.exists()) {
             FileUtil.mkdirsRWX(localFolder);
