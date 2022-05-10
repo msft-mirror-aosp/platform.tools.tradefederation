@@ -28,6 +28,7 @@ import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -79,6 +80,7 @@ import perfetto.protos.PerfettoMergedMetrics.TraceMetrics;
 public class PerfettoGenericPostProcessor extends BasePostProcessor {
 
     private static final String METRIC_SEP = "-";
+    @VisibleForTesting static final String RUNTIME_METRIC_KEY = "perfetto_post_processor_runtime";
 
     public enum METRIC_FILE_FORMAT {
         text,
@@ -133,6 +135,7 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
             isTimeVal = true)
     private long mDecompressTimeoutMs = TimeUnit.MINUTES.toMillis(20);
 
+    @Deprecated
     @Option(
             name = "processed-metric",
             description =
@@ -215,6 +218,7 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
      */
     private Map<String, Metric.Builder> processPerfettoMetrics(List<File> perfettoMetricFiles) {
         Map<String, Metric.Builder> parsedMetrics = new HashMap<>();
+        long startTime = System.currentTimeMillis();
         File uncompressedDir = null;
         for (File perfettoMetricFile : perfettoMetricFiles) {
             // Text files by default are compressed before uploading. Decompress the text proto
@@ -277,6 +281,14 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
             }
         }
 
+        if (parsedMetrics.size() > 0) {
+            parsedMetrics.put(
+                    RUNTIME_METRIC_KEY,
+                    TfMetricProtoUtil.stringToMetric(
+                            Long.toString(System.currentTimeMillis() - startTime))
+                            .toBuilder());
+        }
+
         return parsedMetrics;
     }
 
@@ -284,7 +296,7 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
      * Process perfetto metric files that does not have proto defined in TraceMetrics into key,
      * value pairs.
      *
-     * @param perfettoMetricFiles perfetto metric files to be processed.
+     * @param perfettoMetricFile perfetto metric file to be processed.
      * @return key, value pairs processed from the metrics.
      */
     private Map<String, Metric.Builder> processPerfettoMetricsWithAlternativeMethods(
@@ -600,11 +612,10 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
     }
 
     /**
-     * Set the metric type based on flag.
+     * Set the metric type to RAW metric.
      */
     @Override
     protected DataType getMetricType() {
-        return mProcessedMetric ? DataType.PROCESSED : DataType.RAW;
+        return DataType.RAW;
     }
 }
-

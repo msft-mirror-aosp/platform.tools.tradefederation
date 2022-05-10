@@ -128,9 +128,15 @@ public final class TestDescription implements Serializable, Comparable<TestDescr
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null) return false;
-        if (getClass() != obj.getClass()) return false;
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
         TestDescription other = (TestDescription) obj;
 
         if (!mClassName.equals(other.mClassName) || !mTestName.equals(other.mTestName)) {

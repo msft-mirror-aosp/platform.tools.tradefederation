@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
 java_library_host {
     name: "tradefed-clearcut-client",
     // Restrict visibility to only those targets that need to access it.
@@ -24,9 +28,9 @@ java_library_host {
     ],
     static_libs: [
         "protobuf-java-util-prebuilt-jar",
+        "asuite_proto_java",
     ],
     libs: [
-        "tradefed-protos",
         "tradefed-common-util",
         "devtools-annotations-prebuilt",
     ],

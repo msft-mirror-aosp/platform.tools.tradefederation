@@ -16,7 +16,7 @@
 
 package com.android.tradefed.util;
 
-import com.android.ddmlib.Log;
+import com.android.tradefed.log.LogUtil.CLog;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,7 +38,6 @@ import java.util.zip.ZipEntry;
  */
 public class ClassPathScanner {
 
-    private static final String LOG_TAG = "ClassPathScanner";
     private String[] mClassPath;
 
     /**
@@ -154,8 +153,7 @@ public class ClassPathScanner {
             IClassPathFilter filter) throws IOException {
         File[] childFiles = dir.listFiles();
         if (childFiles == null) {
-            Log.w(LOG_TAG, String.format("Directory %s in classPath is not readable, skipping",
-                    dir.getAbsolutePath()));
+            CLog.w("Directory %s in classPath is not readable, skipping", dir.getAbsolutePath());
             return;
         }
         for (File childFile : childFiles) {
@@ -171,8 +169,7 @@ public class ClassPathScanner {
                     entries.add(filter.transform(classPathEntryName));
                 }
             } else {
-                Log.d(LOG_TAG, String.format("file %s in classPath is not recognized, skipping",
-                        dir.getAbsolutePath()));
+                CLog.d("file %s in classPath is not recognized, skipping", dir.getAbsolutePath());
             }
         }
     }
@@ -206,13 +203,14 @@ public class ClassPathScanner {
                 } else if (classPathFile.isDirectory()) {
                     entryNames.addAll(getEntriesFromDir(classPathFile, filter));
                 } else {
-                    Log.w(LOG_TAG, String.format(
+                    CLog.w(
                             "class path entry %s does not exist or is not recognized, skipping",
-                            classPathElement));
+                            classPathElement);
                 }
             } catch (IOException e) {
-                Log.w(LOG_TAG, String.format("Failed to read class path entry %s. Reason: %s",
-                        classPathElement, e.toString()));
+                CLog.w(
+                        "Failed to read class path entry %s. Reason: %s",
+                        classPathElement, e.toString());
             }
         }
         return entryNames;
@@ -230,18 +228,14 @@ public class ClassPathScanner {
                 if (classPathFile.isFile() && classPathElement.endsWith(".jar")) {
                     entryNames.putAll(getEntriesFromJar(classPathFile, filter));
                 } else {
-                    Log.w(
-                            LOG_TAG,
-                            String.format(
-                                    "class path entry %s does not exist or is not recognized, skipping",
-                                    classPathElement));
+                    CLog.w(
+                            "class path entry %s does not exist or is not recognized, skipping",
+                            classPathElement);
                 }
             } catch (IOException e) {
-                Log.w(
-                        LOG_TAG,
-                        String.format(
-                                "Failed to read class path entry %s. Reason: %s",
-                                classPathElement, e.toString()));
+                CLog.w(
+                        "Failed to read class path entry %s. Reason: %s",
+                        classPathElement, e.toString());
             }
         }
         return entryNames;

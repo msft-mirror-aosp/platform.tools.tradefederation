@@ -76,6 +76,10 @@ public abstract class ProtoResultReporter
         return mReportGranularResults;
     }
 
+    public void setGranularResults(boolean granularResults) {
+        mReportGranularResults = granularResults;
+    }
+
     /**
      * Handling of the partial invocation test record proto after {@link
      * #invocationStarted(IInvocationContext)} occurred.
@@ -204,6 +208,9 @@ public abstract class ProtoResultReporter
         DebugInfo invocationFailure = handleInvocationFailure();
         if (invocationFailure != null) {
             mInvocationRecordBuilder.setDebugInfo(invocationFailure);
+            mInvocationRecordBuilder.setStatus(TestStatus.FAIL);
+        } else {
+            mInvocationRecordBuilder.setStatus(TestStatus.PASS);
         }
 
         // Finalize the protobuf handling: where to put the results.
@@ -249,7 +256,10 @@ public abstract class ProtoResultReporter
 
         // Finalize the module and track it in the child
         TestRecord moduleRecord = moduleBuilder.build();
-        parentBuilder.addChildren(createChildReference(moduleRecord));
+        ChildReference moduleReference = createModuleChildReference(moduleRecord);
+        if (moduleReference != null) {
+            parentBuilder.addChildren(moduleReference);
+        }
         try {
             processTestModuleEnd(moduleRecord);
         } catch (RuntimeException e) {
@@ -296,11 +306,13 @@ public abstract class ProtoResultReporter
         debugBuilder.setErrorMessage(errorMessage);
         if (TestStatus.UNKNOWN.equals(current.getStatus())) {
             current.setDebugInfo(debugBuilder.build());
+            current.setStatus(TestStatus.FAIL);
         } else {
             // We are in a test case and we need the run parent.
             TestRecord.Builder test = mLatestChild.pop();
             TestRecord.Builder run = mLatestChild.peek();
             run.setDebugInfo(debugBuilder.build());
+            run.setStatus(TestStatus.FAIL);
             // Re-add the test
             mLatestChild.add(test);
         }
@@ -334,11 +346,13 @@ public abstract class ProtoResultReporter
 
         if (TestStatus.UNKNOWN.equals(current.getStatus())) {
             current.setDebugInfo(debugBuilder.build());
+            current.setStatus(TestStatus.FAIL);
         } else {
             // We are in a test case and we need the run parent.
             TestRecord.Builder test = mLatestChild.pop();
             TestRecord.Builder run = mLatestChild.peek();
             run.setDebugInfo(debugBuilder.build());
+            run.setStatus(TestStatus.FAIL);
             // Re-add the test
             mLatestChild.add(test);
         }
@@ -351,6 +365,10 @@ public abstract class ProtoResultReporter
         runBuilder.setEndTime(createTimeStamp(startTime + elapsedTimeMillis));
         runBuilder.putAllMetrics(runMetrics);
         TestRecord.Builder parentBuilder = mLatestChild.peek();
+
+        if (!runBuilder.hasDebugInfo()) {
+            runBuilder.setStatus(TestStatus.PASS);
+        }
 
         // Finalize the run and track it in the child
         TestRecord runRecord = runBuilder.build();
@@ -493,8 +511,22 @@ public abstract class ProtoResultReporter
         Map<String, Any> fullmap = new HashMap<>();
         fullmap.putAll(current.getArtifactsMap());
         Any any = Any.pack(createFileProto(logFile));
-        fullmap.put(dataName, any);
+        // Ensure keys are made unique to avoid colliding in the proto representation.
+        int count = 0;
+        String key;
+        do {
+            key = String.format("%s%s", dataName, count == 0 ? "" : count);
+            count++;
+        } while (fullmap.containsKey(key));
+        fullmap.put(key, any);
         current.putAllArtifacts(fullmap);
+    }
+
+    /**
+     * Creates a child reference for a module.
+     */
+    protected ChildReference createModuleChildReference(TestRecord record) {
+        return createChildReference(record);
     }
 
     private ChildReference createChildReference(TestRecord record) {

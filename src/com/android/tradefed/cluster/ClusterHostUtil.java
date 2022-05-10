@@ -24,7 +24,6 @@ import com.android.tradefed.util.VersionParser;
 
 import com.google.common.base.Strings;
 import com.google.common.net.HostAndPort;
-import com.google.common.net.InetAddresses;
 import com.google.common.primitives.Longs;
 
 import java.net.Inet6Address;
@@ -54,6 +53,8 @@ public class ClusterHostUtil {
     static final String EMULATOR_SERIAL_PREFIX = "emulator-";
     static final String NULL_DEVICE_SERIAL_PLACEHOLDER = "(no device serial)";
     static final String UNKNOWN = "UNKNOWN";
+    static final String TRADEFED = "TRADEFED";
+    static final String LOCALHOST_IP = "127.0.0.1";
 
     private static long sTfStartTime = getCurrentTimeMillis();
 
@@ -96,13 +97,13 @@ public class ClusterHostUtil {
      */
     public static String getUniqueDeviceSerial(DeviceDescriptor device) {
         String serial = device.getSerial();
-        if (Strings.isNullOrEmpty(serial)
-                || device.isStubDevice()
+        if (Strings.isNullOrEmpty(serial)) {
+            return String.format("%s:%s", getHostName(), NULL_DEVICE_SERIAL_PLACEHOLDER);
+        }
+        if ((device.isStubDevice()
+                        && !FastbootDevice.class.getSimpleName().equals(device.getDeviceClass()))
                 || serial.startsWith(EMULATOR_SERIAL_PREFIX)) {
-            if (Strings.isNullOrEmpty(serial)) {
-                serial = NULL_DEVICE_SERIAL_PLACEHOLDER;
-            }
-            serial = String.format("%s:%s", getHostName(), serial);
+            return String.format("%s:%s", getHostName(), serial);
         }
         return serial;
     }
@@ -267,15 +268,15 @@ public class ClusterHostUtil {
     }
 
     /**
-     * Checks if a given input is a valid IP:PORT string.
+     * Checks if a given input is a localhost IP:PORT string.
      *
      * @param input a string to check
-     * @return true if the given input is an IP:PORT string
+     * @return true if the given input is a localhost IP:PORT string
      */
-    public static boolean isIpPort(String input) {
+    public static boolean isLocalhostIpPort(String input) {
         try {
             HostAndPort hostAndPort = HostAndPort.fromString(input);
-            return InetAddresses.isInetAddress(hostAndPort.getHost());
+            return LOCALHOST_IP.equals(hostAndPort.getHost());
         } catch (IllegalArgumentException e) {
             return false;
         }
@@ -322,5 +323,9 @@ public class ClusterHostUtil {
         }
 
         return ClusterClient;
+    }
+
+    public static String getTestHarness() {
+        return TRADEFED;
     }
 }

@@ -56,7 +56,10 @@ public class BuildInfoUtil {
             String overrideBuildBranch,
             String overrideBuildAlias)
             throws DeviceNotAvailableException {
-        String buildId, buildAlias, buildFlavor, branch;
+        String buildId;
+        String buildAlias;
+        String buildFlavor;
+        String branch;
         // inject build id
         if (overrideBuildId != null) {
             buildId = overrideBuildId;

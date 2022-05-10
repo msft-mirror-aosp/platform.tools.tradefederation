@@ -15,25 +15,37 @@
  */
 package com.android.tradefed.testtype.suite;
 
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.testmapping.TestInfo;
 import com.android.tradefed.util.testmapping.TestMapping;
 import com.android.tradefed.util.testmapping.TestOption;
+import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.io.Files;
+
+import org.apache.commons.compress.archivers.zip.ZipFile;
 
 import java.io.File;
+import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -78,15 +90,44 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     private List<String> mTestMappingPaths = new ArrayList<>();
 
     @Option(
+        name = RemoteTestTimeOutEnforcer.REMOTE_TEST_TIMEOUT_OPTION,
+        description = RemoteTestTimeOutEnforcer.REMOTE_TEST_TIMEOUT_DESCRIPTION
+    )
+    private Duration mRemoteTestTimeOut = null;
+
+    @Option(
         name = "use-test-mapping-path",
         description = "Whether or not to run tests based on the given test mapping path."
     )
     private boolean mUseTestMappingPath = false;
 
+    @Option(
+            name = "ignore-test-mapping-imports",
+            description = "Whether or not to ignore test mapping import paths.")
+    private boolean mIgnoreTestMappingImports = true;
+
+    @Option(
+            name = "test-mapping-allowed-tests-list",
+            description =
+                    "A list of artifacts that contains allowed tests. Only tests in the lists "
+                            + "will be run. If no list is specified, the tests will not be "
+                            + "filtered by allowed tests.")
+    private Set<String> mAllowedTestLists = new HashSet<>();
+
+    @Option(
+            name = "additional-test-mapping-zip",
+            description =
+                    "A list of additional test_mappings.zip that contains TEST_MAPPING files. The "
+                            + "runner will collect tests based on them. If none  is specified, "
+                            + "only the tests on the triggering device build will be run.")
+    private List<String> mAdditionalTestMappingZips = new ArrayList<>();
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
     private static final String TEST_MAPPING_EXCLUDE_FILTER = "exclude-filter";
+
+    private IBuildInfo mBuildInfo;
 
     /**
      * Load the tests configuration that will be run. Each tests is defined by a {@link
@@ -109,38 +150,49 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         // Name of the tests
         Set<String> testNames = new HashSet<>();
         Set<TestInfo> testInfosToRun = new HashSet<>();
+        mBuildInfo = getBuildInfo();
         if (mTestGroup == null && includeFilter.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "At least one of the options, --test-mapping-test-group or --include-filter, "
-                            + "should be set.");
+                            + "should be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (mTestGroup == null && !mKeywords.isEmpty()) {
-            throw new RuntimeException(
-                    "Must specify --test-mapping-test-group when applying --test-mapping-keyword.");
+            throw new HarnessRuntimeException(
+                    "Must specify --test-mapping-test-group when applying --test-mapping-keyword.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (mTestGroup == null && !mTestModulesForced.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "Must specify --test-mapping-test-group when applying "
-                            + "--force-test-mapping-module.");
+                            + "--force-test-mapping-module.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (mTestGroup != null && !includeFilter.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "If options --test-mapping-test-group is set, option --include-filter should "
-                            + "not be set.");
+                            + "not be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (!includeFilter.isEmpty() && !mTestMappingPaths.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "If option --include-filter is set, option --test-mapping-path should "
-                            + "not be set.");
+                            + "not be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         if (mTestGroup != null) {
+            TestMapping.setIgnoreTestMappingImports(mIgnoreTestMappingImports);
             if (!mTestMappingPaths.isEmpty()) {
                 TestMapping.setTestMappingPaths(mTestMappingPaths);
             }
             testInfosToRun =
                     TestMapping.getTests(
-                            getBuildInfo(), mTestGroup, getPrioritizeHostConfig(), mKeywords);
+                            mBuildInfo,
+                            mTestGroup,
+                            getPrioritizeHostConfig(),
+                            mKeywords,
+                            mAdditionalTestMappingZips);
             if (!mTestModulesForced.isEmpty()) {
                 CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
                 testInfosToRun =
@@ -149,9 +201,14 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                                 .filter(testInfo -> mTestModulesForced.contains(testInfo.getName()))
                                 .collect(Collectors.toSet());
             }
+            if (!mAllowedTestLists.isEmpty()) {
+                CLog.i("Filtering tests from allowed test lists: %s", mAllowedTestLists);
+                testInfosToRun = filterByAllowedTestLists(testInfosToRun);
+            }
             if (testInfosToRun.isEmpty()) {
-                throw new RuntimeException(
-                        String.format("No test found for the given group: %s.", mTestGroup));
+                throw new HarnessRuntimeException(
+                        String.format("No test found for the given group: %s.", mTestGroup),
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             for (TestInfo testInfo : testInfosToRun) {
                 testNames.add(testInfo.getName());
@@ -179,7 +236,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             String configPath = moduleConfig.getName();
             Set<TestInfo> testInfos = getTestInfos(testInfosToRun, moduleName);
             // Only keep the same matching abi runner
-            allTests.addAll(createIndividualTests(testInfos, configPath, abi));
+            allTests.addAll(createIndividualTests(testInfos, moduleConfig, abi));
             if (!allTests.isEmpty()) {
                 // Set back to IConfiguration only if IRemoteTests are created.
                 moduleConfig.setTests(allTests);
@@ -187,6 +244,14 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                 List<String> testSources = getTestSources(testInfos);
                 configDescriptor.addMetadata(TestMapping.TEST_SOURCES, testSources);
             }
+            if (mRemoteTestTimeOut != null) {
+                // Add the timeout to metadata so that it can be used in the ModuleDefinition.
+                configDescriptor.addMetadata(
+                        RemoteTestTimeOutEnforcer.REMOTE_TEST_TIMEOUT_OPTION,
+                        mRemoteTestTimeOut.toString()
+                );
+            }
+
         }
         return testConfigs;
     }
@@ -206,16 +271,39 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         return mUseTestMappingPath;
     }
 
+    /** Ensure there are no collisions of TEST_MAPPING paths between different test mapping zips. */
+    private void validateTestMappingSource(Set<TestInfo> base, Set<TestInfo> target, String name) {
+        Set<String> baseSorces = new HashSet<>();
+        for (TestInfo testInfo : base) {
+            baseSorces.addAll(testInfo.getSources());
+        }
+        for (TestInfo testInfo : target) {
+            for (String src : testInfo.getSources()) {
+                if (baseSorces.contains(src)) {
+                    throw new HarnessRuntimeException(
+                            String.format("Collision of Test Mapping file: %s/TEST_MAPPING in " +
+                                    "artifact: %s.", src, name),
+                            InfraErrorIdentifier.TEST_MAPPING_PATH_COLLISION);
+                }
+            }
+        }
+    }
+
     /**
      * Create individual tests with test infos for a module.
      *
      * @param testInfos A {@code Set<TestInfo>} containing multiple test options.
-     * @param configPath A {@code String} of configuration path.
+     * @param moduleConfig The {@link IConfiguration} of the module config.
      * @return The {@link List} that are injected with the test options.
      */
     @VisibleForTesting
-    List<IRemoteTest> createIndividualTests(Set<TestInfo> testInfos, String configPath, IAbi abi) {
+    List<IRemoteTest> createIndividualTests(
+            Set<TestInfo> testInfos, IConfiguration moduleConfig, IAbi abi) {
         List<IRemoteTest> tests = new ArrayList<>();
+        String configPath = moduleConfig.getName();
+        // Save top-level exclude-filter test options so that we can inject them back
+        // afterwards when creating individual test.
+        Set<String> excludeFilterSet = getExcludeFilter();
         if (configPath == null) {
             throw new RuntimeException(String.format("Configuration path is null."));
         }
@@ -229,6 +317,8 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             // Clean up all the test options injected in SuiteModuleLoader.
             super.cleanUpSuiteSetup();
             super.clearModuleArgs();
+            // Inject back the original exclude-filter test options.
+            super.setExcludeFilter(excludeFilterSet);
             if (configFile != null) {
                 clearConfigPaths();
                 // Set config path to BaseTestSuite to limit the search.
@@ -242,10 +332,24 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                         && !entry.getValue().getConfigurationDescription().getAbi().equals(abi)) {
                     continue;
                 }
-                tests.addAll(entry.getValue().getTests());
+                List<IRemoteTest> remoteTests = entry.getValue().getTests();
+                if (mRemoteTestTimeOut != null) {
+                    addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
+                }
+                tests.addAll(remoteTests);
             }
         }
         return tests;
+    }
+
+    /** Add test mapping's path into module configuration. */
+    private void addTestSourcesToConfig(IConfiguration config, List<IRemoteTest> tests,
+            Set<String> sources) {
+        for (IRemoteTest test : tests) {
+            config.getConfigurationDescription().addMetadata(
+                Integer.toString(test.hashCode()), new ArrayList<>(sources)
+            );
+        }
     }
 
     /**
@@ -342,6 +446,53 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         return testInfos
                 .stream()
                 .filter(testInfo -> moduleName.equals(testInfo.getName()))
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Filter test infos by the given allowed test lists.
+     *
+     * @param testInfos A {@code Set<TestInfo>} containing multiple test options.
+     * @return A {@code Set<TestInfo>} of tests matching the allowed test lists.
+     */
+    @VisibleForTesting
+    Set<TestInfo> filterByAllowedTestLists(Set<TestInfo> testInfos) {
+        // Read the list of allowed tests, and compile a set of allowed test module names.
+        Set<String> allowedTests = new HashSet<String>();
+        for (String testList : mAllowedTestLists) {
+            File testListZip = getBuildInfo().getFile(testList);
+            if (testListZip == null) {
+                throw new RuntimeException("Failed to locate allowed test list " + testList);
+            }
+            File testListFile = null;
+            try {
+                ZipFile zipFile = new ZipFile(testListZip);
+                testListFile =
+                        ZipUtil2.extractFileFromZip(
+                                zipFile, Files.getNameWithoutExtension(testList));
+                zipFile.close();
+                String content = FileUtil.readStringFromFile(testListFile);
+                final String pattern = "([^//]*).config$";
+                Pattern namePattern = Pattern.compile(pattern);
+                for (String line : content.split("\n")) {
+                    Matcher matcher = namePattern.matcher(line);
+                    if (matcher.find()) {
+                        allowedTests.add(matcher.group(1));
+                    }
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(
+                        String.format(
+                                "IO exception (%s) when accessing allowed test list (%s)",
+                                e.getMessage(), testList),
+                        e);
+            } finally {
+                FileUtil.recursiveDelete(testListFile);
+            }
+        }
+
+        return testInfos.stream()
+                .filter(testInfo -> allowedTests.contains(testInfo.getName()))
                 .collect(Collectors.toSet());
     }
 }

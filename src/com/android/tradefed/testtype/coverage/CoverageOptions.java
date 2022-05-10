@@ -61,8 +61,20 @@ public final class CoverageOptions {
     )
     private List<String> mCoverageProcesses = new ArrayList<>();
 
+    @Option(
+            name = "reset-coverage-before-test",
+            description = "Reset coverage before running each test.")
+    private boolean mResetCoverageBeforeTest = true;
+
     @Option(name = "llvm-profdata-path", description = "Path to llvm-profdata tool.")
     private File mLlvmProfdataPath = null;
+
+    @Option(
+            name = "profraw-filter",
+            description =
+                    "The regex of profraw files to merge for coverage measurements.  E.g."
+                            + " \"foo.*\\.profraw\".  Default: \".*\\.profraw\"")
+    private String mProfrawFilter = ".*\\.profraw";
 
     /**
      * Returns whether coverage measurements should be collected from this run.
@@ -102,11 +114,31 @@ public final class CoverageOptions {
     }
 
     /**
+     * Returns whether coverage measurements should be reset before each test.
+     *
+     * <p>Enabling this allows the coverage to be more targeted to the test.
+     *
+     * @return whether to reset coverage before the test
+     */
+    public boolean shouldResetCoverageBeforeTest() {
+        return mResetCoverageBeforeTest;
+    }
+
+    /**
      * Returns the directory containing the llvm-profdata tool.
      *
      * @return a {@link File} containing the llvm-profdata tool and its dependencies
      */
     public File getLlvmProfdataPath() {
         return mLlvmProfdataPath;
+    }
+
+    /**
+     * Returns the prefix of profdata filenames used for coverage measurements.
+     *
+     * @return a {@link String} containing the prefix of profdata filenames
+     */
+    public String getProfrawFilter() {
+        return mProfrawFilter;
     }
 }

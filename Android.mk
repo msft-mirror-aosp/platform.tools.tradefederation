@@ -14,26 +14,13 @@
 
 LOCAL_PATH := $(call my-dir)
 COMPATIBILITY.tradefed_tests_dir := \
-  $(COMPATIBILITY.tradefed_tests_dir) $(LOCAL_PATH)/res/config $(LOCAL_PATH)/tests/res/config
+  $(COMPATIBILITY.tradefed_tests_dir) $(LOCAL_PATH)/res/config $(LOCAL_PATH)/javatests/res/config
 
 include $(CLEAR_VARS)
 
 # makefile rules to copy jars to HOST_OUT/tradefed
 # so tradefed.sh can automatically add to classpath
 
-# Output tradefed-no-fwk as "tradefed.jar" for seamlessly replacing the jar.
-deps := $(call copy-many-files,\
-  $(call intermediates-dir-for,JAVA_LIBRARIES,tradefed-no-fwk,HOST)/javalib.jar:$(HOST_OUT)/tradefed/tradefed.jar)
-
-fwk_deps := $(call copy-many-files,\
-  $(call intermediates-dir-for,JAVA_LIBRARIES,tradefed-test-framework,HOST)/javalib.jar:$(HOST_OUT)/tradefed/tradefed-test-framework.jar)
-
-isodeps := $(call copy-many-files,\
-  $(call intermediates-dir-for,JAVA_LIBRARIES,tradefed-isolation,HOST)/javalib.jar:$(HOST_OUT)/tradefed/tradefed-isolation.jar)
-
-# this dependency ensures the above rule will be executed if jar is installed
-$(HOST_OUT_JAVA_LIBRARIES)/tradefed.jar : $(deps) $(isodeps) $(fwk_deps)
-# The copy rule for loganalysis is in tools/loganalysis/Android.mk
 $(HOST_OUT_JAVA_LIBRARIES)/tradefed.jar : $(HOST_OUT)/tradefed/loganalysis.jar
 
 #######################################################
@@ -42,16 +29,15 @@ $(HOST_OUT_JAVA_LIBRARIES)/tradefed.jar : $(HOST_OUT)/tradefed/loganalysis.jar
 # Note that this is incompatible with `make dist`.  If you want to make
 # the distribution, you must run `tapas` with the individual target names.
 .PHONY: tradefed-core
-tradefed-core: tradefed tradefed-isolation tradefed-test-framework atest_tradefed.sh tradefed-contrib tf-contrib-tests script_help.sh tradefed.sh
+tradefed-core: tradefed tradefed-test-framework atest_tradefed.sh tradefed-contrib script_help.sh tradefed.sh
 
 .PHONY: tradefed-all
-tradefed-all: tradefed-core tradefed-tests tradefed_win loganalysis-tests
+tradefed-all: tradefed-core tradefed-tests tradefed_win compatibility-host-util compatibility-tradefed
 
 ########################################################
 # Zip up the built files and dist it as tradefed.zip
 
-# Do not include "tradefed" in here, it's created below from tradefed-no-fwk
-tradefed_dist_host_jars := tradefed-test-framework tradefed-tests loganalysis loganalysis-tests tradefed-contrib tf-contrib-tests tradefed-isolation
+tradefed_dist_host_jars := tradefed tradefed-test-framework tradefed-tests loganalysis tradefed-contrib compatibility-tradefed compatibility-host-util
 tradefed_dist_host_exes := tradefed.sh tradefed_win.bat script_help.sh atest_tradefed.sh
 tradefed_dist_test_apks := TradeFedUiTestApp TradeFedTestApp
 
@@ -60,9 +46,7 @@ tradefed_dist_test_apks := TradeFedUiTestApp TradeFedTestApp
 # installed location, as that will force installation, and cause this zip to be
 # regenerated too often during incremental builds.
 
-# Copy tradefed-no-fwk to tradefed.jar to be an inplace replacement
-tradefed_dist_copy_pairs := $(call intermediates-dir-for,JAVA_LIBRARIES,tradefed-no-fwk,HOST,COMMON)/javalib.jar:tradefed.jar
-tradefed_dist_copy_pairs += $(foreach m, $(tradefed_dist_host_jars), $(call intermediates-dir-for,JAVA_LIBRARIES,$(m),HOST,COMMON)/javalib.jar:$(m).jar)
+tradefed_dist_copy_pairs := $(foreach m, $(tradefed_dist_host_jars), $(call intermediates-dir-for,JAVA_LIBRARIES,$(m),HOST,COMMON)/javalib.jar:$(m).jar)
 tradefed_dist_copy_pairs += $(foreach m, $(tradefed_dist_host_exes), $(LOCAL_PATH)/$(m):$(m))
 tradefed_dist_copy_pairs += $(foreach m, $(tradefed_dist_test_apks), $(call intermediates-dir-for,APPS,$(m))/package.apk:$(m).apk)
 
@@ -81,11 +65,12 @@ $(tradefed_dist_zip) : $(SOONG_ZIP) $(foreach f,$(tradefed_dist_copy_pairs),$(ca
 	$(SOONG_ZIP) -o $@ -C $(dir $@)/tmp -f $(dir $@)/tmp/version.txt \
 	  $(foreach f,$(PRIVATE_COPY_PAIRS),-f $(dir $@)/tmp/$(call word-colon,2,$(f)))
 
+$(call declare-1p-container,$(tradefed_dist_zip),tools/tradefederation/core)
+$(call declare-container-license-deps,$(tradefed_dist_zip),$(filter $(OUT_DIR)/%,$(foreach f,$(tradefed_dist_copy_pairs), $(call word-colon,1,$(f)))),$(tradefed_dist_zip):)
+
 $(call dist-for-goals, tradefed, $(tradefed_dist_zip))
 
 tradefed_dist_copy_pairs :=
 tradefed_dist_intermediates :=
 tradefed_dist_zip :=
 
-# Build all sub-directories
-include $(call all-makefiles-under,$(LOCAL_PATH))

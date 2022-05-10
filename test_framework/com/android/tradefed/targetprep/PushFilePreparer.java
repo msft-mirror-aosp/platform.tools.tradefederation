@@ -17,7 +17,6 @@
 package com.android.tradefed.targetprep;
 
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.Log;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
@@ -61,7 +60,6 @@ import java.util.Set;
 @OptionClass(alias = "push-file")
 public class PushFilePreparer extends BaseTargetPreparer
         implements IAbiReceiver, IInvocationContextReceiver {
-    private static final String LOG_TAG = "PushFilePreparer";
     private static final String MEDIA_SCAN_INTENT =
             "am broadcast -a android.intent.action.MEDIA_MOUNTED -d file://%s "
                     + "--receiver-include-background";
@@ -84,10 +82,19 @@ public class PushFilePreparer extends BaseTargetPreparer
     @Option(
             name = "push-file",
             description =
-                    "A push-spec, specifying the local file to the path where it should be pushed on "
-                            + "device. May be repeated. If multiple files are configured to be pushed "
-                            + "to the same remote path, the latest one will be pushed.")
+                    "A push-spec, specifying the local file to the path where it should be pushed"
+                        + " on device. May be repeated. If multiple files are configured to be"
+                        + " pushed to the same remote path, the latest one will be pushed.")
     private MultiMap<File, String> mPushFileSpecs = new MultiMap<>();
+
+    @Option(
+            name = "skip-abi-filtering",
+            description =
+                    "A bool to indicate we should or shouldn't skip files that match the "
+                            + "architecture string name, e.g. x86, x86_64, arm64-v8. This "
+                            + "is necessary when file or folder names match an architecture "
+                            + "version but still need to be pushed to the device.")
+    private boolean mSkipAbiFiltering = false;
 
     @Option(
             name = "backup-file",
@@ -146,7 +153,7 @@ public class PushFilePreparer extends BaseTargetPreparer
             throw new TargetSetupError(message, descriptor, identifier);
         } else {
             // Log the error and return
-            Log.w(LOG_TAG, message);
+            CLog.w(message);
         }
     }
 
@@ -361,11 +368,7 @@ public class PushFilePreparer extends BaseTargetPreparer
         Map<String, File> remoteToLocalMapping = getPushSpecs(device.getDeviceDescriptor());
         for (String remotePath : remoteToLocalMapping.keySet()) {
             File local = remoteToLocalMapping.get(remotePath);
-            Log.d(
-                    LOG_TAG,
-                    String.format(
-                            "Trying to push local '%s' to remote '%s'",
-                            local.getPath(), remotePath));
+            CLog.d("Trying to push local '%s' to remote '%s'", local.getPath(), remotePath);
             evaluatePushingPair(device, testInfo.getBuildInfo(), local, remotePath);
         }
 
@@ -430,7 +433,7 @@ public class PushFilePreparer extends BaseTargetPreparer
                         DeviceErrorIdentifier.FAIL_PUSH_FILE);
             }
             Set<String> filter = new HashSet<>();
-            if (mAbi != null) {
+            if (mAbi != null && !mSkipAbiFiltering) {
                 String currentArch = AbiUtils.getArchForAbi(mAbi.getName());
                 filter.addAll(AbiUtils.getArchSupported());
                 filter.remove(currentArch);

@@ -21,11 +21,13 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.suite.TestFailureListener;
@@ -114,6 +116,8 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     private static final String SCREENSHOT_TAG = "Screenshot";
     private static final String SKIPPED_ATTR = "skipped";
     private static final String STACK_TAG = "StackTrace";
+    private static final String ERROR_NAME_ATTR = "error_name";
+    private static final String ERROR_CODE_ATTR = "error_code";
     private static final String START_DISPLAY_TIME_ATTR = "start_display";
     private static final String START_TIME_ATTR = "start";
 
@@ -245,7 +249,9 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         serializer.startTag(NS, BUILD_TAG);
         for (String key : holder.context.getAttributes().keySet()) {
             serializer.attribute(
-                    NS, key, String.join(",", holder.context.getAttributes().get(key)));
+                    NS,
+                    sanitizeAttributesKey(key),
+                    String.join(",", holder.context.getAttributes().get(key)));
         }
         addBuildInfoAttributes(serializer, holder);
         serializer.endTag(NS, BUILD_TAG);
@@ -303,8 +309,17 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                 if (message == null) {
                     message = "Run was incomplete. Some tests might not have finished.";
                 }
+                FailureDescription failureDescription = module.getRunFailureDescription();
                 serializer.startTag(NS, MODULES_NOT_DONE_REASON);
                 serializer.attribute(NS, MESSAGE_ATTR, sanitizeXmlContent(message));
+                if (failureDescription != null && failureDescription.getErrorIdentifier() != null) {
+                    serializer.attribute(
+                            NS, ERROR_NAME_ATTR, failureDescription.getErrorIdentifier().name());
+                    serializer.attribute(
+                            NS,
+                            ERROR_CODE_ATTR,
+                            Long.toString(failureDescription.getErrorIdentifier().code()));
+                }
                 serializer.endTag(NS, MODULES_NOT_DONE_REASON);
             }
             serializeTestCases(serializer, module.getTestResults());
@@ -314,7 +329,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         return resultFile;
     }
 
-    private static void serializeTestCases(
+    private void serializeTestCases(
             XmlSerializer serializer, Map<TestDescription, TestResult> results)
             throws IllegalArgumentException, IllegalStateException, IOException {
         // We reformat into the same format as the ResultHandler from CTS to be compatible for now.
@@ -342,7 +357,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                     serializer.attribute(NS, SKIPPED_ATTR, Boolean.toString(true));
                 }
 
-                handleTestFailure(serializer, individualResult.getValue().getStackTrace());
+                handleTestFailure(serializer, individualResult);
 
                 HandleLoggedFiles(serializer, individualResult);
 
@@ -359,8 +374,9 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         }
     }
 
-    private static void handleTestFailure(XmlSerializer serializer, String fullStack)
+    private void handleTestFailure(XmlSerializer serializer, Entry<String, TestResult> testResult)
             throws IllegalArgumentException, IllegalStateException, IOException {
+        final String fullStack = testResult.getValue().getStackTrace();
         if (fullStack != null) {
             String message;
             int index = fullStack.indexOf('\n');
@@ -370,11 +386,16 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
             } else {
                 message = fullStack.substring(0, index);
             }
+            ErrorIdentifier errorIdentifier =
+                    testResult.getValue().getFailure().getErrorIdentifier();
             serializer.startTag(NS, FAILURE_TAG);
 
             serializer.attribute(NS, MESSAGE_ATTR, sanitizeXmlContent(message));
+            if (errorIdentifier != null) {
+                serializer.attribute(NS, ERROR_NAME_ATTR, errorIdentifier.name());
+                serializer.attribute(NS, ERROR_CODE_ATTR, Long.toString(errorIdentifier.code()));
+            }
             serializer.startTag(NS, STACK_TAG);
-
             serializer.text(sanitizeXmlContent(fullStack));
             serializer.endTag(NS, STACK_TAG);
 
@@ -707,7 +728,11 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     }
 
     @VisibleForTesting
-    static String sanitizeXmlContent(String s) {
+    protected String sanitizeXmlContent(String s) {
         return XmlEscapers.xmlContentEscaper().escape(s);
+    }
+
+    private static String sanitizeAttributesKey(String attribute) {
+        return attribute.replace(":", "_");
     }
 }

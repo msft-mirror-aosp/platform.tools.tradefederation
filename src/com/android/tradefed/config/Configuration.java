@@ -21,6 +21,8 @@ import com.android.tradefed.build.IBuildProvider;
 import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.command.ICommandOptions;
 import com.android.tradefed.config.OptionSetter.FieldDef;
+import com.android.tradefed.config.filter.GlobalTestFilter;
+import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.device.IDeviceRecovery;
 import com.android.tradefed.device.IDeviceSelection;
 import com.android.tradefed.device.TestDeviceOptions;
@@ -78,6 +80,7 @@ public class Configuration implements IConfiguration {
     // type names for built in configuration objects
     public static final String BUILD_PROVIDER_TYPE_NAME = "build_provider";
     public static final String TARGET_PREPARER_TYPE_NAME = "target_preparer";
+    public static final String LAB_PREPARER_TYPE_NAME = "lab_preparer";
     // Variation of Multi_target_preparer that runs BEFORE each device target_preparer.
     public static final String MULTI_PRE_TARGET_PREPARER_TYPE_NAME = "multi_pre_target_preparer";
     public static final String MULTI_PREPARER_TYPE_NAME = "multi_target_preparer";
@@ -98,6 +101,7 @@ public class Configuration implements IConfiguration {
     public static final String SANBOX_OPTIONS_TYPE_NAME = "sandbox_options";
     public static final String RETRY_DECISION_TYPE_NAME = "retry_decision";
     public static final String COVERAGE_OPTIONS_TYPE_NAME = "coverage";
+    public static final String GLOBAL_FILTERS_TYPE_NAME = "global_filters";
 
     private static Map<String, ObjTypeInfo> sObjTypeMap = null;
     private static Set<String> sMultiDeviceSupportedTag = null;
@@ -114,6 +118,9 @@ public class Configuration implements IConfiguration {
     private final String mDescription;
     // original command line used to create this given configuration.
     private String[] mCommandLine;
+
+    // Track options that had no effect
+    private Set<String> mInopOptions = new HashSet<>();
 
     // used to track the files that where dynamically downloaded
     private Set<File> mRemoteFiles = new HashSet<>();
@@ -150,6 +157,7 @@ public class Configuration implements IConfiguration {
             sObjTypeMap.put(BUILD_PROVIDER_TYPE_NAME, new ObjTypeInfo(IBuildProvider.class, false));
             sObjTypeMap.put(TARGET_PREPARER_TYPE_NAME,
                     new ObjTypeInfo(ITargetPreparer.class, true));
+            sObjTypeMap.put(LAB_PREPARER_TYPE_NAME, new ObjTypeInfo(ITargetPreparer.class, true));
             sObjTypeMap.put(
                     MULTI_PRE_TARGET_PREPARER_TYPE_NAME,
                     new ObjTypeInfo(IMultiTargetPreparer.class, true));
@@ -184,6 +192,8 @@ public class Configuration implements IConfiguration {
             sObjTypeMap.put(RETRY_DECISION_TYPE_NAME, new ObjTypeInfo(IRetryDecision.class, false));
             sObjTypeMap.put(
                     COVERAGE_OPTIONS_TYPE_NAME, new ObjTypeInfo(CoverageOptions.class, false));
+            sObjTypeMap.put(
+                    GLOBAL_FILTERS_TYPE_NAME, new ObjTypeInfo(GlobalTestFilter.class, false));
         }
         return sObjTypeMap;
     }
@@ -210,6 +220,7 @@ public class Configuration implements IConfiguration {
             sMultiDeviceSupportedTag = new HashSet<String>();
             sMultiDeviceSupportedTag.add(BUILD_PROVIDER_TYPE_NAME);
             sMultiDeviceSupportedTag.add(TARGET_PREPARER_TYPE_NAME);
+            sMultiDeviceSupportedTag.add(LAB_PREPARER_TYPE_NAME);
             sMultiDeviceSupportedTag.add(DEVICE_RECOVERY_TYPE_NAME);
             sMultiDeviceSupportedTag.add(DEVICE_REQUIREMENTS_TYPE_NAME);
             sMultiDeviceSupportedTag.add(DEVICE_OPTIONS_TYPE_NAME);
@@ -232,6 +243,7 @@ public class Configuration implements IConfiguration {
         setTestInvocationListener(new TextResultReporter());
         // Init an empty list of target_preparers
         setConfigurationObjectListNoThrow(TARGET_PREPARER_TYPE_NAME, new ArrayList<>());
+        setConfigurationObjectListNoThrow(LAB_PREPARER_TYPE_NAME, new ArrayList<>());
         setMultiPreTargetPreparers(new ArrayList<>());
         setMultiTargetPreparers(new ArrayList<>());
         setSystemStatusCheckers(new ArrayList<ISystemStatusChecker>());
@@ -241,6 +253,7 @@ public class Configuration implements IConfiguration {
         setCoverageOptions(new CoverageOptions());
         setConfigurationObjectNoThrow(SANBOX_OPTIONS_TYPE_NAME, new SandboxOptions());
         setConfigurationObjectNoThrow(RETRY_DECISION_TYPE_NAME, new BaseRetryDecision());
+        setConfigurationObjectNoThrow(GLOBAL_FILTERS_TYPE_NAME, new GlobalTestFilter());
     }
 
     /**
@@ -312,6 +325,16 @@ public class Configuration implements IConfiguration {
         notAllowedInMultiMode("getTargetPreparers");
         return ((List<IDeviceConfiguration>)getConfigurationObjectList(DEVICE_NAME))
                 .get(0).getTargetPreparers();
+    }
+
+    /** {@inheritDoc} */
+    @SuppressWarnings("unchecked")
+    @Override
+    public List<ITargetPreparer> getLabPreparers() {
+        notAllowedInMultiMode("getLabPreparers");
+        return ((List<IDeviceConfiguration>) getConfigurationObjectList(DEVICE_NAME))
+                .get(0)
+                .getLabPreparers();
     }
 
     /**
@@ -479,6 +502,13 @@ public class Configuration implements IConfiguration {
         return (CoverageOptions) getConfigurationObject(COVERAGE_OPTIONS_TYPE_NAME);
     }
 
+    /** {@inheritDoc} */
+    @SuppressWarnings("unchecked")
+    @Override
+    public GlobalTestFilter getGlobalFilters() {
+        return (GlobalTestFilter) getConfigurationObject(GLOBAL_FILTERS_TYPE_NAME);
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -528,11 +558,6 @@ public class Configuration implements IConfiguration {
         return getAllConfigurationObjects(null, true);
     }
 
-    /** Return a copy of all config objects that are not disabled via {@link IDisableable}. */
-    private Collection<Object> getAllNonDisabledConfigurationObjects() {
-        return getAllConfigurationObjects(null, false);
-    }
-
     /**
      * Return a copy of all config objects, minus the object configuration of the type specified.
      * Returns all the config objects if param is null.
@@ -556,6 +581,11 @@ public class Configuration implements IConfiguration {
             }
         }
         return objectsCopy;
+    }
+
+    /** Return a copy of all config objects that are not disabled via {@link IDisableable}. */
+    private Collection<Object> getAllNonDisabledConfigurationObjects() {
+        return getAllConfigurationObjects(null, false);
     }
 
     /**
@@ -742,7 +772,7 @@ public class Configuration implements IConfiguration {
                             cloneListTFObject(deepCopyConfig.getAllObjectOfType(objType));
                     clonedConfig.getDeviceConfig().get(i).removeObjectType(objType);
                     for (Object o : listOfType) {
-                        clonedConfig.getDeviceConfig().get(i).addSpecificConfig(o);
+                        clonedConfig.getDeviceConfig().get(i).addSpecificConfig(o, objType);
                     }
                 }
             } else {
@@ -778,9 +808,10 @@ public class Configuration implements IConfiguration {
         }
     }
 
-    private void addToDefaultDeviceConfig(Object obj) {
+    private void addToDefaultDeviceConfig(Object obj, String type) {
         try {
-            getDeviceConfigByName(ConfigurationDef.DEFAULT_DEVICE_NAME).addSpecificConfig(obj);
+            getDeviceConfigByName(ConfigurationDef.DEFAULT_DEVICE_NAME)
+                    .addSpecificConfig(obj, type);
         } catch (ConfigurationException e) {
             // should never happen
             throw new IllegalArgumentException(e);
@@ -793,7 +824,7 @@ public class Configuration implements IConfiguration {
     @Override
     public void setBuildProvider(IBuildProvider provider) {
         notAllowedInMultiMode("setBuildProvider");
-        addToDefaultDeviceConfig(provider);
+        addToDefaultDeviceConfig(provider, BUILD_PROVIDER_TYPE_NAME);
     }
 
     /**
@@ -933,7 +964,7 @@ public class Configuration implements IConfiguration {
     @Override
     public void setDeviceRecovery(IDeviceRecovery recovery) {
         notAllowedInMultiMode("setDeviceRecovery");
-        addToDefaultDeviceConfig(recovery);
+        addToDefaultDeviceConfig(recovery, DEVICE_RECOVERY_TYPE_NAME);
     }
 
     /**
@@ -942,7 +973,7 @@ public class Configuration implements IConfiguration {
     @Override
     public void setTargetPreparer(ITargetPreparer preparer) {
         notAllowedInMultiMode("setTargetPreparer");
-        addToDefaultDeviceConfig(preparer);
+        addToDefaultDeviceConfig(preparer, TARGET_PREPARER_TYPE_NAME);
     }
 
     /** {@inheritDoc} */
@@ -951,7 +982,24 @@ public class Configuration implements IConfiguration {
         notAllowedInMultiMode("setTargetPreparers");
         getDeviceConfigByName(ConfigurationDef.DEFAULT_DEVICE_NAME).getTargetPreparers().clear();
         for (ITargetPreparer prep : preparers) {
-            addToDefaultDeviceConfig(prep);
+            addToDefaultDeviceConfig(prep, TARGET_PREPARER_TYPE_NAME);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setLabPreparer(ITargetPreparer preparer) {
+        notAllowedInMultiMode("setLabPreparer");
+        addToDefaultDeviceConfig(preparer, LAB_PREPARER_TYPE_NAME);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setLabPreparers(List<ITargetPreparer> preparers) {
+        notAllowedInMultiMode("setLabPreparers");
+        getDeviceConfigByName(ConfigurationDef.DEFAULT_DEVICE_NAME).getLabPreparers().clear();
+        for (ITargetPreparer prep : preparers) {
+            addToDefaultDeviceConfig(prep, LAB_PREPARER_TYPE_NAME);
         }
     }
 
@@ -969,7 +1017,7 @@ public class Configuration implements IConfiguration {
     @Override
     public void setDeviceRequirements(IDeviceSelection devRequirements) {
         notAllowedInMultiMode("setDeviceRequirements");
-        addToDefaultDeviceConfig(devRequirements);
+        addToDefaultDeviceConfig(devRequirements, DEVICE_REQUIREMENTS_TYPE_NAME);
     }
 
     /**
@@ -978,7 +1026,7 @@ public class Configuration implements IConfiguration {
     @Override
     public void setDeviceOptions(TestDeviceOptions devOptions) {
         notAllowedInMultiMode("setDeviceOptions");
-        addToDefaultDeviceConfig(devOptions);
+        addToDefaultDeviceConfig(devOptions, DEVICE_OPTIONS_TYPE_NAME);
     }
 
     /**
@@ -1123,7 +1171,9 @@ public class Configuration implements IConfiguration {
             parser.setKeyStore(keyStoreClient);
         }
         try {
-            return parser.parse(listArgs);
+            List<String> leftOver = parser.parse(listArgs);
+            mInopOptions.addAll(parser.getInopOptions());
+            return leftOver;
         } catch (ConfigurationException e) {
             Matcher m = CONFIG_EXCEPTION_PATTERN.matcher(e.getMessage());
             if (!m.matches()) {
@@ -1251,17 +1301,24 @@ public class Configuration implements IConfiguration {
     @Override
     public void resolveDynamicOptions(DynamicRemoteFileResolver resolver)
             throws ConfigurationException, BuildRetrievalError {
+        List<Object> configObjects = new ArrayList<>(getAllConfigurationObjects());
         // Resolve regardless of sharding if we are in remote environment because we know that's
         // where the execution will occur.
         if (!isRemoteEnvironment()) {
             ICommandOptions options = getCommandOptions();
-            if (options.getShardCount() != null && options.getShardIndex() == null) {
-                CLog.w("Skipping download due to local sharding detected.");
+            if (getConfigurationObject(TradefedDelegator.DELEGATE_OBJECT) != null) {
+                configObjects.clear();
+                configObjects.add(getConfigurationObject(TradefedDelegator.DELEGATE_OBJECT));
+                CLog.d("Resolving only delegator object dynamic download.");
+            } else if (options.getShardCount() != null
+                    && options.getShardCount() > 1
+                    && options.getShardIndex() == null) {
+                CLog.w("Skipping dynamic download due to local sharding detected.");
                 return;
             }
         }
 
-        ArgsOptionParser argsParser = new ArgsOptionParser(getAllConfigurationObjects());
+        ArgsOptionParser argsParser = new ArgsOptionParser(configObjects);
         CLog.d("Resolve and download remote files from @Option");
         // Setup and validate the GCS File paths
         mRemoteFiles.addAll(argsParser.validateRemoteFilePath(resolver));
@@ -1292,6 +1349,12 @@ public class Configuration implements IConfiguration {
     @Override
     public Set<File> getFilesToClean() {
         return mRemoteFiles;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Set<String> getInopOptions() {
+        return mInopOptions;
     }
 
     /**
@@ -1366,6 +1429,15 @@ public class Configuration implements IConfiguration {
                             printDeprecatedOptions,
                             printUnchangedOptions);
                 }
+                for (ITargetPreparer preparer : deviceConfig.getLabPreparers()) {
+                    ConfigurationUtil.dumpClassToXml(
+                            serializer,
+                            LAB_PREPARER_TYPE_NAME,
+                            preparer,
+                            excludeFilters,
+                            printDeprecatedOptions,
+                            printUnchangedOptions);
+                }
                 ConfigurationUtil.dumpClassToXml(
                         serializer,
                         DEVICE_RECOVERY_TYPE_NAME,
@@ -1402,6 +1474,15 @@ public class Configuration implements IConfiguration {
                 ConfigurationUtil.dumpClassToXml(
                         serializer,
                         TARGET_PREPARER_TYPE_NAME,
+                        preparer,
+                        excludeFilters,
+                        printDeprecatedOptions,
+                        printUnchangedOptions);
+            }
+            for (ITargetPreparer preparer : getLabPreparers()) {
+                ConfigurationUtil.dumpClassToXml(
+                        serializer,
+                        LAB_PREPARER_TYPE_NAME,
                         preparer,
                         excludeFilters,
                         printDeprecatedOptions,

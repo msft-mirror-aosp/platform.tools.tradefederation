@@ -28,16 +28,20 @@ import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.metric.IMetricCollector;
+import com.android.tradefed.device.metric.IMetricCollectorReceiver;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
-import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.host.PrettyTestEventLogger;
 import com.android.tradefed.testtype.junit4.CarryDnaeError;
 import com.android.tradefed.testtype.junit4.JUnit4ResultForwarder;
@@ -507,6 +511,10 @@ public class HostTest
                 throw new RuntimeException(e);
             }
         }
+        // TODO(olivernguyen): Clean this up after instrumenting runInstrumentationTests(...) API.
+        if (testObj instanceof IConfigurationReceiver) {
+            ((IConfigurationReceiver) testObj).setConfiguration(mConfig);
+        }
     }
 
     /** {@inheritDoc} */
@@ -523,25 +531,24 @@ public class HostTest
                 List<Class<?>> classes = getClasses();
                 if (!mSkipTestClassCheck) {
                     if (classes.isEmpty()) {
-                        throw new IllegalArgumentException("No '--class' option was specified.");
+                        throw new HarnessRuntimeException(
+                                "No '--class' option was specified.",
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                     }
                 }
                 if (mMethodName != null && classes.size() > 1) {
-                    throw new IllegalArgumentException(
+                    throw new HarnessRuntimeException(
                             String.format(
                                     "'--method' only supports one '--class' name. Multiple were "
                                             + "given: '%s'",
-                                    classes));
+                                    classes),
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 }
-            } catch (IllegalArgumentException e) {
+            } catch (RuntimeException e) {
                 listener.testRunStarted(this.getClass().getCanonicalName(), 0);
-                FailureDescription failureDescription =
-                        FailureDescription.create(StreamUtil.getStackTrace(e));
-                failureDescription.setFailureStatus(FailureStatus.TEST_FAILURE);
-                listener.testRunFailed(failureDescription);
+                listener.testRunFailed(createFromException(e));
                 listener.testRunEnded(0L, new HashMap<String, Metric>());
-                throw new HarnessRuntimeException(
-                        e.getMessage(), e, InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                return;
             }
 
             // Add a pretty logger to the events to mark clearly start/end of test cases.
@@ -598,14 +605,11 @@ public class HostTest
                 try {
                     req = req.filterWith(new JUnit4TestFilter(mFilterHelper, mJUnit4JarFiles));
                     checkRunner = req.getRunner();
-                } catch (IllegalArgumentException e) {
+                } catch (RuntimeException e) {
                     listener.testRunStarted(classObj.getName(), 0);
-                    FailureDescription failureDescription =
-                            FailureDescription.create(StreamUtil.getStackTrace(e));
-                    failureDescription.setFailureStatus(FailureStatus.TEST_FAILURE);
-                    listener.testRunFailed(failureDescription);
+                    listener.testRunFailed(createFromException(e));
                     listener.testRunEnded(0L, new HashMap<String, Metric>());
-                    throw e;
+                    return;
                 }
                 runJUnit4Tests(listener, checkRunner, classObj.getName());
             } else {
@@ -633,12 +637,9 @@ public class HostTest
                 Runner checkRunner = req.filterWith(desc).getRunner();
                 try {
                     runJUnit4Tests(listener, checkRunner, desc.getClassName());
-                } catch (IllegalArgumentException e) {
+                } catch (RuntimeException e) {
                     listener.testRunStarted(desc.getClassName(), 0);
-                    FailureDescription failureDescription =
-                            FailureDescription.create(StreamUtil.getStackTrace(e));
-                    failureDescription.setFailureStatus(FailureStatus.TEST_FAILURE);
-                    listener.testRunFailed(failureDescription);
+                    listener.testRunFailed(createFromException(e));
                     listener.testRunEnded(0L, new HashMap<String, Metric>());
                     throw e;
                 }
@@ -661,6 +662,11 @@ public class HostTest
                         String.format(
                                 "%s does not implement ITestCollector", test.getClass()));
             }
+        }
+        // Set collectors for completeness but this isn't really supported as part of HostTest.
+        if (test instanceof IMetricCollectorReceiver) {
+            ((IMetricCollectorReceiver) test)
+                    .setMetricCollectors(new ArrayList<IMetricCollector>());
         }
         test.run(mTestInfo, listener);
     }
@@ -959,8 +965,8 @@ public class HostTest
                             | ClassNotFoundException fallbackSearch) {
                         StreamUtil.close(cl);
                         CLog.e(
-                                "Fallback search for a jar containing '%s' didn't work."
-                                        + "Consider using --jar option directly instead of using --class",
+                                "Fallback search for a jar containing '%s' didn't work.Consider"
+                                        + " using --jar option directly instead of using --class",
                                 className);
                     }
                 }
@@ -1004,6 +1010,9 @@ public class HostTest
                                 && !Modifier.isProtected(modifiers)
                                 && !Modifier.isInterface(modifiers)
                                 && !Modifier.isAbstract(modifiers)) {
+                            if (!mClasses.isEmpty() && !mClasses.contains(className)) {
+                                continue;
+                            }
                             classes.add(cls);
                             classNames.add(className);
                         }
@@ -1103,7 +1112,8 @@ public class HostTest
                 String esc = "\\";
                 String regex = "(?<!" + Pattern.quote(esc) + ")" + Pattern.quote(delim);
                 String[] fields = item.split(regex);
-                String key, value;
+                String key;
+                String value;
                 if (fields.length == 3) {
                     String target = fields[0];
                     if (testObj.getClass().getName().equals(target)) {
@@ -1266,6 +1276,7 @@ public class HostTest
                 Collection<? extends Object> subTests;
                 if (classObj != null) {
                     test.addClassName(classObj.getName());
+                    test.mJars = this.mJars;
                     subTests = test.mClasses;
                 } else {
                     test.addTestMethod(testObj);
@@ -1366,5 +1377,20 @@ public class HostTest
         } catch (BuildRetrievalError | ConfigurationException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private FailureDescription createFromException(Throwable exception) {
+        FailureDescription failure =
+                CurrentInvocation.createFailure(StreamUtil.getStackTrace(exception), null)
+                        .setCause(exception);
+        if (exception instanceof IHarnessException) {
+            ErrorIdentifier id = ((IHarnessException) exception).getErrorId();
+            failure.setErrorIdentifier(id);
+            if (id != null) {
+                failure.setFailureStatus(id.status());
+            }
+            failure.setOrigin(((IHarnessException) exception).getOrigin());
+        }
+        return failure;
     }
 }

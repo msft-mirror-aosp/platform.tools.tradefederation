@@ -27,7 +27,7 @@ import java.io.IOException;
 import java.util.HashMap;
 
 /** Listener that logs all the events it receives into a file */
-public class EventsLoggerListener implements ITestInvocationListener {
+public class EventsLoggerListener implements ILogSaverListener {
 
     private File mLog;
     private TestStatus mTestCaseStatus = null;
@@ -52,7 +52,10 @@ public class EventsLoggerListener implements ITestInvocationListener {
 
     @Override
     public void invocationFailed(FailureDescription failure) {
-        writeToFile(String.format("[invocation failed: %s]\n", failure));
+        writeToFile(
+                String.format(
+                        "[invocation failed: %s|%s|%s]\n",
+                        failure.getFailureStatus(), failure.getErrorIdentifier(), failure));
     }
 
     @Override
@@ -77,11 +80,36 @@ public class EventsLoggerListener implements ITestInvocationListener {
     }
 
     @Override
+    public void testRunStarted(String runName, int testCount) {
+        testRunStarted(runName, testCount, 0, System.currentTimeMillis());
+    }
+
+    @Override
+    public void testRunStarted(String runName, int testCount, int attemptNumber) {
+        testRunStarted(runName, testCount, attemptNumber, System.currentTimeMillis());
+    }
+
+    @Override
     public void testRunStarted(String runName, int testCount, int attemptNumber, long startTime) {
         writeToFile(
                 String.format(
                         "    [run %s (testCount: %s,attempt: %s) started]\n",
                         runName, testCount, attemptNumber));
+    }
+
+    @Override
+    public void testRunFailed(FailureDescription failure) {
+        writeToFile(
+                String.format(
+                        "        [run failed with %s|%s|%s]\n",
+                        failure.getErrorMessage(),
+                        failure.getFailureStatus(),
+                        failure.getErrorIdentifier()));
+    }
+
+    @Override
+    public void testRunFailed(String errorMessage) {
+        writeToFile(String.format("        [run failed with %s]\n", errorMessage));
     }
 
     @Override
@@ -125,8 +153,18 @@ public class EventsLoggerListener implements ITestInvocationListener {
         mTestCaseStatus = null;
     }
 
+    @Override
+    public void logAssociation(String dataName, LogFile logFile) {
+        String extra = "";
+        if (mTestCaseStatus != null) {
+            extra = "test";
+        }
+        writeToFile(
+                String.format("[   %s log: %s | path: %s]\n", extra, dataName, logFile.getPath()));
+    }
+
     private void writeToFile(String text) {
-        if (mLog == null) {
+        if (mLog == null || !mLog.exists()) {
             return;
         }
         try {

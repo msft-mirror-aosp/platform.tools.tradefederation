@@ -39,6 +39,8 @@ public class FailureDescription {
     private @Nullable Throwable mCause = null;
     // Whether or not the error is retriable by Tradefed auto-retry. By Default we retry it all.
     private boolean mRetriable = true;
+    // Test Feature: whether or not to rerun the full run in case of run failure.
+    private boolean mRunFailureReRunAll = true;
 
     // Error identifiers
     // Optional: The error identifier and its code
@@ -114,6 +116,17 @@ public class FailureDescription {
         return mRetriable;
     }
 
+    /** Sets whether or not to rerun the full run when a run failure occurs. */
+    public FailureDescription setFullRerun(boolean fullRerun) {
+        mRunFailureReRunAll = fullRerun;
+        return this;
+    }
+
+    /** Returns whether or not we need to retry the full run or not. */
+    public boolean rerunFull() {
+        return mRunFailureReRunAll;
+    }
+
     /** Sets the {@link ErrorIdentifier} representing the failure. */
     public FailureDescription setErrorIdentifier(ErrorIdentifier errorId) {
         mErrorId = errorId;
@@ -147,6 +160,24 @@ public class FailureDescription {
     /** Returns the error message associated with the failure. */
     public String getErrorMessage() {
         return mErrorMessage;
+    }
+
+    /**
+     * A formatted way of displaying the error and some details.
+     */
+    public String getFormattedErrorMessage() {
+        StringBuilder s = new StringBuilder();
+        if (mErrorId != null) {
+            s.append("[");
+            s.append(mErrorId.name());
+            s.append("|");
+            s.append(mErrorId.code());
+            s.append("|");
+            s.append(mErrorId.status());
+            s.append("] ");
+        }
+        s.append(mErrorMessage);
+        return s.toString();
     }
 
     @Override
@@ -193,18 +224,36 @@ public class FailureDescription {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null) return false;
-        if (getClass() != obj.getClass()) return false;
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
         FailureDescription other = (FailureDescription) obj;
-        if (mActionInProgress != other.mActionInProgress) return false;
+        if (mActionInProgress != other.mActionInProgress) {
+            return false;
+        }
         if (mDebugHelpMessage == null) {
-            if (other.mDebugHelpMessage != null) return false;
-        } else if (!mDebugHelpMessage.equals(other.mDebugHelpMessage)) return false;
+            if (other.mDebugHelpMessage != null) {
+                return false;
+            }
+        } else if (!mDebugHelpMessage.equals(other.mDebugHelpMessage)) {
+            return false;
+        }
         if (mErrorMessage == null) {
-            if (other.mErrorMessage != null) return false;
-        } else if (!mErrorMessage.equals(other.mErrorMessage)) return false;
-        if (mFailureStatus != other.mFailureStatus) return false;
+            if (other.mErrorMessage != null) {
+                return false;
+            }
+        } else if (!mErrorMessage.equals(other.mErrorMessage)) {
+            return false;
+        }
+        if (mFailureStatus != other.mFailureStatus) {
+            return false;
+        }
         return true;
     }
 }

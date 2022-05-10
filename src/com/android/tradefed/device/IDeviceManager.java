@@ -194,6 +194,15 @@ public interface IDeviceManager {
     /** Like {@link #terminate()}, but attempts to forcefully shut down adb as well. */
     public void terminateHard();
 
+    /**
+     * Like {@link #terminateHard()}.
+     *
+     * @param reason optional reason given for the termination.
+     */
+    public default void terminateHard(String reason) {
+        terminateHard();
+    }
+
     /** Stop adb bridge and services depend on adb connections. */
     public void stopAdbBridge();
 
@@ -279,24 +288,6 @@ public interface IDeviceManager {
      * @param timeout time to wait in millisecond before returning false.
      */
     public boolean waitForFirstDeviceAdded(long timeout);
-
-    /**
-     * Get the number of available flashing permits
-     *
-     * @return Number of available flashing permits or Integer.MAX_VALUE if not available.
-     */
-    public int getAvailableFlashingPermits();
-
-    /**
-     * Request permission to flash.  If the number of concurrent flashers is limited, this will
-     * wait in line in order to remain under the flash limit count.
-     */
-    public void takeFlashingPermit();
-
-    /**
-     * Restore a flashing permit that we acquired previously
-     */
-    public void returnFlashingPermit();
 
     /** Get the adb version currently in use by the device manager. */
     public String getAdbVersion();

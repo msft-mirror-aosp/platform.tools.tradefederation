@@ -30,8 +30,8 @@ import java.io.StringWriter;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 
 /**
  * A simple handler class that sends an email to interested people when a WTF
@@ -46,10 +46,11 @@ public class TerribleFailureEmailHandler implements ITerribleFailureHandler {
             importance = Importance.IF_UNSET)
     private String mSender = null;
 
-    @Option(name = "destination",
+    @Option(
+            name = "destination",
             description = "One or more destination addresses.",
             importance = Importance.IF_UNSET)
-    private Collection<String> mDestinations = new HashSet<String>();
+    private Collection<String> mDestinations = new LinkedHashSet<>();
 
     @Option(name = "subject-prefix",
             description = "The prefix to be added to the beginning of the email subject.")
@@ -239,8 +240,9 @@ public class TerribleFailureEmailHandler implements ITerribleFailureHandler {
      * @return A {@link String} containing the stack trace of the throwable.
      */
     private static String getStackTraceString(Throwable t) {
-        if (t == null)
+        if (t == null) {
             return "";
+        }
 
         StringWriter sw = new StringWriter();
         PrintWriter pw = new PrintWriter(sw);
