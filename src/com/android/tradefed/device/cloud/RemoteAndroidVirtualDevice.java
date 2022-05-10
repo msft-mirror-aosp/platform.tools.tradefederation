@@ -199,13 +199,24 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                     // Log the serial output of the instance.
                     getGceHandler().logSerialOutput(mGceAvd, mTestLogger);
 
-                    // Fetch remote files
-                    CommonLogRemoteFileUtil.fetchCommonFiles(
-                            mTestLogger, mGceAvd, getOptions(), getRunUtil());
+                    // Test if an SSH connection can be established. If can't, skip all collection.
+                    boolean isGceReachable =
+                            CommonLogRemoteFileUtil.isRemoteGceReachableBySsh(
+                                    mGceAvd, getOptions(), getRunUtil());
 
-                    // Fetch all tombstones if any.
-                    CommonLogRemoteFileUtil.fetchTombstones(
-                            mTestLogger, mGceAvd, getOptions(), getRunUtil());
+                    if (isGceReachable) {
+                        // Fetch remote files
+                        CommonLogRemoteFileUtil.fetchCommonFiles(
+                                mTestLogger, mGceAvd, getOptions(), getRunUtil());
+
+                        // Fetch all tombstones if any.
+                        CommonLogRemoteFileUtil.fetchTombstones(
+                                mTestLogger, mGceAvd, getOptions(), getRunUtil());
+                    } else {
+                        CLog.e(
+                                "Failed to establish ssh connect to remote file host, skipping"
+                                        + " remote common file and tombstones collection.");
+                    }
 
                     // Fetch host kernel log by running `dmesg` for Oxygen hosts
                     if (getOptions().useOxygen()) {
