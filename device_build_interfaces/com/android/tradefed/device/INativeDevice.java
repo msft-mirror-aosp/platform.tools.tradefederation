@@ -1219,6 +1219,14 @@ public interface INativeDevice {
     public boolean waitForDeviceNotAvailable(final long waitTime);
 
     /**
+     * Blocks until device is visible via fastboot. Use default timeout.
+     *
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public void waitForDeviceBootloader() throws DeviceNotAvailableException;
+
+    /**
      * Blocks for the device to be in the 'adb recovery' state (note this is distinct from
      * {@link IDeviceRecovery}).
      *
