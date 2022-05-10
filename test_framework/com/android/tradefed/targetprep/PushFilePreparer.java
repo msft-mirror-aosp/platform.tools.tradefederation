@@ -17,7 +17,6 @@
 package com.android.tradefed.targetprep;
 
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.Log;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
@@ -61,7 +60,6 @@ import java.util.Set;
 @OptionClass(alias = "push-file")
 public class PushFilePreparer extends BaseTargetPreparer
         implements IAbiReceiver, IInvocationContextReceiver {
-    private static final String LOG_TAG = "PushFilePreparer";
     private static final String MEDIA_SCAN_INTENT =
             "am broadcast -a android.intent.action.MEDIA_MOUNTED -d file://%s "
                     + "--receiver-include-background";
@@ -155,7 +153,7 @@ public class PushFilePreparer extends BaseTargetPreparer
             throw new TargetSetupError(message, descriptor, identifier);
         } else {
             // Log the error and return
-            Log.w(LOG_TAG, message);
+            CLog.w(message);
         }
     }
 
@@ -370,11 +368,7 @@ public class PushFilePreparer extends BaseTargetPreparer
         Map<String, File> remoteToLocalMapping = getPushSpecs(device.getDeviceDescriptor());
         for (String remotePath : remoteToLocalMapping.keySet()) {
             File local = remoteToLocalMapping.get(remotePath);
-            Log.d(
-                    LOG_TAG,
-                    String.format(
-                            "Trying to push local '%s' to remote '%s'",
-                            local.getPath(), remotePath));
+            CLog.d("Trying to push local '%s' to remote '%s'", local.getPath(), remotePath);
             evaluatePushingPair(device, testInfo.getBuildInfo(), local, remotePath);
         }
 

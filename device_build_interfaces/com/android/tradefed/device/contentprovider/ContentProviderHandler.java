@@ -36,6 +36,7 @@ import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -69,7 +70,10 @@ public class ContentProviderHandler {
     public static final String PACKAGE_NAME = "android.tradefed.contentprovider";
     public static final String CONTENT_PROVIDER_URI = "content://android.tradefed.contentprovider";
     private static final String APK_NAME = "TradefedContentProvider.apk";
-    private static final String CONTENT_PROVIDER_APK_RES = "/apks/contentprovider/" + APK_NAME;
+    private static final String CONTENT_PROVIDER_APK_RES = "/" + APK_NAME;
+    private static final String CONTENT_PROVIDER_APK_RES_FALLBACK =
+            "/android/tradefed/contentprovider/" + APK_NAME;
+
     private static final String PROPERTY_RESULT = "LEGACY_STORAGE: allow";
     private static final String ERROR_MESSAGE_TAG = "[ERROR]";
     // Error thrown by device if the content provider is not installed for any reason.
@@ -228,20 +232,32 @@ public class ContentProviderHandler {
             CLog.w("'%s' is not a file but a directory, can't use #pushFile on it.", fileToPush);
             return false;
         }
-        String contentUri = createEscapedContentUri(deviceFilePath);
-        String pushCommand =
-                String.format(
-                        "content write --user %d --uri %s", mDevice.getCurrentUser(), contentUri);
-        CommandResult pushResult = mDevice.executeShellV2Command(pushCommand, fileToPush);
-
-        if (isSuccessful(pushResult)) {
-            return true;
+        Integer currentUser = mDevice.getCurrentUser();
+        boolean res = pushFileInternal(fileToPush, deviceFilePath, currentUser);
+        if (!res && mReportNotFound) {
+            // Re-run setup to ensure we have the content provider installed
+            boolean installed = setUp();
+            if (!installed) {
+                return false;
+            }
+            res = pushFileInternal(fileToPush, deviceFilePath, currentUser);
         }
+        return res;
+    }
 
-        CLog.e(
-                "Failed to push a file '%s' at %s using content provider. Error: '%s'",
-                fileToPush, deviceFilePath, pushResult.getStderr());
-        return false;
+    /**
+     * Content provider callback that push a dir to the URI location.
+     *
+     * @param localFileDir The directory to push
+     * @param deviceFilePath The on device location
+     * @param excludedDirectories Directories not included in the push.
+     * @return True if successful
+     * @throws DeviceNotAvailableException
+     */
+    public boolean pushDir(File localFileDir, String deviceFilePath,
+                           Set<String> excludedDirectories) throws DeviceNotAvailableException {
+        return pushDirInternal(
+                localFileDir, deviceFilePath, excludedDirectories, mDevice.getCurrentUser());
     }
 
     /**
@@ -286,9 +302,17 @@ public class ContentProviderHandler {
     /** Helper method to extract the content provider apk. */
     private File extractResourceApk() throws IOException {
         File apkTempFile = FileUtil.createTempFile(APK_NAME, ".apk");
-        InputStream apkStream =
-                ContentProviderHandler.class.getResourceAsStream(CONTENT_PROVIDER_APK_RES);
-        FileUtil.writeToFile(apkStream, apkTempFile);
+        try {
+            InputStream apkStream =
+                    ContentProviderHandler.class.getResourceAsStream(CONTENT_PROVIDER_APK_RES);
+            FileUtil.writeToFile(apkStream, apkTempFile);
+        } catch (IOException e) {
+            // Fallback to new path
+            InputStream apkStream =
+                    ContentProviderHandler.class.getResourceAsStream(
+                            CONTENT_PROVIDER_APK_RES_FALLBACK);
+            FileUtil.writeToFile(apkStream, apkTempFile);
+        }
         return apkTempFile;
     }
 
@@ -436,5 +460,60 @@ public class ContentProviderHandler {
         } finally {
             StreamUtil.close(localFileStream);
         }
+    }
+
+    private boolean pushFileInternal(File fileToPush, String deviceFilePath, Integer currentUser)
+            throws DeviceNotAvailableException {
+        if (currentUser == null) {
+            currentUser = mDevice.getCurrentUser();
+        }
+        String contentUri = createEscapedContentUri(deviceFilePath);
+        String pushCommand =
+                String.format(
+                        "content write --user %d --uri %s", currentUser, contentUri);
+        CommandResult pushResult = mDevice.executeShellV2Command(pushCommand, fileToPush);
+
+        if (isSuccessful(pushResult)) {
+            return true;
+        }
+
+        CLog.e(
+                "Failed to push a file '%s' at %s using content provider. Error: '%s'",
+                fileToPush, deviceFilePath, pushResult.getStderr());
+        return false;
+    }
+
+    private boolean pushDirInternal(File localFileDir, String deviceFilePath,
+            Set<String> excludedDirectories, Integer currentUser)
+            throws DeviceNotAvailableException {
+        File[] childFiles = localFileDir.listFiles();
+        if (childFiles == null) {
+            CLog.e("Could not read files in %s", localFileDir.getAbsolutePath());
+            return false;
+        }
+        if (currentUser == null) {
+            currentUser = mDevice.getCurrentUser();
+        }
+        for (File childFile : childFiles) {
+            String remotePath = String.format("%s/%s", deviceFilePath, childFile.getName());
+            if (childFile.isDirectory()) {
+                // If we encounter a filtered directory do not push it.
+                if (excludedDirectories.contains(childFile.getName())) {
+                    CLog.d(
+                            "%s directory was not pushed because it was filtered.",
+                            childFile.getAbsolutePath());
+                    continue;
+                }
+                mDevice.executeShellCommand(String.format("mkdir -p \"%s\"", remotePath));
+                if (!pushDirInternal(childFile, remotePath, excludedDirectories, currentUser)) {
+                    return false;
+                }
+            } else if (childFile.isFile()) {
+                if (!pushFileInternal(childFile, remotePath, currentUser)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 }

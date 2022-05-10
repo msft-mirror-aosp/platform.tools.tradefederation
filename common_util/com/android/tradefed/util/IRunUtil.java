@@ -17,6 +17,7 @@
 package com.android.tradefed.util;
 
 import com.android.annotations.Nullable;
+import com.android.tradefed.result.error.ErrorIdentifier;
 
 import java.io.File;
 import java.io.IOException;
@@ -358,6 +359,16 @@ public interface IRunUtil {
     public void interrupt(Thread thread, String message);
 
     /**
+     * Interrupts the ongoing/forthcoming run operations on the given thread. The run operations on
+     * the given thread will throw {@link RunInterruptedException}.
+     *
+     * @param thread
+     * @param message the message for {@link RunInterruptedException}.
+     * @param errorId Representing the cause of the interruption when known.
+     */
+    public void interrupt(Thread thread, String message, ErrorIdentifier errorId);
+
+    /**
      * Decide whether or not when creating a process, unsetting environment variable is higher
      * priority than setting them.
      * By Default, unsetting is higher priority: meaning if an attempt to set a variable with the
@@ -365,6 +376,14 @@ public interface IRunUtil {
      * Cannot be used on the default {@link IRunUtil} instance.
      */
     public void setEnvVariablePriority(EnvPriority priority);
+
+    /**
+     * Allow to use linux 'kill' interruption on process running through #runTimed methods when it
+     * reaches a timeout.
+     *
+     * Cannot be used on the default {@link IRunUtil} instance.
+     */
+    public void setLinuxInterruptProcess(boolean interrupt);
 
     /**
      * Enum that defines whether setting or unsetting a particular env. variable has priority.

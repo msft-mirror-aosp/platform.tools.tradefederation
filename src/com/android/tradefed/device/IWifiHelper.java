@@ -32,6 +32,12 @@ interface IWifiHelper {
         COMPLETED, SCANNING, DISCONNECTED, OTHER;
     }
 
+    public enum WifiConnectionResult {
+        SUCCESS,
+        FAILED_TO_CONNECT,
+        FAILED_TO_ENABLE;
+    }
+
     /**
      * Enables wifi state on device.
      *
@@ -231,10 +237,11 @@ interface IWifiHelper {
      * @param psk the WPA-PSK passphrase to use. This can be null.
      * @param urlToCheck a destination url for a HTTP request check
      * @param scanSsid whether to scan for hidden SSID for this network
-     * @return <code>true</code> if the device pass connectivity check.
+     * @return WifiConnectionResult representing the wifi connection result
      * @throws DeviceNotAvailableException
      */
-    boolean connectToNetwork(String ssid, String psk, String urlToCheck, boolean scanSsid)
+    WifiConnectionResult connectToNetwork(
+            String ssid, String psk, String urlToCheck, boolean scanSsid)
             throws DeviceNotAvailableException;
 
     /**

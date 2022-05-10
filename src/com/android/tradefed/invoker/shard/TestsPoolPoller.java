@@ -27,9 +27,12 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
+import com.android.tradefed.device.metric.CountTestCasesCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.invoker.shard.token.ITokenProvider;
 import com.android.tradefed.invoker.shard.token.ITokenRequest;
 import com.android.tradefed.invoker.shard.token.TokenProperty;
@@ -47,6 +50,8 @@ import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IInvocationContextReceiver;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.IReportNotExecuted;
+import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
@@ -131,7 +136,7 @@ public final class TestsPoolPoller
                             // If the poller already rejected the tests once, do not re-evaluate.
                             continue;
                         }
-                        Set<TokenProperty> tokens = test.getRequiredTokens();
+                        Set<TokenProperty> tokens = test.getRequiredTokens(mTestInfo);
                         if (tokens == null || tokens.isEmpty() || isSupported(tokens)) {
                             // No Token can run anywhere, or supported can run
                             mTokenPool.remove(test);
@@ -201,6 +206,12 @@ public final class TestsPoolPoller
                     ((ISystemStatusCheckerReceiver) test)
                             .setSystemStatusChecker(mSystemStatusCheckers);
                 }
+                if (test instanceof ITestFilterReceiver) {
+                    mConfig.getGlobalFilters().applyFiltersToTest((ITestFilterReceiver) test);
+                } else if (test instanceof BaseTestSuite) {
+                    CLog.d("Applying global filters to BaseTestSuite");
+                    mConfig.getGlobalFilters().applyFiltersToTest((BaseTestSuite) test);
+                }
                 IConfiguration validationConfig = new Configuration("validation", "validation");
                 try {
                     // At this point only the <test> object needs to be validated for options, this
@@ -223,6 +234,11 @@ public final class TestsPoolPoller
                         // If test can receive collectors then let it handle the how to set them up
                         test.run(info, listener);
                     } else {
+                        if (mConfig != null && mConfig.getCommandOptions().reportTestCaseCount()) {
+                            CountTestCasesCollector counter = new CountTestCasesCollector(test);
+                            listenerWithCollectors =
+                                    counter.init(info.getContext(), listenerWithCollectors);
+                        }
                         test.run(info, listenerWithCollectors);
                     }
                 } catch (RuntimeException e) {
@@ -247,6 +263,8 @@ public final class TestsPoolPoller
                     CLog.w(e);
                 } finally {
                     validationConfig.cleanConfigurationData();
+                    CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
+                    CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
                 }
             }
         } finally {
@@ -306,7 +324,7 @@ public final class TestsPoolPoller
                 String message =
                         String.format(
                                 "Test did not run. No token '%s' matching it on any device.",
-                                tokenTest.getRequiredTokens());
+                                tokenTest.getRequiredTokens(mTestInfo));
                 ((IReportNotExecuted) tokenTest).reportNotExecuted(listener, message);
             } else {
                 CLog.e(

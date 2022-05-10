@@ -81,6 +81,19 @@ public class TestDescriptionsFile {
         mTestFile = testfile;
     }
 
+    private static void populateTestFile(List<TestDescription> tests, File testFile) {
+        Collections.sort(tests);
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(testFile), BUFFER_SIZE)) {
+            for (TestDescription test : tests) {
+                writer.write(test.toString());
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /** Return a copy of the tests stored - building from test file if necessary. */
     public List<TestDescription> getTests() {
         return new ArrayList<>(getOrBuildTests());
@@ -125,19 +138,6 @@ public class TestDescriptionsFile {
                 if (test != null) {
                     tests.add(test);
                 }
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static void populateTestFile(List<TestDescription> tests, File testFile) {
-        Collections.sort(tests);
-
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(testFile), BUFFER_SIZE)) {
-            for (TestDescription test : tests) {
-                writer.write(test.toString());
-                writer.newLine();
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
