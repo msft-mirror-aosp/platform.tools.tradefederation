@@ -332,7 +332,7 @@ public interface INativeDevice {
      * CommandResult} properly populated with the command status output, stdout and stderr.
      *
      * @param command The command that should be run.
-     * @param pipeAsInput A {@link File} that will be piped as input to the command.
+     * @param pipeAsInput A {@link File} that will be piped as input to the command, or null.
      * @return The result in {@link CommandResult}.
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
      *     recovered.
@@ -342,10 +342,11 @@ public interface INativeDevice {
 
     /**
      * Helper method which executes an adb shell command and returns the results as a {@link
-     * CommandResult} properly populated with the command status output, stdout and stderr.
+     * CommandResult} properly populated with the command status output and stderr. stdout is
+     * directed to the specified stream.
      *
      * @param command The command that should be run.
-     * @param pipeToOutput {@link OutputStream} where the std output will be redirected.
+     * @param pipeToOutput {@link OutputStream} where the std output will be redirected, or null.
      * @return The result in {@link CommandResult}.
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
      *     recovered.
@@ -396,8 +397,8 @@ public interface INativeDevice {
      *
      * @see #executeShellV2Command(String)
      * @param command the adb shell command to run
-     * @param pipeAsInput A {@link File} that will be piped as input to the command.
-     * @param pipeToOutput {@link OutputStream} where the std output will be redirected.
+     * @param pipeAsInput A {@link File} that will be piped as input to the command, or null.
+     * @param pipeToOutput {@link OutputStream} where the std output will be redirected, or null.
      * @param maxTimeoutForCommand the maximum timeout for the command to complete; unit as
      *     specified in <code>timeUnit</code>
      * @param timeUnit unit for <code>maxTimeToOutputShellResponse</code>
@@ -412,6 +413,34 @@ public interface INativeDevice {
             String command,
             File pipeAsInput,
             OutputStream pipeToOutput,
+            final long maxTimeoutForCommand,
+            final TimeUnit timeUnit,
+            int retryAttempts)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Executes a adb shell command, with more parameters to control command behavior.
+     *
+     * @see #executeShellV2Command(String)
+     * @param command the adb shell command to run
+     * @param pipeAsInput A {@link File} that will be piped as input to the command, or null.
+     * @param pipeToOutput {@link OutputStream} where the std output will be redirected, or null.
+     * @param pipeToError {@link OutputStream} where the std error will be redirected, or null.
+     * @param maxTimeoutForCommand the maximum timeout for the command to complete; unit as
+     *     specified in <code>timeUnit</code>
+     * @param timeUnit unit for <code>maxTimeToOutputShellResponse</code>
+     * @param retryAttempts the maximum number of times to retry command if it fails due to a
+     *     exception. DeviceNotResponsiveException will be thrown if <var>retryAttempts</var> are
+     *     performed without success.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     * @see TimeUtil
+     */
+    public CommandResult executeShellV2Command(
+            String command,
+            File pipeAsInput,
+            OutputStream pipeToOutput,
+            OutputStream pipeToError,
             final long maxTimeoutForCommand,
             final TimeUnit timeUnit,
             int retryAttempts)
@@ -603,6 +632,20 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
+     * Retrieves a file off device.
+     *
+     * @param remoteFilePath the absolute path to file on device.
+     * @param localFile the local file to store contents in. If non-empty, contents will be
+     *     replaced.
+     * @param userId The user id to pull from
+     * @return <code>true</code> if file was retrieved successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pullFile(String remoteFilePath, File localFile, int userId)
+            throws DeviceNotAvailableException;
+
+    /**
      * Retrieves a file off device, stores it in a local temporary {@link File}, and returns that
      * {@code File}.
      *
@@ -613,6 +656,19 @@ public interface INativeDevice {
      *             recovered.
      */
     public File pullFile(String remoteFilePath) throws DeviceNotAvailableException;
+
+    /**
+     * Retrieves a file off device, stores it in a local temporary {@link File}, and returns that
+     * {@code File}.
+     *
+     * @param remoteFilePath the absolute path to file on device.
+     * @param userId The user id to pull from
+     * @return A {@link File} containing the contents of the device file, or {@code null} if the
+     *     copy failed for any reason (including problems with the host filesystem)
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public File pullFile(String remoteFilePath, int userId) throws DeviceNotAvailableException;
 
     /**
      * Retrieves a file off device, and returns the contents.
@@ -862,18 +918,6 @@ public interface INativeDevice {
     public InputStreamSource getLogcat();
 
     /**
-     * Grabs a snapshot stream of captured logcat data starting the date provided. The time on the
-     * device should be used {@link #getDeviceDate}.
-     *
-     * <p>
-     *
-     * @param date in millisecond since epoch format of when to start the snapshot until present.
-     *     (can be be obtained using 'date +%s')
-     */
-    @MustBeClosed
-    public InputStreamSource getLogcatSince(long date);
-
-    /**
      * Grabs a snapshot stream of the last <code>maxBytes</code> of captured logcat data.
      *
      * <p>Useful for cases when you want to capture frequent snapshots of the captured logcat data
@@ -885,6 +929,18 @@ public interface INativeDevice {
      */
     @MustBeClosed
     public InputStreamSource getLogcat(int maxBytes);
+
+    /**
+     * Grabs a snapshot stream of captured logcat data starting the date provided. The time on the
+     * device should be used {@link #getDeviceDate}.
+     *
+     * <p>
+     *
+     * @param date in millisecond since epoch format of when to start the snapshot until present.
+     *     (can be be obtained using 'date +%s')
+     */
+    @MustBeClosed
+    public InputStreamSource getLogcatSince(long date);
 
     /**
      * Get a dump of the current logcat for device. Unlike {@link #getLogcat()}, this method will
@@ -1065,40 +1121,6 @@ public interface INativeDevice {
      * recovered.
      */
     public boolean isAdbRoot() throws DeviceNotAvailableException;
-
-    /**
-     * Encrypts the device.
-     * <p/>
-     * Encrypting the device may be done inplace or with a wipe.  Inplace encryption will not wipe
-     * any data on the device but normally takes a couple orders of magnitude longer than the wipe.
-     * <p/>
-     * This method will reboot the device if it is not already encrypted and will block until device
-     * is online.  Also, it will not decrypt the device after the reboot.  Therefore, the device
-     * might not be fully booted and/or ready to be tested when this method returns.
-     *
-     * @param inplace if the encryption process should take inplace and the device should not be
-     * wiped.
-     * @return <code>true</code> if successful.
-     * @throws DeviceNotAvailableException if device is not available after reboot.
-     * @throws UnsupportedOperationException if encryption is not supported on the device.
-     */
-    public boolean encryptDevice(boolean inplace) throws DeviceNotAvailableException,
-            UnsupportedOperationException;
-
-    /**
-     * Unencrypts the device.
-     * <p/>
-     * Unencrypting the device may cause device to be wiped and may reboot device. This method will
-     * block until device is available and ready for testing.  Requires fastboot inorder to wipe the
-     * userdata partition.
-     *
-     * @return <code>true</code> if successful.
-     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
-     * recovered.
-     * @throws UnsupportedOperationException if encryption is not supported on the device.
-     */
-    public boolean unencryptDevice() throws DeviceNotAvailableException,
-            UnsupportedOperationException;
 
     /**
      * Unlocks the device if the device is in an encrypted state.

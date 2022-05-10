@@ -205,7 +205,9 @@ public class ClusterHostEvent implements IClusterEvent {
         final JSONObject json = new JSONObject();
         // event time should be in POSIX timestamp.
         json.put("time", this.getTimestamp() / 1000);
-        if (this.getType() != null) json.put("type", this.getType().toString());
+        if (this.getType() != null) {
+            json.put("type", this.getType().toString());
+        }
         json.put("hostname", this.getHostName());
         json.put("tf_version", this.getTestHarnessVersion());
         json.put("test_harness_version", this.getTestHarnessVersion());
@@ -220,7 +222,9 @@ public class ClusterHostEvent implements IClusterEvent {
         if (this.getNextClusterIds() != null) {
             json.put("next_cluster_ids", new JSONArray(this.getNextClusterIds()));
         }
-        if (this.getLabName() != null) json.put("lab_name", this.getLabName());
+        if (this.getLabName() != null) {
+            json.put("lab_name", this.getLabName());
+        }
         json.put("state", this.getHostState().toString());
         return json;
     }

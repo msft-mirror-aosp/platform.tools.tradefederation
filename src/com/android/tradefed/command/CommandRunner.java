@@ -24,8 +24,10 @@ import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.NoDeviceException;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.SerializationUtil;
+import com.android.tradefed.testtype.suite.TestSuiteInfo;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -106,9 +108,19 @@ public class CommandRunner {
         try {
             initGlobalConfig(args);
 
-            ClearcutClient client = new ClearcutClient();
+            ClearcutClient client = createClient();
             Runtime.getRuntime().addShutdownHook(new TerminateClearcutClient(client));
             client.notifyTradefedStartEvent();
+            TradefedFeatureServer server = null;
+            if (System.getenv("START_FEATURE_SERVER") != null) {
+                try {
+                    server = new TradefedFeatureServer();
+                    server.start();
+                    GlobalConfiguration.getInstance().setTradefedFeatureServer(server);
+                } catch (RuntimeException e) {
+                    System.out.println(String.format("Error starting feature server: %s", e));
+                }
+            }
 
             mScheduler = getCommandScheduler();
             mScheduler.setClearcutClient(client);
@@ -130,8 +142,11 @@ public class CommandRunner {
         } catch (ConfigurationException e) {
             printStackTrace(e);
             mErrorCode = ExitCode.CONFIG_EXCEPTION;
+            return;
         } finally {
-            mScheduler.shutdownOnEmpty();
+            if (mScheduler != null) {
+                mScheduler.shutdownOnEmpty();
+            }
         }
         try {
             mScheduler.join(getCheckDeviceTimeout());
@@ -164,6 +179,13 @@ public class CommandRunner {
             // Print error to the stderr so that it can be recovered.
             printStackTrace(mScheduler.getLastInvocationThrowable());
         }
+    }
+
+    protected ClearcutClient createClient() {
+        return new ClearcutClient(
+                TestSuiteInfo.getInstance().didLoadFromProperties()
+                        ? TestSuiteInfo.getInstance().getName()
+                        : "");
     }
 
     public static void main(final String[] mainArgs) {

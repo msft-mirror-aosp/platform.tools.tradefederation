@@ -56,13 +56,14 @@ import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.RunUtil;
 
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.io.IOException;
@@ -104,7 +105,7 @@ public class ITestSuiteIntegrationTest {
     private TestInformation mTestInfo;
     private IInvocationContext mContext;
     private IConfiguration mStubMainConfiguration;
-    private ILogSaver mMockLogSaver;
+    @Mock ILogSaver mMockLogSaver;
 
     /**
      * Create a CTS configuration with a fake tests to exercise all cases.
@@ -160,6 +161,8 @@ public class ITestSuiteIntegrationTest {
 
     @Before
     public void setUp() throws IOException {
+        MockitoAnnotations.initMocks(this);
+
         mTestConfigFolder = FileUtil.createTempDir("suite-integration");
         mMockDevice = mock(ITestDevice.class);
         mMockBuildInfo = mock(IBuildInfo.class);
@@ -169,7 +172,6 @@ public class ITestSuiteIntegrationTest {
         mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, mMockBuildInfo);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
 
-        mMockLogSaver = EasyMock.createMock(ILogSaver.class);
         mStubMainConfiguration = new Configuration("stub", "stub");
         mStubMainConfiguration.setLogSaver(mMockLogSaver);
         doReturn("serial").when(mMockDevice).getSerialNumber();

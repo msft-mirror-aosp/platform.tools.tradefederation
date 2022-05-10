@@ -15,20 +15,24 @@
  */
 package com.android.tradefed.result;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.fail;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.InputStream;
 
-/**
- * Unit tests for the {@link SnapshotInputStreamSource} class
- */
-public class SnapshotInputStreamSourceTest extends TestCase {
+/** Unit tests for the {@link SnapshotInputStreamSource} class */
+@RunWith(JUnit4.class)
+public class SnapshotInputStreamSourceTest {
     private static final String FILE_CONTENTS = "These are file contents!";
     private InputStream mInputStream = null;
 
-    @Override
+    @Before
     public void setUp() throws Exception {
         mInputStream = new ByteArrayInputStream(FILE_CONTENTS.getBytes());
     }
@@ -37,7 +41,7 @@ public class SnapshotInputStreamSourceTest extends TestCase {
      * Ensure that the {@link SnapshotInputStreamSource#close()} method cleans up the backing file
      * as expected
      */
-    @SuppressWarnings("serial")
+    @Test
     public void testCancel() {
         final String deletedMsg = "File was deleted";
         final File fakeFile = new File("noexist") {

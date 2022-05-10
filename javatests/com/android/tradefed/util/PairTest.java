@@ -16,12 +16,16 @@
 
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import org.junit.Assert;
 
-public class PairTest extends TestCase {
+@RunWith(JUnit4.class)
+public class PairTest {
 
+    @Test
     public void testPairs() throws Exception {
         Object obj1 = new Object();
         Pair<Object, Object> p1 = Pair.create(obj1, obj1);

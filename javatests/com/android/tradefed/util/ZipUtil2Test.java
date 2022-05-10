@@ -21,6 +21,8 @@ import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.File;
 import java.io.IOException;
@@ -34,6 +36,7 @@ import java.util.Set;
 /**
  * Unit tests for {@link ZipUtil2}
  */
+@RunWith(JUnit4.class)
 public class ZipUtil2Test {
 
     private Set<File> mTempFiles = new HashSet<File>();
@@ -70,7 +73,25 @@ public class ZipUtil2Test {
     }
 
     @Test
-    public void testExtractFileFromZip() throws Exception {
+    public void testExtractFileFromZip() throws IOException {
+        final File destFile = createTempFile("testExtractFileFromZip", ".out");
+        final File zip = getTestDataFile("permission-test");
+        final String fileName = "rwxr-x--x";
+        ZipFile zipFile = null;
+        try {
+            zipFile = new ZipFile(zip);
+            boolean extracted = ZipUtil2.extractFileFromZip(zipFile, "NOT_EXIST", destFile);
+            Assert.assertFalse(extracted);
+            extracted = ZipUtil2.extractFileFromZip(zipFile, fileName, destFile);
+            Assert.assertTrue(extracted);
+            verifyFilePermission(destFile, fileName);
+        } finally {
+            ZipFile.closeQuietly(zipFile);
+        }
+    }
+
+    @Test
+    public void testExtractFileFromZipToTemp() throws Exception {
         final File zip = getTestDataFile("permission-test");
         final String fileName = "rwxr-x--x";
         ZipFile zipFile = null;
@@ -79,6 +100,27 @@ public class ZipUtil2Test {
             File extracted = ZipUtil2.extractFileFromZip(zipFile, fileName);
             mTempFiles.add(extracted);
             verifyFilePermission(extracted, fileName);
+        } finally {
+            ZipFile.closeQuietly(zipFile);
+        }
+    }
+
+    @Test
+    public void testExtractZipWithEmptyDir() throws Exception {
+        final File zip = getTestDataFile("empty_dir");
+
+        // Test extractZip(File toUnzip, File destDir)
+        File destDir = createTempDir("ZipUtil2Test");
+        ZipUtil2.extractZip(zip, destDir);
+        mTempFiles.add(destDir);
+
+        // Test extractZip(ZipFile zipFile, File destDir)
+        destDir = createTempDir("ZipUtil2Test");
+        ZipFile zipFile = null;
+        try {
+            zipFile = new ZipFile(zip);
+            ZipUtil2.extractZip(zipFile, destDir);
+            mTempFiles.add(destDir);
         } finally {
             ZipFile.closeQuietly(zipFile);
         }
@@ -94,7 +136,7 @@ public class ZipUtil2Test {
             ZipUtil2.extractZip(zipFile, destDir);
             // now loop over files to verify
             for (File file : destDir.listFiles()) {
-                // the pmierssion-test.zip file has no hierarchy inside
+                // the permission-test.zip file has no hierarchy inside
                 verifyFilePermission(file);
             }
         } finally {

@@ -16,6 +16,12 @@
 
 package com.android.tradefed.device;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
@@ -32,15 +38,16 @@ import com.android.tradefed.util.ZipUtil;
 
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.stubbing.Answer;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -48,6 +55,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.zip.GZIPOutputStream;
 
 /** Unit tests for {@link LocalAndroidVirtualDevice}. */
@@ -101,87 +110,94 @@ public class LocalAndroidVirtualDeviceTest {
     private static final String ONLINE_SERIAL_NUMBER = IP_ADDRESS + ":" + PORT;
     private static final String INSTANCE_NAME = "local-instance-1";
     private static final long ACLOUD_TIMEOUT = 12345;
-    private static final String SUCCESS_REPORT_STRING =
-            String.format(
-                    "{"
-                            + " \"command\": \"create\","
-                            + " \"data\": {"
-                            + "  \"devices\": ["
-                            + "   {"
-                            + "    \"ip\": \"%s\","
-                            + "    \"instance_name\": \"%s\""
-                            + "   }"
-                            + "  ]"
-                            + " },"
-                            + " \"errors\": [],"
-                            + " \"status\": \"SUCCESS\""
-                            + "}",
-                    ONLINE_SERIAL_NUMBER, INSTANCE_NAME);
-    private static final String FAILURE_REPORT_STRING =
-            String.format(
-                    "{"
-                            + " \"command\": \"create\","
-                            + " \"data\": {"
-                            + "  \"devices_failing_boot\": ["
-                            + "   {"
-                            + "    \"ip\": \"%s\","
-                            + "    \"instance_name\": \"%s\""
-                            + "   }"
-                            + "  ]"
-                            + " },"
-                            + " \"errors\": [],"
-                            + " \"status\": \"BOOT_FAIL\""
-                            + "}",
-                    ONLINE_SERIAL_NUMBER, INSTANCE_NAME);
+    private static final String SUCCESS_REPORT_FORMAT =
+            "{"
+                    + " \"command\": \"create\","
+                    + " \"data\": {"
+                    + "  \"devices\": ["
+                    + "   {"
+                    + "    \"ip\": \"%s\","
+                    + "    \"instance_name\": \"%s\","
+                    + "    \"logs\": ["
+                    + "     {"
+                    + "      \"path\": \"%s\","
+                    + "      \"type\": \"KERNEL_LOG\""
+                    + "     }"
+                    + "    ]"
+                    + "   }"
+                    + "  ]"
+                    + " },"
+                    + " \"errors\": [],"
+                    + " \"status\": \"SUCCESS\""
+                    + "}";
+    private static final String FAILURE_REPORT_FORMAT =
+            "{"
+                    + " \"command\": \"create\","
+                    + " \"data\": {"
+                    + "  \"devices_failing_boot\": ["
+                    + "   {"
+                    + "    \"ip\": \"%s\","
+                    + "    \"instance_name\": \"%s\","
+                    + "    \"logs\": ["
+                    + "     {"
+                    + "      \"path\": \"%s\","
+                    + "      \"type\": \"KERNEL_LOG\""
+                    + "     }"
+                    + "    ]"
+                    + "   }"
+                    + "  ]"
+                    + " },"
+                    + " \"errors\": [],"
+                    + " \"status\": \"BOOT_FAIL\""
+                    + "}";
 
     // Temporary files.
     private File mAcloud;
     private File mImageZip;
     private File mHostPackageTarGzip;
+    private File mBootImageZip;
     private File mSystemImageZip;
     private File mOtaToolsZip;
 
     // Mock object.
-    private IBuildInfo mMockBuildInfo;
+    @Mock IBuildInfo mMockBuildInfo;
 
     // The object under test.
     private TestableLocalAndroidVirtualDevice mLocalAvd;
 
     @Before
     public void setUp() throws IOException {
+        MockitoAnnotations.initMocks(this);
+
         mAcloud = FileUtil.createTempFile("acloud-dev", "");
         mImageZip = ZipUtil.createZip(new ArrayList<File>());
         mHostPackageTarGzip = FileUtil.createTempFile("cvd-host_package", ".tar.gz");
         createHostPackage(mHostPackageTarGzip);
+        mBootImageZip = null;
         mSystemImageZip = null;
         mOtaToolsZip = null;
 
-        mMockBuildInfo = EasyMock.createMock(IBuildInfo.class);
-        EasyMock.expect(mMockBuildInfo.getFile(EasyMock.eq(BuildInfoFileKey.DEVICE_IMAGE)))
-                .andReturn(mImageZip);
-        EasyMock.expect(mMockBuildInfo.getFile((String) EasyMock.anyObject()))
-                .andAnswer(
-                        new IAnswer<File>() {
-                            @Override
-                            public File answer() {
-                                switch ((String) EasyMock.getCurrentArguments()[0]) {
-                                    case "cvd-host_package.tar.gz":
-                                        return mHostPackageTarGzip;
-                                    case "system-img.zip":
-                                        return mSystemImageZip;
-                                    case "otatools.zip":
-                                        return mOtaToolsZip;
-                                    default:
-                                        return null;
-                                }
+        when(mMockBuildInfo.getFile(eq(BuildInfoFileKey.DEVICE_IMAGE))).thenReturn(mImageZip);
+        when(mMockBuildInfo.getFile((String) any()))
+                .thenAnswer(
+                        invocation -> {
+                            switch ((String) invocation.getArguments()[0]) {
+                                case "cvd-host_package.tar.gz":
+                                    return mHostPackageTarGzip;
+                                case "boot-img.zip":
+                                    return mBootImageZip;
+                                case "system-img.zip":
+                                    return mSystemImageZip;
+                                case "otatools.zip":
+                                    return mOtaToolsZip;
+                                default:
+                                    return null;
                             }
-                        })
-                .anyTimes();
-        IDeviceStateMonitor mockDeviceStateMonitor = EasyMock.createMock(IDeviceStateMonitor.class);
-        mockDeviceStateMonitor.setIDevice(EasyMock.anyObject());
-        EasyMock.expectLastCall().anyTimes();
-        IDeviceMonitor mockDeviceMonitor = EasyMock.createMock(IDeviceMonitor.class);
-        EasyMock.replay(mockDeviceStateMonitor, mockDeviceMonitor);
+                        });
+        IDeviceStateMonitor mockDeviceStateMonitor = mock(IDeviceStateMonitor.class);
+        mockDeviceStateMonitor.setIDevice(any());
+
+        IDeviceMonitor mockDeviceMonitor = mock(IDeviceMonitor.class);
 
         mLocalAvd =
                 new TestableLocalAndroidVirtualDevice(
@@ -195,9 +211,11 @@ public class LocalAndroidVirtualDeviceTest {
         options.getGceDriverParams().add("-test");
     }
 
-    private void setUpSystemImageZip() throws IOException {
-        mSystemImageZip = ZipUtil.createZip(new ArrayList<File>());
-        mOtaToolsZip = ZipUtil.createZip(new ArrayList<File>());
+    private void setUpExtraZips() throws IOException {
+        ArrayList<File> empty = new ArrayList<File>();
+        mBootImageZip = ZipUtil.createZip(empty);
+        mSystemImageZip = ZipUtil.createZip(empty);
+        mOtaToolsZip = ZipUtil.createZip(empty);
     }
 
     @After
@@ -210,11 +228,13 @@ public class LocalAndroidVirtualDeviceTest {
         FileUtil.deleteFile(mAcloud);
         FileUtil.deleteFile(mImageZip);
         FileUtil.deleteFile(mHostPackageTarGzip);
+        FileUtil.deleteFile(mBootImageZip);
         FileUtil.deleteFile(mSystemImageZip);
         FileUtil.deleteFile(mOtaToolsZip);
         mAcloud = null;
         mImageZip = null;
         mHostPackageTarGzip = null;
+        mBootImageZip = null;
         mSystemImageZip = null;
         mOtaToolsZip = null;
     }
@@ -236,142 +256,126 @@ public class LocalAndroidVirtualDeviceTest {
         }
     }
 
-    private IAnswer<CommandResult> writeToReportFile(CommandStatus status, String reportString) {
-        return new IAnswer<CommandResult>() {
-            @Override
-            public CommandResult answer() throws Throwable {
-                Object[] args = EasyMock.getCurrentArguments();
-                for (int index = 0; index < args.length; index++) {
-                    if ("--report_file".equals(args[index])) {
-                        index++;
-                        File file = new File((String) args[index]);
-                        FileUtil.writeToFile(reportString, file);
-                    }
+    private Answer<CommandResult> writeToReportFile(CommandStatus status, String reportFormat) {
+        return invocation -> {
+            Object[] args = invocation.getArguments();
+            String instanceDir = null;
+            String reportFile = null;
+            for (int index = 0; index < args.length; index++) {
+                if ("--report_file".equals(args[index])) {
+                    index++;
+                    reportFile = (String) args[index];
+                } else if ("--local-instance-dir".equals(args[index])) {
+                    index++;
+                    instanceDir = (String) args[index];
                 }
-
-                CommandResult result = new CommandResult(status);
-                result.setStderr("acloud create");
-                result.setStdout("acloud create");
-                return result;
             }
+            Assert.assertNotNull(
+                    "Acloud command does not contain --local-instance-dir.", instanceDir);
+            Assert.assertNotNull("Acloud command does not contain --report_file.", reportFile);
+
+            File logFile = new File(instanceDir, "kernel.log");
+            Assert.assertTrue(logFile.createNewFile());
+            FileUtil.writeToFile(
+                    String.format(
+                            reportFormat,
+                            ONLINE_SERIAL_NUMBER,
+                            INSTANCE_NAME,
+                            logFile.getAbsolutePath()),
+                    new File(reportFile));
+
+            CommandResult result = new CommandResult(status);
+            result.setStderr("acloud create");
+            result.setStdout("acloud create");
+            return result;
         };
     }
 
     private IRunUtil mockAcloudCreate(
-            IAnswer<CommandResult> answer,
-            Capture<String> reportFile,
-            Capture<String> hostPackageDir,
-            Capture<String> imageDir,
-            Capture<String> instanceDir) {
-        IRunUtil runUtil = EasyMock.createMock(IRunUtil.class);
-        runUtil.setEnvVariable(EasyMock.eq("TMPDIR"), EasyMock.anyObject());
-
-        EasyMock.expect(
-                        runUtil.runTimedCmd(
-                                EasyMock.eq(ACLOUD_TIMEOUT),
-                                EasyMock.eq(mAcloud.getAbsolutePath()),
-                                EasyMock.eq("create"),
-                                EasyMock.eq("--local-instance"),
-                                EasyMock.eq("--local-image"),
-                                EasyMock.capture(imageDir),
-                                EasyMock.eq("--local-instance-dir"),
-                                EasyMock.capture(instanceDir),
-                                EasyMock.eq("--local-tool"),
-                                EasyMock.capture(hostPackageDir),
-                                EasyMock.eq("--report_file"),
-                                EasyMock.capture(reportFile),
-                                EasyMock.eq("--no-autoconnect"),
-                                EasyMock.eq("--yes"),
-                                EasyMock.eq("--skip-pre-run-check"),
-                                EasyMock.eq("-vv"),
-                                EasyMock.eq("-test")))
-                .andAnswer(answer);
+            Answer<CommandResult> answer,
+            ArgumentCaptor<String> reportFile,
+            ArgumentCaptor<String> hostPackageDir,
+            ArgumentCaptor<String> imageDir,
+            ArgumentCaptor<String> instanceDir) {
+        IRunUtil runUtil = mock(IRunUtil.class);
+        when(runUtil.runTimedCmd(
+                        eq(ACLOUD_TIMEOUT),
+                        eq(mAcloud.getAbsolutePath()),
+                        eq("create"),
+                        eq("--local-instance"),
+                        eq("--local-image"),
+                        imageDir.capture(),
+                        eq("--local-instance-dir"),
+                        instanceDir.capture(),
+                        eq("--local-tool"),
+                        hostPackageDir.capture(),
+                        eq("--report_file"),
+                        reportFile.capture(),
+                        eq("--no-autoconnect"),
+                        eq("--yes"),
+                        eq("--skip-pre-run-check"),
+                        eq("-vv"),
+                        eq("-test")))
+                .thenAnswer(answer);
 
         return runUtil;
     }
 
-    private IRunUtil mockAcloudCreateWithSystemImageDir(
-            IAnswer<CommandResult> answer,
-            Capture<String> reportFile,
-            Capture<String> hostPackageDir,
-            Capture<String> imageDir,
-            Capture<String> instanceDir,
-            Capture<String> systemImageDir,
-            Capture<String> otaToolsDir) {
-        IRunUtil runUtil = EasyMock.createMock(IRunUtil.class);
-        runUtil.setEnvVariable(EasyMock.eq("TMPDIR"), EasyMock.anyObject());
-
-        EasyMock.expect(
-                        runUtil.runTimedCmd(
-                                EasyMock.eq(ACLOUD_TIMEOUT),
-                                EasyMock.eq(mAcloud.getAbsolutePath()),
-                                EasyMock.eq("create"),
-                                EasyMock.eq("--local-instance"),
-                                EasyMock.eq("--local-image"),
-                                EasyMock.capture(imageDir),
-                                EasyMock.eq("--local-instance-dir"),
-                                EasyMock.capture(instanceDir),
-                                EasyMock.eq("--local-tool"),
-                                EasyMock.capture(hostPackageDir),
-                                EasyMock.eq("--report_file"),
-                                EasyMock.capture(reportFile),
-                                EasyMock.eq("--no-autoconnect"),
-                                EasyMock.eq("--yes"),
-                                EasyMock.eq("--skip-pre-run-check"),
-                                EasyMock.eq("--local-system-image"),
-                                EasyMock.capture(systemImageDir),
-                                EasyMock.eq("--local-tool"),
-                                EasyMock.capture(otaToolsDir),
-                                EasyMock.eq("-vv"),
-                                EasyMock.eq("-test")))
-                .andAnswer(answer);
+    private IRunUtil mockAcloudCreateWithExtraDirs(
+            Answer<CommandResult> answer,
+            ArgumentCaptor<String> reportFile,
+            ArgumentCaptor<String> hostPackageDir,
+            ArgumentCaptor<String> imageDir,
+            ArgumentCaptor<String> instanceDir,
+            ArgumentCaptor<String> bootImageDir,
+            ArgumentCaptor<String> systemImageDir,
+            ArgumentCaptor<String> otaToolsDir) {
+        IRunUtil runUtil = mock(IRunUtil.class);
+        when(runUtil.runTimedCmd(
+                        eq(ACLOUD_TIMEOUT),
+                        eq(mAcloud.getAbsolutePath()),
+                        eq("create"),
+                        eq("--local-instance"),
+                        eq("--local-image"),
+                        imageDir.capture(),
+                        eq("--local-instance-dir"),
+                        instanceDir.capture(),
+                        eq("--local-tool"),
+                        hostPackageDir.capture(),
+                        eq("--report_file"),
+                        reportFile.capture(),
+                        eq("--no-autoconnect"),
+                        eq("--yes"),
+                        eq("--skip-pre-run-check"),
+                        eq("--local-boot-image"),
+                        bootImageDir.capture(),
+                        eq("--local-system-image"),
+                        systemImageDir.capture(),
+                        eq("--local-tool"),
+                        otaToolsDir.capture(),
+                        eq("-vv"),
+                        eq("-test")))
+                .thenAnswer(answer);
 
         return runUtil;
     }
 
     private IRunUtil mockAcloudDelete(CommandStatus status) {
-        IRunUtil runUtil = EasyMock.createMock(IRunUtil.class);
-        runUtil.setEnvVariable(EasyMock.eq("TMPDIR"), EasyMock.anyObject());
-
+        IRunUtil runUtil = mock(IRunUtil.class);
         CommandResult result = new CommandResult(status);
         result.setStderr("acloud delete");
         result.setStdout("acloud delete");
-        EasyMock.expect(
-                        runUtil.runTimedCmd(
-                                EasyMock.eq(ACLOUD_TIMEOUT),
-                                EasyMock.eq(mAcloud.getAbsolutePath()),
-                                EasyMock.eq("delete"),
-                                EasyMock.eq("--local-only"),
-                                EasyMock.eq("--instance-names"),
-                                EasyMock.eq(INSTANCE_NAME),
-                                EasyMock.eq("-vv")))
-                .andReturn(result);
+        when(runUtil.runTimedCmd(
+                        eq(ACLOUD_TIMEOUT),
+                        eq(mAcloud.getAbsolutePath()),
+                        eq("delete"),
+                        eq("--local-only"),
+                        eq("--instance-names"),
+                        eq(INSTANCE_NAME),
+                        eq("-vv")))
+                .thenReturn(result);
 
         return runUtil;
-    }
-
-    private ITestLogger mockReportInstanceLogs() {
-        ITestLogger testLogger = EasyMock.createMock(ITestLogger.class);
-        testLogger.testLog(
-                EasyMock.eq("cuttlefish_config.json"),
-                EasyMock.eq(LogDataType.TEXT),
-                EasyMock.anyObject());
-        testLogger.testLog(
-                EasyMock.eq("kernel.log"),
-                EasyMock.eq(LogDataType.KERNEL_LOG),
-                EasyMock.anyObject());
-        testLogger.testLog(
-                EasyMock.eq("logcat"), EasyMock.eq(LogDataType.LOGCAT), EasyMock.anyObject());
-        testLogger.testLog(
-                EasyMock.eq("launcher.log"), EasyMock.eq(LogDataType.TEXT), EasyMock.anyObject());
-        return testLogger;
-    }
-
-    private void createEmptyFiles(File parent, String... names) throws IOException {
-        parent.mkdirs();
-        for (String name : names) {
-            Assert.assertTrue(new File(parent, name).createNewFile());
-        }
     }
 
     private void assertFinalDeviceState(IDevice device) {
@@ -388,29 +392,37 @@ public class LocalAndroidVirtualDeviceTest {
     @Test
     public void testPreinvocationSetupSuccess()
             throws DeviceNotAvailableException, IOException, TargetSetupError {
-        setUpSystemImageZip();
+        setUpExtraZips();
 
-        Capture<String> reportFile = new Capture<String>();
-        Capture<String> hostPackageDir = new Capture<String>();
-        Capture<String> imageDir = new Capture<String>();
-        Capture<String> instanceDir = new Capture<String>();
-        Capture<String> systemImageDir = new Capture<String>();
-        Capture<String> otaToolsDir = new Capture<String>();
+        ArgumentCaptor<String> reportFile = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> hostPackageDir = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> imageDir = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> instanceDir = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> bootImageDir = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> systemImageDir = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> otaToolsDir = ArgumentCaptor.forClass(String.class);
         IRunUtil acloudCreateRunUtil =
-                mockAcloudCreateWithSystemImageDir(
-                        writeToReportFile(CommandStatus.SUCCESS, SUCCESS_REPORT_STRING),
+                mockAcloudCreateWithExtraDirs(
+                        writeToReportFile(CommandStatus.SUCCESS, SUCCESS_REPORT_FORMAT),
                         reportFile,
                         hostPackageDir,
                         imageDir,
                         instanceDir,
+                        bootImageDir,
                         systemImageDir,
                         otaToolsDir);
+        // Map the names shown in error message to the captured arguments.
+        Map<String, ArgumentCaptor<String>> captureDirs = new HashMap<>();
+        captureDirs.put("hostPackageDir", hostPackageDir);
+        captureDirs.put("imageDir", imageDir);
+        captureDirs.put("instanceDir", instanceDir);
+        captureDirs.put("bootImageDir", bootImageDir);
+        captureDirs.put("systemImageDir", systemImageDir);
+        captureDirs.put("otaToolsDir", otaToolsDir);
 
         IRunUtil acloudDeleteRunUtil = mockAcloudDelete(CommandStatus.SUCCESS);
 
-        ITestLogger testLogger = mockReportInstanceLogs();
-
-        EasyMock.replay(mMockBuildInfo, acloudCreateRunUtil, acloudDeleteRunUtil, testLogger);
+        ITestLogger testLogger = mock(ITestLogger.class);
 
         // Test setUp.
         mLocalAvd.setTestLogger(testLogger);
@@ -419,20 +431,12 @@ public class LocalAndroidVirtualDeviceTest {
         mLocalAvd.preInvocationSetup(mMockBuildInfo, null);
 
         Assert.assertEquals(ONLINE_SERIAL_NUMBER, mLocalAvd.getIDevice().getSerialNumber());
+        verify(acloudCreateRunUtil).setEnvVariable(eq("TMPDIR"), any());
 
-        EasyMock.verify(acloudCreateRunUtil);
-        File capturedHostPackageDir = new File(hostPackageDir.getValue());
-        File capturedImageDir = new File(imageDir.getValue());
-        File capturedInstanceDir = new File(instanceDir.getValue());
-        Assert.assertTrue(capturedHostPackageDir.isDirectory());
-        Assert.assertTrue(capturedImageDir.isDirectory());
-        Assert.assertTrue(capturedInstanceDir.isDirectory());
-
-        // Create the logs and configuration that the local AVD object expects.
-        File runtimeDir = new File(capturedInstanceDir, "cuttlefish_runtime");
-        Assert.assertTrue(runtimeDir.mkdirs());
-        createEmptyFiles(
-                runtimeDir, "kernel.log", "logcat", "launcher.log", "cuttlefish_config.json");
+        for (Map.Entry<String, ArgumentCaptor<String>> entry : captureDirs.entrySet()) {
+            File capturedDir = new File(entry.getValue().getValue());
+            Assert.assertTrue(entry.getKey() + " is not a directory.", capturedDir.isDirectory());
+        }
 
         // Test tearDown.
         mLocalAvd.currentRunUtil = acloudDeleteRunUtil;
@@ -440,24 +444,26 @@ public class LocalAndroidVirtualDeviceTest {
         mLocalAvd.postInvocationTearDown(null);
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
+        verify(acloudDeleteRunUtil).setEnvVariable(eq("TMPDIR"), any());
+        verify(testLogger).testLog(any(), eq(LogDataType.KERNEL_LOG), any());
 
-        EasyMock.verify(acloudDeleteRunUtil, testLogger);
         Assert.assertFalse(new File(reportFile.getValue()).exists());
-        Assert.assertFalse(capturedHostPackageDir.exists());
-        Assert.assertFalse(capturedImageDir.exists());
-        Assert.assertFalse(capturedInstanceDir.exists());
+        for (Map.Entry<String, ArgumentCaptor<String>> entry : captureDirs.entrySet()) {
+            File capturedDir = new File(entry.getValue().getValue());
+            Assert.assertFalse(entry.getKey() + " is not deleted.", capturedDir.exists());
+        }
     }
 
     /** Test shutting down the device during the invocation. */
     @Test
     public void testShutdown() throws DeviceNotAvailableException, TargetSetupError {
-        Capture<String> reportFile = new Capture<String>();
-        Capture<String> hostPackageDir = new Capture<String>();
-        Capture<String> imageDir = new Capture<String>();
-        Capture<String> instanceDir = new Capture<String>();
+        ArgumentCaptor<String> reportFile = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> hostPackageDir = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> imageDir = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> instanceDir = ArgumentCaptor.forClass(String.class);
         IRunUtil acloudCreateRunUtil =
                 mockAcloudCreate(
-                        writeToReportFile(CommandStatus.SUCCESS, SUCCESS_REPORT_STRING),
+                        writeToReportFile(CommandStatus.SUCCESS, SUCCESS_REPORT_FORMAT),
                         reportFile,
                         hostPackageDir,
                         imageDir,
@@ -465,9 +471,7 @@ public class LocalAndroidVirtualDeviceTest {
 
         IRunUtil acloudDeleteRunUtil = mockAcloudDelete(CommandStatus.SUCCESS);
 
-        ITestLogger testLogger = EasyMock.createMock(ITestLogger.class);
-
-        EasyMock.replay(mMockBuildInfo, acloudCreateRunUtil, acloudDeleteRunUtil, testLogger);
+        ITestLogger testLogger = mock(ITestLogger.class);
 
         // Test setUp.
         mLocalAvd.setTestLogger(testLogger);
@@ -476,8 +480,8 @@ public class LocalAndroidVirtualDeviceTest {
         mLocalAvd.preInvocationSetup(mMockBuildInfo, null);
 
         Assert.assertEquals(ONLINE_SERIAL_NUMBER, mLocalAvd.getIDevice().getSerialNumber());
+        verify(acloudCreateRunUtil).setEnvVariable(eq("TMPDIR"), any());
 
-        EasyMock.verify(acloudCreateRunUtil);
         File capturedHostPackageDir = new File(hostPackageDir.getValue());
         File capturedImageDir = new File(imageDir.getValue());
         File capturedInstanceDir = new File(instanceDir.getValue());
@@ -490,16 +494,15 @@ public class LocalAndroidVirtualDeviceTest {
         mLocalAvd.expectToConnect = false;
         mLocalAvd.shutdown();
 
-        EasyMock.verify(acloudDeleteRunUtil);
-
         // Test that tearDown does not invoke acloud again.
         mLocalAvd.currentRunUtil = null;
         mLocalAvd.expectToConnect = false;
         mLocalAvd.postInvocationTearDown(null);
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
+        verify(acloudDeleteRunUtil).setEnvVariable(eq("TMPDIR"), any());
+        verify(testLogger).testLog(any(), eq(LogDataType.KERNEL_LOG), any());
 
-        EasyMock.verify(testLogger);
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         Assert.assertFalse(capturedHostPackageDir.exists());
         Assert.assertFalse(capturedImageDir.exists());
@@ -509,13 +512,13 @@ public class LocalAndroidVirtualDeviceTest {
     /** Test that the acloud command reports failure. */
     @Test
     public void testPreInvocationSetupBootFailure() throws DeviceNotAvailableException {
-        Capture<String> reportFile = new Capture<String>();
-        Capture<String> hostPackageDir = new Capture<String>();
-        Capture<String> imageDir = new Capture<String>();
-        Capture<String> instanceDir = new Capture<String>();
+        ArgumentCaptor<String> reportFile = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> hostPackageDir = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> imageDir = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> instanceDir = ArgumentCaptor.forClass(String.class);
         IRunUtil acloudCreateRunUtil =
                 mockAcloudCreate(
-                        writeToReportFile(CommandStatus.SUCCESS, FAILURE_REPORT_STRING),
+                        writeToReportFile(CommandStatus.SUCCESS, FAILURE_REPORT_FORMAT),
                         reportFile,
                         hostPackageDir,
                         imageDir,
@@ -523,9 +526,7 @@ public class LocalAndroidVirtualDeviceTest {
 
         IRunUtil acloudDeleteRunUtil = mockAcloudDelete(CommandStatus.FAILED);
 
-        ITestLogger testLogger = EasyMock.createMock(ITestLogger.class);
-
-        EasyMock.replay(mMockBuildInfo, acloudCreateRunUtil, acloudDeleteRunUtil, testLogger);
+        ITestLogger testLogger = mock(ITestLogger.class);
 
         // Test setUp.
         TargetSetupError expectedException = null;
@@ -540,7 +541,6 @@ public class LocalAndroidVirtualDeviceTest {
 
         Assert.assertEquals(STUB_SERIAL_NUMBER, mLocalAvd.getIDevice().getSerialNumber());
 
-        EasyMock.verify(acloudCreateRunUtil);
         File capturedHostPackageDir = new File(hostPackageDir.getValue());
         File capturedImageDir = new File(imageDir.getValue());
         File capturedInstanceDir = new File(instanceDir.getValue());
@@ -553,8 +553,8 @@ public class LocalAndroidVirtualDeviceTest {
         mLocalAvd.postInvocationTearDown(expectedException);
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
+        verify(testLogger).testLog(any(), eq(LogDataType.KERNEL_LOG), any());
 
-        EasyMock.verify(acloudDeleteRunUtil, testLogger);
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         Assert.assertFalse(capturedHostPackageDir.exists());
         Assert.assertFalse(capturedImageDir.exists());
@@ -564,10 +564,10 @@ public class LocalAndroidVirtualDeviceTest {
     /** Test that the acloud command fails, and the report is empty. */
     @Test
     public void testPreInvocationSetupFailure() throws DeviceNotAvailableException {
-        Capture<String> reportFile = new Capture<String>();
-        Capture<String> hostPackageDir = new Capture<String>();
-        Capture<String> imageDir = new Capture<String>();
-        Capture<String> instanceDir = new Capture<String>();
+        ArgumentCaptor<String> reportFile = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> hostPackageDir = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> imageDir = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> instanceDir = ArgumentCaptor.forClass(String.class);
         IRunUtil acloudCreateRunUtil =
                 mockAcloudCreate(
                         writeToReportFile(CommandStatus.FAILED, ""),
@@ -576,9 +576,7 @@ public class LocalAndroidVirtualDeviceTest {
                         imageDir,
                         instanceDir);
 
-        ITestLogger testLogger = EasyMock.createMock(ITestLogger.class);
-
-        EasyMock.replay(mMockBuildInfo, acloudCreateRunUtil, testLogger);
+        ITestLogger testLogger = mock(ITestLogger.class);
 
         // Test setUp.
         TargetSetupError expectedException = null;
@@ -593,7 +591,6 @@ public class LocalAndroidVirtualDeviceTest {
 
         Assert.assertEquals(STUB_SERIAL_NUMBER, mLocalAvd.getIDevice().getSerialNumber());
 
-        EasyMock.verify(acloudCreateRunUtil);
         File capturedHostPackageDir = new File(hostPackageDir.getValue());
         File capturedImageDir = new File(imageDir.getValue());
         File capturedInstanceDir = new File(instanceDir.getValue());
@@ -607,7 +604,6 @@ public class LocalAndroidVirtualDeviceTest {
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
 
-        EasyMock.verify(testLogger);
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         Assert.assertFalse(capturedHostPackageDir.exists());
         Assert.assertFalse(capturedImageDir.exists());

@@ -16,40 +16,49 @@
 
 package com.android.tradefed.config;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-/**
- * Unit tests for {@link OptionUpdateRule}
- */
-public class OptionUpdateRuleTest extends TestCase {
+/** Unit tests for {@link OptionUpdateRule} */
+@RunWith(JUnit4.class)
+public class OptionUpdateRuleTest {
     private static final String OPTION_NAME = "option-name";
     private static final Object CURRENT = "5 current value";
     private static final Object UPDATE = "5 update value";
     private static final Object SMALL_UPDATE = "0 update value";
     private static final Object BIG_UPDATE = "9 update value";
 
+    @Test
     public void testFirst_simple() throws Exception {
         assertTrue(OptionUpdateRule.FIRST.shouldUpdate(OPTION_NAME, null, UPDATE));
         assertFalse(OptionUpdateRule.FIRST.shouldUpdate(OPTION_NAME, CURRENT, UPDATE));
     }
 
+    @Test
     public void testLast_simple() throws Exception {
         assertTrue(OptionUpdateRule.LAST.shouldUpdate(OPTION_NAME, null, UPDATE));
         assertTrue(OptionUpdateRule.LAST.shouldUpdate(OPTION_NAME, CURRENT, UPDATE));
     }
 
+    @Test
     public void testGreatest_simple() throws Exception {
         assertTrue(OptionUpdateRule.GREATEST.shouldUpdate(OPTION_NAME, null, SMALL_UPDATE));
         assertFalse(OptionUpdateRule.GREATEST.shouldUpdate(OPTION_NAME, CURRENT, SMALL_UPDATE));
         assertTrue(OptionUpdateRule.GREATEST.shouldUpdate(OPTION_NAME, CURRENT, BIG_UPDATE));
     }
 
+    @Test
     public void testLeast_simple() throws Exception {
         assertTrue(OptionUpdateRule.LEAST.shouldUpdate(OPTION_NAME, null, BIG_UPDATE));
         assertTrue(OptionUpdateRule.LEAST.shouldUpdate(OPTION_NAME, CURRENT, SMALL_UPDATE));
         assertFalse(OptionUpdateRule.LEAST.shouldUpdate(OPTION_NAME, CURRENT, BIG_UPDATE));
     }
 
+    @Test
     public void testImmutable_simple() throws Exception {
         assertTrue(OptionUpdateRule.IMMUTABLE.shouldUpdate(OPTION_NAME, null, UPDATE));
         try {
@@ -60,6 +69,7 @@ public class OptionUpdateRuleTest extends TestCase {
         }
     }
 
+    @Test
     public void testInvalidComparison() throws Exception {
         try {
             // Strings aren't comparable with integers
@@ -74,6 +84,7 @@ public class OptionUpdateRuleTest extends TestCase {
         }
     }
 
+    @Test
     public void testNotComparable() throws Exception {
         try {
             OptionUpdateRule.LEAST.shouldUpdate(OPTION_NAME, new Exception("hi"), UPDATE);

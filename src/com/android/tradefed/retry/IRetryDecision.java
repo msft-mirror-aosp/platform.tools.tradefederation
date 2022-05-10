@@ -41,6 +41,13 @@ public interface IRetryDecision {
     /** The maximum number of attempts during auto-retry. */
     public int getMaxRetryCount();
 
+    /** Returns true if we should use the updated reporting. */
+    public boolean useUpdatedReporting();
+
+    /** Decide whether or not the module preparation should be retried. */
+    public RetryPreparationDecision shouldRetryPreparation(
+            ModuleDefinition module, int attempt, int maxAttempt);
+
     /** Set the current invocation context. */
     public void setInvocationContext(IInvocationContext context);
 

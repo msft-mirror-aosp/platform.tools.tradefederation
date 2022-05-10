@@ -16,6 +16,8 @@
 
 package com.android.tradefed.monitoring.collector;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -37,6 +39,7 @@ import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 
 /** Tests for {@link DeviceWifiResourceMetricCollector}. */
+@RunWith(JUnit4.class)
 public class DeviceWifiResourceMetricCollectorTest {
     private static final String MOCK_NO_WIFI_SIGNAL_RESPONSE =
             String.join("\n", "RSSI=-9999", "LINKSPEED=0", "NOISE=-119", "FREQUENCY=2412");
