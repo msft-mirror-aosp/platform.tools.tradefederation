@@ -15,9 +15,12 @@
  */
 package com.android.tradefed.util.net;
 
-import com.android.tradefed.util.RunUtil;
+import static org.junit.Assert.fail;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-import junit.framework.TestCase;
+import com.android.tradefed.util.RunUtil;
 
 import java.io.OutputStream;
 import java.net.ServerSocket;
@@ -26,13 +29,11 @@ import java.net.SocketTimeoutException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Functional tests for {@link HttpHelper}
- */
-public class HttpHelperFuncTest extends TestCase {
-    /**
-     * Make sure that we get a timeout if the backend doesn't respond
-     */
+/** Functional tests for {@link HttpHelper} */
+@RunWith(JUnit4.class)
+public class HttpHelperFuncTest {
+    /** Make sure that we get a timeout if the backend doesn't respond */
+    @Test
     public void testTimeout() throws Exception {
         final int backendDelay = 500;  // msecs
         final int backendTimeout = 200;
@@ -72,9 +73,8 @@ public class HttpHelperFuncTest extends TestCase {
         backend.join(2 * backendTimeout);
     }
 
-    /**
-     * Make sure that we _do not_ time out if the backend responds expediently
-     */
+    /** Make sure that we _do not_ time out if the backend responds expediently */
+    @Test
     public void testNoTimeout() throws Exception {
         final int backendDelay = 0;  // msecs
         final int backendTimeout = 1000;

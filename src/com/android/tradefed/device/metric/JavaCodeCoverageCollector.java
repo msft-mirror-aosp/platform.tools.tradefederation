@@ -65,7 +65,8 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
     @Option(
             name = "merge-coverage-measurements",
             description =
-                    "Merge coverage measurements after all tests are complete rather than logging individual measurements.")
+                    "Merge coverage measurements after all tests are complete rather than logging"
+                            + " individual measurements.")
     private boolean mMergeCoverageMeasurements = false;
 
     private final ExecFileLoader mExecFileLoader = new ExecFileLoader();
@@ -78,11 +79,16 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
             IInvocationContext context, ITestInvocationListener listener) {
         super.init(context, listener);
 
-        if (isJavaCoverageEnabled()) {
-            try (AdbRootElevator adbRoot = new AdbRootElevator(getDevices().get(0))) {
-                getCoverageFlusher().resetCoverage();
-            } catch (DeviceNotAvailableException e) {
-                throw new RuntimeException(e);
+        verifyNotNull(mConfiguration);
+
+        if (isJavaCoverageEnabled()
+                && mConfiguration.getCoverageOptions().shouldResetCoverageBeforeTest()) {
+            for (ITestDevice device : getRealDevices()) {
+                try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
+                    getCoverageFlusher(device).resetCoverage();
+                } catch (DeviceNotAvailableException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
 
@@ -94,12 +100,11 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
         mConfiguration = configuration;
     }
 
-    private JavaCodeCoverageFlusher getCoverageFlusher() {
+    private JavaCodeCoverageFlusher getCoverageFlusher(ITestDevice device) {
         if (mFlusher == null) {
             mFlusher =
                     new JavaCodeCoverageFlusher(
-                            getRealDevices().get(0),
-                            mConfiguration.getCoverageOptions().getCoverageProcesses());
+                            device, mConfiguration.getCoverageOptions().getCoverageProcesses());
         }
         return mFlusher;
     }
@@ -150,20 +155,20 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                 }
             }
 
-            ITestDevice device = getRealDevices().get(0);
+            for (ITestDevice device : getRealDevices()) {
+                try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
+                    if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
+                        getCoverageFlusher(device).forceCoverageFlush();
+                    }
 
-            try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-                if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
-                    getCoverageFlusher().forceCoverageFlush();
+                    // Find all .ec files in /data/misc/trace and pull them from the device as well.
+                    String fileList = device.executeShellCommand(FIND_COVERAGE_FILES);
+                    devicePaths.addAll(Splitter.on('\n').omitEmptyStrings().split(fileList));
+
+                    collectAndLogCoverageMeasurements(device, devicePaths.build());
+                } catch (DeviceNotAvailableException | IOException e) {
+                    throw new RuntimeException(e);
                 }
-
-                // Find all .ec files in /data/misc/trace and pull them from the device as well.
-                String fileList = device.executeShellCommand(FIND_COVERAGE_FILES);
-                devicePaths.addAll(Splitter.on('\n').omitEmptyStrings().split(fileList));
-
-                collectAndLogCoverageMeasurements(device, devicePaths.build());
-            } catch (DeviceNotAvailableException | IOException e) {
-                throw new RuntimeException(e);
             }
         }
     }

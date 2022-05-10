@@ -19,9 +19,12 @@ import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -37,6 +40,9 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Structure to hold relevant data for a given GCE AVD instance. */
 public class GceAvdInfo {
@@ -62,6 +68,8 @@ public class GceAvdInfo {
     private String mErrors;
     private GceStatus mStatus;
     private HashMap<String, String> mBuildVars;
+    private Map<String, LogDataType> mLogs;
+    private boolean mIsIpPreconfigured = false;
 
     public static enum GceStatus {
         SUCCESS,
@@ -74,6 +82,7 @@ public class GceAvdInfo {
         mInstanceName = instanceName;
         mHostAndPort = hostAndPort;
         mBuildVars = new HashMap<String, String>();
+        mLogs = new HashMap<String, LogDataType>();
     }
 
     public GceAvdInfo(
@@ -82,12 +91,10 @@ public class GceAvdInfo {
             ErrorIdentifier errorType,
             String errors,
             GceStatus status) {
-        mInstanceName = instanceName;
-        mHostAndPort = hostAndPort;
+        this(instanceName, hostAndPort);
         mErrorType = errorType;
         mErrors = errors;
         mStatus = status;
-        mBuildVars = new HashMap<String, String>();
     }
 
     /** {@inheritDoc} */
@@ -103,8 +110,12 @@ public class GceAvdInfo {
                 + mErrors
                 + ", mStatus="
                 + mStatus
+                + ", mIsIpPreconfigured="
+                + mIsIpPreconfigured
                 + ", mBuildVars="
                 + mBuildVars.toString()
+                + ", mLogs="
+                + mLogs.toString()
                 + "]";
     }
 
@@ -124,6 +135,11 @@ public class GceAvdInfo {
         return mErrors;
     }
 
+    /** Return the map from local or remote log paths to types. */
+    public Map<String, LogDataType> getLogs() {
+        return mLogs;
+    }
+
     public GceStatus getStatus() {
         return mStatus;
     }
@@ -134,6 +150,14 @@ public class GceAvdInfo {
 
     private void addBuildVar(String buildKey, String buildValue) {
         mBuildVars.put(buildKey, buildValue);
+    }
+
+    public void setIpPreconfigured(boolean isIpPreconfigured) {
+        mIsIpPreconfigured = isIpPreconfigured;
+    }
+
+    public boolean isIpPreconfigured() {
+        return mIsIpPreconfigured;
     }
 
     /**
@@ -195,6 +219,9 @@ public class GceAvdInfo {
                     GceStatus.SUCCESS.equals(gceStatus)
                             ? null
                             : determineAcloudErrorType(errorType);
+            if (errorId == InfraErrorIdentifier.ACLOUD_OXYGEN_LEASE_ERROR) {
+                errorId = refineOxygenErrorType(errors);
+            }
             JSONArray devices = null;
             if (GceStatus.FAIL.equals(gceStatus) || GceStatus.BOOT_FAIL.equals(gceStatus)) {
                 // In case of failure we still look for instance name to shutdown if needed.
@@ -217,6 +244,7 @@ public class GceAvdInfo {
                                     errorId,
                                     errors,
                                     gceStatus);
+                    avdInfo.mLogs.putAll(parseLogField(d));
                     for (String buildVar : BUILD_VARS) {
                         if (d.has(buildVar) && !d.getString(buildVar).trim().isEmpty()) {
                             avdInfo.addBuildVar(buildVar, d.getString(buildVar).trim());
@@ -244,6 +272,85 @@ public class GceAvdInfo {
                 errorId);
     }
 
+    /**
+     * Parse a given command line output from Oxygen client binary to obtain leased AVD info.
+     *
+     * @param oxygenRes the {@link CommandResult} from Oxygen client command execution.
+     * @param remoteAdbPort the remote port that should be used for adb connection
+     * @return the {@link GceAvdInfo} of the device successfully leased. Will throw {@link
+     *     TargetSetupError} if failed to lease a device.
+     */
+    public static GceAvdInfo parseGceInfoFromOxygenClientOutput(
+            CommandResult oxygenRes, int remoteAdbPort) throws TargetSetupError {
+        CommandStatus oxygenCliStatus = oxygenRes.getStatus();
+        if (CommandStatus.SUCCESS.equals(oxygenCliStatus)) {
+            return parseSucceedOxygenClientOutput(
+                    oxygenRes.getStdout() + oxygenRes.getStderr(), remoteAdbPort);
+        } else if (CommandStatus.TIMED_OUT.equals(oxygenCliStatus)) {
+            return new GceAvdInfo(
+                    null,
+                    null,
+                    InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_TIMEOUT,
+                    "Oxygen client binary CLI timed out",
+                    GceStatus.FAIL);
+        } else {
+            throw new TargetSetupError(
+                    String.format(
+                            "Oxygen error: %s, CommandStatus: %s, output: %s",
+                            InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_ERROR,
+                            oxygenCliStatus,
+                            oxygenRes.getStdout() + " " + oxygenRes.getStderr()));
+        }
+    }
+
+    private static GceAvdInfo parseSucceedOxygenClientOutput(String output, int remoteAdbPort)
+            throws TargetSetupError {
+        CLog.d("Parsing oxygen client output: %s", output);
+
+        Pattern pattern =
+                Pattern.compile("session_id:\"(.*)\".*server_url:\"(.*)\".*ports", Pattern.DOTALL);
+        Matcher matcher = pattern.matcher(output);
+        if (!matcher.find()) {
+            throw new TargetSetupError(
+                    String.format(
+                            "Oxygen error: %s. Failed to parse the output: %s",
+                            InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_ERROR, output));
+        }
+        String sessionId = matcher.group(1);
+        String serverUrl = matcher.group(2);
+
+        return new GceAvdInfo(
+                sessionId,
+                HostAndPort.fromString(serverUrl).withDefaultPort(remoteAdbPort),
+                null,
+                null,
+                GceStatus.SUCCESS);
+    }
+
+    /**
+     * Search error message from Oxygen service for more accurate error code.
+     *
+     * @param errors error messages returned by Oxygen service.
+     * @return InfraErrorIdentifier for the Oxygen service error.
+     */
+    private static InfraErrorIdentifier refineOxygenErrorType(String errors) {
+        if (errors.contains("Lease aborted due to launcher failure")) {
+            return InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE;
+        } else if (errors.contains("server_shutting_down")) {
+            return InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN;
+        } else if (errors.contains("UNAVAILABLE: HTTP status code 502")) {
+            return InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR;
+        } else if (errors.contains("DeadlineExceeded")) {
+            return InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT;
+        } else if (errors.contains("RESOURCE_EXHAUSTED")) {
+            return InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED;
+        } else if (errors.contains("502:Bad Gateway")) {
+            return InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE;
+        }
+
+        return InfraErrorIdentifier.ACLOUD_OXYGEN_LEASE_ERROR;
+    }
+
     private static String parseErrorField(String data) throws JSONException {
         String res = "";
         JSONObject response = new JSONObject(data);
@@ -254,11 +361,42 @@ public class GceAvdInfo {
         return res;
     }
 
+    /**
+     * Parse log paths from a device object.
+     *
+     * @param device the device object in JSON.
+     * @return a map from log paths to {@link LogDataType}.
+     * @throws JSONException if any required property is missing.
+     */
+    private static Map<String, LogDataType> parseLogField(JSONObject device) throws JSONException {
+        Map<String, LogDataType> logs = new HashMap<String, LogDataType>();
+        JSONArray logArray = device.optJSONArray("logs");
+        if (logArray == null) {
+            return logs;
+        }
+        for (int i = 0; i < logArray.length(); i++) {
+            JSONObject logObject = logArray.getJSONObject(i);
+            String path = logObject.getString("path");
+            String typeString = logObject.getString("type");
+            LogDataType type;
+            try {
+                type = LogDataType.valueOf(typeString);
+            } catch (IllegalArgumentException e) {
+                CLog.w("Unknown log type in GCE AVD info: %s", typeString);
+                type = LogDataType.UNKNOWN;
+            }
+            if (logs.put(path, type) != null) {
+                CLog.w("Repeated log path in GCE AVD info: %s", path);
+            }
+        }
+        return logs;
+    }
+
     @VisibleForTesting
     static InfraErrorIdentifier determineAcloudErrorType(String errorType) {
         InfraErrorIdentifier identifier;
         if (errorType == null || errorType.isEmpty()) {
-            return null;
+            return InfraErrorIdentifier.ACLOUD_UNRECOGNIZED_ERROR_TYPE;
         }
         try {
             identifier = InfraErrorIdentifier.valueOf(errorType);

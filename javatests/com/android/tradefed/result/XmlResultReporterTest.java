@@ -15,21 +15,26 @@
  */
 package com.android.tradefed.result;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 
-import junit.framework.TestCase;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.HashMap;
 
-/**
- * Unit tests for {@link XmlResultReporter}.
- */
-public class XmlResultReporterTest extends TestCase {
+/** Unit tests for {@link XmlResultReporter}. */
+@RunWith(JUnit4.class)
+public class XmlResultReporterTest {
     private static final String PATH = "path";
     private static final String URL = "url";
 
@@ -65,13 +70,8 @@ public class XmlResultReporterTest extends TestCase {
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-
+    @Before
+    public void setUp() throws Exception {
         mMockLogSaver = new MockLogSaver();
 
         mResultReporter = new XmlResultReporter() {
@@ -89,14 +89,8 @@ public class XmlResultReporterTest extends TestCase {
         mResultReporter.setLogSaver(mMockLogSaver);
     }
 
-    @Override
-    protected void tearDown() throws Exception {
-        super.tearDown();
-    }
-
-    /**
-     * A simple test to ensure expected output is generated for test run with no tests.
-     */
+    /** A simple test to ensure expected output is generated for test run with no tests. */
+    @Test
     public void testEmptyGeneration() {
         final String expectedOutput = "<?xml version='1.0' encoding='UTF-8' ?>" +
             "<testsuite name=\"test\" tests=\"0\" failures=\"0\" errors=\"0\" time=\"1\" " +
@@ -114,6 +108,7 @@ public class XmlResultReporterTest extends TestCase {
     /**
      * A simple test to ensure expected output is generated for test run with a single passed test.
      */
+    @Test
     public void testSinglePass() {
         HashMap<String, Metric> emptyMap = new HashMap<>();
         final TestDescription testId = new TestDescription("FooTest", "testFoo");
@@ -137,6 +132,7 @@ public class XmlResultReporterTest extends TestCase {
     /**
      * A simple test to ensure expected output is generated for test run with a single failed test.
      */
+    @Test
     public void testSingleFail() {
         HashMap<String, Metric> emptyMap = new HashMap<>();
         final TestDescription testId = new TestDescription("FooTest", "testFoo");

@@ -16,6 +16,7 @@
 package com.android.tradefed.build;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
+import com.android.tradefed.util.FuseUtil;
 
 import java.io.File;
 
@@ -25,6 +26,12 @@ import java.io.File;
 public class FolderBuildInfo extends BuildInfo implements IFolderBuildInfo {
 
     private static final long serialVersionUID = BuildSerializedVersion.VERSION;
+
+    /**
+     * The flag to indicate whether the build is using fuse-zip. This should align with the
+     * FolderBuildInfo which this DeviceFolderBuild refer to.
+     */
+    private boolean mUseFuseZip = false;
 
     /** @see BuildInfo#BuildInfo() */
     public FolderBuildInfo() {
@@ -39,10 +46,29 @@ public class FolderBuildInfo extends BuildInfo implements IFolderBuildInfo {
     }
 
     /**
+     * Creates a {@link FolderBuildInfo} The constructor allows the flag of mUseFuseZip to be
+     * configured at the time of building up the FolderBuildInfo.
+     *
+     * @param buildId the build id
+     * @param buildName the build target name
+     * @param useFuseZip the flag to determine if the build uses zip mounting
+     */
+    public FolderBuildInfo(String buildId, String buildName, Boolean useFuseZip) {
+        super(buildId, buildName);
+        mUseFuseZip = useFuseZip;
+    }
+
+    /**
      * @see BuildInfo#BuildInfo(BuildInfo)
      */
     FolderBuildInfo(BuildInfo buildToCopy) {
         super(buildToCopy);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldUseFuseZip() {
+        return mUseFuseZip;
     }
 
     /**
@@ -63,4 +89,18 @@ public class FolderBuildInfo extends BuildInfo implements IFolderBuildInfo {
                 rootDir,
                 BuildInfoFileKey.ROOT_DIRECTORY.getFileKey());
     }
+
+    /**
+     * {@inheritDoc} Additionally, unmount fuse-zip mounted files based on the list of fuse-zip
+     * mounted files.
+     */
+    @Override
+    public void cleanUp() {
+        if (mUseFuseZip) {
+            FuseUtil fuseUtil = new FuseUtil();
+            fuseUtil.unmountZip(this.getRootDir());
+        }
+        super.cleanUp();
+    }
 }
+

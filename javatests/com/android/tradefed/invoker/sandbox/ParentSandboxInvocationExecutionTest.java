@@ -16,11 +16,8 @@
 package com.android.tradefed.invoker.sandbox;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -30,26 +27,16 @@ import com.android.tradefed.build.IBuildProvider;
 import com.android.tradefed.build.StubBuildProvider;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationDef;
-import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.StubDevice;
-import com.android.tradefed.device.TestDeviceOptions;
-import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.TestInvocation.Stage;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.ITestInvocationListener;
-import com.android.tradefed.sandbox.SandboxOptions;
 import com.android.tradefed.targetprep.ITargetPreparer;
-import com.android.tradefed.targetprep.TargetSetupError;
-import com.android.tradefed.util.CommandResult;
-import com.android.tradefed.util.CommandStatus;
-import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 
 import org.junit.Before;
@@ -57,8 +44,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
-
-import java.io.File;
 
 /** Unit tests for {@link ParentSandboxInvocationExecution}. */
 @RunWith(JUnit4.class)
@@ -69,8 +54,7 @@ public class ParentSandboxInvocationExecutionTest {
     private TestInformation mTestInfo;
     private IInvocationContext mContext;
     private IConfigurationFactory mMockFactory;
-    private SandboxOptions mOptions;
-    private ITargetPreparer mMockPreparer;
+    private ITargetPreparer mMockLabPreparer;
     private ITestDevice mMockDevice;
     private ITestLogger mMockLogger;
     private IRunUtil mMockRunUtil;
@@ -78,10 +62,10 @@ public class ParentSandboxInvocationExecutionTest {
     @Before
     public void setUp() {
         mMockFactory = Mockito.mock(IConfigurationFactory.class);
-        mMockPreparer = Mockito.mock(ITargetPreparer.class);
         mMockDevice = Mockito.mock(ITestDevice.class);
         mMockLogger = Mockito.mock(ITestLogger.class);
         mMockRunUtil = Mockito.mock(IRunUtil.class);
+        mMockLabPreparer = Mockito.mock(ITargetPreparer.class);
 
         mParentSandbox =
                 new ParentSandboxInvocationExecution() {
@@ -119,7 +103,6 @@ public class ParentSandboxInvocationExecutionTest {
         mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
         mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
         mConfig = new Configuration("test", "test");
-        mOptions = new SandboxOptions();
     }
 
     @Test
@@ -129,77 +112,7 @@ public class ParentSandboxInvocationExecutionTest {
         mParentSandbox.doCleanUp(mContext, mConfig, null);
 
         verify(mMockFactory, times(0)).createConfigurationFromArgs(Mockito.any());
-        verify(mMockDevice, times(0)).getIDevice();
-    }
-
-    @Test
-    public void testParentConfig() throws Throwable {
-        mConfig.setConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME, mOptions);
-        OptionSetter setter = new OptionSetter(mOptions);
-        setter.setOptionValue(SandboxOptions.PARENT_PREPARER_CONFIG, "parent-config");
-
-        IConfiguration configParent = new Configuration("test1", "test1");
-        configParent.setTargetPreparer(mMockPreparer);
-        doReturn(configParent)
-                .when(mMockFactory)
-                .createConfigurationFromArgs(new String[] {"parent-config"});
-
-        mParentSandbox.doSetup(mTestInfo, mConfig, null);
-        mParentSandbox.doTeardown(mTestInfo, mConfig, mMockLogger, null);
-        mParentSandbox.doCleanUp(mContext, mConfig, null);
-
-        verify(mMockFactory, times(1)).createConfigurationFromArgs(Mockito.any());
-        verify(mMockPreparer, times(1)).setUp(Mockito.any());
-        verify(mMockPreparer, times(1)).tearDown(Mockito.any(), Mockito.any());
-        verify(mMockDevice, times(0)).getIDevice();
-    }
-
-    @Test
-    public void testParentConfig_errorStage() throws Throwable {
-        mConfig.setConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME, mOptions);
-        OptionSetter setter = new OptionSetter(mOptions);
-        setter.setOptionValue(SandboxOptions.PARENT_PREPARER_CONFIG, "parent-config");
-
-        IConfiguration configParent = new Configuration("test1", "test1");
-        configParent.setTargetPreparer(mMockPreparer);
-        doReturn(configParent)
-                .when(mMockFactory)
-                .createConfigurationFromArgs(new String[] {"parent-config"});
-
-        doReturn(new StubDevice("stub")).when(mMockDevice).getIDevice();
-
-        mParentSandbox.doSetup(mTestInfo, mConfig, null);
-        mParentSandbox.doTeardown(mTestInfo, mConfig, mMockLogger, null);
-        mParentSandbox.doCleanUp(mContext, mConfig, null);
-        mParentSandbox.reportLogs(
-                mMockDevice, configParent.getTestInvocationListeners().get(0), Stage.ERROR);
-
-        verify(mMockFactory, times(1)).createConfigurationFromArgs(Mockito.any());
-        verify(mMockPreparer, times(1)).setUp(Mockito.any());
-        verify(mMockPreparer, times(1)).tearDown(Mockito.any(), Mockito.any());
-        // Ensure we reported the logs for the device during ERROR stage.
         verify(mMockDevice, times(1)).getIDevice();
-    }
-
-    @Test
-    public void testParentConfig_exception() throws Throwable {
-        mConfig.setConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME, mOptions);
-        OptionSetter setter = new OptionSetter(mOptions);
-        setter.setOptionValue(SandboxOptions.PARENT_PREPARER_CONFIG, "parent-config");
-        doThrow(new ConfigurationException("test error"))
-                .when(mMockFactory)
-                .createConfigurationFromArgs(new String[] {"parent-config"});
-
-        try {
-            mParentSandbox.doSetup(mTestInfo, mConfig, null);
-            fail("Should have thrown an exception.");
-        } catch (TargetSetupError expected) {
-            // Expected.
-            assertEquals(
-                    "Check your --parent-preparer-config option: test error",
-                    expected.getMessage());
-        }
-        verify(mMockDevice, times(0)).getIDevice();
     }
 
     /**
@@ -239,35 +152,17 @@ public class ParentSandboxInvocationExecutionTest {
         }
     }
 
+    /** Basic test to ensure lab preparers are run in the sandbox parent process */
     @Test
-    public void testParentSandbox_shutdown() throws Throwable {
-        TestDeviceOptions options = mConfig.getDeviceConfig().get(0).getDeviceOptions();
-        options.setAvdDriverBinary(new File("fakeAcloud"));
-        File fakeConfigFile = FileUtil.createTempFile("fake-acloud-config", ".config");
-        try {
-            options.setAvdConfigFile(fakeConfigFile);
-            OptionSetter setter = new OptionSetter(options);
-            setter.setOptionValue("wait-gce-teardown", "true");
-            TestInformation testInfo =
-                    TestInformation.newBuilder().setInvocationContext(mContext).build();
-            testInfo.getBuildInfo().addBuildAttribute(GceManager.GCE_INSTANCE_NAME_KEY, "ins-gce");
-            assertFalse(
-                    testInfo.getBuildInfo()
-                            .getBuildAttributes()
-                            .containsKey(GceManager.GCE_INSTANCE_CLEANED_KEY));
-            CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-            Mockito.doReturn(result)
-                    .when(mMockRunUtil)
-                    .runTimedCmd(Mockito.anyLong(), Mockito.any());
+    public void testParentConfig_labPreparer() throws Throwable {
+        mConfig.setLabPreparer(mMockLabPreparer);
 
-            mParentSandbox.runTests(testInfo, mConfig, null);
+        mParentSandbox.doSetup(mTestInfo, mConfig, null);
+        mParentSandbox.doTeardown(mTestInfo, mConfig, mMockLogger, null);
+        mParentSandbox.doCleanUp(mContext, mConfig, null);
 
-            assertTrue(
-                    testInfo.getBuildInfo()
-                            .getBuildAttributes()
-                            .containsKey(GceManager.GCE_INSTANCE_CLEANED_KEY));
-        } finally {
-            FileUtil.deleteFile(fakeConfigFile);
-        }
+        verify(mMockLabPreparer, times(1)).setUp(Mockito.any());
+        verify(mMockLabPreparer, times(1)).tearDown(Mockito.any(), Mockito.any());
+        verify(mMockDevice, times(1)).getIDevice();
     }
 }

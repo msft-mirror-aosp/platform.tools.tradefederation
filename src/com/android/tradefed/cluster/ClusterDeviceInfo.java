@@ -78,6 +78,7 @@ public class ClusterDeviceInfo {
 
         public Builder setDeviceDescriptor(final DeviceDescriptor deviceDescriptor) {
             mDeviceDescriptor = deviceDescriptor;
+            mExtraInfo.put("hardware_revision", deviceDescriptor.getHardwareRevision());
             return this;
         }
 

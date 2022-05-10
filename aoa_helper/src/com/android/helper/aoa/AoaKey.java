@@ -59,8 +59,12 @@ public class AoaKey {
 
     @Override
     public boolean equals(Object object) {
-        if (this == object) return true;
-        if (!(object instanceof AoaKey)) return false;
+        if (this == object) {
+            return true;
+        }
+        if (!(object instanceof AoaKey)) {
+            return false;
+        }
         AoaKey key = (AoaKey) object;
         return mUsage == key.mUsage && Objects.equals(mModifiers, key.mModifiers);
     }

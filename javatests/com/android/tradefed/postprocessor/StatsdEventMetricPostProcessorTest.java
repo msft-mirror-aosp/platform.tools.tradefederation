@@ -24,6 +24,7 @@ import com.android.os.AtomsProto.AttributionNode;
 import com.android.os.AtomsProto.AppCrashOccurred;
 import com.android.os.AtomsProto.AppStartOccurred;
 import com.android.os.AtomsProto.BleScanStateChanged;
+import com.android.os.StatsLog.AggregatedAtomInfo;
 import com.android.os.StatsLog.ConfigMetricsReport;
 import com.android.os.StatsLog.ConfigMetricsReportList;
 import com.android.os.StatsLog.EventMetricData;
@@ -40,20 +41,30 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 import org.mockito.Mock;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /** Unit tests for {@link StatsdEventMetricPostProcessor}. */
-@RunWith(JUnit4.class)
+@RunWith(Parameterized.class)
 public class StatsdEventMetricPostProcessorTest {
+    @Parameters
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][] {{false}, {true}});
+    }
+
+    @Parameter public boolean mUseAggregatedAtomInfo;
+
     @Rule public TemporaryFolder testDir = new TemporaryFolder();
 
     @Mock private ITestInvocationListener mListener;
@@ -70,6 +81,7 @@ public class StatsdEventMetricPostProcessorTest {
     private static final int STARTUP_MILLIS_2 = 22;
     private static final String CRASH_PKG = "crash.package";
     private static final long CRASH_NANOS = 333;
+    private static final long ELAPSED_NANOS_UNUSED = 444;
     private static final int ATTRIBUTION_NODE_UID_1 = 1;
     private static final int ATTRIBUTION_NODE_UID_2 = 2;
 
@@ -82,7 +94,7 @@ public class StatsdEventMetricPostProcessorTest {
 
         String reportFilename = "report.pb";
         File reportFile = testDir.newFile(reportFilename);
-        Files.write(reportFile.toPath(), generateTestProto().toByteArray());
+        Files.write(reportFile.toPath(), generateTestProto(mUseAggregatedAtomInfo).toByteArray());
 
         // Set up the log files and related option for parsing; only the actual parsing is tested
         // for this class as the logic around getting to the parsing stage has been tested in
@@ -212,11 +224,11 @@ public class StatsdEventMetricPostProcessorTest {
     }
 
     /**
-     * Test that fields from the {@link EventMetricData} message can be accessed by prepending "_"
-     * to the field reference.
+     * Test that the {@code elapsed_timestamp_nanos} can be accessed by prepending "_" to the field
+     * reference.
      */
     @Test
-    public void testAccessingEventMetricDataField() throws ConfigurationException {
+    public void testAccessingElapsedTimestampNanosField() throws ConfigurationException {
         OptionSetter setter = new OptionSetter(mProcessor);
         setter.setOptionValue(
                 "metric-formatter",
@@ -366,55 +378,56 @@ public class StatsdEventMetricPostProcessorTest {
         assertTrue(parsedMetrics.containsKey(crashTimestampKey));
     }
 
-    /** Generates an app startup event for testing purposes. */
-    private EventMetricData generateAppStartupData(String packageName, int launchMillis) {
-        return EventMetricData.newBuilder()
-                .setElapsedTimestampNanos(7)
-                .setAtom(
-                        Atom.newBuilder()
-                                .setAppStartOccurred(
-                                        AppStartOccurred.newBuilder()
-                                                .setPkgName(packageName)
-                                                .setType(AppStartOccurred.TransitionType.COLD)
-                                                .setWindowsDrawnDelayMillis(launchMillis)))
+    /** Generates an app startup atom for testing purposes. */
+    private Atom generateAppStartupAtom(String packageName, int launchMillis) {
+        return Atom.newBuilder()
+                .setAppStartOccurred(
+                        AppStartOccurred.newBuilder()
+                                .setPkgName(packageName)
+                                .setType(AppStartOccurred.TransitionType.COLD)
+                                .setWindowsDrawnDelayMillis(launchMillis))
                 .build();
     }
 
-    /** Generates an app crash event for testing purposes. */
-    private EventMetricData generateAppCrashData() {
-        return EventMetricData.newBuilder()
-                .setElapsedTimestampNanos(CRASH_NANOS)
-                .setAtom(
-                        Atom.newBuilder()
-                                .setAppCrashOccurred(
-                                        AppCrashOccurred.newBuilder()
-                                                .setPackageName(CRASH_PKG)
-                                                .setForegroundState(
-                                                        AppCrashOccurred.ForegroundState.UNKNOWN)))
+    /** Generates an app crash atom for testing purposes. */
+    private Atom generateAppCrashAtom() {
+        return Atom.newBuilder()
+                .setAppCrashOccurred(
+                        AppCrashOccurred.newBuilder()
+                                .setPackageName(CRASH_PKG)
+                                .setForegroundState(AppCrashOccurred.ForegroundState.UNKNOWN))
                 .build();
     }
 
-    /** Generates an event with repeated fields. */
-    private EventMetricData generateRepeatedFieldData() {
-        return EventMetricData.newBuilder()
-                .setElapsedTimestampNanos(111)
-                .setAtom(
-                        Atom.newBuilder()
-                                .setBleScanStateChanged(
-                                        BleScanStateChanged.newBuilder()
-                                                .addAttributionNode(
-                                                        AttributionNode.newBuilder()
-                                                                .setUid(ATTRIBUTION_NODE_UID_1))
-                                                .addAttributionNode(
-                                                        AttributionNode.newBuilder()
-                                                                .setUid(ATTRIBUTION_NODE_UID_2))))
+    /** Generates an atom with repeated fields. */
+    private Atom generateRepeatedFieldAtom() {
+        return Atom.newBuilder()
+                .setBleScanStateChanged(
+                        BleScanStateChanged.newBuilder()
+                                .addAttributionNode(
+                                        AttributionNode.newBuilder().setUid(ATTRIBUTION_NODE_UID_1))
+                                .addAttributionNode(
+                                        AttributionNode.newBuilder()
+                                                .setUid(ATTRIBUTION_NODE_UID_2)))
                 .build();
     }
 
-    /** Generates a {@link StatsLogReport} from an {@link EventMetricData} instance. */
-    private StatsLogReport generateStatsLogReport(EventMetricData data) {
+    /** Generates a {@link StatsLogReport} from an {@link Atom} instance. */
+    private StatsLogReport generateStatsLogReport(
+            Atom atom, long elapsedTimestampNanos, boolean useAggregatedAtomInfo) {
+        EventMetricData.Builder eventBuilder = EventMetricData.newBuilder();
+        if (useAggregatedAtomInfo) {
+            eventBuilder.setAggregatedAtomInfo(
+                    AggregatedAtomInfo.newBuilder()
+                            .setAtom(atom)
+                            .addElapsedTimestampNanos(elapsedTimestampNanos)
+                            .build());
+        } else {
+            eventBuilder.setAtom(atom).setElapsedTimestampNanos(elapsedTimestampNanos);
+        }
         return StatsLogReport.newBuilder()
-                .setEventMetrics(StatsLogReport.EventMetricDataWrapper.newBuilder().addData(data))
+                .setEventMetrics(
+                        StatsLogReport.EventMetricDataWrapper.newBuilder().addData(eventBuilder))
                 .build();
     }
 
@@ -422,30 +435,44 @@ public class StatsdEventMetricPostProcessorTest {
      * Generate a test {@link ConfigMetricsReportList} with two {@link Atom}s in the first report,
      * and one {@link Atom} in the second, third and fourth reports.
      */
-    private ConfigMetricsReportList generateTestProto() {
+    private ConfigMetricsReportList generateTestProto(boolean useAggregatedAtomInfo) {
         return ConfigMetricsReportList.newBuilder()
                 .addReports(
                         ConfigMetricsReport.newBuilder()
                                 .addMetrics(
                                         generateStatsLogReport(
-                                                generateAppStartupData(
-                                                        STARTUP_PKG_1, STARTUP_MILLIS_1)))
-                                .addMetrics(generateStatsLogReport(generateAppCrashData())))
+                                                generateAppStartupAtom(
+                                                        STARTUP_PKG_1, STARTUP_MILLIS_1),
+                                                ELAPSED_NANOS_UNUSED,
+                                                useAggregatedAtomInfo))
+                                .addMetrics(
+                                        generateStatsLogReport(
+                                                generateAppCrashAtom(),
+                                                CRASH_NANOS,
+                                                useAggregatedAtomInfo)))
                 .addReports(
                         ConfigMetricsReport.newBuilder()
                                 .addMetrics(
                                         generateStatsLogReport(
-                                                generateAppStartupData(
-                                                        STARTUP_PKG_2, STARTUP_MILLIS_2))))
+                                                generateAppStartupAtom(
+                                                        STARTUP_PKG_2, STARTUP_MILLIS_2),
+                                                ELAPSED_NANOS_UNUSED,
+                                                useAggregatedAtomInfo)))
                 .addReports(
                         ConfigMetricsReport.newBuilder()
                                 .addMetrics(
                                         generateStatsLogReport(
-                                                generateAppStartupData(
-                                                        STARTUP_PKG_1, STARTUP_MILLIS_2))))
+                                                generateAppStartupAtom(
+                                                        STARTUP_PKG_1, STARTUP_MILLIS_2),
+                                                ELAPSED_NANOS_UNUSED,
+                                                useAggregatedAtomInfo)))
                 .addReports(
                         ConfigMetricsReport.newBuilder()
-                                .addMetrics(generateStatsLogReport(generateRepeatedFieldData())))
+                                .addMetrics(
+                                        generateStatsLogReport(
+                                                generateRepeatedFieldAtom(),
+                                                ELAPSED_NANOS_UNUSED,
+                                                useAggregatedAtomInfo)))
                 .build();
     }
 }

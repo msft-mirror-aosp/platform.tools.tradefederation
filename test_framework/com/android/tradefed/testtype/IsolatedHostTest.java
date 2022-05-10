@@ -17,12 +17,11 @@ package com.android.tradefed.testtype;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.isolation.FilterSpec;
@@ -38,8 +37,10 @@ import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ResourceUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.SystemUtil;
@@ -49,7 +50,6 @@ import com.google.common.annotations.VisibleForTesting;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.ProcessBuilder.Redirect;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -81,8 +81,7 @@ public class IsolatedHostTest
                 IBuildReceiver,
                 ITestAnnotationFilterReceiver,
                 ITestFilterReceiver,
-                ITestCollector,
-                IConfigurationReceiver {
+                ITestCollector {
     @Option(
             name = "class",
             description =
@@ -154,7 +153,7 @@ public class IsolatedHostTest
             description =
                     "The android-all resource jar to be used, e.g."
                             + " 'android-all-R-robolectric-r0.jar'")
-    private String mAndroidAllName = "android-all-S-robolectric-r0.jar";
+    private String mAndroidAllName = "android-all-current-robolectric-r0.jar";
 
     @Option(
             name = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_OPTION,
@@ -169,13 +168,10 @@ public class IsolatedHostTest
     private File mSubprocessLog;
     private File mWorkDir;
     private boolean mReportedFailure = false;
-    private IConfiguration mConfiguration;
 
     private static final String ROOT_DIR = "ROOT_DIR";
     private ServerSocket mServer = null;
 
-    private File mCoverageDestination;
-    private File mAgent;
     private File mIsolationJar;
 
     /** {@inheritDoc} */
@@ -183,8 +179,6 @@ public class IsolatedHostTest
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         mReportedFailure = false;
-        mCoverageDestination = null;
-        mAgent = null;
         try {
             mServer = new ServerSocket(0);
             mServer.setSoTimeout(mSocketTimeout);
@@ -193,6 +187,11 @@ public class IsolatedHostTest
             List<String> cmdArgs = this.compileCommandArgs(classpath);
             CLog.v(String.join(" ", cmdArgs));
             RunUtil runner = new RunUtil();
+
+            String ldLibraryPath = this.compileLdLibraryPath();
+            if (ldLibraryPath != null) {
+                runner.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
+            }
 
             // Note the below chooses a working directory based on the jar that happens to
             // be first in the list of configured jars.  The baked-in assumption is that
@@ -252,15 +251,6 @@ public class IsolatedHostTest
             }
         } finally {
             FileUtil.deleteFile(mIsolationJar);
-            FileUtil.deleteFile(mAgent);
-            mAgent = null;
-            if (mCoverageDestination != null && mCoverageDestination.length() > 0) {
-                try (FileInputStreamSource source =
-                        new FileInputStreamSource(mCoverageDestination, true)) {
-                    listener.testLog("coverage", LogDataType.COVERAGE, source);
-                }
-                mCoverageDestination = null;
-            }
         }
     }
 
@@ -282,19 +272,6 @@ public class IsolatedHostTest
             String javaPath = javaExec.getAbsolutePath();
             cmdArgs.add(javaPath);
             CLog.v("Using java executable at %s", javaPath);
-        }
-        if (mConfiguration != null && mConfiguration.getCoverageOptions().isCoverageEnabled()) {
-            try {
-                mCoverageDestination = FileUtil.createTempFile("coverage", ".exec");
-                mAgent = extractJacocoAgent();
-                String javaAgent =
-                        String.format(
-                                "-javaagent:%s=destfile=%s",
-                                mAgent.getAbsolutePath(), mCoverageDestination.getAbsolutePath());
-                cmdArgs.add(javaAgent);
-            } catch (IOException e) {
-                CLog.e(e);
-            }
         }
         cmdArgs.add("-cp");
         cmdArgs.add(classpath);
@@ -362,8 +339,8 @@ public class IsolatedHostTest
         File testDir = findTestDirectory();
 
         try {
-            File isolationJar = getIsolationJar(CurrentInvocation.getWorkFolder());
-            paths.add(isolationJar.getAbsolutePath());
+            mIsolationJar = getIsolationJar(CurrentInvocation.getWorkFolder());
+            paths.add(mIsolationJar.getAbsolutePath());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -375,8 +352,9 @@ public class IsolatedHostTest
                 // This is contingent on the current android-all version.
                 File androidAllJar = FileUtil.findFile(testDir, mAndroidAllName);
                 if (androidAllJar == null) {
-                    throw new RuntimeException(
-                            "Could not find android-all jar needed for test execution.");
+                    throw new HarnessRuntimeException(
+                            "Could not find android-all jar needed for test execution.",
+                            InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
                 }
                 paths.add(androidAllJar.getAbsolutePath());
             }
@@ -396,6 +374,58 @@ public class IsolatedHostTest
         String jarClasspath = String.join(java.io.File.pathSeparator, paths);
 
         return jarClasspath;
+    }
+
+    @VisibleForTesting
+    String getEnvironment(String key) {
+        return System.getenv(key);
+    }
+
+    /**
+     * Return LD_LIBRARY_PATH for tests that require native library.
+     *
+     * @return a string specifying the colon separated library path.
+     */
+    @VisibleForTesting
+    protected String compileLdLibraryPath() {
+        if (mClasspathOverride != null) {
+            return null;
+        }
+        File testDir = findTestDirectory();
+        List<String> paths = new ArrayList<>();
+
+        for (String jar : mJars) {
+            File f = FileUtil.findFile(testDir, jar);
+            if (f == null || !f.exists()) {
+                continue;
+            }
+            String libs[] = {"lib", "lib64"};
+            for (String lib : libs) {
+                File libFile = new File(f.getParentFile().getAbsolutePath(), lib);
+                // If the test module has no lib directory packaged, we assume the test does not
+                // require any external native library.
+                if (!libFile.exists()) {
+                    continue;
+                }
+                paths.add(libFile.getAbsolutePath());
+                // Include `testcases` directory for running tests based on test zip.
+                libFile = new File(f.getParentFile().getParentFile().getAbsolutePath(), lib);
+                if (libFile.exists()) {
+                    paths.add(libFile.getAbsolutePath());
+                }
+                // Include ANDROID_HOST_OUT/lib to support local case.
+                if (getEnvironment("ANDROID_HOST_OUT") != null) {
+                    libFile = new File(getEnvironment("ANDROID_HOST_OUT"), lib);
+                    if (libFile.exists()) {
+                        paths.add(libFile.getAbsolutePath());
+                    }
+                }
+            }
+        }
+        if (paths.isEmpty()) {
+            return null;
+        }
+        return String.join(java.io.File.pathSeparator, paths);
     }
 
     private List<String> compileRobolectricOptions() {
@@ -619,6 +649,18 @@ public class IsolatedHostTest
         throw new FileNotFoundException(String.format("Could not find jar: %s", jarName));
     }
 
+    /**
+     * Copied over from HostTest to mimic its unit test harnessing.
+     *
+     * <p>Inspect several location where the artifact are usually located for different use cases to
+     * find our jar.
+     */
+    @VisibleForTesting
+    protected File getJarFile(String jarName, TestInformation testInfo)
+            throws FileNotFoundException {
+        return testInfo.getDependencyFile(jarName, /* target first*/ false);
+    }
+
     /** Looks for a jar file given a place to start and a filename. */
     private File searchJarFile(File baseSearchFile, String jarName) {
         if (baseSearchFile != null && baseSearchFile.isDirectory()) {
@@ -738,23 +780,6 @@ public class IsolatedHostTest
         mExcludeAnnotations.clear();
     }
 
-    @Override
-    public void setConfiguration(IConfiguration configuration) {
-        mConfiguration = configuration;
-    }
-
-    /**
-     * Copied over from HostTest to mimic its unit test harnessing.
-     *
-     * <p>Inspect several location where the artifact are usually located for different use cases to
-     * find our jar.
-     */
-    @VisibleForTesting
-    protected File getJarFile(String jarName, TestInformation testInfo)
-            throws FileNotFoundException {
-        return testInfo.getDependencyFile(jarName, /* target first*/ false);
-    }
-
     @VisibleForTesting
     protected void setServer(ServerSocket server) {
         mServer = server;
@@ -769,34 +794,17 @@ public class IsolatedHostTest
         return listener;
     }
 
-    /** Returns a {@link File} pointing to the jacoco args jar file extracted from the resources. */
-    private File extractJacocoAgent() throws IOException {
-        String jacocoAgentRes = "/jacoco/jacocoagent.jar";
-        InputStream jacocoAgentStream = getClass().getResourceAsStream(jacocoAgentRes);
-        if (jacocoAgentStream == null) {
-            throw new IOException("Could not find " + jacocoAgentRes);
-        }
-        File jacocoAgent = FileUtil.createTempFile("jacocoagent", ".jar");
-        FileUtil.writeToFile(jacocoAgentStream, jacocoAgent);
-        return jacocoAgent;
-    }
-
     private File getIsolationJar(File workDir) throws IOException {
-        try (InputStream jarFileStream = getClass().getResourceAsStream("/tradefed-isolation.jar");
-                InputStream qualifiedJarStream =
-                        getClass()
-                                .getResourceAsStream(
-                                        QUALIFIED_PATH + "/tradefed-isolation_deploy.jar")) {
-            if (jarFileStream == null && qualifiedJarStream == null) {
-                throw new RuntimeException("/tradefed-isolation.jar not found.");
-            }
-            mIsolationJar = FileUtil.createTempFile("tradefed-isolation", ".jar", workDir);
-            if (qualifiedJarStream != null) {
-                FileUtil.writeToFile(qualifiedJarStream, mIsolationJar);
-            } else {
-                FileUtil.writeToFile(jarFileStream, mIsolationJar);
-            }
-            return mIsolationJar;
+        File isolationJar = FileUtil.createTempFile("tradefed-isolation", ".jar", workDir);
+        boolean res =
+                ResourceUtil.extractResourceWithAltAsFile(
+                        "/tradefed-isolation.jar",
+                        QUALIFIED_PATH + "/tradefed-isolation_deploy.jar",
+                        isolationJar);
+        if (!res) {
+            FileUtil.deleteFile(isolationJar);
+            throw new RuntimeException("/tradefed-isolation.jar not found.");
         }
+        return isolationJar;
     }
 }
