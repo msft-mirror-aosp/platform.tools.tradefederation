@@ -15,19 +15,20 @@
  */
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * Unit tests for {@link ArrayUtil}
- */
-public class ArrayUtilTest extends TestCase {
+/** Unit tests for {@link ArrayUtil} */
+@RunWith(JUnit4.class)
+public class ArrayUtilTest {
 
-    /**
-     * Simple test for {@link ArrayUtil#buildArray(String[])}
-     */
+    /** Simple test for {@link ArrayUtil#buildArray(String[])} */
+    @Test
     public void testBuildArray_arrays() {
         String[] newArray = ArrayUtil.buildArray(new String[] {"1", "2"}, new String[] {"3"},
                 new String[] {"4"});
@@ -37,9 +38,8 @@ public class ArrayUtilTest extends TestCase {
         }
     }
 
-    /**
-     * Make sure that Collections aren't double-wrapped
-     */
+    /** Make sure that Collections aren't double-wrapped */
+    @Test
     public void testJoinCollection() {
         List<String> list = Arrays.asList("alpha", "beta", "gamma");
         final String expected = "alpha, beta, gamma";
@@ -47,9 +47,8 @@ public class ArrayUtilTest extends TestCase {
         assertEquals(expected, str);
     }
 
-    /**
-     * Make sure that Arrays aren't double-wrapped
-     */
+    /** Make sure that Arrays aren't double-wrapped */
+    @Test
     public void testJoinArray() {
         String[] ary = new String[] {"alpha", "beta", "gamma"};
         final String expected = "alpha, beta, gamma";
@@ -57,9 +56,8 @@ public class ArrayUtilTest extends TestCase {
         assertEquals(expected, str);
     }
 
-    /**
-     * Make sure that join on varargs arrays work as expected
-     */
+    /** Make sure that join on varargs arrays work as expected */
+    @Test
     public void testJoinNormal() {
         final String expected = "alpha, beta, gamma";
         String str = ArrayUtil.join(", ", "alpha", "beta", "gamma");

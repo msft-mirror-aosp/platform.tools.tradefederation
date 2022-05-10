@@ -14,6 +14,8 @@
 
 syntax = "proto3";
 
+package tradefed.test.proto;
+
 option java_package = "com.android.tradefed.util.test";
 option java_outer_classname = "ProtoUtilTestProto";
 

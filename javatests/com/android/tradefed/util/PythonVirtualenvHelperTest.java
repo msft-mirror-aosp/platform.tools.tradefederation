@@ -23,12 +23,15 @@ import static org.mockito.Mockito.*;
 
 import com.google.common.base.Throwables;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.After;
 import org.junit.Test;
 
 import java.io.File;
 import java.nio.file.Paths;
 
+@RunWith(JUnit4.class)
 public class PythonVirtualenvHelperTest {
 
     private File mVenvDir;

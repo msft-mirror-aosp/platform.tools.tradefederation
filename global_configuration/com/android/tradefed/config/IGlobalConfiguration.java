@@ -30,6 +30,8 @@ import com.android.tradefed.invoker.shard.IShardHelper;
 import com.android.tradefed.log.ITerribleFailureHandler;
 import com.android.tradefed.monitoring.collector.IResourceMetricCollector;
 import com.android.tradefed.sandbox.ISandboxFactory;
+import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.service.management.TestInvocationManagementServer;
 import com.android.tradefed.util.hostmetric.IHostMonitor;
 import com.android.tradefed.util.keystore.IKeyStoreFactory;
 
@@ -229,6 +231,12 @@ public interface IGlobalConfiguration {
     /** Returns the {@link IShardHelper} that defines the way to shard a configuration. */
     public IShardHelper getShardingStrategy();
 
+    /** Returns the {@link TradefedFeatureServer} or null if undefined. */
+    public TradefedFeatureServer getFeatureServer();
+
+    /** Returns the {@link TestInvocationManagementServer} or null if undefined. */
+    public TestInvocationManagementServer getTestInvocationManagementSever();
+
     /**
      * Set the {@link IHostOptions}, replacing any existing values.
      *
@@ -277,6 +285,12 @@ public interface IGlobalConfiguration {
 
     /** Sets the {@link IResourceMetricCollector}. */
     public void setResourceMetricCollector(IResourceMetricCollector collector);
+
+    /** Sets the {@link TradefedFeatureServer}. */
+    public void setTradefedFeatureServer(TradefedFeatureServer server);
+
+    /** Sets the {@link TestInvocationManagementServer}. */
+    public void setInvocationServer(TestInvocationManagementServer server);
 
     /**
      * Generic method to set the config object with the given name, replacing any existing value.
@@ -356,6 +370,23 @@ public interface IGlobalConfiguration {
      * @throws IOException
      */
     public File cloneConfigWithFilter(Set<String> exclusionPatterns, String... allowlistConfigs)
+            throws IOException;
+
+    /**
+     * Filter the GlobalConfiguration based on a white list while allowing for manipulation of
+     * option values and output to an XML file.
+     *
+     * @param exclusionPatterns The pattern of class name to exclude from the dump.
+     * @param allowlistConfigs  a {@link String} array of configs to be included in the new XML
+     *                          file.
+     *                          If it's set to <code>null<code/>, a default list should be used.
+     * @return the File containing the new filtered global config.
+     * @see #cloneConfigWithFilter(String...)
+     */
+    public File cloneConfigWithFilter(
+            Set<String> exclusionPatterns,
+            IConfigOptionValueTransformer transformer,
+            String... allowlistConfigs)
             throws IOException;
 
     /**

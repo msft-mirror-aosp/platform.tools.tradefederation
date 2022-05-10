@@ -39,6 +39,7 @@ public class PackageInfo {
     private boolean mIsUpdatedSystemApp;
     private boolean mIsPersistentApp;
     private Map<String, String> mAttributes = new HashMap<String, String>();
+    private Map<Integer, String> mPerUserFirstInstallTime = new HashMap<>();
 
     PackageInfo(String pkgName) {
         mPackageName = pkgName;
@@ -129,5 +130,15 @@ public class PackageInfo {
         }
         return false;
     }
-}
 
+    public void addPerUserAttribute(int userId, String attr, String value) {
+        if (!attr.equals("firstInstallTime")) {
+            return;
+        }
+        mPerUserFirstInstallTime.put(userId, value);
+    }
+
+    public String getFirstInstallTime(int userId) {
+        return mPerUserFirstInstallTime.get(userId);
+    }
+}

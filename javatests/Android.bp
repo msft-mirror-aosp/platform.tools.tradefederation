@@ -51,7 +51,6 @@ tradefed_java_library_host {
     ],
 
     static_libs: [
-        "easymock",
         "objenesis",
         "mockito",
         "tradefed-test-protos",

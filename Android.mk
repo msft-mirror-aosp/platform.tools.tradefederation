@@ -21,15 +21,6 @@ include $(CLEAR_VARS)
 # makefile rules to copy jars to HOST_OUT/tradefed
 # so tradefed.sh can automatically add to classpath
 
-deps := $(call copy-many-files,\
-  $(call intermediates-dir-for,JAVA_LIBRARIES,tradefed,HOST)/javalib.jar:$(HOST_OUT)/tradefed/tradefed.jar)
-
-fwk_deps := $(call copy-many-files,\
-  $(call intermediates-dir-for,JAVA_LIBRARIES,tradefed-test-framework,HOST)/javalib.jar:$(HOST_OUT)/tradefed/tradefed-test-framework.jar)
-
-# this dependency ensures the above rule will be executed if jar is installed
-$(HOST_OUT_JAVA_LIBRARIES)/tradefed.jar : $(deps) $(isodeps) $(fwk_deps)
-# The copy rule for loganalysis is in tools/loganalysis/Android.mk
 $(HOST_OUT_JAVA_LIBRARIES)/tradefed.jar : $(HOST_OUT)/tradefed/loganalysis.jar
 
 #######################################################
@@ -74,11 +65,12 @@ $(tradefed_dist_zip) : $(SOONG_ZIP) $(foreach f,$(tradefed_dist_copy_pairs),$(ca
 	$(SOONG_ZIP) -o $@ -C $(dir $@)/tmp -f $(dir $@)/tmp/version.txt \
 	  $(foreach f,$(PRIVATE_COPY_PAIRS),-f $(dir $@)/tmp/$(call word-colon,2,$(f)))
 
+$(call declare-1p-container,$(tradefed_dist_zip),tools/tradefederation/core)
+$(call declare-container-license-deps,$(tradefed_dist_zip),$(filter $(OUT_DIR)/%,$(foreach f,$(tradefed_dist_copy_pairs), $(call word-colon,1,$(f)))),$(tradefed_dist_zip):)
+
 $(call dist-for-goals, tradefed, $(tradefed_dist_zip))
 
 tradefed_dist_copy_pairs :=
 tradefed_dist_intermediates :=
 tradefed_dist_zip :=
 
-# Build all sub-directories
-include $(call all-makefiles-under,$(LOCAL_PATH))

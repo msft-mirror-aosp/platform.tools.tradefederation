@@ -31,12 +31,17 @@ import java.io.InputStream;
 public class DebugHostLogOnFailureCollector extends BaseDeviceMetricCollector {
 
     private static final String NAME_FORMAT = "%s-debug-hostlog-on-failure";
+    private static final int THROTTLE_LIMIT_PER_RUN = 10;
 
+    private int mCurrentCount = 0;
+    private boolean mFirstThrottle = true;
     private Long offset = null;
 
     @Override
     public void onTestRunStart(DeviceMetricData runData) {
         offset = null;
+        mCurrentCount = 0;
+        mFirstThrottle = true;
         // TODO: Improve the offset from the start of the method instead.
         try (InputStreamSource source = getLogger().getLog()) {
             if (source == null) {
@@ -52,6 +57,13 @@ public class DebugHostLogOnFailureCollector extends BaseDeviceMetricCollector {
     @Override
     public void onTestFail(DeviceMetricData testData, TestDescription test) {
         if (offset == null) {
+            return;
+        }
+        if (mCurrentCount > THROTTLE_LIMIT_PER_RUN) {
+            if (mFirstThrottle) {
+                CLog.w("Throttle capture of host_log-on-failure due to too many failures.");
+                mFirstThrottle = false;
+            }
             return;
         }
         try (InputStreamSource source = getLogger().getLog()) {

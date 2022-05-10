@@ -49,6 +49,7 @@ import com.google.api.services.compute.Compute.Instances.GetSerialPortOutput;
 import com.google.api.services.compute.ComputeScopes;
 import com.google.api.services.compute.model.SerialPortOutput;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 import com.google.common.net.HostAndPort;
 
 import java.io.File;
@@ -58,13 +59,16 @@ import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Helper that manages the GCE calls to start/stop and collect logs from GCE. */
 public class GceManager {
     public static final String GCE_INSTANCE_NAME_KEY = "gce-instance-name";
+    public static final String GCE_HOSTNAME_KEY = "gce-hostname";
     public static final String GCE_INSTANCE_CLEANED_KEY = "gce-instance-clean-called";
+    public static final String GCE_IP_PRECONFIGURED_KEY = "gce-ip-pre-configured";
 
     private static final long BUGREPORT_TIMEOUT = 15 * 60 * 1000L;
     private static final long REMOTE_FILE_OP_TIMEOUT = 10 * 60 * 1000L;
@@ -79,6 +83,8 @@ public class GceManager {
     private String mGceInstanceName = null;
     private String mGceHost = null;
     private GceAvdInfo mGceAvdInfo = null;
+
+    private boolean mSkipSerialLogCollection = false;
 
     /**
      * Ctor
@@ -146,11 +152,11 @@ public class GceManager {
     }
 
     public GceAvdInfo startGce() throws TargetSetupError {
-        return startGce(null, null);
+        return startGce(null, null, null, null);
     }
 
     /**
-     * Attempt to start a gce instance
+     * Attempt to start a gce instance.
      *
      * @param ipDevice the initial IP of the GCE instance to run AVD in, <code>null</code> if not
      *     applicable
@@ -161,6 +167,76 @@ public class GceManager {
      */
     public GceAvdInfo startGce(String ipDevice, MultiMap<String, String> attributes)
             throws TargetSetupError {
+        return startGce(ipDevice, null, null, attributes);
+    }
+
+    /**
+     * Attempt to start a gce instance with either Acloud or Oxygen.
+     *
+     * @param ipDevice the initial IP of the GCE instance to run AVD in, <code>null</code> if not
+     *     applicable
+     * @param user the host running user of AVD, <code>null</code> if not applicable
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @param attributes attributes associated with current invocation, used for passing applicable
+     *     information down to the GCE instance to be added as VM metadata
+     * @return a {@link GceAvdInfo} describing the GCE instance. Could be a BOOT_FAIL instance.
+     * @throws TargetSetupError
+     */
+    public GceAvdInfo startGce(
+            String ipDevice, String user, Integer offset, MultiMap<String, String> attributes)
+            throws TargetSetupError {
+        // If ipDevice is specified, skip collecting serial log as the host may not be GCE instance
+        // If Oxygen cuttlefish is used, skip collecting serial log due to lack of access.
+        mSkipSerialLogCollection =
+                (!Strings.isNullOrEmpty(ipDevice) || getTestDeviceOptions().useOxygen());
+        if (getTestDeviceOptions().useOxygenProxy()) {
+            return startGceWithOxygenClient();
+        } else {
+            return startGceWithAcloud(ipDevice, user, offset, attributes);
+        }
+    }
+
+    /**
+     * Attempt to start a gce instance with Oxygen.
+     *
+     * @return a {@link GceAvdInfo} describing the GCE instance.
+     */
+    private GceAvdInfo startGceWithOxygenClient() throws TargetSetupError {
+        long startTime = System.currentTimeMillis();
+        try {
+            File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
+            OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
+            CommandResult res = oxygenClient.lease(mBuildInfo, getTestDeviceOptions());
+            GceAvdInfo oxygenDeviceInfo =
+                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(
+                            res, mDeviceOptions.getRemoteAdbPort());
+            mGceAvdInfo = oxygenDeviceInfo;
+            return oxygenDeviceInfo;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_DIRECT_LEASE_COUNT, 1);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_LAUNCH_CVD_TIME, System.currentTimeMillis() - startTime);
+        }
+    }
+
+    /**
+     * Attempt to start a gce instance with Acloud.
+     *
+     * @param ipDevice the initial IP of the GCE instance to run AVD in, <code>null</code> if not
+     *     applicable
+     * @param user the host running user of AVD, <code>null</code> if not applicable
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @param attributes attributes associated with current invocation, used for passing applicable
+     *     information down to the GCE instance to be added as VM metadata
+     * @return a {@link GceAvdInfo} describing the GCE instance. Could be a BOOT_FAIL instance.
+     * @throws TargetSetupError
+     */
+    private GceAvdInfo startGceWithAcloud(
+            String ipDevice, String user, Integer offset, MultiMap<String, String> attributes)
+            throws TargetSetupError {
         mGceAvdInfo = null;
         // For debugging purposes bypass.
         if (mGceHost != null && mGceInstanceName != null) {
@@ -169,13 +245,22 @@ public class GceManager {
                             mGceInstanceName,
                             HostAndPort.fromString(mGceHost)
                                     .withDefaultPort(mDeviceOptions.getRemoteAdbPort()));
+            mGceAvdInfo.setIpPreconfigured(ipDevice != null);
             return mGceAvdInfo;
         }
+
+        mBuildInfo.addBuildAttribute(GCE_IP_PRECONFIGURED_KEY, Boolean.toString(ipDevice != null));
+
         // Add extra args.
         File reportFile = null;
         try {
             reportFile = FileUtil.createTempFile("gce_avd_driver", ".json");
-            List<String> gceArgs = buildGceCmd(reportFile, mBuildInfo, ipDevice, attributes);
+            // Override the instance name by specified user
+            if (user != null) {
+                getTestDeviceOptions().setInstanceUser(user);
+            }
+            List<String> gceArgs =
+                    buildGceCmd(reportFile, mBuildInfo, ipDevice, user, offset, attributes);
 
             long driverTimeoutMs = getTestDeviceOptions().getGceCmdTimeout();
             if (!getTestDeviceOptions().allowGceCmdTimeoutOverride()) {
@@ -194,11 +279,14 @@ public class GceManager {
                                     getTestDeviceOptions().getGceCmdTimeout(),
                                     gceArgs.toArray(new String[gceArgs.size()]));
             CLog.i("GCE driver stderr: %s", cmd.getStderr());
-            String instanceName = extractInstanceName(cmd.getStderr());
-            if (instanceName != null) {
-                mBuildInfo.addBuildAttribute(GCE_INSTANCE_NAME_KEY, instanceName);
-            } else {
-                CLog.w("Could not extract an instance name for the gce device.");
+            String instanceName = null;
+            if (!getTestDeviceOptions().useOxygen()) {
+                instanceName = extractInstanceName(cmd.getStderr());
+                if (instanceName != null) {
+                    mBuildInfo.addBuildAttribute(GCE_INSTANCE_NAME_KEY, instanceName);
+                } else {
+                    CLog.w("Could not extract an instance name for the gce device.");
+                }
             }
             if (CommandStatus.TIMED_OUT.equals(cmd.getStatus())) {
                 String errors =
@@ -210,6 +298,7 @@ public class GceManager {
                     // can be shutdown.
                     mGceAvdInfo =
                             new GceAvdInfo(instanceName, null, null, errors, GceStatus.BOOT_FAIL);
+                    mGceAvdInfo.setIpPreconfigured(ipDevice != null);
                     return mGceAvdInfo;
                 }
                 throw new TargetSetupError(
@@ -223,6 +312,7 @@ public class GceManager {
                 if (mGceAvdInfo != null) {
                     // We always return the GceAvdInfo describing the instance when possible
                     // The caller can decide actions to be taken.
+                    mGceAvdInfo.setIpPreconfigured(ipDevice != null);
                     return mGceAvdInfo;
                 } else {
                     errors =
@@ -238,6 +328,13 @@ public class GceManager {
             mGceAvdInfo =
                     GceAvdInfo.parseGceInfoFromFile(
                             reportFile, mDeviceDescriptor, mDeviceOptions.getRemoteAdbPort());
+            if (getTestDeviceOptions().useOxygen()) {
+                mBuildInfo.addBuildAttribute(GCE_INSTANCE_NAME_KEY, mGceAvdInfo.instanceName());
+                // Save GCE hostname to build info for releasing Oxygen cuttlefish in the parent
+                // process if needed.
+                mBuildInfo.addBuildAttribute(GCE_HOSTNAME_KEY, mGceAvdInfo.hostAndPort().getHost());
+            }
+            mGceAvdInfo.setIpPreconfigured(ipDevice != null);
             return mGceAvdInfo;
         } catch (IOException e) {
             throw new TargetSetupError(
@@ -270,7 +367,12 @@ public class GceManager {
 
     /** Build and return the command to launch GCE. Exposed for testing. */
     protected List<String> buildGceCmd(
-            File reportFile, IBuildInfo b, String ipDevice, MultiMap<String, String> attributes) {
+            File reportFile,
+            IBuildInfo b,
+            String ipDevice,
+            String user,
+            Integer offset,
+            MultiMap<String, String> attributes) {
         File avdDriverFile = getTestDeviceOptions().getAvdDriverBinary();
         if (!avdDriverFile.exists()) {
             throw new HarnessRuntimeException(
@@ -287,8 +389,6 @@ public class GceManager {
         gceArgs.add(
                 TestDeviceOptions.getCreateCommandByInstanceType(
                         getTestDeviceOptions().getInstanceType()));
-        // Handle the build id related params
-        List<String> gceDriverParams = getTestDeviceOptions().getGceDriverParams();
 
         if (TestDeviceOptions.InstanceType.CHEEPS.equals(
                 getTestDeviceOptions().getInstanceType())) {
@@ -304,12 +404,19 @@ public class GceManager {
             }
         }
 
-        /* If args passed by gce-driver-param contain build-target or build_target, there is no need
-        to pass the build info from device BuildInfo to gce arguments. Otherwise, generate gce args
-        from device BuildInfo. Please refer to acloud arguments for the supported format:
+        /* If args passed by gce-driver-param contain build-target or build_target, or
+        test device options include local-image and cvd-host-package to side load prebuilt virtual
+        device images, there is no need to pass the build info from device BuildInfo to gce
+        arguments. Otherwise, generate gce args from device BuildInfo. Please refer to acloud
+        arguments for the supported format:
         https://android.googlesource.com/platform/tools/acloud/+/refs/heads/master/create/create_args.py  */
+        List<String> gceDriverParams = getTestDeviceOptions().getGceDriverParams();
+        MultiMap<String, File> gceDriverFileParams =
+                getTestDeviceOptions().getGceDriverFileParams();
         if (!gceDriverParams.contains("--build-target")
-                && !gceDriverParams.contains("--build_target")) {
+                && !gceDriverParams.contains("--build_target")
+                && !(gceDriverFileParams.containsKey("local-image")
+                        && gceDriverFileParams.containsKey("cvd-host-package"))) {
             gceArgs.add("--build-target");
             if (b.getBuildAttributes().containsKey("build_target")) {
                 // If BuildInfo contains the attribute for a build target, use that.
@@ -323,6 +430,11 @@ public class GceManager {
             gceArgs.add(b.getBuildId());
         }
 
+        for (Map.Entry<String, File> entry : gceDriverFileParams.entries()) {
+            gceArgs.add("--" + entry.getKey());
+            gceArgs.add(entry.getValue().getAbsolutePath());
+        }
+
         // process any info in the invocation context that should be passed onto GCE driver
         // as meta data to be associated with the VM instance
         if (attributes != null) {
@@ -334,6 +446,16 @@ public class GceManager {
             }
         }
 
+        MultiMap<File, String> extraFiles = getTestDeviceOptions().getExtraFiles();
+        if (!extraFiles.isEmpty()) {
+            gceArgs.add("--extra-files");
+            for (File local : extraFiles.keySet()) {
+                for (String remoteDestination : extraFiles.get(local)) {
+                    gceArgs.add(local.getAbsolutePath() + "," + remoteDestination);
+                }
+            }
+        }
+
         // Add additional args passed by gce-driver-param.
         gceArgs.addAll(gceDriverParams);
         // Get extra params by instance type
@@ -341,20 +463,38 @@ public class GceManager {
                 TestDeviceOptions.getExtraParamsByInstanceType(
                         getTestDeviceOptions().getInstanceType(),
                         getTestDeviceOptions().getBaseImage()));
-        if (ipDevice == null) {
+        if (getAvdConfigFile() != null) {
             gceArgs.add("--config_file");
             gceArgs.add(getAvdConfigFile().getAbsolutePath());
-            if (getTestDeviceOptions().getServiceAccountJsonKeyFile() != null) {
-                gceArgs.add("--service_account_json_private_key_path");
-                gceArgs.add(
-                        getTestDeviceOptions().getServiceAccountJsonKeyFile().getAbsolutePath());
-            }
-        } else {
+        }
+        if (getTestDeviceOptions().getServiceAccountJsonKeyFile() != null) {
+            gceArgs.add("--service-account-json-private-key-path");
+            gceArgs.add(getTestDeviceOptions().getServiceAccountJsonKeyFile().getAbsolutePath());
+        }
+
+        if (ipDevice != null) {
             gceArgs.add("--host");
             gceArgs.add(ipDevice);
+            gceArgs.add("--host-user");
+            if (user != null) {
+                gceArgs.add(user);
+            } else {
+                gceArgs.add(getTestDeviceOptions().getInstanceUser());
+            }
+            gceArgs.add("--host-ssh-private-key-path");
+            gceArgs.add(getTestDeviceOptions().getSshPrivateKeyPath().getAbsolutePath());
         }
         gceArgs.add("--report_file");
         gceArgs.add(reportFile.getAbsolutePath());
+
+        // Add base-instance-num args with offset, and override the remote adb port.
+        // When offset is 1, base-instance-num=2 and virtual device adb forward port is 6521.
+        if (offset != null) {
+            getTestDeviceOptions().setRemoteAdbPort(6520 + offset);
+            gceArgs.add("--base-instance-num");
+            gceArgs.add(String.valueOf(offset + 1));
+            gceArgs.add("--launch-args=\"" + "--base_instance_num=" + (offset + 1) + "\"");
+        }
         switch (getTestDeviceOptions().getGceDriverLogLevel()) {
             case DEBUG:
                 gceArgs.add("-v");
@@ -371,6 +511,11 @@ public class GceManager {
         }
         // Do not pass flags --logcat_file and --serial_log_file to collect logcat and serial logs.
 
+        if (getTestDeviceOptions().useOxygen()) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_LEASE_THROUGH_ACLOUD_COUNT, 1);
+            gceArgs.add("--oxygen");
+        }
         return gceArgs;
     }
 
@@ -380,6 +525,36 @@ public class GceManager {
      * @return returns true if gce shutdown was requested as non-blocking.
      */
     public boolean shutdownGce() {
+        if (getTestDeviceOptions().useOxygenProxy()) {
+            return shutdownGceWithOxygen();
+        } else {
+            return shutdownGceWithAcloud();
+        }
+    }
+
+    /**
+     * Shutdown the Oxygen Gce instance.
+     *
+     * @return returns true if gce shutdown was requested as non-blocking.
+     */
+    private boolean shutdownGceWithOxygen() {
+        try {
+            File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
+            OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
+            return oxygenClient.release(mGceAvdInfo, getTestDeviceOptions().getGceCmdTimeout());
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_DIRECT_RELEASE_COUNT, 1);
+            mGceAvdInfo = null;
+        }
+    }
+
+    /**
+     * Shutdown the Acloud Gce instance.
+     *
+     * @return returns true if gce shutdown was requested as non-blocking.
+     */
+    private boolean shutdownGceWithAcloud() {
         if (!getTestDeviceOptions().getAvdDriverBinary().canExecute()) {
             mGceAvdInfo = null;
             throw new HarnessRuntimeException(
@@ -401,8 +576,23 @@ public class GceManager {
             CLog.d("No instance to shutdown.");
             return false;
         }
+        // hostname is needed for Oxygen cuttlefish to shutdown.
+        String hostname = null;
+        if (mGceAvdInfo != null && mGceAvdInfo.hostAndPort() != null) {
+            hostname = mGceAvdInfo.hostAndPort().getHost();
+        }
+        boolean ipPreconfigured = false;
+        if (mGceAvdInfo != null) {
+            ipPreconfigured = mGceAvdInfo.isIpPreconfigured();
+        }
         try {
-            boolean res = AcloudShutdown(getTestDeviceOptions(), getRunUtil(), instanceName);
+            boolean res =
+                    AcloudShutdown(
+                            getTestDeviceOptions(),
+                            getRunUtil(),
+                            instanceName,
+                            hostname,
+                            ipPreconfigured);
             // Be more lenient if instance name was not reported officially and we still attempt
             // to clean it.
             if (res || notFromGceAvd) {
@@ -414,37 +604,75 @@ public class GceManager {
         }
     }
 
+    protected static List<String> buildShutdownCommand(
+            File config,
+            TestDeviceOptions options,
+            String instanceName,
+            String hostname,
+            boolean isIpPreconfigured) {
+        List<String> gceArgs = ArrayUtil.list(options.getAvdDriverBinary().getAbsolutePath());
+        gceArgs.add("delete");
+        if (options.useOxygen()) {
+            if (Strings.isNullOrEmpty(hostname)) {
+                CLog.w("`hostname` is needed for releasing Oxygen cuttlefish.");
+                return null;
+            }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_RELEASE_THROUGH_ACLOUD_COUNT, 1);
+            gceArgs.add("--oxygen");
+            gceArgs.add("--ip");
+            gceArgs.add(hostname);
+        }
+        if (options.getServiceAccountJsonKeyFile() != null) {
+            gceArgs.add("--service-account-json-private-key-path");
+            gceArgs.add(options.getServiceAccountJsonKeyFile().getAbsolutePath());
+        }
+        if (isIpPreconfigured) {
+            gceArgs.add("--host");
+            gceArgs.add(hostname);
+            gceArgs.add("--host-user");
+            gceArgs.add(options.getInstanceUser());
+            gceArgs.add("--host-ssh-private-key-path");
+            gceArgs.add(options.getSshPrivateKeyPath().getAbsolutePath());
+        } else {
+            gceArgs.add("--instance_names");
+            gceArgs.add(instanceName);
+            gceArgs.add("--config_file");
+            gceArgs.add(config.getAbsolutePath());
+        }
+        return gceArgs;
+    }
+
     /**
      * Actual Acloud run to shutdown the virtual device.
      *
      * @param options The {@link TestDeviceOptions} for the Acloud options
      * @param runUtil The {@link IRunUtil} to run Acloud
      * @param instanceName The instance to shutdown.
+     * @param hostname hostname of the instance, only used for Oxygen cuttlefish.
+     * @param isIpPreconfigured whether the AVD was created on a remote device with preconfigured IP
      * @return True if successful
      */
     public static boolean AcloudShutdown(
-            TestDeviceOptions options, IRunUtil runUtil, String instanceName) {
-        List<String> gceArgs = ArrayUtil.list(options.getAvdDriverBinary().getAbsolutePath());
-        gceArgs.add("delete");
+            TestDeviceOptions options,
+            IRunUtil runUtil,
+            String instanceName,
+            String hostname,
+            boolean isIpPreconfigured) {
         // Add extra args.
-        File f = null;
         File config = null;
         try {
             config = FileUtil.createTempFile(options.getAvdConfigFile().getName(), "config");
-            gceArgs.add("--instance_names");
-            gceArgs.add(instanceName);
-            gceArgs.add("--config_file");
             // Copy the config in case it comes from a dynamic file. In order to ensure Acloud has
             // the file until it's done with it.
             FileUtil.copyFile(options.getAvdConfigFile(), config);
-            gceArgs.add(config.getAbsolutePath());
-            if (options.getServiceAccountJsonKeyFile() != null) {
-                gceArgs.add("--service_account_json_private_key_path");
-                gceArgs.add(options.getServiceAccountJsonKeyFile().getAbsolutePath());
+            List<String> gceArgs =
+                    buildShutdownCommand(
+                            config, options, instanceName, hostname, isIpPreconfigured);
+            if (gceArgs == null) {
+                CLog.w("Shutdown command as <null>, see earlier logs for reasons.");
+                return false;
             }
-            f = FileUtil.createTempFile("gce_avd_driver", ".json");
-            gceArgs.add("--report_file");
-            gceArgs.add(f.getAbsolutePath());
             CLog.i("Tear down of GCE with %s", gceArgs.toString());
             if (options.waitForGceTearDown()) {
                 CommandResult cmd =
@@ -452,11 +680,13 @@ public class GceManager {
                                 options.getGceCmdTimeout(),
                                 gceArgs.toArray(new String[gceArgs.size()]));
                 FileUtil.deleteFile(config);
+                CLog.i(
+                        "GCE driver teardown output:\nstdout:%s\nstderr:%s",
+                        cmd.getStdout(), cmd.getStderr());
                 if (!CommandStatus.SUCCESS.equals(cmd.getStatus())) {
                     CLog.w(
-                            "Failed to tear down GCE %s with the following arg: %s."
-                                    + "\nstdout:%s\nstderr:%s",
-                            instanceName, gceArgs, cmd.getStdout(), cmd.getStderr());
+                            "Failed to tear down GCE %s with the following arg: %s.",
+                            instanceName, gceArgs);
                     return false;
                 }
             } else {
@@ -466,13 +696,11 @@ public class GceManager {
                 AcloudDeleteCleaner cleaner = new AcloudDeleteCleaner(p, config);
                 cleaner.start();
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException ioe) {
             CLog.e("failed to create log file for GCE Teardown");
-            CLog.e(e);
+            CLog.e(ioe);
             FileUtil.deleteFile(config);
             return false;
-        } finally {
-            FileUtil.deleteFile(f);
         }
         return true;
     }
@@ -597,22 +825,44 @@ public class GceManager {
             String remoteFilePath,
             LogDataType type,
             String baseName) {
-        File remoteFile =
-                RemoteFileUtil.fetchRemoteFile(
-                        gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
-        if (remoteFile != null) {
-            // If we happened to fetch a directory, log all the subfiles
-            logFile(remoteFile, baseName, logger, type);
+        File remoteFile;
+        if (type == LogDataType.DIR) {
+            remoteFile =
+                    RemoteFileUtil.fetchRemoteDir(
+                            gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
+            // Default files under a directory to be text files.
+            type = LogDataType.TEXT;
+            if (remoteFile != null) {
+                // If we happened to fetch a directory, log all the subfiles
+                logDirectory(remoteFile, baseName, logger, type);
+            }
+        } else {
+            remoteFile =
+                    RemoteFileUtil.fetchRemoteFile(
+                            gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
+            if (remoteFile != null) {
+                logFile(remoteFile, baseName, logger, type);
+            }
+        }
+    }
+
+    private static void logDirectory(
+            File remoteDirectory, String baseName, ITestLogger logger, LogDataType type) {
+        for (File f : remoteDirectory.listFiles()) {
+            if (f.isFile()) {
+                LogDataType typeFromName = OxygenUtil.getDefaultLogType(f.getName());
+                if (!typeFromName.equals(LogDataType.UNKNOWN)) {
+                    type = typeFromName;
+                }
+                logFile(f, baseName, logger, type);
+            } else if (f.isDirectory()) {
+                logDirectory(f, baseName, logger, type);
+            }
         }
     }
 
     private static void logFile(
             File remoteFile, String baseName, ITestLogger logger, LogDataType type) {
-        if (remoteFile.isDirectory()) {
-            for (File f : remoteFile.listFiles()) {
-                logFile(f, null, logger, type);
-            }
-        } else {
             try (InputStreamSource remoteFileStream = new FileInputStreamSource(remoteFile, true)) {
                 String name = baseName;
                 if (name == null) {
@@ -620,7 +870,6 @@ public class GceManager {
                 }
                 logger.testLog(name, type, remoteFileStream);
             }
-        }
     }
 
     /**
@@ -734,6 +983,10 @@ public class GceManager {
      * @param logger The {@link ITestLogger} where to log the serial log.
      */
     public void logSerialOutput(GceAvdInfo infos, ITestLogger logger) {
+        if (mSkipSerialLogCollection) {
+            CLog.d("Serial log collection is skipped");
+            return;
+        }
         String output =
                 GceManager.getInstanceSerialLog(
                         infos,

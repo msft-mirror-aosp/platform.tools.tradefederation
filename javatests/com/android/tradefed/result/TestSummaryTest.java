@@ -15,19 +15,25 @@
  */
 package com.android.tradefed.result;
 
+import static org.junit.Assert.assertEquals;
+
 import com.android.tradefed.result.TestSummary.TypedString;
 
-import junit.framework.TestCase;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.util.Map;
 
 /**
- * Unit tests for {@link TestSummary}
- * A class to represent a test summary.  Provides a single field for a summary, in addition to a
- * key-value store for more detailed summary.  Also provides a place for the summary source to be
- * identified.
+ * Unit tests for {@link TestSummary} A class to represent a test summary. Provides a single field
+ * for a summary, in addition to a key-value store for more detailed summary. Also provides a place
+ * for the summary source to be identified.
  */
-public class TestSummaryTest extends TestCase {
+@RunWith(JUnit4.class)
+public class TestSummaryTest {
+
+    @Test
     public void testSimpleCreate() {
         final TypedString sumText = new TypedString("file:///path/to/summary.txt");
         final TypedString httpText = new TypedString("http://summary.com/also/a/summary.html");

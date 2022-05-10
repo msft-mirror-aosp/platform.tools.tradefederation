@@ -28,6 +28,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /** Unit tests for {@link LeakedThreadStatusChecker} */
 @RunWith(JUnit4.class)
 public class LeakedThreadStatusCheckerTest {
@@ -59,7 +61,7 @@ public class LeakedThreadStatusCheckerTest {
         TestInThread thread = new TestInThread();
         thread.start();
         thread.join();
-        leakThread.mIsCancelled = true;
+        leakThread.mIsCancelled.set(true);
         try {
             StatusCheckerResult result = thread.mResult;
             assertEquals(CheckStatus.FAILED, result.getStatus());
@@ -78,7 +80,7 @@ public class LeakedThreadStatusCheckerTest {
         TestInThread thread = new TestInThread();
         thread.start();
         thread.join();
-        leakThread.mIsCancelled = true;
+        leakThread.mIsCancelled.set(true);
         try {
             StatusCheckerResult result = thread.mResult;
             assertEquals(CheckStatus.SUCCESS, result.getStatus());
@@ -110,7 +112,7 @@ public class LeakedThreadStatusCheckerTest {
     /** A thread that runs until cancelled. */
     private class LeakedTestThread extends Thread {
 
-        public boolean mIsCancelled = false;
+        public AtomicBoolean mIsCancelled = new AtomicBoolean(false);
 
         public LeakedTestThread(String name) {
             super(mGroup, name);
@@ -118,7 +120,7 @@ public class LeakedThreadStatusCheckerTest {
 
         @Override
         public void run() {
-            while (!mIsCancelled) {
+            while (!mIsCancelled.get()) {
                 try {
                     Thread.sleep(50);
                 } catch (InterruptedException e) {

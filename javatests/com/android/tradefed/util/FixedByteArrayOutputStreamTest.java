@@ -17,15 +17,18 @@
 
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
-/**
- * Unit tests for {@link FixedByteArrayOutputStream}.
- */
-public class FixedByteArrayOutputStreamTest extends TestCase {
+/** Unit tests for {@link FixedByteArrayOutputStream}. */
+@RunWith(JUnit4.class)
+public class FixedByteArrayOutputStreamTest {
 
     private static final byte BUF_SIZE = 30;
     private static final String TEXT = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, "
@@ -37,9 +40,9 @@ public class FixedByteArrayOutputStreamTest extends TestCase {
             + "anim id est laborum."; // 446 bytes
     private FixedByteArrayOutputStream mOutStream;
 
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
+    @Before
+    public void setUp() throws Exception {
+
         mOutStream = new FixedByteArrayOutputStream(BUF_SIZE);
     }
 
@@ -56,34 +59,30 @@ public class FixedByteArrayOutputStreamTest extends TestCase {
         baos.close();
         return baos.toString();
     }
-    /**
-     * Test the stream works when data written is less than buffer size.
-     */
+    /** Test the stream works when data written is less than buffer size. */
+    @Test
     public void testLessThanBuffer() throws IOException {
         String text = TEXT.substring(0, BUF_SIZE - 5);
         assertEquals(text, writeTextIntoStreamAndReturn(text));
     }
 
-    /**
-     * Test the stream works when data written is exactly equal to buffer size.
-     */
+    /** Test the stream works when data written is exactly equal to buffer size. */
+    @Test
     public void testEqualsBuffer() throws IOException {
         String text = TEXT.substring(0, BUF_SIZE);
         assertEquals(text, writeTextIntoStreamAndReturn(text));
     }
 
-    /**
-     * Test the stream works when data written is 1 greater than buffer size.
-     */
+    /** Test the stream works when data written is 1 greater than buffer size. */
+    @Test
     public void testBufferPlusOne() throws IOException {
         String text = TEXT.substring(0, BUF_SIZE + 1);
         String expected = text.substring(1);
         assertEquals(expected, writeTextIntoStreamAndReturn(text));
     }
 
-    /**
-     * Test the stream works when data written is much greater than buffer size.
-     */
+    /** Test the stream works when data written is much greater than buffer size. */
+    @Test
     public void testBufferPlusPlus() throws IOException {
         String expected = TEXT.substring(TEXT.length() - BUF_SIZE);
         assertEquals(expected, writeTextIntoStreamAndReturn(TEXT));
@@ -91,8 +90,10 @@ public class FixedByteArrayOutputStreamTest extends TestCase {
 
     /**
      * Testing the buffer wrap around scenario
+     *
      * @throws IOException
      */
+    @Test
     public void testWriteWithWrap() throws IOException {
         String prefix = "foobar";
         // larger than 24b because need to overflow the buffer, less than 30b because need to avoid
@@ -106,8 +107,10 @@ public class FixedByteArrayOutputStreamTest extends TestCase {
 
     /**
      * Test writing using byte array with an offset
+     *
      * @throws IOException
      */
+    @Test
     public void testLessThanBufferWithOffset() throws IOException {
         String text = TEXT.substring(0, BUF_SIZE);
         int offset = 5;
@@ -121,8 +124,10 @@ public class FixedByteArrayOutputStreamTest extends TestCase {
 
     /**
      * Test writing using byte array with an offset
+     *
      * @throws IOException
      */
+    @Test
     public void testWriteWithOffsetAndWrap() throws IOException {
         String prefix = "foobar";
         // similar to testWriteWithWrap, but add a tail to account for offset

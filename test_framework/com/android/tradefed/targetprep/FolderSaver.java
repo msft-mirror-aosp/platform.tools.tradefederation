@@ -91,7 +91,7 @@ public final class FolderSaver extends BaseTargetPreparer implements ITestLogger
             }
 
             // Don't pull empty directories if it's specified not to.
-            if (!mIncludeEmpty && device.getFileEntry(path).getChildren(false).isEmpty()) {
+            if (!mIncludeEmpty && device.getChildren(path).length == 0) {
                 CLog.w("Skipping empty directory, %s.", path);
                 continue;
             }

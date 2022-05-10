@@ -16,26 +16,26 @@
 
 package com.android.tradefed.util;
 
-import com.android.tradefed.util.ProcessInfo;
+import static org.junit.Assert.assertEquals;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.util.List;
 
-import junit.framework.TestCase;
-
 /** Simple unit test for {@link PsParser}. */
-public class PsParserTest extends TestCase {
+@RunWith(JUnit4.class)
+public class PsParserTest {
 
-    /**
-     * Test behavior when there are no lines to parse.
-     */
+    /** Test behavior when there are no lines to parse. */
+    @Test
     public void testEmptyPsOutput() {
         List<ProcessInfo> psInfo = PsParser.getProcesses("");
         assertEquals("ProcessInfo list is not empty when ps output is empty", 0, psInfo.size());
     }
 
-    /**
-     * Test valid "ps -A || ps" output for builds after N.
-     */
+    /** Test valid "ps -A || ps" output for builds after N. */
+    @Test
     public void testNewerValidPsOutput() {
         String psOutput = "USER       PID  PPID     VSZ    RSS WCHAN              PC S NAME\n"
                 + "root         1     0   11136   1828 epoll_wait     4d8064 S init\n"
@@ -51,9 +51,8 @@ public class PsParserTest extends TestCase {
         assertEquals("Second process name did not match", "[kthreadd]", psInfo.get(1).getName());
     }
 
-    /**
-     * Test valid "ps -A || ps" output for N and older builds.
-     */
+    /** Test valid "ps -A || ps" output for N and older builds. */
+    @Test
     public void testOlderValidPsOutput() {
         String psOutput = "bad pid '-A'\n"
                 + "USER       PID  PPID     VSZ    RSS WCHAN              PC S NAME\n"
@@ -70,9 +69,8 @@ public class PsParserTest extends TestCase {
         assertEquals("Second process name did not match", "[kthreadd]", psInfo.get(1).getName());
     }
 
-    /**
-     * Test if "ps -A || ps" output has missing data and returns the expected ps info
-     */
+    /** Test if "ps -A || ps" output has missing data and returns the expected ps info */
+    @Test
     public void testMissingInfoPsOutput() {
         String psMissingInfo = "bad pid '-A'\n"
                 + "USER       PID  PPID     VSZ    RSS WCHAN              PC S NAME\n"
@@ -88,5 +86,4 @@ public class PsParserTest extends TestCase {
         assertEquals("Second process id did not match", 2, psInfo.get(1).getPid());
         assertEquals("Second process name did not match", "[kthreadd]", psInfo.get(1).getName());
     }
-
 }

@@ -15,26 +15,34 @@
  */
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-/**
- * Unit test suite to verify the behavior of the {@link ByteArrayList}
- */
-public class ByteArrayListTest extends TestCase {
+/** Unit test suite to verify the behavior of the {@link ByteArrayList} */
+@RunWith(JUnit4.class)
+public class ByteArrayListTest {
     private ByteArrayList mList = null;
 
-    @Override
+    @Before
     public void setUp() throws Exception {
-        super.setUp();
+
         mList = new ByteArrayList();
     }
 
+    @Test
     public void testAdd() {
         mList.add((byte) 1);
         mList.add((byte) 2);
         assertEquals(2, mList.size());
     }
 
+    @Test
     public void testAddAll() {
         byte[] byteAry = new byte[] {0, 1, 2, 3, 4, 5};
         mList.addAll(byteAry);
@@ -43,6 +51,7 @@ public class ByteArrayListTest extends TestCase {
         assertEquals(5, mList.get(5));
     }
 
+    @Test
     public void testAddAll_append() {
         byte[] byteAry1 = new byte[] {0, 1, 2};
         byte[] byteAry2 = new byte[] {3, 4, 5};
@@ -56,6 +65,7 @@ public class ByteArrayListTest extends TestCase {
         assertEquals(5, mList.get(mList.size()-1));
     }
 
+    @Test
     public void testAddAll_limits() {
         byte[] byteAry1 = new byte[] {0, 1, 2};
         byte[] byteAry2 = new byte[] {3, 4, 5};
@@ -69,6 +79,7 @@ public class ByteArrayListTest extends TestCase {
         assertEquals(1, mList.get(1));
     }
 
+    @Test
     public void testClear() {
         mList.add((byte) 1);
         mList.add((byte) 2);
@@ -77,6 +88,7 @@ public class ByteArrayListTest extends TestCase {
         assertEquals(0, mList.size());
     }
 
+    @Test
     public void testEnsure() {
         mList.setSize(0);
         assertEquals(0, mList.getMaxSize());
@@ -84,6 +96,7 @@ public class ByteArrayListTest extends TestCase {
         assertTrue(mList.getMaxSize() >= 5);
     }
 
+    @Test
     public void testEnsure_afterAdd() {
         mList.setSize(0);
         assertEquals(0, mList.getMaxSize());
@@ -91,6 +104,7 @@ public class ByteArrayListTest extends TestCase {
         assertTrue(mList.getMaxSize() >= 1);
     }
 
+    @Test
     public void testEnsure_oddGrowthFactor() {
         ByteArrayList list = new ByteArrayList(1, 1.1f);
         assertEquals(1, list.getMaxSize());
@@ -102,12 +116,14 @@ public class ByteArrayListTest extends TestCase {
      * Verify the fix for a bug in the implementation which would cause the List to try to allocate
      * infinity memory :o)
      */
+    @Test
     public void testEnsure_bugfix() {
         mList.ensureCapacity(931);
         assertTrue(mList.getMaxSize() >= 931);
         assertTrue(mList.getMaxSize() <= 931*3);
     }
 
+    @Test
     public void testEquals() {
         ByteArrayList list2 = new ByteArrayList();
         mList.add((byte) 1);
@@ -118,6 +134,7 @@ public class ByteArrayListTest extends TestCase {
         assertTrue(list2.equals(mList));
     }
 
+    @Test
     public void testEquals_wrongLength() {
         ByteArrayList list2 = new ByteArrayList();
         mList.add((byte) 1);
@@ -127,6 +144,7 @@ public class ByteArrayListTest extends TestCase {
         assertFalse(list2.equals(mList));
     }
 
+    @Test
     public void testEquals_mismatch() {
         ByteArrayList list2 = new ByteArrayList();
         mList.add((byte) 1);
@@ -137,6 +155,7 @@ public class ByteArrayListTest extends TestCase {
         assertFalse(list2.equals(mList));
     }
 
+    @Test
     public void testGetContents() {
         mList.add((byte) 1);
         mList.add((byte) 2);
@@ -145,6 +164,7 @@ public class ByteArrayListTest extends TestCase {
         assertEquals(1, val[0]);
     }
 
+    @Test
     public void testRetrieve() {
         mList.add((byte) 1);
         mList.add((byte) 2);
@@ -158,6 +178,7 @@ public class ByteArrayListTest extends TestCase {
         }
     }
 
+    @Test
     public void testSet() {
         mList.add((byte) 1);
         mList.add((byte) 2);
@@ -170,11 +191,13 @@ public class ByteArrayListTest extends TestCase {
         assertEquals(13, mList.get(2));
     }
 
+    @Test
     public void testSetSize() {
         mList.setSize(256);
         assertEquals(256, mList.getMaxSize());
     }
 
+    @Test
     public void testSetSize_truncate() {
         mList.setSize(2);
         mList.add((byte) 1);
@@ -188,6 +211,7 @@ public class ByteArrayListTest extends TestCase {
         assertEquals(1, mList.get(0));
     }
 
+    @Test
     public void testTrimToSize() {
         mList.add((byte) 1);
         mList.trimToSize();
@@ -195,6 +219,7 @@ public class ByteArrayListTest extends TestCase {
         assertEquals(1, mList.getMaxSize());
     }
 
+    @Test
     public void testLimits_setSize() {
         try {
             mList.setSize(-1);
@@ -206,6 +231,7 @@ public class ByteArrayListTest extends TestCase {
         }
     }
 
+    @Test
     public void testLimits_ensureCapacity() {
         try {
             mList.ensureCapacity(-1);
@@ -217,6 +243,7 @@ public class ByteArrayListTest extends TestCase {
         }
     }
 
+    @Test
     public void testLimits_get() {
         try {
             mList.get(0);
@@ -234,6 +261,7 @@ public class ByteArrayListTest extends TestCase {
         }
     }
 
+    @Test
     public void testLimits_set() {
         try {
             mList.set(0, (byte) 1);
@@ -251,6 +279,7 @@ public class ByteArrayListTest extends TestCase {
         }
     }
 
+    @Test
     public void testLimits_constructor() {
         try {
             new ByteArrayList(-1);

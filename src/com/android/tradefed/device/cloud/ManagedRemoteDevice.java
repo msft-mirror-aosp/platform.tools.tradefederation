@@ -26,6 +26,7 @@ import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
+import com.android.tradefed.device.IConfigurableVirtualDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
@@ -86,7 +87,7 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
 
         // Launch GCE helper script.
         long startTime = getCurrentTime();
-        launchGce();
+        launchGce(attributes);
         long remainingTime = options.getGceCmdTimeout() - (getCurrentTime() - startTime);
         if (remainingTime < 0) {
             throw new DeviceNotAvailableException(
@@ -123,6 +124,18 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
                     // Fetch remote files
                     CommonLogRemoteFileUtil.fetchCommonFiles(
                             mTestLogger, mGceAvd, getOptions(), getRunUtil());
+
+                    // Fetch host kernel log by running `dmesg` for Oxygen hosts
+                    if (getOptions().useOxygen()) {
+                        CommonLogRemoteFileUtil.logRemoteCommandOutput(
+                                mTestLogger,
+                                mGceAvd,
+                                getOptions(),
+                                getRunUtil(),
+                                "host_kernel.log",
+                                "toybox",
+                                "dmesg");
+                    }
                 }
                 // Cleanup GCE first to make sure ssh tunnel has nowhere to go.
                 if (!getOptions().shouldSkipTearDown()) {
@@ -158,17 +171,38 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
     }
 
     /** Launch the actual gce device based on the build info. */
-    protected void launchGce() throws TargetSetupError {
+    protected void launchGce(MultiMap<String, String> attributes) throws TargetSetupError {
         TargetSetupError exception = null;
         for (int attempt = 0; attempt < getOptions().getGceMaxAttempt(); attempt++) {
             try {
-                mGceAvd = getGceHandler().startGce();
-                if (mGceAvd != null) break;
+                CLog.i(
+                        "Launch AVD on %s by user %s (Device offset: %d).",
+                        ((IConfigurableVirtualDevice) getIDevice()).getKnownDeviceIp(),
+                        ((IConfigurableVirtualDevice) getIDevice()).getKnownUser(),
+                        ((IConfigurableVirtualDevice) getIDevice()).getDeviceNumOffset());
+
+                mGceAvd =
+                        getGceHandler()
+                                .startGce(
+                                        ((IConfigurableVirtualDevice) getIDevice())
+                                                .getKnownDeviceIp(),
+                                        ((IConfigurableVirtualDevice) getIDevice()).getKnownUser(),
+                                        ((IConfigurableVirtualDevice) getIDevice())
+                                                .getDeviceNumOffset(),
+                                        attributes);
+                if (mGceAvd != null) {
+                    break;
+                }
             } catch (TargetSetupError tse) {
                 CLog.w(
                         "Failed to start Gce with attempt: %s out of %s. With Exception: %s",
                         attempt + 1, getOptions().getGceMaxAttempt(), tse);
                 exception = tse;
+
+                if (getOptions().useOxygen()) {
+                    OxygenUtil util = new OxygenUtil();
+                    util.downloadLaunchFailureLogs(tse.getMessage(), mTestLogger);
+                }
             }
         }
         if (mGceAvd == null) {

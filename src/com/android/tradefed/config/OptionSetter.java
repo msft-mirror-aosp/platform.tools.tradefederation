@@ -539,7 +539,12 @@ public class OptionSetter {
                 }
                 OptionUpdateRule rule = option.updateRule();
                 if (rule.shouldUpdate(optionName, optionSource, field, value)) {
-                    field.set(optionSource, value);
+                    Object curValue = field.get(optionSource);
+                    if (value == null || value.equals(curValue)) {
+                        fieldWasSet = false;
+                    } else {
+                        field.set(optionSource, value);
+                    }
                 } else {
                     fieldWasSet = false;
                 }
@@ -609,26 +614,26 @@ public class OptionSetter {
     }
 
     /**
-     * Adds all option fields (both declared and inherited) to the <var>optionMap</var> for
-     * provided <var>optionClass</var>.
-     * <p>
-     * Also adds option fields with all the alias namespaced from the class they are found in, and
+     * Adds all option fields (both declared and inherited) to the <var>optionMap</var> for provided
+     * <var>optionClass</var>.
+     *
+     * <p>Also adds option fields with all the alias namespaced from the class they are found in, and
      * their child classes.
-     * <p>
-     * For example:
-     * if class1(@alias1) extends class2(@alias2), all the option from class2 will be available
-     * with the alias1 and alias2. All the option from class1 are available with alias1 only.
+     *
+     * <p>For example: if class1(@alias1) extends class2(@alias2), all the option from class2 will be
+     * available with the alias1 and alias2. All the option from class1 are available with alias1
+     * only.
      *
      * @param optionSource
      * @param optionMap
-     * @param index The unique index of this instance of the optionSource class.  Should equal the
-     *              number of instances of this class that we've already seen, plus 1.
+     * @param index The unique index of this instance of the optionSource class. Should equal the
+     *     number of instances of this class that we've already seen, plus 1.
      * @param deviceName the Configuration Device Name that this attributes belong to. can be null.
      * @throws ConfigurationException
      */
-    private void addOptionsForObject(Object optionSource,
-            Map<String, OptionFieldsForName> optionMap, Integer index, String deviceName)
-            throws ConfigurationException {
+    private void addOptionsForObject(
+        Object optionSource, Map<String, OptionFieldsForName> optionMap, int index, String deviceName)
+      throws ConfigurationException {
         Collection<Field> optionFields = getOptionFieldsForClass(optionSource.getClass());
         for (Field field : optionFields) {
             final Option option = field.getAnnotation(Option.class);
@@ -770,7 +775,7 @@ public class OptionSetter {
     /**
      * Runs through all the {@link File} option type and check if their path should be resolved.
      *
-     * @param The {@link DynamicRemoteFileResolver} to use to resolve the files.
+     * @param resolver The {@link DynamicRemoteFileResolver} to use to resolve the files.
      * @return The list of {@link File} that was resolved that way.
      * @throws BuildRetrievalError
      */
@@ -786,7 +791,7 @@ public class OptionSetter {
      * @param optionClass the {@link Class} to search
      * @return a {@link Collection} of fields annotated with {@link Option}
      */
-    static Collection<Field> getOptionFieldsForClass(final Class<?> optionClass) {
+    public static Collection<Field> getOptionFieldsForClass(final Class<?> optionClass) {
         Collection<Field> fieldList = new ArrayList<Field>();
         buildOptionFieldsForClass(optionClass, fieldList);
         return fieldList;
@@ -851,7 +856,7 @@ public class OptionSetter {
      * @param optionObject the {@link Object} to get field's value from.
      * @return the field's value as a {@link Object}, or <code>null</code>
      */
-    static Object getFieldValue(Field field, Object optionObject) {
+    public static Object getFieldValue(Field field, Object optionObject) {
         try {
             field.setAccessible(true);
             return field.get(optionObject);

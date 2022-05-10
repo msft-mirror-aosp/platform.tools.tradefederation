@@ -16,6 +16,7 @@
 package com.android.tradefed.sandbox;
 
 import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.build.StubBuildProvider;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
@@ -112,6 +113,11 @@ public class SandboxConfigDump {
                 config.getConfigurationDescription().setSandboxed(true);
                 // Don't use replication in the sandbox
                 config.getCommandOptions().setReplicateSetup(false);
+                // Override build providers since they occur in parents
+                for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+                    deviceConfig.addSpecificConfig(
+                            new StubBuildProvider(), Configuration.BUILD_PROVIDER_TYPE_NAME);
+                }
                 // Set the reporter
                 ITestInvocationListener reporter = null;
                 if (getSandboxOptions(config).shouldUseProtoReporter()) {
@@ -166,7 +172,8 @@ public class SandboxConfigDump {
                         /* Don't print unchanged options */ false);
             } else {
                 // FULL_XML in that case.
-                config.dumpXml(pw);
+                config.dumpXml(pw, new ArrayList<>(), true,
+                        /* Don't print unchanged options */ false);
             }
         } catch (ConfigurationException | IOException e) {
             e.printStackTrace();

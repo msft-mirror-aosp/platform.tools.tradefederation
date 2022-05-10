@@ -40,6 +40,8 @@ import java.util.Map;
  * output.
  */
 public class LogRegistry implements ILogRegistry {
+    private static final String GLOBAL_LOG_PATH = "GLOBAL_LOG_PATH";
+
     private static final String LOG_TAG = "LogRegistry";
     private static final String GLOBAL_LOG_PREFIX = "tradefed_global_log_";
     private static final String HISTORY_LOG_PREFIX = "tradefed_history_log_";
@@ -221,7 +223,14 @@ public class LogRegistry implements ILogRegistry {
      */
     @Override
     public void saveGlobalLog() {
-        saveGlobalLogToDir(null);
+        File logDir = null;
+        if (System.getenv(GLOBAL_LOG_PATH) != null) {
+            logDir = new File(System.getenv(GLOBAL_LOG_PATH));
+            if (!logDir.exists()) {
+                logDir = null;
+            }
+        }
+        saveGlobalLogToDir(logDir);
     }
 
     /** {@inheritDoc} */
