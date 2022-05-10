@@ -20,6 +20,7 @@ import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.util.UniqueMultiMap;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -211,6 +212,45 @@ public interface ICommandOptions {
     /** Whether or not to release the device early when done with it. */
     public boolean earlyDeviceRelease();
 
+    /** Whether or not to release the device early in delegated mode. */
+    public boolean delegatedEarlyDeviceRelease();
+
+    /** Set whether or not to release the device early in delegated mode. */
+    public void setDelegatedEarlyDeviceRelease(boolean earlyRelease);
+
     /** Returns the map of args to pass to the dynamic download query. */
     public Map<String, String> getDynamicDownloadArgs();
+
+    /** Whether or not to report the number of test cases per test types. */
+    public boolean reportTestCaseCount();
+
+    /** Set whether or not to report test cases count per test types. */
+    public void setReportTestCaseCount(boolean report);
+
+    /** Whether or not to report passed test cases. */
+    public boolean reportPassedTests();
+
+    /** Whether or not to filters previous passed test cases from previous attempt. */
+    public boolean filterPreviousPassedTests();
+
+    /** whether or not to report the logs until invocationComplete. */
+    public boolean reportInvocationComplete();
+
+    /** Set whether or not to report the logs until invocationComplete */
+    public void setReportInvocationComplete(boolean reportInvocationCompleteLogs);
+
+    /**
+     * Returns the maximum number of times to scheduled the command. Has no effect if isLoopMode is
+     * false.
+     */
+    public long getMaxLoopCount();
+
+    /** List of tags used for reporting related to the invocation. */
+    public List<String> reportingTags();
+
+    /** Whether or not to disable pre-invocaiton setup and post-invocation teardown. */
+    public boolean shouldDisableInvocationSetupAndTeardown();
+
+    /** Return the number of devices for multi-device tests. */
+    public Integer getMultiDeviceCount();
 }

@@ -75,9 +75,13 @@ public class ResultAggregator extends CollectingTestListener {
     // Since we store some of the module level events, ensure the logs order is maintained.
     private Map<String, LogFile> mDetailedModuleLogs = new LinkedHashMap<>();
 
+    private boolean mUpdatedDetailedReporting = false;
+
     // In some configuration of non-module retry, all attempts of runs might not be adjacent. We
     // track that a special handling needs to be applied for this case.
     private boolean mUnorderedRetry = true;
+    // Track whether run start was called for a module.
+    private boolean mRunStartCalled = false;
     // Stores the results from non-module test runs until they are ready to be replayed.
     private final Map<String, List<TestRunResult>> mPureRunResultForAgg = new LinkedHashMap<>();
 
@@ -86,7 +90,6 @@ public class ResultAggregator extends CollectingTestListener {
     private EventsLoggerListener mDetailedEventsLogger;
 
     public ResultAggregator(List<ITestInvocationListener> listeners, RetryStrategy strategy) {
-        mAllForwarder = new ResultAndLogForwarder(listeners);
 
         List<ITestInvocationListener> supportDetails =
                 listeners
@@ -114,10 +117,19 @@ public class ResultAggregator extends CollectingTestListener {
 
         mAggregatedForwarder = new ResultAndLogForwarder(noSupportDetails);
         mDetailedForwarder = new ResultAndLogForwarder(supportDetails);
+        List<ITestInvocationListener> allListeners = new ArrayList<>(listeners);
+        allListeners.add(mDetailedEventsLogger);
+        allListeners.add(mAggregatedEventsLogger);
+        mAllForwarder = new ResultAndLogForwarder(allListeners);
 
         mRetryStrategy = strategy;
         MergeStrategy mergeStrategy = MergeStrategy.getMergeStrategy(mRetryStrategy);
         setMergeStrategy(mergeStrategy);
+    }
+
+    /** Sets the new reporting. */
+    public void setUpdatedReporting(boolean updatedReporting) {
+        mUpdatedDetailedReporting = updatedReporting;
     }
 
     /** {@inheritDoc} */
@@ -161,8 +173,10 @@ public class ResultAggregator extends CollectingTestListener {
         forwardAggregatedInvocationLogs();
 
         // Log the aggregated events for debugging
+        mAggregatedEventsLogger.invocationEnded(elapsedTime);
         saveEventsLog(mAggregatedEventsLogger.getLoggedEvents(), "aggregated-events");
         // Log the detailed events for debugging
+        mDetailedEventsLogger.invocationEnded(elapsedTime);
         saveEventsLog(mDetailedEventsLogger.getLoggedEvents(), "detailed-events");
 
         mAllForwarder.invocationEnded(elapsedTime);
@@ -193,6 +207,7 @@ public class ResultAggregator extends CollectingTestListener {
     @Override
     public void testModuleStarted(IInvocationContext moduleContext) {
         mUnorderedRetry = false;
+        mRunStartCalled = false;
         if (!mPureRunResultForAgg.isEmpty()) {
             for (String name : mPureRunResultForAgg.keySet()) {
                 forwardTestRunResults(mPureRunResultForAgg.get(name), mAggregatedForwarder);
@@ -230,6 +245,7 @@ public class ResultAggregator extends CollectingTestListener {
 
     @Override
     public void testRunStarted(String name, int testCount, int attemptNumber, long startTime) {
+        mRunStartCalled = true;
         // Due to retries happening after several other testRunStart, we need to wait before making
         // the forwarding.
         if (!mUnorderedRetry) {
@@ -239,20 +255,22 @@ public class ResultAggregator extends CollectingTestListener {
             }
         }
 
-        if (mDetailedRunResults != null) {
-            if (mDetailedRunResults.getName().equals(name)) {
-                if (!mDetailedRunResults.isRunFailure()) {
-                    if (RetryStrategy.RETRY_ANY_FAILURE.equals(mRetryStrategy)) {
-                        mShouldReportFailure = false;
+        if (!mUpdatedDetailedReporting) {
+            if (mDetailedRunResults != null) {
+                if (mDetailedRunResults.getName().equals(name)) {
+                    if (!mDetailedRunResults.isRunFailure()) {
+                        if (RetryStrategy.RETRY_ANY_FAILURE.equals(mRetryStrategy)) {
+                            mShouldReportFailure = false;
+                        }
                     }
+                    mDetailedForwarder.testRunEnded(
+                            mDetailedRunResults.getElapsedTime(),
+                            mDetailedRunResults.getRunProtoMetrics());
+                    mDetailedRunResults = null;
+                } else {
+                    mShouldReportFailure = true;
+                    forwardDetailedFailure();
                 }
-                mDetailedForwarder.testRunEnded(
-                        mDetailedRunResults.getElapsedTime(),
-                        mDetailedRunResults.getRunProtoMetrics());
-                mDetailedRunResults = null;
-            } else {
-                mShouldReportFailure = true;
-                forwardDetailedFailure();
             }
         }
         super.testRunStarted(name, testCount, attemptNumber, startTime);
@@ -263,12 +281,18 @@ public class ResultAggregator extends CollectingTestListener {
     public void testRunFailed(String errorMessage) {
         super.testRunFailed(errorMessage);
         // Don't forward here to the detailed forwarder in case we need to clear it.
+        if (mUpdatedDetailedReporting) {
+            mDetailedForwarder.testRunFailed(errorMessage);
+        }
     }
 
     @Override
     public void testRunFailed(FailureDescription failure) {
         super.testRunFailed(failure);
         // Don't forward here to the detailed forwarder in case we need to clear it.
+        if (mUpdatedDetailedReporting) {
+            mDetailedForwarder.testRunFailed(failure);
+        }
     }
 
     @Override
@@ -335,14 +359,18 @@ public class ResultAggregator extends CollectingTestListener {
     @Override
     public void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
         super.testRunEnded(elapsedTime, runMetrics);
-        mDetailedRunResults = getCurrentRunResults();
-        if (mDetailedRunResults.isRunFailure()) {
-            FailureDescription currentFailure = mDetailedRunResults.getRunFailureDescription();
-            if (currentFailure instanceof MultiFailureDescription) {
-                mAllDetailedFailures.addAll(
-                        ((MultiFailureDescription) currentFailure).getFailures());
-            } else {
-                mAllDetailedFailures.add(currentFailure);
+        if (mUpdatedDetailedReporting) {
+            mDetailedForwarder.testRunEnded(elapsedTime, runMetrics);
+        } else {
+            mDetailedRunResults = getCurrentRunResults();
+            if (mDetailedRunResults.isRunFailure()) {
+                FailureDescription currentFailure = mDetailedRunResults.getRunFailureDescription();
+                if (currentFailure instanceof MultiFailureDescription) {
+                    mAllDetailedFailures.addAll(
+                            ((MultiFailureDescription) currentFailure).getFailures());
+                } else {
+                    mAllDetailedFailures.add(currentFailure);
+                }
             }
         }
 
@@ -358,56 +386,62 @@ public class ResultAggregator extends CollectingTestListener {
 
     @Override
     public void testModuleEnded() {
-        forwardDetailedFailure();
-        for (Entry<String, LogFile> assos : mDetailedModuleLogs.entrySet()) {
-            mDetailedForwarder.logAssociation(assos.getKey(), assos.getValue());
+        if (!mUpdatedDetailedReporting) {
+            forwardDetailedFailure();
+            for (Entry<String, LogFile> assos : mDetailedModuleLogs.entrySet()) {
+                mDetailedForwarder.logAssociation(assos.getKey(), assos.getValue());
+            }
+            mDetailedModuleLogs.clear();
         }
-        mDetailedModuleLogs.clear();
         mModuleInProgress = false;
         super.testModuleEnded();
         // We still forward the testModuleEnd to the detailed reporters
         mDetailedForwarder.testModuleEnded();
 
-        List<TestRunResult> mergedResults = getMergedTestRunResults();
-        Set<String> resultNames = new HashSet<>();
-        int expectedTestCount = 0;
-        for (TestRunResult result : mergedResults) {
-            expectedTestCount += result.getExpectedTestCount();
-            resultNames.add(result.getName());
-        }
-        // Forward all the results aggregated
-        mAggregatedForwarder.testRunStarted(
-                getCurrentRunResults().getName(),
-                expectedTestCount,
-                /* Attempt*/ 0,
-                /* Start Time */ getCurrentRunResults().getStartTime());
-        for (TestRunResult runResult : mergedResults) {
-            forwardTestResults(runResult.getTestResults(), mAggregatedForwarder);
-            if (runResult.isRunFailure()) {
-                mAggregatedForwarder.testRunFailed(runResult.getRunFailureDescription());
+        // Only show run results if there was a run.
+        if (mRunStartCalled) {
+            List<TestRunResult> mergedResults = getMergedTestRunResults();
+            Set<String> resultNames = new HashSet<>();
+            int expectedTestCount = 0;
+            for (TestRunResult result : mergedResults) {
+                expectedTestCount += result.getExpectedTestCount();
+                resultNames.add(result.getName());
             }
-            // Provide a strong association of the run to its logs.
-            for (String key : runResult.getRunLoggedFiles().keySet()) {
-                for (LogFile logFile : runResult.getRunLoggedFiles().get(key)) {
-                    mAggregatedForwarder.logAssociation(key, logFile);
+            // Forward all the results aggregated
+            mAggregatedForwarder.testRunStarted(
+                    getCurrentRunResults().getName(),
+                    expectedTestCount,
+                    /* Attempt*/ 0,
+                    /* Start Time */ getCurrentRunResults().getStartTime());
+            for (TestRunResult runResult : mergedResults) {
+                forwardTestResults(runResult.getTestResults(), mAggregatedForwarder);
+                if (runResult.isRunFailure()) {
+                    mAggregatedForwarder.testRunFailed(runResult.getRunFailureDescription());
+                }
+                // Provide a strong association of the run to its logs.
+                for (String key : runResult.getRunLoggedFiles().keySet()) {
+                    for (LogFile logFile : runResult.getRunLoggedFiles().get(key)) {
+                        mAggregatedForwarder.logAssociation(key, logFile);
+                    }
                 }
             }
+    
+            mAggregatedForwarder.testRunEnded(
+                    getCurrentRunResults().getElapsedTime(),
+                    getCurrentRunResults().getRunProtoMetrics());
+            // Ensure we don't carry results from one module to another.
+            for (String name : resultNames) {
+                clearResultsForName(name);
+            }
         }
-
-        mAggregatedForwarder.testRunEnded(
-                getCurrentRunResults().getElapsedTime(),
-                getCurrentRunResults().getRunProtoMetrics());
         // Log all the module only logs
         for (String key : getModuleLogFiles().keySet()) {
             for (LogFile log : getModuleLogFiles().get(key)) {
                 mAggregatedForwarder.logAssociation(key, log);
             }
         }
+        clearModuleLogFiles();
         mAggregatedForwarder.testModuleEnded();
-        // Ensure we don't carry results from one module to another.
-        for (String name : resultNames) {
-            clearResultsForName(name);
-        }
         mUnorderedRetry = true;
     }
 
@@ -530,5 +564,14 @@ public class ResultAggregator extends CollectingTestListener {
                 CLog.e(e);
             }
         }
+        FileUtil.deleteFile(eventsLog);
+    }
+
+    @VisibleForTesting
+    protected File[] getEventsLogs() {
+        File[] logs = new File[2];
+        logs[0] = mAggregatedEventsLogger.getLoggedEvents();
+        logs[1] = mDetailedEventsLogger.getLoggedEvents();
+        return logs;
     }
 }

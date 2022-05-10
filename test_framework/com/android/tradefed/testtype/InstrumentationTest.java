@@ -16,12 +16,10 @@
 
 package com.android.tradefed.testtype;
 
-
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.Log;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner.TestSize;
 import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
@@ -38,11 +36,11 @@ import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.result.BugreportCollector;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.ITestInvocationListener;
-import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
@@ -81,8 +79,6 @@ public class InstrumentationTest
                 IConfigurationReceiver,
                 IMetricCollectorReceiver {
 
-    private static final String LOG_TAG = "InstrumentationTest";
-
     /** max number of attempts to collect list of tests in package */
     private static final int COLLECT_TESTS_ATTEMPTS = 3;
     /** instrumentation test runner argument key used for test execution using a file */
@@ -94,7 +90,7 @@ public class InstrumentationTest
     /** default timeout for tests collection */
     static final long TEST_COLLECTION_TIMEOUT_MS = 2 * 60 * 1000;
 
-    static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
+    public static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
     @Option(
         name = "package",
@@ -152,13 +148,12 @@ public class InstrumentationTest
     private long mTestTimeout = 5 * 60 * 1000L; // default to 5 minutes
 
     @Option(
-        name = "max-timeout",
-        description =
-                "Sets the max timeout for the instrumentation to terminate. "
-                        + "For no timeout, set to 0.",
-        isTimeVal = true
-    )
-    private long mMaxTimeout = 0l;
+            name = "max-timeout",
+            description =
+                    "Sets the max timeout for the instrumentation to terminate. "
+                            + "For no timeout, set to 0.",
+            isTimeVal = true)
+    private long mMaxTimeout = 0L;
 
     @Option(name = "size",
             description="Restrict test to a specific test size.")
@@ -168,11 +163,6 @@ public class InstrumentationTest
             description = "Rerun unexecuted tests individually on same device if test run " +
             "fails to complete.")
     private boolean mIsRerunMode = true;
-
-    @Option(name = "resume",
-            description = "Schedule unexecuted tests for resumption on another device " +
-            "if first device becomes unavailable.")
-    private boolean mIsResumeMode = false;
 
     @Option(name = "install-file",
             description="Optional file path to apk file that contains the tests.")
@@ -189,34 +179,18 @@ public class InstrumentationTest
             requiredForRerun = true)
     private final Map<String, String> mInstrArgMap = new HashMap<String, String>();
 
-    @Option(name = "bugreport-on-failure", description = "Sets which failed testcase events " +
-            "cause a bugreport to be collected. a bugreport after failed testcases.  Note that " +
-            "there is _no feedback mechanism_ between the test runner and the bugreport " +
-            "collector, so use the EACH setting with due caution.")
-    private BugreportCollector.Freq mBugreportFrequency = null;
-
     @Option(
             name = "rerun-from-file",
             description =
                     "Use test file instead of separate adb commands for each test when re-running"
                         + " instrumentations for tests that failed to run in previous attempts. ")
-    private boolean mReRunUsingTestFile = true;
+    private boolean mReRunUsingTestFile = false;
 
     @Option(
         name = "rerun-from-file-attempts",
         description = "Max attempts to rerun tests from file. -1 means rerun from file infinitely."
     )
     private int mReRunUsingTestFileAttempts = 3;
-
-    @Option(
-        name = "fallback-to-serial-rerun",
-        description = "Rerun tests serially after rerun from file failed."
-    )
-    private boolean mFallbackToSerialRerun = false;
-
-    @Option(name = "reboot-before-rerun", description =
-            "Reboot a device before re-running instrumentations.")
-    private boolean mRebootBeforeReRun = false;
 
     @Option(name = AbiFormatter.FORCE_ABI_STRING,
             description = AbiFormatter.FORCE_ABI_DESCRIPTION,
@@ -408,7 +382,7 @@ public class InstrumentationTest
      * separated test classes and methods (format: com.foo.Class#method) to be run.
      * If set, will automatically attempt to re-run tests using this test file
      * via {@link InstrumentationFileTest} instead of executing separate adb commands for each
-     * remaining test via {@link InstrumentationSerialTest}"
+     * remaining test via rerun.
      */
     public void setTestFilePathOnDevice(String testFilePathOnDevice) {
         mTestFilePathOnDevice = testFilePathOnDevice;
@@ -475,6 +449,10 @@ public class InstrumentationTest
     /** Get the test java package to run. */
     protected String getTestPackageName() {
         return mTestPackageName;
+    }
+
+    public void setWindowAnimation(boolean windowAnimation) {
+        mWindowAnimation = windowAnimation;
     }
 
     /**
@@ -544,13 +522,6 @@ public class InstrumentationTest
     }
 
     /**
-     * Optionally, set the resume mode.
-     */
-    public void setResumeMode(boolean resume) {
-        mIsResumeMode = resume;
-    }
-
-    /**
      * Get the shell timeout in ms.
      */
     long getShellTimeout() {
@@ -597,18 +568,6 @@ public class InstrumentationTest
     }
 
     /**
-     * Set the frequency with which to automatically collect bugreports after test failures.
-     * <p />
-     * Note that there is _no feedback mechanism_ between the test runner and the bugreport
-     * collector, so use the EACH setting with due caution: if a large quantity of failures happen
-     * in rapid succession, the bugreport for a given one of the failures could end up being
-     * collected tens of minutes or hours after the respective failure occurred.
-     */
-    public void setBugreportFrequency(BugreportCollector.Freq freq) {
-        mBugreportFrequency = freq;
-    }
-
-    /**
      * Add an argument to provide when running the instrumentation tests.
      *
      * @param key the argument name
@@ -652,16 +611,6 @@ public class InstrumentationTest
     /** Sets the --rerun-from-file option. */
     public void setReRunUsingTestFile(boolean reRunUsingTestFile) {
         mReRunUsingTestFile = reRunUsingTestFile;
-    }
-
-    /** Sets the --fallback-to-serial-rerun option. */
-    public void setFallbackToSerialRerun(boolean reRunSerially) {
-        mFallbackToSerialRerun = reRunSerially;
-    }
-
-    /** Sets the --reboot-before-rerun option. */
-    public void setRebootBeforeReRun(boolean rebootBeforeReRun) {
-        mRebootBeforeReRun = rebootBeforeReRun;
     }
 
     /** Allows to add more custom listeners to the runner */
@@ -909,7 +858,6 @@ public class InstrumentationTest
 
         // Reruns do not create new listeners.
         if (!mIsRerun) {
-            listener = addBugreportListenerIfEnabled(listener);
 
             // TODO: Convert to device-side collectors when possible.
             for (IMetricCollector collector : mCollectors) {
@@ -932,11 +880,20 @@ public class InstrumentationTest
             mRunner.addInstrumentationArg("listener", ArrayUtil.join(",", mExtraDeviceListener));
         }
 
+        InstrumentationListener instrumentationListener =
+                new InstrumentationListener(getDevice(), testsToRun, listener);
+        instrumentationListener.setDisableDuplicateCheck(mDisableDuplicateCheck);
+        if (mEnableSoftRestartCheck) {
+            instrumentationListener.setOriginalSystemServer(
+                    getDevice().getProcessByName("system_server"));
+        }
+        instrumentationListener.setReportUnexecutedTests(mReportUnexecuted);
+
         if (testsToRun == null) {
             // Failed to collect the tests or collection is off. Just try to run them all.
-            runInstrumentationTests(testInfo, mRunner, listener);
+            runInstrumentationTests(testInfo, mRunner, instrumentationListener);
         } else if (!testsToRun.isEmpty()) {
-            runWithRerun(testInfo, listener, testsToRun);
+            runWithRerun(testInfo, listener, instrumentationListener, testsToRun);
         } else {
             CLog.i("No tests expected for %s, skipping", mPackageName);
         }
@@ -945,7 +902,7 @@ public class InstrumentationTest
     private boolean runInstrumentationTests(
             TestInformation testInfo,
             IRemoteAndroidTestRunner runner,
-            ITestLifeCycleReceiver... receivers)
+            ITestInvocationListener... receivers)
             throws DeviceNotAvailableException {
         if (testInfo != null && testInfo.properties().containsKey(RUN_TESTS_AS_USER_KEY)) {
             return mDevice.runInstrumentationTestsAsUser(
@@ -957,24 +914,6 @@ public class InstrumentationTest
     }
 
     /**
-     * Returns a listener that will collect bugreports, or the original {@code listener} if this
-     * feature is disabled.
-     */
-    ITestInvocationListener addBugreportListenerIfEnabled(ITestInvocationListener listener) {
-        if (mBugreportFrequency != null) {
-            // Collect a bugreport after EACH/FIRST failed testcase
-            BugreportCollector.Predicate pred = new BugreportCollector.Predicate(
-                    BugreportCollector.Relation.AFTER,
-                    mBugreportFrequency,
-                    BugreportCollector.Noun.FAILED_TESTCASE);
-            BugreportCollector collector = new BugreportCollector(listener, getDevice());
-            collector.addPredicate(pred);
-            listener = collector;
-        }
-        return listener;
-    }
-
-    /**
      * Execute the test run, but re-run incomplete tests individually if run fails to complete.
      *
      * @param listener the {@link ITestInvocationListener}
@@ -983,19 +922,12 @@ public class InstrumentationTest
     private void runWithRerun(
             TestInformation testInfo,
             final ITestInvocationListener listener,
+            final InstrumentationListener instrumentationListener,
             Collection<TestDescription> expectedTests)
             throws DeviceNotAvailableException {
         CollectingTestListener testTracker = new CollectingTestListener();
-        // Our dedicated listener that allows to perform checks for the harness and collect
-        // the appropriate data.
-        InstrumentationListener instrumentationListener =
-                new InstrumentationListener(getDevice(), expectedTests, listener, testTracker);
-        instrumentationListener.setDisableDuplicateCheck(mDisableDuplicateCheck);
-        if (mEnableSoftRestartCheck) {
-            instrumentationListener.setOriginalSystemServer(
-                    getDevice().getProcessByName("system_server"));
-        }
-        instrumentationListener.setReportUnexecutedTests(mReportUnexecuted);
+        instrumentationListener.addListener(testTracker);
+
         runInstrumentationTests(testInfo, mRunner, instrumentationListener);
         TestRunResult testRun = testTracker.getCurrentRunResults();
         if (testRun.isRunFailure() || !testRun.getCompletedTests().containsAll(expectedTests)) {
@@ -1045,18 +977,18 @@ public class InstrumentationTest
             CLog.d("No tests to re-run, all tests executed at least once.");
             return;
         }
-        if (mRebootBeforeReRun) {
-            mDevice.reboot();
-        } else {
-            // Ensure device is online and responsive before retrying.
-            mDevice.waitForDeviceAvailable();
-        }
+        // Ensure device is online and responsive before retrying.
+        mDevice.waitForDeviceAvailable();
 
         IRemoteTest testReRunner = null;
         try {
             testReRunner = getTestReRunner(expectedTests);
         } catch (ConfigurationException e) {
             CLog.e("Failed to create test runner: %s", e.getMessage());
+            return;
+        }
+        if (testReRunner == null) {
+            CLog.d("No internal rerun configured");
             return;
         }
 
@@ -1068,20 +1000,22 @@ public class InstrumentationTest
 
         if (mNativeCoverageListener != null) {
             mNativeCoverageListener.setCollectOnTestEnd(true);
-            mNativeCoverageListener.logCoverageMeasurements("rerun_merged");
+            mNativeCoverageListener.logCoverageMeasurements(mDevice, "rerun_merged");
         }
     }
 
     @VisibleForTesting
     IRemoteTest getTestReRunner(Collection<TestDescription> tests) throws ConfigurationException {
         if (mReRunUsingTestFile) {
-            return new InstrumentationFileTest(
-                    this, tests, mFallbackToSerialRerun, mReRunUsingTestFileAttempts);
+            // Track the feature usage
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INSTRUMENTATION_RERUN_FROM_FILE, 1);
+            return new InstrumentationFileTest(this, tests, mReRunUsingTestFileAttempts);
         } else {
-            // Since the same runner is reused we must ensure TEST_FILE_INST_ARGS_KEY is not set.
-            // Otherwise, the runner will attempt to execute tests from file.
-            mInstrArgMap.remove(TEST_FILE_INST_ARGS_KEY);
-            return new InstrumentationSerialTest(this, tests);
+            // Track the feature usage which is deprecated now.
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INSTRUMENTATION_RERUN_SERIAL, 1);
+            return null;
         }
     }
 
@@ -1102,8 +1036,9 @@ public class InstrumentationTest
             final ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         if (isRerunMode()) {
-            Log.d(LOG_TAG, String.format("Collecting test info for %s on device %s",
-                    mPackageName, mDevice.getSerialNumber()));
+            CLog.d(
+                    "Collecting test info for %s on device %s",
+                    mPackageName, mDevice.getSerialNumber());
             runner.setTestCollection(true);
             // always explicitly set debug to false when collecting tests
             runner.setDebug(false);
@@ -1147,9 +1082,9 @@ public class InstrumentationTest
             TestRunResult runResults = collector.getCurrentRunResults();
             if (!instrResult || !runResults.isRunComplete()) {
                 // communication failure with device, retry
-                Log.w(LOG_TAG, String.format(
+                CLog.w(
                         "No results when collecting tests to run for %s on device %s. Retrying",
-                        mPackageName, mDevice.getSerialNumber()));
+                        mPackageName, mDevice.getSerialNumber());
                 communicationFailure = true;
             } else if (runResults.isRunFailure()) {
                 // not a communication failure, but run still failed.

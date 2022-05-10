@@ -12,11 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-java_library_host {
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+tradefed_java_library_host {
     name: "tradefed-test-framework",
     defaults: ["tradefed_defaults"],
     srcs: [
         "com/**/*.java",
+    ],
+    java_resources: [
+        ":tradefed-isolation",
     ],
     static_libs: [
         "diffutils-prebuilt-jar",
@@ -24,10 +31,10 @@ java_library_host {
         "perfetto_metrics-full",
         "test-composers",
         "truth-prebuilt",
+        "platformprotos",
     ],
     libs: [
         "tradefed-lib-core",
         "loganalysis",
     ],
 }
-

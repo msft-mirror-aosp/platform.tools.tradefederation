@@ -19,6 +19,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.invoker.proto.InvocationContext.Context;
@@ -56,8 +57,10 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import javax.annotation.Nonnull;
 
@@ -80,6 +83,7 @@ public class ProtoResultParser {
     private IInvocationContext mMainContext;
 
     private boolean mQuietParsing = true;
+    private boolean mSkipParsingAccounting = false;
 
     private boolean mInvocationStarted = false;
     /** Track whether or not invocationFailed was called. */
@@ -121,6 +125,10 @@ public class ProtoResultParser {
     /** Sets whether or not to print when events are received. */
     public void setQuiet(boolean quiet) {
         mQuietParsing = quiet;
+    }
+
+    public void setSkipParsingAccounting(boolean skip) {
+        mSkipParsingAccounting = skip;
     }
 
     /** Sets whether or not we should report the logs. */
@@ -216,35 +224,32 @@ public class ProtoResultParser {
         return mInvocationFailed;
     }
 
-    /** If needed to ensure consistent reporting, complete the events of the module. */
+    /**
+     * If needed to ensure consistent reporting, complete the events of the module, run and methods.
+     */
     public void completeModuleEvents() {
-        if (getModuleInProgress() == null) {
-            if (mCurrentRunName != null) {
-                if (mCurrentTestCase != null) {
-                    FailureDescription failure =
-                            FailureDescription.create(
-                                    "Run was interrupted after starting, results are incomplete.");
-                    mListener.testFailed(mCurrentTestCase, failure);
-                    mListener.testEnded(mCurrentTestCase, new HashMap<String, Metric>());
-                }
-                FailureDescription failure =
-                        FailureDescription.create(
-                                "Run was interrupted after starting, results are incomplete.",
-                                FailureStatus.INFRA_FAILURE);
-                mListener.testRunFailed(failure);
-                mListener.testRunEnded(0L, new HashMap<String, Metric>());
-                mCurrentRunName = null;
-            }
-            return;
+        if (mCurrentRunName == null && getModuleInProgress() != null) {
+            mListener.testRunStarted(getModuleInProgress(), 0);
         }
-        mListener.testRunStarted(getModuleInProgress(), 0);
-        FailureDescription failure =
-                FailureDescription.create(
-                        "Module was interrupted after starting, results are incomplete.",
-                        FailureStatus.INFRA_FAILURE);
-        mListener.testRunFailed(failure);
-        mListener.testRunEnded(0L, new HashMap<String, Metric>());
-        mListener.testModuleEnded();
+        if (mCurrentTestCase != null) {
+            FailureDescription failure =
+                    FailureDescription.create(
+                            "Run was interrupted after starting, results are incomplete.");
+            mListener.testFailed(mCurrentTestCase, failure);
+            mListener.testEnded(mCurrentTestCase, new HashMap<String, Metric>());
+        }
+        if (getModuleInProgress() != null || mCurrentRunName != null) {
+            FailureDescription failure =
+                    FailureDescription.create(
+                            "Module was interrupted after starting, results are incomplete.",
+                            FailureStatus.INFRA_FAILURE);
+            mListener.testRunFailed(failure);
+            mListener.testRunEnded(0L, new HashMap<String, Metric>());
+            mCurrentRunName = null;
+        }
+        if (getModuleInProgress() != null) {
+            mListener.testModuleEnded();
+        }
     }
 
     private void evalChildrenProto(List<ChildReference> children, boolean isInRun) {
@@ -632,6 +637,35 @@ public class ProtoResultParser {
         }
         // Copy invocation attributes
         MultiMap<String, String> attributes = endInvocationContext.getAttributes();
+        // Parse the invocation metric group first.
+        for (InvocationGroupMetricKey groupKey : InvocationGroupMetricKey.values()) {
+            Set<String> attKeys = new HashSet<>(attributes.keySet());
+            for (String attKey : attKeys) {
+                if (attKey.startsWith(groupKey.toString() + ":")) {
+                    List<String> values = attributes.get(attKey);
+                    attributes.remove(attKey);
+                    if (mSkipParsingAccounting) {
+                        continue;
+                    }
+                    String group = attKey.split(":", 2)[1];
+                    for (String val : values) {
+                        if (groupKey.shouldAdd()) {
+                            try {
+                                InvocationMetricLogger.addInvocationMetrics(
+                                        groupKey, group, Long.parseLong(val));
+                            } catch (NumberFormatException e) {
+                                CLog.d(
+                                        "Key %s doesn't have a number value, was: %s.",
+                                        groupKey, val);
+                                InvocationMetricLogger.addInvocationMetrics(groupKey, group, val);
+                            }
+                        } else {
+                            InvocationMetricLogger.addInvocationMetrics(groupKey, group, val);
+                        }
+                    }
+                }
+            }
+        }
         for (InvocationMetricKey key : InvocationMetricKey.values()) {
             if (!attributes.containsKey(key.toString())) {
                 continue;
@@ -639,6 +673,9 @@ public class ProtoResultParser {
             List<String> values = attributes.get(key.toString());
             attributes.remove(key.toString());
 
+            if (mSkipParsingAccounting) {
+                continue;
+            }
             for (String val : values) {
                 if (key.shouldAdd()) {
                     try {
@@ -653,22 +690,23 @@ public class ProtoResultParser {
             }
         }
         if (attributes.containsKey(TfObjectTracker.TF_OBJECTS_TRACKING_KEY)) {
-            List<String> values = attributes.get(TfObjectTracker.TF_OBJECTS_TRACKING_KEY);
-            for (String val : values) {
-                for (String pair : Splitter.on(",").split(val)) {
-                    if (!pair.contains("=")) {
-                        continue;
-                    }
-                    String[] pairSplit = pair.split("=");
-                    try {
-                        TfObjectTracker.directCount(pairSplit[0], Long.parseLong(pairSplit[1]));
-                    } catch (NumberFormatException e) {
-                        CLog.e(e);
-                        continue;
+            List<String> values = attributes.remove(TfObjectTracker.TF_OBJECTS_TRACKING_KEY);
+            if (!mSkipParsingAccounting) {
+                for (String val : values) {
+                    for (String pair : Splitter.on(",").split(val)) {
+                        if (!pair.contains("=")) {
+                            continue;
+                        }
+                        String[] pairSplit = pair.split("=");
+                        try {
+                            TfObjectTracker.directCount(pairSplit[0], Long.parseLong(pairSplit[1]));
+                        } catch (NumberFormatException e) {
+                            CLog.e(e);
+                            continue;
+                        }
                     }
                 }
             }
-            attributes.remove(TfObjectTracker.TF_OBJECTS_TRACKING_KEY);
         }
         receiverContext.addInvocationAttributes(attributes);
     }

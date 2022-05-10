@@ -15,13 +15,20 @@
  */
 package com.android.tradefed.retry;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
+import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
-import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
+import com.android.tradefed.device.internal.DeviceResetHandler;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -29,15 +36,23 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
-import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.ITestFileFilterReceiver;
 import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.testtype.ITestInformationReceiver;
+import com.android.tradefed.testtype.SubprocessTfLauncher;
 import com.android.tradefed.testtype.retry.IAutoRetriableTest;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
+import com.android.tradefed.testtype.suite.SuiteTestFilter;
+import com.android.tradefed.util.FileUtil;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -48,7 +63,8 @@ import java.util.stream.Collectors;
  * Base implementation of {@link IRetryDecision}. Base implementation only take local signals into
  * account.
  */
-public class BaseRetryDecision implements IRetryDecision {
+public class BaseRetryDecision
+        implements IRetryDecision, IConfigurationReceiver, ITestInformationReceiver {
 
     private static final int ABORT_MAX_FAILURES = 75;
 
@@ -59,11 +75,10 @@ public class BaseRetryDecision implements IRetryDecision {
     private boolean mRebootAtLastRetry = false;
 
     @Option(
-            name = "reset-at-last-retry",
-            description =
-                    "Reset or powerwash the device at the last retry attempt. If this option is "
-                            + "set, option `reboot-at-last-retry` will be ignored.")
-    private boolean mResetAtLastRetry = false;
+            name = "retry-isolation-grade",
+            description = "Control the isolation level that should be attempted between retries."
+    )
+    private IsolationGrade mRetryIsolationGrade = IsolationGrade.NOT_ISOLATED;
 
     @Option(
         name = "max-testcase-run-count",
@@ -88,7 +103,34 @@ public class BaseRetryDecision implements IRetryDecision {
     )
     private boolean mEnableAutoRetry = true;
 
+    @Option(
+            name = "skip-retrying-list",
+            description =
+                    "If a test in the list, skip retrying it. The format is the same as the "
+                            + "SuiteTestFilter.")
+    private Set<String> mSkipRetryingList = new HashSet<>();
+
+    @Option(
+            name = "updated-retry-reporting",
+            description = "Feature flag to use the updated retry reporting strategy.")
+    private boolean mUpdatedReporting = true;
+
+    @Option(
+            name = "updated-filtering",
+            description = "Feature flag to use the updated filtering logic.")
+    private boolean mUpdatedFiltering = true;
+
+    @Option(
+            name = "module-preparation-retry",
+            description = "Whether or not to retry any module-level target preparation errors." +
+                    "This flag is for feature testing, and eventualy it's all controlled under " +
+                    "retry strategy."
+    )
+    private boolean mModulePreparationRetry = false;
+
     private IInvocationContext mContext;
+    private IConfiguration mConfiguration;
+    private TestInformation mTestInformation;
 
     private IRemoteTest mCurrentlyConsideredTest;
     private Set<TestDescription> mPreviouslyFailing;
@@ -118,8 +160,60 @@ public class BaseRetryDecision implements IRetryDecision {
     }
 
     @Override
+    public RetryPreparationDecision shouldRetryPreparation(
+            ModuleDefinition module,
+            int attempt,
+            int maxAttempt) {
+        RetryPreparationDecision decision = new RetryPreparationDecision(false, true);
+        switch (mRetryStrategy) {
+            case NO_RETRY:
+                // Currently, do not retry if RetryStrategy is NO_RETRY.
+                return decision;
+            default:
+                // Continue the logic for retry the failures.
+                break;
+        }
+        if (!mModulePreparationRetry) {
+            // No need to retry if `module-preparation-retry` is not set.
+            return decision;
+        }
+        if (attempt == maxAttempt) {
+            // No need to retry if it reaches the maximum retry count.
+            return decision;
+        }
+
+        try {
+            recoverStateOfDevices(getDevices(), attempt, module);
+        } catch (DeviceNotAvailableException e) {
+            // Retried failed, set the exception and return the decision.
+            decision = new RetryPreparationDecision(true, false);
+            decision.setPreviousException(e.getCause());
+            return decision;
+        }
+        // Retried successfully, no exception will be caught, return the decision.
+        decision = new RetryPreparationDecision(false, false);
+        decision.setPreviousException(null);
+        return decision;
+    }
+
+    @Override
     public void setInvocationContext(IInvocationContext context) {
         mContext = context;
+    }
+
+    @Override
+    public void setConfiguration(IConfiguration configuration) {
+        mConfiguration = configuration;
+    }
+
+    @Override
+    public void setTestInformation(TestInformation testInformation) {
+        mTestInformation = testInformation;
+    }
+
+    @Override
+    public TestInformation getTestInformation() {
+        return mTestInformation;
     }
 
     @Override
@@ -148,6 +242,8 @@ public class BaseRetryDecision implements IRetryDecision {
                 // Return directly if we are not considering retry at all.
                 return false;
             case ITERATIONS:
+                // Still support isolating the iterations if that's configured
+                recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
                 // For iterations, retry directly, we have nothing to setup
                 return true;
             case RERUN_UNTIL_FAILURE:
@@ -156,6 +252,13 @@ public class BaseRetryDecision implements IRetryDecision {
             default:
                 // Continue the logic for retry the failures.
                 break;
+        }
+
+        // TODO(b/179206516): Skip known failure list in class/method Level.
+        // Currently, only support skip list in module level.
+        if (module != null && isInSkipList(module)) {
+            CLog.d("Skip retrying known failure test of %s", module.getId());
+            return false;
         }
 
         mStatistics.addResultsFromRun(previousResults);
@@ -174,7 +277,7 @@ public class BaseRetryDecision implements IRetryDecision {
             IAutoRetriableTest autoRetryTest = (IAutoRetriableTest) test;
             boolean shouldRetry = autoRetryTest.shouldRetry(attemptJustExecuted, previousResults);
             if (shouldRetry) {
-                autoRetryTest.recoverStateOfDevices(getDevices(), attemptJustExecuted);
+                recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
             }
             return shouldRetry;
         } else {
@@ -215,6 +318,55 @@ public class BaseRetryDecision implements IRetryDecision {
         return failedTestCases;
     }
 
+    /** Returns true if we should use the updated reporting. */
+    @Override
+    public boolean useUpdatedReporting() {
+        return mUpdatedReporting;
+    }
+
+    @VisibleForTesting
+    public IsolationGrade getIsolationGrade() {
+        return mRetryIsolationGrade;
+    }
+
+    private static Set<TestDescription> getPassedTestCases(List<TestRunResult> previousResults) {
+        Set<TestDescription> previousPassed = new LinkedHashSet<>();
+        for (TestRunResult run : previousResults) {
+            if (run != null) {
+                for (Entry<TestDescription, TestResult> entry : run.getTestResults().entrySet()) {
+                    if (!TestStatus.FAILURE.equals(entry.getValue().getStatus())) {
+                        previousPassed.add(entry.getKey());
+                    }
+                }
+            }
+        }
+        return previousPassed;
+    }
+
+    private boolean isInSkipList(ModuleDefinition module) {
+        String moduleId = module.getId();
+        if (moduleId == null) {
+            return false;
+        }
+        SuiteTestFilter moduleIdFilter = SuiteTestFilter.createFrom(moduleId);
+        String abi = moduleIdFilter.getAbi();
+        String name = moduleIdFilter.getName();
+        for (String skipTest : mSkipRetryingList) {
+            SuiteTestFilter skipRetryingFilter = SuiteTestFilter.createFrom(skipTest);
+            String skipAbi = skipRetryingFilter.getAbi();
+            String skipName = skipRetryingFilter.getName();
+            if (abi != null
+                    && skipAbi != null
+                    && name != null
+                    && skipName != null
+                    && abi.equals(skipAbi)
+                    && name.equals(skipName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Returns the list of failure from the previous results. */
     private static List<TestRunResult> getRunFailures(List<TestRunResult> previousResults) {
         List<TestRunResult> runFailed = new ArrayList<>();
@@ -244,7 +396,29 @@ public class BaseRetryDecision implements IRetryDecision {
             CLog.d("Skipping retry since there was a non-retriable failure.");
             return false;
         }
-        if (!runFailures.isEmpty()) {
+        if (mUpdatedFiltering && mUpdatedReporting) {
+            CLog.d("Using updated filtering logic.");
+            Map<TestDescription, TestResult> previousFailedTests =
+                    getFailedTestCases(previousResults);
+            if (runFailures.isEmpty() && previousFailedTests.isEmpty()) {
+                CLog.d("No test run or test case failures. No need to retry.");
+                return false;
+            }
+            Set<TestDescription> previouslyPassedTests = getPassedTestCases(previousResults);
+            excludePassedTests(test, previouslyPassedTests);
+            excludeNonRetriableFailure(test, previousFailedTests);
+            return true;
+        } else if (!runFailures.isEmpty()) {
+            if (shouldFullRerun(runFailures)) {
+                List<String> names =
+                        runFailures.stream().map(e -> e.getName()).collect(Collectors.toList());
+                CLog.d("Retry the full run since [%s] runs have failures.", names);
+                return true;
+            }
+            // If we don't attempt full rerun add filters.
+            CLog.d("Full rerun not required, excluding previously passed tests.");
+            Set<TestDescription> previouslyPassedTests = getPassedTestCases(previousResults);
+            excludePassedTests(test, previouslyPassedTests);
             return true;
         }
 
@@ -282,6 +456,16 @@ public class BaseRetryDecision implements IRetryDecision {
         return false;
     }
 
+    /** If none of the run failures require a full rerun, trigger the partial rerun logic. */
+    private boolean shouldFullRerun(List<TestRunResult> runFailures) {
+        for (TestRunResult run : runFailures) {
+            if (run.getRunFailureDescription().rerunFull()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Set the filters on the test runner for the retry. */
     private void addRetriedTestsToFilters(
             ITestFilterReceiver test, Map<TestDescription, TestResult> tests) {
@@ -307,6 +491,46 @@ public class BaseRetryDecision implements IRetryDecision {
         }
     }
 
+    private void excludePassedTests(ITestFilterReceiver test, Set<TestDescription> passedTests) {
+        // Exclude all passed tests for the retry.
+        for (TestDescription testCase : passedTests) {
+            String filter = String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
+            if (test instanceof ITestFileFilterReceiver) {
+                File excludeFilterFile = ((ITestFileFilterReceiver) test).getExcludeTestFile();
+                if (excludeFilterFile == null) {
+                    try {
+                        excludeFilterFile = FileUtil.createTempFile("exclude-filter", ".txt");
+                    } catch (IOException e) {
+                        throw new HarnessRuntimeException(
+                                e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+                    }
+                    ((ITestFileFilterReceiver) test).setExcludeTestFile(excludeFilterFile);
+                }
+                try {
+                    FileUtil.writeToFile(filter + "\n", excludeFilterFile, true);
+                } catch (IOException e) {
+                    CLog.e(e);
+                    continue;
+                }
+            } else {
+                test.addExcludeFilter(filter);
+            }
+        }
+    }
+
+    private void excludeNonRetriableFailure(
+          ITestFilterReceiver test, Map<TestDescription, TestResult> previousFailedTests) {
+        for (Entry<TestDescription, TestResult> testCaseEntry : previousFailedTests.entrySet()) {
+            TestDescription testCase = testCaseEntry.getKey();
+            if (!testCaseEntry.getValue().getFailure().isRetriable()) {
+                // If a test case failure is not retriable, exclude it from the filters.
+                String filter =
+                        String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
+                test.addExcludeFilter(filter);
+            }
+        }
+    }
+
     /** Returns all the non-stub device associated with the {@link IRemoteTest}. */
     private List<ITestDevice> getDevices() {
         List<ITestDevice> listDevices = new ArrayList<>(mContext.getDevices());
@@ -321,71 +545,88 @@ public class BaseRetryDecision implements IRetryDecision {
     private void recoverStateOfDevices(
             List<ITestDevice> devices, int lastAttempt, ModuleDefinition module)
             throws DeviceNotAvailableException {
-        if (lastAttempt == (mMaxRetryAttempts - 2)) {
-            if (mResetAtLastRetry) {
-                resetDevice(module, devices);
-            } else if (mRebootAtLastRetry) {
+        if (IsolationGrade.REBOOT_ISOLATED.equals(mRetryIsolationGrade)) {
+            long start = System.currentTimeMillis();
+            try {
                 for (ITestDevice device : devices) {
                     device.reboot();
-                    continue;
                 }
+                CurrentInvocation.setModuleIsolation(IsolationGrade.REBOOT_ISOLATED);
+                CurrentInvocation.setRunIsolation(IsolationGrade.REBOOT_ISOLATED);
+            } finally {
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.REBOOT_RETRY_ISOLATION_PAIR,
+                        start, System.currentTimeMillis());
+            }
+        } else if (IsolationGrade.FULLY_ISOLATED.equals(mRetryIsolationGrade)) {
+            resetIsolation(module, devices);
+        } else if (lastAttempt == (mMaxRetryAttempts - 2)) {
+            // Reset only works for suite right now
+            if (mRebootAtLastRetry) {
+                for (ITestDevice device : devices) {
+                    device.reboot();
+                }
+                CurrentInvocation.setModuleIsolation(IsolationGrade.REBOOT_ISOLATED);
+                CurrentInvocation.setRunIsolation(IsolationGrade.REBOOT_ISOLATED);
             }
         }
     }
 
-    private void resetDevice(ModuleDefinition module, List<ITestDevice> devices)
+    private void resetIsolation(ModuleDefinition module, List<ITestDevice> devices)
             throws DeviceNotAvailableException {
-        CLog.d("Reset devices...");
-        int deviceResetCount = 0;
-        for (ITestDevice device : devices) {
-            if (!(device instanceof RemoteAndroidVirtualDevice)) {
-                CLog.i(
-                        "Device %s of type %s does not support powerwash.",
-                        device.getSerialNumber(), device.getClass());
-                continue;
-            }
-            boolean success = false;
-            try {
-                success = ((RemoteAndroidVirtualDevice) device).powerwashGce();
-                deviceResetCount++;
-            } catch (TargetSetupError e) {
-                CLog.e(e);
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to powerwash device: %s\nError: %s",
-                                device.getSerialNumber(), e.toString()),
-                        e,
-                        device.getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
-            }
+        long start = System.currentTimeMillis();
+        try {
+            isolateRetry(devices);
+            CLog.d(
+                    "Current host properties being erased by reset: %s",
+                    mTestInformation.properties().getAll());
+            mTestInformation.properties().clear();
+            // Rerun suite level preparer if we are inside a subprocess
+            reSetupModule(module, mConfiguration.getCommandOptions()
+                    .getInvocationData()
+                    .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME));
+        } finally {
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.RESET_RETRY_ISOLATION_PAIR,
+                    start, System.currentTimeMillis());
+        }
+    }
 
-            if (!success) {
+    @VisibleForTesting
+    protected void isolateRetry(List<ITestDevice> devices) throws DeviceNotAvailableException {
+        DeviceResetHandler handler = new DeviceResetHandler(mContext);
+        for (ITestDevice device : devices) {
+            boolean resetSuccess = handler.resetDevice(device);
+            if (!resetSuccess) {
                 throw new DeviceNotAvailableException(
-                        String.format("Failed to powerwash device: %s", device.getSerialNumber()),
+                        String.format("Failed to reset device: %s", device.getSerialNumber()),
                         device.getSerialNumber(),
                         DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
             }
         }
+    }
 
-        if (module != null) {
+    private void reSetupModule(ModuleDefinition module, boolean includeSuitePreparers)
+            throws DeviceNotAvailableException {
+        if (module == null) {
+            return;
+        }
+        if (module.getId() != null) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_RESET_MODULES, module.getId());
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_RESET_COUNT, deviceResetCount);
-
-            // Run all preparers including suite level ones.
-            Throwable preparationException =
-                    module.runPreparation(true /* includeSuitePreparers */);
-            if (preparationException != null) {
-                CLog.e(preparationException);
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to reset devices before retry: %s",
-                                preparationException.toString()),
-                        preparationException,
-                        devices.get(0).getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
-            }
+        }
+        // Run all preparers including optionally suite level ones.
+        Throwable preparationException =
+                module.runPreparation(includeSuitePreparers);
+        if (preparationException != null) {
+            CLog.e(preparationException);
+            throw new DeviceNotAvailableException(
+                    String.format(
+                            "Failed to reset devices before retry: %s",
+                            preparationException.toString()),
+                    preparationException,
+                    "serial",
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
         }
     }
 }

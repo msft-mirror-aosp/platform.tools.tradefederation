@@ -147,17 +147,6 @@ public class DeviceTestCase extends MetricTestCase
         }
     }
 
-    @Override
-    public int countTestCases() {
-        // the superclass implementation always returns 1 - add logic to handle case where all tests
-        // should be run
-        if (getName() != null || mMethodName != null) {
-            return 1;
-        } else {
-            return getTestMethodNames().size();
-        }
-    }
-
     /**
      * Override parent method to run all test methods if test method to run is null.
      * <p/>
@@ -183,6 +172,17 @@ public class DeviceTestCase extends MetricTestCase
         } else {
             CLog.d("Running %s#%s()", this.getClass().getName(), getName());
             super.run(result);
+        }
+    }
+
+    @Override
+    public int countTestCases() {
+        // the superclass implementation always returns 1 - add logic to handle case where all tests
+        // should be run
+        if (getName() != null || mMethodName != null) {
+            return 1;
+        } else {
+            return getTestMethodNames().size();
         }
     }
 

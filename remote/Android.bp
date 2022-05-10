@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-java_library_host {
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+tradefed_java_library_host {
   name: "tf-remote-client",
   // Restrict visibility to only those targets that need to access it.
   visibility: [

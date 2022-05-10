@@ -21,7 +21,10 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.device.DeviceFoldableState;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -29,7 +32,10 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
-import com.android.tradefed.testtype.suite.params.IModuleParameter;
+import com.android.tradefed.testtype.ITestFileFilterReceiver;
+import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.testtype.suite.params.FoldableExpandingHandler;
+import com.android.tradefed.testtype.suite.params.IModuleParameterHandler;
 import com.android.tradefed.testtype.suite.params.ModuleParameters;
 import com.android.tradefed.testtype.suite.params.ModuleParametersHelper;
 import com.android.tradefed.testtype.suite.params.NegativeHandler;
@@ -42,11 +48,12 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 /** A Test for running Compatibility Test Suite with new suite system. */
@@ -62,6 +69,7 @@ public class BaseTestSuite extends ITestSuite {
     public static final char TEST_OPTION_SHORT_NAME = 't';
     public static final String CONFIG_PATTERNS_OPTION = "config-patterns";
     private static final String MODULE_ARG_OPTION = "module-arg";
+    private static final String REVERSE_EXCLUDE_FILTERS = "reverse-exclude-filters";
     private static final int MAX_FILTER_DISPLAY = 20;
 
     @Option(
@@ -81,6 +89,13 @@ public class BaseTestSuite extends ITestSuite {
                         + "https://source.android.com/devices/tech/test_infra/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
     private Set<String> mExcludeFilters = new HashSet<>();
+
+    @Option(
+            name = REVERSE_EXCLUDE_FILTERS,
+            description =
+                    "Flip exclude-filters into include-filters, in order to run only the excluded "
+                            + "set.")
+    private boolean mReverseExcludeFilters = false;
 
     @Option(
         name = MODULE_OPTION,
@@ -208,26 +223,40 @@ public class BaseTestSuite extends ITestSuite {
     private boolean mIgnoreNonPreloadedMainlineModule = false;
 
     private SuiteModuleLoader mModuleRepo;
-    private Map<String, List<SuiteTestFilter>> mIncludeFiltersParsed = new HashMap<>();
-    private Map<String, List<SuiteTestFilter>> mExcludeFiltersParsed = new HashMap<>();
+    private Map<String, LinkedHashSet<SuiteTestFilter>> mIncludeFiltersParsed = new LinkedHashMap<>();
+    private Map<String, LinkedHashSet<SuiteTestFilter>> mExcludeFiltersParsed = new LinkedHashMap<>();
     private List<File> mConfigPaths = new ArrayList<>();
+    private Set<IAbi> mAbis = new LinkedHashSet<>();
+    private Set<DeviceFoldableState> mFoldableStates = new LinkedHashSet<>();
 
     /** {@inheritDoc} */
     @Override
     public LinkedHashMap<String, IConfiguration> loadTests() {
         try {
             File testsDir = getTestsDir();
+            mFoldableStates = getFoldableStates(getDevice());
             setupFilters(testsDir);
-            Set<IAbi> abis = getAbis(getDevice());
+            mAbis = getAbis(getDevice());
+
+            if (mReverseExcludeFilters) {
+                if (mExcludeFilters.isEmpty()) {
+                    return new LinkedHashMap<String, IConfiguration>();
+                }
+                mIncludeFilters.clear();
+                mIncludeFilters.addAll(mExcludeFilters);
+                mExcludeFilters.clear();
+            }
 
             // Create and populate the filters here
-            SuiteModuleLoader.addFilters(mIncludeFilters, mIncludeFiltersParsed, abis);
-            SuiteModuleLoader.addFilters(mExcludeFilters, mExcludeFiltersParsed, abis);
+            SuiteModuleLoader.addFilters(
+                    mIncludeFilters, mIncludeFiltersParsed, mAbis, mFoldableStates);
+            SuiteModuleLoader.addFilters(
+                    mExcludeFilters, mExcludeFiltersParsed, mAbis, mFoldableStates);
 
-            String includeFilter = mIncludeFiltersParsed.toString();
+            String includeFilters = "";
             if (mIncludeFiltersParsed.size() > MAX_FILTER_DISPLAY) {
                 if (isSplitting()) {
-                    includeFilter = includeFilter.substring(0, 100) + "...";
+                    includeFilters = "Includes: <too long to display>";
                 } else {
                     File suiteIncludeFilters = null;
                     try {
@@ -238,7 +267,8 @@ public class BaseTestSuite extends ITestSuite {
                                 suiteIncludeFilters,
                                 suiteIncludeFilters.getName(),
                                 LogDataType.TEXT);
-                        includeFilter = String.format("See %s", suiteIncludeFilters.getName());
+                        includeFilters =
+                                String.format("Includes: See %s", suiteIncludeFilters.getName());
                     } catch (IOException e) {
                         CLog.e(e);
                     } finally {
@@ -247,10 +277,10 @@ public class BaseTestSuite extends ITestSuite {
                 }
             }
 
-            String excludeFilter = mExcludeFiltersParsed.toString();
+            String excludeFilters = "";
             if (mExcludeFiltersParsed.size() > MAX_FILTER_DISPLAY) {
                 if (isSplitting()) {
-                    excludeFilter = excludeFilter.substring(0, 100) + "...";
+                    excludeFilters = "Excludes: <too long to display>";
                 } else {
                     File suiteExcludeFilters = null;
                     try {
@@ -261,7 +291,8 @@ public class BaseTestSuite extends ITestSuite {
                                 suiteExcludeFilters,
                                 suiteExcludeFilters.getName(),
                                 LogDataType.TEXT);
-                        excludeFilter = String.format("See %s", suiteExcludeFilters.getName());
+                        excludeFilters =
+                                String.format("Excludes: See %s", suiteExcludeFilters.getName());
                     } catch (IOException e) {
                         CLog.e(e);
                     } finally {
@@ -272,8 +303,11 @@ public class BaseTestSuite extends ITestSuite {
 
             CLog.d(
                     "Initializing ModuleRepo\nABIs:%s\n"
-                            + "Test Args:%s\nModule Args:%s\nIncludes:%s\nExcludes:%s",
-                    abis, mTestArgs, mModuleArgs, includeFilter, excludeFilter);
+                            + "Test Args:%s\nModule Args:%s\n%s\n%s",
+                            mAbis, mTestArgs, mModuleArgs, includeFilters, excludeFilters);
+            if (!mFoldableStates.isEmpty()) {
+                CLog.d("Foldable states: %s", mFoldableStates);
+            }
 
             mModuleRepo =
                     createModuleLoader(
@@ -301,6 +335,7 @@ public class BaseTestSuite extends ITestSuite {
             mModuleRepo.setOptionalParameterizedModules(mEnableOptionalParameter);
             mModuleRepo.setModuleParameter(mForceParameter);
             mModuleRepo.setExcludedModuleParameters(mExcludedModuleParameters);
+            mModuleRepo.setFoldableStates(mFoldableStates);
 
             List<File> testsDirectories = new ArrayList<>();
 
@@ -322,7 +357,7 @@ public class BaseTestSuite extends ITestSuite {
             testsDirectories.add(testsDir);
             // Actual loading of the configurations.
             LinkedHashMap<String, IConfiguration> loadedTests =
-                    loadingStrategy(abis, testsDirectories, mSuitePrefix, mSuiteTag);
+                    loadingStrategy(mAbis, testsDirectories, mSuitePrefix, mSuiteTag);
 
             if (mFailOnEverythingFiltered
                     && loadedTests.isEmpty()
@@ -331,7 +366,7 @@ public class BaseTestSuite extends ITestSuite {
                         String.format(
                                 "Include filter '%s' was specified"
                                         + " but resulted in an empty test set.",
-                                includeFilter),
+                                        mIncludeFiltersParsed.toString()),
                         InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             return loadedTests;
@@ -415,6 +450,13 @@ public class BaseTestSuite extends ITestSuite {
         return mModuleRepo;
     }
 
+    public void reevaluateFilters() {
+        SuiteModuleLoader.addFilters(
+                mIncludeFilters, mIncludeFiltersParsed, mAbis, mFoldableStates);
+        SuiteModuleLoader.addFilters(
+                mExcludeFilters, mExcludeFiltersParsed, mAbis, mFoldableStates);
+    }
+
     /** Adds module args */
     public void addModuleArgs(Set<String> moduleArgs) {
         mModuleArgs.addAll(moduleArgs);
@@ -455,8 +497,8 @@ public class BaseTestSuite extends ITestSuite {
      * @return the created {@link SuiteModuleLoader}.
      */
     public SuiteModuleLoader createModuleLoader(
-            Map<String, List<SuiteTestFilter>> includeFiltersFormatted,
-            Map<String, List<SuiteTestFilter>> excludeFiltersFormatted,
+            Map<String, LinkedHashSet<SuiteTestFilter>> includeFiltersFormatted,
+            Map<String, LinkedHashSet<SuiteTestFilter>> excludeFiltersFormatted,
             List<String> testArgs,
             List<String> moduleArgs) {
         return new SuiteModuleLoader(
@@ -513,21 +555,39 @@ public class BaseTestSuite extends ITestSuite {
             // Create the matching filters for the parameterized version of it if needed.
             if (mEnableParameter) {
                 for (ModuleParameters param : ModuleParameters.values()) {
-                    IModuleParameter moduleParam =
-                            ModuleParametersHelper.getParameterHandler(
-                                    param, mEnableOptionalParameter);
-                    if (moduleParam == null) {
+                    Map<ModuleParameters, IModuleParameterHandler> moduleParamExpanded =
+                            ModuleParametersHelper.resolveParam(param, mEnableOptionalParameter);
+                    if (moduleParamExpanded == null) {
                         continue;
                     }
-                    if (moduleParam instanceof NegativeHandler) {
-                        continue;
+                    for (Entry<ModuleParameters, IModuleParameterHandler> moduleParam :
+                            moduleParamExpanded.entrySet()) {
+                        if (moduleParam.getValue() instanceof NegativeHandler) {
+                            continue;
+                        }
+                        if (moduleParam.getValue() instanceof FoldableExpandingHandler) {
+                            List<IModuleParameterHandler> foldableHandlers =
+                                    ((FoldableExpandingHandler) moduleParam.getValue())
+                                        .expandHandler(mFoldableStates);
+                            for (IModuleParameterHandler foldableHandler : foldableHandlers) {
+                                String paramModuleName =
+                                        String.format(
+                                                "%s[%s]", moduleName,
+                                                foldableHandler.getParameterIdentifier());
+                                mIncludeFilters.add(
+                                        new SuiteTestFilter(getRequestedAbi(), paramModuleName,
+                                                            mTestName).toString());
+                            }
+                            continue;
+                        }
+                        String paramModuleName =
+                                String.format(
+                                        "%s[%s]", moduleName,
+                                        moduleParam.getValue().getParameterIdentifier());
+                        mIncludeFilters.add(
+                                new SuiteTestFilter(getRequestedAbi(), paramModuleName, mTestName)
+                                        .toString());
                     }
-                    String paramModuleName =
-                            String.format(
-                                    "%s[%s]", moduleName, moduleParam.getParameterIdentifier());
-                    mIncludeFilters.add(
-                            new SuiteTestFilter(getRequestedAbi(), paramModuleName, mTestName)
-                                    .toString());
                 }
             }
         }
@@ -597,5 +657,56 @@ public class BaseTestSuite extends ITestSuite {
         try (FileInputStreamSource source = new FileInputStreamSource(filterFile)) {
             getCurrentTestLogger().testLog(dataName, type, source);
         }
+    }
+
+    @Override
+    protected boolean shouldModuleRun(ModuleDefinition module) {
+        String moduleId = module.getId();
+        LinkedHashSet<SuiteTestFilter> excludeFilters = mExcludeFiltersParsed.get(moduleId);
+        CLog.d("Filters for '%s': %s", moduleId, excludeFilters);
+        if (excludeFilters == null || excludeFilters.isEmpty()) {
+            return true;
+        }
+        for (SuiteTestFilter filter : excludeFilters) {
+            if (filter.getTest() == null) {
+                CLog.d("Skipping %s, it previously passed.", moduleId);
+                return false;
+            }
+            for (IRemoteTest test : module.getTests()) {
+                if (test instanceof ITestFileFilterReceiver) {
+                    File excludeFilterFile = ((ITestFileFilterReceiver) test).getExcludeTestFile();
+                    if (excludeFilterFile == null) {
+                        try {
+                            excludeFilterFile = FileUtil.createTempFile("exclude-filter", ".txt");
+                        } catch (IOException e) {
+                            throw new HarnessRuntimeException(
+                                    e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+                        }
+                        ((ITestFileFilterReceiver) test).setExcludeTestFile(excludeFilterFile);
+                    }
+                    try {
+                        FileUtil.writeToFile(filter.getTest() + "\n", excludeFilterFile, true);
+                    } catch (IOException e) {
+                        CLog.e(e);
+                        continue;
+                    }
+                } else if (test instanceof ITestFilterReceiver) {
+                    ((ITestFilterReceiver) test).addExcludeFilter(filter.getTest());
+                }
+            }
+        }
+        return true;
+    }
+
+    protected Set<DeviceFoldableState> getFoldableStates(ITestDevice device)
+            throws DeviceNotAvailableException {
+        if (device == null || device.getIDevice() instanceof StubDevice) {
+            return mFoldableStates;
+        }
+        if (!mFoldableStates.isEmpty()) {
+            return mFoldableStates;
+        }
+        mFoldableStates = device.getFoldableStates();
+        return mFoldableStates;
     }
 }

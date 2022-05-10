@@ -16,17 +16,20 @@
 
 package com.android.tradefed.testtype.suite;
 
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.metric.CollectorHelper;
+import com.android.tradefed.device.metric.CountTestCasesCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ILogSaver;
@@ -43,6 +46,7 @@ import com.android.tradefed.testtype.ITestFilterReceiver;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -81,6 +85,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     private ModuleListener mMainGranularRunListener;
     private RetryLogSaverResultForwarder mRetryAttemptForwarder;
     private List<ITestInvocationListener> mModuleLevelListeners;
+    private ITestInvocationListener mRemoteTestTimeOutEnforcer;
     private ILogSaver mLogSaver;
     private String mModuleId;
     private int mMaxRunLimit;
@@ -108,7 +113,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             int maxRunLimit) {
         mTest = test;
         mModule = module;
-        mMainGranularRunListener = new ModuleListener(mainListener);
+        initializeGranularRunListener(mainListener);
         mFailureListener = failureListener;
         mModuleLevelListeners = moduleLevelListeners;
         mMaxRunLimit = maxRunLimit;
@@ -178,6 +183,29 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     }
 
     /**
+     * Initialize granular run listener with {@link RemoteTestTimeOutEnforcer} if timeout is
+     * set.
+     *
+     * @param listener The listener for each test run should be wrapped.
+     *
+     */
+    private void initializeGranularRunListener(ITestInvocationListener listener) {
+        mMainGranularRunListener = new ModuleListener(listener);
+        if (mModule != null) {
+            ConfigurationDescriptor configDesc =
+                    mModule.getModuleInvocationContext().getConfigurationDescriptor();
+            if (configDesc.getMetaData(
+                    RemoteTestTimeOutEnforcer.REMOTE_TEST_TIMEOUT_OPTION) != null) {
+                Duration duration = Duration.parse(
+                        configDesc.getMetaData(
+                                RemoteTestTimeOutEnforcer.REMOTE_TEST_TIMEOUT_OPTION).get(0));
+                mRemoteTestTimeOutEnforcer = new RemoteTestTimeOutEnforcer(
+                        mMainGranularRunListener, mModule, mTest, duration);
+            }
+        }
+    }
+
+    /**
      * Initialize a new {@link ModuleListener} for each test run.
      *
      * @return a {@link ITestInvocationListener} listener which contains the new {@link
@@ -192,6 +220,10 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             currentTestListener.addAll(mModuleLevelListeners);
         }
         currentTestListener.add(mMainGranularRunListener);
+
+        if (mRemoteTestTimeOutEnforcer != null) {
+            currentTestListener.add(mRemoteTestTimeOutEnforcer);
+        }
 
         mRetryAttemptForwarder = new RetryLogSaverResultForwarder(mLogSaver, currentTestListener);
         ITestInvocationListener runListener = mRetryAttemptForwarder;
@@ -283,6 +315,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     /** The workflow for each individual {@link IRemoteTest} run. */
     private final void intraModuleRun(TestInformation testInfo, ITestInvocationListener runListener)
             throws DeviceNotAvailableException {
+        mMainGranularRunListener.setAttemptIsolation(CurrentInvocation.runCurrentIsolation());
         try {
             List<IMetricCollector> clonedCollectors = cloneCollectors(mRunMetricCollectors);
             if (mTest instanceof IMetricCollectorReceiver) {
@@ -290,6 +323,10 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
                 // If test can receive collectors then let it handle how to set them up
                 mTest.run(testInfo, runListener);
             } else {
+                if (mModuleConfiguration.getCommandOptions().reportTestCaseCount()) {
+                    CountTestCasesCollector counter = new CountTestCasesCollector(mTest);
+                    clonedCollectors.add(counter);
+                }
                 // Module only init the collectors here to avoid triggering the collectors when
                 // replaying the cached events at the end. This ensures metrics are capture at
                 // the proper time in the invocation.
@@ -335,6 +372,8 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             throw dnae;
         } finally {
             mRetryAttemptForwarder.incrementAttempt();
+            // After one run, do not consider follow up isolated without action.
+            CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
         }
     }
 
@@ -378,8 +417,12 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     }
 
     private FailureDescription createFromException(Throwable exception) {
+        String message =
+                (exception.getMessage() == null)
+                        ? String.format("No error message reported for: %s", exception)
+                        : exception.getMessage();
         FailureDescription failure =
-                CurrentInvocation.createFailure(exception.getMessage(), null).setCause(exception);
+                CurrentInvocation.createFailure(message, null).setCause(exception);
         if (exception instanceof IHarnessException) {
             ErrorIdentifier id = ((IHarnessException) exception).getErrorId();
             failure.setErrorIdentifier(id);

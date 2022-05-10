@@ -65,7 +65,6 @@ public class LogSaverResultForwarder extends ResultForwarder implements ILogSave
     @Override
     public void invocationEnded(long elapsedTime) {
         InvocationSummaryHelper.reportInvocationEnded(getListeners(), elapsedTime);
-        reportEndHostLog(mLogSaver);
         // Intentionally call invocationEnded for the log saver last.
         try {
             mLogSaver.invocationEnded(elapsedTime);
@@ -73,22 +72,21 @@ public class LogSaverResultForwarder extends ResultForwarder implements ILogSave
             CLog.e("Caught runtime exception from log saver: %s", mLogSaver.getClass().getName());
             CLog.e(e);
         }
+        reportEndHostLog(mLogSaver, TestInvocation.TRADEFED_END_HOST_LOG);
     }
 
-    private void reportEndHostLog(ILogSaver saver) {
+    /** Reports host_log from session in progress. */
+    public static void reportEndHostLog(ILogSaver saver, String name) {
         LogRegistry registry = (LogRegistry) LogRegistry.getLogRegistry();
         try (InputStreamSource source = registry.getLogger().getLog()) {
             if (source == null) {
                 if (!(registry.getLogger() instanceof StdoutLogger)) {
-                    CLog.e(
-                            "%s stream was null, skip saving it.",
-                            TestInvocation.TRADEFED_END_HOST_LOG);
+                    CLog.e("%s stream was null, skip saving it.", name);
                 }
                 return;
             }
             try (InputStream stream = source.createInputStream()) {
-                saver.saveLogData(
-                        TestInvocation.TRADEFED_END_HOST_LOG, LogDataType.HOST_LOG, stream);
+                saver.saveLogData(name, LogDataType.HOST_LOG, stream);
             }
             if (SystemUtil.isRemoteEnvironment()) {
                 try (InputStream stream = source.createInputStream()) {

@@ -21,9 +21,10 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
-import com.android.tradefed.device.IDeviceManager;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.host.IHostOptions;
+import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -38,6 +39,7 @@ import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -145,7 +147,7 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer {
             // Assume this is a build problem
             throw new DeviceFailedToBootError(
                     String.format(
-                            "Device %s did not become available after flashing GKI. Exception: %s",
+                            "Device %s did not become available after flashing GSI. Exception: %s",
                             device.getSerialNumber(), e),
                     device.getDeviceDescriptor(),
                     DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
@@ -155,13 +157,13 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer {
     }
 
     /**
-     * Get a reference to the {@link IDeviceManager}
+     * Get a reference to the {@link IHostOptions}
      *
-     * @return the {@link IDeviceManager} to use
+     * @return the {@link IHostOptions} to use
      */
     @VisibleForTesting
-    IDeviceManager getDeviceManager() {
-        return GlobalConfiguration.getDeviceManagerInstance();
+    protected IHostOptions getHostOptions() {
+        return GlobalConfiguration.getInstance().getHostOptions();
     }
 
     /**
@@ -183,7 +185,6 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer {
      */
     private void flashGsi(ITestDevice device, IBuildInfo buildInfo)
             throws TargetSetupError, DeviceNotAvailableException {
-        IDeviceManager deviceManager = getDeviceManager();
         device.waitForDeviceOnline();
         // After Android 10, system parition and product partion are moved to dynamic partitions
         // https://source.android.com/devices/tech/ota/dynamic_partitions/implement?hl=en
@@ -193,7 +194,7 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer {
         }
         device.rebootIntoBootloader();
         long start = System.currentTimeMillis();
-        deviceManager.takeFlashingPermit();
+        getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
         CLog.v(
                 "Flashing permit obtained after %ds",
                 TimeUnit.MILLISECONDS.toSeconds((System.currentTimeMillis() - start)));
@@ -223,16 +224,16 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer {
                                 "delete-logical-partition", "product" + currSlot);
                     }
                 }
+                executeFastbootCmd(device, "-w");
                 executeFastbootCmd(device, "erase", "system" + currSlot);
                 executeFastbootCmd(device, "flash", "system", mSystemImg.getAbsolutePath());
-                executeFastbootCmd(device, "-w");
             }
             if (mBootImg != null) {
                 device.rebootIntoBootloader();
                 executeFastbootCmd(device, "flash", "boot", mBootImg.getAbsolutePath());
             }
         } finally {
-            deviceManager.returnFlashingPermit();
+            getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
             // Allow interruption at the end no matter what.
             getRunUtil().allowInterrupt(true);
             CLog.v(
@@ -358,7 +359,9 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer {
      */
     private String executeFastbootCmd(ITestDevice device, String... cmdArgs)
             throws DeviceNotAvailableException, TargetSetupError {
-        CLog.i("Execute fastboot command %s on %s", cmdArgs, device.getSerialNumber());
+        CLog.i(
+                "Execute fastboot command %s on %s",
+                Arrays.toString(cmdArgs), device.getSerialNumber());
         CommandResult result = device.executeLongFastbootCommand(cmdArgs);
         CLog.v("fastboot stdout: " + result.getStdout());
         CLog.v("fastboot stderr: " + result.getStderr());
@@ -372,7 +375,7 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer {
             throw new TargetSetupError(
                     String.format(
                             "fastboot command %s failed in device %s. stdout: %s, stderr: %s",
-                            cmdArgs,
+                            Arrays.toString(cmdArgs),
                             device.getSerialNumber(),
                             result.getStdout(),
                             result.getStderr()),

@@ -29,6 +29,7 @@ import com.android.tradefed.util.StreamUtil;
 
 import org.junit.AssumptionViolatedException;
 import org.junit.runner.Description;
+import org.junit.runner.Result;
 import org.junit.runner.notification.Failure;
 import org.junit.runner.notification.RunListener;
 import org.junit.runners.model.MultipleFailureException;
@@ -37,6 +38,7 @@ import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * Result forwarder from JUnit4 Runner.
@@ -45,6 +47,11 @@ public class JUnit4ResultForwarder extends RunListener {
 
     private ITestInvocationListener mListener;
     private List<Throwable> mTestCaseFailures;
+    private Description mRunDescription;
+    private boolean mBeforeClass = true;
+    private boolean mTestFinished = false;
+
+    private LogUploaderThread mLogUploaderThread;
 
     public JUnit4ResultForwarder(ITestInvocationListener listener) {
         mListener = listener;
@@ -53,6 +60,8 @@ public class JUnit4ResultForwarder extends RunListener {
 
     @Override
     public void testFailure(Failure failure) throws Exception {
+        mTestFinished = true;
+
         Description description = failure.getDescription();
         if (description.getMethodName() == null) {
             Throwable error = failure.getException();
@@ -90,7 +99,37 @@ public class JUnit4ResultForwarder extends RunListener {
     }
 
     @Override
+    public void testRunStarted(Description description) throws Exception {
+        mRunDescription = description;
+    }
+
+    @Override
+    public void testRunFinished(Result result) throws Exception {
+        if (!mTestCaseFailures.isEmpty()) {
+            String stack = StreamUtil.getStackTrace(mTestCaseFailures.get(0));
+            if (mBeforeClass) {
+                for (Description test : mRunDescription.getChildren()) {
+                    TestDescription testid =
+                            new TestDescription(
+                                    test.getClassName(),
+                                    test.getMethodName(),
+                                    test.getAnnotations());
+                    mListener.testStarted(testid);
+                    mListener.testAssumptionFailure(testid, stack);
+                    mListener.testEnded(testid, new HashMap<String, Metric>());
+                }
+            } else {
+                // This would be an error in AfterClass, we have no good place to put results today
+                // so report it as a failure for now.
+                mListener.testRunFailed(stack);
+            }
+        }
+    }
+
+    @Override
     public void testStarted(Description description) throws Exception {
+        mBeforeClass = false;
+        mTestFinished = false;
         mTestCaseFailures.clear();
         TestDescription testid =
                 new TestDescription(
@@ -98,10 +137,16 @@ public class JUnit4ResultForwarder extends RunListener {
                         description.getMethodName(),
                         description.getAnnotations());
         mListener.testStarted(testid);
+
+        mLogUploaderThread = new LogUploaderThread(description);
+        mLogUploaderThread.setDaemon(true);
+        mLogUploaderThread.start();
     }
 
     @Override
     public void testFinished(Description description) throws Exception {
+        mTestFinished = true;
+
         TestDescription testid =
                 new TestDescription(
                         description.getClassName(),
@@ -110,6 +155,12 @@ public class JUnit4ResultForwarder extends RunListener {
         try {
             handleFailures(testid);
         } finally {
+            while (mLogUploaderThread.isAlive()) {
+                // wait for it to finish
+            }
+            // run last time to make sure all logs uploaded
+            pollLogsAndUpload(description);
+
             // Explore the Description to see if we find any Annotation metrics carrier
             HashMap<String, Metric> metrics = new HashMap<>();
             for (Description child : description.getChildren()) {
@@ -117,18 +168,10 @@ public class JUnit4ResultForwarder extends RunListener {
                     if (a instanceof MetricAnnotation) {
                         metrics.putAll(((MetricAnnotation) a).mMetrics);
                     }
-                    if (a instanceof LogAnnotation) {
-                        // Log all the logs found.
-                        for (LogHolder log : ((LogAnnotation) a).mLogs) {
-                            mListener.testLog(log.mDataName, log.mDataType, log.mDataStream);
-                            StreamUtil.cancel(log.mDataStream);
-                        }
-                        ((LogAnnotation) a).mLogs.clear();
-                    }
                 }
             }
-            //description.
             mListener.testEnded(testid, metrics);
+            mTestCaseFailures.clear();
         }
     }
 
@@ -166,6 +209,41 @@ public class JUnit4ResultForwarder extends RunListener {
             MultipleFailureException multiException =
                     new MultipleFailureException(mTestCaseFailures);
             mListener.testFailed(testid, getMultiFailureStack(multiException));
+        }
+    }
+
+    /**
+     * Thread used to upload logs in between of testStarted and testFinished, in parallel to the
+     * test actual run
+     */
+    private class LogUploaderThread extends Thread {
+        private Description mDescription;
+
+        public LogUploaderThread(Description description) {
+            mDescription = description;
+        }
+
+        @Override
+        public void run() {
+            while (!mTestFinished) {
+                pollLogsAndUpload(mDescription);
+            }
+        }
+    }
+
+    private void pollLogsAndUpload(Description description) {
+        for (Description child : description.getChildren()) {
+            for (Annotation a : child.getAnnotations()) {
+                if (a instanceof LogAnnotation) {
+                    LinkedBlockingQueue<LogHolder> list = ((LogAnnotation) a).mLogs;
+                    while (!list.isEmpty()) {
+                        LogHolder log = list.poll();
+                        // upload log
+                        mListener.testLog(log.mDataName, log.mDataType, log.mDataStream);
+                        StreamUtil.cancel(log.mDataStream);
+                    }
+                }
+            }
         }
     }
 

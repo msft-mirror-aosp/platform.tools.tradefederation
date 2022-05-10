@@ -59,14 +59,16 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private static final String APEX_DATA_DIR = "/data/apex/active/";
     private static final String STAGING_DATA_DIR = "/data/app-staging/";
     private static final String SESSION_DATA_DIR = "/data/apex/sessions/";
-    private static final String APEX_SUFFIX = ".apex";
-    private static final String APK_SUFFIX = ".apk";
-    private static final String SPLIT_APKS_SUFFIX = ".apks";
     private static final String TRAIN_WITH_APEX_INSTALL_OPTION = "install-multi-package";
+    private static final String ENABLE_ROLLBACK_INSTALL_OPTION = "--enable-rollback";
+    private static final String STAGED_INSTALL_OPTION = "--staged";
     private static final String ACTIVATED_APEX_SOURCEDIR_PREFIX = "data";
     private static final int R_SDK_INT = 30;
     // Pattern used to identify the package names from adb shell pm path.
     private static final Pattern PACKAGE_REGEX = Pattern.compile("package:(.*)");
+    protected static final String APEX_SUFFIX = ".apex";
+    protected static final String APK_SUFFIX = ".apk";
+    protected static final String SPLIT_APKS_SUFFIX = ".apks";
 
     private List<ApexInfo> mTestApexInfoList = new ArrayList<>();
     private List<String> mApexModulesToUninstall = new ArrayList<>();
@@ -82,14 +84,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     @Option(name = "bundletool-file-name", description = "The file name of the bundletool jar.")
     private String mBundletoolFilename;
 
-    @Option(name = "train-path", description = "The absoulte path of the train folder.")
-    private File mTrainFolderPath;
+    @Option(name = "train-path", description = "The absolute path of the train folder.")
+    protected File mTrainFolderPath;
 
     @Option(
-        name = "apex-staging-wait-time",
-        description = "The time in ms to wait for apex staged session ready.",
-        isTimeVal = true
-    )
+            name = "apex-staging-wait-time",
+            description = "The time in ms to wait for apex staged session ready.",
+            isTimeVal = true)
     private long mApexStagingWaitTime = 1 * 60 * 1000;
 
     @Option(
@@ -101,8 +102,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
 
     @Option(
             name = "skip-apex-teardown",
-            description = "Skip teardown if all files to be installed are apex files. "
-                    + "Currently, this option is only used for Test Mapping use case.")
+            description =
+                    "Skip teardown if all files to be installed are apex files. "
+                            + "Currently, this option is only used for Test Mapping use case.")
     private boolean mSkipApexTearDown = false;
 
     @Override
@@ -185,6 +187,18 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             }
         }
 
+        checkApexActivation(device);
+    }
+
+    /**
+     * Check if all apexes are activated.
+     *
+     * @param device under test.
+     * @throws Exception if activation failed.
+     */
+    protected void checkApexActivation(ITestDevice device)
+            throws DeviceNotAvailableException, TargetSetupError {
+        Set<ApexInfo> activatedApexes;
         activatedApexes = device.getActiveApexes();
 
         if (activatedApexes.isEmpty()) {
@@ -192,7 +206,8 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     String.format(
                             "Failed to retrieve activated apex on device %s. Empty set returned.",
                             device.getSerialNumber()),
-                    device.getDeviceDescriptor());
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
         } else {
             CLog.i("Activated apex packages list after module/train installation:");
             for (ApexInfo info : activatedApexes) {
@@ -366,11 +381,33 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             if (mTestApexInfoList.isEmpty() && getApkInstalled().isEmpty()) {
                 super.tearDown(testInfo, e);
             } else {
-                for (String apkPkgName : getApkInstalled()) {
-                    uninstallPackage(device, apkPkgName);
-                }
-                if (!mTestApexInfoList.isEmpty()) {
-                    cleanUpStagedAndActiveSession(device);
+                if (mTestApexInfoList.isEmpty()) {
+                    for (String apkPkgName : getApkInstalled()) {
+                        uninstallPackage(device, apkPkgName);
+                    }
+                } else {
+                    for (ApexInfo apex : mTestApexInfoList) {
+                        String output =
+                                device.executeShellCommand(
+                                        String.format("pm rollback-app %s", apex.name));
+                        // Rolling back one newly installed module will rollback all other newly
+                        // installed modules.
+                        if (output.contains("Success")) {
+                            break;
+                        } else {
+                            throw new RuntimeException(
+                                    String.format(
+                                            "Failed to rollback %s, Output: %s",
+                                            apex.name, output));
+                        }
+                    }
+                    CLog.i("Wait for rollback fully done.");
+                    RunUtil.getDefault().sleep(mApexStagingWaitTime);
+                    CLog.i("Device Rebooting");
+                    device.reboot();
+                    CLog.i("Reboot finished. Wait for rollback fully propagate.");
+                    RunUtil.getDefault().sleep(mApexStagingWaitTime);
+                    device.waitForDeviceAvailable();
                 }
             }
         }
@@ -382,12 +419,14 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * @param testInfo the {@link TestInformation} for the invocation.
      * @throws TargetSetupError if bundletool cannot be found.
      */
-    private void initBundletoolUtil(TestInformation testInfo) throws TargetSetupError {
+    protected void initBundletoolUtil(TestInformation testInfo) throws TargetSetupError {
         if (mBundletoolUtil != null) {
             return;
         }
+
         File bundletoolJar;
         File f = new File(getBundletoolFileName());
+
         if (!f.isAbsolute()) {
             bundletoolJar = getLocalPathForFilename(testInfo, getBundletoolFileName());
         } else {
@@ -431,10 +470,11 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * @return a File[] containing the splits.
      * @throws TargetSetupError if bundletool cannot be found or device spec file fails to generate.
      */
-    private List<File> getSplitsForApks(TestInformation testInfo, File moduleFile)
+    protected List<File> getSplitsForApks(TestInformation testInfo, File moduleFile)
             throws TargetSetupError {
         initBundletoolUtil(testInfo);
         initDeviceSpecFilePath(testInfo.getDevice());
+
         File splitsDir =
                 getBundletoolUtil()
                         .extractSplitsFromApks(
@@ -505,7 +545,8 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                                     "Mainline module %s is not preloaded on the device "
                                             + "but is in the input lists.",
                                     modulePackageName),
-                            device.getDeviceDescriptor());
+                            device.getDeviceDescriptor(),
+                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
                 }
                 CLog.i(
                         "The module package %s is not preloaded on the device but is included in "
@@ -530,16 +571,10 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         if (containsApex(testAppFileNames.keySet())) {
             mTestApexInfoList = collectApexInfoFromApexModules(testAppFileNames, testInfo);
         }
-        if (containsPersistentApk(testAppFileNames.keySet(), testInfo)) {
-            // When there is a persistent apk in the train, use '--staged' to install full train
-            // Otherwise, do normal install without '--staged'
-            installTrain(
-                    testInfo,
-                    new ArrayList<>(testAppFileNames.keySet()),
-                    new String[] {"--staged"});
-            return;
-        }
-        installTrain(testInfo, new ArrayList<>(testAppFileNames.keySet()), new String[] {});
+        installTrain(
+                testInfo,
+                new ArrayList<>(testAppFileNames.keySet()),
+                new String[] {ENABLE_ROLLBACK_INSTALL_OPTION, STAGED_INSTALL_OPTION});
     }
 
     /**
@@ -569,9 +604,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         List<String> trainInstallCmd = new ArrayList<>();
 
         trainInstallCmd.add(TRAIN_WITH_APEX_INSTALL_OPTION);
+        trainInstallCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
+        trainInstallCmd.add(STAGED_INSTALL_OPTION);
         if (extraArgs != null) {
             for (String arg : extraArgs) {
+                if (!trainInstallCmd.contains(arg)) {
                 trainInstallCmd.add(arg);
+                }
             }
         }
 
@@ -651,6 +690,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             appFilesAndPackages.put(
                     splits.get(0), parsePackageName(splits.get(0), device.getDeviceDescriptor()));
             super.installer(testInfo, appFilesAndPackages);
+            mTestApexInfoList = collectApexInfoFromApexModules(appFilesAndPackages, testInfo);
         } else {
             // Install .apks that contain apk module.
             getBundletoolUtil().installApks(apks, device);
@@ -696,6 +736,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         List<String> installCmd = new ArrayList<>();
 
         installCmd.add(TRAIN_WITH_APEX_INSTALL_OPTION);
+        installCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
         for (String arg : mSplitsInstallArgs) {
             installCmd.add(arg);
         }
@@ -709,7 +750,8 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     String.format(
                             "Failed to stage train on device %s. Cmd is: %s. Error log: %s.",
                             device.getSerialNumber(), installCmd.toString(), log),
-                    device.getDeviceDescriptor());
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.FAIL_ACTIVATE_APEX);
         }
     }
 
@@ -934,7 +976,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         return failToActivateApex;
     }
 
-    private void addApksToTestFiles() {
+    protected void addApksToTestFiles() {
         File[] filesUnderTrainFolder = mTrainFolderPath.listFiles();
         Arrays.sort(filesUnderTrainFolder, (a, b) -> a.getName().compareTo(b.getName()));
         for (File f : filesUnderTrainFolder) {

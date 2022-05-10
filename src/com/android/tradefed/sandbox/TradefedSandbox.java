@@ -17,9 +17,11 @@ package com.android.tradefed.sandbox;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.command.CommandOptions;
+import com.android.tradefed.config.ArgsOptionParser;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
+import com.android.tradefed.config.ConfigurationXmlParserSettings;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
@@ -27,8 +29,8 @@ import com.android.tradefed.config.IGlobalConfiguration;
 import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
+import com.android.tradefed.invoker.RemoteInvocationExecution;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
-import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.proto.InvocationContext.Context;
@@ -41,6 +43,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.proto.StreamProtoReceiver;
 import com.android.tradefed.result.proto.StreamProtoResultReporter;
 import com.android.tradefed.sandbox.SandboxConfigDump.DumpCmd;
+import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -57,13 +60,14 @@ import com.android.tradefed.util.keystore.IKeyStoreClient;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
@@ -77,8 +81,6 @@ public class TradefedSandbox implements ISandbox {
 
     private File mStdoutFile = null;
     private File mStderrFile = null;
-    private OutputStream mStdout = null;
-    private FileOutputStream mStderr = null;
     private File mHeapDump = null;
 
     private File mSandboxTmpFolder = null;
@@ -86,12 +88,12 @@ public class TradefedSandbox implements ISandbox {
     private File mGlobalConfig = null;
     private File mSerializedContext = null;
     private File mSerializedConfiguration = null;
+    private File mSerializedTestConfig = null;
 
     private SubprocessTestResultsParser mEventParser = null;
     private StreamProtoReceiver mProtoReceiver = null;
 
     private IRunUtil mRunUtil;
-    private boolean mCollectStdout = true;
 
     @Override
     public CommandResult run(IConfiguration config, ITestLogger logger) throws Throwable {
@@ -125,15 +127,20 @@ public class TradefedSandbox implements ISandbox {
             mCmdArgs.add("--" + CommandOptions.USE_SANDBOX);
         }
 
-        long timeout = config.getCommandOptions().getInvocationTimeout();
+        // Remove a bit of timeout to account for parent overhead
+        long timeout = Math.max(config.getCommandOptions().getInvocationTimeout() - 120000L, 0);
         // Allow interruption, subprocess should handle signals itself
         mRunUtil.allowInterrupt(true);
         CommandResult result = null;
         RuntimeException interruptedException = null;
         try {
             result =
-                    mRunUtil.runTimedCmd(
-                            timeout, mStdout, mStderr, mCmdArgs.toArray(new String[0]));
+                    mRunUtil.runTimedCmdWithInput(
+                            timeout, /*input*/
+                            null,
+                            mStdoutFile,
+                            mStderrFile,
+                            mCmdArgs.toArray(new String[0]));
         } catch (RuntimeException interrupted) {
             CLog.e("Sandbox runtimedCmd threw an exception");
             CLog.e(interrupted);
@@ -181,11 +188,6 @@ public class TradefedSandbox implements ISandbox {
             if (mProtoReceiver != null) {
                 mProtoReceiver.completeModuleEvents();
             }
-            // Log the configuration used to run
-            try (InputStreamSource configFile =
-                    new FileInputStreamSource(mSerializedConfiguration)) {
-                logger.testLog("sandbox-config", LogDataType.HARNESS_CONFIG, configFile);
-            }
             try (InputStreamSource contextFile = new FileInputStreamSource(mSerializedContext)) {
                 logger.testLog("sandbox-context", LogDataType.PB, contextFile);
             }
@@ -225,32 +227,11 @@ public class TradefedSandbox implements ISandbox {
     @Override
     public Exception prepareEnvironment(
             IInvocationContext context, IConfiguration config, ITestInvocationListener listener) {
-        // Check for local sharding, avoid redirecting several stdout (from each shards) to the
-        // sandbox stdout as it creates a lot of I/O to the same output.
-        if (config.getCommandOptions().getShardCount() != null
-                && config.getCommandOptions().getShardIndex() == null) {
-            mCollectStdout = false;
-        }
         // Create our temp directories.
         try {
-            if (mCollectStdout) {
-                mStdoutFile =
-                        FileUtil.createTempFile("stdout_subprocess_", ".log", getWorkFolder());
-                mStdout = new FileOutputStream(mStdoutFile);
-            } else {
-                mStdout =
-                        new OutputStream() {
-                            @Override
-                            public void write(int b) throws IOException {
-                                // Ignore stdout
-                            }
-                        };
-            }
-
+            mStdoutFile = FileUtil.createTempFile("stdout_subprocess_", ".log", getWorkFolder());
             mStderrFile = FileUtil.createTempFile("stderr_subprocess_", ".log", getWorkFolder());
-            mStderr = new FileOutputStream(mStderrFile);
-
-            mSandboxTmpFolder = FileUtil.createTempDir("tradefed-container", getWorkFolder());
+            mSandboxTmpFolder = FileUtil.createTempDir("tf-container", getWorkFolder());
         } catch (IOException e) {
             return e;
         }
@@ -259,12 +240,23 @@ public class TradefedSandbox implements ISandbox {
         mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
         mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
         mRunUtil.unsetEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT);
+        mRunUtil.unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
+
         if (getSandboxOptions(config).shouldEnableDebugThread()) {
             mRunUtil.setEnvVariable(TradefedSandboxRunner.DEBUG_THREAD_KEY, "true");
         }
         for (Entry<String, String> envEntry :
                 getSandboxOptions(config).getEnvVariables().entrySet()) {
             mRunUtil.setEnvVariable(envEntry.getKey(), envEntry.getValue());
+        }
+        if (config.getConfigurationDescription().getMetaData(TradefedFeatureServer.SERVER_REFERENCE)
+                != null) {
+            mRunUtil.setEnvVariable(
+                    TradefedFeatureServer.SERVER_REFERENCE,
+                    config.getConfigurationDescription()
+                            .getAllMetaData()
+                            .getUniqueMap()
+                            .get(TradefedFeatureServer.SERVER_REFERENCE));
         }
 
         try {
@@ -300,14 +292,13 @@ public class TradefedSandbox implements ISandbox {
     public void tearDown() {
         StreamUtil.close(mEventParser);
         StreamUtil.close(mProtoReceiver);
-        StreamUtil.close(mStdout);
-        StreamUtil.close(mStderr);
         FileUtil.deleteFile(mStdoutFile);
         FileUtil.deleteFile(mStderrFile);
         FileUtil.recursiveDelete(mSandboxTmpFolder);
         FileUtil.deleteFile(mSerializedContext);
         FileUtil.deleteFile(mSerializedConfiguration);
         FileUtil.deleteFile(mGlobalConfig);
+        FileUtil.deleteFile(mSerializedTestConfig);
     }
 
     @Override
@@ -364,7 +355,6 @@ public class TradefedSandbox implements ISandbox {
     protected Exception prepareConfiguration(
             IInvocationContext context, IConfiguration config, ITestInvocationListener listener) {
         try {
-            // TODO: switch reporting of parent and subprocess to proto
             String commandLine = config.getCommandLine();
             if (getSandboxOptions(config).shouldUseProtoReporter()) {
                 mProtoReceiver =
@@ -377,6 +367,7 @@ public class TradefedSandbox implements ISandbox {
             }
             String[] args =
                     QuotationAwareTokenizer.tokenizeLine(commandLine, /* No Logging */ false);
+
             mGlobalConfig = dumpGlobalConfig(config, new HashSet<>());
             try (InputStreamSource source = new FileInputStreamSource(mGlobalConfig)) {
                 listener.testLog("sandbox-global-config", LogDataType.HARNESS_CONFIG, source);
@@ -385,7 +376,6 @@ public class TradefedSandbox implements ISandbox {
             if (config.getCommandOptions().shouldUseSandboxTestMode()) {
                 mode = DumpCmd.TEST_MODE;
             }
-
             try {
                 mSerializedConfiguration =
                         SandboxConfigUtil.dumpConfigForVersion(
@@ -400,13 +390,21 @@ public class TradefedSandbox implements ISandbox {
                                         String.format(
                                                 "Could not find configuration '%s'", args[0]))) {
                     CLog.w(
-                            "Child version doesn't contains '%s'. Attempting to backfill missing parent configuration.",
+                            "Child version doesn't contains '%s'. Attempting to backfill missing"
+                                    + " parent configuration.",
                             args[0]);
-                    File parentConfig = handleChildMissingConfig(args);
+                    File parentConfig = handleChildMissingConfig(getSandboxOptions(config), args);
                     if (parentConfig != null) {
                         try (InputStreamSource source = new FileInputStreamSource(parentConfig)) {
                             listener.testLog(
                                     "sandbox-parent-config", LogDataType.HARNESS_CONFIG, source);
+                        }
+                        if (mSerializedTestConfig != null) {
+                            try (InputStreamSource source =
+                                    new FileInputStreamSource(mSerializedTestConfig)) {
+                                listener.testLog(
+                                        "sandbox-test-config", LogDataType.HARNESS_CONFIG, source);
+                            }
                         }
                         try {
                             mSerializedConfiguration =
@@ -505,11 +503,15 @@ public class TradefedSandbox implements ISandbox {
                 config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME);
     }
 
-    private File handleChildMissingConfig(String[] args) {
+    private File handleChildMissingConfig(SandboxOptions options, String[] args) {
         IConfiguration parentConfig = null;
         File tmpParentConfig = null;
         PrintWriter pw = null;
+
         try {
+            if (options.dumpTestTemplate()) {
+                args = extractTestTemplate(args);
+            }
             tmpParentConfig = FileUtil.createTempFile("parent-config", ".xml", mSandboxTmpFolder);
             pw = new PrintWriter(tmpParentConfig);
             parentConfig = ConfigurationFactory.getInstance().createConfigurationFromArgs(args);
@@ -527,14 +529,56 @@ public class TradefedSandbox implements ISandbox {
         }
     }
 
+    private String[] extractTestTemplate(String[] args) throws ConfigurationException, IOException {
+        ConfigurationXmlParserSettings parserSettings = new ConfigurationXmlParserSettings();
+        final ArgsOptionParser templateArgParser = new ArgsOptionParser(parserSettings);
+        List<String> listArgs = new ArrayList<>(Arrays.asList(args));
+        String configArg = listArgs.remove(0);
+        List<String> leftOverCommandLine = new ArrayList<>();
+        leftOverCommandLine.addAll(templateArgParser.parseBestEffort(listArgs, true));
+        Map<String, String> uniqueTemplates = parserSettings.templateMap.getUniqueMap();
+        CLog.d("Templates: %s", uniqueTemplates);
+        // We look at the "test" template since it's the usual main part of the versioned object
+        // configs. This will be improved in the future.
+        if (!uniqueTemplates.containsKey("test")) {
+            return args;
+        }
+        for (Entry<String, String> template : uniqueTemplates.entrySet()) {
+            if (!"test".equals(template.getKey())) {
+                leftOverCommandLine.add("--template:map");
+                leftOverCommandLine.add(
+                        String.format("%s=%s", template.getKey(), template.getValue()));
+            }
+        }
+        mSerializedTestConfig =
+                SandboxConfigUtil.dumpConfigForVersion(
+                        createClasspath(mRootFolder),
+                        mRunUtil,
+                        new String[] {uniqueTemplates.get("test")},
+                        DumpCmd.STRICT_TEST,
+                        mGlobalConfig);
+        leftOverCommandLine.add("--template:map");
+        leftOverCommandLine.add("test=" + mSerializedTestConfig.getAbsolutePath());
+        leftOverCommandLine.add(0, configArg);
+        CLog.d("New Command line: %s", leftOverCommandLine);
+        return leftOverCommandLine.toArray(new String[0]);
+    }
+
     private void logAndCleanHeapDump(File heapDumpDir, ITestLogger logger) {
         try {
-            if (heapDumpDir != null && heapDumpDir.listFiles().length != 0) {
-                for (File f : heapDumpDir.listFiles()) {
-                    FileInputStreamSource fileInput = new FileInputStreamSource(f);
-                    logger.testLog(f.getName(), LogDataType.HPROF, fileInput);
-                    StreamUtil.cancel(fileInput);
-                }
+            if (heapDumpDir == null) {
+                return;
+            }
+            if (!heapDumpDir.isDirectory()) {
+                return;
+            }
+            if (heapDumpDir.listFiles().length == 0) {
+                return;
+            }
+            for (File f : heapDumpDir.listFiles()) {
+                FileInputStreamSource fileInput = new FileInputStreamSource(f);
+                logger.testLog(f.getName(), LogDataType.HPROF, fileInput);
+                StreamUtil.cancel(fileInput);
             }
         } finally {
             FileUtil.recursiveDelete(heapDumpDir);
@@ -542,10 +586,6 @@ public class TradefedSandbox implements ISandbox {
     }
 
     private File getWorkFolder() {
-        File workfolder = CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER);
-        if (workfolder == null || !workfolder.exists()) {
-            return null;
-        }
-        return workfolder;
+        return CurrentInvocation.getWorkFolder();
     }
 }

@@ -62,6 +62,9 @@ public class DeviceAllocationResult {
             }
             sb.append(String.format("device '%s': %s", serial, reason));
         }
+        if (reasons.isEmpty()) {
+            sb.append("No reason returned.");
+        }
         return sb.toString();
     }
 }

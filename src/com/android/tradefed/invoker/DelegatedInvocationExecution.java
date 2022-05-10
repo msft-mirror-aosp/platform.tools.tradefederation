@@ -24,6 +24,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInvocation.Stage;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -31,6 +32,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.StreamProtoReceiver;
+import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
@@ -54,6 +56,9 @@ import java.util.List;
 
 /** {@link InvocationExecution} which delegate the execution to another Tradefed binary. */
 public class DelegatedInvocationExecution extends InvocationExecution {
+
+    /** If present the invocation is executing within a delegated mode */
+    public static final String DELEGATED_MODE_VAR = "DELEGATED_MODE";
 
     /** Timeout to wait for the events received from subprocess to finish being processed. */
     private static final long EVENT_THREAD_JOIN_TIMEOUT_MS = 30 * 1000;
@@ -87,6 +92,19 @@ public class DelegatedInvocationExecution extends InvocationExecution {
     }
 
     @Override
+    public void runDevicePreInvocationSetup(
+            IInvocationContext context, IConfiguration config, ITestLogger logger)
+            throws DeviceNotAvailableException, TargetSetupError {
+        // Do nothing
+    }
+
+    @Override
+    public void runDevicePostInvocationTearDown(
+            IInvocationContext context, IConfiguration config, Throwable exception) {
+        // Do nothing
+    }
+
+    @Override
     public void doTeardown(
             TestInformation testInfo,
             IConfiguration config,
@@ -116,11 +134,15 @@ public class DelegatedInvocationExecution extends InvocationExecution {
                         config.getConfigurationObject(TradefedDelegator.DELEGATE_OBJECT);
         List<String> commandLine = new ArrayList<>();
         commandLine.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
-        mTmpDelegatedDir = FileUtil.createTempDir("delegated-invocation");
+        mTmpDelegatedDir =
+                FileUtil.createTempDir("delegated-invocation", CurrentInvocation.getWorkFolder());
         commandLine.add(String.format("-Djava.io.tmpdir=%s", mTmpDelegatedDir.getAbsolutePath()));
         commandLine.add("-cp");
         // Add classpath
         commandLine.add(delegator.createClasspath());
+        // Carry the updated TF_JAR_DIR to delegate, this will simulate tradefed.sh environment.
+        commandLine.add(
+                String.format("-DTF_JAR_DIR=%s", delegator.getTfRootDir().getAbsolutePath()));
         commandLine.add("com.android.tradefed.command.CommandRunner");
         // Add command line
         commandLine.addAll(Arrays.asList(delegator.getCommandLine()));
@@ -130,7 +152,7 @@ public class DelegatedInvocationExecution extends InvocationExecution {
             mStderrFile = FileUtil.createTempFile("stderr_delegate_", ".log", mTmpDelegatedDir);
             mStderr = new FileOutputStream(mStderrFile);
             mStdout = new FileOutputStream(mStdoutFile);
-            IRunUtil runUtil = createRunUtil(receiver.getSocketServerPort());
+            IRunUtil runUtil = createRunUtil(receiver.getSocketServerPort(), config);
             CommandResult result = null;
             RuntimeException runtimeException = null;
             CLog.d("Command line: %s", commandLine);
@@ -180,7 +202,7 @@ public class DelegatedInvocationExecution extends InvocationExecution {
         FileUtil.deleteFile(mGlobalConfig);
     }
 
-    private IRunUtil createRunUtil(int port) throws IOException {
+    private IRunUtil createRunUtil(int port, IConfiguration config) throws IOException {
         IRunUtil runUtil = new RunUtil();
         // Handle the global configs for the subprocess
         runUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
@@ -190,6 +212,18 @@ public class DelegatedInvocationExecution extends InvocationExecution {
         runUtil.setEnvVariable(
                 GlobalConfiguration.GLOBAL_CONFIG_VARIABLE, mGlobalConfig.getAbsolutePath());
         runUtil.setEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT, Integer.toString(port));
+        // Set a variable to detect delegated mode
+        runUtil.setEnvVariable(DELEGATED_MODE_VAR, "1");
+        // Pass the server reference for child to use.
+        if (config.getConfigurationDescription().getMetaData(TradefedFeatureServer.SERVER_REFERENCE)
+                != null) {
+            runUtil.setEnvVariable(
+                    TradefedFeatureServer.SERVER_REFERENCE,
+                    config.getConfigurationDescription()
+                            .getAllMetaData()
+                            .getUniqueMap()
+                            .get(TradefedFeatureServer.SERVER_REFERENCE));
+        }
         return runUtil;
     }
 
@@ -224,7 +258,7 @@ public class DelegatedInvocationExecution extends InvocationExecution {
      */
     private void logAndCleanFile(
             File fileToExport, LogDataType type, ITestInvocationListener listener) {
-        if (fileToExport == null) return;
+        if (fileToExport == null) { return; }
 
         try (FileInputStreamSource inputStream = new FileInputStreamSource(fileToExport, true)) {
             listener.testLog(fileToExport.getName(), type, inputStream);

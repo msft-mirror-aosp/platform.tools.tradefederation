@@ -15,17 +15,19 @@
  */
 package com.android.tradefed.testtype.host;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.io.Files.getNameWithoutExtension;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.FileUtil;
 
@@ -75,11 +77,18 @@ public final class CoverageMeasurementForwarder implements IRemoteTest {
 
         listener.testRunStarted("CoverageMeasurementForwarder", 0);
         for (String artifactName : mCoverageMeasurements) {
-            File coverageMeasurement =
-                    checkNotNull(
-                            testInfo.getBuildInfo().getFile(artifactName),
-                            "Failed to get artifact '%s' from the build.",
-                            artifactName);
+            File coverageMeasurement = testInfo.getBuildInfo().getFile(artifactName);
+            if (coverageMeasurement == null) {
+                listener.testRunFailed(
+                        FailureDescription.create(
+                                        String.format(
+                                                "Failed to get artifact '%s' from the build.",
+                                                artifactName),
+                                        FailureStatus.CUSTOMER_ISSUE)
+                                .setErrorIdentifier(
+                                        InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND));
+                break;
+            }
             try (InputStreamSource stream = new FileInputStreamSource(coverageMeasurement)) {
                 listener.testLog(getNameWithoutExtension(artifactName), mLogDataType, stream);
             } finally {

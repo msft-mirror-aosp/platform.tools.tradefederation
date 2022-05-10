@@ -16,6 +16,7 @@
 package com.android.tradefed.sandbox;
 
 import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.build.StubBuildProvider;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
@@ -57,6 +58,8 @@ public class SandboxConfigDump {
         RUN_CONFIG,
         /** Special mode that allows the sandbox to generate another layer of sandboxing. */
         TEST_MODE,
+        /** Mode used to dump the test template only. */
+        STRICT_TEST
     }
 
     /**
@@ -72,6 +75,24 @@ public class SandboxConfigDump {
         VERSIONED_ELEMENTS.add(Configuration.MULTI_PREPARER_TYPE_NAME);
         VERSIONED_ELEMENTS.add(Configuration.TARGET_PREPARER_TYPE_NAME);
         VERSIONED_ELEMENTS.add(Configuration.TEST_TYPE_NAME);
+    }
+
+    /** Elements that are not related to tests of the config but to the surrounding invocation. */
+    private static final Set<String> NON_TEST_ELEMENTS = new HashSet<>();
+
+    static {
+        NON_TEST_ELEMENTS.add(Configuration.BUILD_PROVIDER_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.LOGGER_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.DEVICE_RECOVERY_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.LOG_SAVER_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.RESULT_REPORTER_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.DEVICE_REQUIREMENTS_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.DEVICE_OPTIONS_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.COVERAGE_OPTIONS_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.RETRY_DECISION_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.SANBOX_OPTIONS_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.CMD_OPTIONS_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.CONFIGURATION_DESCRIPTION_TYPE_NAME);
     }
 
     /**
@@ -92,6 +113,11 @@ public class SandboxConfigDump {
                 config.getConfigurationDescription().setSandboxed(true);
                 // Don't use replication in the sandbox
                 config.getCommandOptions().setReplicateSetup(false);
+                // Override build providers since they occur in parents
+                for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+                    deviceConfig.addSpecificConfig(
+                            new StubBuildProvider(), Configuration.BUILD_PROVIDER_TYPE_NAME);
+                }
                 // Set the reporter
                 ITestInvocationListener reporter = null;
                 if (getSandboxOptions(config).shouldUseProtoReporter()) {
@@ -136,11 +162,18 @@ public class SandboxConfigDump {
                 config.dumpXml(
                         pw,
                         new ArrayList<>(VERSIONED_ELEMENTS),
-                        true, /* Don't print unchanged options */
-                        false);
+                        true,
+                        /* Don't print unchanged options */ false);
+            } else if (DumpCmd.STRICT_TEST.equals(cmd)) {
+                config.dumpXml(
+                        pw,
+                        new ArrayList<>(NON_TEST_ELEMENTS),
+                        true,
+                        /* Don't print unchanged options */ false);
             } else {
                 // FULL_XML in that case.
-                config.dumpXml(pw);
+                config.dumpXml(pw, new ArrayList<>(), true,
+                        /* Don't print unchanged options */ false);
             }
         } catch (ConfigurationException | IOException e) {
             e.printStackTrace();

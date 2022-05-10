@@ -39,7 +39,9 @@ public class DirectedGraph<V> {
     @Override
     public String toString() {
         StringBuffer s = new StringBuffer();
-        for (V v: neighbors.keySet()) s.append("\n    " + v + " -> " + neighbors.get(v));
+        for (V v : neighbors.keySet()) {
+            s.append("\n    " + v + " -> " + neighbors.get(v));
+        }
         return s.toString();
     }
 

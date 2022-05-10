@@ -17,6 +17,7 @@ package com.android.tradefed.device.metric;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.InputStreamSource;
@@ -27,13 +28,33 @@ import com.android.tradefed.result.TestDescription;
 public class ScreenshotOnFailureCollector extends BaseDeviceMetricCollector {
 
     private static final String NAME_FORMAT = "%s-%s-screenshot-on-failure";
+    private static final int THROTTLE_LIMIT_PER_RUN = 10;
+
+    private int mCurrentCount = 0;
+    private boolean mFirstThrottle = true;
+
+    @Override
+    public void onTestRunStart(DeviceMetricData runData) {
+        super.onTestRunStart(runData);
+        mCurrentCount = 0;
+        mFirstThrottle = true;
+    }
 
     @Override
     public void onTestFail(DeviceMetricData testData, TestDescription test) {
+        if (mCurrentCount > THROTTLE_LIMIT_PER_RUN) {
+            if (mFirstThrottle) {
+                CLog.w("Throttle capture of screenshot-on-failure due to too many failures.");
+                mFirstThrottle = false;
+            }
+            return;
+        }
         for (ITestDevice device : getRealDevices()) {
             if (!shouldCollect(device)) {
                 continue;
             }
+            RecoveryMode mode = device.getRecoveryMode();
+            device.setRecoveryMode(RecoveryMode.NONE);
             try (InputStreamSource screenSource = device.getScreenshot()) {
                 super.testLog(
                         String.format(NAME_FORMAT, test.toString(), device.getSerialNumber()),
@@ -43,8 +64,11 @@ public class ScreenshotOnFailureCollector extends BaseDeviceMetricCollector {
                 CLog.e(
                         "Device %s became unavailable while capturing screenshot, %s",
                         device.getSerialNumber(), e.toString());
+            } finally {
+                device.setRecoveryMode(mode);
             }
         }
+        mCurrentCount++;
     }
 
     private boolean shouldCollect(ITestDevice device) {
