@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.android.tradefed.cluster;
 
 import com.android.annotations.VisibleForTesting;
@@ -45,11 +46,11 @@ import com.android.tradefed.util.StringEscapeUtils;
 import com.android.tradefed.util.StringUtil;
 import com.android.tradefed.util.SubprocessEventHelper.InvocationFailedEventInfo;
 import com.android.tradefed.util.SubprocessTestResultsParser;
-import com.android.tradefed.util.SystemUtil;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -58,6 +59,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A {@link IRemoteTest} class to launch a command from TFC via a subprocess TF. FIXME: this needs
@@ -71,8 +74,9 @@ public class ClusterCommandLauncher
     public static final String TF_PATH = "TF_PATH";
     public static final String TEST_WORK_DIR = "TEST_WORK_DIR";
     public static final String ANDROID_SERIALS = "ANDROID_SERIALS";
+    public static final String TF_DEVICE_COUNT = "TF_DEVICE_COUNT";
 
-    private static final Duration MAX_EVENT_RECEIVER_WAIT_TIME = Duration.ofMinutes(10);
+    private static final Duration MAX_EVENT_RECEIVER_WAIT_TIME = Duration.ofMinutes(30);
 
     @Option(name = "root-dir", description = "A root directory", mandatory = true)
     private File mRootDir;
@@ -144,6 +148,8 @@ public class ClusterCommandLauncher
         runUtil.setWorkingDir(mRootDir);
         // clear the TF_GLOBAL_CONFIG env, so another tradefed will not reuse the global config file
         runUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
+        // Add device count to env var.
+        mEnvVars.put(TF_DEVICE_COUNT, String.valueOf(mInvocationContext.getDevices().size()));
         for (final String key : mEnvVars.keySet()) {
             runUtil.setEnvVariable(key, getEnvVar(key));
         }
@@ -292,9 +298,16 @@ public class ClusterCommandLauncher
             if (jarFile.isFile()) {
                 jars.add(jarFile.getAbsolutePath());
             } else {
-                // Add a folder path to the classpath to handle class file directories.
-                jars.add(jarFile.getAbsolutePath() + "/");
-                jars.add(new File(path, "*").getAbsolutePath());
+                try (Stream<Path> walk = Files.walk(jarFile.toPath())) {
+                    List<String> result =
+                            walk.map(p -> p.toString())
+                                    .filter(f -> f.toLowerCase().endsWith(".jar"))
+                                    .collect(Collectors.toList());
+                    jars.addAll(result);
+                } catch (IOException e) {
+                    throw new RuntimeException(
+                            String.format("failed to find jars from %s", jarFile), e);
+                }
             }
         }
         if (jars.isEmpty()) {
@@ -307,10 +320,17 @@ public class ClusterCommandLauncher
     private List<String> buildJavaCommandArgs(String classpath, String tfCommandLine) {
         // Build a command line to invoke a TF process.
         final List<String> cmdArgs = new ArrayList<>();
-        cmdArgs.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
+        final String javaHome = getEnvVar("JAVA_HOME", System.getProperty("java.home"));
+        final String javaPath = String.format("%s/bin/java", javaHome);
+        cmdArgs.add(new File(javaPath).getAbsolutePath());
         cmdArgs.add("-cp");
         cmdArgs.add(classpath);
         cmdArgs.addAll(mJvmOptions);
+
+        // Use separate tmp directory for the subprocess to prevent clashing with other tmp files.
+        File tmpDir = new File(mRootDir, "tmp");
+        tmpDir.mkdirs();
+        cmdArgs.add("-Djava.io.tmpdir=" + tmpDir.getAbsolutePath());
 
         // Pass Java properties as -D options.
         for (final Entry<String, String> entry : mJavaProperties.entrySet()) {
@@ -325,6 +345,7 @@ public class ClusterCommandLauncher
 
         final Integer shardCount = mConfiguration.getCommandOptions().getShardCount();
         final Integer shardIndex = mConfiguration.getCommandOptions().getShardIndex();
+
         if (shardCount != null && shardCount > 1) {
             cmdArgs.add("--shard-count");
             cmdArgs.add(Integer.toString(shardCount));

@@ -17,6 +17,7 @@
 package com.android.tradefed.device.metric;
 
 import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
+
 import static com.google.common.base.Verify.verifyNotNull;
 
 import com.android.tradefed.build.BuildRetrievalError;
@@ -25,12 +26,14 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.AdbRootElevator;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -48,6 +51,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -63,11 +68,14 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
         implements IConfigurationReceiver {
 
     private static final String NATIVE_COVERAGE_DEVICE_PATH = "/data/misc/trace";
-    private static final String COVERAGE_TAR_PATH =
-            String.format("%s/coverage.tar", NATIVE_COVERAGE_DEVICE_PATH);
 
     // Timeout for pulling coverage measurements from the device, in minutes.
     private static final long TIMEOUT = 20;
+
+    // Maximum number of profile files before writing the list to a file. Beyond this value,
+    // llvm-profdata will use the -f option to read the list from a file to prevent exceeding
+    // the command line length limit.
+    private static final int MAX_PROFILE_FILES = 100;
 
     // Finds .profraw files in /data/misc/trace and compresses those files only. Stores the full
     // path of the file on the device.
@@ -80,7 +88,6 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
     private static final String DELETE_COVERAGE_FILES_COMMAND =
             String.format("find %s -name '*.profraw' -delete", NATIVE_COVERAGE_DEVICE_PATH);
 
-    private IBuildInfo mBuildInfo;
     private IConfiguration mConfiguration;
     private IRunUtil mRunUtil = RunUtil.getDefault();
     private File mLlvmProfileTool;
@@ -92,12 +99,17 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
             IInvocationContext context, ITestInvocationListener listener) {
         super.init(context, listener);
 
-        if (isClangCoverageEnabled()) {
-            // Clear coverage measurements on the device.
-            try (AdbRootElevator adbRoot = new AdbRootElevator(getDevices().get(0))) {
-                getCoverageFlusher().resetCoverage();
-            } catch (DeviceNotAvailableException e) {
-                throw new RuntimeException(e);
+        verifyNotNull(mConfiguration);
+
+        if (isClangCoverageEnabled()
+                && mConfiguration.getCoverageOptions().shouldResetCoverageBeforeTest()) {
+            for (ITestDevice device : getRealDevices()) {
+                // Clear coverage measurements on the device.
+                try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
+                    getCoverageFlusher(device).resetCoverage();
+                } catch (DeviceNotAvailableException e) {
+                    throw new HarnessRuntimeException(e.getMessage(), e, e.getErrorId());
+                }
             }
         }
 
@@ -112,6 +124,9 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
     @VisibleForTesting
     public void setRunUtil(IRunUtil runUtil) {
         mRunUtil = runUtil;
+        if (mFlusher != null) {
+            mFlusher.setRunUtil(runUtil);
+        }
     }
 
     @Override
@@ -121,14 +136,15 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
             return;
         }
 
-        ITestDevice device = getRealDevices().get(0);
-        try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-            if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
-                getCoverageFlusher().forceCoverageFlush();
+        for (ITestDevice device : getRealDevices()) {
+            try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
+                if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
+                    getCoverageFlusher(device).forceCoverageFlush();
+                }
+                logCoverageMeasurement(device, getRunName());
+            } catch (DeviceNotAvailableException | IOException e) {
+                throw new RuntimeException(e);
             }
-            logCoverageMeasurement(device, getRunName());
-        } catch (DeviceNotAvailableException | IOException e) {
-            throw new RuntimeException(e);
         }
     }
 
@@ -143,6 +159,7 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
             throws DeviceNotAvailableException, IOException {
         File coverageTarGz = null;
         File untarDir = null;
+        File fileList = null;
         File profileTool = null;
         File indexedProfileFile = null;
         try {
@@ -160,14 +177,16 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
             }
 
             untarDir = TarUtil.extractTarGzipToTemp(coverageTarGz, "clang_coverage");
-            Set<String> rawProfileFiles = FileUtil.findFiles(untarDir, ".*\\.profraw");
+            Set<String> rawProfileFiles =
+                    FileUtil.findFiles(
+                            untarDir, mConfiguration.getCoverageOptions().getProfrawFilter());
 
             if (rawProfileFiles.isEmpty()) {
                 CLog.i("No Clang code coverage measurements found.");
                 return;
             }
 
-            CLog.i("Received Clang code coverage measurements: %s", rawProfileFiles);
+            CLog.i("Received %d Clang code coverage measurements.", rawProfileFiles.size());
 
             // Get the llvm-profdata tool from the build. This tool must match the same one used to
             // compile the build, otherwise this action will fail.
@@ -180,8 +199,18 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
             command.add("merge");
             command.add("-sparse");
 
-            // Add all .profraw files from untarDir.
-            command.addAll(rawProfileFiles);
+            if (rawProfileFiles.size() > MAX_PROFILE_FILES) {
+                // Write the measurement file list to a temporary file. This allows large numbers
+                // of measurements to not exceed the command line length limit.
+                fileList = FileUtil.createTempFile("clang_measurements", ".txt");
+                Files.write(fileList.toPath(), rawProfileFiles, Charset.defaultCharset());
+
+                // Add the file containing the list of .profraw files.
+                command.add("-f");
+                command.add(fileList.getAbsolutePath());
+            } else {
+                command.addAll(rawProfileFiles);
+            }
 
             // Create the output file.
             indexedProfileFile =
@@ -191,11 +220,15 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
 
             CommandResult result = mRunUtil.runTimedCmd(0, command.toArray(new String[0]));
             if (result.getStatus() != CommandStatus.SUCCESS) {
-                throw new IOException(
-                        "Failed to merge Clang profile data in "
-                                + command.toString()
-                                + " "
-                                + result.toString());
+                // Retry with -failure-mode=all to still be able to report some coverage.
+                command.add("-failure-mode=all");
+                result = mRunUtil.runTimedCmd(0, command.toArray(new String[0]));
+
+                if (result.getStatus() != CommandStatus.SUCCESS) {
+                    throw new HarnessRuntimeException(
+                            "Failed to merge Clang profile data:\n" + result.toString(),
+                            InfraErrorIdentifier.CODE_COVERAGE_ERROR);
+                }
             }
 
             try (FileInputStreamSource source =
@@ -207,6 +240,7 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
             device.executeShellCommand(DELETE_COVERAGE_FILES_COMMAND);
             FileUtil.deleteFile(coverageTarGz);
             FileUtil.recursiveDelete(untarDir);
+            FileUtil.deleteFile(fileList);
             FileUtil.recursiveDelete(mLlvmProfileTool);
             FileUtil.deleteFile(indexedProfileFile);
         }
@@ -217,13 +251,13 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
      *
      * @return a NativeCodeCoverageFlusher
      */
-    private NativeCodeCoverageFlusher getCoverageFlusher() {
+    private NativeCodeCoverageFlusher getCoverageFlusher(ITestDevice device) {
         if (mFlusher == null) {
             verifyNotNull(mConfiguration);
             mFlusher =
                     new NativeCodeCoverageFlusher(
-                            getDevices().get(0),
-                            mConfiguration.getCoverageOptions().getCoverageProcesses());
+                            device, mConfiguration.getCoverageOptions().getCoverageProcesses());
+            mFlusher.setRunUtil(mRunUtil);
         }
         return mFlusher;
     }
@@ -246,10 +280,22 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
         if (configurationTool != null) {
             return configurationTool;
         }
+        if (mLlvmProfileTool != null && mLlvmProfileTool.exists()) {
+            return mLlvmProfileTool;
+        }
 
         // Otherwise, try to download llvm-profdata.zip from the build and cache it.
         File profileToolZip = null;
+        for (IBuildInfo info : getBuildInfos()) {
+            if (info.getFile("llvm-profdata.zip") != null) {
+                profileToolZip = info.getFile("llvm-profdata.zip");
+                mLlvmProfileTool = ZipUtil.extractZipToTemp(profileToolZip, "llvm-profdata");
+                return mLlvmProfileTool;
+            }
+        }
         try {
+            // TODO: Delete this, we shouldn't have re-entry in the build
+            // provider this can cause quite a lot of overhead.
             IBuildInfo buildInfo = mConfiguration.getBuildProvider().getBuild();
             profileToolZip =
                     verifyNotNull(

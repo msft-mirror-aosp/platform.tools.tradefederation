@@ -22,12 +22,14 @@ import com.android.tradefed.build.DeviceBuildInfo;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -136,7 +138,18 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         } finally {
             // Flush before the log to ensure order of events
             receiver.flush();
+            try {
+                // Add a small extra log to the output for verification sake.
+                FileUtil.writeToFile(
+                        String.format(
+                                "\nBinary '%s' still exists: %s", gtestFile, gtestFile.exists()),
+                        stdout,
+                        true);
+            } catch (IOException e) {
+                // Ignore
+            }
             if (stdout != null && stdout.length() > 0L) {
+
                 try (FileInputStreamSource source = new FileInputStreamSource(stdout)) {
                     logger.testLog(
                             String.format("%s-output", gtestFile.getName()),
@@ -202,8 +215,9 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         // TODO: Switch throwing exceptions to use ITestInvocation.testRunFailed
         switch (testResult.getStatus()) {
             case TIMED_OUT:
-                throw new RuntimeException(
-                        String.format("Command run timed out after %d ms", maxTestTimeMs));
+                throw new HarnessRuntimeException(
+                        String.format("Command run timed out after %d ms", maxTestTimeMs),
+                        TestErrorIdentifier.TEST_BINARY_TIMED_OUT);
             case EXCEPTION:
                 throw new RuntimeException("Command run failed with exception");
             case FAILED:
@@ -214,6 +228,7 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
                     // No need to handle it as the parser would have reported it already.
                     CLog.e("Command run failed with exit code %s", exitCode);
                 }
+                break;
             default:
                 break;
         }

@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
 java_library_host {
     name: "tradefed-protos",
     // Restrict visibility to only those targets that need to access it.
@@ -30,35 +34,73 @@ java_library_host {
         include_dirs: ["external/protobuf/src"],
         type: "full",
     },
-    static_libs: [
-        "platformprotos",
-        "asuite_proto_java",
-    ],
 }
 
-java_genrule_host {
-    name: "lab-resource-grpc-gen",
+java_library_host {
+    name: "lab-resource-grpc",
     srcs: [
         "proto/monitoring/server/lab_resource.proto",
     ],
-    tools: [
-        "aprotoc",
-        "protoc-gen-grpc-java-plugin",
-        "soong_zip",
-     ],
-     cmd: "$(location aprotoc) -Iexternal/protobuf/src" +
-        " -Itools/tradefederation/core/proto/monitoring/server" +
-        " --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-java-plugin) $(in)" +
-        " --grpc_out=$(genDir) && $(location soong_zip) -o $(out) -C $(genDir) -D $(genDir)",
-     out: ["tradefed-grpc.srcjar"],
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        plugin: "grpc-java-plugin",
+    },
+    libs: [
+        "tradefed-protos",
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
+    ],
+}
+
+java_library_host {
+    name: "tradefed-service-grpc-lib",
+    visibility: [
+        "//tools/tradefederation/core",
+    ],
+    srcs: [
+        "proto/feature/tradefed_service.proto",
+    ],
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        plugin: "grpc-java-plugin",
+    },
+    libs: [
+        "tradefed-protos",
+    ],
+    static_libs: [
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
+    ],
+}
+
+java_library_host {
+    name: "tradefed-invocation-grpc",
+    srcs: [
+        "proto/invocation/invocation_manager.proto",
+    ],
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        plugin: "grpc-java-plugin",
+    },
+    libs: [
+        "tradefed-protos",
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
+    ],
 }
 
 // Main Target to build tradefed jar
-java_library_host {
+tradefed_java_library_host {
     name: "tradefed",
     defaults: ["tradefed_defaults"],
     java_resource_dirs: [
         "res",
+    ],
+    java_resources: [
+        ":TradefedContentProvider",
     ],
     static_libs: [
         "tradefed-lib-core",
@@ -92,7 +134,6 @@ java_library_host {
     srcs: [
         "src/**/*.java",
         "global_configuration/**/*.java",
-        ":lab-resource-grpc-gen",
     ],
     static_libs: [
         "tradefed-common-util",
@@ -100,31 +141,34 @@ java_library_host {
         "tradefed-result-interfaces",
         "tradefed-device-build-interfaces",
         "tradefed-invocation-interfaces",
+        "tradefed-external-dependencies",
+        "tradefed-service-grpc-lib",
+        "lab-resource-grpc",
+        "tradefed-invocation-grpc",
         "protobuf-java-util-prebuilt-jar",
         "aoa-helper",
         "error_prone_annotations-2.0.18",
-        "google-api-java-client-min-repackaged",
+        "google-api-java-client-assembly",
+        "auto_value_annotations",
         "google-api-services-compute",
         "google-api-services-storage",
         "gson-prebuilt-jar",
         "guice",
         "jacoco-cli",
-        "jline-1.0",
+        "jline",
         "junit-params",
         "kxml2-2.3.0",
         "libprotobuf-java-full",
+        // TODO(b/1859290570: Delete platform-test-annotations dep
         "platform-test-annotations",
         "snakeyaml",
         "tf-remote-client",
         "tradefed-protos",
         "tradefed-isolation-protos",
         "tradefed-lite",
-        "guava",
         "guava-testlib",
-        "grpc-java",
         "grpc-java-testing",
         "grpc-java-netty-shaded",
-        "javax-annotation-api-prebuilt-host-jar",
         "opencensus-java-api",
         "opencensus-java-contrib-grpc-metrics",
     ],
@@ -148,7 +192,16 @@ tradefed_doc_stubs_args = " -hide UnresolvedLink -hide HiddenSuperclass " +
 droidstubs_host {
     name: "tradefed-doc-stubs",
     srcs: [
+        // Keep in alphabetical order
+        "common_util/**/*.java",
+        "device_build_interfaces/**/*.java",
+        "global_configuration/**/*.java",
+        "invocation_interfaces/**/*.java",
+        "lite/**/*.java",
+        "remote/**/*.java",
         "src/**/*.java",
+        "test_framework/**/*.java",
+        "test_result_interfaces/**/*.java",
     ],
     libs: [
         "loganalysis",
@@ -164,6 +217,7 @@ droiddoc_host {
         ":tradefed-doc-stubs",
     ],
     libs: [
+        "kotlin-annotations",
         "loganalysis",
         "tradefed",
     ],
@@ -202,9 +256,4 @@ sh_binary_host {
 sh_binary_host {
     name: "run_tf_cmd.sh",
     src: "run_tf_cmd.sh",
-}
-
-sh_binary_host {
-    name: "atest_tradefed.sh",
-    src: "atest_tradefed.sh",
 }

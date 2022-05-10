@@ -1,4 +1,3 @@
-package com.android.tradefed.util;
 /*
  * Copyright (C) 2010 The Android Open Source Project
  *
@@ -14,13 +13,15 @@ package com.android.tradefed.util;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.android.tradefed.util;
 
-
-import com.android.ddmlib.Log;
 import com.android.tradefed.command.FatalHostError;
 import com.android.tradefed.config.Option;
+import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
 
 import java.io.BufferedInputStream;
@@ -39,6 +40,7 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystemException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
@@ -51,14 +53,13 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import java.util.zip.ZipFile;
-
 /**
  * A helper class for file related operations
  */
 public class FileUtil {
 
-    private static final String LOG_TAG = "FileUtil";
     /**
      * The minimum allowed disk space in megabytes. File creation methods will throw
      * {@link LowDiskSpaceException} if the usable disk space in desired partition is less than
@@ -106,13 +107,39 @@ public class FileUtil {
     public static class LowDiskSpaceException extends FatalHostError {
 
         LowDiskSpaceException(String msg, Throwable cause) {
-            super(msg, cause);
+            super(msg, cause, InfraErrorIdentifier.LAB_HOST_FILESYSTEM_FULL);
         }
 
         LowDiskSpaceException(String msg) {
-            super(msg);
+            super(msg, InfraErrorIdentifier.LAB_HOST_FILESYSTEM_FULL);
         }
 
+    }
+
+    /** Harness exception that helps carrying file issues. */
+    public static class HarnessIOException extends IOException implements IHarnessException {
+
+        private ErrorIdentifier mErrorId;
+        private String mOrigin;
+
+        HarnessIOException(Throwable cause, ErrorIdentifier errorId) {
+            super(cause);
+            mErrorId = errorId;
+            mOrigin =
+                    StackWalker.getInstance(java.lang.StackWalker.Option.RETAIN_CLASS_REFERENCE)
+                            .getCallerClass()
+                            .getCanonicalName();
+        }
+
+        @Override
+        public ErrorIdentifier getErrorId() {
+            return mErrorId;
+        }
+
+        @Override
+        public String getOrigin() {
+            return mOrigin;
+        }
     }
 
     /**
@@ -131,7 +158,7 @@ public class FileUtil {
             // parent doesn't exist.  recurse upward, which should both mkdir and chmod
             if (!mkdirsRWX(parent)) {
                 // Couldn't mkdir parent, fail
-                Log.w(LOG_TAG, String.format("Failed to mkdir parent dir %s.", parent));
+                CLog.w("Failed to mkdir parent dir %s.", parent);
                 return false;
             }
         }
@@ -141,7 +168,7 @@ public class FileUtil {
             // file should exist.  Try chmod and complain if that fails, but keep going
             boolean setPerms = chmodGroupRWX(file);
             if (!setPerms) {
-                Log.w(LOG_TAG, String.format("Failed to set dir %s to be group accessible.", file));
+                CLog.w("Failed to set dir %s to be group accessible.", file);
             }
         }
 
@@ -200,12 +227,11 @@ public class FileUtil {
             if (chmod(file, "ug+rw")) {
                 return true;
             } else {
-                Log.d(LOG_TAG, String.format("Failed chmod on %s", file.getAbsolutePath()));
+                CLog.d("Failed chmod on %s", file.getAbsolutePath());
                 return false;
             }
         } else {
-            Log.d(LOG_TAG, String.format("chmod not available; "
-                    + "attempting to set %s globally RW", file.getAbsolutePath()));
+            CLog.d("chmod not available; attempting to set %s globally RW", file.getAbsolutePath());
             return file.setWritable(true, false /* false == writable for all */) &&
                     file.setReadable(true, false /* false == readable for all */);
         }
@@ -225,12 +251,13 @@ public class FileUtil {
             if (chmod(file, "ug+rwx")) {
                 return true;
             } else {
-                Log.d(LOG_TAG, String.format("Failed chmod on %s", file.getAbsolutePath()));
+                CLog.d("Failed chmod on %s", file.getAbsolutePath());
                 return false;
             }
         } else {
-            Log.d(LOG_TAG, String.format("chmod not available; "
-                    + "attempting to set %s globally RWX", file.getAbsolutePath()));
+            CLog.d(
+                    "chmod not available; attempting to set %s globally RWX",
+                    file.getAbsolutePath());
             return file.setExecutable(true, false /* false == executable for all */) &&
                     file.setWritable(true, false /* false == writable for all */) &&
                     file.setReadable(true, false /* false == readable for all */);
@@ -243,8 +270,10 @@ public class FileUtil {
     protected static boolean chmodExists() {
         // Silence the scary process exception when chmod is missing, we will log instead.
         CommandResult result = RunUtil.getDefault().runTimedCmdSilently(10 * 1000, sChmod);
-        // Exit code 127 means “command not found”.
-        if (result.getExitCode() != null && result.getExitCode() != 127) {
+        // Exit code 127 means “command not found”. 88 is our internal error
+        if (result.getExitCode() != null
+                && result.getExitCode() != 127
+                && result.getExitCode() != 88) {
             return true;
         }
         CLog.w("Chmod is not supported by this OS.");
@@ -314,7 +343,7 @@ public class FileUtil {
     /**
      * Helper function to create a named directory inside your temp folder.
      * <p/>
-     * This directory will not have it's name randomized. If the directory already exists it will
+     * This directory will not have its name randomized. If the directory already exists it will
      * be returned.
      *
      * @param name The name of the directory to create in your tmp folder.
@@ -322,6 +351,30 @@ public class FileUtil {
      */
     public static File createNamedTempDir(String name) throws IOException {
         File namedTmpDir = new File(System.getProperty("java.io.tmpdir"), name);
+        if (!namedTmpDir.exists()) {
+            createDir(namedTmpDir);
+        }
+        return namedTmpDir;
+    }
+
+    /**
+     * Helper function to create a named directory inside a foldere.
+     *
+     * <p>This directory will not have its name randomized. If the directory already exists it will
+     * be returned.
+     *
+     * @param parentDir the directory where to create the dir. If null, will be in /tmp
+     * @param name The name of the directory to create in the parent folder
+     * @return the created directory
+     */
+    public static File createNamedTempDir(File parentDir, String name) throws IOException {
+        String parentPath;
+        if (parentDir == null) {
+            parentPath = System.getProperty("java.io.tmpdir");
+        } else {
+            parentPath = parentDir.getAbsolutePath();
+        }
+        File namedTmpDir = new File(parentPath, name);
         if (!namedTmpDir.exists()) {
             createDir(namedTmpDir);
         }
@@ -387,7 +440,11 @@ public class FileUtil {
             CLog.d("Creating temp file at %s with prefix \"%s\" suffix \"%s\"",
                     parentDir.getAbsolutePath(), prefix, suffix);
         }
-        returnFile = File.createTempFile(prefix, suffix, parentDir);
+        try {
+            returnFile = File.createTempFile(prefix, suffix, parentDir);
+        } catch (IOException e) {
+            throw new HarnessIOException(e, InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
+        }
         verifyDiskSpace(returnFile);
         return returnFile;
     }
@@ -474,6 +531,28 @@ public class FileUtil {
      */
     public static void recursiveHardlink(File sourceDir, File destDir, boolean ignoreExistingFile)
             throws IOException {
+        recursiveHardlink(sourceDir, destDir, ignoreExistingFile, new HashSet<>());
+    }
+
+    /**
+     * Recursively hardlink folder contents.
+     *
+     * <p>Only supports copying of files and directories - symlinks are not copied. If the
+     * destination directory does not exist, it will be created.
+     *
+     * @param sourceDir the folder that contains the files to copy
+     * @param destDir the destination folder
+     * @param ignoreExistingFile If True and the file being linked already exists, skip the
+     *     exception.
+     * @param copyInsteadofHardlink Set of files that needs to be copied instead of linked.
+     * @throws IOException
+     */
+    public static void recursiveHardlink(
+            File sourceDir,
+            File destDir,
+            boolean ignoreExistingFile,
+            Set<String> copyInsteadofHardlink)
+            throws IOException {
         if (!destDir.isDirectory() && !destDir.mkdir()) {
             throw new IOException(String.format("Could not create directory %s",
                     destDir.getAbsolutePath()));
@@ -483,7 +562,11 @@ public class FileUtil {
             if (childFile.isDirectory()) {
                 recursiveHardlink(childFile, destChild, ignoreExistingFile);
             } else if (childFile.isFile()) {
-                hardlinkFile(childFile, destChild, ignoreExistingFile);
+                if (copyInsteadofHardlink.contains(childFile.getName())) {
+                    FileUtil.copyFile(childFile, destChild);
+                } else {
+                    hardlinkFile(childFile, destChild, ignoreExistingFile);
+                }
             }
         }
     }
@@ -868,6 +951,46 @@ public class FileUtil {
     }
 
     /**
+     * Get all file paths of files in the given directory with name matching the given filter and
+     * also filter the found file by abi arch if abi is not null. Return the first match file found.
+     *
+     * @param fileName {@link String} of the regex to match file path
+     * @param abi {@link IAbi} object of the abi to match the target
+     * @param dirs a varargs array of {@link File} object of the directories to search for files
+     * @return the {@link File} or <code>null</code> if it could not be found
+     */
+    public static File findFile(String fileName, IAbi abi, File... dirs) throws IOException {
+        for (File dir : dirs) {
+            Set<File> testSrcs = findFilesObject(dir, fileName);
+            if (testSrcs.isEmpty()) {
+                continue;
+            }
+            Iterator<File> itr = testSrcs.iterator();
+            if (abi == null) {
+                // Return the first candidate be found.
+                return itr.next();
+            }
+            while (itr.hasNext()) {
+                File matchFile = itr.next();
+                if (matchFile
+                        .getParentFile()
+                        .getName()
+                        .equals(AbiUtils.getArchForAbi(abi.getName()))) {
+                    return matchFile;
+                }
+            }
+        }
+        // Scan dirs again without abi rule.
+        for (File dir : dirs) {
+            File matchFile = findFile(dir, fileName);
+            if (matchFile != null && matchFile.exists()) {
+                return matchFile;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Recursively find all directories under the given {@code rootDir}
      *
      * @param rootDir the root directory to search in
@@ -1073,11 +1196,14 @@ public class FileUtil {
      *
      * @param file
      * @return md5 of the file
-     * @throws IOException
      */
-    public static String calculateMd5(File file) throws IOException {
-        FileInputStream inputSource = new FileInputStream(file);
-        return StreamUtil.calculateMd5(inputSource);
+    public static String calculateMd5(File file) {
+        try (FileInputStream inputSource = new FileInputStream(file)) {
+            return StreamUtil.calculateMd5(inputSource);
+        } catch (IOException e) {
+            CLog.e(e);
+        }
+        return "-1";
     }
 
     /**
@@ -1085,11 +1211,14 @@ public class FileUtil {
      *
      * @param file
      * @return md5 of the file
-     * @throws IOException
      */
-    public static String calculateBase64Md5(File file) throws IOException {
-        FileInputStream inputSource = new FileInputStream(file);
-        return StreamUtil.calculateBase64Md5(inputSource);
+    public static String calculateBase64Md5(File file) {
+        try (FileInputStream inputSource = new FileInputStream(file)) {
+            return StreamUtil.calculateBase64Md5(inputSource);
+        } catch (IOException e) {
+            CLog.e(e);
+        }
+        return "-1";
     }
 
     /**
@@ -1115,50 +1244,12 @@ public class FileUtil {
      */
     public static Set<String> findFiles(File dir, String filter) throws IOException {
         Set<String> files = new HashSet<>();
-        Files.walk(Paths.get(dir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)
-                .filter(path -> path.getFileName().toString().matches(filter))
-                .forEach(path -> files.add(path.toString()));
+        try (Stream<Path> stream =
+                Files.walk(Paths.get(dir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)) {
+            stream.filter(path -> path.getFileName().toString().matches(filter))
+                    .forEach(path -> files.add(path.toString()));
+        }
         return files;
-    }
-
-    /**
-     * Get all file paths of files in the given directory with name matching the given filter and
-     * also filter the found file by abi arch if abi is not null. Return the first match file found.
-     *
-     * @param fileName {@link String} of the regex to match file path
-     * @param abi {@link IAbi} object of the abi to match the target
-     * @param dirs a varargs array of {@link File} object of the directories to search for files
-     * @return the {@link File} or <code>null</code> if it could not be found
-     */
-    public static File findFile(String fileName, IAbi abi, File... dirs) throws IOException {
-        for (File dir : dirs) {
-            Set<File> testSrcs = findFilesObject(dir, fileName);
-            if (testSrcs.isEmpty()) {
-                continue;
-            }
-            Iterator<File> itr = testSrcs.iterator();
-            if (abi == null) {
-                // Return the first candidate be found.
-                return itr.next();
-            }
-            while (itr.hasNext()) {
-                File matchFile = itr.next();
-                if (matchFile
-                        .getParentFile()
-                        .getName()
-                        .equals(AbiUtils.getArchForAbi(abi.getName()))) {
-                    return matchFile;
-                }
-            }
-        }
-        // Scan dirs again without abi rule.
-        for (File dir : dirs) {
-            File matchFile = findFile(dir, fileName);
-            if (matchFile != null && matchFile.exists()) {
-                return matchFile;
-            }
-        }
-        return null;
     }
 
     /**
@@ -1195,9 +1286,11 @@ public class FileUtil {
      */
     public static Set<File> findFilesObject(File dir, String filter) throws IOException {
         Set<File> files = new LinkedHashSet<>();
-        Files.walk(Paths.get(dir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)
-                .filter(path -> path.getFileName().toString().matches(filter))
-                .forEach(path -> files.add(path.toFile()));
+        try (Stream<Path> stream =
+                Files.walk(Paths.get(dir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)) {
+            stream.filter(path -> path.getFileName().toString().matches(filter))
+                    .forEach(path -> files.add(path.toFile()));
+        }
         return files;
     }
 
@@ -1250,5 +1343,29 @@ public class FileUtil {
                 resourceStream.close();
             }
         }
+    }
+
+    /** Returns the size reported by the directory. */
+    public static Long sizeOfDirectory(File directory) {
+        if (directory == null || !directory.isDirectory()) {
+            return null;
+        }
+        Path folder = directory.getAbsoluteFile().toPath();
+        try {
+            long size = 0;
+            try (Stream<Path> stream = Files.walk(folder, FileVisitOption.FOLLOW_LINKS)) {
+                size =
+                        stream.filter(p -> p.toFile().isFile())
+                                .mapToLong(p -> p.toFile().length())
+                                .sum();
+            }
+            CLog.d(
+                    "Directory '%s' has size: %s. Contains: %s",
+                    directory, size, Arrays.asList(directory.list()));
+            return size;
+        } catch (IOException | RuntimeException e) {
+            CLog.e(e);
+        }
+        return null;
     }
 }

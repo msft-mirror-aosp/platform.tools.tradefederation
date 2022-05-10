@@ -31,7 +31,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
 
 /**
  * Host options holder class.
@@ -52,6 +54,10 @@ public class HostOptions implements IHostOptions {
     )
     private Integer mConcurrentDownloadLimit = null;
 
+    @Option(name = "concurrent-limits", description =
+            "The maximum number of concurrent actions of a given type.")
+    private Map<PermitLimitType, Integer> mConcurrentLimit = new HashMap<>();
+
     @Option(
         name = "fastboot-tmpdir",
         description = "The location of temporary directory used by fastboot"
@@ -61,7 +67,7 @@ public class HostOptions implements IHostOptions {
     @Option(
             name = "enable-fastbootd-mode",
             description = "Feature flag to enable the support for fastbootd.")
-    private boolean mEnableFastbootdMode = false;
+    private boolean mEnableFastbootdMode = true;
 
     @Option(name = "download-cache-dir", description = "the directory for caching downloaded "
             + "flashing files. Should be on the same filesystem as java.io.tmpdir.  Consider "
@@ -97,14 +103,28 @@ public class HostOptions implements IHostOptions {
     private Set<String> mKnownGceDeviceIpPool = new HashSet<>();
 
     @Option(
+            name = "known-remote-device-ip-pool",
+            description =
+                    "known remote device available via ip associated with the "
+                            + "remote-device placeholder.")
+    private Set<String> mKnownRemoteDeviceIpPool = new HashSet<>();
+
+    @Option(
             name = "use-zip64-in-partial-download",
             description = "Whether to use zip64 format in partial download.")
-    private boolean mUseZip64InPartialDownload = false;
+    private boolean mUseZip64InPartialDownload = true;
 
     @Option(
             name = "use-network-interface",
             description = "The network interface used to connect to test devices.")
     private String mNetworkInterface = null;
+
+    @Option(
+            name = "preconfigured-virtual-device-pool",
+            description = "Preconfigured virtual device pool. (Value format: $hostname:$user.)")
+    private List<String> mPreconfiguredVirtualDevicePool = new ArrayList<>();
+
+    private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
 
     /** {@inheritDoc} */
     @Override
@@ -174,6 +194,18 @@ public class HostOptions implements IHostOptions {
 
     /** {@inheritDoc} */
     @Override
+    public Set<String> getKnownRemoteDeviceIpPool() {
+        return new HashSet<>(mKnownRemoteDeviceIpPool);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Set<String> getKnownPreconfigureVirtualDevicePool() {
+        return new HashSet<>(mPreconfiguredVirtualDevicePool);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean getUseZip64InPartialDownload() {
         return mUseZip64InPartialDownload;
     }
@@ -209,5 +241,58 @@ public class HostOptions implements IHostOptions {
             CLog.w(e);
         }
         return null;
+    }
+
+    @Override
+    public void initConcurrentLocks() {
+        // Do not reinit if it has been called before
+        if (!mConcurrentLocks.isEmpty()) {
+            return;
+        }
+        // Backfill flasher & download limit from their dedicated option
+        if (!mConcurrentLimit.containsKey(PermitLimitType.CONCURRENT_FLASHER)) {
+            mConcurrentLimit.put(PermitLimitType.CONCURRENT_FLASHER, mConcurrentFlasherLimit);
+        }
+        if (!mConcurrentLimit.containsKey(PermitLimitType.CONCURRENT_DOWNLOAD)) {
+            mConcurrentLimit.put(PermitLimitType.CONCURRENT_DOWNLOAD, mConcurrentDownloadLimit);
+        }
+
+        for (Entry<PermitLimitType, Integer> limits : mConcurrentLimit.entrySet()) {
+            if (limits.getValue() == null) {
+                continue;
+            }
+            mConcurrentLocks.put(limits.getKey(),
+                    new Semaphore(limits.getValue(), true /* fair */));
+        }
+    }
+
+    @Override
+    public void takePermit(PermitLimitType type) {
+        if (!mConcurrentLocks.containsKey(type)) {
+            return;
+        }
+        synchronized (mConcurrentLocks.get(type)) {
+            CLog.i(
+                    "Requesting a '%s' permit out of the max limit of %s. Current queue "
+                            + "length: %s",
+                    type, mConcurrentLimit.get(type), mConcurrentLocks.get(type).getQueueLength());
+            mConcurrentLocks.get(type).acquireUninterruptibly();
+        }
+    }
+
+    @Override
+    public void returnPermit(PermitLimitType type) {
+        if (!mConcurrentLocks.containsKey(type)) {
+            return;
+        }
+        mConcurrentLocks.get(type).release();
+    }
+
+    @Override
+    public Integer getAvailablePermits(PermitLimitType type) {
+        if (!mConcurrentLocks.containsKey(type)) {
+            return Integer.MAX_VALUE;
+        }
+        return mConcurrentLocks.get(type).availablePermits();
     }
 }

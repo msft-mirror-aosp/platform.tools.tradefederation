@@ -124,6 +124,20 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
         });
     }
 
+    private IManagedTestDevice find(IMatcher<IManagedTestDevice> m) {
+        mListLock.lock();
+        try {
+            for (IManagedTestDevice d : mList) {
+                if (m.matches(d)) {
+                    return d;
+                }
+            }
+        } finally {
+            mListLock.unlock();
+        }
+        return null;
+    }
+
     private boolean isValidDeviceSerial(String serial) {
         return serial.length() > 1 && !serial.contains("?");
     }
@@ -180,20 +194,6 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
                 if (m.matches(d)) {
                     iterator.remove();
                     mList.add(d);
-                    return d;
-                }
-            }
-        } finally {
-            mListLock.unlock();
-        }
-        return null;
-    }
-
-    private IManagedTestDevice find(IMatcher<IManagedTestDevice> m) {
-        mListLock.lock();
-        try {
-            for (IManagedTestDevice d : mList) {
-                if (m.matches(d)) {
                     return d;
                 }
             }
