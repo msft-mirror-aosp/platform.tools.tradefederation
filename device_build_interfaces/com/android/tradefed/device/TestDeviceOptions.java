@@ -18,6 +18,7 @@ package com.android.tradefed.device;
 import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.util.ArrayUtil;
+import com.android.tradefed.util.MultiMap;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -45,6 +46,13 @@ public class TestDeviceOptions {
         EMULATOR,
         /** Chrome OS VM (betty) */
         CHEEPS,
+    }
+
+    /** The size of the host which Oxygen virtual device will be running on. */
+    private enum DeviceSize {
+        STANDARD,
+        LARGE,
+        EXTRA_LARGE,
     }
 
     public static final int DEFAULT_ADB_PORT = 5555;
@@ -84,6 +92,13 @@ public class TestDeviceOptions {
             "time in ms to wait for a device to reboot to full system.")
     private int mRebootTimeout = 2 * 60 * 1000;
 
+    @Option(
+            name = "device-fastboot-binary",
+            description =
+                    "The fastboot binary to use for the test session. If null, will use "
+                            + "the same fastboot binary as DeviceManager.")
+    private File mFastbootBinary = null;
+
     @Option(name = "use-fastboot-erase", description =
             "use fastboot erase instead of fastboot format to wipe partitions")
     private boolean mUseFastbootErase = false;
@@ -104,9 +119,10 @@ public class TestDeviceOptions {
             description = "default URL to be used for connectivity checks.")
     private String mConnCheckUrl = "http://www.google.com";
 
-    @Option(name = "wifi-attempts",
+    @Option(
+            name = "wifi-attempts",
             description = "default number of attempts to connect to wifi network.")
-    private int mWifiAttempts = 5;
+    private int mWifiAttempts = 4;
 
     @Option(name = "wifi-retry-wait-time",
             description = "the base wait time in ms between wifi connect retries. "
@@ -147,6 +163,13 @@ public class TestDeviceOptions {
                         + "This results in falling back to standard adb push/pull."
     )
     private boolean mUseContentProvider = true;
+
+    @Option(
+            name = "exit-status-workaround",
+            description =
+                    "On older devices that do not support ADB shell v2, use a workaround "
+                            + "to get the exit status of shell commands")
+    private boolean mExitStatusWorkaround = false;
 
     // ====================== Options Related to Virtual Devices ======================
     @Option(
@@ -194,6 +217,14 @@ public class TestDeviceOptions {
     )
     private List<String> mGceDriverParams = new ArrayList<>();
 
+    @Option(
+            name = "gce-driver-file-param",
+            description =
+                    "Additional file paths to pass to gce driver as parameters. For example, "
+                            + "local-image=/path/to/image is converted to "
+                            + "--local-image /path/to/image.")
+    private MultiMap<String, File> mGceDriverFileParams = new MultiMap<>();
+
     @Deprecated
     @Option(
         name = "gce-driver-build-id-param",
@@ -218,6 +249,36 @@ public class TestDeviceOptions {
                     "Whether or not to skip the GCE tear down. Skipping tear down will "
                             + "result in the instance being left.")
     private boolean mSkipTearDown = false;
+
+    @Option(
+            name = "use-oxygen",
+            description = "Whether or not to use virtual devices created by Oxygen.")
+    private boolean mUseOxygen = false;
+
+    @Option(
+            name = "use-oxygen-client",
+            description = "Whether or not to use Oxygen client tool to create virtual devices.")
+    private boolean mUseOxygenClient = false;
+
+    @Option(name = "oxygen-target-region", description = "Oxygen device target region.")
+    private String mOxygenTargetRegion = "us-west";
+
+    @Option(
+            name = "oxygen-lease-length",
+            description = "Oxygen device lease length.",
+            isTimeVal = true)
+    private long mOxygenLeaseLength = 600 * 60 * 1000;
+
+    @Option(
+            name = "oxygen-device-size",
+            description = "The size of the host which Oxygen virtual device will be running on.")
+    private DeviceSize mOxygenDeviceSize = DeviceSize.STANDARD;
+
+    @Option(name = "oxygen-service-address", description = "Oxygen service address.")
+    private String mOxygenServiceAddress = null;
+
+    @Option(name = "oxygen-accounting-user", description = "Oxygen account user.")
+    private String mOxygenAccountingUser = null;
 
     @Option(
             name = "wait-gce-teardown",
@@ -260,6 +321,21 @@ public class TestDeviceOptions {
     )
     private String mCrosPassword = null;
 
+    @Option(
+            name = "invocation-attribute-to-metadata",
+            description =
+                    "Pass the named attribute found in invocation context to GCE driver (acloud)"
+                            + " as metadata to be associated with the GCE VM. e.g. if invocation"
+                            + " context has form_factor=phone, it'll be added to GCE VM as metadata"
+                            + " form_factor=phone.")
+    private List<String> mInvocationAttributeToMetadata = new ArrayList<>();
+
+    @Option(
+            name = "gce-extra-files",
+            description =
+                    "Path of extra files need to upload GCE instance during Acloud create."
+                            + "Key is local file, value is GCE destination path.")
+    private MultiMap<File, String> mGceExtraFiles = new MultiMap<>();
     // END ====================== Options Related to Virtual Devices ======================
 
     // Option related to Remote Device only
@@ -362,6 +438,11 @@ public class TestDeviceOptions {
      */
     public void setUseFastbootErase(boolean useFastbootErase) {
         mUseFastbootErase = useFastbootErase;
+    }
+
+    /** Returns a specified fastboot binary to be used. if null, use the DeviceManager one. */
+    public File getFastbootBinary() {
+        return mFastbootBinary;
     }
 
     /**
@@ -508,6 +589,14 @@ public class TestDeviceOptions {
         return mUseContentProvider;
     }
 
+    /**
+     * Returns whether to use a workaround to get shell exit status on older devices without shell
+     * v2.
+     */
+    public boolean useExitStatusWorkaround() {
+        return mExitStatusWorkaround;
+    }
+
     // =========================== Getter and Setter for Virtual Devices
     /** Return the Gce Avd timeout for the instance to come online. */
     public long getGceCmdTimeout() {
@@ -588,6 +677,11 @@ public class TestDeviceOptions {
         mGceDriverParams.add(param);
     }
 
+    /** Return the additional file paths as GCE driver parameters provided via option. */
+    public MultiMap<String, File> getGceDriverFileParams() {
+        return mGceDriverFileParams;
+    }
+
     /** Set the GCE driver parameter that should be paired with the build id from build info */
     public void setGceDriverBuildIdParam(String gceDriverBuildIdParam) {
         mGceDriverBuildIdParam = gceDriverBuildIdParam;
@@ -626,14 +720,29 @@ public class TestDeviceOptions {
         return mWaitForGceTearDown;
     }
 
-    /** Returns the instance type of GCE virtual device that should be created */
+    /** Returns true if use Oxygen to create virtual devices. False otherwise. */
+    public boolean useOxygen() {
+        return mUseOxygen;
+    }
+
+    /** Returns the instance user of GCE virtual device that should be created */
     public String getInstanceUser() {
         return mInstanceUser;
+    }
+
+    /** Set the instance user of GCE virtual device that should be created. */
+    public void setInstanceUser(String instanceUser) {
+        mInstanceUser = instanceUser;
     }
 
     /** Returns the remote port in instance that the adb server listens to */
     public int getRemoteAdbPort() {
         return mRemoteAdbPort;
+    }
+
+    /** Set the remote port in instance that the adb server listens to */
+    public void setRemoteAdbPort(int remoteAdbPort) {
+        mRemoteAdbPort = remoteAdbPort;
     }
 
     /** Returns the base image name to be used for the current instance */
@@ -659,6 +768,16 @@ public class TestDeviceOptions {
     /** The file pointing to the directory of the Tradefed version to be pushed to the remote. */
     public File getRemoteTf() {
         return mRemoteTFVersion;
+    }
+
+    /** Return the extra files need to upload to GCE during acloud create. */
+    public MultiMap<File, String> getExtraFiles() {
+        return mGceExtraFiles;
+    }
+
+    /** Set the extra files need to upload to GCE during acloud create. */
+    public void setExtraFiles(MultiMap<File, String> extraFiles) {
+        mGceExtraFiles = extraFiles;
     }
 
     public static String getCreateCommandByInstanceType(InstanceType type) {
@@ -687,4 +806,40 @@ public class TestDeviceOptions {
         }
         return Collections.emptyList();
     }
+
+    /** Returns true if we should block on GCE tear down completion before proceeding. */
+    public List<String> getInvocationAttributeToMetadata() {
+        return mInvocationAttributeToMetadata;
+    }
+
+    /** Returns true if we want TradeFed directly call Oxygen to lease a device. */
+    public boolean useOxygenProxy() {
+        return mUseOxygenClient;
+    }
+
+    /** Returns the target region of the Oxygen device. */
+    public String getOxygenTargetRegion() {
+        return mOxygenTargetRegion;
+    }
+
+    /** Returns the length of leasing the Oxygen device in milliseconds. */
+    public long getOxygenLeaseLength() {
+        return mOxygenLeaseLength;
+    }
+
+    /** Returns The size of the host which Oxygen virtual device will be running on. */
+    public DeviceSize getOxygenDeviceSize() {
+        return mOxygenDeviceSize;
+    }
+
+    /** Returns the service address of the Oxygen device. */
+    public String getOxygenServiceAddress() {
+        return mOxygenServiceAddress;
+    }
+
+    /** Returns the accounting user of the Oxygen device. */
+    public String getOxygenAccountingUser() {
+        return mOxygenAccountingUser;
+    }
 }
+

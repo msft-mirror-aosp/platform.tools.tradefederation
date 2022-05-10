@@ -27,11 +27,14 @@ import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.ZipUtil;
@@ -42,9 +45,11 @@ import com.google.common.net.HostAndPort;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /** The class for local virtual devices running on TradeFed host. */
 public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements ITestLoggerReceiver {
@@ -52,13 +57,15 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
     private static final int INVALID_PORT = 0;
 
     // Environment variables.
-    private static final String ANDROID_HOST_OUT = "ANDROID_HOST_OUT";
+    private static final String ANDROID_SOONG_HOST_OUT = "ANDROID_SOONG_HOST_OUT";
     private static final String TMPDIR = "TMPDIR";
 
-    // The name of the GZIP file containing launch_cvd and stop_cvd.
+    // The build info key of the cuttlefish tools.
     private static final String CVD_HOST_PACKAGE_NAME = "cvd-host_package.tar.gz";
-
-    private static final String CUTTLEFISH_RUNTIME_DIR_NAME = "cuttlefish_runtime";
+    // The optional build info keys for mixing images.
+    private static final String BOOT_IMAGE_ZIP_NAME = "boot-img.zip";
+    private static final String SYSTEM_IMAGE_ZIP_NAME = "system-img.zip";
+    private static final String OTA_TOOLS_ZIP_NAME = "otatools.zip";
 
     private ITestLogger mTestLogger = null;
 
@@ -66,9 +73,13 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
     private File mImageDir = null;
     private File mInstanceDir = null;
     private File mHostPackageDir = null;
+    private File mBootImageDir = null;
+    private File mSystemImageDir = null;
+    private File mOtaToolsDir = null;
     private List<File> mTempDirs = new ArrayList<File>();
 
     private GceAvdInfo mGceAvdInfo = null;
+    private boolean mCanShutdown = false;
 
     public LocalAndroidVirtualDevice(
             IDevice device, IDeviceStateMonitor stateMonitor, IDeviceMonitor allocationMonitor) {
@@ -77,12 +88,14 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
 
     /** Execute common setup procedure and launch the virtual device. */
     @Override
-    public synchronized void preInvocationSetup(IBuildInfo info)
+    public synchronized void preInvocationSetup(
+            IBuildInfo info, MultiMap<String, String> attributes)
             throws TargetSetupError, DeviceNotAvailableException {
+        resetAttributes();
         // The setup method in super class does not require the device to be online.
-        super.preInvocationSetup(info);
+        super.preInvocationSetup(info, attributes);
 
-        createTempDirs(info);
+        prepareToolsAndImages(info);
 
         CommandResult result = null;
         File report = null;
@@ -92,14 +105,18 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
             loadAvdInfo(report);
         } catch (IOException ex) {
             throw new TargetSetupError(
-                    "Cannot create acloud report file.", ex, getDeviceDescriptor());
+                    "Cannot create acloud report file.",
+                    ex,
+                    getDeviceDescriptor(),
+                    InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         } finally {
             FileUtil.deleteFile(report);
         }
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             throw new TargetSetupError(
                     String.format("Cannot execute acloud command. stderr:\n%s", result.getStderr()),
-                    getDeviceDescriptor());
+                    getDeviceDescriptor(),
+                    InfraErrorIdentifier.ACLOUD_UNDETERMINED);
         }
 
         HostAndPort hostAndPort = mGceAvdInfo.hostAndPort();
@@ -110,7 +127,9 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
             setRecoveryMode(RecoveryMode.NONE);
             if (!adbTcpConnect(hostAndPort.getHost(), Integer.toString(hostAndPort.getPort()))) {
                 throw new TargetSetupError(
-                        String.format("Cannot connect to %s.", hostAndPort), getDeviceDescriptor());
+                        String.format("Cannot connect to %s.", hostAndPort),
+                        getDeviceDescriptor(),
+                        DeviceErrorIdentifier.FAILED_TO_CONNECT_TO_GCE);
             }
             waitForDeviceAvailable();
         } finally {
@@ -136,15 +155,18 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
                 CLog.i(
                         "Skip deleting the temporary directories.\n"
                                 + "Address: %s\nName: %s\n"
-                                + "Host package: %s\nImage: %s\nInstance: %s",
-                        hostAndPort, instanceName, mHostPackageDir, mImageDir, mInstanceDir);
-                mTempDirs.clear();
-                mHostPackageDir = null;
-                mInstanceDir = null;
-                mImageDir = null;
+                                + "Host package: %s\nImage: %s\nInstance: %s\n"
+                                + "Boot image: %s\nSystem image: %s\nOTA tools: %s",
+                        hostAndPort,
+                        instanceName,
+                        mHostPackageDir,
+                        mImageDir,
+                        mInstanceDir,
+                        mBootImageDir,
+                        mSystemImageDir,
+                        mOtaToolsDir);
             }
-
-            mGceAvdInfo = null;
+            resetAttributes();
 
             super.postInvocationTearDown(exception);
         }
@@ -179,36 +201,40 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
         return file;
     }
 
-    /** Find host package in build info and extract to a temporary directory. */
-    private File findHostPackage(IBuildInfo buildInfo) throws TargetSetupError {
-        File hostPackageDir = null;
-        File hostPackage = buildInfo.getFile(CVD_HOST_PACKAGE_NAME);
-        if (hostPackage != null) {
-            try {
-                hostPackageDir = extractArchive(hostPackage);
-            } catch (IOException ex) {
-                throw new TargetSetupError(
-                        "Cannot extract host package.", ex, getDeviceDescriptor());
-            }
-        }
-        if (hostPackageDir == null) {
-            String androidHostOut = System.getenv(ANDROID_HOST_OUT);
-            if (!Strings.isNullOrEmpty(androidHostOut)) {
-                CLog.i(
-                        "Use the host tools in %s as the build info does not provide host package.",
-                        androidHostOut);
-                hostPackageDir = new File(androidHostOut);
-            }
-        }
-        if (hostPackageDir == null || !hostPackageDir.isDirectory()) {
+    /** Find a file in build info and extract it to a temporary directory. */
+    private File findAndExtractFile(IBuildInfo buildInfo, String fileKey) throws TargetSetupError {
+        File file = buildInfo.getFile(fileKey);
+        try {
+            return file != null ? extractArchive(file) : null;
+        } catch (IOException ex) {
             throw new TargetSetupError(
-                    String.format(
-                            "Cannot find %s in build info and %s.",
-                            CVD_HOST_PACKAGE_NAME, ANDROID_HOST_OUT),
-                    getDeviceDescriptor());
+                    String.format("Cannot extract %s.", fileKey),
+                    ex,
+                    getDeviceDescriptor(),
+                    InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
-        FileUtil.chmodRWXRecursively(new File(hostPackageDir, "bin"));
-        return hostPackageDir;
+    }
+
+    /** Find a file in build info and extract it; fall back to environment variable. */
+    private File findAndExtractFile(IBuildInfo buildInfo, String fileKey, String envVar)
+            throws TargetSetupError {
+        File dir = findAndExtractFile(buildInfo, fileKey);
+        if (dir != null) {
+            return dir;
+        }
+
+        String envDir = System.getenv(envVar);
+        if (!Strings.isNullOrEmpty(envDir)) {
+            dir = new File(envDir);
+            if (dir.isDirectory()) {
+                CLog.i(
+                        "Use the files in %s as the build info does not provide %s.",
+                        envVar, fileKey);
+                return dir;
+            }
+            CLog.w("Cannot use the files in %s as it is not a directory.", envVar);
+        }
+        return null;
     }
 
     /** Find device images in build info and extract to a temporary directory. */
@@ -216,12 +242,18 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
         File imageZip = buildInfo.getFile(BuildInfoFileKey.DEVICE_IMAGE);
         if (imageZip == null) {
             throw new TargetSetupError(
-                    "Cannot find image zip in build info.", getDeviceDescriptor());
+                    "Cannot find image zip in build info.",
+                    getDeviceDescriptor(),
+                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
         try {
             return extractArchive(imageZip);
         } catch (IOException ex) {
-            throw new TargetSetupError("Cannot extract image zip.", ex, getDeviceDescriptor());
+            throw new TargetSetupError(
+                    "Cannot extract image zip.",
+                    ex,
+                    getDeviceDescriptor(),
+                    InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
     }
 
@@ -233,20 +265,51 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
             return tempDir;
         } catch (IOException ex) {
             throw new TargetSetupError(
-                    "Cannot create temporary directory.", ex, getDeviceDescriptor());
+                    "Cannot create temporary directory.",
+                    ex,
+                    getDeviceDescriptor(),
+                    InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
     }
 
     /** Get the necessary files to create the instance. */
-    private void createTempDirs(IBuildInfo info) throws TargetSetupError {
+    private void prepareToolsAndImages(IBuildInfo info) throws TargetSetupError {
         try {
-            mHostPackageDir = findHostPackage(info);
+            mHostPackageDir =
+                    findAndExtractFile(info, CVD_HOST_PACKAGE_NAME, ANDROID_SOONG_HOST_OUT);
+            if (mHostPackageDir == null) {
+                throw new TargetSetupError(
+                        String.format(
+                                "Cannot find %s in build info and %s.",
+                                CVD_HOST_PACKAGE_NAME, ANDROID_SOONG_HOST_OUT),
+                        getDeviceDescriptor(),
+                        InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+            }
             mImageDir = findDeviceImages(info);
+            mBootImageDir = findAndExtractFile(info, BOOT_IMAGE_ZIP_NAME);
+            mSystemImageDir = findAndExtractFile(info, SYSTEM_IMAGE_ZIP_NAME);
+            mOtaToolsDir = findAndExtractFile(info, OTA_TOOLS_ZIP_NAME);
             mInstanceDir = createTempDir();
         } catch (TargetSetupError ex) {
             deleteTempDirs();
             throw ex;
         }
+        FileUtil.chmodRWXRecursively(new File(mHostPackageDir, "bin"));
+        if (mOtaToolsDir != null) {
+            FileUtil.chmodRWXRecursively(new File(mOtaToolsDir, "bin"));
+        }
+    }
+
+    private void resetAttributes() {
+        mTempDirs.clear();
+        mImageDir = null;
+        mInstanceDir = null;
+        mHostPackageDir = null;
+        mBootImageDir = null;
+        mSystemImageDir = null;
+        mOtaToolsDir = null;
+        mGceAvdInfo = null;
+        mCanShutdown = false;
     }
 
     /** Delete all temporary directories. */
@@ -256,9 +319,6 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
             FileUtil.recursiveDelete(tempDir);
         }
         mTempDirs.clear();
-        mImageDir = null;
-        mInstanceDir = null;
-        mHostPackageDir = null;
     }
 
     /**
@@ -271,7 +331,9 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
         IDevice device = getIDevice();
         if (!StubLocalAndroidVirtualDevice.class.equals(device.getClass())) {
             throw new TargetSetupError(
-                    "Unexpected device type: " + device.getClass(), getDeviceDescriptor());
+                    "Unexpected device type: " + device.getClass(),
+                    getDeviceDescriptor(),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         setIDevice(new StubLocalAndroidVirtualDevice(newSerialNumber));
         setFastbootEnabled(false);
@@ -281,6 +343,21 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
     private void restoreStubDevice() {
         setIDevice(new StubLocalAndroidVirtualDevice(getInitialSerial()));
         setFastbootEnabled(false);
+    }
+
+    private void addExtraDirsToAcloudCommand(List<String> command) {
+        if (mBootImageDir != null) {
+            command.add("--local-boot-image");
+            command.add(mBootImageDir.getAbsolutePath());
+        }
+        if (mSystemImageDir != null) {
+            command.add("--local-system-image");
+            command.add(mSystemImageDir.getAbsolutePath());
+        }
+        if (mOtaToolsDir != null) {
+            command.add("--local-tool");
+            command.add(mOtaToolsDir.getAbsolutePath());
+        }
     }
 
     private static void addLogLevelToAcloudCommand(List<String> command, LogLevel logLevel) {
@@ -349,9 +426,11 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
                                 "--no-autoconnect",
                                 "--yes",
                                 "--skip-pre-run-check"));
+        addExtraDirsToAcloudCommand(command);
         addLogLevelToAcloudCommand(command, logLevel);
         command.addAll(args);
 
+        mCanShutdown = true;
         CommandResult result = runUtil.runTimedCmd(timeout, command.toArray(new String[0]));
         CLog.i("acloud create stdout:\n%s", result.getStdout());
         CLog.i("acloud create stderr:\n%s", result.getStderr());
@@ -380,7 +459,10 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
     private void loadAvdInfo(File report) throws TargetSetupError {
         mGceAvdInfo = GceAvdInfo.parseGceInfoFromFile(report, getDeviceDescriptor(), INVALID_PORT);
         if (mGceAvdInfo == null) {
-            throw new TargetSetupError("Cannot read acloud report file.", getDeviceDescriptor());
+            throw new TargetSetupError(
+                    "Cannot read acloud report file.",
+                    getDeviceDescriptor(),
+                    InfraErrorIdentifier.NO_ACLOUD_REPORT);
         }
 
         if (!GceAvdInfo.GceStatus.SUCCESS.equals(mGceAvdInfo.getStatus())) {
@@ -391,45 +473,49 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
         }
 
         if (Strings.isNullOrEmpty(mGceAvdInfo.instanceName())) {
-            throw new TargetSetupError("No instance name in acloud report.", getDeviceDescriptor());
+            throw new TargetSetupError(
+                    "No instance name in acloud report.",
+                    getDeviceDescriptor(),
+                    InfraErrorIdentifier.NO_ACLOUD_REPORT);
         }
 
         if (getHostAndPortFromAvdInfo() == null) {
-            throw new TargetSetupError("No port in acloud report.", getDeviceDescriptor());
+            throw new TargetSetupError(
+                    "No port in acloud report.",
+                    getDeviceDescriptor(),
+                    InfraErrorIdentifier.NO_ACLOUD_REPORT);
         }
     }
 
     /** Shutdown the device. */
     public synchronized void shutdown() {
         TestDeviceOptions options = getOptions();
-        if (options.shouldSkipTearDown()) {
+        if (!mCanShutdown || options.shouldSkipTearDown()) {
             CLog.i("Skip shutting down the virtual device.");
             return;
         }
+        // After this device is shut down, the resources like network ports and instance name may
+        // be reused by other devices. Hence, this device must not be shut down more than once.
+        mCanShutdown = false;
+
         HostAndPort hostAndPort = getHostAndPortFromAvdInfo();
         String instanceName = (mGceAvdInfo != null ? mGceAvdInfo.instanceName() : null);
 
-        try {
-            if (hostAndPort != null) {
-                if (!adbTcpDisconnect(
-                        hostAndPort.getHost(), Integer.toString(hostAndPort.getPort()))) {
-                    CLog.e("Cannot disconnect from %s", hostAndPort.toString());
-                }
-            } else {
-                CLog.i("Skip disconnecting.");
+        if (hostAndPort != null) {
+            if (!adbTcpDisconnect(hostAndPort.getHost(), Integer.toString(hostAndPort.getPort()))) {
+                CLog.e("Cannot disconnect from %s", hostAndPort.toString());
             }
+        } else {
+            CLog.i("Skip disconnecting.");
+        }
 
-            if (instanceName != null) {
-                CommandResult result = acloudDelete(instanceName, options);
-                if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                    CLog.e("Cannot stop the virtual device.");
-                }
-            } else {
-                CLog.i("Skip acloud delete.");
+        if (instanceName != null) {
+            CommandResult result = acloudDelete(instanceName, options);
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                CLog.e("Cannot stop the virtual device.");
             }
-        } finally {
-            // Remove AVD info to avoid deleting the device more than once.
-            mGceAvdInfo = null;
+        } else {
+            CLog.i("Skip acloud delete.");
         }
     }
 
@@ -463,23 +549,31 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
     }
 
     private void reportInstanceLogs() {
-        if (mTestLogger == null || mInstanceDir == null) {
+        if (mTestLogger == null || mInstanceDir == null || mGceAvdInfo == null) {
             return;
         }
-        File runtimeDir = new File(mInstanceDir, CUTTLEFISH_RUNTIME_DIR_NAME);
-        reportInstanceLog(new File(runtimeDir, "kernel.log"), LogDataType.KERNEL_LOG);
-        reportInstanceLog(new File(runtimeDir, "logcat"), LogDataType.LOGCAT);
-        reportInstanceLog(new File(runtimeDir, "launcher.log"), LogDataType.TEXT);
-        reportInstanceLog(new File(runtimeDir, "cuttlefish_config.json"), LogDataType.TEXT);
-    }
-
-    private void reportInstanceLog(File file, LogDataType type) {
-        if (file.exists()) {
-            try (InputStreamSource source = new FileInputStreamSource(file)) {
-                mTestLogger.testLog(file.getName(), type, source);
+        Path realInstanceDir = null;
+        try {
+            realInstanceDir = mInstanceDir.toPath().toRealPath();
+        } catch (IOException ex) {
+            CLog.e(ex);
+            return;
+        }
+        for (Map.Entry<String, LogDataType> log : mGceAvdInfo.getLogs().entrySet()) {
+            File file = new File(log.getKey());
+            if (file.exists()) {
+                try (InputStreamSource source = new FileInputStreamSource(file)) {
+                    if (file.toPath().toRealPath().startsWith(realInstanceDir)) {
+                        mTestLogger.testLog(file.getName(), log.getValue(), source);
+                    } else {
+                        CLog.w("%s is not in instance directory.", file.getAbsolutePath());
+                    }
+                } catch (IOException ex) {
+                    CLog.e(ex);
+                }
+            } else {
+                CLog.w("%s doesn't exist.", file.getAbsolutePath());
             }
-        } else {
-            CLog.w("%s doesn't exist.", file.getAbsolutePath());
         }
     }
 

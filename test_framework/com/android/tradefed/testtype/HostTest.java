@@ -28,6 +28,8 @@ import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.metric.IMetricCollector;
+import com.android.tradefed.device.metric.IMetricCollectorReceiver;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.TestInformation;
@@ -509,6 +511,10 @@ public class HostTest
                 throw new RuntimeException(e);
             }
         }
+        // TODO(olivernguyen): Clean this up after instrumenting runInstrumentationTests(...) API.
+        if (testObj instanceof IConfigurationReceiver) {
+            ((IConfigurationReceiver) testObj).setConfiguration(mConfig);
+        }
     }
 
     /** {@inheritDoc} */
@@ -656,6 +662,11 @@ public class HostTest
                         String.format(
                                 "%s does not implement ITestCollector", test.getClass()));
             }
+        }
+        // Set collectors for completeness but this isn't really supported as part of HostTest.
+        if (test instanceof IMetricCollectorReceiver) {
+            ((IMetricCollectorReceiver) test)
+                    .setMetricCollectors(new ArrayList<IMetricCollector>());
         }
         test.run(mTestInfo, listener);
     }
@@ -999,6 +1010,9 @@ public class HostTest
                                 && !Modifier.isProtected(modifiers)
                                 && !Modifier.isInterface(modifiers)
                                 && !Modifier.isAbstract(modifiers)) {
+                            if (!mClasses.isEmpty() && !mClasses.contains(className)) {
+                                continue;
+                            }
                             classes.add(cls);
                             classNames.add(className);
                         }
@@ -1098,7 +1112,8 @@ public class HostTest
                 String esc = "\\";
                 String regex = "(?<!" + Pattern.quote(esc) + ")" + Pattern.quote(delim);
                 String[] fields = item.split(regex);
-                String key, value;
+                String key;
+                String value;
                 if (fields.length == 3) {
                     String target = fields[0];
                     if (testObj.getClass().getName().equals(target)) {
@@ -1261,6 +1276,7 @@ public class HostTest
                 Collection<? extends Object> subTests;
                 if (classObj != null) {
                     test.addClassName(classObj.getName());
+                    test.mJars = this.mJars;
                     subTests = test.mClasses;
                 } else {
                     test.addTestMethod(testObj);

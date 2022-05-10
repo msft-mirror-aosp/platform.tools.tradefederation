@@ -22,14 +22,21 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceState;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableSet;
 
 import org.apache.commons.compress.archivers.zip.ZipFile;
 
@@ -55,6 +62,8 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     private static final String SLOT_PROP = "ro.boot.slot_suffix";
     private static final String SLOT_VAR = "current-slot";
     private static final String SKIP_REBOOT_PARAM = "--skip-reboot";
+    private static final ImmutableSet<String> DISK_SPACE_ERRORS =
+        ImmutableSet.of("No space left on device", "failed to create temporary file");
 
     private long mWipeTimeout = 4 * 60 * 1000;
 
@@ -143,6 +152,14 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     @Override
     public void flash(ITestDevice device, IDeviceBuildInfo deviceBuild) throws TargetSetupError,
             DeviceNotAvailableException {
+        boolean initialStateFastbootD =
+                supportsFlashingInFastbootD() &&
+                TestDeviceState.FASTBOOTD.equals(device.getDeviceState());
+        if (initialStateFastbootD) {
+            CLog.i("Using flashing from fastbootd");
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.FLASHING_FROM_FASTBOOTD, 1);
+        }
 
         CLog.i("Flashing device %s with build %s", device.getSerialNumber(),
                 deviceBuild.getDeviceBuildId());
@@ -151,7 +168,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         String systemBuildId = device.getBuildId();
         String systemBuildFlavor = device.getBuildFlavor();
 
-        device.rebootIntoBootloader();
+        if (!initialStateFastbootD) {
+            device.rebootIntoBootloader();
+        }
 
         downloadFlashingResources(device, deviceBuild);
         preFlashSetup(device, deviceBuild);
@@ -223,7 +242,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
      */
     protected void flashPartition(ITestDevice device, File imgFile, String partition)
             throws DeviceNotAvailableException, TargetSetupError {
-        CLog.d("fastboot flash %s %s", partition, imgFile.getAbsolutePath());
+        CLog.d(
+                "fastboot flash %s %s [md5=%s]",
+                partition, imgFile.getAbsolutePath(), FileUtil.calculateMd5(imgFile));
         executeLongFastbootCmd(
                 device,
                 buildFastbootCommand(
@@ -326,9 +347,14 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             ITestDevice device, IFlashingResourcesParser resourceParser, String deviceProductType)
             throws TargetSetupError {
         if (!containsIgnoreCase(resourceParser.getRequiredBoards(), deviceProductType)) {
-            throw new TargetSetupError(String.format("Device %s is %s. Expected %s",
-                    device.getSerialNumber(), deviceProductType,
-                    resourceParser.getRequiredBoards()), device.getDeviceDescriptor());
+            throw new TargetSetupError(
+                    String.format(
+                            "Device %s is %s. Expected %s",
+                            device.getSerialNumber(),
+                            deviceProductType,
+                            resourceParser.getRequiredBoards()),
+                    device.getDeviceDescriptor(),
+                    InfraErrorIdentifier.UNEXPECTED_DEVICE_CONFIGURED);
         }
     }
 
@@ -376,8 +402,8 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
 
     /**
      * If needed, flash the bootloader image on device.
-     * <p/>
-     * Will only flash bootloader if current version on device != required version.
+     *
+     * <p>Will only flash bootloader if current version on device != required version.
      *
      * @param device the {@link ITestDevice} to flash
      * @param deviceBuild the {@link IDeviceBuildInfo} that contains the bootloader image to flash
@@ -821,16 +847,31 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
      * @return the stderr output from command if non-empty. Otherwise returns the stdout
      * @throws TargetSetupError
      */
-    private String handleFastbootResult(ITestDevice device, CommandResult result, String... cmdArgs)
+    @VisibleForTesting
+    String handleFastbootResult(ITestDevice device, CommandResult result, String... cmdArgs)
             throws TargetSetupError {
         CLog.v("fastboot stdout: " + result.getStdout());
         CLog.v("fastboot stderr: " + result.getStderr());
         mFbCmdStatus = result.getStatus();
-        if (result.getStderr().contains("FAILED")) {
+        ErrorIdentifier errorIdentifier = null;
+        boolean diskErrorIdentified = false;
+        for (String diskError : DISK_SPACE_ERRORS) {
+            if (result.getStderr().contains(diskError)) {
+                errorIdentifier = InfraErrorIdentifier.NO_DISK_SPACE;
+                mFbCmdStatus = CommandStatus.FAILED;
+                diskErrorIdentified = true;
+                break;
+            }
+        }
+
+        if (!diskErrorIdentified && result.getStderr().contains("FAILED")) {
             // if output contains "FAILED", just override to failure
             mFbCmdStatus = CommandStatus.FAILED;
         }
         if (mFbCmdStatus != CommandStatus.SUCCESS) {
+            if (errorIdentifier == null) {
+                errorIdentifier = DeviceErrorIdentifier.ERROR_AFTER_FLASHING;
+            }
             throw new TargetSetupError(
                     String.format(
                             "fastboot command %s failed in device %s. stdout: %s, stderr: %s",
@@ -839,7 +880,7 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                             result.getStdout(),
                             result.getStderr()),
                     device.getDeviceDescriptor(),
-                    DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
+                    errorIdentifier);
         }
         if (result.getStderr().length() > 0) {
             return result.getStderr();
@@ -917,6 +958,8 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     protected void flashRamdiskIfNeeded(ITestDevice device, IDeviceBuildInfo deviceBuild)
             throws TargetSetupError, DeviceNotAvailableException {
         if (mShouldFlashRamdisk) {
+            // Flash ramdisk in bootloader
+            device.rebootIntoBootloader();
             executeLongFastbootCmd(
                     device,
                     "flash",

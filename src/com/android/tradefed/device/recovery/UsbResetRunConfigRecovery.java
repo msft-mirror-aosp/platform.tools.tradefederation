@@ -18,6 +18,7 @@ package com.android.tradefed.device.recovery;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.IManagedTestDevice;
+import com.android.tradefed.device.TestDeviceState;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -30,6 +31,10 @@ public class UsbResetRunConfigRecovery extends RunConfigDeviceRecovery {
 
     @Override
     public boolean shouldSkip(IManagedTestDevice device) {
+        if (TestDeviceState.RECOVERY.equals(device.getDeviceState())) {
+            // Skip usb reset in recovery mode
+            return true;
+        }
         boolean res = device.isStateBootloaderOrFastbootd();
         // Do not reset available devices
         if (!res && DeviceAllocationState.Available.equals(device.getAllocationState())) {

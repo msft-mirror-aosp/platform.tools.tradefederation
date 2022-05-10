@@ -17,6 +17,8 @@ package com.android.tradefed.util;
 
 import com.android.tradefed.log.LogUtil.CLog;
 
+import com.google.common.base.Strings;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,9 +41,17 @@ public class AaptParser {
             "^sdkVersion:'(\\d+)'", Pattern.MULTILINE);
     private static final Pattern TARGET_SDK_PATTERN =
             Pattern.compile("^targetSdkVersion:'(\\d+)'", Pattern.MULTILINE);
-    /** Patterns for native code are not always present, so the list may stay empty. */
+    /**
+     * 1. Patterns for native code are not always present, so the list may stay empty; 2. There may
+     * be more than two native-codes for APKs built by Soong; 3. Java regular expressions cannot be
+     * captured for each group in a repeated group, so hard-code it for now to handle up to ten
+     * native-codes.
+     */
+    private static final int MAX_NUM_NATIVE_CODE = 10;
+
     private static final Pattern NATIVE_CODE_PATTERN =
-            Pattern.compile("native-code: '(.*?)'( '.*?')*");
+            Pattern.compile(
+                    "native-code: '(.*?)'" + Strings.repeat("( '.*?')?", MAX_NUM_NATIVE_CODE - 1));
 
     private static final Pattern REQUEST_LEGACY_STORAGE_PATTERN =
             Pattern.compile("requestLegacyExternalStorage.*=\\(.*\\)(.*)", Pattern.MULTILINE);
@@ -155,16 +165,6 @@ public class AaptParser {
         return false;
     }
 
-    boolean parseXmlTree(String aaptOut) {
-        Matcher m = REQUEST_LEGACY_STORAGE_PATTERN.matcher(aaptOut);
-        if (m.find()) {
-            // 0xffffffff is true and 0x0 is false
-            mRequestLegacyStorage = m.group(1).equals("0xffffffff");
-        }
-        // REQUEST_LEGACY_STORAGE_PATTERN may or may not be present
-        return true;
-    }
-
     /**
      * Parse info from the apk.
      *
@@ -190,13 +190,13 @@ public class AaptParser {
 
         String stderr = result.getStderr();
         if (stderr != null && !stderr.isEmpty()) {
-            CLog.e("aapt dump badging stderr: %s", stderr);
+            CLog.e("%s dump badging stderr: %s", toolName(aaptVersion), stderr);
         }
         AaptParser p = new AaptParser();
         if (!CommandStatus.SUCCESS.equals(result.getStatus()) || !p.parse(result.getStdout())) {
             CLog.e(
-                    "Failed to run aapt on %s. stdout: %s",
-                    apkFile.getAbsoluteFile(), result.getStdout());
+                    "Failed to run %s on %s. stdout: %s",
+                    toolName(aaptVersion), apkFile.getAbsoluteFile(), result.getStdout());
             return null;
         }
         result =
@@ -209,17 +209,27 @@ public class AaptParser {
 
         stderr = result.getStderr();
         if (stderr != null && !stderr.isEmpty()) {
-            CLog.e("aapt dump xmltree AndroidManifest.xml stderr: %s", stderr);
+            CLog.e("%s dump xmltree AndroidManifest.xml stderr: %s", toolName(aaptVersion), stderr);
         }
 
         if (!CommandStatus.SUCCESS.equals(result.getStatus())
                 || !p.parseXmlTree(result.getStdout())) {
             CLog.e(
-                    "Failed to run aapt on %s. stdout: %s",
-                    apkFile.getAbsoluteFile(), result.getStdout());
+                    "Failed to run %s on %s. stdout: %s",
+                    toolName(aaptVersion), apkFile.getAbsoluteFile(), result.getStdout());
             return null;
         }
         return p;
+    }
+
+    boolean parseXmlTree(String aaptOut) {
+        Matcher m = REQUEST_LEGACY_STORAGE_PATTERN.matcher(aaptOut);
+        if (m.find()) {
+            // 0xffffffff is true and 0x0 is false
+            mRequestLegacyStorage = m.group(1).equals("0xffffffff");
+        }
+        // REQUEST_LEGACY_STORAGE_PATTERN may or may not be present
+        return true;
     }
 
     public String getPackageName() {
@@ -261,5 +271,9 @@ public class AaptParser {
 
     public boolean isUsingPermissionManageExternalStorage() {
         return mUsesPermissionManageExternalStorage;
+    }
+
+    private static String toolName(AaptVersion version) {
+        return version.name().toLowerCase();
     }
 }

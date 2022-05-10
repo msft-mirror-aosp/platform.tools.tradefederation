@@ -16,6 +16,7 @@
 
 package com.android.tradefed.config;
 
+import com.android.tradefed.auth.ICredentialFactory;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.command.CommandScheduler;
 import com.android.tradefed.command.ICommandScheduler;
@@ -37,6 +38,8 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.monitoring.collector.IResourceMetricCollector;
 import com.android.tradefed.sandbox.ISandboxFactory;
 import com.android.tradefed.sandbox.TradefedSandboxFactory;
+import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.service.management.TestInvocationManagementServer;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
@@ -81,6 +84,9 @@ public class GlobalConfiguration implements IGlobalConfiguration {
     public static final String GLOBAL_CONFIG_SERVER = "global_config_server";
     public static final String SANDBOX_FACTORY_TYPE_NAME = "sandbox_factory";
     public static final String RESOURCE_METRIC_COLLECTOR_TYPE_NAME = "resource_metric_collector";
+    public static final String CREDENTIAL_FACTORY_TYPE_NAME = "credential_factory";
+    public static final String TF_FEATURE_SERVER_NAME = "tf_feature_server";
+    public static final String TF_INVOCATION_SERVER_NAME = "tf_invocation_server";
 
     public static final String GLOBAL_CONFIG_VARIABLE = "TF_GLOBAL_CONFIG";
     public static final String GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE =
@@ -310,6 +316,8 @@ public class GlobalConfiguration implements IGlobalConfiguration {
             sObjTypeMap.put(
                     RESOURCE_METRIC_COLLECTOR_TYPE_NAME,
                     new ObjTypeInfo(IResourceMetricCollector.class, true));
+            sObjTypeMap.put(
+                    CREDENTIAL_FACTORY_TYPE_NAME, new ObjTypeInfo(ICredentialFactory.class, false));
         }
         return sObjTypeMap;
     }
@@ -464,9 +472,14 @@ public class GlobalConfiguration implements IGlobalConfiguration {
                 getConfigurationObjectList(RESOURCE_METRIC_COLLECTOR_TYPE_NAME);
     }
 
-    /**
-     * Internal helper to get the list of config object
-     */
+    /** {@inheritDoc} */
+    @Override
+    @SuppressWarnings("unchecked")
+    public ICredentialFactory getCredentialFactory() {
+        return (ICredentialFactory) getConfigurationObject(CREDENTIAL_FACTORY_TYPE_NAME);
+    }
+
+    /** Internal helper to get the list of config object */
     private List<?> getConfigurationObjectList(String typeName) {
         return mConfigMap.get(typeName);
     }
@@ -621,6 +634,42 @@ public class GlobalConfiguration implements IGlobalConfiguration {
     @Override
     public void setResourceMetricCollector(IResourceMetricCollector collector) {
         setConfigurationObjectNoThrow(RESOURCE_METRIC_COLLECTOR_TYPE_NAME, collector);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setTradefedFeatureServer(TradefedFeatureServer server) {
+        setConfigurationObjectNoThrow(TF_FEATURE_SERVER_NAME, server);
+    }
+
+    @Override
+    public void setInvocationServer(TestInvocationManagementServer server) {
+        setConfigurationObjectNoThrow(TF_INVOCATION_SERVER_NAME, server);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public TradefedFeatureServer getFeatureServer() {
+        List<?> configObjects = getConfigurationObjectList(TF_FEATURE_SERVER_NAME);
+        if (configObjects == null) {
+            return null;
+        }
+        if (configObjects.size() != 1) {
+            return null;
+        }
+        return (TradefedFeatureServer) configObjects.get(0);
+    }
+
+    @Override
+    public TestInvocationManagementServer getTestInvocationManagementSever() {
+        List<?> configObjects = getConfigurationObjectList(TF_INVOCATION_SERVER_NAME);
+        if (configObjects == null) {
+            return null;
+        }
+        if (configObjects.size() != 1) {
+            return null;
+        }
+        return (TestInvocationManagementServer) configObjects.get(0);
     }
 
     /** {@inheritDoc} */
@@ -804,6 +853,17 @@ public class GlobalConfiguration implements IGlobalConfiguration {
     @Override
     public File cloneConfigWithFilter(Set<String> exclusionPatterns, String... allowlistConfigs)
             throws IOException {
+        return cloneConfigWithFilter(
+                exclusionPatterns, new NoOpConfigOptionValueTransformer(), allowlistConfigs);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public File cloneConfigWithFilter(
+            Set<String> exclusionPatterns,
+            IConfigOptionValueTransformer transformer,
+            String... allowlistConfigs)
+            throws IOException {
         IConfigurationFactory configFactory = getConfigurationFactory();
         IGlobalConfiguration copy = null;
         try {
@@ -836,7 +896,14 @@ public class GlobalConfiguration implements IGlobalConfiguration {
                 isGenericObject = true;
             }
             ConfigurationUtil.dumpClassToXml(
-                    serializer, config, configObj, isGenericObject, new ArrayList<>(), true, false);
+                    serializer,
+                    config,
+                    configObj,
+                    isGenericObject,
+                    new ArrayList<>(),
+                    transformer,
+                    true,
+                    false);
         }
         serializer.endTag(null, ConfigurationUtil.CONFIGURATION_NAME);
         serializer.endDocument();

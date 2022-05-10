@@ -22,9 +22,11 @@ import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.TimeoutException;
 import com.android.tradefed.device.IDeviceManager.IFastbootListener;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunInterruptedException;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.TimeUtil;
 
 import com.google.common.base.Strings;
 
@@ -35,6 +37,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -130,12 +133,28 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
         return null;
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public IDevice waitForDeviceOnline() {
+        return waitForDeviceOnline(mDefaultOnlineTimeout);
+    }
+
     @Override
     public IDevice waitForDeviceInRecovery() {
         if (waitForDeviceState(TestDeviceState.RECOVERY, mDefaultOnlineTimeout)) {
             return getIDevice();
         }
         return null;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean waitForDeviceInRecovery(long waitTime) {
+        return waitForDeviceState(TestDeviceState.RECOVERY, waitTime);
     }
 
     /**
@@ -168,14 +187,6 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
      * {@inheritDoc}
      */
     @Override
-    public IDevice waitForDeviceOnline() {
-        return waitForDeviceOnline(mDefaultOnlineTimeout);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
     public boolean waitForDeviceNotAvailable(long waitTime) {
         IFastbootListener listener = new StubFastbootListener();
         if (mFastbootEnabled) {
@@ -186,14 +197,6 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
             mMgr.removeFastbootListener(listener);
         }
         return result;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean waitForDeviceInRecovery(long waitTime) {
-        return waitForDeviceState(TestDeviceState.RECOVERY, waitTime);
     }
 
     /** {@inheritDoc} */
@@ -209,30 +212,34 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
     public boolean waitForDeviceShell(final long waitTime) {
         CLog.i("Waiting %d ms for device %s shell to be responsive", waitTime,
                 getSerialNumber());
-        long startTime = System.currentTimeMillis();
-        int counter = 1;
-        while (System.currentTimeMillis() - startTime < waitTime) {
-            final CollectingOutputReceiver receiver = createOutputReceiver();
-            final String cmd = "ls /system/bin/adb";
-            try {
-                getIDevice().executeShellCommand(cmd, receiver, MAX_OP_TIME, TimeUnit.MILLISECONDS);
-                String output = receiver.getOutput();
-                if (output.contains("/system/bin/adb")) {
-                    return true;
-                }
-            } catch (IOException | AdbCommandRejectedException |
-                    ShellCommandUnresponsiveException e) {
-                CLog.e("%s failed on: %s", cmd, getSerialNumber());
-                CLog.e(e);
-            } catch (TimeoutException e) {
-                CLog.e("%s failed on %s: timeout", cmd, getSerialNumber());
-                CLog.e(e);
-            }
-            getRunUtil().sleep(Math.min(getCheckPollTime() * counter, MAX_CHECK_POLL_TIME));
-            counter++;
+        Callable<BUSY_WAIT_STATUS> bootComplete =
+                () -> {
+                    final CollectingOutputReceiver receiver = createOutputReceiver();
+                    final String cmd = "ls /system/bin/adb";
+                    try {
+                        getIDevice()
+                                .executeShellCommand(
+                                        cmd, receiver, MAX_OP_TIME, TimeUnit.MILLISECONDS);
+                        String output = receiver.getOutput();
+                        if (output.contains("/system/bin/adb")) {
+                            return BUSY_WAIT_STATUS.SUCCESS;
+                        }
+                    } catch (IOException
+                            | AdbCommandRejectedException
+                            | ShellCommandUnresponsiveException e) {
+                        CLog.e("%s failed on: %s", cmd, getSerialNumber());
+                        CLog.e(e);
+                    } catch (TimeoutException e) {
+                        CLog.e("%s failed on %s: timeout", cmd, getSerialNumber());
+                        CLog.e(e);
+                    }
+                    return BUSY_WAIT_STATUS.CONTINUE_WAITING;
+                };
+        boolean result = busyWaitFunction(bootComplete, waitTime);
+        if (!result) {
+            CLog.w("Device %s shell is unresponsive", getSerialNumber());
         }
-        CLog.w("Device %s shell is unresponsive", getSerialNumber());
-        return false;
+        return result;
     }
 
     /**
@@ -281,27 +288,32 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
     @Override
     public boolean waitForBootComplete(final long waitTime) {
         CLog.i("Waiting %d ms for device %s boot complete", waitTime, getSerialNumber());
-        int counter = 1;
-        long startTime = System.currentTimeMillis();
-        final String cmd = "getprop " + BOOTCOMPLETE_PROP;
-        while ((System.currentTimeMillis() - startTime) < waitTime) {
-            try {
-                String bootFlag = getIDevice().getSystemProperty("dev.bootcomplete").get();
-                if ("1".equals(bootFlag)) {
-                    return true;
-                }
-            } catch (InterruptedException e) {
-                CLog.i("%s on device %s failed: %s", cmd, getSerialNumber(), e.getMessage());
-                // exit the loop for InterruptedException
-                break;
-            } catch (ExecutionException e) {
-                CLog.i("%s on device %s failed: %s", cmd, getSerialNumber(), e.getMessage());
-            }
-            getRunUtil().sleep(Math.min(getCheckPollTime() * counter, MAX_CHECK_POLL_TIME));
-            counter++;
+        Callable<BUSY_WAIT_STATUS> bootComplete =
+                () -> {
+                    final String cmd = "getprop " + BOOTCOMPLETE_PROP;
+                    try {
+                        String bootFlag = getIDevice().getSystemProperty("dev.bootcomplete").get();
+                        if ("1".equals(bootFlag)) {
+                            return BUSY_WAIT_STATUS.SUCCESS;
+                        }
+                    } catch (InterruptedException e) {
+                        CLog.i(
+                                "%s on device %s failed: %s",
+                                cmd, getSerialNumber(), e.getMessage());
+                        // exit the loop for InterruptedException
+                        return BUSY_WAIT_STATUS.ABORT;
+                    } catch (ExecutionException e) {
+                        CLog.i(
+                                "%s on device %s failed: %s",
+                                cmd, getSerialNumber(), e.getMessage());
+                    }
+                    return BUSY_WAIT_STATUS.CONTINUE_WAITING;
+                };
+        boolean result = busyWaitFunction(bootComplete, waitTime);
+        if (!result) {
+            CLog.w("Device %s did not boot after %d ms", getSerialNumber(), waitTime);
         }
-        CLog.w("Device %s did not boot after %d ms", getSerialNumber(), waitTime);
-        return false;
+        return result;
     }
 
     /**
@@ -488,7 +500,8 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
             } catch (InterruptedException e) {
                 CLog.w("wait for device bootloader state update interrupted");
                 CLog.w(e);
-                throw new RunInterruptedException(e);
+                throw new RunInterruptedException(
+                        e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
             } finally {
                 mMgr.removeFastbootListener(listener);
             }
@@ -497,13 +510,14 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
 
     private boolean waitForDeviceState(TestDeviceState state, long time) {
         String deviceSerial = getSerialNumber();
-        if (getDeviceState() == state) {
+        TestDeviceState currentStatus = getDeviceState();
+        if (currentStatus.equals(state)) {
             CLog.i("Device %s is already %s", deviceSerial, state);
             return true;
         }
         CLog.i(
-                "Waiting for device %s to be in %s mode; it is currently in %s mode...",
-                deviceSerial, state, getDeviceState());
+                "Waiting for device %s to be in %s mode for '%s'; it is currently in %s mode...",
+                deviceSerial, state, TimeUtil.formatElapsedTime(time), currentStatus);
         DeviceStateListener listener = new DeviceStateListener(state);
         addDeviceStateListener(listener);
         synchronized (listener) {
@@ -512,7 +526,8 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
             } catch (InterruptedException e) {
                 CLog.w("wait for device state interrupted");
                 CLog.w(e);
-                throw new RunInterruptedException(e);
+                throw new RunInterruptedException(
+                        e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
             } finally {
                 removeDeviceStateListener(listener);
             }
@@ -650,5 +665,40 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
         String output = receiver.getOutput().trim();
         CLog.v("'%s' returned %s", statCommand, output);
         return output;
+    }
+
+    private boolean busyWaitFunction(Callable<BUSY_WAIT_STATUS> callable, long maxWaitTime) {
+        int counter = 0;
+        long startTime = System.currentTimeMillis();
+        long currentTotalWaitTime = 0L;
+        while ((System.currentTimeMillis() - startTime) < maxWaitTime) {
+            if (counter > 0) {
+                long nextWaitTime = Math.min(getCheckPollTime() * counter, MAX_CHECK_POLL_TIME);
+                if (currentTotalWaitTime + nextWaitTime > maxWaitTime) {
+                    nextWaitTime = maxWaitTime - currentTotalWaitTime;
+                }
+                getRunUtil().sleep(nextWaitTime);
+                currentTotalWaitTime += nextWaitTime;
+            }
+            counter++;
+            try {
+                BUSY_WAIT_STATUS res = callable.call();
+                if (BUSY_WAIT_STATUS.SUCCESS.equals(res)) {
+                    return true;
+                }
+                if (BUSY_WAIT_STATUS.ABORT.equals(res)) {
+                    return false;
+                }
+            } catch (Exception e) {
+                CLog.e(e);
+            }
+        }
+        return false;
+    }
+
+    private enum BUSY_WAIT_STATUS {
+        CONTINUE_WAITING,
+        ABORT,
+        SUCCESS,
     }
 }

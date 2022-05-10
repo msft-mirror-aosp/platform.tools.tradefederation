@@ -15,9 +15,6 @@
  */
 package com.android.tradefed.testtype.suite.params;
 
-import android.platform.test.annotations.AppModeFull;
-import android.platform.test.annotations.AppModeInstant;
-
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.targetprep.ITargetPreparer;
@@ -29,7 +26,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /** Handler for {@link ModuleParameters#INSTANT_APP}. */
-public class InstantAppHandler implements IModuleParameter {
+public class InstantAppHandler implements IModuleParameterHandler {
 
     /** {@inheritDoc} */
     @Override
@@ -58,9 +55,9 @@ public class InstantAppHandler implements IModuleParameter {
                 // clearing/reset of the annotations.
                 Set<String> excludeAnnotations = new HashSet<>(filterTest.getExcludeAnnotations());
                 // Remove any global filter on AppModeInstant so instant mode tests can run.
-                excludeAnnotations.remove(AppModeInstant.class.getCanonicalName());
+                excludeAnnotations.remove("android.platform.test.annotations.AppModeInstant");
                 // Prevent full mode tests from running.
-                excludeAnnotations.add(AppModeFull.class.getCanonicalName());
+                excludeAnnotations.add("android.platform.test.annotations.AppModeFull");
                 // Reset the annotations of the tests
                 filterTest.clearExcludeAnnotations();
                 filterTest.addAllExcludeAnnotation(excludeAnnotations);

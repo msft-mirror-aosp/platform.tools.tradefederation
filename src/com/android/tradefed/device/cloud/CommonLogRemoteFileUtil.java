@@ -19,6 +19,7 @@ import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
@@ -30,6 +31,7 @@ import com.android.tradefed.util.ZipUtil;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -44,11 +46,30 @@ public class CommonLogRemoteFileUtil {
     public static final String EMULATOR_REMOTE_LOG_DIR = "/home/%s/log/";
     public static final String TOMBSTONES_ZIP_NAME = "tombstones-zip";
 
+    /** The directory where to find emulator logs from Oxygen service. */
+    public static final String OXYGEN_EMULATOR_LOG_DIR = "/tmp/device_launcher/";
+    /** The directory where to find Oxygen device logs. */
+    public static final String OXYGEN_CUTTLEFISH_LOG_DIR =
+            "/tmp/cfbase/3/cuttlefish/instances/cvd-1/logs/";
+    /**
+     * The directory where to find Oxygen device runtime logs. Only use this if
+     * OXYGEN_CUTTLEFISH_LOG_DIR is not found.
+     */
+    public static final String OXYGEN_RUNTIME_LOG_DIR = "/tmp/cfbase/3/cuttlefish_runtime/";
+
+    public static final List<KnownLogFileEntry> OXYGEN_LOG_FILES = new ArrayList<>();
+    /** For older version of cuttlefish, log files only exists in cuttlefish_runtime directory. */
+    public static final List<KnownLogFileEntry> OXYGEN_LOG_FILES_FALLBACK = new ArrayList<>();
+
     public static final MultiMap<InstanceType, KnownLogFileEntry> KNOWN_FILES_TO_FETCH =
             new MultiMap<>();
 
     static {
         // Cuttlefish known files to collect
+        KNOWN_FILES_TO_FETCH.put(
+                InstanceType.CUTTLEFISH,
+                new KnownLogFileEntry(
+                        "/home/%s/fetcher_config.json", null, LogDataType.TEXT));
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.CUTTLEFISH,
                 new KnownLogFileEntry(
@@ -67,6 +88,9 @@ public class CommonLogRemoteFileUtil {
                         NESTED_REMOTE_LOG_DIR + "launcher.log",
                         "cuttlefish_launcher.log",
                         LogDataType.TEXT));
+        KNOWN_FILES_TO_FETCH.put(
+                InstanceType.CUTTLEFISH,
+                new KnownLogFileEntry("/var/log/kern.log", "host_kernel.log", LogDataType.TEXT));
         // Emulator known files to collect
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.EMULATOR,
@@ -84,6 +108,24 @@ public class CommonLogRemoteFileUtil {
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.EMULATOR,
                 new KnownLogFileEntry("/var/log/daemon.log", null, LogDataType.TEXT));
+        KNOWN_FILES_TO_FETCH.put(
+                InstanceType.EMULATOR,
+                new KnownLogFileEntry("/var/log/kern.log", "host_kernel.log", LogDataType.TEXT));
+
+        OXYGEN_LOG_FILES.add(new KnownLogFileEntry(OXYGEN_EMULATOR_LOG_DIR, null, LogDataType.DIR));
+        OXYGEN_LOG_FILES.add(
+                new KnownLogFileEntry(OXYGEN_CUTTLEFISH_LOG_DIR, null, LogDataType.DIR));
+        OXYGEN_LOG_FILES_FALLBACK.add(
+                new KnownLogFileEntry(
+                        OXYGEN_RUNTIME_LOG_DIR + "launcher.log", null, LogDataType.TEXT));
+        OXYGEN_LOG_FILES_FALLBACK.add(
+                new KnownLogFileEntry(
+                        OXYGEN_RUNTIME_LOG_DIR + "vdl_stdout.txt", null, LogDataType.TEXT));
+        OXYGEN_LOG_FILES_FALLBACK.add(
+                new KnownLogFileEntry(
+                        OXYGEN_RUNTIME_LOG_DIR + "kernel.log", null, LogDataType.TEXT));
+        OXYGEN_LOG_FILES_FALLBACK.add(
+                new KnownLogFileEntry(OXYGEN_RUNTIME_LOG_DIR + "logcat", null, LogDataType.TEXT));
     }
 
     /** A representation of a known log entry for remote devices. */
@@ -118,6 +160,14 @@ public class CommonLogRemoteFileUtil {
         }
         // Capture known extra files
         List<KnownLogFileEntry> toFetch = KNOWN_FILES_TO_FETCH.get(options.getInstanceType());
+        if (options.useOxygen()) {
+            // Override the list of logs to collect when the device is hosted by Oxygen service.
+            toFetch = new ArrayList<>(OXYGEN_LOG_FILES);
+            if (!RemoteFileUtil.doesRemoteFileExist(
+                    gceAvd, options, runUtil, 60000, OXYGEN_CUTTLEFISH_LOG_DIR)) {
+                toFetch.addAll(OXYGEN_LOG_FILES_FALLBACK);
+            }
+        }
         if (toFetch != null) {
             for (KnownLogFileEntry entry : toFetch) {
                 LogRemoteFile(
@@ -139,6 +189,44 @@ public class CommonLogRemoteFileUtil {
             // TODO: Improve type of files.
             LogRemoteFile(testLogger, gceAvd, options, runUtil, file, LogDataType.TEXT, null);
         }
+    }
+
+    /**
+     * Execute a command on remote instance and log its output
+     *
+     * @param testLogger The {@link ITestLogger} where to log the files.
+     * @param gceAvd The descriptor of the remote instance.
+     * @param options The {@link TestDeviceOptions} describing the device options
+     * @param runUtil A {@link IRunUtil} to execute commands.
+     * @param logName the log name to use when reporting to the {@link ITestLogger}
+     * @param remoteCommand the command line to be executed on remote instance
+     */
+    public static void logRemoteCommandOutput(
+            ITestLogger testLogger,
+            GceAvdInfo gceAvd,
+            TestDeviceOptions options,
+            IRunUtil runUtil,
+            String logName,
+            String... remoteCommand) {
+        if (gceAvd == null) {
+            CLog.e("GceAvdInfo was null, cannot collect remote files.");
+            return;
+        }
+        CommandResult commandResult =
+                GceManager.remoteSshCommandExecution(
+                        gceAvd, options, runUtil, 60000, remoteCommand);
+        StringBuilder builder = new StringBuilder();
+        builder.append(String.format("Command: %s\n", remoteCommand));
+        builder.append(
+                String.format(
+                        "Exit code: %d, Status: %s\n",
+                        commandResult.getExitCode(), commandResult.getStatus()));
+        builder.append(String.format("stdout:\n%s\n", commandResult.getStdout()));
+        builder.append(String.format("stderr:\n%s\n", commandResult.getStderr()));
+        testLogger.testLog(
+                logName,
+                LogDataType.TEXT,
+                new ByteArrayInputStreamSource(builder.toString().getBytes()));
     }
 
     /**

@@ -50,6 +50,8 @@ public class GceRemoteCmdFormatter {
         List<String> cmd = new ArrayList<>();
         cmd.add("ssh");
         cmd.add("-o");
+        cmd.add("LogLevel=ERROR");
+        cmd.add("-o");
         cmd.add("UserKnownHostsFile=/dev/null");
         cmd.add("-o");
         cmd.add("StrictHostKeyChecking=no");
@@ -91,6 +93,8 @@ public class GceRemoteCmdFormatter {
             ScpMode mode) {
         List<String> cmd = new ArrayList<>();
         cmd.add("scp");
+        cmd.add("-o");
+        cmd.add("LogLevel=ERROR");
         cmd.add("-o");
         cmd.add("UserKnownHostsFile=/dev/null");
         cmd.add("-o");
