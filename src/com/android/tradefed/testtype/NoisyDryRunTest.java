@@ -187,12 +187,25 @@ public class NoisyDryRunTest implements IRemoteTest {
         // This only partially check the sandbox setup. It only checks that the NON_VERSIONED part
         // of the configuration is fine.
         // TODO(b/75033502, b/110545254): also run the noisy dry run in the sandbox.
-        IConfiguration config =
-                SandboxConfigurationFactory.getInstance()
-                        .createConfigurationFromArgs(
-                                args, new DryRunKeyStore(), createSandbox(), createRunUtil(), null);
-        // Do not resolve dynamic files
-        config.validateOptions();
+        File globalConfig = null;
+        try {
+            globalConfig = FileUtil.createTempFile("noisy_dry_run_global_config", ".xml");
+            FileUtil.writeToFile("<configuration></configuration>", globalConfig);
+            IConfiguration config =
+                    SandboxConfigurationFactory.getInstance()
+                            .createConfigurationFromArgs(
+                                    args,
+                                    new DryRunKeyStore(),
+                                    createSandbox(),
+                                    createRunUtil(),
+                                    globalConfig);
+            // Do not resolve dynamic files
+            config.validateOptions();
+        } catch (IOException e) {
+            throw new ConfigurationException(e.getMessage(), e);
+        } finally {
+            FileUtil.deleteFile(globalConfig);
+        }
     }
 
     /** Returns a {@link IRunUtil} implementation. */

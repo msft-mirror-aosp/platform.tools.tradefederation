@@ -16,8 +16,6 @@
 
 package com.android.tradefed.testtype;
 
-import com.android.ddmlib.FileListingService;
-import com.android.ddmlib.Log;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
@@ -25,6 +23,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IFileEntry;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
@@ -41,7 +40,6 @@ import java.util.concurrent.TimeUnit;
 @OptionClass(alias = "native-stress")
 public class NativeStressTest implements IDeviceTest, IRemoteTest {
 
-    private static final String LOG_TAG = "NativeStressTest";
     static final String DEFAULT_TEST_PATH = "data/nativestresstest";
 
     // The metrics key names to report to listeners
@@ -131,7 +129,7 @@ public class NativeStressTest implements IDeviceTest, IRemoteTest {
     private String getTestPath() {
         StringBuilder testPath = new StringBuilder(mDeviceTestPath);
         if (mTestModule != null) {
-            testPath.append(FileListingService.FILE_SEPARATOR);
+            testPath.append("/");
             testPath.append(mTestModule);
         }
         return testPath.toString();
@@ -159,8 +157,7 @@ public class NativeStressTest implements IDeviceTest, IRemoteTest {
             // use name of file as run name
             NativeStressTestParser resultParser = createResultParser(rootEntry.getName());
             String fullPath = rootEntry.getFullEscapedPath();
-            Log.i(LOG_TAG, String.format("Running native stress test %s on %s", fullPath,
-                    mDevice.getSerialNumber()));
+            CLog.i("Running native stress test %s on %s", fullPath, mDevice.getSerialNumber());
             // force file to be executable
             testDevice.executeShellCommand(String.format("chmod 755 %s", fullPath));
             int startIteration = 0;
@@ -169,8 +166,7 @@ public class NativeStressTest implements IDeviceTest, IRemoteTest {
             listener.testRunStarted(resultParser.getRunName(), 0);
             try {
                 for (int i = 0; i < mNumRuns; i++) {
-                    Log.i(LOG_TAG, String.format("Running %s for %d iterations",
-                            rootEntry.getName(), mNumIterations));
+                    CLog.i("Running %s for %d iterations", rootEntry.getName(), mNumIterations);
                     // -s is start iteration, -e means end iteration
                     // use maxShellOutputResponseTime to enforce the max iteration time
                     // it won't be exact, but should be close
@@ -196,9 +192,9 @@ public class NativeStressTest implements IDeviceTest, IRemoteTest {
         int iterationsComplete = parser.getIterationsCompleted();
         float avgIterationTime = iterationsComplete > 0 ? elapsedTime / iterationsComplete : 0;
         Map<String, String> metricMap = new HashMap<String, String>(2);
-        Log.i(LOG_TAG, String.format(
+        CLog.i(
                 "Stress test %s is finished. Num iterations %d, avg time %f ms",
-                parser.getRunName(), iterationsComplete, avgIterationTime));
+                parser.getRunName(), iterationsComplete, avgIterationTime);
         metricMap.put(ITERATION_KEY, Integer.toString(iterationsComplete));
         metricMap.put(AVG_ITERATION_TIME_KEY, Float.toString(avgIterationTime));
         listener.testRunEnded(elapsedTime, TfMetricProtoUtil.upgradeConvert(metricMap));
@@ -230,8 +226,9 @@ public class NativeStressTest implements IDeviceTest, IRemoteTest {
         String testPath = getTestPath();
         IFileEntry nativeTestDirectory = mDevice.getFileEntry(testPath);
         if (nativeTestDirectory == null) {
-            Log.w(LOG_TAG, String.format("Could not find native stress test directory %s in %s!",
-                    testPath, mDevice.getSerialNumber()));
+            CLog.w(
+                    "Could not find native stress test directory %s in %s!",
+                    testPath, mDevice.getSerialNumber());
             return;
         }
         doRunAllTestsInSubdirectory(nativeTestDirectory, mDevice, listener);

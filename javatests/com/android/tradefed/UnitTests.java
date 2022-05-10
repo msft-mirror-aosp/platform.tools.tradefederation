@@ -47,9 +47,7 @@ import com.android.tradefed.command.CommandOptionsTest;
 import com.android.tradefed.command.CommandRunnerTest;
 import com.android.tradefed.command.CommandSchedulerTest;
 import com.android.tradefed.command.ConsoleTest;
-import com.android.tradefed.command.console.ConfigCompletorTest;
-import com.android.tradefed.command.remote.RemoteManagerTest;
-import com.android.tradefed.command.remote.RemoteOperationTest;
+import com.android.tradefed.command.console.ConfigCompleterTest;
 import com.android.tradefed.config.ArgsOptionParserTest;
 import com.android.tradefed.config.ConfigurationDefTest;
 import com.android.tradefed.config.ConfigurationDescriptorTest;
@@ -63,6 +61,8 @@ import com.android.tradefed.config.OptionSetterTest;
 import com.android.tradefed.config.OptionUpdateRuleTest;
 import com.android.tradefed.config.RetryConfigurationFactoryTest;
 import com.android.tradefed.config.SandboxConfigurationFactoryTest;
+import com.android.tradefed.config.filter.CommandOptionsGetterTest;
+import com.android.tradefed.config.filter.OptionFetcherTest;
 import com.android.tradefed.config.gcs.GCSConfigurationFactoryTest;
 import com.android.tradefed.config.gcs.GCSConfigurationServerTest;
 import com.android.tradefed.config.proxy.AutomatedReportersTest;
@@ -92,15 +92,22 @@ import com.android.tradefed.device.cloud.GceRemoteCmdFormatterTest;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitorTest;
 import com.android.tradefed.device.cloud.ManagedRemoteDeviceTest;
 import com.android.tradefed.device.cloud.NestedRemoteDeviceTest;
+import com.android.tradefed.device.cloud.OxygenUtilTest;
+import com.android.tradefed.device.cloud.OxygenClientTest;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDeviceTest;
 import com.android.tradefed.device.cloud.RemoteFileUtilTest;
 import com.android.tradefed.device.contentprovider.ContentProviderHandlerTest;
 import com.android.tradefed.device.helper.TelephonyHelperTest;
+import com.android.tradefed.device.internal.DeviceReleaseReporterTest;
+import com.android.tradefed.device.internal.DeviceResetFeatureTest;
+import com.android.tradefed.device.internal.DeviceResetHandlerTest;
+import com.android.tradefed.device.internal.EarlyDeviceReleaseFeatureTest;
 import com.android.tradefed.device.metric.AtraceCollectorTest;
 import com.android.tradefed.device.metric.AtraceRunMetricCollectorTest;
 import com.android.tradefed.device.metric.AutoLogCollectorTest;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollectorTest;
 import com.android.tradefed.device.metric.BugreportzOnFailureCollectorTest;
+import com.android.tradefed.device.metric.BugreportzOnTestCaseFailureCollectorTest;
 import com.android.tradefed.device.metric.ClangCodeCoverageCollectorTest;
 import com.android.tradefed.device.metric.DebugHostLogOnFailureCollectorTest;
 import com.android.tradefed.device.metric.DeviceMetricDataTest;
@@ -109,7 +116,6 @@ import com.android.tradefed.device.metric.FilePullerDeviceMetricCollectorTest;
 import com.android.tradefed.device.metric.FilePullerLogCollectorTest;
 import com.android.tradefed.device.metric.GcovCodeCoverageCollectorTest;
 import com.android.tradefed.device.metric.HostStatsdMetricCollectorTest;
-import com.android.tradefed.device.metric.IncidentReportCollectorTest;
 import com.android.tradefed.device.metric.JavaCodeCoverageCollectorTest;
 import com.android.tradefed.device.metric.LogcatOnFailureCollectorTest;
 import com.android.tradefed.device.metric.LogcatTimingMetricCollectorTest;
@@ -117,11 +123,13 @@ import com.android.tradefed.device.metric.PerfettoPullerMetricCollectorTest;
 import com.android.tradefed.device.metric.RebootReasonCollectorTest;
 import com.android.tradefed.device.metric.RuntimeRestartCollectorTest;
 import com.android.tradefed.device.metric.ScreenshotOnFailureCollectorTest;
+import com.android.tradefed.device.metric.ShowmapPullerMetricCollectorTest;
 import com.android.tradefed.device.recovery.BatteryUnavailableDeviceRecoveryTest;
 import com.android.tradefed.device.recovery.RunConfigDeviceRecoveryTest;
 import com.android.tradefed.device.recovery.UsbResetMultiDeviceRecoveryTest;
 import com.android.tradefed.device.recovery.UsbResetRunConfigRecoveryTest;
 import com.android.tradefed.error.HarnessExceptionTest;
+import com.android.tradefed.external_dependency.ExternalDependencyTest;
 import com.android.tradefed.guice.InvocationScopeTest;
 import com.android.tradefed.host.LocalHostResourceManagerTest;
 import com.android.tradefed.host.gcs.GCSHostResourceManagerTest;
@@ -161,6 +169,7 @@ import com.android.tradefed.monitoring.collector.ResourceMetricUtilTest;
 import com.android.tradefed.postprocessor.AggregatePostProcessorTest;
 import com.android.tradefed.postprocessor.AveragePostProcessorTest;
 import com.android.tradefed.postprocessor.BasePostProcessorTest;
+import com.android.tradefed.postprocessor.MetricFilePostProcessorTest;
 import com.android.tradefed.postprocessor.PerfettoGenericPostProcessorTest;
 import com.android.tradefed.postprocessor.StatsdBeforeAfterGaugeMetricPostProcessorTest;
 import com.android.tradefed.postprocessor.StatsdEventMetricPostProcessorTest;
@@ -171,12 +180,8 @@ import com.android.tradefed.result.CollectingTestListenerTest;
 import com.android.tradefed.result.ConsoleResultReporterTest;
 import com.android.tradefed.result.CountingTestResultListenerTest;
 import com.android.tradefed.result.DeviceFileReporterTest;
-import com.android.tradefed.result.DeviceUnavailEmailResultReporterTest;
-import com.android.tradefed.result.EmailResultReporterTest;
 import com.android.tradefed.result.FailureDescriptionTest;
-import com.android.tradefed.result.FailureEmailResultReporterTest;
 import com.android.tradefed.result.FileSystemLogSaverTest;
-import com.android.tradefed.result.InvocationFailureEmailResultReporterTest;
 import com.android.tradefed.result.InvocationToJUnitResultForwarderTest;
 import com.android.tradefed.result.JUnitToInvocationResultForwarderTest;
 import com.android.tradefed.result.JsonHttpTestResultReporterTest;
@@ -190,13 +195,11 @@ import com.android.tradefed.result.ReportPassedTestsTest;
 import com.android.tradefed.result.SnapshotInputStreamSourceTest;
 import com.android.tradefed.result.SubprocessResultsReporterTest;
 import com.android.tradefed.result.TestDescriptionTest;
-import com.android.tradefed.result.TestFailureEmailResultReporterTest;
 import com.android.tradefed.result.TestResultListenerTest;
 import com.android.tradefed.result.TestResultTest;
 import com.android.tradefed.result.TestRunResultTest;
 import com.android.tradefed.result.TestSummaryTest;
 import com.android.tradefed.result.XmlResultReporterTest;
-import com.android.tradefed.result.ddmlib.InstrumentationResultProtoParserTest;
 import com.android.tradefed.result.ddmlib.TestRunToTestInvocationForwarderTest;
 import com.android.tradefed.result.error.ErrorIdentifierTest;
 import com.android.tradefed.result.proto.FileProtoResultReporterTest;
@@ -211,7 +214,9 @@ import com.android.tradefed.sandbox.SandboxConfigDumpTest;
 import com.android.tradefed.sandbox.SandboxConfigUtilTest;
 import com.android.tradefed.sandbox.SandboxInvocationRunnerTest;
 import com.android.tradefed.sandbox.TradefedSandboxTest;
+import com.android.tradefed.service.management.TestInvocationManagementServerTest;
 import com.android.tradefed.suite.checker.ActivityStatusCheckerTest;
+import com.android.tradefed.suite.checker.DeviceBaselineCheckerTest;
 import com.android.tradefed.suite.checker.DeviceSettingCheckerTest;
 import com.android.tradefed.suite.checker.DeviceStorageStatusCheckerTest;
 import com.android.tradefed.suite.checker.EnforcedSeLinuxCheckerTest;
@@ -229,6 +234,7 @@ import com.android.tradefed.targetprep.BaseTargetPreparerTest;
 import com.android.tradefed.targetprep.CreateUserPreparerTest;
 import com.android.tradefed.targetprep.DefaultTestsZipInstallerTest;
 import com.android.tradefed.targetprep.DeviceFlashPreparerTest;
+import com.android.tradefed.targetprep.DeviceOwnerTargetPreparerTest;
 import com.android.tradefed.targetprep.DeviceSetupTest;
 import com.android.tradefed.targetprep.DeviceStorageFillerTest;
 import com.android.tradefed.targetprep.DeviceStringPusherTest;
@@ -244,6 +250,8 @@ import com.android.tradefed.targetprep.InstallApkSetupTest;
 import com.android.tradefed.targetprep.InstrumentationPreparerTest;
 import com.android.tradefed.targetprep.KnownFailurePreparerTest;
 import com.android.tradefed.targetprep.LocalEmulatorLaunchTest;
+import com.android.tradefed.targetprep.ModuleOemTargetPreparerTest;
+import com.android.tradefed.targetprep.ModulePusherTest;
 import com.android.tradefed.targetprep.PushFilePreparerTest;
 import com.android.tradefed.targetprep.PythonVirtualenvPreparerTest;
 import com.android.tradefed.targetprep.RebootTargetPreparerTest;
@@ -253,6 +261,7 @@ import com.android.tradefed.targetprep.RunCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostScriptTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparerTest;
+import com.android.tradefed.targetprep.RunOnSystemUserTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnWorkProfileTargetPreparerTest;
 import com.android.tradefed.targetprep.StopServicesSetupTest;
 import com.android.tradefed.targetprep.SwitchUserTargetPreparerTest;
@@ -287,7 +296,6 @@ import com.android.tradefed.testtype.HostGTestTest;
 import com.android.tradefed.testtype.HostTestTest;
 import com.android.tradefed.testtype.InstalledInstrumentationsTestTest;
 import com.android.tradefed.testtype.InstrumentationFileTestTest;
-import com.android.tradefed.testtype.InstrumentationSerialTestTest;
 import com.android.tradefed.testtype.InstrumentationTestTest;
 import com.android.tradefed.testtype.IsolatedHostTestTest;
 import com.android.tradefed.testtype.JarHostTestTest;
@@ -306,6 +314,7 @@ import com.android.tradefed.testtype.binary.ExecutableTargetTestTest;
 import com.android.tradefed.testtype.host.CoverageMeasurementForwarderTest;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4TestTest;
 import com.android.tradefed.testtype.junit4.DeviceParameterizedRunnerTest;
+import com.android.tradefed.testtype.junit4.JUnit4ResultForwarderTest;
 import com.android.tradefed.testtype.junit4.LongevityHostRunnerTest;
 import com.android.tradefed.testtype.mobly.MoblyBinaryHostTestTest;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultParserTest;
@@ -326,7 +335,9 @@ import com.android.tradefed.testtype.suite.ModuleListenerTest;
 import com.android.tradefed.testtype.suite.ModuleMergerTest;
 import com.android.tradefed.testtype.suite.ModuleSplitterTest;
 import com.android.tradefed.testtype.suite.RemoteTestTimeOutEnforcerTest;
+import com.android.tradefed.testtype.suite.ResolvePartialDownloadTest;
 import com.android.tradefed.testtype.suite.SuiteModuleLoaderTest;
+import com.android.tradefed.testtype.suite.SuiteTestFilterTest;
 import com.android.tradefed.testtype.suite.TestFailureListenerTest;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunnerTest;
 import com.android.tradefed.testtype.suite.TestSuiteInfoTest;
@@ -338,11 +349,14 @@ import com.android.tradefed.testtype.suite.module.CarModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.DeviceFeatureModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.MinApiLevelModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.NativeBridgeModuleControllerTest;
+import com.android.tradefed.testtype.suite.module.PackageInstalledModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.ShippingApiLevelModuleControllerTest;
 import com.android.tradefed.testtype.suite.params.InstantAppHandlerTest;
 import com.android.tradefed.testtype.suite.params.MainlineModuleHandlerTest;
 import com.android.tradefed.testtype.suite.params.ModuleParametersHelperTest;
 import com.android.tradefed.testtype.suite.params.SecondaryUserHandlerTest;
+import com.android.tradefed.testtype.suite.params.multiuser.RunOnSecondaryUserParameterHandlerTest;
+import com.android.tradefed.testtype.suite.params.multiuser.RunOnWorkProfileParameterHandlerTest;
 import com.android.tradefed.testtype.suite.retry.ResultsPlayerTest;
 import com.android.tradefed.testtype.suite.retry.RetryReschedulerTest;
 import com.android.tradefed.util.AaptParserTest;
@@ -374,6 +388,7 @@ import com.android.tradefed.util.KeyguardControllerStateTest;
 import com.android.tradefed.util.ListInstrumentationParserTest;
 import com.android.tradefed.util.LocalRunInstructionBuilderTest;
 import com.android.tradefed.util.LogcatEventParserTest;
+import com.android.tradefed.util.MetricUtilityTest;
 import com.android.tradefed.util.MultiMapTest;
 import com.android.tradefed.util.NativeCodeCoverageFlusherTest;
 import com.android.tradefed.util.PairTest;
@@ -478,11 +493,7 @@ import org.junit.runners.Suite.SuiteClasses;
     ConsoleTest.class,
 
     // command.console
-    ConfigCompletorTest.class,
-
-    // command.remote
-    RemoteManagerTest.class,
-    RemoteOperationTest.class,
+    ConfigCompleterTest.class,
 
     // config
     ArgsOptionParserTest.class,
@@ -498,6 +509,10 @@ import org.junit.runners.Suite.SuiteClasses;
     OptionUpdateRuleTest.class,
     RetryConfigurationFactoryTest.class,
     SandboxConfigurationFactoryTest.class,
+
+    // config.filter
+    CommandOptionsGetterTest.class,
+    OptionFetcherTest.class,
 
     // config.gcs
     GCSConfigurationServerTest.class,
@@ -540,6 +555,8 @@ import org.junit.runners.Suite.SuiteClasses;
     GceSshTunnelMonitorTest.class,
     ManagedRemoteDeviceTest.class,
     NestedRemoteDeviceTest.class,
+    OxygenClientTest.class,
+    OxygenUtilTest.class,
     RemoteAndroidVirtualDeviceTest.class,
     RemoteFileUtilTest.class,
 
@@ -549,11 +566,18 @@ import org.junit.runners.Suite.SuiteClasses;
     // device.helper
     TelephonyHelperTest.class,
 
+    // device.internal
+    DeviceResetFeatureTest.class,
+    DeviceResetHandlerTest.class,
+    EarlyDeviceReleaseFeatureTest.class,
+    DeviceReleaseReporterTest.class,
+
     // device.metric
     AtraceCollectorTest.class,
     AtraceRunMetricCollectorTest.class,
     AutoLogCollectorTest.class,
     BaseDeviceMetricCollectorTest.class,
+    BugreportzOnTestCaseFailureCollectorTest.class,
     BugreportzOnFailureCollectorTest.class,
     ClangCodeCoverageCollectorTest.class,
     DebugHostLogOnFailureCollectorTest.class,
@@ -562,7 +586,6 @@ import org.junit.runners.Suite.SuiteClasses;
     FilePullerDeviceMetricCollectorTest.class,
     FilePullerLogCollectorTest.class,
     GcovCodeCoverageCollectorTest.class,
-    IncidentReportCollectorTest.class,
     JavaCodeCoverageCollectorTest.class,
     LogcatOnFailureCollectorTest.class,
     LogcatTimingMetricCollectorTest.class,
@@ -570,6 +593,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RebootReasonCollectorTest.class,
     RuntimeRestartCollectorTest.class,
     ScreenshotOnFailureCollectorTest.class,
+    ShowmapPullerMetricCollectorTest.class,
     HostStatsdMetricCollectorTest.class,
 
     // device.recovery
@@ -580,6 +604,9 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // error
     HarnessExceptionTest.class,
+
+    // external_dependency
+    ExternalDependencyTest.class,
 
     // Guice
     InvocationScopeTest.class,
@@ -634,6 +661,7 @@ import org.junit.runners.Suite.SuiteClasses;
     AggregatePostProcessorTest.class,
     AveragePostProcessorTest.class,
     BasePostProcessorTest.class,
+    MetricFilePostProcessorTest.class,
     PerfettoGenericPostProcessorTest.class,
     StatsdBeforeAfterGaugeMetricPostProcessorTest.class,
     StatsdEventMetricPostProcessorTest.class,
@@ -646,12 +674,8 @@ import org.junit.runners.Suite.SuiteClasses;
     ConsoleResultReporterTest.class,
     CountingTestResultListenerTest.class,
     DeviceFileReporterTest.class,
-    DeviceUnavailEmailResultReporterTest.class,
-    EmailResultReporterTest.class,
     FailureDescriptionTest.class,
-    FailureEmailResultReporterTest.class,
     FileSystemLogSaverTest.class,
-    InvocationFailureEmailResultReporterTest.class,
     InvocationToJUnitResultForwarderTest.class,
     JsonHttpTestResultReporterTest.class,
     JUnitToInvocationResultForwarderTest.class,
@@ -662,7 +686,6 @@ import org.junit.runners.Suite.SuiteClasses;
     MultiFailureDescriptionTest.class,
     SnapshotInputStreamSourceTest.class,
     SubprocessResultsReporterTest.class,
-    TestFailureEmailResultReporterTest.class,
     PassingTestFileReporterTest.class,
     ReportPassedTestsTest.class,
     TestDescriptionTest.class,
@@ -673,7 +696,6 @@ import org.junit.runners.Suite.SuiteClasses;
     XmlResultReporterTest.class,
 
     // result.ddmlib
-    InstrumentationResultProtoParserTest.class,
     TestRunToTestInvocationForwarderTest.class,
 
     // result.error
@@ -701,6 +723,7 @@ import org.junit.runners.Suite.SuiteClasses;
     CreateUserPreparerTest.class,
     DefaultTestsZipInstallerTest.class,
     DeviceFlashPreparerTest.class,
+    DeviceOwnerTargetPreparerTest.class,
     DeviceSetupTest.class,
     DeviceStorageFillerTest.class,
     DeviceStringPusherTest.class,
@@ -716,6 +739,8 @@ import org.junit.runners.Suite.SuiteClasses;
     InstrumentationPreparerTest.class,
     KnownFailurePreparerTest.class,
     LocalEmulatorLaunchTest.class,
+    ModuleOemTargetPreparerTest.class,
+    ModulePusherTest.class,
     PushFilePreparerTest.class,
     PythonVirtualenvPreparerTest.class,
     RebootTargetPreparerTest.class,
@@ -725,6 +750,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RunHostCommandTargetPreparerTest.class,
     RunHostScriptTargetPreparerTest.class,
     RunOnSecondaryUserTargetPreparerTest.class,
+    RunOnSystemUserTargetPreparerTest.class,
     RunOnWorkProfileTargetPreparerTest.class,
     StopServicesSetupTest.class,
     SystemUpdaterDeviceFlasherTest.class,
@@ -755,8 +781,12 @@ import org.junit.runners.Suite.SuiteClasses;
     SandboxInvocationRunnerTest.class,
     TradefedSandboxTest.class,
 
+    // service.management
+    TestInvocationManagementServerTest.class,
+
     // suite/checker
     ActivityStatusCheckerTest.class,
+    DeviceBaselineCheckerTest.class,
     DeviceSettingCheckerTest.class,
     DeviceStorageStatusCheckerTest.class,
     EnforcedSeLinuxCheckerTest.class,
@@ -789,7 +819,6 @@ import org.junit.runners.Suite.SuiteClasses;
     HostGTestTest.class,
     HostTestTest.class,
     InstalledInstrumentationsTestTest.class,
-    InstrumentationSerialTestTest.class,
     InstrumentationFileTestTest.class,
     InstrumentationTestTest.class,
     IsolatedHostTestTest.class,
@@ -812,6 +841,7 @@ import org.junit.runners.Suite.SuiteClasses;
     // testtype/junit4
     BaseHostJUnit4TestTest.class,
     DeviceParameterizedRunnerTest.class,
+    JUnit4ResultForwarderTest.class,
     LongevityHostRunnerTest.class,
 
     // testtype/mobly
@@ -840,7 +870,9 @@ import org.junit.runners.Suite.SuiteClasses;
     ModuleMergerTest.class,
     ModuleSplitterTest.class,
     RemoteTestTimeOutEnforcerTest.class,
+    ResolvePartialDownloadTest.class,
     SuiteModuleLoaderTest.class,
+    SuiteTestFilterTest.class,
     TestFailureListenerTest.class,
     TestMappingSuiteRunnerTest.class,
     TestSuiteInfoTest.class,
@@ -854,12 +886,15 @@ import org.junit.runners.Suite.SuiteClasses;
     DeviceFeatureModuleControllerTest.class,
     MinApiLevelModuleControllerTest.class,
     NativeBridgeModuleControllerTest.class,
+    PackageInstalledModuleControllerTest.class,
     ShippingApiLevelModuleControllerTest.class,
 
     // testtype/suite/params
     InstantAppHandlerTest.class,
     MainlineModuleHandlerTest.class,
     ModuleParametersHelperTest.class,
+    RunOnSecondaryUserParameterHandlerTest.class,
+    RunOnWorkProfileParameterHandlerTest.class,
     SecondaryUserHandlerTest.class,
 
     // testtype/suite/retry
@@ -896,6 +931,7 @@ import org.junit.runners.Suite.SuiteClasses;
     LegacySubprocessResultsReporterTest.class,
     ListInstrumentationParserTest.class,
     LogcatEventParserTest.class,
+    MetricUtilityTest.class,
     MultiMapTest.class,
     MergedZipEntryCollectionTest.class,
     NativeCodeCoverageFlusherTest.class,

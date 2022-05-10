@@ -89,6 +89,7 @@ public class ConfigurationUtil {
                 obj,
                 false,
                 excludeClassFilter,
+                new NoOpConfigOptionValueTransformer(),
                 printDeprecatedOptions,
                 printUnchangedOptions);
     }
@@ -112,6 +113,7 @@ public class ConfigurationUtil {
             Object obj,
             boolean isGenericObject,
             List<String> excludeClassFilter,
+            IConfigOptionValueTransformer transformer,
             boolean printDeprecatedOptions,
             boolean printUnchangedOptions)
             throws IOException {
@@ -125,12 +127,14 @@ public class ConfigurationUtil {
             serializer.startTag(null, "object");
             serializer.attribute(null, "type", classTypeName);
             serializer.attribute(null, CLASS_NAME, obj.getClass().getName());
-            dumpOptionsToXml(serializer, obj, printDeprecatedOptions, printUnchangedOptions);
+            dumpOptionsToXml(
+                    serializer, obj, transformer, printDeprecatedOptions, printUnchangedOptions);
             serializer.endTag(null, "object");
         } else {
             serializer.startTag(null, classTypeName);
             serializer.attribute(null, CLASS_NAME, obj.getClass().getName());
-            dumpOptionsToXml(serializer, obj, printDeprecatedOptions, printUnchangedOptions);
+            dumpOptionsToXml(
+                    serializer, obj, transformer, printDeprecatedOptions, printUnchangedOptions);
             serializer.endTag(null, classTypeName);
         }
     }
@@ -147,6 +151,7 @@ public class ConfigurationUtil {
     private static void dumpOptionsToXml(
             KXmlSerializer serializer,
             Object obj,
+            IConfigOptionValueTransformer transformer,
             boolean printDeprecatedOptions,
             boolean printUnchangedOptions)
             throws IOException {
@@ -182,27 +187,29 @@ public class ConfigurationUtil {
 
             if (fieldVal instanceof Collection) {
                 for (Object entry : (Collection) fieldVal) {
+                    entry = transformer.transform(obj, option, entry);
                     dumpOptionToXml(serializer, option.name(), null, entry.toString());
                 }
             } else if (fieldVal instanceof Map) {
                 Map map = (Map) fieldVal;
                 for (Object entryObj : map.entrySet()) {
                     Map.Entry entry = (Entry) entryObj;
+                    Object value = entry.getValue();
+                    value = transformer.transform(obj, option, value);
                     dumpOptionToXml(
-                            serializer,
-                            option.name(),
-                            entry.getKey().toString(),
-                            entry.getValue().toString());
+                            serializer, option.name(), entry.getKey().toString(), value.toString());
                 }
             } else if (fieldVal instanceof MultiMap) {
                 MultiMap multimap = (MultiMap) fieldVal;
                 for (Object keyObj : multimap.keySet()) {
                     for (Object valueObj : multimap.get(keyObj)) {
+                        valueObj = transformer.transform(obj, option, valueObj);
                         dumpOptionToXml(
                                 serializer, option.name(), keyObj.toString(), valueObj.toString());
                     }
                 }
             } else {
+                fieldVal = transformer.transform(obj, option, fieldVal);
                 dumpOptionToXml(serializer, option.name(), null, fieldVal.toString());
             }
         }

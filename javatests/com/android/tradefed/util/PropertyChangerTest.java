@@ -15,7 +15,13 @@
  */
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -27,18 +33,17 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
-/**
- * Functional test for {@link PropertyChanger}
- */
-public class PropertyChangerTest extends TestCase {
+/** Functional test for {@link PropertyChanger} */
+@RunWith(JUnit4.class)
+public class PropertyChangerTest {
 
     private File mTmpInput;
     private File mTmpOutput;
     private Map<String, String> mOriginal, mChanges, mExpected;
 
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
+    @Before
+    public void setUp() throws Exception {
+
         mTmpInput = FileUtil.createTempFile("prop_test_in", ".prop");
         mOriginal = new HashMap<String, String>();
         mOriginal.put("foo1", "bar1");
@@ -58,20 +63,20 @@ public class PropertyChangerTest extends TestCase {
         mExpected.put("foo5", "bar5-new");
     }
 
+    @Test
     public void testChangeProperty() throws Exception {
         mTmpOutput = PropertyChanger.changeProperties(mTmpInput, mChanges);
         verifyProperties(mTmpOutput, mExpected);
     }
 
-    @Override
-    protected void tearDown() throws Exception {
+    @After
+    public void tearDown() throws Exception {
         if (mTmpInput != null && mTmpInput.exists()) {
             mTmpInput.delete();
         }
         if (mTmpOutput != null && mTmpOutput.exists()) {
             mTmpOutput.delete();
         }
-        super.tearDown();
     }
 
     private void writeProperties(File output, Map<String, String> props) throws IOException {

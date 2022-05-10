@@ -16,6 +16,7 @@
 package com.android.tradefed.testtype;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.Option;
@@ -30,13 +31,15 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner.TestMetrics;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.junit.runners.Suite.SuiteClasses;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -49,19 +52,18 @@ public class DeviceSuiteTest {
 
     // We use HostTest as a runner for JUnit4 Suite
     private HostTest mHostTest;
-    private ITestDevice mMockDevice;
+    @Mock ITestDevice mMockDevice;
     private TestInformation mTestInfo;
-    private ITestInvocationListener mListener;
-    private IBuildInfo mMockBuildInfo;
-    private IAbi mMockAbi;
+    @Mock ITestInvocationListener mListener;
+    @Mock IBuildInfo mMockBuildInfo;
+    @Mock IAbi mMockAbi;
 
     @Before
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mHostTest = new HostTest();
-        mMockDevice = EasyMock.createMock(ITestDevice.class);
-        mListener = EasyMock.createMock(ITestInvocationListener.class);
-        mMockBuildInfo = EasyMock.createMock(IBuildInfo.class);
-        mMockAbi = EasyMock.createMock(IAbi.class);
+
         mHostTest.setDevice(mMockDevice);
         mHostTest.setBuild(mMockBuildInfo);
         mHostTest.setAbi(mMockAbi);
@@ -75,8 +77,7 @@ public class DeviceSuiteTest {
     }
 
     @RunWith(DeviceJUnit4ClassRunner.class)
-    public static class Junit4DeviceTestclass implements IDeviceTest, IAbiReceiver,
-            IBuildReceiver {
+    public static class Junit4DeviceTestclass implements IDeviceTest, IAbiReceiver, IBuildReceiver {
         public static ITestDevice sDevice;
         public static IBuildInfo sBuildInfo;
         public static IAbi sAbi;
@@ -128,8 +129,7 @@ public class DeviceSuiteTest {
     @SuiteClasses({
         Junit4DeviceTestclass.class,
     })
-    public class Junit4DeviceSuite {
-    }
+    public class Junit4DeviceSuite {}
 
     /** JUnit3 test class */
     public static class JUnit3DeviceTestCase extends DeviceTestCase
@@ -169,21 +169,25 @@ public class DeviceSuiteTest {
     public void testRunDeviceSuite() throws Exception {
         OptionSetter setter = new OptionSetter(mHostTest);
         setter.setOptionValue("class", Junit4DeviceSuite.class.getName());
-        mListener.testRunStarted(
-                EasyMock.eq("com.android.tradefed.testtype.DeviceSuiteTest$Junit4DeviceSuite"),
-                EasyMock.eq(2));
+
         TestDescription test1 =
                 new TestDescription(Junit4DeviceTestclass.class.getName(), "testPass1");
         TestDescription test2 =
                 new TestDescription(Junit4DeviceTestclass.class.getName(), "testPass2");
-        mListener.testStarted(EasyMock.eq(test1));
-        mListener.testEnded(EasyMock.eq(test1), EasyMock.eq(new HashMap<String, Metric>()));
-        mListener.testStarted(EasyMock.eq(test2));
-        mListener.testEnded(EasyMock.eq(test2), EasyMock.eq(new HashMap<String, Metric>()));
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.eq(new HashMap<String, Metric>()));
-        EasyMock.replay(mListener, mMockDevice);
+
         mHostTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener, mMockDevice);
+
+        verify(mListener)
+                .testRunStarted(
+                        Mockito.eq(
+                                "com.android.tradefed.testtype.DeviceSuiteTest$Junit4DeviceSuite"),
+                        Mockito.eq(2));
+        verify(mListener).testStarted(Mockito.eq(test1));
+        verify(mListener).testEnded(Mockito.eq(test1), Mockito.eq(new HashMap<String, Metric>()));
+        verify(mListener).testStarted(Mockito.eq(test2));
+        verify(mListener).testEnded(Mockito.eq(test2), Mockito.eq(new HashMap<String, Metric>()));
+        verify(mListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.eq(new HashMap<String, Metric>()));
         // Verify that all setters were called on Test class inside suite
         assertEquals(mMockDevice, Junit4DeviceTestclass.sDevice);
         assertEquals(mMockBuildInfo, Junit4DeviceTestclass.sBuildInfo);
@@ -198,17 +202,21 @@ public class DeviceSuiteTest {
         mHostTest.addIncludeAnnotation(
                 "com.android.tradefed.testtype.DeviceSuiteTest$MyAnnotation1");
         assertEquals(1, mHostTest.countTestCases());
-        mListener.testRunStarted(
-                EasyMock.eq("com.android.tradefed.testtype.DeviceSuiteTest$Junit4DeviceSuite"),
-                EasyMock.eq(1));
+
         TestDescription test1 =
                 new TestDescription(Junit4DeviceTestclass.class.getName(), "testPass1");
-        mListener.testStarted(EasyMock.eq(test1));
-        mListener.testEnded(EasyMock.eq(test1), EasyMock.eq(new HashMap<String, Metric>()));
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.eq(new HashMap<String, Metric>()));
-        EasyMock.replay(mListener, mMockDevice);
+
         mHostTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener, mMockDevice);
+
+        verify(mListener)
+                .testRunStarted(
+                        Mockito.eq(
+                                "com.android.tradefed.testtype.DeviceSuiteTest$Junit4DeviceSuite"),
+                        Mockito.eq(1));
+        verify(mListener).testStarted(Mockito.eq(test1));
+        verify(mListener).testEnded(Mockito.eq(test1), Mockito.eq(new HashMap<String, Metric>()));
+        verify(mListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.eq(new HashMap<String, Metric>()));
     }
 
     /** Tests that options are piped from Suite to the sub-runners. */
@@ -217,24 +225,30 @@ public class DeviceSuiteTest {
         OptionSetter setter = new OptionSetter(mHostTest);
         setter.setOptionValue("class", Junit4DeviceSuite.class.getName());
         setter.setOptionValue("set-option", "option:value_test");
-        mListener.testRunStarted(
-                EasyMock.eq("com.android.tradefed.testtype.DeviceSuiteTest$Junit4DeviceSuite"),
-                EasyMock.eq(2));
+
         TestDescription test1 =
                 new TestDescription(Junit4DeviceTestclass.class.getName(), "testPass1");
         TestDescription test2 =
                 new TestDescription(Junit4DeviceTestclass.class.getName(), "testPass2");
-        mListener.testStarted(EasyMock.eq(test1));
+
         Map<String, String> expected = new HashMap<>();
         expected.put("option", "value_test");
-        mListener.testEnded(
-                EasyMock.eq(test1), EasyMock.eq(TfMetricProtoUtil.upgradeConvert(expected)));
-        mListener.testStarted(EasyMock.eq(test2));
-        mListener.testEnded(EasyMock.eq(test2), EasyMock.eq(new HashMap<String, Metric>()));
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.eq(new HashMap<String, Metric>()));
-        EasyMock.replay(mListener, mMockDevice);
+
         mHostTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener, mMockDevice);
+
+        verify(mListener)
+                .testRunStarted(
+                        Mockito.eq(
+                                "com.android.tradefed.testtype.DeviceSuiteTest$Junit4DeviceSuite"),
+                        Mockito.eq(2));
+        verify(mListener).testStarted(Mockito.eq(test1));
+        verify(mListener)
+                .testEnded(
+                        Mockito.eq(test1), Mockito.eq(TfMetricProtoUtil.upgradeConvert(expected)));
+        verify(mListener).testStarted(Mockito.eq(test2));
+        verify(mListener).testEnded(Mockito.eq(test2), Mockito.eq(new HashMap<String, Metric>()));
+        verify(mListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.eq(new HashMap<String, Metric>()));
     }
 
     /** Test that a JUnit3 class inside our JUnit4 suite can receive the usual values. */
@@ -242,16 +256,20 @@ public class DeviceSuiteTest {
     public void testRunDeviceSuite_junit3() throws Exception {
         OptionSetter setter = new OptionSetter(mHostTest);
         setter.setOptionValue("class", JUnit4SuiteWithJunit3.class.getName());
-        mListener.testRunStarted(
-                EasyMock.eq("com.android.tradefed.testtype.DeviceSuiteTest$JUnit4SuiteWithJunit3"),
-                EasyMock.eq(1));
+
         TestDescription test1 =
                 new TestDescription(JUnit3DeviceTestCase.class.getName(), "testOne");
-        mListener.testStarted(EasyMock.eq(test1));
-        mListener.testEnded(EasyMock.eq(test1), EasyMock.eq(new HashMap<String, Metric>()));
-        mListener.testRunEnded(EasyMock.anyLong(), EasyMock.eq(new HashMap<String, Metric>()));
-        EasyMock.replay(mListener, mMockDevice);
+
         mHostTest.run(mTestInfo, mListener);
-        EasyMock.verify(mListener, mMockDevice);
+
+        verify(mListener)
+                .testRunStarted(
+                        Mockito.eq(
+                                "com.android.tradefed.testtype.DeviceSuiteTest$JUnit4SuiteWithJunit3"),
+                        Mockito.eq(1));
+        verify(mListener).testStarted(Mockito.eq(test1));
+        verify(mListener).testEnded(Mockito.eq(test1), Mockito.eq(new HashMap<String, Metric>()));
+        verify(mListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.eq(new HashMap<String, Metric>()));
     }
 }

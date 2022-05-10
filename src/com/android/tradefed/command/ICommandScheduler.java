@@ -26,6 +26,7 @@ import com.android.tradefed.device.NoDeviceException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.ITestInvocation;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.util.Pair;
 
 import java.io.PrintWriter;
 import java.util.List;
@@ -71,20 +72,22 @@ public interface ICommandScheduler {
 
     /**
      * Adds a command to the scheduler.
-     * <p/>
-     * A command is essentially an instance of a configuration to run and its associated arguments.
-     * <p/>
-     * If "--help" argument is specified the help text for
-     * the config will be outputed to stdout. Otherwise, the config will be added to the queue to
-     * run.
+     *
+     * <p>A command is essentially an instance of a configuration to run and its associated
+     * arguments.
+     *
+     * <p>If "--help" argument is specified the help text for the config will be outputed to stdout.
+     * Otherwise, the config will be added to the queue to run.
      *
      * @param args the config arguments.
-     * @return <code>true</code> if command was added successfully
+     * @return A pair of values, first value is a Boolean <code>true</code> if command was added
+     *     successfully. Second value is the known command tracker id(non-negative value) if the
+     *     command was added successfully, return 0 when command is added for all devices, otherwise
+     *     -1.
      * @throws ConfigurationException if command could not be parsed
-     *
      * @see IConfigurationFactory#createConfigurationFromArgs(String[])
      */
-    public boolean addCommand(String[] args) throws ConfigurationException;
+    public Pair<Boolean, Integer> addCommand(String[] args) throws ConfigurationException;
 
     /**
      * Adds all commands from given file to the scheduler
@@ -159,29 +162,6 @@ public interface ICommandScheduler {
      * Note that if any commands are in loop mode, the scheduler will never exit.
      */
     public void shutdownOnEmpty();
-
-    /**
-     * Initiates a {@link #shutdown()} and handover to another tradefed process on this same host.
-     * <p/>
-     * The scheduler will inform the remote tradefed process listening on that port of freed devices
-     * as they become available.
-     *
-     * @return <code>true</code> if handover initiation was successful, <code>false</code>
-     * otherwise
-     */
-    public boolean handoverShutdown(int handoverPort);
-
-    /**
-     * Informs the command scheduler that initial handover exchange of devices and commands in use
-     * is complete, and it can begin scheduling operation.
-     */
-    public void handoverInitiationComplete();
-
-    /**
-     * Informs the command scheduler that a initiated handover sequence is fully complete, and it
-     * should re-initialize its remote manager on the default port.
-     */
-    public void completeHandover();
 
     /** Attempt to forcefully shutdown the command scheduler. Same as shutdownHard(true). */
     public void shutdownHard();

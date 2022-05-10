@@ -140,11 +140,6 @@ public class UsbHelper implements AutoCloseable {
         return null;
     }
 
-    @VisibleForTesting
-    UsbDevice connect(@Nonnull Pointer devicePointer) {
-        return new UsbDevice(this, devicePointer);
-    }
-
     /**
      * Wait for a USB device using its serial number.
      *
@@ -163,6 +158,11 @@ public class UsbHelper implements AutoCloseable {
         }
 
         return device;
+    }
+
+    @VisibleForTesting
+    UsbDevice connect(@Nonnull Pointer devicePointer) {
+        return new UsbDevice(this, devicePointer);
     }
 
     /**
