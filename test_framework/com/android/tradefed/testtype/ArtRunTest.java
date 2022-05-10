@@ -33,6 +33,9 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.RunUtil;
 
+import difflib.DiffUtils;
+import difflib.Patch;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -52,9 +55,6 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import difflib.DiffUtils;
-import difflib.Patch;
-
 /** A test runner to run ART run-tests. */
 public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceiver {
 
@@ -63,7 +63,8 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
     private static final Path ART_APEX_PATH = Paths.get("/apex", "com.android.art");
 
     private static final String DALVIKVM_CMD =
-            "dalvikvm|#BITNESS#| -classpath |#CLASSPATH#| |#MAINCLASS#|";
+            "dalvikvm|#BITNESS#| -Xcompiler-option --compile-art-test -classpath |#CLASSPATH#| "
+                    + "|#MAINCLASS#|";
 
     // Name of the Checker Python Archive (PAR) file.
     public static final String CHECKER_PAR_FILENAME = "art-run-test-checker";
@@ -361,94 +362,102 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
     protected Optional<String> executeCheckerTest(
             TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        // TODO: Encapsulate the device temp dir creation logic in its own method.
-        String tmpCheckerDir =
-                String.format("/data/local/tmp/%s", mRunTestName.replaceAll("/", "-"));
-        String mkdirCmd = String.format("mkdir -p \"%s\"", tmpCheckerDir);
-        CommandResult mkdirResult = mDevice.executeShellV2Command(mkdirCmd);
-        if (mkdirResult.getStatus() != CommandStatus.SUCCESS) {
-            String errorMessage =
+
+        /**
+         * An internal exception class for errors related to the preparation and execution of the
+         * Checker tool.
+         */
+        class CheckerTestException extends Exception {
+            CheckerTestException(String format, Object... args) {
+                super(String.format(format, args));
+            }
+        }
+
+        // Temporary directory used to store files used in Checker test.
+        File runTestDir = null;
+
+        try {
+            // TODO: Encapsulate the device temp dir creation logic in its own method.
+            String tmpCheckerDir =
+                    String.format("/data/local/tmp/%s", mRunTestName.replaceAll("/", "-"));
+            String mkdirCmd = String.format("mkdir -p \"%s\"", tmpCheckerDir);
+            CommandResult mkdirResult = mDevice.executeShellV2Command(mkdirCmd);
+            if (mkdirResult.getStatus() != CommandStatus.SUCCESS) {
+                throw new CheckerTestException(
+                        "Cannot create directory `%s` on device", mkdirResult.getStderr());
+            }
+
+            String cfgPath = tmpCheckerDir + "/graph.cfg";
+            String oatPath = tmpCheckerDir + "/output.oat";
+            String abi = mAbi.getName();
+            String dex2oatBinary = "dex2oat" + AbiUtils.getBitness(abi);
+            Path dex2oatPath = Paths.get(ART_APEX_PATH.toString(), "bin", dex2oatBinary);
+            String dex2oatCmd =
                     String.format(
-                            "Cannot create directory `%s` on device", mkdirResult.getStderr());
+                            "%s --dex-file=%s --oat-file=%s --dump-cfg=%s -j1 --compile-art-test",
+                            dex2oatPath, mClasspath.get(0), oatPath, cfgPath);
+            CommandResult dex2oatResult = mDevice.executeShellV2Command(dex2oatCmd);
+            if (dex2oatResult.getStatus() != CommandStatus.SUCCESS) {
+                throw new CheckerTestException(
+                        "Error while running dex2oat: %s", dex2oatResult.getStderr());
+            }
+
+            try {
+                runTestDir =
+                        Files.createTempDirectory(
+                                        testInfo.dependenciesFolder().toPath(), mRunTestName)
+                                .toFile();
+            } catch (IOException e) {
+                throw new CheckerTestException("I/O error while creating test dir: %s", e);
+            }
+
+            File localCfgPath = new File(runTestDir, "graph.cfg");
+            if (localCfgPath.isFile()) {
+                localCfgPath.delete();
+            }
+
+            if (!mDevice.pullFile(cfgPath, localCfgPath)) {
+                throw new CheckerTestException("Cannot pull CFG file from the device");
+            }
+
+            File tempJar = new File(runTestDir, "temp.jar");
+            if (!mDevice.pullFile(mClasspath.get(0), tempJar)) {
+                throw new CheckerTestException("Cannot pull JAR file from the device");
+            }
+
+            try {
+                extractSourcesFromJar(runTestDir, tempJar);
+            } catch (IOException e) {
+                throw new CheckerTestException("Error unpacking test JAR file: %s", e);
+            }
+
+            String checkerArch = AbiUtils.getArchForAbi(mAbi.getName()).toUpperCase();
+
+            File checkerBinary = getCheckerBinaryPath(testInfo);
+
+            String[] checkerCommandLine = {
+                checkerBinary.getAbsolutePath(),
+                "--no-print-cfg",
+                "-q",
+                "--arch=" + checkerArch,
+                localCfgPath.getAbsolutePath(),
+                runTestDir.getAbsolutePath()
+            };
+
+            Optional<String> checkerError = runChecker(checkerCommandLine);
+            if (checkerError.isPresent()) {
+                listener.testLog(
+                        "graph.cfg", LogDataType.CFG, new FileInputStreamSource(localCfgPath));
+                CLog.i(checkerError.get());
+                return checkerError;
+            }
+        } catch (CheckerTestException e) {
+            String errorMessage = e.getMessage();
             CLog.e(errorMessage);
             return Optional.of(errorMessage);
+        } finally {
+            FileUtil.recursiveDelete(runTestDir);
         }
-
-        String cfgPath = tmpCheckerDir + "/graph.cfg";
-        String oatPath = tmpCheckerDir + "/output.oat";
-        String abi = mAbi.getName();
-        String dex2oatBinary = "dex2oat" + AbiUtils.getBitness(abi);
-        Path dex2oatPath = Paths.get(ART_APEX_PATH.toString(), "bin", dex2oatBinary);
-        String dex2oatCmd =
-                String.format(
-                        "%s --dex-file=%s --oat-file=%s --dump-cfg=%s -j1",
-                        dex2oatPath, mClasspath.get(0), oatPath, cfgPath);
-        CommandResult dex2oatResult = mDevice.executeShellV2Command(dex2oatCmd);
-        if (dex2oatResult.getStatus() != CommandStatus.SUCCESS) {
-            String errorMessage =
-                    String.format("Error while running dex2oat: %s", dex2oatResult.getStderr());
-            CLog.e(errorMessage);
-            return Optional.of(errorMessage);
-        }
-
-        File runTestDir;
-        try {
-            runTestDir =
-                    Files.createTempDirectory(testInfo.dependenciesFolder().toPath(), mRunTestName)
-                            .toFile();
-        } catch (IOException e) {
-            String errorMessage = String.format("I/O error while creating test dir: %s", e);
-            CLog.e(errorMessage);
-            return Optional.of(errorMessage);
-        }
-
-        File localCfgPath = new File(runTestDir, "graph.cfg");
-        if (localCfgPath.isFile()) {
-            localCfgPath.delete();
-        }
-
-        if (!mDevice.pullFile(cfgPath, localCfgPath)) {
-            String errorMessage = "Cannot pull CFG file from the device";
-            CLog.e(errorMessage);
-            return Optional.of(errorMessage);
-        }
-
-        File tempJar = new File(runTestDir, "temp.jar");
-        if (!mDevice.pullFile(mClasspath.get(0), tempJar)) {
-            String errorMessage = "Cannot pull JAR file from the device";
-            CLog.e(errorMessage);
-            return Optional.of(errorMessage);
-        }
-
-        try {
-            extractSourcesFromJar(runTestDir, tempJar);
-        } catch (IOException e) {
-            String errorMessage = String.format("Error unpacking test JAR file: %s", e);
-            CLog.e(errorMessage);
-            return Optional.of(errorMessage);
-        }
-
-        String checkerArch = AbiUtils.getArchForAbi(mAbi.getName()).toUpperCase();
-
-        File checkerBinary = getCheckerBinaryPath(testInfo);
-
-        String[] checkerCommandLine = {
-            checkerBinary.getAbsolutePath(),
-            "--no-print-cfg",
-            "-q",
-            "--arch=" + checkerArch,
-            localCfgPath.getAbsolutePath(),
-            runTestDir.getAbsolutePath()
-        };
-
-        Optional<String> checkerError = runChecker(checkerCommandLine);
-        if (checkerError.isPresent()) {
-            listener.testLog("graph.cfg", LogDataType.CFG, new FileInputStreamSource(localCfgPath));
-            CLog.i(checkerError.get());
-            return checkerError;
-        }
-
-        FileUtil.recursiveDelete(runTestDir);
         return Optional.empty();
     }
 
@@ -474,8 +483,8 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
      */
     protected Optional<String> runChecker(String[] checkerCommandLine) {
         CLog.d("About to run Checker command: %s", String.join(" ", checkerCommandLine));
-        CommandResult result = RunUtil.getDefault().runTimedCmd(CHECKER_TIMEOUT_MS,
-                checkerCommandLine);
+        CommandResult result =
+                RunUtil.getDefault().runTimedCmd(CHECKER_TIMEOUT_MS, checkerCommandLine);
         if (result.getStatus() != CommandStatus.SUCCESS) {
             String errorMessage;
             if (result.getStatus() == CommandStatus.TIMED_OUT) {
@@ -501,9 +510,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         return Optional.empty();
     }
 
-    /**
-     * Extract src directory from given jar file to given directory
-     */
+    /** Extract src directory from given jar file to given directory */
     protected void extractSourcesFromJar(File runTestDir, File jar) throws IOException {
         try (ZipFile archive = new ZipFile(jar)) {
             File srcFile = new File(runTestDir, "src");
@@ -562,14 +569,25 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             String expected, String actual, String expectedFileName, String actualFileName) {
         List<String> expectedLines = Arrays.asList(expected.split("\\r?\\n"));
         List<String> actualLines = Arrays.asList(actual.split("\\r?\\n"));
-        Patch<String> diff = DiffUtils.diff(expectedLines, actualLines);
-        List<String> unifiedDiff =
-                DiffUtils.generateUnifiedDiff(
-                        expectedFileName, actualFileName, expectedLines, diff, 3);
-        StringBuilder diffOutput = new StringBuilder();
-        for (String delta : unifiedDiff) {
-            diffOutput.append(delta).append('\n');
+
+        // This try block is necessary to be compatible with a more recent
+        // version of diffutil that declares a checked exception on the `diff`
+        // method.  This transforms any exceptions in this block into
+        // runtime exceptions which as there are no checked exceptions in here
+        // at present, doesn't actually change anything.
+        // TODO: properly handle DiffException when we can do so.
+        try {
+            Patch<String> diff = DiffUtils.diff(expectedLines, actualLines);
+            List<String> unifiedDiff =
+                    DiffUtils.generateUnifiedDiff(
+                            expectedFileName, actualFileName, expectedLines, diff, 3);
+            StringBuilder diffOutput = new StringBuilder();
+            for (String delta : unifiedDiff) {
+                diffOutput.append(delta).append('\n');
+            }
+            return diffOutput.toString();
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
         }
-        return diffOutput.toString();
     }
 }

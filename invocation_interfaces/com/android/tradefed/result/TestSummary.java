@@ -91,19 +91,22 @@ public class TestSummary {
     public void setSource(String source) {
         mSource = source;
     }
-    public void setSummary(TypedString summary) {
-        mSummary = summary;
-    }
-    public void addKvEntry(String key, TypedString value) {
-        mKvStore.put(key, value);
-    }
 
     // trampolines
     public void setSummary(String summary) {
         setSummary(new TypedString(summary));
     }
+
+    public void setSummary(TypedString summary) {
+        mSummary = summary;
+    }
+
     public void addKvEntry(String key, String value) {
         addKvEntry(key, new TypedString(value));
+    }
+
+    public void addKvEntry(String key, TypedString value) {
+        mKvStore.put(key, value);
     }
 
     public String getSource() {

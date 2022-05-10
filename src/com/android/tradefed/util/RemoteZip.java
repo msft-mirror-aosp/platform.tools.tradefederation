@@ -184,9 +184,7 @@ public class RemoteZip {
                     LocalFileHeader localFileHeader =
                             new LocalFileHeader(
                                     partialZipFile,
-                                    (int)
-                                            (entry.getLocalHeaderOffset()
-                                                    - collection.getStartOffset()));
+                                    entry.getLocalHeaderOffset() - collection.getStartOffset());
                     ZipUtil.unzipPartialZipFile(
                             partialZipFile,
                             targetFile,

@@ -67,15 +67,6 @@ public class LogFileSaver {
         mInvLogPathSegments.add(invLogDirName);
     }
 
-    private File createTempDir() {
-        try {
-            return FileUtil.createTempDir("inv_");
-        } catch (IOException e) {
-            // uh oh, this can't be good, abort tradefed
-            throw new FatalHostError("Cannot create tmp directory.", e);
-        }
-    }
-
     /**
      * Creates a {@link LogFileSaver}.
      * <p/>
@@ -96,6 +87,15 @@ public class LogFileSaver {
      */
     public LogFileSaver(File rootDir) {
         this(null, rootDir, null);
+    }
+
+    private File createTempDir() {
+        try {
+            return FileUtil.createTempDir("inv_");
+        } catch (IOException e) {
+            // uh oh, this can't be good, abort tradefed
+            throw new FatalHostError("Cannot create tmp directory.", e);
+        }
     }
 
     /**
@@ -217,10 +217,9 @@ public class LogFileSaver {
             mInvLogDir.mkdirs();
         }
         // add underscore to end of data name to make generated name more readable
-        File logFile = FileUtil.createTempFile(saneDataName + "_", "." + ext,
-                mInvLogDir);
+        File logFile = FileUtil.createTempFile(saneDataName + "_", "." + ext, mInvLogDir);
         FileUtil.writeToFile(dataStream, logFile);
-        CLog.i("Saved log file %s", logFile.getAbsolutePath());
+        CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
         return logFile;
     }
 
@@ -248,7 +247,7 @@ public class LogFileSaver {
             bufInput = new BufferedInputStream(dataStream);
             outStream = createGZipLogStream(logFile);
             StreamUtil.copyStreams(bufInput, outStream);
-            CLog.i("Saved log file %s", logFile.getAbsolutePath());
+            CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
             return logFile;
         } finally {
             StreamUtil.close(bufInput);
@@ -284,7 +283,7 @@ public class LogFileSaver {
                     logFile), BUFFER_SIZE));
             outStream.putNextEntry(new ZipEntry(saneDataName + "." + dataType.getFileExt()));
             StreamUtil.copyStreams(bufInput, outStream);
-            CLog.i("Saved log file %s", logFile.getAbsolutePath());
+            CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
             return logFile;
         } finally {
             StreamUtil.close(bufInput);

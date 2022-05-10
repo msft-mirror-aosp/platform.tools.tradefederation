@@ -35,9 +35,13 @@ public interface IFolderBuildInfo extends IBuildInfo {
      */
     public void setRootDir(File rootDir);
 
+    /** Get the flag which indicates whether fuse-zip is in use for the build artifacts. */
+    public boolean shouldUseFuseZip();
+
     /**
      * Deletes root directory and all its contents.
      */
     @Override
     public void cleanUp();
 }
+

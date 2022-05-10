@@ -240,8 +240,9 @@ public class TerribleFailureEmailHandler implements ITerribleFailureHandler {
      * @return A {@link String} containing the stack trace of the throwable.
      */
     private static String getStackTraceString(Throwable t) {
-        if (t == null)
+        if (t == null) {
             return "";
+        }
 
         StringWriter sw = new StringWriter();
         PrintWriter pw = new PrintWriter(sw);

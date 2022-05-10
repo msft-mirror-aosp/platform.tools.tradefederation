@@ -65,7 +65,6 @@ public class LogSaverResultForwarder extends ResultForwarder implements ILogSave
     @Override
     public void invocationEnded(long elapsedTime) {
         InvocationSummaryHelper.reportInvocationEnded(getListeners(), elapsedTime);
-        reportEndHostLog(mLogSaver, TestInvocation.TRADEFED_END_HOST_LOG);
         // Intentionally call invocationEnded for the log saver last.
         try {
             mLogSaver.invocationEnded(elapsedTime);
@@ -73,6 +72,7 @@ public class LogSaverResultForwarder extends ResultForwarder implements ILogSave
             CLog.e("Caught runtime exception from log saver: %s", mLogSaver.getClass().getName());
             CLog.e(e);
         }
+        reportEndHostLog(mLogSaver, TestInvocation.TRADEFED_END_HOST_LOG);
     }
 
     /** Reports host_log from session in progress. */

@@ -24,8 +24,10 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.UniqueMultiMap;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -228,6 +230,12 @@ public class CommandOptions implements ICommandOptions {
     private boolean mEnableEarlyDeviceRelease = true;
 
     @Option(
+            name = "delegated-early-device-release",
+            description =
+                    "Feature flag to enable early device release when running in delegated mode.")
+    private boolean mEnableDelegatedEarlyDeviceRelease = false;
+
+    @Option(
             name = "dynamic-download-args",
             description =
                     "Extra args passed to the IRemoteFileResolver interface for dynamic download "
@@ -245,9 +253,25 @@ public class CommandOptions implements ICommandOptions {
     private boolean mReportPassedTests = true;
 
     @Option(
+            name = "filter-previous-passed",
+            description = "Feature flag to test filtering previously passed tests.")
+    private boolean mTestFilterPassed = true;
+
+    @Option(
             name = "report-invocation-complete-logs",
             description = "Whether or not to attempt to report the logs until invocationComplete.")
-    private boolean mReportInvocationCompleteLogs = false;
+    private boolean mReportInvocationCompleteLogs = true;
+
+    @Option(
+            name = "disable-invocation-setup-and-teardown",
+            description = "Disable the pre-invocation setup and post-invocation teardown phases.")
+    private boolean mDisableInvocationSetupAndTeardown = false;
+
+    @Option(
+            name = "multi-device-count",
+            description = "The number of devices for multi-device tests. For a new feature "
+                                  + "under developing, not for other uses.")
+    private Integer mMultiDeviceCount;
 
     /**
      * Set the help mode for the config.
@@ -598,6 +622,18 @@ public class CommandOptions implements ICommandOptions {
 
     /** {@inheritDoc} */
     @Override
+    public boolean delegatedEarlyDeviceRelease() {
+        return mEnableDelegatedEarlyDeviceRelease;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setDelegatedEarlyDeviceRelease(boolean earlyRelease) {
+        mEnableDelegatedEarlyDeviceRelease = earlyRelease;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public Map<String, String> getDynamicDownloadArgs() {
         return mDynamicDownloadArgs;
     }
@@ -622,6 +658,12 @@ public class CommandOptions implements ICommandOptions {
 
     /** {@inheritDoc} */
     @Override
+    public boolean filterPreviousPassedTests() {
+        return mTestFilterPassed;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean reportInvocationComplete() {
         return mReportInvocationCompleteLogs;
     }
@@ -630,5 +672,29 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public void setReportInvocationComplete(boolean reportInvocationCompleteLogs) {
         mReportInvocationCompleteLogs = reportInvocationCompleteLogs;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<String> reportingTags() {
+        List<String> tags = new ArrayList<>();
+        // Convert a few of the enabled features into easily consumable tag that can be displayed
+        // to see if a feature is enabled.
+        if (filterPreviousPassedTests()) {
+            tags.add("incremental_retry");
+        }
+        return tags;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldDisableInvocationSetupAndTeardown() {
+        return mDisableInvocationSetupAndTeardown;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Integer getMultiDeviceCount() {
+        return mMultiDeviceCount;
     }
 }

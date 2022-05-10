@@ -99,6 +99,14 @@ public class QuotationAwareTokenizerTest {
         verify(input, expected, ",");
     }
 
+    /** Tokenizing line with extra whitespace between flags, using whitespace as delimiter. */
+    @Test
+    public void testTokenizeLine_extraSpace() throws IllegalArgumentException {
+        String input = "--firstFlag stringOne  --secondFlag stringTwo";
+        String[] expected = new String[] {"--firstFlag", "stringOne", "--secondFlag", "stringTwo"};
+        verify(input, expected, " ");
+    }
+
     /** Inverse of {@link #testTokenizeLine_whitespace}. */
     @Test
     public void testCombineTokens_whitespace() throws IllegalArgumentException {

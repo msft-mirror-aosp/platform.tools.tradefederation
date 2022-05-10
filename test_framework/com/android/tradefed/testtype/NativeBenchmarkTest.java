@@ -16,14 +16,13 @@
 
 package com.android.tradefed.testtype;
 
-import com.android.ddmlib.FileListingService;
-import com.android.ddmlib.Log;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IFileEntry;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
@@ -44,7 +43,6 @@ import java.util.concurrent.TimeUnit;
 @OptionClass(alias = "native-benchmark")
 public class NativeBenchmarkTest implements IDeviceTest, IRemoteTest {
 
-    private static final String LOG_TAG = "NativeStressTest";
     static final String DEFAULT_TEST_PATH = "data/nativebenchmark";
 
     // The metrics key names to report to listeners
@@ -71,9 +69,11 @@ public class NativeBenchmarkTest implements IDeviceTest, IRemoteTest {
             description="The number of benchmark test iterations per run.")
     private int mNumIterations = 1000;
 
-    @Option(name = "delay-per-run",
-            description="The delay between each benchmark iteration, in micro seconds." +
-                "Multiple values may be given to specify multiple runs with different delay values.")
+    @Option(
+            name = "delay-per-run",
+            description =
+                    "The delay between each benchmark iteration, in micro seconds.Multiple values"
+                            + " may be given to specify multiple runs with different delay values.")
     // TODO: change units to seconds for consistency with native benchmark module input
     private Collection<Integer> mDelays = new ArrayList<Integer>();
 
@@ -153,7 +153,7 @@ public class NativeBenchmarkTest implements IDeviceTest, IRemoteTest {
     String getTestPath() {
         StringBuilder testPath = new StringBuilder(mDeviceTestPath);
         if (mTestModule != null) {
-            testPath.append(FileListingService.FILE_SEPARATOR);
+            testPath.append("/");
             testPath.append(mTestModule);
         }
         return testPath.toString();
@@ -199,12 +199,14 @@ public class NativeBenchmarkTest implements IDeviceTest, IRemoteTest {
                     NativeBenchmarkTestParser resultParser = createResultParser(runName);
                     // convert delay to seconds
                     double delayFloat = ((double)delay)/1000000;
-                    Log.i(LOG_TAG, String.format("Running %s for %d iterations with delay %f",
-                            rootEntry.getName(), mNumIterations, delayFloat));
+                    CLog.i(
+                            "Running %s for %d iterations with delay %f",
+                            rootEntry.getName(), mNumIterations, delayFloat);
                     String cmd = String.format("%s -n %d -d %f -c %d -s %d", fullPath,
                             mNumIterations, delayFloat, mClientCpu, mServerCpu);
-                    Log.i(LOG_TAG, String.format("Running native benchmark test on %s: %s",
-                            mDevice.getSerialNumber(), cmd));
+                    CLog.i(
+                            "Running native benchmark test on %s: %s",
+                            mDevice.getSerialNumber(), cmd);
                     testDevice.executeShellCommand(cmd, resultParser,
                             mMaxRunTime, TimeUnit.MILLISECONDS, 0);
                     addMetric(metricMap, resultParser, delay);
@@ -254,8 +256,9 @@ public class NativeBenchmarkTest implements IDeviceTest, IRemoteTest {
         String testPath = getTestPath();
         IFileEntry nativeTestDirectory = mDevice.getFileEntry(testPath);
         if (nativeTestDirectory == null) {
-            Log.w(LOG_TAG, String.format("Could not find native benchmark test directory %s in %s!",
-                    testPath, mDevice.getSerialNumber()));
+            CLog.w(
+                    "Could not find native benchmark test directory %s in %s!",
+                    testPath, mDevice.getSerialNumber());
             return;
         }
         if (mMaxCpuFreq) {

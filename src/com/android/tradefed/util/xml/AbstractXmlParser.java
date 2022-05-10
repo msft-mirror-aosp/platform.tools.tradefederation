@@ -15,7 +15,7 @@
  */
 package com.android.tradefed.util.xml;
 
-import com.android.ddmlib.Log;
+import com.android.tradefed.log.LogUtil.CLog;
 
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
@@ -32,8 +32,6 @@ import javax.xml.parsers.SAXParserFactory;
  * Helper base class for parsing xml files
  */
 public abstract class AbstractXmlParser {
-
-    private static final String LOG_TAG = "XmlDefsParser";
 
     /**
      * Thrown if XML input could not be parsed
@@ -61,7 +59,7 @@ public abstract class AbstractXmlParser {
             DefaultHandler handler = createXmlHandler();
             parser.parse(new InputSource(xmlInput), handler);
         } catch (ParserConfigurationException | SAXException | IOException e) {
-            Log.e(LOG_TAG, e);
+            CLog.e(e);
             throw new ParseException(e);
         }
     }

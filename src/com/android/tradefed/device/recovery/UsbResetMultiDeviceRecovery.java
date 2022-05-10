@@ -72,9 +72,9 @@ public class UsbResetMultiDeviceRecovery implements IMultiDeviceRecovery {
             // Android and non-Android devices (supported in 4.1+)
             Set<String> deviceSerials = usb.getSerialNumbers(/* AOAv2-compatible */ true);
 
-            // Find devices currently in fastboot
+            // Find devices currently in fastboot & fastbootd
             FastbootHelper fastboot = getFastbootHelper();
-            Set<String> fastbootSerials = fastboot.getDevices();
+            Set<String> fastbootSerials = fastboot.getBootloaderAndFastbootdDevices().keySet();
 
             // AOA check fails on Fastboot devices, so add them to the set of connected devices
             deviceSerials.addAll(fastbootSerials);
