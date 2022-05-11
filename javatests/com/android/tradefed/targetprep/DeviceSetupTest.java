@@ -261,7 +261,9 @@ public class DeviceSetupTest {
         doCheckExternalStoreSpaceExpectations();
         doSettingExpectations("global", "wifi_on", "1");
         doCommandsExpectations("svc wifi enable");
-        when(mMockDevice.connectToWifiNetwork("wifi_network", "psk")).thenReturn(true);
+        LinkedHashMap<String, String> ssidToPsk = new LinkedHashMap<>();
+        ssidToPsk.put("wifi_network", "psk");
+        when(mMockDevice.connectToWifiNetwork(ssidToPsk)).thenReturn(true);
 
         mDeviceSetup.setWifiNetwork("wifi_network");
         mDeviceSetup.setWifiPsk("psk");
@@ -279,10 +281,12 @@ public class DeviceSetupTest {
         doCheckExternalStoreSpaceExpectations();
         doSettingExpectations("global", "wifi_on", "1");
         doCommandsExpectations("svc wifi enable");
-        when(mMockDevice.connectToWifiNetwork("wifi_network", null)).thenReturn(true);
+        LinkedHashMap<String, String> ssidToPsk = new LinkedHashMap<>();
+        ssidToPsk.put("wifi_network", "");
+        when(mMockDevice.connectToWifiNetwork(ssidToPsk)).thenReturn(true);
 
         mDeviceSetup.setWifiNetwork("wifi_network");
-        mDeviceSetup.setWifiPsk(""); // empty psk becomes null in connectToWifiNetwork
+        mDeviceSetup.setWifiPsk("");
 
         mDeviceSetup.setWifi(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -314,9 +318,11 @@ public class DeviceSetupTest {
         doCheckExternalStoreSpaceExpectations();
         doSettingExpectations("global", "wifi_on", "1");
         doCommandsExpectations("svc wifi enable");
-        when(mMockDevice.connectToWifiNetwork("old_network", "abc")).thenReturn(false);
-        when(mMockDevice.connectToWifiNetwork("network", "def")).thenReturn(false);
-        when(mMockDevice.connectToWifiNetwork("new_network", "ghi")).thenReturn(true);
+        LinkedHashMap<String, String> ssidToPskExpected = new LinkedHashMap<>();
+        ssidToPskExpected.put("old_network", "abc");
+        ssidToPskExpected.put("network", "def");
+        ssidToPskExpected.put("new_network", "ghi");
+        when(mMockDevice.connectToWifiNetwork(ssidToPskExpected)).thenReturn(true);
 
         mDeviceSetup.setWifiNetwork("old_network");
         mDeviceSetup.setWifiPsk("abc");
@@ -338,9 +344,11 @@ public class DeviceSetupTest {
         doCheckExternalStoreSpaceExpectations();
         doSettingExpectations("global", "wifi_on", "1");
         doCommandsExpectations("svc wifi enable");
-        when(mMockDevice.connectToWifiNetwork("old_network", null)).thenReturn(false);
-        when(mMockDevice.connectToWifiNetwork("network", null)).thenReturn(false);
-        when(mMockDevice.connectToWifiNetwork("new_network", null)).thenReturn(true);
+        LinkedHashMap<String, String> ssidToPskExpected = new LinkedHashMap<>();
+        ssidToPskExpected.put("old_network", null);
+        ssidToPskExpected.put("network", "");
+        ssidToPskExpected.put("new_network", "");
+        when(mMockDevice.connectToWifiNetwork(ssidToPskExpected)).thenReturn(true);
 
         mDeviceSetup.setWifiNetwork("old_network");
         mDeviceSetup.setWifiPsk(null);
