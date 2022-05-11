@@ -4004,6 +4004,31 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** {@inheritDoc} */
     @Override
+    public void waitForDeviceBootloader() throws DeviceNotAvailableException {
+        if (mOptions.useUpdatedBootloaderStatus()) {
+            CommandResult commandResult =
+                    simpleFastbootCommand(
+                            mOptions.getFastbootTimeout(),
+                            buildFastbootCommand("getvar", "product"));
+            if (!CommandStatus.SUCCESS.equals(commandResult.getStatus())) {
+                CLog.e(
+                        "Waiting for device in bootloader. Status: %s.\nstdout:%s\nstderr:%s",
+                        commandResult.getStatus(),
+                        commandResult.getStdout(),
+                        commandResult.getStderr());
+                recoverDeviceFromBootloader();
+            } else {
+                setDeviceState(TestDeviceState.FASTBOOT);
+            }
+        } else {
+            if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
+                recoverDeviceFromBootloader();
+            }
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean waitForDeviceInSideload(long waitTime) {
         return mStateMonitor.waitForDeviceInSideload(waitTime);
     }
@@ -5583,29 +5608,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** The log that contains all the {@link #executeShellCommand(String)} logs. */
     public final File getExecuteShellCommandLog() {
         return mExecuteShellCommandLogs;
-    }
-
-    private void waitForDeviceBootloader() throws DeviceNotAvailableException {
-        if (mOptions.useUpdatedBootloaderStatus()) {
-            CommandResult commandResult =
-                    simpleFastbootCommand(
-                            mOptions.getFastbootTimeout(),
-                            buildFastbootCommand("getvar", "product"));
-            if (!CommandStatus.SUCCESS.equals(commandResult.getStatus())) {
-                CLog.e(
-                        "Waiting for device in bootloader. Status: %s.\nstdout:%s\nstderr:%s",
-                        commandResult.getStatus(),
-                        commandResult.getStdout(),
-                        commandResult.getStderr());
-                recoverDeviceFromBootloader();
-            } else {
-                setDeviceState(TestDeviceState.FASTBOOT);
-            }
-        } else {
-            if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
-                recoverDeviceFromBootloader();
-            }
-        }
     }
 
     /** Executes a simple fastboot command and report the status of the command. */
