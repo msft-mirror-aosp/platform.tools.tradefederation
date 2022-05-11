@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.cluster;
 
+import static org.mockito.Mockito.when;
+
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.IDevice.DeviceState;
 import com.android.tradefed.command.remote.DeviceDescriptor;
@@ -28,11 +30,11 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mockito;
 
 /** Unit tests for {@link ClusterHostUtil}. */
 @RunWith(JUnit4.class)
@@ -195,8 +197,8 @@ public class ClusterHostUtilTest {
     @Test
     public void testSupportedRunTargetMatchPattern() {
         String format = "foo-{PRODUCT}-{PRODUCT_VARIANT}-{API_LEVEL}-{DEVICE_PROP:bar}";
-        IDevice mockIDevice = EasyMock.createMock(IDevice.class);
-        EasyMock.expect(mockIDevice.getProperty("bar")).andReturn("zzz");
+        IDevice mockIDevice = Mockito.mock(IDevice.class);
+        when(mockIDevice.getProperty("bar")).thenReturn("zzz");
         DeviceDescriptor device =
                 new DeviceDescriptor(
                         DEVICE_SERIAL,
@@ -213,11 +215,10 @@ public class ClusterHostUtilTest {
                         "",
                         "",
                         mockIDevice);
-        EasyMock.replay(mockIDevice);
+
         Assert.assertEquals(
                 "foo-product-productVariant-sdkVersion-zzz",
                 ClusterHostUtil.getRunTarget(device, format, null));
-        EasyMock.verify(mockIDevice);
     }
 
     // Test all supported run target match patterns with unknown property.
@@ -295,11 +296,10 @@ public class ClusterHostUtilTest {
     @Test
     public void testGetRunTarget_withStubDevice() {
         final String hostname = ClusterHostUtil.getHostName();
-        // with a stub device.
         DeviceDescriptor device =
                 new DeviceDescriptor(
                         DEVICE_SERIAL,
-                        true,
+                        true, // Stub device.
                         DeviceAllocationState.Available,
                         "product",
                         "productVariant",
@@ -312,12 +312,30 @@ public class ClusterHostUtilTest {
     }
 
     @Test
-    public void testGetRunTarget_withEmulator() {
-        final String hostname = ClusterHostUtil.getHostName();
-        // with a stub device.
+    public void testGetRunTarget_withFastbootDevice() {
         DeviceDescriptor device =
                 new DeviceDescriptor(
-                        EMULATOR_SERIAL,
+                        DEVICE_SERIAL,
+                        true, // Stub device.
+                        DeviceAllocationState.Available,
+                        "product",
+                        "productVariant",
+                        "sdkVersion",
+                        "buildId",
+                        "batteryLevel",
+                        FastbootDevice.class.getSimpleName(), // Fastboot device.
+                        "macAddress",
+                        "simState",
+                        "simOperator");
+        Assert.assertEquals(DEVICE_SERIAL, ClusterHostUtil.getRunTarget(device, "{SERIAL}", null));
+    }
+
+    @Test
+    public void testGetRunTarget_withEmulator() {
+        final String hostname = ClusterHostUtil.getHostName();
+        DeviceDescriptor device =
+                new DeviceDescriptor(
+                        EMULATOR_SERIAL, // Emulator.
                         false,
                         DeviceAllocationState.Available,
                         "product",
@@ -333,10 +351,9 @@ public class ClusterHostUtilTest {
     @Test
     public void testGetRunTarget_withEmptyDeviceSerial() {
         final String hostname = ClusterHostUtil.getHostName();
-        // with a stub device.
         DeviceDescriptor device =
                 new DeviceDescriptor(
-                        "",
+                        "", // Empty serial number.
                         false,
                         DeviceAllocationState.Available,
                         "product",

@@ -15,8 +15,8 @@
  */
 package com.android.tradefed.device;
 
-import com.android.ddmlib.Log;
 import com.android.tradefed.config.GlobalConfiguration;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.testtype.DeviceTestCase;
 
 /**
@@ -24,7 +24,6 @@ import com.android.tradefed.testtype.DeviceTestCase;
  */
 public class DeviceManagerFuncTest extends DeviceTestCase {
 
-    private static final String LOG_TAG = "DeviceManagerFuncTest";
     private ITestDevice mUsbDevice;
 
     @Override
@@ -40,8 +39,7 @@ public class DeviceManagerFuncTest extends DeviceTestCase {
      * @throws DeviceNotAvailableException
      */
     public void testReconnectDeviceToTcp_backUsb() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "Starting testReconnectDeviceToTcp_backUsb");
-
+        CLog.i("Starting testReconnectDeviceToTcp_backUsb");
 
         IDeviceManager deviceManager = getDeviceManager();
         ITestDevice tcpDevice = deviceManager.reconnectDeviceToTcp(mUsbDevice);
@@ -74,8 +72,7 @@ public class DeviceManagerFuncTest extends DeviceTestCase {
      * @throws DeviceNotAvailableException
      */
     public void testReconnectDeviceToTcp_reboot() throws DeviceNotAvailableException {
-        Log.i(LOG_TAG, "Starting testReconnectDeviceToTcp_reboot");
-
+        CLog.i("Starting testReconnectDeviceToTcp_reboot");
 
         IDeviceManager deviceManager = getDeviceManager();
         ITestDevice tcpDevice = deviceManager.reconnectDeviceToTcp(mUsbDevice);

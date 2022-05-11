@@ -16,6 +16,7 @@
 
 package com.android.tradefed.config;
 
+import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
 
 import java.io.PrintStream;
@@ -87,7 +88,10 @@ public interface IConfigurationFactory {
      * @throws ConfigurationException if configuration could not be loaded
      */
     public IConfiguration createPartialConfigurationFromArgs(
-            String[] arrayArgs, IKeyStoreClient keyStoreClient, Set<String> allowedObjects)
+            String[] arrayArgs,
+            IKeyStoreClient keyStoreClient,
+            Set<String> allowedObjects,
+            TradefedDelegator delegator)
             throws ConfigurationException;
 
     /**

@@ -22,12 +22,17 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
+import com.android.tradefed.result.ILogSaver;
+import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
@@ -155,6 +160,10 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         // Does nothing
     }
 
+    public void onTestRunFailed(DeviceMetricData testData, FailureDescription failure) {
+        // Does nothing
+    }
+
     @Override
     public void onTestRunEnd(
             DeviceMetricData runData, final Map<String, Metric> currentRunMetrics) {
@@ -244,22 +253,46 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
             String runName, int testCount, int attemptNumber, long startTime) {
         mRunData = new DeviceMetricData(mContext);
         mRunName = runName;
+        long start = System.currentTimeMillis();
         try {
             onTestRunStart(mRunData);
         } catch (Throwable t) {
             // Prevent exception from messing up the status reporting.
             CLog.e(t);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
         }
         mForwarder.testRunStarted(runName, testCount, attemptNumber, startTime);
     }
 
     @Override
     public final void testRunFailed(String errorMessage) {
+        long start = System.currentTimeMillis();
+        try {
+            onTestRunFailed(mRunData, FailureDescription.create(errorMessage));
+        } catch (Throwable t) {
+            // Prevent exception from messing up the status reporting.
+            CLog.e(t);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+        }
         mForwarder.testRunFailed(errorMessage);
     }
 
     @Override
     public final void testRunFailed(FailureDescription failure) {
+        long start = System.currentTimeMillis();
+        try {
+            onTestRunFailed(mRunData, failure);
+        } catch (Throwable t) {
+            // Prevent exception from messing up the status reporting.
+            CLog.e(t);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+        }
         mForwarder.testRunFailed(failure);
     }
 
@@ -270,12 +303,16 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
+        long start = System.currentTimeMillis();
         try {
             onTestRunEnd(mRunData, runMetrics);
             mRunData.addToMetrics(runMetrics);
         } catch (Throwable t) {
             // Prevent exception from messing up the status reporting.
             CLog.e(t);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
         }
         mForwarder.testRunEnded(elapsedTime, runMetrics);
     }
@@ -291,11 +328,15 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         mTestData = new DeviceMetricData(mContext);
         mSkipTestCase = shouldSkip(test);
         if (!mSkipTestCase) {
+            long start = System.currentTimeMillis();
             try {
                 onTestStart(mTestData);
             } catch (Throwable t) {
                 // Prevent exception from messing up the status reporting.
                 CLog.e(t);
+            } finally {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
             }
         }
         mForwarder.testStarted(test, startTime);
@@ -304,11 +345,15 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     @Override
     public final void testFailed(TestDescription test, String trace) {
         if (!mSkipTestCase) {
+            long start = System.currentTimeMillis();
             try {
                 onTestFail(mTestData, test);
             } catch (Throwable t) {
                 // Prevent exception from messing up the status reporting.
                 CLog.e(t);
+            } finally {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
             }
         }
         mForwarder.testFailed(test, trace);
@@ -320,11 +365,15 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
             // Don't collect on not_executed test case
             if (failure.getFailureStatus() == null
                     || !FailureStatus.NOT_EXECUTED.equals(failure.getFailureStatus())) {
+                long start = System.currentTimeMillis();
                 try {
                     onTestFail(mTestData, test);
                 } catch (Throwable t) {
                     // Prevent exception from messing up the status reporting.
                     CLog.e(t);
+                } finally {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
                 }
             }
         }
@@ -340,12 +389,16 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     public final void testEnded(
             TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
         if (!mSkipTestCase) {
+            long start = System.currentTimeMillis();
             try {
                 onTestEnd(mTestData, testMetrics, test);
                 mTestData.addToMetrics(testMetrics);
             } catch (Throwable t) {
                 // Prevent exception from messing up the status reporting.
                 CLog.e(t);
+            } finally {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
             }
         } else {
             CLog.d("Skipping %s collection for %s.", this.getClass().getName(), test.toString());
@@ -356,11 +409,15 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     @Override
     public final void testAssumptionFailure(TestDescription test, String trace) {
         if (!mSkipTestCase) {
+            long start = System.currentTimeMillis();
             try {
                 onTestAssumptionFailure(mTestData, test);
             } catch (Throwable t) {
                 // Prevent exception from messing up the status reporting.
                 CLog.e(t);
+            } finally {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
             }
         }
         mForwarder.testAssumptionFailure(test, trace);
@@ -369,11 +426,15 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     @Override
     public final void testAssumptionFailure(TestDescription test, FailureDescription failure) {
         if (!mSkipTestCase) {
+            long start = System.currentTimeMillis();
             try {
                 onTestAssumptionFailure(mTestData, test);
             } catch (Throwable t) {
                 // Prevent exception from messing up the status reporting.
                 CLog.e(t);
+            } finally {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
             }
         }
         mForwarder.testAssumptionFailure(test, failure);
@@ -382,6 +443,37 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     @Override
     public final void testIgnored(TestDescription test) {
         mForwarder.testIgnored(test);
+    }
+
+    /**
+     * Do not use inside metric collector implementation. This is pure forwarding.
+     */
+    @Override
+    public final void setLogSaver(ILogSaver logSaver) {
+        if (mForwarder instanceof ILogSaverListener) {
+            ((ILogSaverListener) mForwarder).setLogSaver(logSaver);
+        }
+    }
+
+    /**
+     * Do not use inside metric collector implementation. This is pure forwarding.
+     */
+    @Override
+    public final void logAssociation(String dataName, LogFile logFile) {
+        if (mForwarder instanceof ILogSaverListener) {
+            ((ILogSaverListener) mForwarder).logAssociation(dataName, logFile);
+        }
+    }
+
+    /**
+     * Do not use inside metric collector implementation. This is pure forwarding.
+     */
+    @Override
+    public final void testLogSaved(String dataName, LogDataType dataType,
+            InputStreamSource dataStream, LogFile logFile) {
+        if (mForwarder instanceof ILogSaverListener) {
+            ((ILogSaverListener) mForwarder).testLogSaved(dataName, dataType, dataStream, logFile);
+        }
     }
 
     /** {@inheritDoc} */

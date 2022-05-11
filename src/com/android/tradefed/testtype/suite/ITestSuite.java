@@ -41,6 +41,8 @@ import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.logger.TfObjectTracker;
@@ -74,14 +76,12 @@ import com.android.tradefed.testtype.IReportNotExecuted;
 import com.android.tradefed.testtype.IRuntimeHintProvider;
 import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.ITestCollector;
-import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.util.AbiFormatter;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
@@ -142,7 +142,6 @@ public abstract class ITestSuite
     public static final String MODULE_METADATA_INCLUDE_FILTER = "module-metadata-include-filter";
     public static final String MODULE_METADATA_EXCLUDE_FILTER = "module-metadata-exclude-filter";
     public static final String RANDOM_SEED = "random-seed";
-    public static final String REBOOT_BEFORE_TEST = "reboot-before-test";
 
     private static final String PRODUCT_CPU_ABI_KEY = "ro.product.cpu.abi";
 
@@ -187,12 +186,6 @@ public abstract class ITestSuite
     // Options for suite runner behavior
     @Option(name = "reboot-per-module", description = "Reboot the device before every module run.")
     private boolean mRebootPerModule = false;
-
-    @Option(
-        name = REBOOT_BEFORE_TEST,
-        description = "Reboot the device before the test suite starts."
-    )
-    private boolean mRebootBeforeTest = false;
 
     @Option(name = "skip-all-system-status-check",
             description = "Whether all system status check between modules should be skipped")
@@ -314,16 +307,6 @@ public abstract class ITestSuite
     /** @deprecated to be deleted when next version is deployed */
     @Deprecated
     @Option(
-        name = "max-testcase-run-count",
-        description =
-                "If the IRemoteTest can have its testcases run multiple times, "
-                        + "the max number of runs for each testcase."
-    )
-    private int mMaxRunLimit = 1;
-
-    /** @deprecated to be deleted when next version is deployed */
-    @Deprecated
-    @Option(
         name = "retry-strategy",
         description =
                 "The retry strategy to be used when re-running some tests with "
@@ -340,9 +323,20 @@ public abstract class ITestSuite
     // end [Options relate to module retry and intra-module retry]
 
     @Option(
-            name = "filter-previous-passed",
-            description = "Feature flag to test filtering previously passed tests.")
-    private boolean mTestFilterPassed = false;
+            name = "partial-download-via-feature",
+            description = "Feature flag to test partial download via feature service.")
+    private boolean mStageArtifactsViaFeature = true;
+
+    @Option(
+            name = "multi-devices-modules",
+            description = "Running strategy for modules that require multiple devices.")
+    private MultiDeviceModuleStrategy mMultiDevicesStrategy = MultiDeviceModuleStrategy.EXCLUDE_ALL;
+
+    public enum MultiDeviceModuleStrategy {
+        EXCLUDE_ALL,
+        RUN,
+        ONLY_MULTI_DEVICES
+    }
 
     private ITestDevice mDevice;
     private IBuildInfo mBuildInfo;
@@ -356,9 +350,6 @@ public abstract class ITestSuite
     private boolean mIsSharded = false;
     private ModuleDefinition mDirectModule = null;
     private boolean mShouldMakeDynamicModule = true;
-
-    // Store the previous attempts passed tests
-    private List<SuiteTestFilter> mPreviousPassedFilters = null;
 
     // Guice object
     private Injector mInjector;
@@ -460,6 +451,22 @@ public abstract class ITestSuite
                 // execution.
                 continue;
             }
+            switch (mMultiDevicesStrategy) {
+                case EXCLUDE_ALL:
+                    if (config.getValue().getDeviceConfig().size() > 1) {
+                        // Exclude multi-devices configs
+                        continue;
+                    }
+                    break;
+                case ONLY_MULTI_DEVICES:
+                    if (config.getValue().getDeviceConfig().size() == 1) {
+                        // Exclude single devices configs
+                        continue;
+                    }
+                    break;
+                default:
+                    break;
+            }
             filterPreparers(config.getValue(), mAllowedPreparers);
 
             // Copy the CoverageOptions from the main configuration to the module configuration.
@@ -483,6 +490,9 @@ public abstract class ITestSuite
 
     /** Helper to download all artifacts for the given modules. */
     private void stageTestArtifacts(ITestDevice device, Set<String> modules) {
+        if (mBuildInfo.getRemoteFiles().isEmpty()) {
+            return;
+        }
         CLog.i(String.format("Start to stage test artifacts for %d modules.", modules.size()));
         long startTime = System.currentTimeMillis();
         // Include the file if its path contains a folder name matching any of the module.
@@ -493,25 +503,52 @@ public abstract class ITestSuite
         List<String> includeFilters = Arrays.asList(moduleRegex);
         // Ignore config file as it's part of config zip artifact that's staged already.
         List<String> excludeFilters = Arrays.asList("[.]config$");
-        mDynamicResolver.setDevice(device);
-        mDynamicResolver.addExtraArgs(
-                mMainConfiguration.getCommandOptions().getDynamicDownloadArgs());
-        for (File remoteFile : mBuildInfo.getRemoteFiles()) {
-            try {
-                mDynamicResolver.resolvePartialDownloadZip(
-                        getTestsDir(), remoteFile.toString(), includeFilters, excludeFilters);
-            } catch (BuildRetrievalError | FileNotFoundException e) {
-                String message =
-                        String.format(
-                                "Failed to download partial zip from %s for modules: %s",
-                                remoteFile, String.join(", ", modules));
-                CLog.e(message);
-                CLog.e(e);
-                if (e instanceof IHarnessException) {
-                    throw new HarnessRuntimeException(message, (IHarnessException) e);
+        if (mStageArtifactsViaFeature) {
+            try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+                Map<String, String> args = new HashMap<>();
+                args.put(ResolvePartialDownload.DESTINATION_DIR, getTestsDir().getAbsolutePath());
+                args.put(ResolvePartialDownload.INCLUDE_FILTERS, String.join(";", includeFilters));
+                args.put(ResolvePartialDownload.EXCLUDE_FILTERS, String.join(";", excludeFilters));
+                // Pass the remote paths
+                String remotePaths =
+                        mBuildInfo.getRemoteFiles().stream()
+                                .map(p -> p.toString())
+                                .collect(Collectors.joining(";"));
+                args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+
+                FeatureResponse rep =
+                        client.triggerFeature(
+                                ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);
+                if (rep.hasErrorInfo()) {
+                    throw new HarnessRuntimeException(
+                            rep.getErrorInfo().getErrorTrace(),
+                            InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
                 }
+            } catch (FileNotFoundException e) {
                 throw new HarnessRuntimeException(
-                        message, e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+                        e.getMessage(), e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+            }
+        } else {
+            mDynamicResolver.setDevice(device);
+            mDynamicResolver.addExtraArgs(
+                    mMainConfiguration.getCommandOptions().getDynamicDownloadArgs());
+            for (File remoteFile : mBuildInfo.getRemoteFiles()) {
+                try {
+                    mDynamicResolver.resolvePartialDownloadZip(
+                            getTestsDir(), remoteFile.toString(), includeFilters, excludeFilters);
+                } catch (BuildRetrievalError | FileNotFoundException e) {
+                    String message =
+                            String.format(
+                                    "Failed to download partial zip from %s for modules: %s",
+                                    remoteFile, String.join(", ", modules));
+                    CLog.e(message);
+                    CLog.e(e);
+                    if (e instanceof IHarnessException) {
+                        throw new HarnessRuntimeException(message, (IHarnessException) e);
+                    }
+                    throw new HarnessRuntimeException(
+                            message, e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+                }
             }
         }
         long elapsedTime = System.currentTimeMillis() - startTime;
@@ -646,8 +683,9 @@ public abstract class ITestSuite
         for (IDeviceConfiguration holder : config.getDeviceConfig()) {
             List<ITargetPreparer> preparers = new ArrayList<>();
             for (ITargetPreparer preparer : holder.getTargetPreparers()) {
-                if (allowedSuitePreparers.contains(preparer.getClass().getCanonicalName()))
+                if (allowedSuitePreparers.contains(preparer.getClass().getCanonicalName())) {
                     preparers.add(preparer);
+                }
             }
             res.put(holder.getDeviceName(), preparers);
         }
@@ -686,18 +724,6 @@ public abstract class ITestSuite
             }
         }
 
-        // If requested reboot each device before the testing starts.
-        if (mRebootBeforeTest) {
-            for (ITestDevice device : mContext.getDevices()) {
-                if (!(device.getIDevice() instanceof StubDevice)) {
-                    CLog.d(
-                            "Rebooting device '%s' before test starts as requested.",
-                            device.getSerialNumber());
-                    mDevice.reboot();
-                }
-            }
-        }
-
         /** Setup a special listener to take actions on test failures. */
         TestFailureListener failureListener =
                 new TestFailureListener(
@@ -715,14 +741,12 @@ public abstract class ITestSuite
                     mRunModules);
         }
 
-        List<SuiteTestFilter> previousPassedFilters = getPreviousPassedFilters();
-
         /** Run all the module, make sure to reduce the list to release resources as we go. */
         try {
             while (!mRunModules.isEmpty()) {
                 ModuleDefinition module = mRunModules.remove(0);
 
-                if (!shouldModuleRun(module, previousPassedFilters)) {
+                if (!shouldModuleRun(module)) {
                     continue;
                 }
                 // Before running the module we ensure it has tests at this point or skip completely
@@ -737,6 +761,14 @@ public abstract class ITestSuite
                             .addAllocatedDevice(deviceName, mContext.getDevice(deviceName));
                     module.getModuleInvocationContext()
                             .addDeviceBuildInfo(deviceName, mContext.getBuildInfo(deviceName));
+                }
+                // Add isolation status before module start for reporting
+                if (!IsolationGrade.NOT_ISOLATED.equals(
+                        CurrentInvocation.moduleCurrentIsolation())) {
+                    module.getModuleInvocationContext()
+                            .addInvocationAttribute(
+                                    ModuleDefinition.MODULE_ISOLATED,
+                                    CurrentInvocation.moduleCurrentIsolation().toString());
                 }
                 listener.testModuleStarted(module.getModuleInvocationContext());
                 mModuleInProgress = module;
@@ -755,6 +787,8 @@ public abstract class ITestSuite
                     // execution
                     listener.testModuleEnded();
                     mModuleInProgress = null;
+                    // Following modules will not be isolated if no action is taken
+                    CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
                 }
                 // Module isolation routine
                 moduleIsolation(mContext, listener);
@@ -855,6 +889,10 @@ public abstract class ITestSuite
         module.setMergeAttemps(mMergeAttempts);
         // Pass the retry decision to be used.
         module.setRetryDecision(decision);
+        // Restore the config, as the setter might have override it with module config.
+        if (decision instanceof IConfigurationReceiver) {
+            ((IConfigurationReceiver) decision).setConfiguration(mMainConfiguration);
+        }
 
         module.setEnableDynamicDownload(mEnableDynamicDownload);
         module.transferSuiteLevelOptions(mMainConfiguration);
@@ -1049,7 +1087,6 @@ public abstract class ITestSuite
             // to carry these extra data.
             cleanUpSuiteSetup();
 
-            List<SuiteTestFilter> filters = getPreviousPassedFilters();
             // create an association of one ITestSuite <=> one ModuleDefinition as the smallest
             // execution unit supported.
             List<IRemoteTest> splitTests = new ArrayList<>();
@@ -1058,7 +1095,6 @@ public abstract class ITestSuite
                 OptionCopier.copyOptionsNoThrow(this, suite);
                 suite.mIsSharded = true;
                 suite.mDirectModule = m;
-                suite.mPreviousPassedFilters = filters;
                 splitTests.add(suite);
             }
             // return the list of ITestSuite with their ModuleDefinition assigned
@@ -1196,7 +1232,7 @@ public abstract class ITestSuite
                     TimeUtil.formatElapsedTime(mDirectModule.getRuntimeHint()));
             return mDirectModule.getRuntimeHint();
         }
-        return 0l;
+        return 0L;
     }
 
     /** {@inheritDoc} */
@@ -1261,11 +1297,11 @@ public abstract class ITestSuite
     }
 
     @Override
-    public Set<TokenProperty> getRequiredTokens() {
+    public Set<TokenProperty> getRequiredTokens(TestInformation testInfo) {
         if (mDirectModule == null) {
             return null;
         }
-        return mDirectModule.getRequiredTokens();
+        return mDirectModule.getRequiredTokens(testInfo);
     }
 
     /**
@@ -1397,11 +1433,6 @@ public abstract class ITestSuite
         return mInjector;
     }
 
-    /** Sets reboot-before-test to true. */
-    public final void enableRebootBeforeTest() {
-        mRebootBeforeTest = true;
-    }
-
     /**
      * Apply the metadata filter to the config and see if the config should run.
      *
@@ -1521,86 +1552,11 @@ public abstract class ITestSuite
         mAbis.addAll(abis);
     }
 
-    @VisibleForTesting
-    FeatureResponse triggerFeature(TradefedFeatureClient client, Map<String, String> args) {
-        return client.triggerFeature("getPreviousPassed", args);
-    }
-
-    private void convertResponseToFilter(
-            FeatureResponse previousPassed, List<SuiteTestFilter> previousPassedFilters) {
-        if (previousPassed.hasErrorInfo()) {
-            return;
-        }
-        if (Strings.isNullOrEmpty(previousPassed.getResponse())) {
-            return;
-        }
-        for (String line : previousPassed.getResponse().split("\n")) {
-            if (line.isEmpty()) {
-                continue;
-            }
-            previousPassedFilters.add(SuiteTestFilter.createFrom(line));
-        }
-    }
-
-    private boolean shouldModuleRun(
-            ModuleDefinition module, List<SuiteTestFilter> previousPassedFilter) {
-        if (previousPassedFilter.isEmpty()) {
-            return true;
-        }
-        String moduleId = module.getId();
-        for (SuiteTestFilter filter : previousPassedFilter) {
-            String name = filter.getName();
-            if (filter.getAbi() != null) {
-                name = filter.getAbi() + " " + name;
-            }
-            if (!name.equals(moduleId)) {
-                continue;
-            }
-            if (filter.getTest() == null) {
-                CLog.d("Skipping %s, it previously passed.", moduleId);
-                return false;
-            }
-            for (IRemoteTest test : module.getTests()) {
-                if (test instanceof ITestFilterReceiver) {
-                    ((ITestFilterReceiver) test).addExcludeFilter(filter.getTest());
-                }
-            }
-        }
+    protected boolean shouldModuleRun(ModuleDefinition module) {
         return true;
     }
 
-    private List<SuiteTestFilter> getPreviousPassedFilters() {
-        List<SuiteTestFilter> previousPassedFilters = new ArrayList<>();
-        if (!mTestFilterPassed) {
-            return previousPassedFilters;
-        }
-        if (mPreviousPassedFilters != null) {
-            return mPreviousPassedFilters;
-        }
-        mPreviousPassedFilters = new ArrayList<>();
-        // Test the query of previous passed test
-        Map<String, String> args = new HashMap<>();
-        String invocationId =
-                mMainConfiguration
-                        .getCommandOptions()
-                        .getInvocationData()
-                        .getUniqueMap()
-                        .get("invocation_id");
-        if (!Strings.isNullOrEmpty(invocationId)) {
-            args.put("invocation_id", invocationId);
-        }
-        // TODO: Only do this if it's not the first attempt
-        if (args.isEmpty()) {
-            return mPreviousPassedFilters;
-        }
-        try (TradefedFeatureClient client = new TradefedFeatureClient()) {
-            FeatureResponse previousPassed = triggerFeature(client, args);
-            CLog.d("FeatureResponse: %s", previousPassed);
-            convertResponseToFilter(previousPassed, previousPassedFilters);
-        } catch (RuntimeException e) {
-            CLog.e(e);
-        }
-        mPreviousPassedFilters.addAll(previousPassedFilters);
-        return mPreviousPassedFilters;
+    protected void setMultiDeviceStrategy(MultiDeviceModuleStrategy strategy) {
+        mMultiDevicesStrategy = strategy;
     }
 }

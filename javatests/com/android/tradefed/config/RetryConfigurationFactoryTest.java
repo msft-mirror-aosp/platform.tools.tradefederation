@@ -17,6 +17,8 @@ package com.android.tradefed.config;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -28,12 +30,14 @@ import com.android.tradefed.testtype.suite.retry.RetryRescheduler;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.keystore.StubKeyStoreClient;
 
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -44,14 +48,15 @@ public class RetryConfigurationFactoryTest {
 
     private RetryConfigurationFactory mFactory;
     private File mConfig;
-    private ITestSuiteResultLoader mMockLoader;
+    @Mock ITestSuiteResultLoader mMockLoader;
     private CollectingTestListener mFakeRecord;
 
     @Before
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mFactory = new RetryConfigurationFactory();
         mConfig = FileUtil.createTempFile("config-retry-factory", ".xml");
-        mMockLoader = EasyMock.createMock(ITestSuiteResultLoader.class);
     }
 
     @After
@@ -77,19 +82,18 @@ public class RetryConfigurationFactoryTest {
         populateFakeResults();
         mFactory = new RetryConfigurationFactory();
 
-        mMockLoader.init();
-        EasyMock.expect(mMockLoader.getCommandLine()).andReturn("suite/apct");
-        EasyMock.expect(mMockLoader.loadPreviousResults()).andReturn(mFakeRecord);
-        mMockLoader.customizeConfiguration(EasyMock.anyObject());
-        mMockLoader.cleanUp();
+        when(mMockLoader.getCommandLine()).thenReturn("suite/apct");
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
         IConfiguration retryConfig = new Configuration("retry", "retry");
         retryConfig.setConfigurationObject(RetryRescheduler.PREVIOUS_LOADER_NAME, mMockLoader);
         retryConfig.setTest(new RetryRescheduler());
 
-        EasyMock.replay(mMockLoader);
         IConfiguration config = mFactory.createRetryConfiguration(retryConfig);
-        EasyMock.verify(mMockLoader);
+
+        verify(mMockLoader).init();
+        verify(mMockLoader).customizeConfiguration(Mockito.any());
+        verify(mMockLoader).cleanUp();
 
         // It's not our original config anymore
         assertFalse(config.getTests().get(0) instanceof RetryRescheduler);

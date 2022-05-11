@@ -28,6 +28,8 @@ import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 
@@ -36,6 +38,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /** Unit tests for {@link MetricsXMLResultReporter}. */
+@RunWith(JUnit4.class)
 public class MetricsXMLResultReporterTest {
     @Spy private MetricsXMLResultReporter mResultReporter;
     private ByteArrayOutputStream mOutputStream;

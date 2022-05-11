@@ -25,6 +25,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.UserInfo;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -58,6 +59,19 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
 
     private IConfiguration mConfiguration;
 
+    private int mUserIdToDelete = -1;
+    private DeviceOwner mDeviceOwnerToSet = null;
+
+    private static class DeviceOwner {
+        final String componentName;
+        final int userId;
+
+        DeviceOwner(String componentName, int userId) {
+            this.componentName = componentName;
+            this.userId = userId;
+        }
+    }
+
     @Option(
             name = TEST_PACKAGE_NAME_OPTION,
             description =
@@ -83,10 +97,7 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
 
         int workProfileId = getWorkProfileId(testInfo.getDevice());
 
-        if (workProfileId != -1) {
-            // There is already a work profile - so we don't want to remove it
-            setDisableTearDown(true);
-        } else {
+        if (workProfileId == -1) {
             if (!assumeTrue(
                     canCreateAdditionalUsers(testInfo.getDevice(), 1),
                     "Device cannot support additional users",
@@ -94,8 +105,22 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
                 return;
             }
 
+            mDeviceOwnerToSet = getDeviceOwner(testInfo.getDevice());
+
+            if (mDeviceOwnerToSet != null) {
+                CLog.d(
+                        "Work profiles cannot be created after device owner is set. Attempting to"
+                                + " remove device owner");
+                removeDeviceOwner(testInfo.getDevice(), mDeviceOwnerToSet);
+            }
+
             workProfileId = createWorkProfile(testInfo.getDevice());
+            mUserIdToDelete = workProfileId;
         }
+
+        // The wait flag is only supported on Android 29+
+        testInfo.getDevice()
+                .startUser(workProfileId, /* waitFlag= */ testInfo.getDevice().getApiLevel() >= 29);
 
         for (String pkg : mTestPackages) {
             testInfo.getDevice()
@@ -118,19 +143,28 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
     /** Creates a work profile and returns the new user ID. */
     private static int createWorkProfile(ITestDevice device) throws DeviceNotAvailableException {
         int parentProfile = device.getCurrentUser();
-        final String createUserOutput =
-                device.executeShellCommand(
-                        "pm create-user --profileOf " + parentProfile + " --managed work");
-        final int profileId = Integer.parseInt(createUserOutput.split(" id ")[1].trim());
-        device.executeShellCommand("am start-user -w " + profileId);
-        return profileId;
+        String command = "pm create-user --profileOf " + parentProfile + " --managed work";
+        final String createUserOutput = device.executeShellCommand(command);
+
+        try {
+            return Integer.parseInt(createUserOutput.split(" id ")[1].trim());
+        } catch (RuntimeException e) {
+            throwCommandError("Error creating work profile", command, createUserOutput, e);
+            return -1; // Never reached as showCommandError throws an exception
+        }
     }
 
     @Override
     public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
-        int workProfileId = Integer.parseInt(testInfo.properties().get(RUN_TESTS_AS_USER_KEY));
         testInfo.properties().remove(RUN_TESTS_AS_USER_KEY);
-        testInfo.getDevice().removeUser(workProfileId);
+        if (mUserIdToDelete != -1) {
+            testInfo.getDevice().removeUser(mUserIdToDelete);
+        }
+
+        if (mDeviceOwnerToSet != null) {
+            testInfo.getDevice()
+                    .setDeviceOwner(mDeviceOwnerToSet.componentName, mDeviceOwnerToSet.userId);
+        }
     }
 
     private boolean requireFeatures(ITestDevice device, String... features)
@@ -172,5 +206,52 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
     protected boolean canCreateAdditionalUsers(ITestDevice device, int numberOfUsers)
             throws DeviceNotAvailableException {
         return device.listUsers().size() + numberOfUsers <= device.getMaxNumberOfUsersSupported();
+    }
+
+    private DeviceOwner getDeviceOwner(ITestDevice device) throws DeviceNotAvailableException {
+        String command = "dumpsys device_policy";
+        String dumpsysOutput = device.executeShellCommand(command);
+
+        if (!dumpsysOutput.contains("Device Owner:")) {
+            return null;
+        }
+
+        try {
+            String deviceOwnerOnwards = dumpsysOutput.split("Device Owner:", 2)[1];
+            String componentName =
+                    deviceOwnerOnwards.split("ComponentInfo\\{", 2)[1].split("}", 2)[0];
+            int userId =
+                    Integer.parseInt(
+                            deviceOwnerOnwards.split("User ID: ", 2)[1].split("\n", 2)[0].trim());
+            return new DeviceOwner(componentName, userId);
+        } catch (RuntimeException e) {
+            throwCommandError("Error reading device owner information", command, dumpsysOutput, e);
+            return null; // Never reached as showCommandError throws an exception
+        }
+    }
+
+    private void removeDeviceOwner(ITestDevice device, DeviceOwner deviceOwner)
+            throws DeviceNotAvailableException {
+        String command =
+                "dpm remove-active-admin --user "
+                        + deviceOwner.userId
+                        + " "
+                        + deviceOwner.componentName;
+
+        String commandOutput = device.executeShellCommand(command);
+        if (!commandOutput.startsWith("Success")) {
+            throwCommandError("Error removing device owner", command, commandOutput);
+        }
+    }
+
+    private static void throwCommandError(String error, String command, String commandOutput) {
+        throwCommandError(error, command, commandOutput, /* exception= */ null);
+    }
+
+    private static void throwCommandError(
+            String error, String command, String commandOutput, Exception exception) {
+        throw new IllegalStateException(
+                error + ". Command was '" + command + "', output was '" + commandOutput + "'",
+                exception);
     }
 }

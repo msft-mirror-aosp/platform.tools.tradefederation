@@ -109,6 +109,7 @@ public class GTestResultParser extends MultiLineReceiver {
 
     /** True if at least one testRunStart has been reported. */
     private boolean mSeenOneTestRunStart = false;
+    private boolean mFailureReported = false;
     /**
      * Track all the log lines before the testRunStart is made, it is helpful on an early failure to
      * report those logs.
@@ -494,6 +495,8 @@ public class GTestResultParser extends MultiLineReceiver {
         String[] testId = identifier.split("\\.");
         if (testId.length < 2) {
             CLog.e("Could not detect the test class and test name, received: %s", identifier);
+            returnInfo.mTestClassName = null;
+            returnInfo.mTestName = null;
         }
         else {
             returnInfo.mTestClassName = testId[0];
@@ -578,7 +581,7 @@ public class GTestResultParser extends MultiLineReceiver {
         testResult.mTestName = parsedResults.mTestName;
         testResult.mStartTimeMs = System.currentTimeMillis();
         TestDescription testId = null;
-        if (getTestClass(testResult) !=null && testResult.mTestName !=null) {
+        if (getTestClass(testResult) != null && testResult.mTestName != null) {
             testId = new TestDescription(getTestClass(testResult), testResult.mTestName);
         } else {
             CLog.e("Error during parsing, className: %s and testName: %s, should both be not null",
@@ -789,7 +792,7 @@ public class GTestResultParser extends MultiLineReceiver {
         } else if (mTestRunInProgress) {
             handleTestRunFailed("No test results", InfraErrorIdentifier.UNDETERMINED);
             mTestRunInProgress = false;
-        } else if (!mSeenOneTestRunStart) {
+        } else if (!mSeenOneTestRunStart && !mFailureReported) {
             for (ITestInvocationListener listener : mTestListeners) {
                 listener.testRunStarted(mTestRunName, 0);
                 listener.testRunFailed(
@@ -800,6 +803,7 @@ public class GTestResultParser extends MultiLineReceiver {
                                         String.join("\n", mTrackLogsBeforeRunStart))));
                 listener.testRunEnded(0L, new HashMap<String, Metric>());
             }
+            mFailureReported = true;
         }
     }
 

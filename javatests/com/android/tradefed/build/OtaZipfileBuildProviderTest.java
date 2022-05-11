@@ -16,14 +16,18 @@
 
 package com.android.tradefed.build;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.File;
 
-/**
- * Tests for {@link OtaZipfileBuildProvider}
- */
-public class OtaZipfileBuildProviderTest extends TestCase {
+/** Tests for {@link OtaZipfileBuildProvider} */
+@RunWith(JUnit4.class)
+public class OtaZipfileBuildProviderTest {
     private static final String SOME_BAD_PATH = "/some/inexistent/path.zip";
     private static final String BUILD_ID = "123456";
     private static final String MOCK_BUILD_PROP =
@@ -38,6 +42,7 @@ public class OtaZipfileBuildProviderTest extends TestCase {
         }
     }
 
+    @Test
     public void testGetBuild_Success() throws BuildRetrievalError {
         OtaZipfileBuildProviderUnderTest providerAllGood = new OtaZipfileBuildProviderUnderTest() {
             @Override
@@ -51,6 +56,7 @@ public class OtaZipfileBuildProviderTest extends TestCase {
         assertEquals(new File(SOME_BAD_PATH), ((IDeviceBuildInfo) buildInfo).getOtaPackageFile());
     }
 
+    @Test
     public void testGetBuild_NoPath() throws BuildRetrievalError {
         OtaZipfileBuildProvider providerNoPath = new OtaZipfileBuildProvider();
         try {
@@ -61,6 +67,7 @@ public class OtaZipfileBuildProviderTest extends TestCase {
         }
     }
 
+    @Test
     public void testGetBuild_BadPath() {
         OtaZipfileBuildProviderUnderTest providerBadPath = new OtaZipfileBuildProviderUnderTest();
         try {

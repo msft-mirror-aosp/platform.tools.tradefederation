@@ -17,19 +17,20 @@
 
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.IOException;
 import java.io.InputStream;
 
-/**
- * Unit tests for {@link SizeLimitedOutputStreamTest}
- */
-public class SizeLimitedOutputStreamTest extends TestCase {
+/** Unit tests for {@link SizeLimitedOutputStreamTest} */
+@RunWith(JUnit4.class)
+public class SizeLimitedOutputStreamTest {
 
-    /**
-     * Test the file size limiting.
-     */
+    /** Test the file size limiting. */
+    @Test
     public void testMaxFileSizeHelper() throws IOException {
         final byte[] data = new byte[29];
 

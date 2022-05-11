@@ -62,7 +62,9 @@ class CommandFileWatcher extends Thread {
          * @param cmdFile a {@link File} representing the command file path
          */
         public CommandFile(File cmdFile) {
-            if (cmdFile == null) throw new NullPointerException();
+            if (cmdFile == null) {
+                throw new NullPointerException();
+            }
 
             this.file = cmdFile;
             this.modTime = cmdFile.lastModified();
@@ -84,7 +86,9 @@ class CommandFileWatcher extends Thread {
          *        main command file, {@code cmdFile}.
          */
         public CommandFile(File cmdFile, List<String> extraArgs, List<File> dependencies) {
-            if (cmdFile == null) throw new NullPointerException();
+            if (cmdFile == null) {
+                throw new NullPointerException();
+            }
 
             this.file = cmdFile;
             this.modTime = cmdFile.lastModified();
@@ -131,6 +135,22 @@ class CommandFileWatcher extends Thread {
     void addCmdFile(File cmdFile, List<String> extraArgs, List<File> dependencies) {
         CommandFile f = new CommandFile(cmdFile, extraArgs, dependencies);
         mCmdFileMap.put(cmdFile.getAbsolutePath(), f);
+    }
+
+    /**
+     * <p>
+     * Add a command file to watch, as well as its dependencies.  When either
+     * the command file itself or any of its dependencies changes, notify the registered
+     * {@link ICommandFileListener}
+     * </p>
+     * if the cmdFile is already being watching, this call will replace the current entry
+     */
+    public void addCmdFile(File cmdFile, List<String> extraArgs, Collection<String> includedFiles) {
+        List<File> includesAsFiles = new ArrayList<File>(includedFiles.size());
+        for (String p : includedFiles) {
+            includesAsFiles.add(new File(p));
+        }
+        addCmdFile(cmdFile, extraArgs, includesAsFiles);
     }
 
     /**
@@ -226,22 +246,6 @@ class CommandFileWatcher extends Thread {
      */
     IRunUtil getRunUtil() {
         return RunUtil.getDefault();
-    }
-
-    /**
-     * <p>
-     * Add a command file to watch, as well as its dependencies.  When either
-     * the command file itself or any of its dependencies changes, notify the registered
-     * {@link ICommandFileListener}
-     * </p>
-     * if the cmdFile is already being watching, this call will replace the current entry
-     */
-    public void addCmdFile(File cmdFile, List<String> extraArgs, Collection<String> includedFiles) {
-        List<File> includesAsFiles = new ArrayList<File>(includedFiles.size());
-        for (String p : includedFiles) {
-            includesAsFiles.add(new File(p));
-        }
-        addCmdFile(cmdFile, extraArgs, includesAsFiles);
     }
 
     /**

@@ -15,7 +15,10 @@
  */
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
@@ -23,11 +26,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * Unit test for {@link TableFormatter}.
- */
-public class TableFormatterTest extends TestCase {
+/** Unit test for {@link TableFormatter}. */
+@RunWith(JUnit4.class)
+public class TableFormatterTest {
 
+    @Test
     public void testDisplayTable() {
         List<List<String>> testData = new ArrayList<List<String>>();
 
@@ -40,9 +43,8 @@ public class TableFormatterTest extends TestCase {
         assertEquals(expectedOutput, actualOutput);
     }
 
-    /**
-     * Test displaying a table with different sized rows
-     */
+    /** Test displaying a table with different sized rows */
+    @Test
     public void testDisplayTable_missized() {
         List<List<String>> testData = new ArrayList<List<String>>();
 
@@ -68,5 +70,4 @@ public class TableFormatterTest extends TestCase {
         String actualOutput = outStream.toString();
         return actualOutput;
     }
-
 }
