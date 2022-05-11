@@ -1470,19 +1470,19 @@ public class Configuration implements IConfiguration {
                     excludeFilters,
                     printDeprecatedOptions,
                     printUnchangedOptions);
-            for (ITargetPreparer preparer : getTargetPreparers()) {
+            for (ITargetPreparer preparer : getLabPreparers()) {
                 ConfigurationUtil.dumpClassToXml(
                         serializer,
-                        TARGET_PREPARER_TYPE_NAME,
+                        LAB_PREPARER_TYPE_NAME,
                         preparer,
                         excludeFilters,
                         printDeprecatedOptions,
                         printUnchangedOptions);
             }
-            for (ITargetPreparer preparer : getLabPreparers()) {
+            for (ITargetPreparer preparer : getTargetPreparers()) {
                 ConfigurationUtil.dumpClassToXml(
                         serializer,
-                        LAB_PREPARER_TYPE_NAME,
+                        TARGET_PREPARER_TYPE_NAME,
                         preparer,
                         excludeFilters,
                         printDeprecatedOptions,
