@@ -17,31 +17,35 @@ package com.android.tradefed.suite.checker;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.suite.checker.StatusCheckerResult.CheckStatus;
 import com.android.tradefed.util.ProcessInfo;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 /** Unit tests for {@link SystemServerStatusChecker} */
 @RunWith(JUnit4.class)
 public class SystemServerStatusCheckerTest {
 
     private SystemServerStatusChecker mChecker;
-    private ITestDevice mMockDevice;
+    @Mock ITestDevice mMockDevice;
 
     @Before
     public void setUp() throws DeviceNotAvailableException {
-        mMockDevice = EasyMock.createMock(ITestDevice.class);
-        EasyMock.expect(mMockDevice.getSerialNumber()).andStubReturn("SERIAL");
-        EasyMock.expect(mMockDevice.getApiLevel()).andStubReturn(29);
+        MockitoAnnotations.initMocks(this);
+
+        when(mMockDevice.getSerialNumber()).thenReturn("SERIAL");
+        when(mMockDevice.getApiLevel()).thenReturn(29);
         mChecker =
                 new SystemServerStatusChecker() {
                     @Override
@@ -54,42 +58,39 @@ public class SystemServerStatusCheckerTest {
     /** Test that system checker pass if system_server didn't restart. */
     @Test
     public void testSystemServerProcessNotRestarted() throws Exception {
-        EasyMock.expect(mMockDevice.getProcessByName(EasyMock.eq("system_server")))
-                .andReturn(new ProcessInfo("system", 914, "system_server", 1559091922L));
-        EasyMock.expect(mMockDevice.deviceSoftRestarted(EasyMock.anyObject())).andReturn(false);
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getProcessByName(Mockito.eq("system_server")))
+                .thenReturn(new ProcessInfo("system", 914, "system_server", 1559091922L));
+        when(mMockDevice.deviceSoftRestarted(Mockito.any())).thenReturn(false);
+
         assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
         assertEquals(CheckStatus.SUCCESS, mChecker.postExecutionCheck(mMockDevice).getStatus());
-        EasyMock.verify(mMockDevice);
     }
 
     /** Test that system checker fail if system_server restarted without device reboot. */
     @Test
     public void testSystemServerProcessRestartedWithoutDeviceReboot() throws Exception {
-        EasyMock.expect(mMockDevice.getProcessByName(EasyMock.eq("system_server")))
-                .andReturn(new ProcessInfo("system", 914, "system_server", 1559091922L));
-        EasyMock.expect(mMockDevice.deviceSoftRestarted(EasyMock.anyObject())).andReturn(true);
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getProcessByName(Mockito.eq("system_server")))
+                .thenReturn(new ProcessInfo("system", 914, "system_server", 1559091922L));
+        when(mMockDevice.deviceSoftRestarted(Mockito.any())).thenReturn(true);
+
         assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
         StatusCheckerResult result = mChecker.postExecutionCheck(mMockDevice);
         assertEquals(CheckStatus.FAILED, result.getStatus());
         assertTrue(result.isBugreportNeeded());
-        EasyMock.verify(mMockDevice);
     }
 
     /** Test that system checker fail if system_server restarted with device reboot. */
     @Test
     public void testSystemServerProcessRestartedWithAbnormalDeviceReboot() throws Exception {
-        EasyMock.expect(mMockDevice.getProcessByName(EasyMock.eq("system_server")))
-                .andReturn(new ProcessInfo("system", 914, "system_server", 1559091922L));
-        EasyMock.expect(mMockDevice.deviceSoftRestarted(EasyMock.anyObject()))
-                .andThrow(new RuntimeException("abnormal reboot"));
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getProcessByName(Mockito.eq("system_server")))
+                .thenReturn(new ProcessInfo("system", 914, "system_server", 1559091922L));
+        when(mMockDevice.deviceSoftRestarted(Mockito.any()))
+                .thenThrow(new RuntimeException("abnormal reboot"));
+
         assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
         StatusCheckerResult result = mChecker.postExecutionCheck(mMockDevice);
         assertEquals(CheckStatus.FAILED, result.getStatus());
         assertTrue(result.isBugreportNeeded());
-        EasyMock.verify(mMockDevice);
     }
 
     /**
@@ -98,12 +99,11 @@ public class SystemServerStatusCheckerTest {
      */
     @Test
     public void testFailToGetSystemServerProcess() throws Exception {
-        EasyMock.expect(mMockDevice.getProcessByName(EasyMock.eq("system_server"))).andReturn(null);
-        mMockDevice.reboot();
-        EasyMock.replay(mMockDevice);
+        when(mMockDevice.getProcessByName(Mockito.eq("system_server"))).thenReturn(null);
+
         assertEquals(CheckStatus.FAILED, mChecker.preExecutionCheck(mMockDevice).getStatus());
         assertEquals(CheckStatus.SUCCESS, mChecker.postExecutionCheck(mMockDevice).getStatus());
-        EasyMock.verify(mMockDevice);
-    }
 
+        verify(mMockDevice).reboot();
+    }
 }

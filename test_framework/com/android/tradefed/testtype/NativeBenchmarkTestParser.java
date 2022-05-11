@@ -16,8 +16,8 @@
 package com.android.tradefed.testtype;
 
 import com.android.ddmlib.IShellOutputReceiver;
-import com.android.ddmlib.Log;
 import com.android.ddmlib.MultiLineReceiver;
+import com.android.tradefed.log.LogUtil.CLog;
 
 import java.text.DecimalFormat;
 import java.text.ParseException;
@@ -35,8 +35,6 @@ import java.util.regex.Pattern;
 * </code>
 */
 public class NativeBenchmarkTestParser extends MultiLineReceiver {
-
-    private final static String LOG_TAG = "NativeBenchmarkTestParser";
 
     // just parse any string
     private final static String FLOAT_STRING = "\\s*(.*)\\s*";
@@ -70,10 +68,10 @@ public class NativeBenchmarkTestParser extends MultiLineReceiver {
     }
 
     private void parseLine(String line) {
-        Log.d(LOG_TAG, line);
+        CLog.d(line);
         Matcher matcher = COMPLETE_PATTERN.matcher(line);
         if (matcher.find()) {
-            Log.i(LOG_TAG, String.format("Found result for benchmark %s: %s", getRunName(), line));
+            CLog.i("Found result for benchmark %s: %s", getRunName(), line);
             mMinOpTime = parseDoubleValue(line, matcher.group(1));
             mAvgOpTime = parseDoubleValue(line, matcher.group(2));
             mMaxOpTime = parseDoubleValue(line, matcher.group(3));
@@ -86,15 +84,13 @@ public class NativeBenchmarkTestParser extends MultiLineReceiver {
         } catch (NumberFormatException e) {
             // fall through
         }
-        Log.w(LOG_TAG, String.format("Value was not a double (%s), trying for scientfic",
-                line));
+        CLog.w("Value was not a double (%s), trying for scientfic", line);
         DecimalFormat format = new DecimalFormat("0.0E0");
         try {
             Number num = format.parse(valueString);
             return num.doubleValue();
         } catch (ParseException e) {
-            Log.e(LOG_TAG, String.format("Could not parse double value in (%s)",
-                    line));
+            CLog.e("Could not parse double value in (%s)", line);
         }
         return 0;
     }

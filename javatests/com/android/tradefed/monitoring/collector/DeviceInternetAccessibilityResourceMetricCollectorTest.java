@@ -16,6 +16,8 @@
 
 package com.android.tradefed.monitoring.collector;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -36,6 +38,7 @@ import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 
 /** Tests for {@link DeviceInternetAccessibilityResourceMetricCollector}. */
+@RunWith(JUnit4.class)
 public class DeviceInternetAccessibilityResourceMetricCollectorTest {
     private static final String MOCK_SUCCESS_RESPONSE =
             String.join(

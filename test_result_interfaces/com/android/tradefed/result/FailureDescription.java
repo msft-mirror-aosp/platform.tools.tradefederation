@@ -162,6 +162,24 @@ public class FailureDescription {
         return mErrorMessage;
     }
 
+    /**
+     * A formatted way of displaying the error and some details.
+     */
+    public String getFormattedErrorMessage() {
+        StringBuilder s = new StringBuilder();
+        if (mErrorId != null) {
+            s.append("[");
+            s.append(mErrorId.name());
+            s.append("|");
+            s.append(mErrorId.code());
+            s.append("|");
+            s.append(mErrorId.status());
+            s.append("] ");
+        }
+        s.append(mErrorMessage);
+        return s.toString();
+    }
+
     @Override
     public String toString() {
         // For backward compatibility of result interface, toString falls back to the simple message
@@ -206,18 +224,36 @@ public class FailureDescription {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null) return false;
-        if (getClass() != obj.getClass()) return false;
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
         FailureDescription other = (FailureDescription) obj;
-        if (mActionInProgress != other.mActionInProgress) return false;
+        if (mActionInProgress != other.mActionInProgress) {
+            return false;
+        }
         if (mDebugHelpMessage == null) {
-            if (other.mDebugHelpMessage != null) return false;
-        } else if (!mDebugHelpMessage.equals(other.mDebugHelpMessage)) return false;
+            if (other.mDebugHelpMessage != null) {
+                return false;
+            }
+        } else if (!mDebugHelpMessage.equals(other.mDebugHelpMessage)) {
+            return false;
+        }
         if (mErrorMessage == null) {
-            if (other.mErrorMessage != null) return false;
-        } else if (!mErrorMessage.equals(other.mErrorMessage)) return false;
-        if (mFailureStatus != other.mFailureStatus) return false;
+            if (other.mErrorMessage != null) {
+                return false;
+            }
+        } else if (!mErrorMessage.equals(other.mErrorMessage)) {
+            return false;
+        }
+        if (mFailureStatus != other.mFailureStatus) {
+            return false;
+        }
         return true;
     }
 }

@@ -15,10 +15,14 @@
  */
 package com.android.tradefed.util;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
-
-import junit.framework.TestCase;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -31,12 +35,14 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 
 /** Unit tests for the {@link com.android.tradefed.util.StreamUtil} utility class */
-public class StreamUtilTest extends TestCase {
+@RunWith(JUnit4.class)
+public class StreamUtilTest {
 
     /**
      * Verify that {@link com.android.tradefed.util.StreamUtil#getByteArrayListFromSource} works as
      * expected.
      */
+    @Test
     public void testGetByteArrayListFromSource() throws Exception {
         final String contents = "this is a string";
         final byte[] contentBytes = contents.getBytes();
@@ -56,6 +62,7 @@ public class StreamUtilTest extends TestCase {
      * Verify that {@link com.android.tradefed.util.StreamUtil#getByteArrayListFromStream} works as
      * expected.
      */
+    @Test
     public void testGetByteArrayListFromStream() throws Exception {
         final String contents = "this is a string";
         final byte[] contentBytes = contents.getBytes();
@@ -73,6 +80,7 @@ public class StreamUtilTest extends TestCase {
      * Verify that {@link com.android.tradefed.util.StreamUtil#getStringFromSource} works as
      * expected.
      */
+    @Test
     public void testGetStringFromSource() throws Exception {
         final String contents = "this is a string";
         try (InputStreamSource source = new ByteArrayInputStreamSource(contents.getBytes())) {
@@ -86,6 +94,7 @@ public class StreamUtilTest extends TestCase {
      * Verify that {@link com.android.tradefed.util.StreamUtil#getBufferedReaderFromStreamSrc} works
      * as expected.
      */
+    @Test
     public void testGetBufferedReaderFromInputStream() throws Exception {
         final String contents = "this is a string";
         BufferedReader output = null;
@@ -103,6 +112,7 @@ public class StreamUtilTest extends TestCase {
      * Verify that {@link com.android.tradefed.util.StreamUtil#countLinesFromSource} works as
      * expected.
      */
+    @Test
     public void testCountLinesFromSource() throws Exception {
         final String contents = "foo\nbar\n\foo\n";
         final InputStreamSource source = new ByteArrayInputStreamSource(contents.getBytes());
@@ -113,6 +123,7 @@ public class StreamUtilTest extends TestCase {
      * Verify that {@link com.android.tradefed.util.StreamUtil#getStringFromStream(InputStream)}
      * works as expected.
      */
+    @Test
     public void testGetStringFromStream() throws Exception {
         final String contents = "this is a string";
         final String output = StreamUtil.getStringFromStream(
@@ -124,6 +135,7 @@ public class StreamUtilTest extends TestCase {
      * Verify that {@link com.android.tradefed.util.StreamUtil#getStringFromStream(InputStream,
      * long)} works as expected.
      */
+    @Test
     public void testGetStringFromStream_withLength() throws Exception {
         final String contents = "this is a string";
         final String output =
@@ -137,6 +149,7 @@ public class StreamUtilTest extends TestCase {
      *
      * @throws IOException
      */
+    @Test
     public void testCalculateCrc32() throws IOException {
         final String source = getLargeText();
         final long crc32 = 3023941728L;
@@ -151,6 +164,7 @@ public class StreamUtilTest extends TestCase {
      *
      * @throws IOException
      */
+    @Test
     public void testCalculateMd5() throws IOException {
         final String source = "testtesttesttesttest";
         final String md5 = "f317f682fafe0309c6a423af0b4efa59";
@@ -165,6 +179,7 @@ public class StreamUtilTest extends TestCase {
      *
      * @throws IOException
      */
+    @Test
     public void testCalculateBase64Md5() throws IOException {
         final String source = "testtesttesttesttest";
         final String base64Md5 = "8xf2gvr+AwnGpCOvC076WQ==";
@@ -173,6 +188,7 @@ public class StreamUtilTest extends TestCase {
         assertEquals(base64Md5, actualBase64Md5);
     }
 
+    @Test
     public void testCopyStreams() throws Exception {
         String text = getLargeText();
         ByteArrayInputStream bais = new ByteArrayInputStream(text.getBytes());
@@ -187,6 +203,7 @@ public class StreamUtilTest extends TestCase {
      * Verify that {@link com.android.tradefed.util.StreamUtil#copyStreams(InputStream,
      * OutputStream, long, long)} can copy partial content.
      */
+    @Test
     public void testCopyStreams_partialSuccess() throws Exception {
         String text = getLargeText();
         StringBuilder builder = new StringBuilder(33 * 1024);
@@ -208,6 +225,7 @@ public class StreamUtilTest extends TestCase {
      * OutputStream, long, long)} cannot copy partial content if requested size is larger than
      * what's available.
      */
+    @Test
     public void testCopyStreams_partialFail() throws Exception {
         ByteArrayInputStream bais = null;
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
@@ -223,6 +241,7 @@ public class StreamUtilTest extends TestCase {
         }
     }
 
+    @Test
     public void testCopyStreamToWriter() throws Exception {
         String text = getLargeText();
         ByteArrayInputStream bais = new ByteArrayInputStream(text.getBytes());
@@ -241,6 +260,7 @@ public class StreamUtilTest extends TestCase {
      *
      * @throws IOException
      */
+    @Test
     public void testCopyFileToStream() throws IOException {
         String text = getLargeText();
         File file = File.createTempFile("testCopyFileToStream", ".txt");

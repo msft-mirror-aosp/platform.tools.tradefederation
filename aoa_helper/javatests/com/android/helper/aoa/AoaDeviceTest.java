@@ -33,7 +33,6 @@ import static com.android.helper.aoa.AoaDevice.TOUCH_UP;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyByte;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -135,13 +134,10 @@ public class AoaDeviceTest {
         // never in accessory mode
         when(mDelegate.getVendorId()).thenReturn(INVALID_VID);
 
-        try {
-            mDevice = createDevice();
-            fail("UsbException expected");
-        } catch (UsbException e) {
-            // retried starting accessory mode before giving up
-            verifyRequest(times(ACCESSORY_START_MAX_RETRIES), ACCESSORY_START);
-        }
+        mDevice = createDevice();
+
+        // retried starting accessory mode before giving up
+        verifyRequest(times(ACCESSORY_START_MAX_RETRIES), ACCESSORY_START);
     }
 
     @Test

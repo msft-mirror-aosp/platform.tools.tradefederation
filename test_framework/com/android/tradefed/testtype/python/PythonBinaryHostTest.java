@@ -16,7 +16,6 @@
 package com.android.tradefed.testtype.python;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.ddmlib.Log;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -313,34 +312,20 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
             if (mUseTestOutputFile) {
                 result = getRunUtil().runTimedCmd(mTestTimeout, commandLine.toArray(new String[0]));
             } else {
-                pythonParser.setFinalizeWhenParsing(false);
-                FileOutputStream fileOutputParser =
-                        new FileOutputStream(stderrFile) {
-                            @Override
-                            public void write(byte[] b, int off, int len) throws IOException {
-                                super.write(b, off, len);
-                                pythonParser.addOutput(b, off, len);
-                            }
-
-                            @Override
-                            public void flush() throws IOException {
-                                super.flush();
-                                pythonParser.flush();
-                            }
-                        };
-                result =
-                        getRunUtil()
-                                .runTimedCmd(
-                                        mTestTimeout,
-                                        null,
-                                        fileOutputParser,
-                                        commandLine.toArray(new String[0]));
-                fileOutputParser.flush();
-                pythonParser.finalizeParser();
+                try (FileOutputStream fileOutputParser = new FileOutputStream(stderrFile)) {
+                    result =
+                            getRunUtil()
+                                    .runTimedCmd(
+                                            mTestTimeout,
+                                            null,
+                                            fileOutputParser,
+                                            commandLine.toArray(new String[0]));
+                    fileOutputParser.flush();
+                }
             }
 
             if (!Strings.isNullOrEmpty(result.getStdout())) {
-                CLog.logAndDisplay(Log.LogLevel.INFO, "\nstdout:\n%s", result.getStdout());
+                CLog.i("\nstdout:\n%s", result.getStdout());
                 try (InputStreamSource data =
                         new ByteArrayInputStreamSource(result.getStdout().getBytes())) {
                     listener.testLog(
@@ -350,21 +335,18 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
                 }
             }
             if (!Strings.isNullOrEmpty(result.getStderr())) {
-                CLog.logAndDisplay(Log.LogLevel.INFO, "\nstderr:\n%s", result.getStderr());
+                CLog.i("\nstderr:\n%s", result.getStderr());
             }
 
             File testOutputFile = stderrFile;
-            String testOutput = result.getStderr();
             if (mUseTestOutputFile) {
                 testOutputFile = tempTestOutputFile;
-                // This assumes that the output file is encoded using the same charset as the
-                // currently configured default.
-                testOutput = FileUtil.readStringFromFile(testOutputFile);
                 testLogFile(
                         listener,
                         String.format(PYTHON_LOG_TEST_OUTPUT_FORMAT, runName),
                         testOutputFile);
             }
+            String testOutput = FileUtil.readStringFromFile(testOutputFile);
             pythonParser.processNewLines(testOutput.split("\n"));
         } catch (RuntimeException e) {
             StringBuilder message = new StringBuilder();

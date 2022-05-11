@@ -34,19 +34,25 @@ public final class NativeCodeCoverageFlusher {
 
     private static final String EXTRACT_SIGCGT_FORMAT =
             "cat /proc/%d/status | grep SigCgt | awk '{ print $2 }'";
-    private static final long SIGNAL_37_BIT = 1 << (37 - 1);
+    private static final long SIGNAL_37_BIT = 1L << (37 - 1);
     private static final String COVERAGE_FLUSH_COMMAND_FORMAT = "kill -37 %s";
     private static final String CLEAR_CLANG_COVERAGE_FILES =
             "find /data/misc/trace -name '*.profraw' -delete";
     private static final String CLEAR_GCOV_COVERAGE_FILES =
             "find /data/misc/trace -name '*.gcda' -delete";
+    private static final long FLUSH_DELAY_MS = 2 * 60 * 1000; // 2 minutes
 
     private final ITestDevice mDevice;
     private final List<String> mProcessNames;
+    private IRunUtil mRunUtil = RunUtil.getDefault();
 
     public NativeCodeCoverageFlusher(ITestDevice device, List<String> processNames) {
         mDevice = device;
         mProcessNames = processNames;
+    }
+
+    public void setRunUtil(IRunUtil runUtil) {
+        mRunUtil = runUtil;
     }
 
     /**
@@ -84,8 +90,9 @@ public final class NativeCodeCoverageFlusher {
                     String.format(COVERAGE_FLUSH_COMMAND_FORMAT, pidString.toString()));
         }
 
-        // Wait up to 5 minutes for the device to be available after flushing coverage data.
-        mDevice.waitForDeviceAvailable(5 * 60 * 1000);
+        // Wait 2 minutes for the device to complete flushing coverage data.
+        mRunUtil.sleep(FLUSH_DELAY_MS);
+        mDevice.waitForDeviceAvailable();
     }
 
     /** Finds processes that handle the native coverage flush signal (37). */

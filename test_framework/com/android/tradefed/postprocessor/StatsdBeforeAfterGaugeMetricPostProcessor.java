@@ -16,6 +16,7 @@
 package com.android.tradefed.postprocessor;
 
 import com.android.os.AtomsProto.Atom;
+import com.android.os.StatsLog.AggregatedAtomInfo;
 import com.android.os.StatsLog.ConfigMetricsReport;
 import com.android.os.StatsLog.ConfigMetricsReportList;
 import com.android.os.StatsLog.GaugeBucketInfo;
@@ -113,7 +114,7 @@ public class StatsdBeforeAfterGaugeMetricPostProcessor extends StatsdGenericPost
                             + "References to repeated fields should be avoided unless the user is "
                             + "confident that it will always contain only one value in practice. "
                             + "Field definitions can be found in the atoms.proto file under "
-                            + "frameworks/base/cmds/statsd/src in the source tree. "
+                            + "frameworks/proto_logging/stats in the source tree. "
                             + "The metric key can be empty if only one metric is coming out of a "
                             + "particular atom and the atom name is descriptive enough.")
     private MultiMap<String, String> mMetricFormatters = new MultiMap<>();
@@ -312,7 +313,14 @@ public class StatsdBeforeAfterGaugeMetricPostProcessor extends StatsdGenericPost
             GaugeBucketInfo bucket,
             Map<String, MultiMap<String, String>> metricsOutput,
             Map<String, Map<String, Set<String>>> keyToFormatterOutput) {
-        for (Atom atom : bucket.getAtomList()) {
+        List<Atom> atoms = bucket.getAtomList();
+        if (atoms.isEmpty()) {
+            atoms = new ArrayList<>();
+            for (AggregatedAtomInfo info : bucket.getAggregatedAtomInfoList()) {
+                atoms.add(info.getAtom());
+            }
+        }
+        for (Atom atom : atoms) {
             Map<FieldDescriptor, Object> atomFields = atom.getAllFields();
             for (FieldDescriptor field : atomFields.keySet()) {
                 if (!mMetricFormatters.containsKey(field.getName())) {

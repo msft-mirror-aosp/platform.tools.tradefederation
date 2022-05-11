@@ -16,9 +16,15 @@
 
 package com.android.tradefed.util;
 
-import com.android.tradefed.util.IEmail.Message;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-import junit.framework.TestCase;
+import com.android.tradefed.util.IEmail.Message;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -27,7 +33,8 @@ import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
-public class EmailTest extends TestCase {
+@RunWith(JUnit4.class)
+public class EmailTest {
     private TestEmail mEmail = null;
 
     /**
@@ -89,17 +96,17 @@ public class EmailTest extends TestCase {
         }
     }
 
-    @Override
+    @Before
     public void setUp() throws Exception {
-        super.setUp();
 
         mEmail = new TestEmail();
     }
 
     /**
      * Ensure that IllegalArgumentException is thrown when a message without a destination address
-     * is sent.  Note that the address is not validated in any way (it could even be null)
+     * is sent. Note that the address is not validated in any way (it could even be null)
      */
+    @Test
     public void testSendInval_destination() throws IOException {
         Message msg = new Message();
         msg.setSubject("subject");
@@ -113,9 +120,8 @@ public class EmailTest extends TestCase {
         }
     }
 
-    /**
-     * Ensure that IllegalArgumentException is thrown when a message without a subject is sent.
-     */
+    /** Ensure that IllegalArgumentException is thrown when a message without a subject is sent. */
+    @Test
     public void testSendInval_subject() throws IOException {
         Message msg = new Message("dest@ination.com", null, "body");
         try {
@@ -126,9 +132,8 @@ public class EmailTest extends TestCase {
         }
     }
 
-    /**
-     * Ensure that IllegalArgumentException is thrown when a message without a body is sent.
-     */
+    /** Ensure that IllegalArgumentException is thrown when a message without a body is sent. */
+    @Test
     public void testSendInval_body() throws IOException {
         Message msg = new Message("dest@ination.com", "subject", null);
         try {
@@ -139,9 +144,8 @@ public class EmailTest extends TestCase {
         }
     }
 
-    /**
-     * Ensure that the email body is passed correctly to the mailer program's standard input
-     */
+    /** Ensure that the email body is passed correctly to the mailer program's standard input */
+    @Test
     public void testSend_simple() throws IOException {
         final Message msg = new Message("dest@ination.com", "subject", "body");
         msg.setSender("or@igin.com");
@@ -158,9 +162,8 @@ public class EmailTest extends TestCase {
         assertEquals(4, headers.size());
     }
 
-    /**
-     * Make sure that the HTML flag is passed along correctly
-     */
+    /** Make sure that the HTML flag is passed along correctly */
+    @Test
     public void testSend_htmlEmail() throws IOException {
         final String expectedBody = "<html><body>le body</body></html>";
         final Message msg = new Message("dest@ination.com", "subject", expectedBody);
@@ -178,6 +181,7 @@ public class EmailTest extends TestCase {
      * Ensure that the email is sent correctly even if the message has an empty (but present)
      * subject
      */
+    @Test
     public void testSend_emptySubject() throws IOException {
         Message msg = new Message("dest@ination.com", "", "body");
         mEmail.send(msg);
@@ -187,6 +191,7 @@ public class EmailTest extends TestCase {
     /**
      * Ensure that the email is sent correctly even if the message has an empty (but present) body.
      */
+    @Test
     public void testSend_emptyBody() throws IOException {
         Message msg = new Message("dest@ination.com", "subject", "");
         mEmail.send(msg);

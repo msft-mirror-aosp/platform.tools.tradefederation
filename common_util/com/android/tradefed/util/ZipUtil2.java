@@ -52,6 +52,21 @@ public class ZipUtil2 {
     }
 
     /**
+     * Utility method to extract a zip entry to a file.
+     *
+     * @param zipFile the {@link ZipFile} to extract
+     * @param entry the {@link ZipArchiveEntry} to extract
+     * @param destFile the {@link File} to extract to
+     * @return whether the Unix permissions are set
+     * @throws IOException if failed to extract file
+     */
+    private static boolean extractZipEntry(ZipFile zipFile, ZipArchiveEntry entry, File destFile)
+            throws IOException {
+        FileUtil.writeToFile(zipFile.getInputStream(entry), destFile);
+        return applyUnixModeIfNecessary(entry, destFile);
+    }
+
+    /**
      * Utility method to extract entire contents of zip file into given directory
      *
      * @param zipFile the {@link ZipFile} to extract
@@ -72,8 +87,7 @@ public class ZipUtil2 {
                 }
                 continue;
             } else {
-                FileUtil.writeToFile(zipFile.getInputStream(entry), childFile);
-                if (!applyUnixModeIfNecessary(entry, childFile)) {
+                if (!extractZipEntry(zipFile, entry, childFile)) {
                     noPermissions.add(entry.getName());
                 }
             }
@@ -90,14 +104,38 @@ public class ZipUtil2 {
      * Utility method to extract a zip file into a given directory. The zip file being presented as
      * a {@link File}.
      *
-     * @param zipFile a {@link File} pointing to a zip file.
+     * @param toUnzip a {@link File} pointing to a zip file.
      * @param destDir the local dir to extract file to
      * @throws IOException if failed to extract file
      */
-    public static void extractZip(File zipFile, File destDir) throws IOException {
-        try (ZipFile zip = new ZipFile(zipFile)) {
-            extractZip(zip, destDir);
+    public static void extractZip(File toUnzip, File destDir) throws IOException {
+        // Extract fast
+        try (java.util.zip.ZipFile zipFile = new java.util.zip.ZipFile(toUnzip)) {
+            ZipUtil.extractZip(zipFile, destDir);
         }
+        // Then restore permissions
+        try (ZipFile zip = new ZipFile(toUnzip)) {
+            restorePermissions(zip, destDir);
+        }
+    }
+
+    /**
+     * Utility method to extract one specific file from zip file
+     *
+     * @param zipFile the {@link ZipFile} to extract
+     * @param filePath the file path in the zip
+     * @param destFile the {@link File} to extract to
+     * @return whether the file is found and extracted
+     * @throws IOException if failed to extract file
+     */
+    public static boolean extractFileFromZip(ZipFile zipFile, String filePath, File destFile)
+            throws IOException {
+        ZipArchiveEntry entry = zipFile.getEntry(filePath);
+        if (entry == null) {
+            return false;
+        }
+        extractZipEntry(zipFile, entry, destFile);
+        return true;
     }
 
     /**
@@ -113,10 +151,8 @@ public class ZipUtil2 {
         if (entry == null) {
             return null;
         }
-        File createdFile = FileUtil.createTempFile("extracted",
-                FileUtil.getExtension(filePath));
-        FileUtil.writeToFile(zipFile.getInputStream(entry), createdFile);
-        applyUnixModeIfNecessary(entry, createdFile);
+        File createdFile = FileUtil.createTempFile("extracted", FileUtil.getExtension(filePath));
+        extractZipEntry(zipFile, entry, createdFile);
         return createdFile;
     }
 
@@ -129,8 +165,8 @@ public class ZipUtil2 {
      */
     public static File extractZipToTemp(File zipFile, String nameHint) throws IOException {
         File localRootDir = FileUtil.createTempDir(nameHint);
-        try (ZipFile zip = new ZipFile(zipFile)) {
-            extractZip(zip, localRootDir);
+        try {
+            extractZip(zipFile, localRootDir);
             return localRootDir;
         } catch (IOException e) {
             // clean tmp file since we couldn't extract.
@@ -151,6 +187,25 @@ public class ZipUtil2 {
             } catch (IOException e) {
                 // ignore
             }
+        }
+    }
+
+    /** Match permission on an already extracted destination directory. */
+    private static void restorePermissions(ZipFile zipFile, File destDir) throws IOException {
+        Enumeration<? extends ZipArchiveEntry> entries = zipFile.getEntries();
+        Set<String> noPermissions = new HashSet<>();
+        while (entries.hasMoreElements()) {
+            ZipArchiveEntry entry = entries.nextElement();
+            File childFile = new File(destDir, entry.getName());
+            if (!applyUnixModeIfNecessary(entry, childFile)) {
+                noPermissions.add(entry.getName());
+            }
+        }
+        if (!noPermissions.isEmpty()) {
+            CLog.e(
+                    "Entries '%s' exist but do not contain Unix mode permission info. Files will "
+                            + "have default permission.",
+                    noPermissions);
         }
     }
 }
