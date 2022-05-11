@@ -16,13 +16,18 @@
 
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-/**
- * Unit tests for {@link TimeVal}.
- */
-public class TimeValTest extends TestCase {
+/** Unit tests for {@link TimeVal}. */
+@RunWith(JUnit4.class)
+public class TimeValTest {
 
+    @Test
     public void testBasic() {
         assertEquals(0, TimeVal.fromString("0"));
         assertEquals(1, TimeVal.fromString("1"));
@@ -46,6 +51,7 @@ public class TimeValTest extends TestCase {
         assertEquals(1000 * 86400, TimeVal.fromString("1D"));
     }
 
+    @Test
     public void testComposition() {
         assertEquals(1303, TimeVal.fromString("1s303"));
         assertEquals(1000 * 60 + 303, TimeVal.fromString("1m303"));
@@ -57,6 +63,7 @@ public class TimeValTest extends TestCase {
                 TimeVal.fromString("1d2h3m4s5ms"));
     }
 
+    @Test
     public void testWhitespace() {
         assertEquals(1, TimeVal.fromString("1 ms"));
         assertEquals(1, TimeVal.fromString("  1  ms  "));
@@ -72,6 +79,7 @@ public class TimeValTest extends TestCase {
                 TimeVal.fromString("1d 2h 3m 4s 5ms"));
     }
 
+    @Test
     public void testInvalid() {
         assertInvalid("-1");
         assertInvalid("1m1h");
@@ -80,9 +88,10 @@ public class TimeValTest extends TestCase {
 
     /**
      * Because of TimeVal's multiplication features, it can be easier for a user to unexpectedly
-     * trigger an overflow without realizing that their value has become quite so large.  Here,
-     * we verify that various kinds of overflows and ensure that we detect them.
+     * trigger an overflow without realizing that their value has become quite so large. Here, we
+     * verify that various kinds of overflows and ensure that we detect them.
      */
+    @Test
     public void testOverflow() {
         // 2**63 - 1
         assertEquals(Long.MAX_VALUE, TimeVal.fromString("9223372036854775807"));

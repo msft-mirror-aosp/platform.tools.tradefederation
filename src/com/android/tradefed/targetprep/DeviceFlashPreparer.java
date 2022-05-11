@@ -23,14 +23,18 @@ import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
-import com.android.tradefed.device.IDeviceManager;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NullDevice;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
+import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.IDeviceFlasher.UserDataFlashOption;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
@@ -42,11 +46,6 @@ import java.util.concurrent.TimeUnit;
 
 /** A {@link ITargetPreparer} that flashes an image on physical Android hardware. */
 public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
-
-    /**
-     * Enum of options for handling the encryption of userdata image
-     */
-    public static enum EncryptionOptions {ENCRYPT, IGNORE}
 
     private static final int BOOT_POLL_TIME_MS = 5 * 1000;
 
@@ -60,10 +59,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
     @Option(name = "userdata-flash", description =
         "specify handling of userdata partition.")
     private UserDataFlashOption mUserDataFlashOption = UserDataFlashOption.FLASH;
-
-    @Option(name = "encrypt-userdata", description = "specify if userdata partition should be "
-            + "encrypted; defaults to IGNORE, where no actions will be taken.")
-    private EncryptionOptions mEncryptUserData = EncryptionOptions.IGNORE;
 
     @Option(name = "force-system-flash", description =
         "specify if system should always be flashed even if already running desired build.")
@@ -157,17 +152,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
     }
 
     /**
-     * Getg a reference to the {@link IDeviceManager}
-     *
-     * Exposed for unit testing
-     *
-     * @return the {@link IDeviceManager} to use
-     */
-    IDeviceManager getDeviceManager() {
-        return GlobalConfiguration.getDeviceManagerInstance();
-    }
-
-    /**
      * Gets the {@link IHostOptions} instance to use.
      * <p/>
      * Exposed for unit testing
@@ -201,12 +185,16 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
         }
         IDeviceBuildInfo deviceBuild = (IDeviceBuildInfo) buildInfo;
         if (mShouldFlashRamdisk && deviceBuild.getRamdiskFile() == null) {
-            throw new IllegalArgumentException(
-                    "ramdisk flashing enabled but no ramdisk file was found in build info");
+            throw new HarnessRuntimeException(
+                    "ramdisk flashing enabled but no ramdisk file was found in build info",
+                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
+        // For debugging: log the original build from the device
+        buildInfo.addBuildAttribute(
+                "original_build_fingerprint", device.getProperty("ro.product.build.fingerprint"));
+
         // don't allow interruptions during flashing operations.
         getRunUtil().allowInterrupt(false);
-        IDeviceManager deviceManager = getDeviceManager();
         long queueTime = -1;
         long flashingTime = -1;
         long start = -1;
@@ -218,11 +206,13 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             // only surround fastboot related operations with flashing permit restriction
             try {
                 start = System.currentTimeMillis();
-                deviceManager.takeFlashingPermit();
+                getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
                 queueTime = System.currentTimeMillis() - start;
                 CLog.v(
                         "Flashing permit obtained after %ds",
                         TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
 
                 flasher.overrideDeviceOptions(device);
                 flasher.setUserDataFlashOption(mUserDataFlashOption);
@@ -235,12 +225,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 if (flasher instanceof FastbootDeviceFlasher) {
                     ((FastbootDeviceFlasher) flasher).setFlashOptions(mFastbootFlashOptions);
                 }
-                preEncryptDevice(device, flasher);
                 start = System.currentTimeMillis();
                 flasher.flash(device, deviceBuild);
             } finally {
                 flashingTime = System.currentTimeMillis() - start;
-                deviceManager.returnFlashingPermit();
+                getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
                 // report flashing status
                 CommandStatus status = flasher.getSystemFlashingStatus();
                 if (status == null) {
@@ -267,7 +256,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             // Disable interrupt for encryption operation.
             getRunUtil().allowInterrupt(false);
             checkBuild(device, deviceBuild);
-            postEncryptDevice(device, flasher);
             // Once critical operation is done, we re-enable interruptable
             getRunUtil().allowInterrupt(true);
             try {
@@ -344,129 +332,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
     protected abstract IDeviceFlasher createFlasher(ITestDevice device)
             throws DeviceNotAvailableException;
 
-    /**
-     * Handle encrypting of the device pre-flash.
-     *
-     * @see #postEncryptDevice(ITestDevice, IDeviceFlasher)
-     * @param device
-     * @throws DeviceNotAvailableException
-     * @throws TargetSetupError if the device could not be encrypted or unlocked.
-     */
-    private void preEncryptDevice(ITestDevice device, IDeviceFlasher flasher)
-            throws DeviceNotAvailableException, TargetSetupError {
-        switch (mEncryptUserData) {
-            case IGNORE:
-                return;
-            case ENCRYPT:
-                if (!device.isEncryptionSupported()) {
-                    throw new TargetSetupError("Encryption is not supported",
-                            device.getDeviceDescriptor());
-                }
-                if (!device.isDeviceEncrypted()) {
-                    switch(flasher.getUserDataFlashOption()) {
-                        case TESTS_ZIP: // Intentional fall through.
-                        case WIPE_RM:
-                            // a new filesystem will not be created by the flasher, but the userdata
-                            // partition is expected to be cleared anyway, so we encrypt the device
-                            // with wipe
-                            if (!device.encryptDevice(false)) {
-                                throw new TargetSetupError("Failed to encrypt device",
-                                        device.getDeviceDescriptor());
-                            }
-                            if (!device.unlockDevice()) {
-                                throw new TargetSetupError("Failed to unlock device",
-                                        device.getDeviceDescriptor());
-                            }
-                            break;
-                        case RETAIN:
-                            // original filesystem must be retained, so we encrypt in place
-                            if (!device.encryptDevice(true)) {
-                                throw new TargetSetupError("Failed to encrypt device",
-                                        device.getDeviceDescriptor());
-                            }
-                            if (!device.unlockDevice()) {
-                                throw new TargetSetupError("Failed to unlock device",
-                                        device.getDeviceDescriptor());
-                            }
-                            break;
-                        default:
-                            // Do nothing, userdata will be encrypted post-flash.
-                    }
-                }
-                break;
-            default:
-                // should not get here
-                return;
-        }
-    }
-
-    /**
-     * Handle encrypting of the device post-flash.
-     * <p>
-     * This method handles encrypting the device after a flash in cases where a flash would undo any
-     * encryption pre-flash, such as when the device is flashed or wiped.
-     * </p>
-     *
-     * @see #preEncryptDevice(ITestDevice, IDeviceFlasher)
-     * @param device
-     * @throws DeviceNotAvailableException
-     * @throws TargetSetupError If the device could not be encrypted or unlocked.
-     */
-    private void postEncryptDevice(ITestDevice device, IDeviceFlasher flasher)
-            throws DeviceNotAvailableException, TargetSetupError {
-        switch (mEncryptUserData) {
-            case IGNORE:
-                return;
-            case ENCRYPT:
-                if (!device.isEncryptionSupported()) {
-                    throw new TargetSetupError("Encryption is not supported",
-                            device.getDeviceDescriptor());
-                }
-                switch(flasher.getUserDataFlashOption()) {
-                    case FLASH:
-                        if (!device.encryptDevice(true)) {
-                            throw new TargetSetupError("Failed to encrypt device",
-                                    device.getDeviceDescriptor());
-                        }
-                        break;
-                    case WIPE: // Intentional fall through.
-                    case FORCE_WIPE:
-                        // since the device was just wiped, encrypt with wipe
-                        if (!device.encryptDevice(false)) {
-                            throw new TargetSetupError("Failed to encrypt device",
-                                    device.getDeviceDescriptor());
-                        }
-                        break;
-                    default:
-                        // Do nothing, userdata was encrypted pre-flash.
-                }
-                if (!device.unlockDevice()) {
-                    throw new TargetSetupError("Failed to unlock device",
-                            device.getDeviceDescriptor());
-                }
-                break;
-            default:
-                // should not get here
-                return;
-        }
-    }
-
     @Override
     public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
         if (testInfo.getDevice().getIDevice() instanceof NullDevice) {
             CLog.i("Skipping device flashing tearDown, this is a null-device.");
             return;
-        }
-        ITestDevice device = testInfo.getDevice();
-        if (mEncryptUserData == EncryptionOptions.ENCRYPT
-                && mUserDataFlashOption != UserDataFlashOption.RETAIN) {
-            if (e instanceof DeviceNotAvailableException) {
-                CLog.e("Device was encrypted but now unavailable. may need manual cleanup");
-            } else if (device.isDeviceEncrypted()) {
-                if (!device.unencryptDevice()) {
-                    throw new RuntimeException("Failed to unencrypt device");
-                }
-            }
         }
     }
 

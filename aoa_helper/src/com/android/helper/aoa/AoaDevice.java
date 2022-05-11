@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+import java.util.logging.Logger;
 import javax.annotation.Nonnull;
 
 /**
@@ -42,6 +43,8 @@ import javax.annotation.Nonnull;
  *     Protocol 2.0</a>
  */
 public class AoaDevice implements AutoCloseable {
+
+    private static final Logger LOGGER = Logger.getLogger(AoaDevice.class.getName());
 
     // USB error code
     static final int DEVICE_NOT_FOUND = -4;
@@ -113,21 +116,33 @@ public class AoaDevice implements AutoCloseable {
                 return;
             }
             if (attempt >= ACCESSORY_START_MAX_RETRIES) {
-                throw new UsbException("Failed to start accessory mode after %d attempts", attempt);
+                LOGGER.warning(
+                        String.format(
+                                "Failed to start accessory mode on %s after %d attempts;"
+                                        + " proceeding anyway",
+                                mSerialNumber, attempt));
+                registerHIDs();
+                return;
             }
             // Send accessory information, restart in accessory mode, and try to initialize again
-            mHelper.checkResult(
-                    mDelegate.controlTransfer(OUTPUT, ACCESSORY_SEND_STRING, 0, 0, MANUFACTURER));
-            mHelper.checkResult(
-                    mDelegate.controlTransfer(OUTPUT, ACCESSORY_SEND_STRING, 0, 1, MODEL));
-            mHelper.checkResult(
-                    mDelegate.controlTransfer(OUTPUT, ACCESSORY_SEND_STRING, 0, 3, VERSION));
-            mHelper.checkResult(
-                    mDelegate.controlTransfer(OUTPUT, ACCESSORY_START, 0, 0, new byte[0]));
+            transferOrThrow(ACCESSORY_SEND_STRING, 0, 0, MANUFACTURER);
+            transferOrThrow(ACCESSORY_SEND_STRING, 0, 1, MODEL);
+            transferOrThrow(ACCESSORY_SEND_STRING, 0, 3, VERSION);
+            transferOrThrow(ACCESSORY_START, 0, 0, new byte[0]);
             sleep(CONFIGURE_DELAY);
             mDelegate.close();
             reconnect();
         }
+    }
+
+    // Convenience method to perform an outbound control transfer
+    private int transfer(byte request, int value, int index, byte[] data) {
+        return mDelegate.controlTransfer(OUTPUT, request, value, index, data);
+    }
+
+    // Convenience method to perform an outbound control transfer and throw if an error occurs
+    private void transferOrThrow(byte request, int value, int index, byte[] data) {
+        mHelper.checkResult(transfer(request, value, index, data));
     }
 
     // Reconnect to underlying USB device
@@ -141,22 +156,10 @@ public class AoaDevice implements AutoCloseable {
     // Register HIDs
     private void registerHIDs() {
         for (AoaHID hid : AoaHID.values()) {
-            // register HID identifier
-            mHelper.checkResult(
-                    mDelegate.controlTransfer(
-                            OUTPUT,
-                            ACCESSORY_REGISTER_HID,
-                            hid.getId(),
-                            hid.getDescriptor().length,
-                            new byte[0]));
-            // register HID descriptor
-            mHelper.checkResult(
-                    mDelegate.controlTransfer(
-                            OUTPUT,
-                            ACCESSORY_SET_HID_REPORT_DESC,
-                            hid.getId(),
-                            0,
-                            hid.getDescriptor()));
+            // register HID identifier and descriptor
+            transferOrThrow(
+                    ACCESSORY_REGISTER_HID, hid.getId(), hid.getDescriptor().length, new byte[0]);
+            transferOrThrow(ACCESSORY_SET_HID_REPORT_DESC, hid.getId(), 0, hid.getDescriptor());
         }
         sleep(CONFIGURE_DELAY);
     }
@@ -164,8 +167,7 @@ public class AoaDevice implements AutoCloseable {
     // Unregister HIDs
     private void unregisterHIDs() {
         for (AoaHID hid : AoaHID.values()) {
-            mDelegate.controlTransfer(
-                    OUTPUT, ACCESSORY_UNREGISTER_HID, hid.getId(), 0, new byte[0]);
+            transfer(ACCESSORY_UNREGISTER_HID, hid.getId(), 0, new byte[0]);
         }
     }
 
@@ -218,15 +220,15 @@ public class AoaDevice implements AutoCloseable {
         click(point, Duration.ZERO);
     }
 
-    /** Perform a long click. */
-    public void longClick(@Nonnull Point point) {
-        click(point, LONG_CLICK);
-    }
-
     // Click and wait at a location.
     private void click(Point point, Duration duration) {
         touch(TOUCH_DOWN, point, duration);
         touch(TOUCH_UP, point, ACTION_DELAY);
+    }
+
+    /** Perform a long click. */
+    public void longClick(@Nonnull Point point) {
+        click(point, LONG_CLICK);
     }
 
     /**
@@ -305,14 +307,14 @@ public class AoaDevice implements AutoCloseable {
 
     // Send a HID event to the device
     private void send(AoaHID hid, byte[] data, Duration pause) {
-        int result =
-                mDelegate.controlTransfer(OUTPUT, ACCESSORY_SEND_HID_EVENT, hid.getId(), 0, data);
+        int result = transfer(ACCESSORY_SEND_HID_EVENT, hid.getId(), 0, data);
         if (result == DEVICE_NOT_FOUND) {
-            // device not found, reset the connection and retry
+            LOGGER.warning(
+                    String.format(
+                            "Device %s not found while sending AOA HID event; resetting connection",
+                            mSerialNumber));
             resetConnection();
-            result =
-                    mDelegate.controlTransfer(
-                            OUTPUT, ACCESSORY_SEND_HID_EVENT, hid.getId(), 0, data);
+            result = transfer(ACCESSORY_SEND_HID_EVENT, hid.getId(), 0, data);
         }
         mHelper.checkResult(result);
         sleep(pause);

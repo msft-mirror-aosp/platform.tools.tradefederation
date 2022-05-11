@@ -39,10 +39,20 @@ public class ActivityStatusChecker implements ISystemStatusChecker, ITestLoggerR
     private StatusCheckerResult isFrontActivityLauncher(ITestDevice device)
             throws DeviceNotAvailableException {
         StatusCheckerResult result = new StatusCheckerResult();
-        String output =
-                device.executeShellCommand(
-                        "dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'");
-        CLog.d("dumpsys window windows: %s", output);
+        // For API >= 29, `dumpsys window windows` is deprecated, use `displays` instead
+        String output = "";
+        int apiLevel = device.getApiLevel();
+        if (apiLevel >= 29) {
+            output =
+                    device.executeShellCommand(
+                            "dumpsys window displays | grep -E 'mCurrentFocus|mFocusedApp'");
+            CLog.d("dumpsys window displays: %s", output);
+        } else {
+            output =
+                    device.executeShellCommand(
+                            "dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'");
+            CLog.d("dumpsys window windows: %s", output);
+        }
         if (output.contains("Launcher")) {
             result.setStatus(CheckStatus.SUCCESS);
             return result;

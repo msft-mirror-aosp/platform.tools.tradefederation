@@ -17,11 +17,14 @@ package com.android.tradefed.util;
 
 import static org.junit.Assert.*;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.Test;
 
 /**
  * Unit Tests for {@link TimeUtil}
  */
+@RunWith(JUnit4.class)
 public class TimeUtilTest {
 
     @Test

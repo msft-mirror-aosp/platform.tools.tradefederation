@@ -35,8 +35,10 @@ public enum DeviceErrorIdentifier implements ErrorIdentifier {
     FAIL_PUSH_FILE(520_102, FailureStatus.DEPENDENCY_ISSUE),
     FAIL_PULL_FILE(520_103, FailureStatus.DEPENDENCY_ISSUE),
     DEVICE_FAILED_TO_RESET(520_104, FailureStatus.DEPENDENCY_ISSUE),
+    DEVICE_FAILED_TO_REMOUNT(520_105, FailureStatus.DEPENDENCY_ISSUE),
 
     INSTRUMENTATION_CRASH(520_200, FailureStatus.SYSTEM_UNDER_TEST_CRASHED),
+    ADB_DISCONNECT(520_201, FailureStatus.DEPENDENCY_ISSUE),
 
     FAILED_TO_LAUNCH_GCE(520_500, FailureStatus.LOST_SYSTEM_UNDER_TEST),
     FAILED_TO_CONNECT_TO_GCE(520_501, FailureStatus.LOST_SYSTEM_UNDER_TEST),
@@ -44,7 +46,8 @@ public enum DeviceErrorIdentifier implements ErrorIdentifier {
 
     DEVICE_UNAVAILABLE(520_750, FailureStatus.LOST_SYSTEM_UNDER_TEST),
     DEVICE_UNRESPONSIVE(520_751, FailureStatus.LOST_SYSTEM_UNDER_TEST),
-    DEVICE_CRASHED(520_752, FailureStatus.SYSTEM_UNDER_TEST_CRASHED);
+    DEVICE_CRASHED(520_752, FailureStatus.SYSTEM_UNDER_TEST_CRASHED),
+    UNEXPECTED_REBOOT(520_753, FailureStatus.SYSTEM_UNDER_TEST_CRASHED);
 
     private final long code;
     private final @Nonnull FailureStatus status;

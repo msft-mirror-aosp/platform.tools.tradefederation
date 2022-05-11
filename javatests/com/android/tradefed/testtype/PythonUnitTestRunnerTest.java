@@ -19,6 +19,10 @@ package com.android.tradefed.testtype;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -27,11 +31,13 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.util.HashMap;
 
@@ -125,12 +131,13 @@ public class PythonUnitTestRunnerTest {
     }
 
     private PythonUnitTestRunner mRunner;
-    private ITestInvocationListener mMockListener;
+    @Mock ITestInvocationListener mMockListener;
 
     @Before
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
         mRunner = new PythonUnitTestRunner();
-        mMockListener = EasyMock.createMock(ITestInvocationListener.class);
     }
 
     @Test
@@ -163,87 +170,94 @@ public class PythonUnitTestRunnerTest {
 
     private IRunUtil getMockRunUtil(UnitTestResult testResult) {
         CommandResult expectedResult = testResult.getCommandResult();
-        IRunUtil mockRunUtil = EasyMock.createMock(IRunUtil.class);
+        IRunUtil mockRunUtil = mock(IRunUtil.class);
         // EasyMock checks the number of arguments when verifying method call.
         // The actual runTimedCmd() expected here looks like:
         // runTimedCmd(300000, null, "-m", "unittest", "-v", "")
-        EasyMock.expect(
-                        mockRunUtil.runTimedCmd(
-                                EasyMock.anyLong(),
-                                (String) EasyMock.anyObject(),
-                                (String) EasyMock.anyObject(),
-                                (String) EasyMock.anyObject(),
-                                (String) EasyMock.anyObject(),
-                                (String) EasyMock.anyObject()))
-                .andReturn(expectedResult)
-                .times(1);
+        when(mockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any()))
+                .thenReturn(expectedResult);
         return mockRunUtil;
     }
 
-    private void setMockListenerExpectTestPass(boolean testPass) {
-        mMockListener.testRunStarted((String) EasyMock.anyObject(), EasyMock.anyInt());
-        EasyMock.expectLastCall().times(1);
-        mMockListener.testStarted((TestDescription) EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+    private void verifyMockRunUtil(IRunUtil mockRunUtil) {
+        verify(mockRunUtil, times(1))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any());
+    }
+
+    private void verifyMockListenerExpectTestPass(boolean testPass) {
+        verify(mMockListener, times(1)).testRunStarted((String) Mockito.any(), Mockito.anyInt());
+        verify(mMockListener, times(1)).testStarted((TestDescription) Mockito.any());
+
         if (!testPass) {
-            mMockListener.testFailed(
-                    (TestDescription) EasyMock.anyObject(), (String) EasyMock.anyObject());
-            EasyMock.expectLastCall().times(1);
+            verify(mMockListener, times(1))
+                    .testFailed((TestDescription) Mockito.any(), (String) Mockito.any());
         }
-        mMockListener.testEnded(
-                (TestDescription) EasyMock.anyObject(),
-                (HashMap<String, Metric>) EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
-        mMockListener.testRunEnded(
-                EasyMock.anyLong(), (HashMap<String, Metric>) EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
+
+        verify(mMockListener, times(1))
+                .testEnded(
+                        (TestDescription) Mockito.any(), (HashMap<String, Metric>) Mockito.any());
+        verify(mMockListener, times(1))
+                .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
     }
 
     /** Test execution succeeds and all test cases pass. */
     @Test
     public void testRunPass() {
         IRunUtil mockRunUtil = getMockRunUtil(UnitTestResult.PASS);
-        setMockListenerExpectTestPass(true);
-        EasyMock.replay(mMockListener, mockRunUtil);
+
         mRunner.doRunTest(mMockListener, mockRunUtil, "");
-        EasyMock.verify(mMockListener, mockRunUtil);
+        verifyMockListenerExpectTestPass(true);
+        verifyMockRunUtil(mockRunUtil);
     }
 
     /** Test execution succeeds and some test cases fail. */
     @Test
     public void testRunFail() {
         IRunUtil mockRunUtil = getMockRunUtil(UnitTestResult.FAIL);
-        setMockListenerExpectTestPass(false);
-        EasyMock.replay(mMockListener, mockRunUtil);
+
         mRunner.doRunTest(mMockListener, mockRunUtil, "");
-        EasyMock.verify(mMockListener, mockRunUtil);
+
+        verifyMockListenerExpectTestPass(false);
+        verifyMockRunUtil(mockRunUtil);
     }
 
     /** Test execution fails. */
     @Test
     public void testRunExecutionFail() {
         IRunUtil mockRunUtil = getMockRunUtil(UnitTestResult.EXECUTION_FAIL);
-        EasyMock.replay(mockRunUtil);
+
         try {
             mRunner.doRunTest(mMockListener, mockRunUtil, "");
             fail("Should not reach here.");
         } catch (RuntimeException e) {
+            verifyMockRunUtil(mockRunUtil);
             assertEquals("Test execution failed", e.getMessage());
         }
-        EasyMock.verify(mockRunUtil);
     }
 
     /** Test execution times out. */
     @Test
     public void testRunTimeout() {
         IRunUtil mockRunUtil = getMockRunUtil(UnitTestResult.TIMEOUT);
-        EasyMock.replay(mockRunUtil);
+
         try {
             mRunner.doRunTest(mMockListener, mockRunUtil, "");
             fail("Should not reach here.");
         } catch (RuntimeException e) {
+            verifyMockRunUtil(mockRunUtil);
             assertTrue(e.getMessage().startsWith("Python unit test timed out after"));
         }
-        EasyMock.verify(mockRunUtil);
     }
 }

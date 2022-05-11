@@ -16,8 +16,9 @@
 
 package com.android.tradefed.config;
 
-import com.android.ddmlib.Log;
+import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.command.CommandOptions;
+import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.config.yaml.ConfigurationYamlParser;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -42,10 +43,13 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
@@ -63,11 +67,12 @@ public class ConfigurationFactory implements IConfigurationFactory {
     private static final Set<String> SUPPORTED_EXTENSIONS =
             ImmutableSortedSet.of(".xml", ".config");
 
-    private static final String LOG_TAG = "ConfigurationFactory";
     private static IConfigurationFactory sInstance = null;
     private static final String CONFIG_PREFIX = "config/";
     private static final String DRY_RUN_TEMPLATE_CONFIG = "empty";
     private static final String CONFIG_ERROR_PATTERN = "(Could not find option with name )(.*)";
+    // TODO(murj) generalize this to a URI matcher
+    private static final String DIRECT_CONFIG_PATTERN = "^(gs|file|http|https)://.*";
 
     private Map<ConfigId, ConfigurationDef> mConfigDefMap;
 
@@ -115,10 +120,12 @@ public class ConfigurationFactory implements IConfigurationFactory {
         }
 
         private boolean matches(Object a, Object b) {
-            if (a == null && b == null)
+            if (a == null && b == null) {
                 return true;
-            if (a == null || b == null)
+            }
+            if (a == null || b == null) {
                 return false;
+            }
             return a.equals(b);
         }
 
@@ -127,10 +134,12 @@ public class ConfigurationFactory implements IConfigurationFactory {
          */
         @Override
         public boolean equals(Object other) {
-            if (other == null)
+            if (other == null) {
                 return false;
-            if (!(other instanceof ConfigId))
+            }
+            if (!(other instanceof ConfigId)) {
                 return false;
+            }
 
             final ConfigId otherConf = (ConfigId) other;
             return matches(name, otherConf.name) && matches(templateMap, otherConf.templateMap);
@@ -549,8 +558,11 @@ public class ConfigurationFactory implements IConfigurationFactory {
             // (unconsumedArgs == null) is taken as a signal that the caller
             // expects all args to
             // be processed.
-            throw new ConfigurationException(String.format(
-                    "Invalid arguments provided. Unprocessed arguments: %s", tmpUnconsumedArgs));
+            throw new ConfigurationException(
+                    String.format(
+                            "Invalid arguments provided. Unprocessed arguments: %s",
+                            tmpUnconsumedArgs),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         } else if (unconsumedArgs != null) {
             // Return the unprocessed args
             unconsumedArgs.addAll(tmpUnconsumedArgs);
@@ -562,10 +574,15 @@ public class ConfigurationFactory implements IConfigurationFactory {
     /** {@inheritDoc} */
     @Override
     public IConfiguration createPartialConfigurationFromArgs(
-            String[] arrayArgs, IKeyStoreClient keyStoreClient, Set<String> allowedObjects)
+            String[] arrayArgs,
+            IKeyStoreClient keyStoreClient,
+            Set<String> allowedObjects,
+            TradefedDelegator delegator)
             throws ConfigurationException {
         if (arrayArgs.length == 0) {
-            throw new ConfigurationException("Configuration to run was not specified");
+            throw new ConfigurationException(
+                    "Configuration to run was not specified",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         List<String> listArgs = new ArrayList<String>(arrayArgs.length);
@@ -573,11 +590,19 @@ public class ConfigurationFactory implements IConfigurationFactory {
         IConfiguration config =
                 internalCreateConfigurationFromArgs(
                         reorderedArrayArgs, listArgs, keyStoreClient, allowedObjects);
+        if (delegator != null) {
+            config.setConfigurationObject(TradefedDelegator.DELEGATE_OBJECT, delegator);
+        }
         config.setCommandLine(arrayArgs);
         List<String> leftOver =
                 config.setBestEffortOptionsFromCommandLineArgs(listArgs, keyStoreClient);
         CLog.d("Non-applied arguments: %s", leftOver);
         return config;
+    }
+
+    @VisibleForTesting
+    protected boolean isDirectConfiguration(String configName) {
+        return Pattern.matches(DIRECT_CONFIG_PATTERN, configName);
     }
 
     /**
@@ -603,8 +628,27 @@ public class ConfigurationFactory implements IConfigurationFactory {
         // first arg is config name
         final String configName = listArgs.remove(0);
 
+        // ATTN This section short-circuts the rest of the configuration pipeline
+        if (isDirectConfiguration(configName)) {
+            return internalCreateDirectConfiguration(
+                    configName, listArgs, optionArgsRef, keyStoreClient, allowedObjects);
+        }
+
         Map<String, String> uniqueMap =
                 extractTemplates(configName, listArgs, optionArgsRef, keyStoreClient);
+        if (allowedObjects != null && !allowedObjects.isEmpty()) {
+            ConfigLoader tmpLoader = new ConfigLoader(false);
+            // For partial loading be lenient about templates and let the delegate deal with it.
+            // In some cases this won't be 100% correct but it's better than failing on all new
+            // configs.
+            for (String key : uniqueMap.keySet()) {
+                try {
+                    tmpLoader.findConfigName(uniqueMap.get(key), null);
+                } catch (ConfigurationException e) {
+                    uniqueMap.put(key, "empty");
+                }
+            }
+        }
         ConfigurationDef configDef = getConfigurationDef(configName, false, uniqueMap);
         if (!uniqueMap.isEmpty()) {
             // remove the bad ConfigDef from the cache.
@@ -616,7 +660,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                 }
             }
             throw new ConfigurationException(
-                    String.format("Unused template:map parameters: %s", uniqueMap.toString()));
+                    String.format("Unused template:map parameters: %s", uniqueMap.toString()),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         return configDef.createConfiguration(allowedObjects);
     }
@@ -643,8 +688,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                 for (String key : parserSettings.templateMap.keySet()) {
                     if (parserSettings.templateMap.get(key).size() > 1) {
                         throw new ConfigurationException(
-                                String.format(
-                                        "More than one template specified for key '%s'", key));
+                                String.format("More than one template specified for key '%s'", key),
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                     }
                 }
                 return parserSettings.templateMap.getUniqueMap();
@@ -659,6 +704,182 @@ public class ConfigurationFactory implements IConfigurationFactory {
             default:
                 return new HashMap<>();
         }
+    }
+
+    /**
+     * A delegation method from the other `internalCreateConfiguration...` methods for direct
+     * configs
+     *
+     * <p>This method encapsulates the direct configuration flow so that we can separate it from the
+     * legacy flows for future refactoring.
+     *
+     * @param listArgs list of command arguments **not including the config name**
+     * @param optionArgsRef an empty list, that will be populated with the option arguments left to
+     *     be interpreted (should be populated with all non-template option arguments)
+     * @param keyStoreClient {@link IKeyStoreClient} keystore client to use if any.
+     * @param allowedObjects config object that are allowed to be created.
+     * @return An {@link IConfiguration} object representing the configuration that was loaded
+     * @throws ConfigurationException
+     */
+    @VisibleForTesting
+    private IConfiguration internalCreateDirectConfiguration(
+            String configName,
+            List<String> listArgs,
+            List<String> optionArgsRef,
+            IKeyStoreClient keyStoreClient,
+            Set<String> allowedObjects)
+            throws ConfigurationException {
+        // Download the file and do some error handling here
+        try {
+            URI configURI = new URI(configName);
+            String name =
+                    Arrays.stream(configURI.getPath().split("/"))
+                            .reduce((first, second) -> second)
+                            .orElseThrow();
+            CLog.i("Determined the config name was %s", name);
+
+            // GCS resolver doesn't respect this, but just in case others do,
+            // we'd prefer them here.
+            File destDir = FileUtil.createTempDir("tf-configs");
+
+            File configFile = resolveRemoteFile(configURI, destDir.toURI());
+
+            CLog.i("Attempting to read from file: %s", configFile.getPath());
+            try (BufferedInputStream configInputStream =
+                    new BufferedInputStream(new FileInputStream(configFile))) {
+                ConfigurationDef configDef = new ConfigurationDef(configName);
+
+                switch (FileUtil.getExtension(configFile.getPath())) {
+                    case ".xml":
+                    case ".config":
+                    case "":
+                        // Note: this disabled config loader both prevents templates from being
+                        // instantiated and allows me to use the ConfigurationXMLParser without
+                        // substantial modification, for now.
+                        ConfigLoader exceptionLoader = new ExceptionLoader(false);
+                        ConfigurationXmlParser parser =
+                                new ConfigurationXmlParser(exceptionLoader, null);
+
+                        parser.parse(
+                                configDef,
+                                configName,
+                                configInputStream,
+                                new HashMap<String, String>(),
+                                new HashSet<String>());
+                        break;
+                    case ".tf_yaml":
+                        ConfigurationYamlParser yamlParser = new ConfigurationYamlParser();
+                        yamlParser.parse(configDef, configName, configInputStream, false);
+                        break;
+                    default:
+                        throw new ConfigurationException(
+                                String.format(
+                                        "The config format for %s is not supported.", configName),
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                }
+
+                FileUtil.deleteFile(configFile);
+                FileUtil.recursiveDelete(destDir);
+
+                final ConfigurationXmlParserSettings parserSettings =
+                        new ConfigurationXmlParserSettings();
+                final ArgsOptionParser cmdArgParser = new ArgsOptionParser(parserSettings);
+                if (keyStoreClient != null) {
+                    cmdArgParser.setKeyStore(keyStoreClient);
+                }
+                optionArgsRef.addAll(cmdArgParser.parseBestEffort(listArgs));
+
+                return configDef.createConfiguration(allowedObjects);
+            }
+        } catch (FileNotFoundException e) {
+            throw new ConfigurationException(e.toString(), e);
+        } catch (BuildRetrievalError e) {
+            throw new ConfigurationException(e.toString(), e);
+        } catch (URISyntaxException e) {
+            throw new ConfigurationException(
+                    String.format("Invalid URI specified: %s", configName), e);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to create temp dir for config", e);
+        }
+    }
+
+    @VisibleForTesting
+    protected File resolveRemoteFile(URI configURI, URI destDir) throws BuildRetrievalError {
+        return RemoteFileResolver.resolveRemoteFile(configURI, destDir);
+    }
+
+    protected class ExceptionLoader extends ConfigLoader {
+        public ExceptionLoader(boolean isGlobal) {
+            super(isGlobal);
+        }
+
+        @Override
+        public ConfigurationDef getConfigurationDef(String name, Map<String, String> templateMap)
+                throws ConfigurationException {
+            throw new ConfigurationException(
+                    "Templates are not allowed in direct configuration contexts");
+        }
+
+        @Override
+        public boolean isBundledConfig(String name) {
+            throw new RuntimeException(
+                    new ConfigurationException(
+                            "Templates are not allowed in direct configuration contexts"));
+        }
+
+        @Override
+        protected String findConfigName(String name, String parentName) {
+            throw new RuntimeException(
+                    new ConfigurationException(
+                            "Templates are not allowed in direct configuration contexts"));
+        }
+
+        @Override
+        public void loadIncludedConfiguration(
+                ConfigurationDef def,
+                String parentName,
+                String name,
+                String deviceTagObject,
+                Map<String, String> templateMap,
+                Set<String> templateSeen)
+                throws ConfigurationException {
+            throw new ConfigurationException(
+                    "Templates are not allowed in direct configuration contexts",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+
+        @Override
+        public void loadConfiguration(
+                String name,
+                ConfigurationDef def,
+                String deviceTagObject,
+                Map<String, String> templateMap,
+                Set<String> templateSeen)
+                throws ConfigurationException {
+            throw new ConfigurationException(
+                    "Templates are not allowed in direct configuration contexts",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+
+        @Override
+        protected void trackConfig(String name, ConfigurationDef def) {
+            throw new RuntimeException(
+                    new ConfigurationException(
+                            "Templates are not allowed in direct configuration contexts"));
+        }
+
+        @Override
+        protected boolean isTrackableConfig(String name) {
+            throw new RuntimeException(
+                    new ConfigurationException(
+                            "Templates are not allowed in direct configuration contexts"));
+        }
+
+        // `private String getAbsolutePath(String root, String name)` is private
+        // and so cannot be overridden
+
+        // `public boolean isGlobalConfig()` not overridden because it is probably
+        // fine to call in this context
     }
 
     /**
@@ -715,10 +936,11 @@ public class ConfigurationFactory implements IConfigurationFactory {
         SortedSet<ConfigurationDef> configDefs = new TreeSet<ConfigurationDef>(
                 new ConfigDefComparator());
         configDefs.addAll(mConfigDefMap.values());
+        StringBuilder sb = new StringBuilder();
         for (ConfigurationDef def : configDefs) {
-            out.printf("  %s: %s", def.getName(), def.getDescription());
-            out.println();
+            sb.append(String.format("  %s: %s\n", def.getName(), def.getDescription()));
         }
+        out.printf(sb.toString());
     }
 
     /**
@@ -851,9 +1073,9 @@ public class ConfigurationFactory implements IConfigurationFactory {
             InputStream configStream = getConfigStream(configName);
             StreamUtil.copyStreams(configStream, out);
         } catch (ConfigurationException e) {
-            Log.e(LOG_TAG, e);
+            CLog.e(e);
         } catch (IOException e) {
-            Log.e(LOG_TAG, e);
+            CLog.e(e);
         }
     }
 

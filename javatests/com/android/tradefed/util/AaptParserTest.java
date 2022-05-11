@@ -16,16 +16,24 @@
 
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /** Tests for {@link AaptParser}. */
-public class AaptParserTest extends TestCase {
+@RunWith(JUnit4.class)
+public class AaptParserTest {
 
+    @Test
     public void testParseInvalidInput() {
         AaptParser p = new AaptParser();
         assertFalse(p.parse("Bad data"));
     }
 
+    @Test
     public void testParseEmptyVersionCode() {
         AaptParser p = new AaptParser();
         assertTrue(p.parse("package: name='android.support.graphics.drawable.animated.test'" +
@@ -50,6 +58,7 @@ public class AaptParserTest extends TestCase {
         assertEquals("", p.getVersionCode());
     }
 
+    @Test
     public void testParsePackageNameVersionLabel() {
         AaptParser p = new AaptParser();
         p.parse("package: name='com.android.foo' versionCode='13' versionName='2.3'\n" +
@@ -64,6 +73,7 @@ public class AaptParserTest extends TestCase {
         assertEquals(5, p.getSdkVersion());
     }
 
+    @Test
     public void testParseVersionMultipleFieldsNoLabel() {
         AaptParser p = new AaptParser();
         p.parse("package: name='com.android.foo' versionCode='217173' versionName='1.7173' " +
@@ -80,6 +90,7 @@ public class AaptParserTest extends TestCase {
         assertEquals(10, p.getSdkVersion());
     }
 
+    @Test
     public void testParseInvalidSdkVersion() {
         AaptParser p = new AaptParser();
         p.parse("package: name='com.android.foo' versionCode='217173' versionName='1.7173' " +
@@ -92,6 +103,7 @@ public class AaptParserTest extends TestCase {
         assertEquals(-1, p.getSdkVersion());
     }
 
+    @Test
     public void testParseNativeCode() {
         AaptParser p = new AaptParser();
         p.parse(
@@ -107,6 +119,7 @@ public class AaptParserTest extends TestCase {
         assertEquals("arm64-v8a", p.getNativeCode().get(0));
     }
 
+    @Test
     public void testParseNativeCode_multi() {
         AaptParser p = new AaptParser();
         p.parse(
@@ -123,6 +136,68 @@ public class AaptParserTest extends TestCase {
         assertEquals("armeabi-v7a", p.getNativeCode().get(1));
     }
 
+    @Test
+    public void testParseNativeCode_multi_4() {
+        AaptParser p = new AaptParser();
+        p.parse(
+                "package: name='com.android.foo' versionCode='217173' versionName='1.7173' "
+                        + "platformBuildVersionName=''\n"
+                        + "install-location:'preferExternal'\n"
+                        + "sdkVersion:'notavalidsdk'\n"
+                        + "targetSdkVersion:'21'\n"
+                        + "uses-permission: name='android.permission.INTERNET'\n"
+                        + "uses-permission: name='android.permission.ACCESS_NETWORK_STATE'\n"
+                        + "densities: '160'\n"
+                        + "native-code: 'arm64-v8a' 'armeabi-v7a' 'x86' 'x86_64'");
+        assertEquals(4, p.getNativeCode().size());
+        assertEquals("arm64-v8a", p.getNativeCode().get(0));
+        assertEquals("armeabi-v7a", p.getNativeCode().get(1));
+        assertEquals("x86", p.getNativeCode().get(2));
+        assertEquals("x86_64", p.getNativeCode().get(3));
+    }
+
+    @Test
+    public void testParseNativeCode_multi_10() {
+        AaptParser p = new AaptParser();
+        p.parse(
+                "package: name='com.android.foo' versionCode='217173' versionName='1.7173' "
+                        + "platformBuildVersionName=''\n"
+                        + "install-location:'preferExternal'\n"
+                        + "sdkVersion:'notavalidsdk'\n"
+                        + "targetSdkVersion:'21'\n"
+                        + "uses-permission: name='android.permission.INTERNET'\n"
+                        + "uses-permission: name='android.permission.ACCESS_NETWORK_STATE'\n"
+                        + "densities: '160'\n"
+                        + "native-code: 'nc0' 'nc1' 'nc2' 'nc3' 'nc4' 'nc5' 'nc6' 'nc7' "
+                        + "'nc8' 'nc9'");
+        assertEquals(10, p.getNativeCode().size());
+        for (int i = 0; i < 10; ++i) {
+            assertEquals("nc" + i, p.getNativeCode().get(i));
+        }
+    }
+
+    // only parse out the first 10 native-codes if there are more than 10
+    @Test
+    public void testParseNativeCode_multi_11() {
+        AaptParser p = new AaptParser();
+        p.parse(
+                "package: name='com.android.foo' versionCode='217173' versionName='1.7173' "
+                        + "platformBuildVersionName=''\n"
+                        + "install-location:'preferExternal'\n"
+                        + "sdkVersion:'notavalidsdk'\n"
+                        + "targetSdkVersion:'21'\n"
+                        + "uses-permission: name='android.permission.INTERNET'\n"
+                        + "uses-permission: name='android.permission.ACCESS_NETWORK_STATE'\n"
+                        + "densities: '160'\n"
+                        + "native-code: 'nc0' 'nc1' 'nc2' 'nc3' 'nc4' 'nc5' 'nc6' 'nc7' "
+                        + "'nc8' 'nc9' 'nc10'");
+        assertEquals(10, p.getNativeCode().size());
+        for (int i = 0; i < 10; ++i) {
+            assertEquals("nc" + i, p.getNativeCode().get(i));
+        }
+    }
+
+    @Test
     public void testParseNativeCode_alt() {
         AaptParser p = new AaptParser();
         p.parse(
@@ -140,6 +215,7 @@ public class AaptParserTest extends TestCase {
         assertEquals("armeabi-v7a", p.getNativeCode().get(1));
     }
 
+    @Test
     public void testParseXmlTree_withRequestLegacyFlagTrue() {
         AaptParser p = new AaptParser();
         p.parseXmlTree(
@@ -168,34 +244,54 @@ public class AaptParserTest extends TestCase {
         assertTrue(p.isRequestingLegacyStorage());
     }
 
+    @Test
     public void testParseXmlTreeForAapt2_withRequestLegacyFlagTrue() {
         AaptParser p = new AaptParser();
         p.parseXmlTree(
                 "N: android=http://schemas.android.com/apk/res/android\n"
-                        + "  E: manifest (line=2)\n"
-                        + "    A: http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=(type 0x10)0x1d\n"
-                        + "    A: http://schemas.android.com/apk/res/android:versionName(0x0101021c)=\"R\" (Raw: \"R\")\n"
-                        + "    A: http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=(type 0x10)0x1d\n"
-                        + "    A: http://schemas.android.com/apk/res/android:compileSdkVersionCodename(0x01010573)=\"R\" (Raw: "
-                        + "\"R\")\n"
-                        + "    A: package=\"com.android.foo\" (Raw: \"com.android.foo\")\n"
-                        + "    A: platformBuildVersionCode=(type 0x10)0x1d\n"
-                        + "    A: platformBuildVersionName=\"R\" (Raw: \"R\")\n"
-                        + "    E: uses-sdk (line=5)\n"
-                        + "      A: http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=(type 0x10)0x1c\n"
-                        + "      A: http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=\"R\" (Raw: \"R\")\n"
-                        + "    E: application (line=12)\n"
-                        + "      A: http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=(type 0x10)0x1e\n"
-                        + "      A: http://schemas.android.com/apk/res/android:supportsRtl(0x010103af)=(type 0x12)0xffffffff\n"
-                        + "      A: http://schemas.android.com/apk/res/android:extractNativeLibs(0x010104ea)=(type 0x12)0xffffffff\n"
-                        + "      A: http://schemas.android.com/apk/res/android:appComponentFactory(0x0101057a)=\"androidx.core.app"
-                        + ".CoreComponentFactory\" (Raw: \"androidx.core.app"
-                        + ".CoreComponentFactory\")\n"
-                        + "      A: http://schemas.android.com/apk/res/android:requestLegacyExternalStorage(0x01010603)=(type 0x12)"
-                        + "0xffffffff\n");
+                    + "  E: manifest (line=2)\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=(type"
+                    + " 0x10)0x1d\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/android:versionName(0x0101021c)=\"R\""
+                    + " (Raw: \"R\")\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=(type"
+                    + " 0x10)0x1d\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/android:compileSdkVersionCodename(0x01010573)=\"R\""
+                    + " (Raw: \"R\")\n"
+                    + "    A: package=\"com.android.foo\" (Raw: \"com.android.foo\")\n"
+                    + "    A: platformBuildVersionCode=(type 0x10)0x1d\n"
+                    + "    A: platformBuildVersionName=\"R\" (Raw: \"R\")\n"
+                    + "    E: uses-sdk (line=5)\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=(type"
+                    + " 0x10)0x1c\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=\"R\""
+                    + " (Raw: \"R\")\n"
+                    + "    E: application (line=12)\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=(type"
+                    + " 0x10)0x1e\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:supportsRtl(0x010103af)=(type"
+                    + " 0x12)0xffffffff\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:extractNativeLibs(0x010104ea)=(type"
+                    + " 0x12)0xffffffff\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:appComponentFactory(0x0101057a)=\"androidx.core.app.CoreComponentFactory\""
+                    + " (Raw: \"androidx.core.app.CoreComponentFactory\")\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:requestLegacyExternalStorage(0x01010603)=(type"
+                    + " 0x12)0xffffffff\n");
         assertTrue(p.isRequestingLegacyStorage());
     }
 
+    @Test
     public void testParseXmlTree_withRequestLegacyFlagFalse() {
         AaptParser p = new AaptParser();
         p.parseXmlTree(
@@ -224,34 +320,54 @@ public class AaptParserTest extends TestCase {
         assertFalse(p.isRequestingLegacyStorage());
     }
 
+    @Test
     public void testParseXmlTreeForAapt2_withRequestLegacyFlagFalse() {
         AaptParser p = new AaptParser();
         p.parseXmlTree(
                 "N: android=http://schemas.android.com/apk/res/android\n"
-                        + "  E: manifest (line=2)\n"
-                        + "    A: http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=(type 0x10)0x1d\n"
-                        + "    A: http://schemas.android.com/apk/res/android:versionName(0x0101021c)=\"R\" (Raw: \"R\")\n"
-                        + "    A: http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=(type 0x10)0x1d\n"
-                        + "    A: http://schemas.android.com/apk/res/android:compileSdkVersionCodename(0x01010573)=\"R\" (Raw: "
-                        + "\"R\")\n"
-                        + "    A: package=\"com.android.foo\" (Raw: \"com.android.foo\")\n"
-                        + "    A: platformBuildVersionCode=(type 0x10)0x1d\n"
-                        + "    A: platformBuildVersionName=\"R\" (Raw: \"R\")\n"
-                        + "    E: uses-sdk (line=5)\n"
-                        + "      A: http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=(type 0x10)0x1c\n"
-                        + "      A: http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=\"R\" (Raw: \"R\")\n"
-                        + "    E: application (line=12)\n"
-                        + "      A: http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=(type 0x10)0x1e\n"
-                        + "      A: http://schemas.android.com/apk/res/android:supportsRtl(0x010103af)=(type 0x12)0xffffffff\n"
-                        + "      A: http://schemas.android.com/apk/res/android:extractNativeLibs(0x010104ea)=(type 0x12)0xffffffff\n"
-                        + "      A: http://schemas.android.com/apk/res/android:appComponentFactory(0x0101057a)=\"androidx.core.app"
-                        + ".CoreComponentFactory\" (Raw: \"androidx.core.app"
-                        + ".CoreComponentFactory\")\n"
-                        + "      A: http://schemas.android.com/apk/res/android:requestLegacyExternalStorage(0x01010603)=(type 0x12)"
-                        + "0x0\n");
+                    + "  E: manifest (line=2)\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=(type"
+                    + " 0x10)0x1d\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/android:versionName(0x0101021c)=\"R\""
+                    + " (Raw: \"R\")\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=(type"
+                    + " 0x10)0x1d\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/android:compileSdkVersionCodename(0x01010573)=\"R\""
+                    + " (Raw: \"R\")\n"
+                    + "    A: package=\"com.android.foo\" (Raw: \"com.android.foo\")\n"
+                    + "    A: platformBuildVersionCode=(type 0x10)0x1d\n"
+                    + "    A: platformBuildVersionName=\"R\" (Raw: \"R\")\n"
+                    + "    E: uses-sdk (line=5)\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=(type"
+                    + " 0x10)0x1c\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=\"R\""
+                    + " (Raw: \"R\")\n"
+                    + "    E: application (line=12)\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=(type"
+                    + " 0x10)0x1e\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:supportsRtl(0x010103af)=(type"
+                    + " 0x12)0xffffffff\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:extractNativeLibs(0x010104ea)=(type"
+                    + " 0x12)0xffffffff\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:appComponentFactory(0x0101057a)=\"androidx.core.app.CoreComponentFactory\""
+                    + " (Raw: \"androidx.core.app.CoreComponentFactory\")\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/android:requestLegacyExternalStorage(0x01010603)=(type"
+                    + " 0x12)0x0\n");
         assertFalse(p.isRequestingLegacyStorage());
     }
 
+    @Test
     public void testParseXmlTree_withoutRequestLegacyFlag() {
         AaptParser p = new AaptParser();
         p.parseXmlTree(
@@ -277,31 +393,51 @@ public class AaptParserTest extends TestCase {
         assertFalse(p.isRequestingLegacyStorage());
     }
 
+    @Test
     public void testParseXmlTreeForAapt2_withoutRequestLegacyFlag() {
         AaptParser p = new AaptParser();
         p.parseXmlTree(
                 "N: android=http://schemas.android.com/apk/res/android\n"
-                        + "  E: manifest (line=2)\n"
-                        + "    A: http://schemas.android.com/apk/res/androidandroid:versionCode(0x0101021b)=(type 0x10)0x1d\n"
-                        + "    A: http://schemas.android.com/apk/res/androidandroid:versionName(0x0101021c)=\"R\" (Raw: \"R\")\n"
-                        + "    A: http://schemas.android.com/apk/res/androidandroid:compileSdkVersion(0x01010572)=(type 0x10)0x1d\n"
-                        + "    A: http://schemas.android.com/apk/res/androidandroid:compileSdkVersionCodename(0x01010573)=\"R\" (Raw: "
-                        + "\"R\")\n"
-                        + "    A: package=\"com.android.foo\" (Raw: \"com.android.foo\")\n"
-                        + "    A: platformBuildVersionCode=(type 0x10)0x1d\n"
-                        + "    A: platformBuildVersionName=\"R\" (Raw: \"R\")\n"
-                        + "    E: uses-sdk (line=5)\n"
-                        + "      A: http://schemas.android.com/apk/res/androidandroid:minSdkVersion(0x0101020c)=(type 0x10)0x1c\n"
-                        + "      A: http://schemas.android.com/apk/res/androidandroid:targetSdkVersion(0x01010270)=\"R\" (Raw: \"R\")\n"
-                        + "    E: application (line=12)\n"
-                        + "      A: http://schemas.android.com/apk/res/androidandroid:targetSdkVersion(0x01010270)=(type 0x10)0x1e\n"
-                        + "      A: http://schemas.android.com/apk/res/androidandroid:supportsRtl(0x010103af)=(type 0x12)0xffffffff\n"
-                        + "      A: http://schemas.android.com/apk/res/androidandroid:extractNativeLibs(0x010104ea)=(type 0x12)0xffffffff\n"
-                        + "      A: http://schemas.android.com/apk/res/androidandroid:appComponentFactory(0x0101057a)=\"androidx.core.app"
-                        + ".CoreComponentFactory\" (Raw: \"androidx.core.app");
+                    + "  E: manifest (line=2)\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/androidandroid:versionCode(0x0101021b)=(type"
+                    + " 0x10)0x1d\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/androidandroid:versionName(0x0101021c)=\"R\""
+                    + " (Raw: \"R\")\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/androidandroid:compileSdkVersion(0x01010572)=(type"
+                    + " 0x10)0x1d\n"
+                    + "    A:"
+                    + " http://schemas.android.com/apk/res/androidandroid:compileSdkVersionCodename(0x01010573)=\"R\""
+                    + " (Raw: \"R\")\n"
+                    + "    A: package=\"com.android.foo\" (Raw: \"com.android.foo\")\n"
+                    + "    A: platformBuildVersionCode=(type 0x10)0x1d\n"
+                    + "    A: platformBuildVersionName=\"R\" (Raw: \"R\")\n"
+                    + "    E: uses-sdk (line=5)\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/androidandroid:minSdkVersion(0x0101020c)=(type"
+                    + " 0x10)0x1c\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/androidandroid:targetSdkVersion(0x01010270)=\"R\""
+                    + " (Raw: \"R\")\n"
+                    + "    E: application (line=12)\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/androidandroid:targetSdkVersion(0x01010270)=(type"
+                    + " 0x10)0x1e\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/androidandroid:supportsRtl(0x010103af)=(type"
+                    + " 0x12)0xffffffff\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/androidandroid:extractNativeLibs(0x010104ea)=(type"
+                    + " 0x12)0xffffffff\n"
+                    + "      A:"
+                    + " http://schemas.android.com/apk/res/androidandroid:appComponentFactory(0x0101057a)=\"androidx.core.app.CoreComponentFactory\""
+                    + " (Raw: \"androidx.core.app");
         assertFalse(p.isRequestingLegacyStorage());
     }
 
+    @Test
     public void testParse_withUsesPermissionManageExternalStorage() {
         AaptParser p = new AaptParser();
         p.parse(
@@ -315,6 +451,7 @@ public class AaptParserTest extends TestCase {
         assertTrue(p.isUsingPermissionManageExternalStorage());
     }
 
+    @Test
     public void testParse_withoutUsesPermissionManageExternalStorage() {
         AaptParser p = new AaptParser();
         p.parse(
@@ -327,6 +464,7 @@ public class AaptParserTest extends TestCase {
         assertFalse(p.isUsingPermissionManageExternalStorage());
     }
 
+    @Test
     public void testParseTargetSdkVersion() {
         AaptParser p = new AaptParser();
         p.parse(
@@ -338,6 +476,7 @@ public class AaptParserTest extends TestCase {
         assertEquals(29, p.getTargetSdkVersion());
     }
 
+    @Test
     public void testParseInvalidTargetSdkVersion() {
         AaptParser p = new AaptParser();
         p.parse(
@@ -349,6 +488,7 @@ public class AaptParserTest extends TestCase {
         assertEquals(10000, p.getTargetSdkVersion());
     }
 
+    @Test
     public void testParseNoTargetSdkVersion() {
         AaptParser p = new AaptParser();
         p.parse(

@@ -162,7 +162,9 @@ public abstract class ExecutableBaseTest
             String cmd = testCommands.get(testName);
             String path = findBinary(cmd);
             TestDescription description = new TestDescription(testName, testName);
-            if (shouldSkipCurrentTest(description)) continue;
+            if (shouldSkipCurrentTest(description)) {
+                continue;
+            }
             if (path == null) {
                 listener.testRunStarted(testName, 0);
                 FailureDescription failure =
@@ -265,7 +267,10 @@ public abstract class ExecutableBaseTest
 
     /** {@inheritDoc} */
     @Override
-    public final Collection<IRemoteTest> split() {
+    public final Collection<IRemoteTest> split(int shardHint) {
+        if (shardHint <= 1) {
+            return null;
+        }
         int testCount = mBinaryPaths.size() + mTestCommands.size();
         if (testCount <= 2) {
             return null;

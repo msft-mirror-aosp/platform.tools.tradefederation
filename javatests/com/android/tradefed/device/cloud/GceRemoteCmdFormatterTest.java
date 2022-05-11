@@ -37,16 +37,18 @@ public class GceRemoteCmdFormatterTest {
                         new File("/tmp/key"), null, "root", "127.0.0.1", "stop", "adbd");
         assertEquals("ssh", res.get(0));
         assertEquals("-o", res.get(1));
-        assertEquals("UserKnownHostsFile=/dev/null", res.get(2));
+        assertEquals("LogLevel=ERROR", res.get(2));
         assertEquals("-o", res.get(3));
-        assertEquals("StrictHostKeyChecking=no", res.get(4));
+        assertEquals("UserKnownHostsFile=/dev/null", res.get(4));
         assertEquals("-o", res.get(5));
-        assertEquals("ServerAliveInterval=10", res.get(6));
-        assertEquals("-i", res.get(7));
-        assertEquals("/tmp/key", res.get(8));
-        assertEquals("root@127.0.0.1", res.get(9));
-        assertEquals("stop", res.get(10));
-        assertEquals("adbd", res.get(11));
+        assertEquals("StrictHostKeyChecking=no", res.get(6));
+        assertEquals("-o", res.get(7));
+        assertEquals("ServerAliveInterval=10", res.get(8));
+        assertEquals("-i", res.get(9));
+        assertEquals("/tmp/key", res.get(10));
+        assertEquals("root@127.0.0.1", res.get(11));
+        assertEquals("stop", res.get(12));
+        assertEquals("adbd", res.get(13));
     }
 
     @Test
@@ -62,14 +64,16 @@ public class GceRemoteCmdFormatterTest {
                         ScpMode.PULL);
         assertEquals("scp", res.get(0));
         assertEquals("-o", res.get(1));
-        assertEquals("UserKnownHostsFile=/dev/null", res.get(2));
+        assertEquals("LogLevel=ERROR", res.get(2));
         assertEquals("-o", res.get(3));
-        assertEquals("StrictHostKeyChecking=no", res.get(4));
+        assertEquals("UserKnownHostsFile=/dev/null", res.get(4));
         assertEquals("-o", res.get(5));
-        assertEquals("ServerAliveInterval=10", res.get(6));
-        assertEquals("-i", res.get(7));
-        assertEquals("/tmp/key", res.get(8));
-        assertEquals("root@127.0.0.1:/sdcard/test", res.get(9));
-        assertEquals("/tmp/here", res.get(10));
+        assertEquals("StrictHostKeyChecking=no", res.get(6));
+        assertEquals("-o", res.get(7));
+        assertEquals("ServerAliveInterval=10", res.get(8));
+        assertEquals("-i", res.get(9));
+        assertEquals("/tmp/key", res.get(10));
+        assertEquals("root@127.0.0.1:/sdcard/test", res.get(11));
+        assertEquals("/tmp/here", res.get(12));
     }
 }

@@ -109,7 +109,9 @@ public interface IEmail {
             mSender = sender;
         }
         public void setContentType(String contentType) {
-            if (contentType == null) throw new NullPointerException();
+            if (contentType == null) {
+                throw new NullPointerException();
+            }
             mContentType = contentType;
         }
 

@@ -155,6 +155,7 @@ public class SandboxConfigurationFactory extends ConfigurationFactory {
             config.setCommandLine(args);
             config.setConfigurationObject(Configuration.SANDBOX_TYPE_NAME, sandbox);
         } catch (SandboxConfigurationException e) {
+            CLog.w("Using thin launcher as fallback");
             // Handle the thin launcher mode: Configuration does not exists in parent version yet.
             config = sandbox.createThinLauncherConfig(args, keyStoreClient, runUtil, globalConfig);
             if (config == null) {

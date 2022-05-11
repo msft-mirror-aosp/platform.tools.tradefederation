@@ -16,6 +16,11 @@
 
 package com.android.tradefed.device.metric;
 
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -23,12 +28,15 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.TestDescription;
 
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.util.Arrays;
@@ -38,11 +46,11 @@ import java.util.Map;
 /** Unit tests for {@link TraceCmdCollector}, */
 @RunWith(JUnit4.class)
 public final class TraceCmdCollectorTest {
-    private ITestDevice mMockDevice;
+    @Mock ITestDevice mMockDevice;
     private TraceCmdCollector mTraceCmd;
     private OptionSetter mOptionSetter;
-    private ITestInvocationListener mMockTestLogger;
-    private IInvocationContext mMockInvocationContext;
+    @Mock ITestInvocationListener mMockTestLogger;
+    @Mock IInvocationContext mMockInvocationContext;
     private String mDefaultLogPath = "/data/local/tmp/atrace.dat";
     private String mTraceCmdPath = "/data/local/tmp/trace-cmd";
     private String mSerialNo = "12349876";
@@ -51,17 +59,14 @@ public final class TraceCmdCollectorTest {
 
     @Before
     public void setUp() throws Exception {
-        mMockDevice = EasyMock.createNiceMock(ITestDevice.class);
-        mMockTestLogger = EasyMock.createMock(ITestInvocationListener.class);
-        mMockInvocationContext = EasyMock.createNiceMock(IInvocationContext.class);
+        MockitoAnnotations.initMocks(this);
 
         mTraceCmd = new TraceCmdCollector();
         mOptionSetter = new OptionSetter(mTraceCmd);
         mOptionSetter.setOptionValue("categories", mCategories);
 
-        EasyMock.expect(mMockInvocationContext.getDevices())
-                .andStubReturn(Arrays.asList(mMockDevice));
-        EasyMock.replay(mMockInvocationContext);
+        when(mMockInvocationContext.getDevices()).thenReturn(Arrays.asList(mMockDevice));
+
         mTraceCmd.init(mMockInvocationContext, mMockTestLogger);
     }
 
@@ -82,28 +87,25 @@ public final class TraceCmdCollectorTest {
                         + " "
                         + mTraceCmdOptions
                         + " > /dev/null 2>&1 &";
-        mMockDevice.executeShellCommand(
-                EasyMock.eq("atrace --async_start -z " + mCategories),
-                EasyMock.anyObject(),
-                EasyMock.eq(1L),
-                EasyMock.anyObject(),
-                EasyMock.eq(1));
-        EasyMock.expectLastCall().times(1);
-
-        mMockDevice.executeShellCommand(
-                EasyMock.eq("chmod +x " + mTraceCmdPath),
-                EasyMock.anyObject(),
-                EasyMock.eq(1L),
-                EasyMock.anyObject(),
-                EasyMock.eq(1));
-        EasyMock.expectLastCall().times(1);
-        EasyMock.replay(mMockDevice);
 
         mOptionSetter.setOptionValue("trace-cmd-binary", mTraceCmdPath);
         mOptionSetter.setOptionValue("trace-cmd-recording-args", mTraceCmdOptions);
 
         mTraceCmd.onTestStart(new DeviceMetricData(mMockInvocationContext));
-        EasyMock.verify(mMockDevice);
+        verify(mMockDevice, times(1))
+                .executeShellCommand(
+                        Mockito.eq("atrace --async_start -z " + mCategories),
+                        Mockito.any(),
+                        Mockito.eq(1L),
+                        Mockito.any(),
+                        Mockito.eq(1));
+        verify(mMockDevice, times(1))
+                .executeShellCommand(
+                        Mockito.eq("chmod +x " + mTraceCmdPath),
+                        Mockito.any(),
+                        Mockito.eq(1L),
+                        Mockito.any(),
+                        Mockito.eq(1));
     }
 
     /**
@@ -114,27 +116,26 @@ public final class TraceCmdCollectorTest {
      */
     @Test
     public void testStartsAtraceAndTraceCmdFails() throws Exception {
-        mMockDevice.executeShellCommand(
-                EasyMock.eq("atrace --async_start -z " + mCategories),
-                EasyMock.anyObject(),
-                EasyMock.eq(1L),
-                EasyMock.anyObject(),
-                EasyMock.eq(1));
-        EasyMock.expectLastCall().times(1);
-        mMockDevice.executeShellCommand(
-                (String) EasyMock.anyObject(),
-                EasyMock.anyObject(),
-                EasyMock.eq(1L),
-                EasyMock.anyObject(),
-                EasyMock.eq(1));
-        EasyMock.expectLastCall().andThrow(new DeviceNotAvailableException("test", "serial"));
 
-        EasyMock.replay(mMockDevice);
+        doThrow(new DeviceNotAvailableException("test", "serial"))
+                .when(mMockDevice)
+                .executeShellCommand(
+                        (String) Mockito.any(),
+                        Mockito.any(),
+                        Mockito.eq(1L),
+                        Mockito.any(),
+                        Mockito.eq(1));
 
         mOptionSetter.setOptionValue("trace-cmd-binary", mTraceCmdPath);
 
         mTraceCmd.onTestStart(new DeviceMetricData(mMockInvocationContext));
-        EasyMock.verify(mMockDevice);
+        verify(mMockDevice, times(1))
+                .executeShellCommand(
+                        Mockito.eq("atrace --async_start -z " + mCategories),
+                        Mockito.any(),
+                        Mockito.eq(1L),
+                        Mockito.any(),
+                        Mockito.eq(1));
     }
 
     /**
@@ -146,25 +147,23 @@ public final class TraceCmdCollectorTest {
      */
     @Test
     public void testStopsTraceCmdDuringTearDown() throws Exception {
-        //wait won't work, as trace-cmd was ran with nohup in a different session.
-        mMockDevice.executeShellCommand(
-                EasyMock.eq(
-                        "for PID in $(pidof trace-cmd); "
-                                + "do while kill -s sigint $PID; do sleep 0.3; done; done;"),
-                EasyMock.anyObject(),
-                EasyMock.eq(60L),
-                EasyMock.anyObject(),
-                EasyMock.eq(1));
-        EasyMock.expectLastCall().times(1);
-        EasyMock.expect(mMockDevice.pullFile(EasyMock.eq(mDefaultLogPath)))
-                .andReturn(new File("/tmp/potato"))
-                .once();
+        // wait won't work, as trace-cmd was ran with nohup in a different session.
+        TestDescription test = new TestDescription("class", "test");
+        when(mMockDevice.pullFile(Mockito.eq(mDefaultLogPath))).thenReturn(new File("/tmp/potato"));
 
-        EasyMock.replay(mMockDevice);
         mOptionSetter.setOptionValue("trace-cmd-binary", "trc");
         mTraceCmd.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
-        EasyMock.verify(mMockDevice);
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
+        verify(mMockDevice, times(1))
+                .executeShellCommand(
+                        Mockito.eq(
+                                "for PID in $(pidof trace-cmd); do while kill -s sigint $PID; do"
+                                        + " sleep 0.3; done; done;"),
+                        Mockito.any(),
+                        Mockito.eq(60L),
+                        Mockito.any(),
+                        Mockito.eq(1));
+        verify(mMockDevice, times(1)).pullFile(Mockito.eq(mDefaultLogPath));
     }
 
     /**
@@ -175,20 +174,18 @@ public final class TraceCmdCollectorTest {
      */
     @Test
     public void testUploadslogWithRawKernelBuffer() throws Exception {
-        EasyMock.expect(mMockDevice.pullFile((String) EasyMock.anyObject()))
-                .andStubReturn(new File("/tmp/potato"));
-        EasyMock.expect(mMockDevice.getSerialNumber()).andStubReturn(mSerialNo);
-        mMockTestLogger.testLog(
-                EasyMock.eq("atrace" + mSerialNo),
-                EasyMock.eq(LogDataType.KERNEL_TRACE),
-                EasyMock.anyObject());
-        EasyMock.expectLastCall().times(1);
-        EasyMock.replay(mMockDevice, mMockTestLogger);
+        TestDescription test = new TestDescription("class", "test");
+        when(mMockDevice.pullFile((String) Mockito.any())).thenReturn(new File("/tmp/potato"));
+        when(mMockDevice.getSerialNumber()).thenReturn(mSerialNo);
 
         mOptionSetter.setOptionValue("trace-cmd-binary", "trace-cmd");
         mTraceCmd.onTestEnd(
-                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>());
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
 
-        EasyMock.verify(mMockTestLogger);
+        verify(mMockTestLogger, times(1))
+                .testLog(
+                        Mockito.eq("atrace_class#test" + mSerialNo + "_"),
+                        Mockito.eq(LogDataType.KERNEL_TRACE),
+                        Mockito.any());
     }
 }

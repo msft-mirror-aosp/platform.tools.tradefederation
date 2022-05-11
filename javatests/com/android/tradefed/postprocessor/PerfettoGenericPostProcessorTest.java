@@ -23,6 +23,7 @@ import static org.mockito.MockitoAnnotations.initMocks;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.DataType;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.postprocessor.PerfettoGenericPostProcessor.METRIC_FILE_FORMAT;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -324,10 +325,10 @@ public class PerfettoGenericPostProcessorTest {
         Map<String, Metric.Builder> parsedMetrics = mProcessor
                 .processRunMetricsAndLogs(new HashMap<>(), testLogs);
 
-        assertMetricsContain(parsedMetrics,
+        assertMetricsContain(
+                parsedMetrics,
                 "perfetto_android_hwui_metric-process_info-process_name-com.android.systemui-all_mem_min",
                 15120269);
-
     }
 
     /** Test metrics enabled with key and integer value prefixing. */
@@ -447,6 +448,32 @@ public class PerfettoGenericPostProcessorTest {
         if (null != metricProtoFile) {
             metricProtoFile.delete();
         }
+    }
+
+    /** Test that post processor runtime is reported if metrics are present. */
+    @Test
+    public void testReportsRuntime() throws ConfigurationException, IOException {
+        setupPerfettoMetricFile(METRIC_FILE_FORMAT.text, true, true);
+        mOptionSetter.setOptionValue(PREFIX_OPTION, PREFIX_OPTION_VALUE);
+        mOptionSetter.setOptionValue(INDEX_OPTION, "perfetto.protos.AndroidStartupMetric.startup");
+        mOptionSetter.setOptionValue(REGEX_OPTION_VALUE, "android_startup-startup-1.*");
+        Map<String, LogFile> testLogs = new HashMap<>();
+        testLogs.put(
+                PREFIX_OPTION_VALUE,
+                new LogFile(
+                        perfettoMetricProtoFile.getAbsolutePath(), "some.url", LogDataType.TEXTPB));
+        Map<String, Metric.Builder> parsedMetrics =
+                mProcessor.processRunMetricsAndLogs(new HashMap<>(), testLogs);
+
+        assertTrue(parsedMetrics.containsKey(PerfettoGenericPostProcessor.RUNTIME_METRIC_KEY));
+    }
+
+    /**
+     * Test the default metric type is set to RAW.
+     */
+    @Test
+    public void testMetricTypeIsRaw() {
+        assertTrue(mProcessor.getMetricType().equals(DataType.RAW));
     }
 
     /**
