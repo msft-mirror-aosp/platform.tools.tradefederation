@@ -192,6 +192,30 @@ public class CommonLogRemoteFileUtil {
     }
 
     /**
+     * Execute a command to validate the ssh connection to the remote GCE instance.
+     *
+     * @param gceAvd The {@link GceAvdInfo} that describe the device.
+     * @param options a {@link TestDeviceOptions} describing the device options to be used for the
+     *     GCE device.
+     * @param runUtil a {@link IRunUtil} to execute commands.
+     * @return A boolean which indicate whether the remote GCE is reachable by ssh.
+     */
+    public static boolean isRemoteGceReachableBySsh(
+            GceAvdInfo gceAvd, TestDeviceOptions options, IRunUtil runUtil) {
+        CommandStatus sshAttemptStatus =
+                RemoteSshUtil.remoteSshCommandExec(gceAvd, options, runUtil, 10000, "exit")
+                        .getStatus();
+        if (!CommandStatus.SUCCESS.equals(sshAttemptStatus)) {
+            CLog.e(
+                    String.format(
+                            "Unable to ssh to the remote GCE, ssh failed with status %s.",
+                            sshAttemptStatus));
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Execute a command on remote instance and log its output
      *
      * @param testLogger The {@link ITestLogger} where to log the files.
