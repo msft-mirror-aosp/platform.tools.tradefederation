@@ -31,7 +31,6 @@ import com.android.tradefed.util.CommandStatus;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -559,11 +558,11 @@ public class GceAvdInfoTest {
                 .when(res)
                 .getStderr();
         try {
-            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
-            Assert.fail();
+            GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+            fail("Should have thrown an exception");
         } catch (TargetSetupError expected) {
             assertEquals(
-                    "Oxygen error: OXYGEN_CLIENT_BINARY_ERROR. Failed to parse the output: debug "
+                    "Failed to parse the output: debug "
                             + "info lease result: leased_device_spec:{type:TESTTYPE "
                             + "build_artifacts:{build_id:\"P1234567\" build_target:\"target\" "
                             + "build_branch:\"testBranch\"}} debug_info:{reserved_cores:1 "
@@ -634,11 +633,11 @@ public class GceAvdInfoTest {
                 .when(res)
                 .getStderr();
         try {
-            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
-            Assert.fail();
+            GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+            fail("Should have thrown an exception");
         } catch (TargetSetupError expected) {
             assertEquals(
-                    "Oxygen error: OXYGEN_CLIENT_BINARY_ERROR, CommandStatus: FAILED, output:  "
+                    "OxygenClient - CommandStatus: FAILED, output:  "
                             + "[Oxygen error: OXYGEN_CLIENT_BINARY_ERROR, CommandStatus: FAILED, "
                             + "output:  Error received while trying to lease device: rpc error: "
                             + "code = Internal desc = Internal error encountered. details = "
