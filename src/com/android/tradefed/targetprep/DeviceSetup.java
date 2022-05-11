@@ -1011,19 +1011,9 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             return;
         }
 
-        String wifiPsk = Strings.emptyToNull(mWifiPsk);
-        if (mWifiSsid != null && device.connectToWifiNetwork(mWifiSsid, wifiPsk)) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.WIFI_AP_NAME, mWifiSsid);
+        mWifiSsidToPsk.put(mWifiSsid, mWifiPsk);
+        if (device.connectToWifiNetwork(mWifiSsidToPsk)) {
             return;
-        }
-        for (Map.Entry<String, String> ssidToPsk : mWifiSsidToPsk.entrySet()) {
-            String psk = Strings.emptyToNull(ssidToPsk.getValue());
-            if (device.connectToWifiNetwork(ssidToPsk.getKey(), psk)) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.WIFI_AP_NAME, ssidToPsk.getKey());
-                return;
-            }
         }
 
         if (mWifiSsid != null || !mWifiSsidToPsk.isEmpty()) {
