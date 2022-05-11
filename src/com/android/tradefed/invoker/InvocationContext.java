@@ -187,17 +187,17 @@ public class InvocationContext implements IInvocationContext {
      * {@inheritDoc}
      */
     @Override
-    public void addDeviceBuildInfo(String deviceName, IBuildInfo buildinfo) {
-        mNameAndBuildinfoMap.put(deviceName, buildinfo);
-        mAllocatedDeviceAndBuildMap.put(getDevice(deviceName), buildinfo);
+    public IBuildInfo getBuildInfo(ITestDevice testDevice) {
+        return mAllocatedDeviceAndBuildMap.get(testDevice);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public IBuildInfo getBuildInfo(ITestDevice testDevice) {
-        return mAllocatedDeviceAndBuildMap.get(testDevice);
+    public void addDeviceBuildInfo(String deviceName, IBuildInfo buildinfo) {
+        mNameAndBuildinfoMap.put(deviceName, buildinfo);
+        mAllocatedDeviceAndBuildMap.put(getDevice(deviceName), buildinfo);
     }
 
     /**
@@ -416,7 +416,9 @@ public class InvocationContext implements IInvocationContext {
         }
         contextBuilder.addAllMetadata(metadatas);
         // Configuration Description
-        contextBuilder.setConfigurationDescription(mConfigurationDescriptor.toProto());
+        if (mConfigurationDescriptor != null) {
+            contextBuilder.setConfigurationDescription(mConfigurationDescriptor.toProto());
+        }
         // Module Context if it exists
         if (mModuleContext != null) {
             contextBuilder.setModuleContext(mModuleContext.toProto());

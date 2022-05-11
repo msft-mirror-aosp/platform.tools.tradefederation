@@ -15,13 +15,18 @@
  */
 package com.android.tradefed.util;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-/**
- * Unit tests for {@link DirectedGraph}
- */
-public class DirectedGraphTest extends TestCase {
+/** Unit tests for {@link DirectedGraph} */
+@RunWith(JUnit4.class)
+public class DirectedGraphTest {
 
+    @Test
     public void testBasicGraph() {
         DirectedGraph<Integer> graph = new DirectedGraph<Integer>();
         graph.addEdge(0, 1);
@@ -35,6 +40,7 @@ public class DirectedGraphTest extends TestCase {
         assertTrue(graph.isDag());
     }
 
+    @Test
     public void testCyclicGraph() {
         DirectedGraph<Integer> graph = new DirectedGraph<Integer>();
         graph.addEdge(0, 1); graph.addEdge(0, 2); graph.addEdge(0, 3);
@@ -51,6 +57,7 @@ public class DirectedGraphTest extends TestCase {
         assertTrue(graph.isDag());
     }
 
+    @Test
     public void testRemoveUnexistingVertex() {
         DirectedGraph<Integer> graph = new DirectedGraph<Integer>();
         try {

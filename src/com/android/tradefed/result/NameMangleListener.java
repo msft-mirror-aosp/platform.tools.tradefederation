@@ -28,7 +28,9 @@ public abstract class NameMangleListener implements ITestInvocationListener {
     private final ITestInvocationListener mListener;
 
     public NameMangleListener(ITestInvocationListener listener) {
-        if (listener == null) throw new NullPointerException();
+        if (listener == null) {
+            throw new NullPointerException();
+        }
         mListener = listener;
     }
 

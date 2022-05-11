@@ -29,6 +29,8 @@ import com.android.tradefed.util.UniqueMultiMap;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import org.json.JSONException;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -160,12 +162,17 @@ public class ClusterCommandConfigBuilder {
         return new Configuration("Cluster Command " + mCommand.getCommandId(), "");
     }
 
+    @VisibleForTesting
+    Map<String, String> getSystemEnvMap() {
+        return System.getenv();
+    }
+
     /**
      * Builds a configuration file.
      *
      * @return a {@link File} object for a generated configuration file.
      */
-    public File build() throws ConfigurationException, IOException {
+    public File build() throws ConfigurationException, IOException, JSONException {
         assert mCommand != null;
         assert mTestEnvironment != null;
         assert mTestResources != null;
@@ -189,6 +196,9 @@ public class ClusterCommandConfigBuilder {
         }
 
         Map<String, String> envVars = new TreeMap<>();
+        Map<String, String> systemEnvMap = getSystemEnvMap();
+        envVars.putAll(systemEnvMap);
+
         envVars.put("TF_WORK_DIR", mWorkDir.getAbsolutePath());
         envVars.putAll(mTestEnvironment.getEnvVars());
         envVars.putAll(mTestContext.getEnvVars());
@@ -269,7 +279,8 @@ public class ClusterCommandConfigBuilder {
             final String url =
                     String.format(
                             "%s%s/%s/", baseUrl, mCommand.getCommandId(), mCommand.getAttemptId());
-            config.injectOptionValue("cluster:output-file-upload-url", url);
+            config.injectOptionValue(
+                    "cluster:output-file-upload-url", StringUtil.expand(url, envVars));
         }
         for (final String pattern : mTestEnvironment.getOutputFilePatterns()) {
             config.injectOptionValue("cluster:output-file-pattern", pattern);
@@ -294,20 +305,15 @@ public class ClusterCommandConfigBuilder {
         testResources.addAll(mTestContext.getTestResources());
         for (final TestResource resource : testResources) {
             config.injectOptionValue(
-                    "cluster:test-resource", resource.getName(), resource.getUrl());
-            if (resource.getDecompress()) {
-                config.injectOptionValue(
-                        "cluster:decompress-test-resource",
-                        resource.getName(),
-                        resource.getDecompressDir());
-            }
+                    "cluster:test-resource",
+                    StringUtil.expand(resource.toJson().toString(), envVars));
         }
 
         // Inject any extra options into the configuration
         UniqueMultiMap<String, String> extraOptions = mCommand.getExtraOptions();
         for (String key : extraOptions.keySet()) {
             for (String value : extraOptions.get(key)) {
-                config.injectOptionValue(key, value);
+                config.injectOptionValue(key, StringUtil.expand(value, envVars));
             }
         }
 

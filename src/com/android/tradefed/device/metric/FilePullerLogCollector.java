@@ -52,6 +52,8 @@ public class FilePullerLogCollector extends FilePullerDeviceMetricCollector {
                     type = LogDataType.PERFETTO;
                 } else if (".zip".equals(ext)) {
                     type = LogDataType.ZIP;
+                } else if (LogDataType.UIX.getFileExt().equals(ext)) {
+                    type = LogDataType.UIX;
                 }
                 testLog(FileUtil.getBaseName(metricFile.getName()), type, source);
             }

@@ -55,7 +55,9 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         /** Use a placeholder for a remote device in virtualized environment. */
         REMOTE_DEVICE(VmRemoteDevice.class),
         /** Allocate a virtual device running on localhost. */
-        LOCAL_VIRTUAL_DEVICE(StubLocalAndroidVirtualDevice.class);
+        LOCAL_VIRTUAL_DEVICE(StubLocalAndroidVirtualDevice.class),
+        /** A real physical or virtual device already started, not a placeholder type. */
+        EXISTING_DEVICE(IDevice.class);
 
         private Class<?> mRequiredIDeviceClass;
 
@@ -171,6 +173,8 @@ public class DeviceSelectionOptions implements IDeviceSelection {
     private boolean mFetchedEnvVariable = false;
     // Store the reason for which the device was not matched.
     private Map<String, String> mNoMatchReason = new LinkedHashMap<>();
+    // If we fail all allocation due to serial report a special message
+    private boolean mSerialMatch = false;
 
     private static final String VARIANT_SEPARATOR = ":";
 
@@ -198,6 +202,29 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         return new ArrayList<>(mSerials);
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public Collection<String> getSerials(IDevice device) {
+        // If no serial was explicitly set, use the environment variable ANDROID_SERIAL.
+        if (mSerials.isEmpty() && !mFetchedEnvVariable) {
+            String env_serial = fetchEnvironmentVariable("ANDROID_SERIAL");
+            if (env_serial != null
+                    && (!(device instanceof StubDevice) || (device instanceof FastbootDevice))) {
+                mSerials.add(env_serial);
+            }
+            mFetchedEnvVariable = true;
+        }
+        if (device != null && !mSerials.isEmpty()) {
+            String hardwareProperty = device.getProperty("ro.hardware");
+            if (hardwareProperty != null
+                    && hardwareProperty.equals("microdroid")
+                    && !mSerials.contains(device.getSerialNumber())) {
+                mSerials.add(device.getSerialNumber());
+            }
+        }
+        return copyCollection(mSerials);
+    }
+
     /**
      * Add a serial number to exclusion list.
      *
@@ -221,21 +248,6 @@ public class DeviceSelectionOptions implements IDeviceSelection {
      */
     public void addProperty(String propertyKey, String propValue) {
         mPropertyMap.put(propertyKey, propValue);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public Collection<String> getSerials(IDevice device) {
-        // If no serial was explicitly set, use the environment variable ANDROID_SERIAL.
-        if (mSerials.isEmpty() && !mFetchedEnvVariable) {
-            String env_serial = fetchEnvironmentVariable("ANDROID_SERIAL");
-            if (env_serial != null
-                    && (!(device instanceof StubDevice) || (device instanceof FastbootDevice))) {
-                mSerials.add(env_serial);
-            }
-            mFetchedEnvVariable = true;
-        }
-        return copyCollection(mSerials);
     }
 
     /**
@@ -311,6 +323,10 @@ public class DeviceSelectionOptions implements IDeviceSelection {
             return mRequestedType.equals(DeviceRequestedType.GCE_DEVICE);
         }
         return mGceDeviceRequested;
+    }
+
+    public void setGceDeviceRequested(boolean gceDeviceRequested) {
+        mGceDeviceRequested = gceDeviceRequested;
     }
 
     public boolean remoteDeviceRequested() {
@@ -467,12 +483,10 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
         if (!serials.isEmpty() &&
                 !serials.contains(device.getSerialNumber())) {
-            addNoMatchReason(
-                    deviceSerial,
-                    String.format(
-                            "device serial does not match any requested serial(%s)", serials));
+            // Don't add a reason here, if the serial doesn't even match it's just verbose
             return false;
         }
+        mSerialMatch = true;
         if (excludeSerials.contains(device.getSerialNumber())) {
             addNoMatchReason(
                     deviceSerial,
@@ -634,13 +648,16 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
         if (mRequestedType != null) {
             Class<?> classNeeded = mRequestedType.getRequiredClass();
-            if (!device.getClass().equals(classNeeded)) {
-                addNoMatchReason(
-                        deviceSerial,
-                        String.format(
-                                "device is type (%s) while requested type was (%s)",
-                                device.getClass(), classNeeded));
-                return false;
+            // Don't match IDevice for real device
+            if (!DeviceRequestedType.EXISTING_DEVICE.equals(mRequestedType)) {
+                if (!device.getClass().equals(classNeeded)) {
+                    addNoMatchReason(
+                            deviceSerial,
+                            String.format(
+                                    "device is type (%s) while requested type was (%s)",
+                                    device.getClass(), classNeeded));
+                    return false;
+                }
             }
         } else {
             if (device.isEmulator() && (device instanceof StubDevice) && !stubEmulatorRequested()) {
@@ -791,6 +808,12 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
     @Override
     public Map<String, String> getNoMatchReason() {
+        if (!mSerialMatch) {
+            mNoMatchReason.put(
+                    "no_match",
+                    String.format("Need serial (%s) but couldn't match it.", getSerials()));
+        }
+        mSerialMatch = false;
         return mNoMatchReason;
     }
 

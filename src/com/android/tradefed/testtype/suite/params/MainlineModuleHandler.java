@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.testtype.suite.params;
 
+import com.android.annotations.VisibleForTesting;
+
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
@@ -23,6 +25,8 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.InstallApexModuleTargetPreparer;
 import com.android.tradefed.testtype.IAbi;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
+import com.android.tradefed.testtype.suite.module.MainlineTestModuleController;
 import com.android.tradefed.util.AbiUtils;
 
 import java.util.Arrays;
@@ -40,6 +44,7 @@ public final class MainlineModuleHandler {
     private String mName = null;
     private boolean mOptimizeMainlineTest = false;
     private boolean mIgnoreNonPreloadedMainlineModule = false;
+    private String mBuildTop = System.getenv("ANDROID_BUILD_TOP");
 
     public MainlineModuleHandler(
             String name,
@@ -62,13 +67,24 @@ public final class MainlineModuleHandler {
         mIgnoreNonPreloadedMainlineModule = ignoreNonPreloadedMainlineModule;
     }
 
-    /** Builds the dynamic base link where the mainline modules would be downloaded. */
+    /** This constructor is only exposed to unit tests, not for production purposes. */
+    @VisibleForTesting
+    MainlineModuleHandler(String name, String buildTop, IAbi abi, IInvocationContext context) {
+        mName = name;
+        mBuildTop = buildTop;
+        mAbi = abi;
+        buildDynamicBaseLink(context.getBuildInfos().get(0));
+    }
+
+    /**
+     * Builds the dynamic base link where the mainline modules would be downloaded. If the test runs
+     * in local, the dynamic base link will be out/dist.
+     */
     private void buildDynamicBaseLink(IBuildInfo buildInfo) {
         if (buildInfo == null) {
             throw new IllegalArgumentException(
                     "Missing build information when enable-mainline-parameterized-modules is set.");
         }
-        CLog.i("Building the dynamic base link based on the build information.");
         String buildBranch = buildInfo.getBuildBranch();
         String buildFlavor = buildInfo.getBuildFlavor();
         String buildId = buildInfo.getBuildId();
@@ -76,12 +92,29 @@ public final class MainlineModuleHandler {
             throw new IllegalArgumentException(
                     "Missing required information to build the dynamic base link.");
         }
-        mDynamicBaseLink = String.format("ab://%s/%s/%s", buildBranch, buildFlavor, buildId);
+        if (mBuildTop == null) {
+            CLog.i("Building the dynamic base link based on the build information.");
+            mDynamicBaseLink = String.format("ab://%s/%s/%s", buildBranch, buildFlavor, buildId);
+        } else {
+            CLog.i("Building the dynamic base link from local artifacts.");
+            mDynamicBaseLink = String.format("%s/%s", mBuildTop, "out/dist");
+        }
     }
 
 
     /** Apply to the module {@link IConfiguration} the parameter specific mainline module setup. */
     public void applySetup(IConfiguration moduleConfiguration) {
+        // MainlineTestModuleController is a module controller to run tests when the mainline
+        // module is preloaded on device, and it’s disabled by default.(b/181724969#comment12)
+        List<?> ctrlObjectList =
+                moduleConfiguration.getConfigurationObjectList(ModuleDefinition.MODULE_CONTROLLER);
+        if (ctrlObjectList != null) {
+            for (Object ctrlObject : ctrlObjectList) {
+                if (ctrlObject instanceof MainlineTestModuleController) {
+                    ((MainlineTestModuleController) ctrlObject).enableModuleController(true);
+                }
+            }
+        }
         for (IDeviceConfiguration deviceConfig : moduleConfiguration.getDeviceConfig()) {
             List<ITargetPreparer> preparers = deviceConfig.getTargetPreparers();
             preparers.add(0, createMainlineModuleInstaller());
@@ -107,9 +140,10 @@ public final class MainlineModuleHandler {
                                 "%s/mainline_modules_%s",
                                         mDynamicBaseLink, AbiUtils.getArchForAbi(mAbi.getName()));
             }
+            // TODO: b/180394948 when the consolidated build script lands, we may need to add suffix
+            // "_bundled" accordingly.
             mainlineModuleInstaller.addTestFileName(
-                    String.format("%s/%s", fullDynamicLink, mainlineModule)
-            );
+                    String.format("%s/%s", fullDynamicLink, mainlineModule));
         }
         return mainlineModuleInstaller;
     }
