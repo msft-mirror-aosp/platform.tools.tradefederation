@@ -195,17 +195,18 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         } catch (IOException e) {
             CLog.e(e);
-            CLog.e("Cannot run pts-bot, make sure it is properly installed");
+            throw new RuntimeException("Cannot run pts-bot, make sure it is properly installed");
         }
 
-        CLog.e("No tests have been found in tests config file");
+        CLog.w("No tests have been found in tests config file");
         return null;
     }
 
     private void runPtsBotTestsForProfile(String profile, ITestInvocationListener listener) {
         String[] tests = listPtsBotTestsForProfile(profile);
+
         if (tests == null || tests.length == 0) {
-            CLog.e("Cannot run PTS-bot for %s, no tests found", profile);
+            CLog.w("Cannot run PTS-bot for %s, no tests found", profile);
             return;
         } else {
             CLog.i("Available tests for %s: [%s]", profile, String.join(", ", tests));
