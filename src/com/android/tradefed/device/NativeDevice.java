@@ -3011,6 +3011,22 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public boolean connectToWifiNetwork(String wifiSsid, String wifiPsk, boolean scanSsid)
             throws DeviceNotAvailableException {
+        LinkedHashMap<String, String> ssidToPsk = new LinkedHashMap<>();
+        ssidToPsk.put(wifiSsid, wifiPsk);
+        return connectToWifiNetwork(ssidToPsk, scanSsid);
+    }
+
+    /** {@inheritDoc}f */
+    @Override
+    public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk)
+            throws DeviceNotAvailableException {
+        return connectToWifiNetwork(wifiSsidToPsk, false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk, boolean scanSsid)
+            throws DeviceNotAvailableException {
         // Clears the last connected wifi network.
         mLastConnectedWifiSsid = null;
         mLastConnectedWifiPsk = null;
@@ -3025,34 +3041,42 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         long startTime = mClock.millis();
         try {
             for (int i = 1; i <= mOptions.getWifiAttempts(); i++) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.WIFI_CONNECT_RETRY_COUNT, 1);
-                CLog.i("Connecting to wifi network %s on %s", wifiSsid, getSerialNumber());
-                WifiConnectionResult result =
-                        wifi.connectToNetwork(
-                                wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
-                final Map<String, String> wifiInfo = wifi.getWifiInfo();
-                if (WifiConnectionResult.SUCCESS.equals(result)) {
-                    CLog.i(
-                            "Successfully connected to wifi network %s(%s) on %s",
-                            wifiSsid, wifiInfo.get("bssid"), getSerialNumber());
+                boolean failedToEnableWifi = false;
+                for (Map.Entry<String, String> ssidToPsk : wifiSsidToPsk.entrySet()) {
+                    String wifiSsid = ssidToPsk.getKey();
+                    String wifiPsk = Strings.emptyToNull(ssidToPsk.getValue());
 
-                    mLastConnectedWifiSsid = wifiSsid;
-                    mLastConnectedWifiPsk = wifiPsk;
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.WIFI_CONNECT_RETRY_COUNT, i);
+                    CLog.i("Connecting to wifi network %s on %s", wifiSsid, getSerialNumber());
+                    WifiConnectionResult result =
+                            wifi.connectToNetwork(
+                                    wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
+                    final Map<String, String> wifiInfo = wifi.getWifiInfo();
+                    if (WifiConnectionResult.SUCCESS.equals(result)) {
+                        CLog.i(
+                                "Successfully connected to wifi network %s(%s) on %s",
+                                wifiSsid, wifiInfo.get("bssid"), getSerialNumber());
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.WIFI_AP_NAME, wifiSsid);
+                        mLastConnectedWifiSsid = wifiSsid;
+                        mLastConnectedWifiPsk = wifiPsk;
 
-                    return true;
-                } else if (WifiConnectionResult.FAILED_TO_ENABLE.equals(result)) {
-                    CLog.w("Failed to enable wifi");
-                    // Do not sleep if case of wifi enabled failure.
-                    continue;
-                } else {
-                    CLog.w(
-                            "Failed to connect to wifi network %s(%s) on %s on attempt %d of %d",
-                            wifiSsid,
-                            wifiInfo.get("bssid"),
-                            getSerialNumber(),
-                            i,
-                            mOptions.getWifiAttempts());
+                        return true;
+                    } else if (WifiConnectionResult.FAILED_TO_ENABLE.equals(result)) {
+                        CLog.w("Failed to enable wifi");
+                        failedToEnableWifi = true;
+                    } else {
+                        failedToEnableWifi = false;
+                        CLog.w(
+                                "Failed to connect to wifi network %s(%s) on %s on attempt %d of"
+                                        + " %d",
+                                wifiSsid,
+                                wifiInfo.get("bssid"),
+                                getSerialNumber(),
+                                i,
+                                mOptions.getWifiAttempts());
+                    }
                 }
                 if (mClock.millis() - startTime >= mOptions.getMaxWifiConnectTime()) {
                     CLog.e(
@@ -3060,13 +3084,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                             mOptions.getMaxWifiConnectTime());
                     break;
                 }
-                if (i < mOptions.getWifiAttempts()) {
+                // Do not sleep for the last iteration and when failed to enable wifi.
+                if (i < mOptions.getWifiAttempts() && !failedToEnableWifi) {
                     if (mOptions.isWifiExpoRetryEnabled()) {
                         // use binary exponential back-offs when retrying.
                         waitTime = rnd.nextInt(backoffSlotCount) * slotTime;
                         backoffSlotCount *= 2;
                     }
-                    CLog.e("Waiting for %d ms before reconnecting to %s...", waitTime, wifiSsid);
+                    CLog.e(
+                            "Waiting for %d ms before reconnecting to %s...",
+                            waitTime, wifiSsidToPsk.keySet().toString());
                     getRunUtil().sleep(waitTime);
                 }
             }
@@ -3973,6 +4000,31 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public boolean waitForDeviceInRecovery(long waitTime) {
         return mStateMonitor.waitForDeviceInRecovery(waitTime);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void waitForDeviceBootloader() throws DeviceNotAvailableException {
+        if (mOptions.useUpdatedBootloaderStatus()) {
+            CommandResult commandResult =
+                    simpleFastbootCommand(
+                            mOptions.getFastbootTimeout(),
+                            buildFastbootCommand("getvar", "product"));
+            if (!CommandStatus.SUCCESS.equals(commandResult.getStatus())) {
+                CLog.e(
+                        "Waiting for device in bootloader. Status: %s.\nstdout:%s\nstderr:%s",
+                        commandResult.getStatus(),
+                        commandResult.getStdout(),
+                        commandResult.getStderr());
+                recoverDeviceFromBootloader();
+            } else {
+                setDeviceState(TestDeviceState.FASTBOOT);
+            }
+        } else {
+            if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
+                recoverDeviceFromBootloader();
+            }
+        }
     }
 
     /** {@inheritDoc} */
@@ -5556,29 +5608,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** The log that contains all the {@link #executeShellCommand(String)} logs. */
     public final File getExecuteShellCommandLog() {
         return mExecuteShellCommandLogs;
-    }
-
-    private void waitForDeviceBootloader() throws DeviceNotAvailableException {
-        if (mOptions.useUpdatedBootloaderStatus()) {
-            CommandResult commandResult =
-                    simpleFastbootCommand(
-                            mOptions.getFastbootTimeout(),
-                            buildFastbootCommand("getvar", "product"));
-            if (!CommandStatus.SUCCESS.equals(commandResult.getStatus())) {
-                CLog.e(
-                        "Waiting for device in bootloader. Status: %s.\nstdout:%s\nstderr:%s",
-                        commandResult.getStatus(),
-                        commandResult.getStdout(),
-                        commandResult.getStderr());
-                recoverDeviceFromBootloader();
-            } else {
-                setDeviceState(TestDeviceState.FASTBOOT);
-            }
-        } else {
-            if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
-                recoverDeviceFromBootloader();
-            }
-        }
     }
 
     /** Executes a simple fastboot command and report the status of the command. */
