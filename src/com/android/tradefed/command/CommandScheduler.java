@@ -668,18 +668,19 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     setLastInvocationExitCode(
                             instance.getExitInfo().mExitCode, instance.getExitInfo().mStack);
                 }
-                if (config.getCommandOptions().reportInvocationComplete()) {
-                    LogSaverResultForwarder.reportEndHostLog(
-                            config.getLogSaver(), TestInvocation.TRADEFED_INVOC_COMPLETE_HOST_LOG);
-                    config.getLogOutput().closeLog();
-                    LogRegistry.getLogRegistry().unregisterLogger();
-                }
                 if (getFeatureServer() != null) {
                     getFeatureServer().unregisterInvocation(config);
                 }
                 mCmd.commandFinished(elapsedTime);
                 logInvocationEndedEvent(
                         mCmd.getCommandTracker().getId(), elapsedTime, mInvocationContext);
+                CLog.d("Finalizing the logger and invocation.");
+                if (config.getCommandOptions().reportInvocationComplete()) {
+                    LogSaverResultForwarder.reportEndHostLog(
+                            config.getLogSaver(), TestInvocation.TRADEFED_INVOC_COMPLETE_HOST_LOG);
+                    config.getLogOutput().closeLog();
+                    LogRegistry.getLogRegistry().unregisterLogger();
+                }
             }
         }
 
@@ -1089,13 +1090,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             // potentially create more invocations.
             manager.terminateDeviceRecovery();
             manager.terminateDeviceMonitor();
-            if (getFeatureServer() != null) {
-                try {
-                    getFeatureServer().shutdown();
-                } catch (InterruptedException e) {
-                    CLog.e(e);
-                }
-            }
             if (getTestInvocationManagementServer() != null) {
                 try {
                     getTestInvocationManagementServer().shutdown();
@@ -1108,6 +1102,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             exit(manager);
             cleanUp();
             CLog.logAndDisplay(LogLevel.INFO, "All done");
+            // Stop Feature Server after invocations are completed in case
+            // they still need it during shutdown.
+            if (getFeatureServer() != null) {
+                try {
+                    getFeatureServer().shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
             if (mClient != null) {
                 mClient.stop();
             }
