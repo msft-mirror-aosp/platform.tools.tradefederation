@@ -126,7 +126,8 @@ public class MetricFilePostProcessor extends BasePostProcessor {
             if (aggregateTestResultsFile != null) {
                 try (InputStreamSource source = new FileInputStreamSource(aggregateTestResultsFile,
                         true)) {
-                    testLog(aggregateTestResultsFile.getName(), LogDataType.TEXT, source);
+                    testLog(aggregateTestResultsFile.getName(), LogDataType.CB_METRICS_FILE,
+                            source);
                 }
             }
         }
@@ -148,7 +149,7 @@ public class MetricFilePostProcessor extends BasePostProcessor {
         if (metricFile != null) {
             try (InputStreamSource source = new FileInputStreamSource(metricFile,
                     true)) {
-                testLog(metricFile.getName(), LogDataType.TEXT, source);
+                testLog(metricFile.getName(), LogDataType.CB_METRICS_FILE, source);
             }
         }
     }
