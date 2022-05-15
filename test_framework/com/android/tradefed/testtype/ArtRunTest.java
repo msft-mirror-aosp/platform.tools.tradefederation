@@ -56,7 +56,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /** A test runner to run ART run-tests. */
-public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceiver {
+public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceiver, ITestCollector {
 
     private static final String RUNTEST_TAG = "ArtRunTest";
 
@@ -91,6 +91,13 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
     private IAbi mAbi = null;
     private final Set<String> mIncludeFilters = new LinkedHashSet<>();
     private final Set<String> mExcludeFilters = new LinkedHashSet<>();
+
+    @Option(
+            name = "collect-tests-only",
+            description =
+                    "Do a dry-run of the tests in order to collect their "
+                            + "names, but do not actually run them.")
+    private boolean mCollectTestsOnly = false;
 
     /** {@inheritDoc} */
     @Override
@@ -153,6 +160,12 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
 
     /** {@inheritDoc} */
     @Override
+    public void setCollectTestsOnly(boolean shouldCollectTest) {
+        mCollectTestsOnly = shouldCollectTest;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         mDevice = testInfo.getDevice();
@@ -208,6 +221,10 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         String tmpTestRemoteDirPath = null;
 
         try {
+            if (mCollectTestsOnly) {
+                return;
+            }
+
             // Create remote temporary directory and set redirections in test command.
             String tmpTestRemoteDirPathTemplate =
                     String.format("%s.XXXXXXXXXX", mRunTestName.replaceAll("/", "-"));
