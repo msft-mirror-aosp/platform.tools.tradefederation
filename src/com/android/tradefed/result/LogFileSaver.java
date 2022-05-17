@@ -32,8 +32,6 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.GZIPOutputStream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 
 /**
@@ -212,6 +210,7 @@ public class LogFileSaver {
      */
     public File saveLogDataRaw(String dataName, String ext, InputStream dataStream)
             throws IOException {
+        long startTime = System.currentTimeMillis();
         final String saneDataName = sanitizeFilename(dataName);
         if (mInvLogDir != null && !mInvLogDir.exists()) {
             mInvLogDir.mkdirs();
@@ -219,7 +218,11 @@ public class LogFileSaver {
         // add underscore to end of data name to make generated name more readable
         File logFile = FileUtil.createTempFile(saneDataName + "_", "." + ext, mInvLogDir);
         FileUtil.writeToFile(dataStream, logFile);
-        CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
+        CLog.i(
+                "Saved log file %s. [size=%s, elapsed=%sms]",
+                logFile.getAbsolutePath(),
+                logFile.length(),
+                System.currentTimeMillis() - startTime);
         return logFile;
     }
 
@@ -239,6 +242,7 @@ public class LogFileSaver {
             CLog.d("Log data for %s is already compressed, skipping compression", dataName);
             return saveLogData(dataName, dataType, dataStream);
         }
+        long startTime = System.currentTimeMillis();
         BufferedInputStream bufInput = null;
         OutputStream outStream = null;
         try {
@@ -247,47 +251,15 @@ public class LogFileSaver {
             bufInput = new BufferedInputStream(dataStream);
             outStream = createGZipLogStream(logFile);
             StreamUtil.copyStreams(bufInput, outStream);
-            CLog.i("Saved gzip log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
+            CLog.i(
+                    "Saved gzip log file %s. [size=%s, elapsed=%sms]",
+                    logFile.getAbsolutePath(),
+                    logFile.length(),
+                    System.currentTimeMillis() - startTime);
             return logFile;
         } finally {
             StreamUtil.close(bufInput);
             StreamUtil.close(outStream);
-        }
-    }
-
-    /**
-     * Save and compress, if necessary, the log data to a zip file
-     *
-     * @param dataName a {@link String} descriptive name of the data. e.g. "dev
-     * @param dataType the {@link LogDataType} of the file. Log data which is a (ie
-     *            {@link LogDataType#isCompressed()} is <code>true</code>)
-     * @param dataStream the {@link InputStream} of the data.
-     * @return the file of the generated data
-     * @throws IOException if log file could not be generated
-     */
-    public File saveAndZipLogData(String dataName, LogDataType dataType, InputStream dataStream)
-            throws IOException {
-        if (dataType.isCompressed()) {
-            CLog.d("Log data for %s is already compressed, skipping compression", dataName);
-            return saveLogData(dataName, dataType, dataStream);
-        }
-        BufferedInputStream bufInput = null;
-        ZipOutputStream outStream = null;
-        try {
-            final String saneDataName = sanitizeFilename(dataName);
-            // add underscore to end of data name to make generated name more readable
-            File logFile = FileUtil.createTempFile(saneDataName + "_", "."
-                    + LogDataType.ZIP.getFileExt(), mInvLogDir);
-            bufInput = new BufferedInputStream(dataStream);
-            outStream = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(
-                    logFile), BUFFER_SIZE));
-            outStream.putNextEntry(new ZipEntry(saneDataName + "." + dataType.getFileExt()));
-            StreamUtil.copyStreams(bufInput, outStream);
-            CLog.i("Saved zip log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
-            return logFile;
-        } finally {
-            StreamUtil.close(bufInput);
-            StreamUtil.closeZipStream(outStream);
         }
     }
 
