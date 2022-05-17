@@ -19,7 +19,10 @@ package com.android.tradefed.host;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.util.RunInterruptedException;
 
 import java.io.File;
 import java.net.InetAddress;
@@ -141,7 +144,17 @@ public class HostOptions implements IHostOptions {
     /** {@inheritDoc} */
     @Override
     public File getFastbootTmpDir() {
-        return mFastbootTmpDir;
+        if (mFastbootTmpDir != null) {
+            if (!mFastbootTmpDir.exists() || !mFastbootTmpDir.isDirectory()) {
+                throw new HarnessRuntimeException(
+                        String.format(
+                                "Fastboot tmp dir '%s' is missing and was expected.",
+                                mFastbootTmpDir),
+                        InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
+            }
+            return mFastbootTmpDir;
+        }
+        return null;
     }
 
     /** {@inheritDoc} */
@@ -271,12 +284,14 @@ public class HostOptions implements IHostOptions {
         if (!mConcurrentLocks.containsKey(type)) {
             return;
         }
-        synchronized (mConcurrentLocks.get(type)) {
-            CLog.i(
-                    "Requesting a '%s' permit out of the max limit of %s. Current queue "
-                            + "length: %s",
-                    type, mConcurrentLimit.get(type), mConcurrentLocks.get(type).getQueueLength());
-            mConcurrentLocks.get(type).acquireUninterruptibly();
+        CLog.i(
+                "Requesting a '%s' permit out of the max limit of %s. Current queue "
+                        + "length: %s",
+                type, mConcurrentLimit.get(type), mConcurrentLocks.get(type).getQueueLength());
+        try {
+            mConcurrentLocks.get(type).acquire();
+        } catch (InterruptedException e) {
+            throw new RunInterruptedException(e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
         }
     }
 

@@ -78,6 +78,12 @@ public final class FolderSaver extends BaseTargetPreparer implements ITestLogger
         }
         ITestDevice device = testInfo.getDevice();
         for (String path : mDevicePaths) {
+            if (device.isStateBootloaderOrFastbootd()) {
+                CLog.e(
+                        "Skip FolderSaver: %s is in state %s",
+                        device.getSerialNumber(), device.getDeviceState());
+                continue;
+            }
             // Don't try to pull a directory if it doesn't exist.
             if (!device.doesFileExist(path)) {
                 CLog.w("Directory, %s, does not exist.", path);

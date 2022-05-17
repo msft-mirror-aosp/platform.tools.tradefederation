@@ -59,20 +59,22 @@ public class MoblyYamlResultParserTest {
     private static final String DEFAULT_TEST_CLASS = "DefaultTestClass";
     private static final String DEFAULT_TEST_NAME = "default_test_name";
     private static final String SAMPLE_STACK_TRACE =
-            "\"Traceback (most recent call last):\\n  "
-                    + "File \\\"/usr/local/google/home/yourldap/temp/sanity_suite_host"
-                    + ".par/google3/third_party/py/mobly/base_test.py\\\"\\\n"
-                    + "    , line 354, in _teardown_class\\n    self.teardown_class()\\n  File "
-                    + "\\\"/usr/local/google/home/yourldap/temp/sanity_suite_host"
-                    + ".par/google3/javatests/com/google/android/apps/camera/functional/syshealth/sanity"
-                    + ".py\\\"\\\n"
-                    + "    , line 51, in teardown_class\\n    self._helper.dut.uia.press.home()\\n  File "
-                    + "\\\"\\\n"
-                    + "    /usr/local/google/home/yourldap/temp/sanity_suite_host"
-                    + ".par/google3/third_party/py/mobly/controllers/android_device.py\\\"\\\n"
-                    + "    , line 1091, in __getattr__\\n    return self.__getattribute__(name)"
-                    + "\\nAttributeError:\\\n"
-                    + "    \\ 'AndroidDevice' object has no attribute 'uia'\\n\"";
+            "\"Traceback (most recent call last):\\n"
+                + "  File"
+                + " \\\"/usr/local/google/home/yourldap/temp/sanity_suite_host.par/google3/third_party/py/mobly/base_test.py\\\"\\\n"
+                + "    , line 354, in _teardown_class\\n"
+                + "    self.teardown_class()\\n"
+                + "  File"
+                + " \\\"/usr/local/google/home/yourldap/temp/sanity_suite_host.par/google3/javatests/com/google/android/apps/camera/functional/syshealth/sanity.py\\\"\\\n"
+                + "    , line 51, in teardown_class\\n"
+                + "    self._helper.dut.uia.press.home()\\n"
+                + "  File \\\"\\\n"
+                + "    /usr/local/google/home/yourldap/temp/sanity_suite_host.par/google3/third_party/py/mobly/controllers/android_device.py\\\"\\\n"
+                + "    , line 1091, in __getattr__\\n"
+                + "    return self.__getattribute__(name)\\n"
+                + "AttributeError:\\\n"
+                + "    \\ 'AndroidDevice' object has no attribute 'uia'\\n"
+                + "\"";
     private static final Map<String, Object> mRecordMap;
 
     static {
@@ -94,9 +96,10 @@ public class MoblyYamlResultParserTest {
             "Test Name: test_imageintent_take_photo\n"
                     + "Type: UserData\n"
                     + "sponge_properties:\n"
-                    + "    dut_build_info: {build_characteristics: nosdcard, build_id: MASTER, "
-                    + "build_product: blueline,\n"
-                    + "        build_type: userdebug, build_version_codename: R, build_version_sdk: '29',\n"
+                    + "    dut_build_info: {build_characteristics: nosdcard, build_id: MASTER,"
+                    + " build_product: blueline,\n"
+                    + "        build_type: userdebug, build_version_codename: R, build_version_sdk:"
+                    + " '29',\n"
                     + "        debuggable: '1', hardware: blueline, product_name: blueline}\n"
                     + "    dut_model: blueline\n"
                     + "    dut_serial: 827X003PY\n"
@@ -104,9 +107,10 @@ public class MoblyYamlResultParserTest {
                     + "timestamp: 1571681312605";
     private static final String CONTROLLER_INFO =
             "Controller Info:\n"
-                    + "-   build_info: {build_characteristics: nosdcard, build_id: MASTER, build_product:"
-                    + " blueline,\n"
-                    + "        build_type: userdebug, build_version_codename: R, build_version_sdk: '29',\n"
+                    + "-   build_info: {build_characteristics: nosdcard, build_id: MASTER,"
+                    + " build_product: blueline,\n"
+                    + "        build_type: userdebug, build_version_codename: R, build_version_sdk:"
+                    + " '29',\n"
                     + "        debuggable: '1', hardware: blueline, product_name: blueline}\n"
                     + "    model: blueline\n"
                     + "    serial: 827X003PY\n"
@@ -116,7 +120,8 @@ public class MoblyYamlResultParserTest {
                     + "Timestamp: 1571681322.791003\n"
                     + "Type: ControllerInfo";
     private static final String SUMMARY =
-            "{Error: 2, Executed: 3, Failed: 1, Passed: 1, Requested: 4, Skipped: 0, Type: Summary}";
+            "{Error: 2, Executed: 3, Failed: 1, Passed: 1, Requested: 4, Skipped: 0, Type:"
+                    + " Summary}";
     private static final String TESTNAME_LIST =
             "Requested Tests: [test_imageintent_cold_launch, "
                     + "test_imageintent_take_photo]\n"
@@ -318,9 +323,11 @@ public class MoblyYamlResultParserTest {
         Map<String, Object> docMap = new HashMap<>();
         docMap.put("Type", "Summary");
         docMap.put("Executed", "10");
+        docMap.put("Skipped", "0");
         IMoblyYamlResultHandler.ITestResult result = mParser.parseDocumentMap(docMap);
         assertTrue(result instanceof Summary);
         assertEquals(10, ((Summary) result).getExecuted());
+        assertEquals(0, ((Summary) result).getSkipped());
     }
 
     @Test

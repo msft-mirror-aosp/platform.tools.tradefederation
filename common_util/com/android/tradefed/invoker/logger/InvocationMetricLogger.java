@@ -33,6 +33,9 @@ public class InvocationMetricLogger {
         // Bugreport time and count
         BUGREPORT_TIME("bugreport_time", true),
         BUGREPORT_COUNT("bugreport_count", true),
+        // Logcat dump time and count
+        LOGCAT_DUMP_TIME("logcat_dump_time", true),
+        LOGCAT_DUMP_COUNT("logcat_dump_count", true),
         CLEARED_RUN_ERROR("cleared_run_error", true),
         FETCH_BUILD("fetch_build_time_ms", true),
         SETUP("setup_time_ms", true),
@@ -65,6 +68,25 @@ public class InvocationMetricLogger {
         ADB_REBOOT_TIME("adb_reboot_time", true),
         // Represents how often we attempt to reboot the device.
         ADB_REBOOT_ROUTINE_COUNT("adb_reboot_routine_count", true),
+        // Represents the time attempting to reboot a device into bootloader
+        BOOTLOADER_REBOOT_TIME("bootloader_reboot_time", true),
+        // Represents how often we attempt to reboot the device into bootloader
+        BOOTLOADER_REBOOT_COUNT("bootloader_reboot_count", true),
+        // Represents the time attempting to reboot a device into fastbootd
+        FASTBOOTD_REBOOT_TIME("fastbootd_reboot_time", true),
+        // Represents how often we attempt to reboot the device into fastbootd
+        FASTBOOTD_REBOOT_COUNT("fastbootd_reboot_count", true),
+        // Represents how often we reboot a device already in bootloader
+        BOOTLOADER_SAME_STATE_REBOOT("bootloader_same_state_reboot", true),
+        // Represents the time we spend during postboot setup
+        POSTBOOT_SETUP_TIME("postboot_setup_time", true),
+        // Represents how often we go through postboot setup
+        POSTBOOT_SETUP_COUNT("postboot_setup_count", true),
+        // Represents the time we spend during postboot wifi setup
+        POSTBOOT_WIFI_SETUP_TIME("postboot_wifi_setup_time", true),
+        // Represents how often we go through postboot wifi setup
+        POSTBOOT_WIFI_SETUP_COUNT("postboot_wifi_setup_count", true),
+
         // Represents the time we spend pulling file from device.
         PULL_FILE_TIME("pull_file_time_ms", true),
         // Represents how many times we pulled file from the device.
@@ -139,6 +161,8 @@ public class InvocationMetricLogger {
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
         ARTIFACTS_UPLOAD_SIZE("tf_artifacts_upload_size_bytes", true),
+        LOG_SAVING_TIME("log_saving_time", true),
+        LOG_SAVING_COUNT("log_saving_count", true),
         // TODO: Delete start/end timestamp in favor of pair.
         FETCH_BUILD_START("tf_fetch_build_start_timestamp", false),
         FETCH_BUILD_END("tf_fetch_build_end_timestamp", false),
@@ -148,6 +172,7 @@ public class InvocationMetricLogger {
         SETUP_END("tf_setup_end_timestamp", false),
         SETUP_PAIR("tf_setup_pair_timestamp", true),
         FLASHING_FROM_FASTBOOTD("flashing_from_fastbootd", true),
+        FLASHING_TIME("flashing_time_ms", true),
         FLASHING_PERMIT_LATENCY("flashing_permit_latency_ms", true),
         DOWNLOAD_PERMIT_LATENCY("download_permit_latency_ms", true),
         // Unzipping metrics

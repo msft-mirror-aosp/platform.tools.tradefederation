@@ -82,6 +82,11 @@ public enum LogDataType {
     ADB_HOST_LOG("txt", "text/plain", true, true),
     PASSED_TESTS("txt", "text/plain", true, true),
     RECOVERY_MODE_LOG("txt", "text/plain", false, true),
+    GOLDEN_RESULT_PROTO(
+            "textproto",
+            "text/plain",
+            true, // b/230070438: don't compress this file
+            true), // ScreenshotTest proto result
     /* Unknown file type */
     UNKNOWN("dat", "text/plain", false, false);
 

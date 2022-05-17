@@ -75,6 +75,7 @@ import com.android.tradefed.result.suite.SuiteResultReporter;
 import com.android.tradefed.sandbox.ISandbox;
 import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.service.management.TestInvocationManagementServer;
+import com.android.tradefed.targetprep.DeviceFailedToBootError;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.retry.RetryRescheduler;
 import com.android.tradefed.util.ArrayUtil;
@@ -642,8 +643,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     CLog.e("Invocation reached its timeout. Cleaning up.");
                 }
                 long elapsedTime = System.currentTimeMillis() - mStartTime;
-                CLog.i("Updating command %d with elapsed time %d ms",
-                       mCmd.getCommandTracker().getId(), elapsedTime);
+                CLog.logAndDisplay(
+                        LogLevel.INFO,
+                        "Updating command %d with elapsed time %d ms",
+                        mCmd.getCommandTracker().getId(),
+                        elapsedTime);
                 // remove invocation thread first so another invocation can be started on device
                 // when freed
                 removeInvocationThread(this);
@@ -664,18 +668,19 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     setLastInvocationExitCode(
                             instance.getExitInfo().mExitCode, instance.getExitInfo().mStack);
                 }
-                if (config.getCommandOptions().reportInvocationComplete()) {
-                    LogSaverResultForwarder.reportEndHostLog(
-                            config.getLogSaver(), TestInvocation.TRADEFED_INVOC_COMPLETE_HOST_LOG);
-                    config.getLogOutput().closeLog();
-                    LogRegistry.getLogRegistry().unregisterLogger();
-                }
                 if (getFeatureServer() != null) {
                     getFeatureServer().unregisterInvocation(config);
                 }
                 mCmd.commandFinished(elapsedTime);
                 logInvocationEndedEvent(
                         mCmd.getCommandTracker().getId(), elapsedTime, mInvocationContext);
+                CLog.d("Finalizing the logger and invocation.");
+                if (config.getCommandOptions().reportInvocationComplete()) {
+                    LogSaverResultForwarder.reportEndHostLog(
+                            config.getLogSaver(), TestInvocation.TRADEFED_INVOC_COMPLETE_HOST_LOG);
+                    config.getLogOutput().closeLog();
+                    LogRegistry.getLogRegistry().unregisterLogger();
+                }
             }
         }
 
@@ -858,6 +863,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             // Reset the recovery mode at the end of the invocation.
             device.setRecoveryMode(RecoveryMode.AVAILABLE);
+        }
+        // For releasing, also investigate cause for possible DNAE
+        if (e instanceof DeviceFailedToBootError
+                && e.getCause() instanceof DeviceNotAvailableException) {
+            e = e.getCause();
         }
 
         DeviceNotAvailableException dnae = null;
@@ -1080,13 +1090,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             // potentially create more invocations.
             manager.terminateDeviceRecovery();
             manager.terminateDeviceMonitor();
-            if (getFeatureServer() != null) {
-                try {
-                    getFeatureServer().shutdown();
-                } catch (InterruptedException e) {
-                    CLog.e(e);
-                }
-            }
             if (getTestInvocationManagementServer() != null) {
                 try {
                     getTestInvocationManagementServer().shutdown();
@@ -1099,6 +1102,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             exit(manager);
             cleanUp();
             CLog.logAndDisplay(LogLevel.INFO, "All done");
+            // Stop Feature Server after invocations are completed in case
+            // they still need it during shutdown.
+            if (getFeatureServer() != null) {
+                try {
+                    getFeatureServer().shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
             if (mClient != null) {
                 mClient.stop();
             }

@@ -367,12 +367,6 @@ public class TestInvocation implements ITestInvocation {
                     }
                 }
                 reportRecoveryLogs(context.getDevices(), listener);
-                if (exception == null) {
-                    CLog.d("Checking that devices are online.");
-                    checkDevicesAvailable(context.getDevices(), listener);
-                } else {
-                    CLog.d("Skip online check as an exception was already reported: %s", exception);
-                }
             }
             // Save the device executeShellCommand logs
             logExecuteShellCommand(context.getDevices(), listener);
@@ -382,6 +376,12 @@ public class TestInvocation implements ITestInvocation {
                     CLog.e("Found a test level only device unavailable exception:");
                     CLog.e(exception);
                 }
+            }
+            if (exception == null) {
+                CLog.d("Checking that devices are online.");
+                exception = checkDevicesAvailable(context.getDevices(), listener);
+            } else {
+                CLog.d("Skip online check as an exception was already reported: %s", exception);
             }
             mStatus = "tearing down";
             try {
@@ -1492,8 +1492,9 @@ public class TestInvocation implements ITestInvocation {
      * If no previous exception occurred, report if the device is not available anymore after tests
      * finish running.
      */
-    private void checkDevicesAvailable(
+    private DeviceNotAvailableException checkDevicesAvailable(
             List<ITestDevice> devices, ITestInvocationListener listener) {
+        DeviceNotAvailableException dnae = null;
         for (ITestDevice device : devices) {
             if (device == null) {
                 continue;
@@ -1501,8 +1502,10 @@ public class TestInvocation implements ITestInvocation {
             if (device.getIDevice() instanceof StubDevice) {
                 continue;
             }
+            RecoveryMode current = device.getRecoveryMode();
+            device.setRecoveryMode(RecoveryMode.NONE);
             try {
-                device.waitForDeviceOnline();
+                device.waitForDeviceAvailable();
             } catch (DeviceNotAvailableException e) {
                 String msg =
                         String.format("Device was left offline after tests: %s", e.getMessage());
@@ -1510,8 +1513,12 @@ public class TestInvocation implements ITestInvocation {
                         new DeviceNotAvailableException(msg, e, e.getSerial(), e.getErrorId());
                 reportFailure(
                         createFailureFromException(wrap, FailureStatus.INFRA_FAILURE), listener);
+                dnae = e;
+            } finally {
+                device.setRecoveryMode(current);
             }
         }
+        return dnae;
     }
 
     /**

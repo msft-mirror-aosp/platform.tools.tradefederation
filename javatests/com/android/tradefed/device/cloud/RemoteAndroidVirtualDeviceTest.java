@@ -464,6 +464,15 @@ public class RemoteAndroidVirtualDeviceTest {
     public void testDeviceNotStoreShutdownState() throws Exception {
         mUseRealTunnel = true;
         IRunUtil mockRunUtil = Mockito.mock(IRunUtil.class);
+
+        // Set mock result for the ssh check logic in shut down
+        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+        result.setStderr("");
+        result.setStdout("");
+        doReturn(result)
+                .when(mockRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.any());
+
         IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
         when(mMockBuildInfo.getBuildBranch()).thenReturn("branch");
         when(mMockBuildInfo.getBuildFlavor()).thenReturn("flavor");
@@ -555,6 +564,15 @@ public class RemoteAndroidVirtualDeviceTest {
     public void testDevice_skipTearDown() throws Exception {
         mUseRealTunnel = true;
         IRunUtil mockRunUtil = Mockito.mock(IRunUtil.class);
+
+        // Set mock result for the ssh check logic in shut down
+        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+        result.setStderr("");
+        result.setStdout("");
+        doReturn(result)
+                .when(mockRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.any());
+
         IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
         when(mMockBuildInfo.getBuildBranch()).thenReturn("branch");
         when(mMockBuildInfo.getBuildFlavor()).thenReturn("flavor");

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.tradefed.testtype.blueberry;
+package com.android.tradefed.testtype.pandora;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
@@ -50,7 +50,7 @@ import java.util.Set;
  */
 public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
-    private static final int BLUEBERRY_SERVER_PORT = 8999;
+    private static final int PANDORA_SERVER_PORT = 8999;
     private static final int HCI_ROOTCANAL_PORT_CUTTLEFISH = 7300;
     private static final int HCI_ROOTCANAL_PORT = 6211;
     private static final int HCI_PROXY_PORT = 1234;
@@ -137,13 +137,15 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         ITestDevice testDevice = testInfo.getDevice();
 
-        // Forward Blueberry Server port.
-        adbForwardPort(testDevice, BLUEBERRY_SERVER_PORT);
+        // Forward Pandora Server port.
+        adbForwardPort(testDevice, PANDORA_SERVER_PORT);
+
+        boolean isCuttlefish = testDevice.getProductType().equals("cutf");
 
         if (!physical) {
             // Check product type to determine Root Canal port.
-            hciPort = HCI_ROOTCANAL_PORT_CUTTLEFISH;
-            if (!testDevice.getProductType().equals("cutf")) {
+            if (isCuttlefish) hciPort = HCI_ROOTCANAL_PORT_CUTTLEFISH;
+            else {
                 hciPort = HCI_ROOTCANAL_PORT;
 
                 // Forward Root Canal port.
@@ -161,8 +163,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         }
 
         // Remove forwarded ports.
-        adbForwardRemovePort(testDevice, BLUEBERRY_SERVER_PORT);
-        if (!physical && !testDevice.getProductType().equals("cutf")) {
+        adbForwardRemovePort(testDevice, PANDORA_SERVER_PORT);
+        if (!physical && !isCuttlefish) {
             adbForwardRemovePort(testDevice, HCI_ROOTCANAL_PORT);
         }
     }
@@ -193,17 +195,18 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         } catch (IOException e) {
             CLog.e(e);
-            CLog.e("Cannot run pts-bot, make sure it is properly installed");
+            throw new RuntimeException("Cannot run pts-bot, make sure it is properly installed");
         }
 
-        CLog.e("No tests have been found in tests config file");
+        CLog.w("No tests have been found in tests config file");
         return null;
     }
 
     private void runPtsBotTestsForProfile(String profile, ITestInvocationListener listener) {
         String[] tests = listPtsBotTestsForProfile(profile);
+
         if (tests == null || tests.length == 0) {
-            CLog.e("Cannot run PTS-bot for %s, no tests found", profile);
+            CLog.w("Cannot run PTS-bot for %s, no tests found", profile);
             return;
         } else {
             CLog.i("Available tests for %s: [%s]", profile, String.join(", ", tests));
@@ -232,25 +235,18 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
     }
 
     private boolean shouldSkipTest(String testName) {
-        for (String excludeFilter : excludeFilters) {
-            // If the test or one of its parent test group is included in
-            // exclude filters, then skip it.
-            if (testName.contains(excludeFilter)) {
-                return true;
-            }
-        }
-        if (!includeFilters.isEmpty()) {
-            for (String includeFilter : includeFilters) {
-                // If the test or one of its parent test group is included in
-                // include filters, then don't skip it.
-                if (testName.contains(includeFilter)) {
-                    return false;
-                }
-            }
-            // If include filters are provided, and if the test or one of its
-            // parent test group is not included, then skip it.
-            return true;
-        }
+        // If the test or one of its parent test group is included in
+        // exclude filters, then skip it.
+        if (excludeFilters.stream().anyMatch(testName::contains)) return true;
+
+        // If the test or one of its parent test group is included in
+        // include filters, then don't skip it.
+        if (includeFilters.stream().anyMatch(testName::contains)) return false;
+
+        // If include filters are provided, and if the test or one of its
+        // parent test group is not included, then skip it.
+        if (!includeFilters.isEmpty()) return true;
+
         return false;
     }
 
@@ -290,24 +286,20 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
                     new BufferedReader(new InputStreamReader(process.getErrorStream()));
 
             Optional<String> lastLine =
-                    stdInput.lines().peek(CLog::i).reduce((last, value) -> value);
+                    stdInput.lines().peek(line -> CLog.i(line)).reduce((last, value) -> value);
+
             // Last line is providing success information.
-            success =
-                    lastLine.map(
-                                    (line) -> {
-                                        try {
-                                            return Integer.parseInt(
-                                                            line.split(", ")[1].substring(0, 1))
-                                                    == 1;
-                                        } catch (Exception e) {
-                                            CLog.e("Failed to parse success");
-                                            return false;
-                                        }
-                                    })
-                            .orElse(false);
+            if (lastLine.isPresent()) {
+                try {
+                    success = Integer.parseInt(lastLine.get().split(", ")[1].substring(0, 1)) == 1;
+                } catch (Exception e) {
+                    CLog.e("Failed to parse success");
+                }
+            }
+
             stdInput.close();
 
-            stdError.lines().forEach(CLog::e);
+            stdError.lines().forEach(line -> CLog.e(line));
             stdError.close();
 
         } catch (Exception e) {

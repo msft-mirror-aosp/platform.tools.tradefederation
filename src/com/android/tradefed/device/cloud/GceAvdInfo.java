@@ -296,10 +296,9 @@ public class GceAvdInfo {
         } else {
             throw new TargetSetupError(
                     String.format(
-                            "Oxygen error: %s, CommandStatus: %s, output: %s",
-                            InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_ERROR,
-                            oxygenCliStatus,
-                            oxygenRes.getStdout() + " " + oxygenRes.getStderr()));
+                            "OxygenClient - CommandStatus: %s, output: %s",
+                            oxygenCliStatus, oxygenRes.getStdout() + " " + oxygenRes.getStderr()),
+                    InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_ERROR);
         }
     }
 
@@ -312,9 +311,8 @@ public class GceAvdInfo {
         Matcher matcher = pattern.matcher(output);
         if (!matcher.find()) {
             throw new TargetSetupError(
-                    String.format(
-                            "Oxygen error: %s. Failed to parse the output: %s",
-                            InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_ERROR, output));
+                    String.format("Failed to parse the output: %s", output),
+                    InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_ERROR);
         }
         String sessionId = matcher.group(1);
         String serverUrl = matcher.group(2);

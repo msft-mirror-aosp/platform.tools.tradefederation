@@ -16,6 +16,7 @@
 package com.android.tradefed.build;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -127,5 +128,70 @@ public class BootstrapBuildProviderTest {
         } finally {
             mProvider.cleanUp(res);
         }
+    }
+
+    /** When TestsDir is given, cleanUp won't delete it. */
+    @Test
+    public void testCleanup_withExistingTestsDir() throws Exception {
+        when(mMockDevice.getBuildId()).thenReturn("5");
+        when(mMockDevice.getIDevice()).thenReturn(mock(IDevice.class));
+        when(mMockDevice.waitForDeviceShell(Mockito.anyLong())).thenReturn(true);
+        when(mMockDevice.getProperty(Mockito.any())).thenReturn("property");
+        when(mMockDevice.getProductVariant()).thenReturn("variant");
+        when(mMockDevice.getBuildFlavor()).thenReturn("flavor");
+        when(mMockDevice.getBuildAlias()).thenReturn("alias");
+
+        OptionSetter setter = new OptionSetter(mProvider);
+        File mTestsDir = FileUtil.createTempDir("testCleanup", new File("/tmp"));
+        setter.setOptionValue("tests-dir", mTestsDir.getAbsolutePath());
+        IBuildInfo res = mProvider.getBuild(mMockDevice);
+
+        mProvider.cleanUp(res);
+
+        assertTrue(mTestsDir.exists());
+        // cleanup test dirs.
+        FileUtil.recursiveDelete(mTestsDir);
+    }
+
+    /** When TestsDir is not given, cleanUp will delete the created temporary dir. */
+    @Test
+    public void testCleanup_withTestsDirIsNull() throws Exception {
+        when(mMockDevice.getBuildId()).thenReturn("5");
+        when(mMockDevice.getIDevice()).thenReturn(mock(IDevice.class));
+        when(mMockDevice.waitForDeviceShell(Mockito.anyLong())).thenReturn(true);
+        when(mMockDevice.getProperty(Mockito.any())).thenReturn("property");
+        when(mMockDevice.getProductVariant()).thenReturn("variant");
+        when(mMockDevice.getBuildFlavor()).thenReturn("flavor");
+        when(mMockDevice.getBuildAlias()).thenReturn("alias");
+        IBuildInfo res = mProvider.getBuild(mMockDevice);
+
+        mProvider.cleanUp(res);
+
+        for (String fileKey : res.getVersionedFileKeys()) {
+            assertFalse(res.getVersionedFile(fileKey).getFile().exists());
+        }
+    }
+
+    /** When TestsDir is given and not a directory, cleanUp won't delete it. */
+    @Test
+    public void testCleanup_withTestsDirIsNotDir() throws Exception {
+        when(mMockDevice.getBuildId()).thenReturn("5");
+        when(mMockDevice.getIDevice()).thenReturn(mock(IDevice.class));
+        when(mMockDevice.waitForDeviceShell(Mockito.anyLong())).thenReturn(true);
+        when(mMockDevice.getProperty(Mockito.any())).thenReturn("property");
+        when(mMockDevice.getProductVariant()).thenReturn("variant");
+        when(mMockDevice.getBuildFlavor()).thenReturn("flavor");
+        when(mMockDevice.getBuildAlias()).thenReturn("alias");
+
+        OptionSetter setter = new OptionSetter(mProvider);
+        File mNotDir = FileUtil.createTempFile("testCleanup", "file_c");
+        setter.setOptionValue("tests-dir", mNotDir.getAbsolutePath());
+        IBuildInfo res = mProvider.getBuild(mMockDevice);
+
+        mProvider.cleanUp(res);
+
+        assertTrue(mNotDir.exists());
+        // cleanup test files.
+        FileUtil.deleteFile(mNotDir);
     }
 }

@@ -110,6 +110,7 @@ public class OxygenClientTest {
         setter.setOptionValue("oxygen-service-address", "10.1.23.45");
         setter.setOptionValue("gce-boot-timeout", "900000");
         setter.setOptionValue("oxygen-accounting-user", "random1234@space.com");
+        setter.setOptionValue("extra-oxygen-args", "arg1", "value1");
         mRunUtil = Mockito.mock(IRunUtil.class);
         mOxygenClient = new OxygenClient(mOxygenBinaryFile, mRunUtil);
     }
@@ -141,7 +142,8 @@ public class OxygenClientTest {
                                                 + " -kernel_build_target testKernelTarget"
                                                 + " -kernel_build_id K1234567 -target_region"
                                                 + " us-east -accounting_user random1234@space.com"
-                                                + " -lease_length_secs 3600";
+                                                + " -lease_length_secs 3600"
+                                                + " -arg1 value1";
                                 assertEquals(timeout, 900000);
                                 assertEquals(expectedCmdString, cmdString);
 

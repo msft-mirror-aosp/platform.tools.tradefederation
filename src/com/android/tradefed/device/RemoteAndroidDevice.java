@@ -126,6 +126,7 @@ public class RemoteAndroidDevice extends TestDevice {
         // device in use will not be of the TcpDevice type.
         if (!(getIDevice() instanceof TcpDevice)) {
             // Before attempting standard recovery, reconnect the device.
+            CLog.i("Reconnecting to %s:%s for recovery", getHostName(), getPortNum());
             adbTcpConnect(getHostName(), getPortNum());
             waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
         }

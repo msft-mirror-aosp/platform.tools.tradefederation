@@ -1079,21 +1079,12 @@ public class TestDeviceTest {
      */
     @Test
     public void testExecuteFastbootCommand_state() throws Exception {
-        final long waitTimeMs = 150;
-        // build a fastboot response that will block
+        // build a fastboot response that will change state
         Answer<CommandResult> blockResult =
                 invocation -> {
-                    synchronized (this) {
-                        // first inform this test that fastboot cmd is executing
-                        notifyAll();
-                        // now wait for test to unblock us when its done testing logic
-                        long now = System.currentTimeMillis();
-                        long deadline = now + waitTimeMs;
-                        while (now < deadline) {
-                            wait(deadline - now);
-                            now = System.currentTimeMillis();
-                        }
-                    }
+                    // Expect this to be ignored
+                    mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
+                    assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
                     return new CommandResult(CommandStatus.SUCCESS);
                 };
         when(mMockRunUtil.runTimedCmd(
@@ -1106,33 +1097,12 @@ public class TestDeviceTest {
 
         mTestDevice.setDeviceState(TestDeviceState.FASTBOOT);
         assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
-
-        // start fastboot command in background thread
-        Thread fastbootThread =
-                new Thread() {
-                    @Override
-                    public void run() {
-                        try {
-                            mTestDevice.executeFastbootCommand("foo");
-                        } catch (DeviceNotAvailableException e) {
-                            CLog.e(e);
-                        }
-                    }
-                };
-        fastbootThread.setName(getClass().getCanonicalName() + "#testExecuteFastbootCommand_state");
-        fastbootThread.start();
         try {
-            synchronized (blockResult) {
-                blockResult.wait(waitTimeMs);
-            }
-            // expect to ignore this
-            mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
-        } finally {
-            synchronized (blockResult) {
-                blockResult.notifyAll();
-            }
+            mTestDevice.executeFastbootCommand("foo");
+            fail("Should have thrown an exception");
+        } catch (DeviceNotAvailableException expected) {
+            // Expected
         }
-        fastbootThread.join();
         assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
         mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
         assertEquals(TestDeviceState.NOT_AVAILABLE, mTestDevice.getDeviceState());
