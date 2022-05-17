@@ -193,4 +193,15 @@ public class OxygenClientTest {
                 mOxygenClient.release(mGceAvdInfo, mTestDeviceOptions.getGceCmdTimeout());
         assertTrue(isReleased);
     }
+
+    /** Test releasing an empty GceAvdInfo. */
+    @Test
+    public void testReleaseEmptyGceAvdInfo() throws Exception {
+        // Empty GceAvdInfo happen when the lease was unsuccessful
+        GceAvdInfo emptyGceAvdInfo = new GceAvdInfo(null, null);
+        boolean isReleased =
+                mOxygenClient.release(emptyGceAvdInfo, mTestDeviceOptions.getGceCmdTimeout());
+        // Should return true as there is nothing need to be released
+        assertTrue(isReleased);
+    }
 }
