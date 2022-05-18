@@ -193,7 +193,6 @@ public class ClusterCommandSchedulerTest {
         mMockEventUploader = mock(ICommandEventUploader.class);
 
         mMockClusterOptions = new ClusterOptions();
-        mMockClusterOptions.setCheckFlashingPermitsLease(false);
         mMockClusterOptions.setClusterId(CLUSTER_ID);
         mMockClusterClient =
                 new ClusterClient() {
@@ -419,74 +418,6 @@ public class ClusterCommandSchedulerTest {
     }
 
     @Test
-    public void testFetchHostCommands() throws Exception {
-        // Create some devices to fetch tasks for
-        mMockClusterOptions.getDeviceGroup().put("group1", "s1");
-        mMockClusterOptions.getDeviceGroup().put("group1", "s2");
-        DeviceDescriptor d1 =
-                createDevice("s1", "product1", "variant1", DeviceAllocationState.Available);
-        DeviceDescriptor d2 =
-                createDevice("s2", "product2", "variant2", DeviceAllocationState.Available);
-        DeviceDescriptor d3 =
-                createDevice("s3", "product2", "variant2", DeviceAllocationState.Available);
-        String runTarget1 = "product1:variant1";
-        String runTarget2 = "product2:variant2";
-        final MultiMap<String, DeviceDescriptor> deviceMap = new MultiMap<>();
-        deviceMap.put(runTarget1, d1);
-        deviceMap.put(runTarget2, d2);
-        deviceMap.put(runTarget2, d3);
-
-        mMockClusterOptions.getNextClusterIds().add("cluster2");
-        mMockClusterOptions.getNextClusterIds().add("cluster3");
-
-        ArgumentCaptor<JSONObject> capture = ArgumentCaptor.forClass(JSONObject.class);
-        // Create some mock responses for the expected REST API calls
-        JSONObject product1Response =
-                createLeaseResponse(createCommandTask("1", "2", "3", "4", "command line 1"));
-        when(mMockApiHelper.execute(
-                        Mockito.eq("POST"),
-                        AdditionalMatchers.aryEq(new String[] {"tasks", "leasehosttasks"}),
-                        Mockito.eq(
-                                ImmutableMap.of(
-                                        "cluster",
-                                        CLUSTER_ID,
-                                        "hostname",
-                                        ClusterHostUtil.getHostName(),
-                                        "num_tasks",
-                                        Integer.toString(3))),
-                        capture.capture()))
-                .thenReturn(buildHttpResponse(product1Response.toString()));
-        when(mMockHostOptions.getAvailablePermits(PermitLimitType.CONCURRENT_FLASHER))
-                .thenReturn(1);
-        when(mMockHostOptions.getAvailablePermits(PermitLimitType.CONCURRENT_DOWNLOAD))
-                .thenReturn(5);
-        // Actually fetch commands
-
-        final List<ClusterCommand> commands = mScheduler.fetchHostCommands(deviceMap);
-
-        // Verity the http request body is correct.
-        JSONArray deviceInfos = capture.getValue().getJSONArray("device_infos");
-        JSONArray clusterIds = capture.getValue().getJSONArray("next_cluster_ids");
-        assertEquals("group1", deviceInfos.getJSONObject(0).get("group_name"));
-        assertEquals("s1", deviceInfos.getJSONObject(0).get("device_serial"));
-        assertEquals("group1", deviceInfos.getJSONObject(1).get("group_name"));
-        assertEquals("s2", deviceInfos.getJSONObject(1).get("device_serial"));
-        assertFalse(deviceInfos.getJSONObject(2).has("group_name"));
-        assertEquals("s3", deviceInfos.getJSONObject(2).get("device_serial"));
-        assertEquals("cluster2", clusterIds.getString(0));
-        assertEquals("cluster3", clusterIds.getString(1));
-
-        // expect 1 command allocated per device type based on availability and fetching algorithm
-        assertEquals("commands size mismatch", 1, commands.size());
-        ClusterCommand command = commands.get(0);
-        assertEquals("1", command.getRequestId());
-        assertEquals("2", command.getCommandId());
-        assertEquals("3", command.getTaskId());
-        assertEquals("4", command.getAttemptId());
-        assertEquals("command line 1", command.getCommandLine());
-    }
-
-    @Test
     public void testFetchHostCommands_withFlashingPermitCheck() throws Exception {
         // Create some devices to fetch tasks for
         DeviceDescriptor d1 =
@@ -499,7 +430,6 @@ public class ClusterCommandSchedulerTest {
         deviceMap.put(runTarget1, d2);
 
         mMockClusterOptions.getNextClusterIds().add("cluster2");
-        mMockClusterOptions.setCheckFlashingPermitsLease(true);
         ArgumentCaptor<JSONObject> capture = ArgumentCaptor.forClass(JSONObject.class);
         // Create some mock responses for the expected REST API calls
         JSONObject product1Response =
