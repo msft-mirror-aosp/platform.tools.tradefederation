@@ -102,4 +102,7 @@ public interface IHostOptions {
 
     /** Returns the number of available permit of a given type */
     public Integer getAvailablePermits(PermitLimitType type);
+
+    /** Returns the number of permits in use for a given type */
+    public int getInUsePermits(PermitLimitType type);
 }
