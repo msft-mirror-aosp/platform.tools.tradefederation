@@ -252,6 +252,8 @@ public abstract class ProtoResultReporter
         TestRecord.Builder moduleBuilder = mLatestChild.pop();
         mModuleInProgress = false;
         moduleBuilder.setEndTime(createTimeStamp(System.currentTimeMillis()));
+        // Module do not have a fail status
+        moduleBuilder.setStatus(TestStatus.PASS);
         TestRecord.Builder parentBuilder = mLatestChild.peek();
 
         // Finalize the module and track it in the child
