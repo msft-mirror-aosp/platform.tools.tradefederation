@@ -1016,19 +1016,6 @@ public class TestInvocation implements ITestInvocation {
             }
 
             mStatus = "fetching build";
-            for (String deviceName : context.getDeviceConfigNames()) {
-                context.getDevice(deviceName).clearLastConnectedWifiNetwork();
-                context.getDevice(deviceName)
-                        .setOptions(config.getDeviceConfigByName(deviceName).getDeviceOptions());
-                if (config.getDeviceConfigByName(deviceName)
-                        .getDeviceOptions()
-                        .isLogcatCaptureEnabled()) {
-                    if (!(context.getDevice(deviceName).getIDevice() instanceof StubDevice)) {
-                        context.getDevice(deviceName).startLogcat();
-                    }
-                }
-            }
-
             String cmdLineArgs = config.getCommandLine();
             if (cmdLineArgs != null) {
                 CLog.i("Invocation was started with cmd: %s", cmdLineArgs);
@@ -1048,6 +1035,32 @@ public class TestInvocation implements ITestInvocation {
                     InvocationMetricKey.FETCH_BUILD, fetchBuildDuration);
             CLog.d("Fetch build duration: %s", TimeUtil.formatElapsedTime(fetchBuildDuration));
             if (!providerSuccess) {
+                return;
+            }
+            try {
+                for (String deviceName : context.getDeviceConfigNames()) {
+                    context.getDevice(deviceName).clearLastConnectedWifiNetwork();
+                    // TODO: Report invocation error if setOptions() fails
+                    context.getDevice(deviceName)
+                            .setOptions(
+                                    config.getDeviceConfigByName(deviceName).getDeviceOptions());
+                    if (config.getDeviceConfigByName(deviceName)
+                            .getDeviceOptions()
+                            .isLogcatCaptureEnabled()) {
+                        if (!(context.getDevice(deviceName).getIDevice() instanceof StubDevice)) {
+                            context.getDevice(deviceName).startLogcat();
+                        }
+                    }
+                }
+            } catch (RuntimeException e) {
+                // Report an empty invocation, so this error is sent to listeners
+                startInvocation(config, info.getContext(), listener);
+                reportFailure(createFailureFromException(e, FailureStatus.INFRA_FAILURE), listener);
+                for (ITestDevice device : info.getContext().getDevices()) {
+                    invocationPath.reportLogs(device, listener, Stage.ERROR);
+                }
+                reportHostLog(listener, config);
+                reportInvocationEnded(config, info.getContext(), listener, 0L);
                 return;
             }
 
