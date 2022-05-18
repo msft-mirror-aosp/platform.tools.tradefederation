@@ -245,6 +245,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private final Object mCacheLock = new Object();
 
     private String mFastbootSerialNumber = null;
+    private File mUnpackedFastbootDir = null;
 
     /**
      * Interface for a generic device communication attempt.
@@ -420,7 +421,32 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throwIfNull(options);
         mOptions = options;
         if (mOptions.getFastbootBinary() != null) {
-            setFastbootPath(mOptions.getFastbootBinary().getAbsolutePath());
+            // Setup fastboot- if it's zipped, unzip it
+            // TODO: Dedup the logic with DeviceManager
+            if (".zip".equals(FileUtil.getExtension(mOptions.getFastbootBinary().getName()))) {
+                // Unzip the fastboot files
+                try {
+                    mUnpackedFastbootDir =
+                            ZipUtil2.extractZipToTemp(
+                                    mOptions.getFastbootBinary(), "unpacked-fastboot");
+                    File unpackedFastboot = FileUtil.findFile(mUnpackedFastbootDir, "fastboot");
+                    if (unpackedFastboot == null) {
+                        throw new HarnessRuntimeException(
+                                String.format(
+                                        "device-fastboot-binary was set, but didn't contain a"
+                                                + " fastboot binary."),
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                    }
+                    setFastbootPath(unpackedFastboot.getAbsolutePath());
+                } catch (IOException e) {
+                    CLog.e("Failed to unpacked zipped fastboot.");
+                    CLog.e(e);
+                    FileUtil.recursiveDelete(mUnpackedFastbootDir);
+                    mUnpackedFastbootDir = null;
+                }
+            } else {
+                setFastbootPath(mOptions.getFastbootBinary().getAbsolutePath());
+            }
         }
         mStateMonitor.setDefaultOnlineTimeout(options.getOnlineTimeout());
         mStateMonitor.setDefaultAvailableTimeout(options.getAvailableTimeout());
@@ -1687,7 +1713,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public String getMountPoint(String mountName) {
-        return mStateMonitor.getMountPoint(mountName);
+        try {
+            return mStateMonitor.getMountPoint(mountName);
+        } catch (DeviceNotAvailableException e) {
+            CLog.e(e);
+            return null;
+        }
     }
 
     /**
@@ -4916,6 +4947,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         mIsEncryptionSupported = null;
         FileUtil.deleteFile(mExecuteShellCommandLogs);
         mExecuteShellCommandLogs = null;
+        FileUtil.recursiveDelete(mUnpackedFastbootDir);
         // Default implementation
         if (getIDevice() instanceof StubDevice) {
             return;
