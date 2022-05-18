@@ -18,6 +18,8 @@ package com.android.tradefed.util;
 import com.android.tradefed.command.FatalHostError;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.error.IHarnessException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.ErrorIdentifier;
@@ -1198,10 +1200,17 @@ public class FileUtil {
      * @return md5 of the file
      */
     public static String calculateMd5(File file) {
+        long startTime = System.currentTimeMillis();
         try (FileInputStream inputSource = new FileInputStream(file)) {
             return StreamUtil.calculateMd5(inputSource);
         } catch (IOException e) {
             CLog.e(e);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MD5_CALCULATION_TIME,
+                    System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MD5_CALCULATION_COUNT, 1);
         }
         return "-1";
     }
