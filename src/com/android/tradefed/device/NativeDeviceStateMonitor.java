@@ -436,25 +436,25 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
         return false;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public String getMountPoint(String mountName) {
+    public String getMountPoint(String mountName) throws DeviceNotAvailableException {
         String mountPoint = getIDevice().getMountPoint(mountName);
         if (mountPoint != null) {
             return mountPoint;
         }
         // cached mount point is null - try querying directly
         CollectingOutputReceiver receiver = createOutputReceiver();
+        String command = "echo $" + mountName;
         try {
-            getIDevice().executeShellCommand("echo $" + mountName, receiver);
+            getIDevice().executeShellCommand(command, receiver);
             return receiver.getOutput().trim();
         } catch (IOException e) {
             return null;
         } catch (TimeoutException e) {
             return null;
         } catch (AdbCommandRejectedException e) {
+            rejectToUnavailable(command, e);
             return null;
         } catch (ShellCommandUnresponsiveException e) {
             return null;

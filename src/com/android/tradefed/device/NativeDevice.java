@@ -1713,7 +1713,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public String getMountPoint(String mountName) {
-        return mStateMonitor.getMountPoint(mountName);
+        try {
+            return mStateMonitor.getMountPoint(mountName);
+        } catch (DeviceNotAvailableException e) {
+            CLog.e(e);
+            return null;
+        }
     }
 
     /**
