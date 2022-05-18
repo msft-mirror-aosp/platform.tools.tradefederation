@@ -133,8 +133,19 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
         if (mKeys.isEmpty() && mDirectoryKeys.isEmpty()) {
             return;
         }
+        Map<ITestDevice, Integer> deviceUsers = new HashMap<>();
+        if (!mKeys.isEmpty()) {
+            try {
+                for (ITestDevice device : getRealDevices()) {
+                    deviceUsers.put(device, device.getCurrentUser());
+                }
+            } catch (DeviceNotAvailableException dnae) {
+                CLog.e(dnae);
+                return;
+            }
+        }
         for (String key : mKeys) {
-            Map<String, File> pulledMetrics = pullMetricFile(key, currentMetrics);
+            Map<String, File> pulledMetrics = pullMetricFile(key, currentMetrics, deviceUsers);
 
             // Process all the metric files that matched the key pattern.
             for (Map.Entry<String, File> entry : pulledMetrics.entrySet()) {
@@ -173,19 +184,11 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
     }
 
     private Map<String, File> pullMetricFile(
-            String pattern, final Map<String, String> currentMetrics) {
+            String pattern,
+            final Map<String, String> currentMetrics,
+            Map<ITestDevice, Integer> deviceUsers) {
         Map<String, File> matchedFiles = new HashMap<>();
         Pattern p = Pattern.compile(pattern);
-
-        Map<ITestDevice, Integer> deviceUsers = new HashMap<>();
-        try {
-            for (ITestDevice device : getRealDevices()) {
-                deviceUsers.put(device, device.getCurrentUser());
-            }
-        } catch (DeviceNotAvailableException dnae) {
-            CLog.e(dnae);
-            return matchedFiles;
-        }
 
         for (Entry<String, String> entry : currentMetrics.entrySet()) {
             if (p.matcher(entry.getKey()).find()) {
