@@ -405,19 +405,6 @@ public class TestInvocation implements ITestInvocation {
             mStatus = "done running tests";
             CurrentInvocation.setActionInProgress(ActionInProgress.FREE_RESOURCES);
 
-            // Only log the device done metrics if the delegatedEarlyDeviceRelease feature is turned
-            // off. If the feature is turned on, logging is done in the EarlyDeviceReleaseFeature.
-            // Note: When this flag is enabled by default, logging should not be performed if
-            // running as a parent or delegate object.
-            if (!config.getCommandOptions().delegatedEarlyDeviceRelease()) {
-                // Log count of allocated devices for test accounting
-                addInvocationMetric(
-                        InvocationMetricKey.DEVICE_COUNT, context.getNumDevicesAllocated());
-                // Track the timestamp when we are done with devices
-                addInvocationMetric(
-                        InvocationMetricKey.DEVICE_DONE_TIMESTAMP, System.currentTimeMillis());
-            }
-
             // Ensure we always deregister the logger
             for (String deviceName : context.getDeviceConfigNames()) {
                 if (!(context.getDevice(deviceName).getIDevice() instanceof StubDevice)) {
@@ -436,6 +423,11 @@ public class TestInvocation implements ITestInvocation {
                     scheduleListener.releaseDevices(context, devicesStates);
                 }
             }
+            // Log count of allocated devices for test accounting
+            addInvocationMetric(InvocationMetricKey.DEVICE_COUNT, context.getNumDevicesAllocated());
+            // Track the timestamp when we are done with devices
+            addInvocationMetric(
+                    InvocationMetricKey.DEVICE_DONE_TIMESTAMP, System.currentTimeMillis());
             try {
                 // Clean up host.
                 invocationPath.doCleanUp(context, config, exception);
