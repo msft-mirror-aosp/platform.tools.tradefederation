@@ -310,4 +310,12 @@ public class HostOptions implements IHostOptions {
         }
         return mConcurrentLocks.get(type).availablePermits();
     }
+
+    @Override
+    public int getInUsePermits(PermitLimitType type) {
+        if (!mConcurrentLocks.containsKey(type)) {
+            return 0;
+        }
+        return mConcurrentLimit.get(type) - mConcurrentLocks.get(type).availablePermits();
+    }
 }
