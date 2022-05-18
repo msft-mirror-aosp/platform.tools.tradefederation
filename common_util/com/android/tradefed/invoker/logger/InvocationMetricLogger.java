@@ -86,6 +86,10 @@ public class InvocationMetricLogger {
         POSTBOOT_WIFI_SETUP_TIME("postboot_wifi_setup_time", true),
         // Represents how often we go through postboot wifi setup
         POSTBOOT_WIFI_SETUP_COUNT("postboot_wifi_setup_count", true),
+        // Represents the time we spend during md5 calculation
+        MD5_CALCULATION_TIME("md5_calculation_time", true),
+        // Represents how often we go through md5 calculation
+        MD5_CALCULATION_COUNT("md5_calculation_count", true),
 
         // Represents the time we spend pulling file from device.
         PULL_FILE_TIME("pull_file_time_ms", true),
