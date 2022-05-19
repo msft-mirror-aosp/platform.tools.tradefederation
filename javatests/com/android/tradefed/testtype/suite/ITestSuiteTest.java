@@ -22,6 +22,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -32,6 +34,7 @@ import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationDef;
 import com.android.tradefed.config.ConfigurationDescriptor;
@@ -69,6 +72,7 @@ import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.retry.IRetryDecision;
+import com.android.tradefed.retry.RetryPreparationDecision;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.suite.checker.KeyguardStatusChecker;
 import com.android.tradefed.suite.checker.StatusCheckerResult;
@@ -76,6 +80,7 @@ import com.android.tradefed.suite.checker.StatusCheckerResult.CheckStatus;
 import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.StubTargetPreparer;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.testtype.FakeTest;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
@@ -130,6 +135,7 @@ public class ITestSuiteTest {
     private List<IMetricCollector> mListCollectors;
     private IConfiguration mStubMainConfiguration;
     @Mock ILogSaver mMockLogSaver;
+    @Mock IRetryDecision mMockDecision;
     private BaseTargetPreparer mMockPreparer;
 
     // Guice scope and objects for testing
@@ -289,6 +295,16 @@ public class ITestSuiteTest {
         @Override
         public void clearExcludeFilters() {
             // ignored
+        }
+    }
+
+    /** Implementation of {@link IRemoteTest} to simulate running 0 tests. */
+    public static class StubCollectingTestWithEmptyTestMethods extends StubCollectingTest {
+        @Override
+        public void run(TestInformation testInfo, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
+            // To simulate that no tests would be run.
+            return;
         }
     }
 
@@ -601,6 +617,79 @@ public class ITestSuiteTest {
         FailureDescription failure = capture.getValue();
         assertEquals(
                 TestErrorIdentifier.MODULE_CHANGED_SYSTEM_STATUS, failure.getErrorIdentifier());
+    }
+
+    /**
+     * Test for {@link ITestSuite#run(TestInformation, ITestInvocationListener)} when preparation
+     * pass after retrying but there are no tests run, it should reports testRunStarted,
+     * testRunFailed, and testRunEnd at 1st time. At 2nd time, it should report testRunStarted, and
+     * testRunEnd with empty test methods.
+     */
+    @Test
+    public void testRun_preparationPassAfterRetry_report2times() throws Exception {
+        List<ISystemStatusChecker> sysChecker = new ArrayList<ISystemStatusChecker>();
+        sysChecker.add(mMockSysChecker);
+        mTestSuite =
+            new TestSuiteImpl() {
+                @Override
+                public LinkedHashMap<String, IConfiguration> loadTests() {
+                    LinkedHashMap<String, IConfiguration> testConfig = new LinkedHashMap<>();
+                    try {
+                        IConfiguration config =
+                            ConfigurationFactory.getInstance()
+                                .createConfigurationFromArgs(new String[] {EMPTY_CONFIG});
+                        config.setTargetPreparer(mMockPreparer);
+                        config.setSystemStatusChecker(mMockSysChecker);
+                        config.setTest(new StubCollectingTestWithEmptyTestMethods());
+                        config.getConfigurationDescription().setModuleName(TEST_CONFIG_NAME);
+                        testConfig.put(TEST_CONFIG_NAME, config);
+                    } catch (ConfigurationException e) {
+                        CLog.e(e);
+                        throw new RuntimeException(e);
+                    }
+                    return testConfig;
+                }
+            };
+        mTestSuite.setDevice(mMockDevice);
+        mTestSuite.setBuild(mMockBuildInfo);
+        mTestSuite.setInvocationContext(mContext);
+        mTestSuite.setSystemStatusChecker(sysChecker);
+        mTestSuite.setConfiguration(mStubMainConfiguration);
+        OptionSetter setter = new OptionSetter(mTestSuite);
+        setter.setOptionValue("merge-attempts", "false");
+        final String exceptionMessage = "ouch I failed";
+        DeviceDescriptor nullDescriptor = null;
+        doThrow(new TargetSetupError(exceptionMessage, nullDescriptor))
+                .when(mMockPreparer)
+                .setUp(Mockito.any());
+        RetryPreparationDecision decision = new RetryPreparationDecision(
+                false, false);
+        doReturn(decision)
+                .when(mMockDecision)
+                .shouldRetryPreparation(Mockito.any(), Mockito.anyInt(), Mockito.anyInt());
+        doReturn(2).when(mMockDecision).getMaxRetryCount();
+        when(mMockSysChecker.preExecutionCheck(Mockito.eq(mMockDevice)))
+                .thenReturn(new StatusCheckerResult(CheckStatus.SUCCESS));
+        when(mMockSysChecker.postExecutionCheck(Mockito.eq(mMockDevice)))
+                .thenReturn(new StatusCheckerResult(CheckStatus.SUCCESS));
+        mStubMainConfiguration.setRetryDecision(mMockDecision);
+        mTestSuite.run(mTestInfo, mMockListener);
+        verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("test"), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
+        ArgumentCaptor<FailureDescription> captured =
+                ArgumentCaptor.forClass(FailureDescription.class);
+        verify(mMockListener).testRunFailed(captured.capture());
+        // At the second time, the device is recovered, so expect that it run test level tests.
+        verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("test"),
+                        Mockito.eq(0),
+                        Mockito.eq(1),
+                        Mockito.anyLong());
+        verify(mMockListener, times(2))
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        assertTrue(captured.getValue().getErrorMessage().contains(exceptionMessage));
     }
 
     /**
