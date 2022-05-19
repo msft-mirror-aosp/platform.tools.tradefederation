@@ -406,7 +406,7 @@ public class DynamicRemoteFileResolver {
         String protocol;
         Map<String, String> query;
         try {
-            URI uri = new URI(path);
+            URI uri = new URI(path.replace('\\','/'));
             protocol = uri.getScheme();
             query = parseQuery(uri.getQuery());
             fileToResolve = new File(protocol + ":" + uri.getPath());
