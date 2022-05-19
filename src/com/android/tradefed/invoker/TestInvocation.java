@@ -28,9 +28,12 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.filter.OptionFetcher;
 import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.config.proxy.TradefedDelegator;
+import com.android.tradefed.dependencies.ExternalDependency;
+import com.android.tradefed.dependencies.IExternalDependency;
 import com.android.tradefed.device.DeviceManager;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
@@ -108,11 +111,14 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Default implementation of {@link ITestInvocation}.
@@ -149,6 +155,8 @@ public class TestInvocation implements ITestInvocation {
     static final String TARGET_SETUP_ERROR_BUGREPORT_NAME = "target_setup_error_bugreport";
     static final String BATT_TAG = "[battery level]";
     static final String RECOVERY_LOG_DEVICE_PATH = "/tmp/recovery.log";
+    public static final String INVOCATION_EXTERNAL_DEPENDENCIES =
+            "invocation-external-dependencies";
 
     public enum Stage {
         ERROR("error"),
@@ -1320,6 +1328,23 @@ public class TestInvocation implements ITestInvocation {
         if (config.getCommandOptions().getShardIndex() != null) {
             context.addInvocationAttribute(
                     "shard_index", config.getCommandOptions().getShardIndex().toString());
+        }
+        // add Invocation level external dependencies
+        Set<ExternalDependency> externalDependencies = new LinkedHashSet<>();
+        for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+            for (Object obj : deviceConfig.getAllObjects()) {
+                if (obj instanceof IExternalDependency) {
+                    externalDependencies.addAll(((IExternalDependency) obj).getDependencies());
+                }
+            }
+        }
+        if (!externalDependencies.isEmpty()) {
+            List<String> dependencyClassNames =
+                    externalDependencies.stream()
+                            .map(dependency -> dependency.getClass().getName())
+                            .collect(Collectors.toList());
+            context.addInvocationAttribute(
+                    INVOCATION_EXTERNAL_DEPENDENCIES, String.join(", ", dependencyClassNames));
         }
     }
 
