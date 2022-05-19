@@ -52,9 +52,9 @@ public class FilePullerLogCollector extends FilePullerDeviceMetricCollector {
                     type = LogDataType.PERFETTO;
                 } else if (".zip".equals(ext)) {
                     type = LogDataType.ZIP;
-                } else if (LogDataType.UIX.getFileExt().equals(ext)) {
+                } else if (".uix".equals(ext)) {
                     type = LogDataType.UIX;
-                } else if (LogDataType.GOLDEN_RESULT_PROTO.getFileExt().equals(ext)
+                } else if (".textproto".equals(ext)
                         && FileUtil.getBaseName(metricFile.getName()).contains("_goldResult")) {
                     type = LogDataType.GOLDEN_RESULT_PROTO;
                 }
