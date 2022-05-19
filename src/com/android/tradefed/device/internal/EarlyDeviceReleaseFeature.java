@@ -20,11 +20,12 @@ import com.android.tradefed.command.ICommandScheduler.IScheduledInvocationListen
 import com.android.tradefed.device.FreeDeviceState;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.service.internal.IRemoteScheduledListenersFeature;
 import com.android.tradefed.testtype.ITestInformationReceiver;
+
 import com.proto.tradefed.feature.FeatureRequest;
 import com.proto.tradefed.feature.FeatureResponse;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,15 +73,6 @@ public class EarlyDeviceReleaseFeature
                     mTestInformation.getContext().getDevice(entry.getKey()),
                     FreeDeviceState.valueOf(entry.getValue()));
         }
-
-        // Log count of allocated devices for test accounting
-        InvocationMetricLogger.addInvocationMetrics(
-                InvocationMetricLogger.InvocationMetricKey.DEVICE_COUNT,
-                mTestInformation.getContext().getNumDevicesAllocated());
-        // Track the timestamp when we are done with devices
-        InvocationMetricLogger.addInvocationMetrics(
-                InvocationMetricLogger.InvocationMetricKey.DEVICE_DONE_TIMESTAMP,
-                System.currentTimeMillis());
 
         for (IScheduledInvocationListener listener : mScheduledInvocationListeners) {
             listener.releaseDevices(mTestInformation.getContext(), deviceStates);
