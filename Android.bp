@@ -101,6 +101,7 @@ tradefed_java_library_host {
     ],
     java_resources: [
         ":TradefedContentProvider",
+        ":TelephonyUtility",
     ],
     static_libs: [
         "tradefed-lib-core",
