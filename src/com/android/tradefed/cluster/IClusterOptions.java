@@ -38,9 +38,6 @@ public interface IClusterOptions {
     /** Get the device serial to tag mapping. */
     public Map<String, String> getDeviceTag();
 
-    /** Check if it should check for available flashing permits before leasing. */
-    public boolean checkFlashingPermitsOnLease();
-
     /** Check some available permits before leasing. */
     public boolean checkPermitsOnLease();
 

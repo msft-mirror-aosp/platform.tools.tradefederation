@@ -574,42 +574,29 @@ public class ClusterCommandScheduler extends CommandScheduler {
         return devices;
     }
 
-    /**
-     * Get available flashing permits.
-     *
-     * @return the number of available flashing permits.
-     */
-    private int getAvailableFlashingPermits() {
-        // By default there is no limit on available flashing permits.
-        int availableFlashingPermits = Integer.MAX_VALUE;
-        final IClusterOptions options = getClusterOptions();
-
-        boolean checkFlashingPermitsLease = options.checkFlashingPermitsOnLease();
-        if (checkFlashingPermitsLease) {
-            availableFlashingPermits = getHostOptions()
-                    .getAvailablePermits(PermitLimitType.CONCURRENT_FLASHER);
-            CLog.i("available flasher permits %d", availableFlashingPermits);
-        }
-        return availableFlashingPermits;
-    }
-
-    private boolean arePermitsAvailableToSchedule() {
+    private int permitsAvailableToSchedule() {
         if (!getClusterOptions().checkPermitsOnLease()) {
-            return true;
+            return Integer.MAX_VALUE;
         }
         for (PermitLimitType permit : PermitLimitType.values()) {
-            if (getClusterOptions().checkFlashingPermitsOnLease()
-                    && PermitLimitType.CONCURRENT_FLASHER.equals(permit)) {
-                // Already checked by dedicated flashing logic
-                continue;
-            }
             if (getHostOptions().getAvailablePermits(permit) <= 0) {
                 CLog.i("There is no available '%s' permits. Not leasing any additional commands.",
                         permit);
-                return false;
+                return 0;
             }
         }
-        return true;
+        // Assumption is that download permits eventually become flashing permits
+        // TODO: Improve to track after download until flashing
+        int heuriticPermitCalculation =
+                getHostOptions().getAvailablePermits(PermitLimitType.CONCURRENT_FLASHER)
+                        - getHostOptions().getInUsePermits(PermitLimitType.CONCURRENT_DOWNLOAD);
+        if (heuriticPermitCalculation < 0) {
+            CLog.i(
+                    "Download permits will exceed the flashing limit and might create permit"
+                            + " delays. Not Leasing.");
+            return 0;
+        }
+        return heuriticPermitCalculation;
     }
 
     private boolean checkDiskSpace() {
@@ -635,14 +622,8 @@ public class ClusterCommandScheduler extends CommandScheduler {
      */
     List<ClusterCommand> fetchHostCommands(final MultiMap<String, DeviceDescriptor> devices) {
         CLog.d("fetching cluster host commands from leasehosttasks...");
-        int availableFlashingPermits = getAvailableFlashingPermits();
-
-        // Don't try to lease if there are no flasher permits available
-        if (availableFlashingPermits == 0) {
-            CLog.i("There is no available flashing permits. Not lease any additional commands.");
-            return Collections.<ClusterCommand>emptyList();
-        }
-        if (!arePermitsAvailableToSchedule()) {
+        int permitsAvailable = permitsAvailableToSchedule();
+        if (permitsAvailable <= 0) {
             return Collections.<ClusterCommand>emptyList();
         }
         // Check disk space before scheduling
@@ -672,7 +653,7 @@ public class ClusterCommandScheduler extends CommandScheduler {
             }
         }
         try {
-            int count = Math.min(deviceInfos.size(), availableFlashingPermits);
+            int count = Math.min(deviceInfos.size(), permitsAvailable);
             List<ClusterCommand> commands =
                     getClusterClient()
                             .leaseHostCommands(
