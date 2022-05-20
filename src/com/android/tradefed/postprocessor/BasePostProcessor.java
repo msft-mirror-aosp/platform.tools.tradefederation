@@ -21,6 +21,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.DataType;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
+import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -134,9 +135,18 @@ public abstract class BasePostProcessor implements IPostProcessor {
             CLog.i("Saving file with data name %s in post processor.", dataName);
             if (mLogSaver != null) {
                 try {
-                    LogFile log =
-                            mLogSaver.saveLogData(
-                                    dataName, dataType, dataStream.createInputStream());
+                    LogFile log = null;
+                    if (dataStream instanceof FileInputStreamSource) {
+                        log =
+                                mLogSaver.saveLogFile(
+                                        dataName,
+                                        dataType,
+                                        ((FileInputStreamSource) dataStream).getFile());
+                    } else {
+                        log =
+                                mLogSaver.saveLogData(
+                                        dataName, dataType, dataStream.createInputStream());
+                    }
                     testLogSaved(dataName, dataType, dataStream, log);
                     logAssociation(dataName, log);
                 } catch (IOException e) {
