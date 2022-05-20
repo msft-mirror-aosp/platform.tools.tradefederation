@@ -123,7 +123,18 @@ public class LogSaverResultForwarder extends ResultForwarder implements ILogSave
             long startTime = System.currentTimeMillis();
             LogFile logFile = null;
             try {
-                logFile = mLogSaver.saveLogData(dataName, dataType, dataStream.createInputStream());
+                // If it's a file, copy it directly as it's faster
+                if (dataStream instanceof FileInputStreamSource) {
+                    logFile =
+                            mLogSaver.saveLogFile(
+                                    dataName,
+                                    dataType,
+                                    ((FileInputStreamSource) dataStream).getFile());
+                } else {
+                    logFile =
+                            mLogSaver.saveLogData(
+                                    dataName, dataType, dataStream.createInputStream());
+                }
             } finally {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.LOG_SAVING_TIME,

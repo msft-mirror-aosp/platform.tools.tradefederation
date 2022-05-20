@@ -90,6 +90,14 @@ public class CommonLogRemoteFileUtil {
                         LogDataType.TEXT));
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.CUTTLEFISH,
+                new KnownLogFileEntry(
+                        NESTED_REMOTE_LOG_DIR + "crosvm_openwrt_boot.log", null, LogDataType.TEXT));
+        KNOWN_FILES_TO_FETCH.put(
+                InstanceType.CUTTLEFISH,
+                new KnownLogFileEntry(
+                        NESTED_REMOTE_LOG_DIR + "crosvm_openwrt.log", null, LogDataType.TEXT));
+        KNOWN_FILES_TO_FETCH.put(
+                InstanceType.CUTTLEFISH,
                 new KnownLogFileEntry("/var/log/kern.log", "host_kernel.log", LogDataType.TEXT));
         // Emulator known files to collect
         KNOWN_FILES_TO_FETCH.put(
@@ -118,6 +126,14 @@ public class CommonLogRemoteFileUtil {
         OXYGEN_LOG_FILES_FALLBACK.add(
                 new KnownLogFileEntry(
                         OXYGEN_RUNTIME_LOG_DIR + "launcher.log", null, LogDataType.TEXT));
+        OXYGEN_LOG_FILES_FALLBACK.add(
+                new KnownLogFileEntry(
+                        OXYGEN_RUNTIME_LOG_DIR + "crosvm_openwrt_boot.log",
+                        null,
+                        LogDataType.TEXT));
+        OXYGEN_LOG_FILES_FALLBACK.add(
+                new KnownLogFileEntry(
+                        OXYGEN_RUNTIME_LOG_DIR + "crosvm_openwrt.log", null, LogDataType.TEXT));
         OXYGEN_LOG_FILES_FALLBACK.add(
                 new KnownLogFileEntry(
                         OXYGEN_RUNTIME_LOG_DIR + "vdl_stdout.txt", null, LogDataType.TEXT));

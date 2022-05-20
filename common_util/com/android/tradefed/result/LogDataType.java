@@ -50,6 +50,7 @@ public enum LogDataType {
             false, // Not compressed by default, so we can gzip them
             false), // binary proto perfetto trace file
     /* Specific text file types */
+    ANRS("txt", "text/plain", true, true),
     BUGREPORT("txt", "text/plain", false, true),
     BUGREPORTZ("zip", "application/zip", true, false),
     HOST_LOG("txt", "text/plain", true, true),
