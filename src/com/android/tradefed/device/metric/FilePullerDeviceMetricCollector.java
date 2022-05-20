@@ -137,6 +137,12 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
         if (!mKeys.isEmpty()) {
             try {
                 for (ITestDevice device : getRealDevices()) {
+                    if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                        CLog.d(
+                                "Device '%s' is in state '%s' skipping file puller",
+                                device.getSerialNumber(), device.getDeviceState());
+                        return;
+                    }
                     deviceUsers.put(device, device.getCurrentUser());
                 }
             } catch (DeviceNotAvailableException dnae) {
