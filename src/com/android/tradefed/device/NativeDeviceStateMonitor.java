@@ -307,7 +307,7 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
                 () -> {
                     final String cmd = "getprop " + BOOTCOMPLETE_PROP;
                     try {
-                        String bootFlag = getIDevice().getSystemProperty("dev.bootcomplete").get();
+                        String bootFlag = getIDevice().getSystemProperty(BOOTCOMPLETE_PROP).get();
                         if ("1".equals(bootFlag)) {
                             return BUSY_WAIT_STATUS.SUCCESS;
                         }
