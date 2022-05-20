@@ -25,6 +25,7 @@ import com.android.tradefed.config.DeviceConfigurationHolder;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.dependencies.ExternalDependency;
 import com.android.tradefed.dependencies.IExternalDependency;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -241,25 +242,21 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         mModuleInvocationContext.addInvocationAttribute(MODULE_ID, mId);
 
         // Add External Dependencies of this module to the module context
-        if (preparersPerDevice != null) {
-            Set<ExternalDependency> externalDependencies = new LinkedHashSet<>();
-            for (String device : preparersPerDevice.keySet()) {
-                for (ITargetPreparer preparer : preparersPerDevice.get(device)) {
-                    if (preparer instanceof IExternalDependency) {
-                        externalDependencies.addAll(
-                                ((IExternalDependency) preparer).getDependencies());
-                    }
+        Set<ExternalDependency> externalDependencies = new LinkedHashSet<>();
+        for (IDeviceConfiguration deviceConfig : moduleConfig.getDeviceConfig()) {
+            for (Object obj : deviceConfig.getAllObjects()) {
+                if (obj instanceof IExternalDependency) {
+                    externalDependencies.addAll(((IExternalDependency) obj).getDependencies());
                 }
             }
-            // Add External Dependencies of this module to the module context
+        }
+        if (!externalDependencies.isEmpty()) {
             final List<String> dependencyClassNames =
                     externalDependencies.stream()
                             .map(dependency -> dependency.getClass().getName())
                             .collect(Collectors.toList());
-            if (!dependencyClassNames.isEmpty()) {
-                mModuleInvocationContext.addInvocationAttribute(
-                        MODULE_EXTERNAL_DEPENDENCIES, String.join(", ", dependencyClassNames));
-            }
+            mModuleInvocationContext.addInvocationAttribute(
+                    MODULE_EXTERNAL_DEPENDENCIES, String.join(", ", dependencyClassNames));
         }
 
         mMultiPreparers.addAll(multiPreparers);
