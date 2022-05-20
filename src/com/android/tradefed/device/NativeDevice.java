@@ -131,6 +131,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private static final String BUGREPORTZ_CMD = "bugreportz";
     private static final String BUGREPORTZ_TMP_PATH = "/bugreports/";
 
+    /** On-device path where we expect ANRs to be generated. */
+    private static final String ANRS_PATH = "/data/anrs";
+
     /**
      * Allow up to 2 minutes to receives the full logcat dump.
      */
@@ -2989,6 +2992,35 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             return null;
         }
         return new ByteArrayInputStreamSource(receiver.getOutput());
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean logAnrs(ITestLogger logger) throws DeviceNotAvailableException {
+        if (!doesFileExist(ANRS_PATH)) {
+            CLog.d("No ANRs at %s", ANRS_PATH);
+            return true;
+        }
+        File localDir = null;
+        try {
+            localDir = FileUtil.createTempDir("pulled-anrs");
+            boolean success = pullDir(ANRS_PATH, localDir);
+            if (!success) {
+                CLog.w("Failed to pull %s", ANRS_PATH);
+                return false;
+            }
+            for (File f : localDir.listFiles()) {
+                try (FileInputStreamSource source = new FileInputStreamSource(f)) {
+                    logger.testLog(f.getName(), LogDataType.ANRS, source);
+                }
+            }
+        } catch (IOException e) {
+            CLog.e(e);
+            return false;
+        } finally {
+            FileUtil.recursiveDelete(localDir);
+        }
+        return true;
     }
 
     /**
