@@ -1444,6 +1444,14 @@ public interface INativeDevice {
     public Bugreport takeBugreport();
 
     /**
+     * Collects and log ANRs from the device.
+     *
+     * @param logger an {@link ITestLogger} to log the ANRs.
+     * @return True if the logging was successful, false otherwise.
+     */
+    public boolean logAnrs(ITestLogger logger) throws DeviceNotAvailableException;
+
+    /**
      * Get the device class.
      *
      * @return the {@link String} device class.
