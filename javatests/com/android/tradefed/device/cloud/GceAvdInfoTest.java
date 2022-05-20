@@ -38,6 +38,7 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.util.List;
 import java.util.Map;
 
 /** Unit tests for {@link GceAvdInfo} */
@@ -512,10 +513,85 @@ public class GceAvdInfoTest {
                 .when(res)
                 .getStderr();
         try {
-            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234).get(0);
             assertEquals(gceAvdInfo.getStatus(), GceAvdInfo.GceStatus.SUCCESS);
             assertEquals(gceAvdInfo.instanceName(), "6a6a744e-0653-4926-b7b8-535d121a2fc9");
             assertEquals(gceAvdInfo.hostAndPort().getHost(), "10.0.80.227");
+        } catch (TargetSetupError e) {
+            e.printStackTrace();
+        }
+    }
+
+    /** Test handling succeeded Oxygen device lease multiple devices request. */
+    @Test
+    public void testOxygenClientLeaseMultiDevicesSucceedResponse() {
+        String output =
+                "I0516 20:50:21.513705   21141 oxygen_proxy_cf_client.go:102] "
+                        + "lease_infos:{session_id:\"17c788fa-be05-45e9-a8df-6e02f387d4a4\"  "
+                        + "server_url:\"10.120.166.14\"  ports:{type:WATERFALL  value:26908}  "
+                        + "ports:{type:WATERFALL_REVERSE_PORT_FORWARDER  value:24885}  "
+                        + "leased_device_spec:{virtualization_type:CUTTLEFISH  "
+                        + "build_artifacts:{build_id:\"8552002\"  "
+                        + "build_target:\"cf_x86_64_phone-userdebug\"  "
+                        + "build_branch:\"git_master\"  "
+                        + "cuttlefish_build_artifacts:{build_id:\"8552002\"  "
+                        + "build_target:\"cf_x86_64_phone-userdebug\"  image_type:DEVICE_IMAGE}}}"
+                        + "  debug_info:{reserved_cores:5  region:\"us-east4\"  "
+                        + "environment:\"prod\"  oxygen_version:\"v20220509-0008-rc01-cl447382102"
+                        + "\"  prewarmed:false}}  lease_infos:{session_id:\"17c788fa-be05-45e9"
+                        + "-a8df-6e02f387d4a4\"  server_url:\"10.120.166.14\"  "
+                        + "ports:{type:WATERFALL  value:16590}  "
+                        + "ports:{type:WATERFALL_REVERSE_PORT_FORWARDER  value:26010}  "
+                        + "leased_device_spec:{virtualization_type:CUTTLEFISH  "
+                        + "build_artifacts:{build_id:\"8558504\"  "
+                        + "build_target:\"cf_x86_64_phone-userdebug\"  "
+                        + "build_branch:\"git_master\"  "
+                        + "cuttlefish_build_artifacts:{build_id:\"8558504\"  "
+                        + "build_target:\"cf_x86_64_phone-userdebug\"  image_type:DEVICE_IMAGE}}}"
+                        + "  index:1  debug_info:{reserved_cores:5  region:\"us-east4\"  "
+                        + "environment:\"prod\"  oxygen_version:\"v20220509-0008-rc01-cl447382102"
+                        + "\"  prewarmed:false}}  debug_info:{reserved_cores:5  "
+                        + "region:\"us-east4\"  environment:\"prod\"  "
+                        + "oxygen_version:\"v20220509-0008-rc01-cl447382102\"  prewarmed:false}";
+        CommandResult res = Mockito.mock(CommandResult.class);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return CommandStatus.SUCCESS;
+                            }
+                        })
+                .when(res)
+                .getStatus();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return "";
+                            }
+                        })
+                .when(res)
+                .getStdout();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return output;
+                            }
+                        })
+                .when(res)
+                .getStderr();
+        try {
+            List<GceAvdInfo> gceAvdInfoList =
+                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+            for (int i = 0; i < 2; i++) {
+                GceAvdInfo gceAvdInfo =
+                        GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234).get(i);
+                assertEquals(gceAvdInfo.getStatus(), GceAvdInfo.GceStatus.SUCCESS);
+                assertEquals(gceAvdInfo.instanceName(), "17c788fa-be05-45e9-a8df-6e02f387d4a4");
+                assertEquals(gceAvdInfo.hostAndPort().getHost(), "10.120.166.14");
+                assertEquals(gceAvdInfo.hostAndPort().getPort(), 1234 + i);
+            }
         } catch (TargetSetupError e) {
             e.printStackTrace();
         }
@@ -585,7 +661,7 @@ public class GceAvdInfoTest {
                 .when(res)
                 .getStatus();
         try {
-            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234).get(0);
             assertEquals(gceAvdInfo.getStatus(), GceAvdInfo.GceStatus.FAIL);
             assertEquals(
                     gceAvdInfo.getErrorType(), InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_TIMEOUT);
