@@ -37,6 +37,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -277,22 +278,23 @@ public class GceAvdInfo {
      *
      * @param oxygenRes the {@link CommandResult} from Oxygen client command execution.
      * @param remoteAdbPort the remote port that should be used for adb connection
-     * @return the {@link GceAvdInfo} of the device successfully leased. Will throw {@link
+     * @return {@link List<GceAvdInfo>} of the devices successfully leased. Will throw {@link
      *     TargetSetupError} if failed to lease a device.
      */
-    public static GceAvdInfo parseGceInfoFromOxygenClientOutput(
+    public static List<GceAvdInfo> parseGceInfoFromOxygenClientOutput(
             CommandResult oxygenRes, int remoteAdbPort) throws TargetSetupError {
         CommandStatus oxygenCliStatus = oxygenRes.getStatus();
         if (CommandStatus.SUCCESS.equals(oxygenCliStatus)) {
             return parseSucceedOxygenClientOutput(
                     oxygenRes.getStdout() + oxygenRes.getStderr(), remoteAdbPort);
         } else if (CommandStatus.TIMED_OUT.equals(oxygenCliStatus)) {
-            return new GceAvdInfo(
-                    null,
-                    null,
-                    InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_TIMEOUT,
-                    "Oxygen client binary CLI timed out",
-                    GceStatus.FAIL);
+            return Arrays.asList(
+                    new GceAvdInfo(
+                            null,
+                            null,
+                            InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_TIMEOUT,
+                            "Oxygen client binary CLI timed out",
+                            GceStatus.FAIL));
         } else {
             throw new TargetSetupError(
                     String.format(
@@ -302,27 +304,36 @@ public class GceAvdInfo {
         }
     }
 
-    private static GceAvdInfo parseSucceedOxygenClientOutput(String output, int remoteAdbPort)
+    private static List<GceAvdInfo> parseSucceedOxygenClientOutput(String output, int remoteAdbPort)
             throws TargetSetupError {
         CLog.d("Parsing oxygen client output: %s", output);
 
         Pattern pattern =
-                Pattern.compile("session_id:\"(.*)\".*server_url:\"(.*)\".*ports", Pattern.DOTALL);
+                Pattern.compile("session_id:\"(.*?)\".*?server_url:\"(.*?)\"", Pattern.DOTALL);
         Matcher matcher = pattern.matcher(output);
-        if (!matcher.find()) {
+
+        List<GceAvdInfo> gceAvdInfos = new ArrayList<>();
+        int deviceOffset = 0;
+        while (matcher.find()) {
+            String sessionId = matcher.group(1);
+            String serverUrl = matcher.group(2);
+            gceAvdInfos.add(
+                    new GceAvdInfo(
+                            sessionId,
+                            HostAndPort.fromString(serverUrl)
+                                    .withDefaultPort(remoteAdbPort + deviceOffset),
+                            null,
+                            null,
+                            GceStatus.SUCCESS));
+            deviceOffset++;
+        }
+        if (gceAvdInfos.isEmpty()) {
             throw new TargetSetupError(
                     String.format("Failed to parse the output: %s", output),
                     InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_ERROR);
         }
-        String sessionId = matcher.group(1);
-        String serverUrl = matcher.group(2);
 
-        return new GceAvdInfo(
-                sessionId,
-                HostAndPort.fromString(serverUrl).withDefaultPort(remoteAdbPort),
-                null,
-                null,
-                GceStatus.SUCCESS);
+        return gceAvdInfos;
     }
 
     /**
