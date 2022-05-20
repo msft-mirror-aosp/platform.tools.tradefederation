@@ -27,6 +27,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.PythonVirtualenvHelper;
 import com.android.tradefed.util.RunUtil;
@@ -56,7 +57,6 @@ import java.util.Set;
 public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
     private static final int PANDORA_SERVER_PORT = 8999;
-    private static final int HCI_ROOTCANAL_PORT_CUTTLEFISH = 7300;
     private static final int HCI_ROOTCANAL_PORT = 6211;
     private static final int HCI_PROXY_PORT = 1234;
 
@@ -89,8 +89,6 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
     private final Set<String> includeFilters = new LinkedHashSet<>();
     private final Set<String> excludeFilters = new LinkedHashSet<>();
-
-    private int hciPort;
 
     @Override
     public void addIncludeFilter(String filter) {
@@ -132,6 +130,10 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         excludeFilters.clear();
     }
 
+    private int getHciPort() {
+        return physical ? HCI_PROXY_PORT : HCI_ROOTCANAL_PORT;
+    }
+
     @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
@@ -169,31 +171,35 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         // Forward Pandora Server port.
         adbForwardPort(testDevice, PANDORA_SERVER_PORT);
 
-        boolean isCuttlefish = testDevice.getProductType().equals("cutf");
-
-        if (!physical) {
-            // Check product type to determine Root Canal port.
-            if (isCuttlefish) hciPort = HCI_ROOTCANAL_PORT_CUTTLEFISH;
-            else {
-                hciPort = HCI_ROOTCANAL_PORT;
-
-                // Forward Root Canal port.
-                adbForwardPort(testDevice, hciPort);
-            }
-        } else {
-            hciPort = HCI_PROXY_PORT;
-        }
+        int hciPort = getHciPort();
+        Integer hciPassthroughPid = null;
 
         CLog.i("HCI port: %s", hciPort);
+
+        if (!physical) {
+            boolean isCuttlefish = testDevice.getProductType().equals("cutf");
+
+            if (isCuttlefish) {
+                hciPassthroughPid = createHciPassthrough(testDevice, hciPort);
+            }
+
+            // Forward Root Canal port.
+            adbForwardPort(testDevice, hciPort);
+        }
 
         // Run tests.
         for (String profile : profiles) {
             runPtsBotTestsForProfile(profile, testInfo, listener);
         }
 
+        // Kill passthrough
+        if (hciPassthroughPid != null) {
+            testDevice.executeShellV2Command(String.format("kill %s", hciPassthroughPid));
+        }
+
         // Remove forwarded ports.
         adbForwardRemovePort(testDevice, PANDORA_SERVER_PORT);
-        if (!physical && !isCuttlefish) {
+        if (!physical) {
             adbForwardRemovePort(testDevice, HCI_ROOTCANAL_PORT);
         }
     }
@@ -346,7 +352,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         command.add("-c");
         command.add(testsConfigFile.getPath());
         command.add("--hci");
-        command.add(String.valueOf(hciPort));
+        command.add(String.valueOf(getHciPort()));
 
         if (ptsSetupPath != null) {
             command.add("--pts-setup");
@@ -373,6 +379,50 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         builder.environment().put("PYTHONPATH", pythonPath);
 
         return builder;
+    }
+
+    /**
+     * This method create a HCI "passthrough" on cuttlefish.
+     *
+     * <p>With Cuttlefish, RootCanal the HCI virtual emulator runs on the Host and Android on the
+     * Guest. To connect to the RootCanal HCI we would need to create a tunnel to the Host machine,
+     * however we only have a conveninent access to the Guest.
+     *
+     * <p>Fortunately the Host and the Guest are connected via a network, so from the Guest,
+     * RootCanal is accessible with ip 192.168.97.1 and port 7300
+     *
+     * <p>To be able to do an adb forward we create a passthrough that will forward data received on
+     * a port to 192.168.97.1:7300
+     *
+     * @return the passthrough pid
+     */
+    private int createHciPassthrough(ITestDevice testDevice, int port)
+            throws DeviceNotAvailableException {
+        String command =
+                String.format(
+                        "nohup nc -L -p %s nc 192.168.97.1 7300 2>/dev/null 1>/dev/null & echo $!",
+                        port);
+        CommandResult result = testDevice.executeShellV2Command(command);
+        if (result.getExitCode() != 0) {
+            throw new RuntimeException("HCI passthrough command failed: " + result.getExitCode());
+        }
+
+        int pid = Integer.parseInt(result.getStdout().trim());
+
+        CLog.i("HCI passthrough pid: %s", pid);
+
+        // Wait a bit and see if pid is still there
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            CLog.e("sleep interrupted");
+        }
+        CommandResult psResult = testDevice.executeShellV2Command(String.format("ps -p %s", pid));
+        if (psResult.getExitCode() != 0) {
+            throw new RuntimeException("HCI passthrough died");
+        }
+
+        return pid;
     }
 
     private void adbForwardPort(ITestDevice testDevice, int port)
