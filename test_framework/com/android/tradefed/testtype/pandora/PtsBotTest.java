@@ -33,6 +33,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -54,6 +55,15 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
     private static final int HCI_ROOTCANAL_PORT_CUTTLEFISH = 7300;
     private static final int HCI_ROOTCANAL_PORT = 6211;
     private static final int HCI_PROXY_PORT = 1234;
+
+    @Option(name = "pts-bot-path", description = "pts-bot binary path.")
+    private File ptsBotPath = new File("pts-bot");
+
+    @Option(name = "pts-setup-path", description = "Bluetooth SIG pts setup path.")
+    private File ptsSetupPath = null;
+
+    @Option(name = "python-home", description = "PYTHONHOME value to use while running pts-bot.")
+    private File pythonHome = null;
 
     @Option(name = "mmi2grpc", description = "mmi2grpc python module path.")
     private File mmi2grpc = null;
@@ -171,9 +181,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
     private String[] listPtsBotTestsForProfile(String profile) {
         try {
-            ProcessBuilder processBuilder =
-                    new ProcessBuilder(
-                            "pts-bot", "-c", testsConfigFile.getPath(), "--list", profile);
+            ProcessBuilder processBuilder = ptsBot("--list", profile);
 
             CLog.i("Running command: %s", String.join(" ", processBuilder.command()));
             Process process = processBuilder.start();
@@ -263,22 +271,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         listener.testStarted(testDescription);
         CLog.i(testName);
         try {
-
-            ProcessBuilder processBuilder;
-            processBuilder =
-                    new ProcessBuilder(
-                            "pts-bot",
-                            "-c",
-                            testsConfigFile.getPath(),
-                            "--hci",
-                            String.valueOf(hciPort),
-                            testName);
-
-            if (mmi2grpc.exists()) {
-                // Add mmi2grpc python module path to process builder environment.
-                Map<String, String> env = processBuilder.environment();
-                env.put("PYTHONPATH", mmi2grpc.getPath());
-            }
+            ProcessBuilder processBuilder = ptsBot(testName);
 
             CLog.i("Running command: %s", String.join(" ", processBuilder.command()));
             Process process = processBuilder.start();
@@ -319,6 +312,34 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         listener.testEnded(testDescription, Collections.emptyMap());
 
         return success;
+    }
+
+    private ProcessBuilder ptsBot(String... args) {
+        List<String> command = new ArrayList();
+
+        ptsBotPath.setExecutable(true);
+
+        command.add(ptsBotPath.getPath());
+        command.add("-c");
+        command.add(testsConfigFile.getPath());
+        command.add("--hci");
+        command.add(String.valueOf(hciPort));
+
+        if (ptsSetupPath != null) {
+            command.add("--pts-setup");
+            command.add(ptsSetupPath.getPath());
+        }
+
+        command.addAll(Arrays.asList(args));
+
+        ProcessBuilder builder = new ProcessBuilder(command);
+
+        if (pythonHome != null) builder.environment().put("PYTHONHOME", pythonHome.getPath());
+
+        // Add mmi2grpc python module path to process builder environment.
+        builder.environment().put("PYTHONPATH", mmi2grpc.getPath());
+
+        return builder;
     }
 
     private void adbForwardPort(ITestDevice testDevice, int port)
