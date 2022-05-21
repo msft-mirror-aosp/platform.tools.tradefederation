@@ -28,6 +28,8 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.PythonVirtualenvHelper;
+import com.android.tradefed.util.RunUtil;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -186,7 +188,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         // Run tests.
         for (String profile : profiles) {
-            runPtsBotTestsForProfile(profile, listener);
+            runPtsBotTestsForProfile(profile, testInfo, listener);
         }
 
         // Remove forwarded ports.
@@ -196,9 +198,9 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         }
     }
 
-    private String[] listPtsBotTestsForProfile(String profile) {
+    private String[] listPtsBotTestsForProfile(String profile, TestInformation testInfo) {
         try {
-            ProcessBuilder processBuilder = ptsBot("--list", profile);
+            ProcessBuilder processBuilder = ptsBot(testInfo, "--list", profile);
 
             CLog.i("Running command: %s", String.join(" ", processBuilder.command()));
             Process process = processBuilder.start();
@@ -232,8 +234,9 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         return null;
     }
 
-    private void runPtsBotTestsForProfile(String profile, ITestInvocationListener listener) {
-        String[] tests = listPtsBotTestsForProfile(profile);
+    private void runPtsBotTestsForProfile(
+            String profile, TestInformation testInfo, ITestInvocationListener listener) {
+        String[] tests = listPtsBotTestsForProfile(profile, testInfo);
 
         if (tests == null || tests.length == 0) {
             CLog.w("Cannot run PTS-bot for %s, no tests found", profile);
@@ -257,7 +260,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             listener.testRunStarted(profile, filteredTests.size());
             long startTimestamp = System.currentTimeMillis();
             for (String testName : filteredTests) {
-                runPtsBotTest(profile, testName, listener);
+                runPtsBotTest(profile, testName, testInfo, listener);
             }
             long endTimestamp = System.currentTimeMillis();
             listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
@@ -281,14 +284,17 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
     }
 
     private boolean runPtsBotTest(
-            String profile, String testName, ITestInvocationListener listener) {
+            String profile,
+            String testName,
+            TestInformation testInfo,
+            ITestInvocationListener listener) {
         TestDescription testDescription = new TestDescription(profile, testName);
         boolean success = false;
 
         listener.testStarted(testDescription);
         CLog.i(testName);
         try {
-            ProcessBuilder processBuilder = ptsBot(testName);
+            ProcessBuilder processBuilder = ptsBot(testInfo, testName);
 
             CLog.i("Running command: %s", String.join(" ", processBuilder.command()));
             Process process = processBuilder.start();
@@ -331,7 +337,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         return success;
     }
 
-    private ProcessBuilder ptsBot(String... args) {
+    private ProcessBuilder ptsBot(TestInformation testInfo, String... args) {
         List<String> command = new ArrayList();
 
         ptsBotPath.setExecutable(true);
@@ -353,8 +359,18 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         if (pythonHome != null) builder.environment().put("PYTHONHOME", pythonHome.getPath());
 
+        String pythonPath = mmi2grpc.getPath();
+
+        File venvDir = testInfo.getBuildInfo().getFile(PythonVirtualenvHelper.VIRTUAL_ENV);
+        if (venvDir != null) {
+            String packagePath =
+                    PythonVirtualenvHelper.getPackageInstallLocation(
+                            new RunUtil(), venvDir.getAbsolutePath());
+            pythonPath += ":" + packagePath;
+        }
+
         // Add mmi2grpc python module path to process builder environment.
-        builder.environment().put("PYTHONPATH", mmi2grpc.getPath());
+        builder.environment().put("PYTHONPATH", pythonPath);
 
         return builder;
     }
