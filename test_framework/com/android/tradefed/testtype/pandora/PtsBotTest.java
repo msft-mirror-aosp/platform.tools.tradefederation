@@ -180,6 +180,11 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
             BufferedReader stdInput =
                     new BufferedReader(new InputStreamReader(process.getInputStream()));
+            BufferedReader stdError =
+                    new BufferedReader(new InputStreamReader(process.getErrorStream()));
+
+            stdError.lines().forEach(line -> CLog.e(line));
+            stdError.close();
 
             String line =
                     stdInput.lines().filter(l -> l.startsWith("Tests:")).findFirst().orElse(null);
