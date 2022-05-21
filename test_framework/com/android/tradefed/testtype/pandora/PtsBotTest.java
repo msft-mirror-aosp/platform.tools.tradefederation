@@ -20,12 +20,14 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.util.FileUtil;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -139,6 +141,21 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
                 testsConfigFile = testInfo.getDependencyFile(testsConfigFile.getName(), false);
             } catch (FileNotFoundException e) {
                 throw new RuntimeException("Tests config file does not exist");
+            }
+        }
+
+        // If mmi2grpc cannot be found using full path, search in
+        // dependencies.
+        // As mmi2grpc is a folder we cannot use getDependencyFile
+        if (!mmi2grpc.exists()) {
+            try {
+                File testsDir = testInfo.executionFiles().get(FilesKey.TARGET_TESTS_DIRECTORY);
+                mmi2grpc = FileUtil.findDirectory(mmi2grpc.getName(), testsDir);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            if (mmi2grpc == null) {
+                throw new RuntimeException("mmi2grpc folder does not exist");
             }
         }
 
