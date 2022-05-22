@@ -20,12 +20,17 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.PythonVirtualenvHelper;
+import com.android.tradefed.util.RunUtil;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -33,6 +38,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,9 +57,17 @@ import java.util.Set;
 public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
     private static final int PANDORA_SERVER_PORT = 8999;
-    private static final int HCI_ROOTCANAL_PORT_CUTTLEFISH = 7300;
     private static final int HCI_ROOTCANAL_PORT = 6211;
     private static final int HCI_PROXY_PORT = 1234;
+
+    @Option(name = "pts-bot-path", description = "pts-bot binary path.")
+    private File ptsBotPath = new File("pts-bot");
+
+    @Option(name = "pts-setup-path", description = "Bluetooth SIG pts setup path.")
+    private File ptsSetupPath = null;
+
+    @Option(name = "python-home", description = "PYTHONHOME value to use while running pts-bot.")
+    private File pythonHome = null;
 
     @Option(name = "mmi2grpc", description = "mmi2grpc python module path.")
     private File mmi2grpc = null;
@@ -75,8 +89,6 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
     private final Set<String> includeFilters = new LinkedHashSet<>();
     private final Set<String> excludeFilters = new LinkedHashSet<>();
-
-    private int hciPort;
 
     @Override
     public void addIncludeFilter(String filter) {
@@ -118,6 +130,10 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         excludeFilters.clear();
     }
 
+    private int getHciPort() {
+        return physical ? HCI_PROXY_PORT : HCI_ROOTCANAL_PORT;
+    }
+
     @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
@@ -132,6 +148,21 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             }
         }
 
+        // If mmi2grpc cannot be found using full path, search in
+        // dependencies.
+        // As mmi2grpc is a folder we cannot use getDependencyFile
+        if (!mmi2grpc.exists()) {
+            try {
+                File testsDir = testInfo.executionFiles().get(FilesKey.TARGET_TESTS_DIRECTORY);
+                mmi2grpc = FileUtil.findDirectory(mmi2grpc.getName(), testsDir);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            if (mmi2grpc == null) {
+                throw new RuntimeException("mmi2grpc folder does not exist");
+            }
+        }
+
         CLog.i("Tests config file: %s", testsConfigFile.getPath());
         CLog.i("Profiles to be tested: %s", profiles);
 
@@ -140,46 +171,53 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         // Forward Pandora Server port.
         adbForwardPort(testDevice, PANDORA_SERVER_PORT);
 
-        boolean isCuttlefish = testDevice.getProductType().equals("cutf");
-
-        if (!physical) {
-            // Check product type to determine Root Canal port.
-            if (isCuttlefish) hciPort = HCI_ROOTCANAL_PORT_CUTTLEFISH;
-            else {
-                hciPort = HCI_ROOTCANAL_PORT;
-
-                // Forward Root Canal port.
-                adbForwardPort(testDevice, hciPort);
-            }
-        } else {
-            hciPort = HCI_PROXY_PORT;
-        }
+        int hciPort = getHciPort();
+        Integer hciPassthroughPid = null;
 
         CLog.i("HCI port: %s", hciPort);
 
+        if (!physical) {
+            boolean isCuttlefish = testDevice.getProductType().equals("cutf");
+
+            if (isCuttlefish) {
+                hciPassthroughPid = createHciPassthrough(testDevice, hciPort);
+            }
+
+            // Forward Root Canal port.
+            adbForwardPort(testDevice, hciPort);
+        }
+
         // Run tests.
         for (String profile : profiles) {
-            runPtsBotTestsForProfile(profile, listener);
+            runPtsBotTestsForProfile(profile, testInfo, listener);
+        }
+
+        // Kill passthrough
+        if (hciPassthroughPid != null) {
+            testDevice.executeShellV2Command(String.format("kill %s", hciPassthroughPid));
         }
 
         // Remove forwarded ports.
         adbForwardRemovePort(testDevice, PANDORA_SERVER_PORT);
-        if (!physical && !isCuttlefish) {
+        if (!physical) {
             adbForwardRemovePort(testDevice, HCI_ROOTCANAL_PORT);
         }
     }
 
-    private String[] listPtsBotTestsForProfile(String profile) {
+    private String[] listPtsBotTestsForProfile(String profile, TestInformation testInfo) {
         try {
-            ProcessBuilder processBuilder =
-                    new ProcessBuilder(
-                            "pts-bot", "-c", testsConfigFile.getPath(), "--list", profile);
+            ProcessBuilder processBuilder = ptsBot(testInfo, "--list", profile);
 
             CLog.i("Running command: %s", String.join(" ", processBuilder.command()));
             Process process = processBuilder.start();
 
             BufferedReader stdInput =
                     new BufferedReader(new InputStreamReader(process.getInputStream()));
+            BufferedReader stdError =
+                    new BufferedReader(new InputStreamReader(process.getErrorStream()));
+
+            stdError.lines().forEach(line -> CLog.e(line));
+            stdError.close();
 
             String line =
                     stdInput.lines().filter(l -> l.startsWith("Tests:")).findFirst().orElse(null);
@@ -202,8 +240,9 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         return null;
     }
 
-    private void runPtsBotTestsForProfile(String profile, ITestInvocationListener listener) {
-        String[] tests = listPtsBotTestsForProfile(profile);
+    private void runPtsBotTestsForProfile(
+            String profile, TestInformation testInfo, ITestInvocationListener listener) {
+        String[] tests = listPtsBotTestsForProfile(profile, testInfo);
 
         if (tests == null || tests.length == 0) {
             CLog.w("Cannot run PTS-bot for %s, no tests found", profile);
@@ -227,7 +266,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             listener.testRunStarted(profile, filteredTests.size());
             long startTimestamp = System.currentTimeMillis();
             for (String testName : filteredTests) {
-                runPtsBotTest(profile, testName, listener);
+                runPtsBotTest(profile, testName, testInfo, listener);
             }
             long endTimestamp = System.currentTimeMillis();
             listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
@@ -251,29 +290,17 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
     }
 
     private boolean runPtsBotTest(
-            String profile, String testName, ITestInvocationListener listener) {
+            String profile,
+            String testName,
+            TestInformation testInfo,
+            ITestInvocationListener listener) {
         TestDescription testDescription = new TestDescription(profile, testName);
         boolean success = false;
 
         listener.testStarted(testDescription);
         CLog.i(testName);
         try {
-
-            ProcessBuilder processBuilder;
-            processBuilder =
-                    new ProcessBuilder(
-                            "pts-bot",
-                            "-c",
-                            testsConfigFile.getPath(),
-                            "--hci",
-                            String.valueOf(hciPort),
-                            testName);
-
-            if (mmi2grpc.exists()) {
-                // Add mmi2grpc python module path to process builder environment.
-                Map<String, String> env = processBuilder.environment();
-                env.put("PYTHONPATH", mmi2grpc.getPath());
-            }
+            ProcessBuilder processBuilder = ptsBot(testInfo, testName);
 
             CLog.i("Running command: %s", String.join(" ", processBuilder.command()));
             Process process = processBuilder.start();
@@ -314,6 +341,88 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         listener.testEnded(testDescription, Collections.emptyMap());
 
         return success;
+    }
+
+    private ProcessBuilder ptsBot(TestInformation testInfo, String... args) {
+        List<String> command = new ArrayList();
+
+        ptsBotPath.setExecutable(true);
+
+        command.add(ptsBotPath.getPath());
+        command.add("-c");
+        command.add(testsConfigFile.getPath());
+        command.add("--hci");
+        command.add(String.valueOf(getHciPort()));
+
+        if (ptsSetupPath != null) {
+            command.add("--pts-setup");
+            command.add(ptsSetupPath.getPath());
+        }
+
+        command.addAll(Arrays.asList(args));
+
+        ProcessBuilder builder = new ProcessBuilder(command);
+
+        if (pythonHome != null) builder.environment().put("PYTHONHOME", pythonHome.getPath());
+
+        String pythonPath = mmi2grpc.getPath();
+
+        File venvDir = testInfo.getBuildInfo().getFile(PythonVirtualenvHelper.VIRTUAL_ENV);
+        if (venvDir != null) {
+            String packagePath =
+                    PythonVirtualenvHelper.getPackageInstallLocation(
+                            new RunUtil(), venvDir.getAbsolutePath());
+            pythonPath += ":" + packagePath;
+        }
+
+        // Add mmi2grpc python module path to process builder environment.
+        builder.environment().put("PYTHONPATH", pythonPath);
+
+        return builder;
+    }
+
+    /**
+     * This method create a HCI "passthrough" on cuttlefish.
+     *
+     * <p>With Cuttlefish, RootCanal the HCI virtual emulator runs on the Host and Android on the
+     * Guest. To connect to the RootCanal HCI we would need to create a tunnel to the Host machine,
+     * however we only have a conveninent access to the Guest.
+     *
+     * <p>Fortunately the Host and the Guest are connected via a network, so from the Guest,
+     * RootCanal is accessible with ip 192.168.97.1 and port 7300
+     *
+     * <p>To be able to do an adb forward we create a passthrough that will forward data received on
+     * a port to 192.168.97.1:7300
+     *
+     * @return the passthrough pid
+     */
+    private int createHciPassthrough(ITestDevice testDevice, int port)
+            throws DeviceNotAvailableException {
+        String command =
+                String.format(
+                        "nohup nc -L -p %s nc 192.168.97.1 7300 2>/dev/null 1>/dev/null & echo $!",
+                        port);
+        CommandResult result = testDevice.executeShellV2Command(command);
+        if (result.getExitCode() != 0) {
+            throw new RuntimeException("HCI passthrough command failed: " + result.getExitCode());
+        }
+
+        int pid = Integer.parseInt(result.getStdout().trim());
+
+        CLog.i("HCI passthrough pid: %s", pid);
+
+        // Wait a bit and see if pid is still there
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            CLog.e("sleep interrupted");
+        }
+        CommandResult psResult = testDevice.executeShellV2Command(String.format("ps -p %s", pid));
+        if (psResult.getExitCode() != 0) {
+            throw new RuntimeException("HCI passthrough died");
+        }
+
+        return pid;
     }
 
     private void adbForwardPort(ITestDevice testDevice, int port)
