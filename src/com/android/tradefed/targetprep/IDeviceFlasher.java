@@ -128,6 +128,20 @@ public interface IDeviceFlasher {
             DeviceNotAvailableException;
 
     /**
+     * All clean up operations & checks that must occur after actual flashing critical section. None
+     * of those operations will be included in the concurrency-controlled critical section.
+     *
+     * @param device the {@link ITestDevice} to flash
+     * @param deviceBuild the {@link IDeviceBuildInfo} to flash
+     * @throws TargetSetupError if any setup fails
+     * @throws DeviceNotAvailableException if device becomes unresponsive
+     */
+    public default void postFlashOperations(ITestDevice device, IDeviceBuildInfo deviceBuild)
+            throws TargetSetupError, DeviceNotAvailableException {
+        // Empty by default
+    }
+
+    /**
      * Retrieve the command execution status for flashing primary system partitions.
      * <p>
      * Note that if system partitions are not flashed (system already has the build to be flashed)
