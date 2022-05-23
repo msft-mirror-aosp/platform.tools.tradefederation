@@ -39,7 +39,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -307,20 +306,29 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
                 () -> {
                     final String cmd = "getprop " + BOOTCOMPLETE_PROP;
                     try {
-                        String bootFlag = getIDevice().getSystemProperty(BOOTCOMPLETE_PROP).get();
-                        if ("1".equals(bootFlag)) {
+                        CollectingOutputReceiver receiver = new CollectingOutputReceiver();
+                        getIDevice()
+                                .executeShellCommand(
+                                        "getprop " + BOOTCOMPLETE_PROP,
+                                        receiver,
+                                        60000L,
+                                        TimeUnit.MILLISECONDS);
+                        String bootFlag = receiver.getOutput();
+                        if (bootFlag != null && "1".equals(bootFlag.trim())) {
                             return BUSY_WAIT_STATUS.SUCCESS;
                         }
-                    } catch (InterruptedException e) {
-                        CLog.i(
-                                "%s on device %s failed: %s",
-                                cmd, getSerialNumber(), e.getMessage());
-                        // exit the loop for InterruptedException
-                        return BUSY_WAIT_STATUS.ABORT;
-                    } catch (ExecutionException e) {
-                        CLog.i(
-                                "%s on device %s failed: %s",
-                                cmd, getSerialNumber(), e.getMessage());
+                    } catch (IOException | ShellCommandUnresponsiveException e) {
+                        CLog.e("%s failed on: %s", cmd, getSerialNumber());
+                        CLog.e(e);
+                    } catch (TimeoutException e) {
+                        CLog.e("%s failed on %s: timeout", cmd, getSerialNumber());
+                        CLog.e(e);
+                    } catch (AdbCommandRejectedException e) {
+                        CLog.e("%s failed on: %s", cmd, getSerialNumber());
+                        CLog.e(e);
+                        if (e.isDeviceOffline() || e.wasErrorDuringDeviceSelection()) {
+                            return BUSY_WAIT_STATUS.ABORT;
+                        }
                     }
                     return BUSY_WAIT_STATUS.CONTINUE_WAITING;
                 };
