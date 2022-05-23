@@ -608,6 +608,7 @@ public class TestInvocation implements ITestInvocation {
         RecoveryMode recovery = device.getRecoveryMode();
         try {
             device.setRecoveryMode(RecoveryMode.NONE);
+            device.logAnrs(listener);
             boolean res =
                     device.logBugreport(
                             String.format("%s_%s", bugreportName, device.getSerialNumber()),
@@ -615,7 +616,7 @@ public class TestInvocation implements ITestInvocation {
             if (!res) {
                 CLog.w("Error when collecting bugreport for device '%s'", device.getSerialNumber());
             }
-        } catch (RuntimeException e) {
+        } catch (DeviceNotAvailableException | RuntimeException e) {
             CLog.e("Harness Exception while collecting bugreport");
             CLog.e(e);
         } finally {
