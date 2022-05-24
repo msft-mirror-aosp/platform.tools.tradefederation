@@ -230,6 +230,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             } finally {
                 flashingTime = System.currentTimeMillis() - start;
                 getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
+                flasher.postFlashOperations(device, deviceBuild);
                 // report flashing status
                 CommandStatus status = flasher.getSystemFlashingStatus();
                 if (status == null) {
