@@ -20,6 +20,7 @@ import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.RemoteAndroidDevice;
+import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -96,6 +97,17 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
                 }
             } else if (mTestInformation.getDevice() instanceof RemoteAndroidDevice) {
                 responseBuilder.setResponse("RemoteAndroidDevice has no powerwash support.");
+            } else if (mTestInformation.getDevice() instanceof NestedRemoteDevice) {
+                boolean res =
+                        ((NestedRemoteDevice) mTestInformation.getDevice()).resetVirtualDevice();
+                if (!res) {
+                    throw new DeviceNotAvailableException(
+                            String.format(
+                                    "Failed to powerwash device: %s",
+                                    mTestInformation.getDevice().getSerialNumber()),
+                            mTestInformation.getDevice().getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
+                }
             }
             for (ITargetPreparer labPreparer : configHolder.getLabPreparers()) {
                 if (labPreparer.isDisabled()) {

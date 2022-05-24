@@ -19,13 +19,11 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
 
 import com.android.ddmlib.IDevice;
-import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.TestDeviceOptions;
-import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
@@ -46,7 +44,6 @@ public class NestedRemoteDeviceTest {
     private IDeviceStateMonitor mMockStateMonitor;
     private IDeviceMonitor mMockMonitor;
     private IRunUtil mMockRunUtil;
-    private ITestLogger mMockLogger;
 
     @Before
     public void setUp() throws Exception {
@@ -54,7 +51,6 @@ public class NestedRemoteDeviceTest {
         mMockStateMonitor = Mockito.mock(IDeviceStateMonitor.class);
         mMockMonitor = Mockito.mock(IDeviceMonitor.class);
         mMockRunUtil = Mockito.mock(IRunUtil.class);
-        mMockLogger = Mockito.mock(ITestLogger.class);
         TestDeviceOptions options = new TestDeviceOptions();
         OptionSetter setter = new OptionSetter(options);
         setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
@@ -74,6 +70,11 @@ public class NestedRemoteDeviceTest {
                     public int getApiLevel() throws DeviceNotAvailableException {
                         return 23;
                     }
+
+                    @Override
+                    public String getSerialNumber() {
+                        return "0.0.0.0:6520";
+                    }
                 };
     }
 
@@ -85,10 +86,10 @@ public class NestedRemoteDeviceTest {
     /** Test that reset device returns true in case of success */
     @Test
     public void testResetVirtualDevice() throws DeviceNotAvailableException {
-        CommandResult stopCvdRes = new CommandResult(CommandStatus.SUCCESS);
-        doReturn(stopCvdRes).when(mMockRunUtil).runTimedCmd(Mockito.anyLong(), Mockito.any());
+        CommandResult powerwash = new CommandResult(CommandStatus.SUCCESS);
+        doReturn(powerwash).when(mMockRunUtil).runTimedCmd(Mockito.anyLong(), Mockito.any());
         doReturn(mMockIDevice).when(mMockStateMonitor).waitForDeviceAvailable();
 
-        assertTrue(mDevice.resetVirtualDevice(mMockLogger, new BuildInfo(), true));
+        assertTrue(mDevice.resetVirtualDevice());
     }
 }
