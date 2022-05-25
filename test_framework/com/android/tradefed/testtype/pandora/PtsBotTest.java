@@ -172,7 +172,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         adbForwardPort(testDevice, PANDORA_SERVER_PORT);
 
         int hciPort = getHciPort();
-        Integer hciPassthroughPid = null;
+        Thread killHciPassthrough = null;
 
         CLog.i("HCI port: %s", hciPort);
 
@@ -180,7 +180,18 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             boolean isCuttlefish = testDevice.getProductType().equals("cutf");
 
             if (isCuttlefish) {
-                hciPassthroughPid = createHciPassthrough(testDevice, hciPort);
+                int pid = createHciPassthrough(testDevice, hciPort);
+                killHciPassthrough =
+                        new Thread(
+                                () -> {
+                                    try {
+                                        testDevice.executeShellV2Command(
+                                                String.format("kill %s", pid));
+                                    } catch (DeviceNotAvailableException e) {
+                                        CLog.e("Can not kill hci passthrough, device not found");
+                                    }
+                                });
+                Runtime.getRuntime().addShutdownHook(killHciPassthrough);
             }
 
             // Forward Root Canal port.
@@ -193,8 +204,13 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         }
 
         // Kill passthrough
-        if (hciPassthroughPid != null) {
-            testDevice.executeShellV2Command(String.format("kill %s", hciPassthroughPid));
+        if (killHciPassthrough != null) {
+            try {
+                Runtime.getRuntime().removeShutdownHook(killHciPassthrough);
+                killHciPassthrough.run();
+            } catch (IllegalStateException e) {
+                // If we are already in the process of shutting down do nothing
+            }
         }
 
         // Remove forwarded ports.
