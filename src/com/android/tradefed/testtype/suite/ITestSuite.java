@@ -823,12 +823,7 @@ public abstract class ITestSuite
         // TODO: we can probably make it smarter: Did any test ran for example?
         ITestDevice device = context.getDevices().get(0);
         if (mIsolatedModule && (device instanceof NestedRemoteDevice)) {
-            boolean res =
-                    ((NestedRemoteDevice) device)
-                            .resetVirtualDevice(
-                                    logger,
-                                    context.getBuildInfos().get(0),
-                                    /* Do not collect the logs */ false);
+            boolean res = ((NestedRemoteDevice) device).resetVirtualDevice();
             if (!res) {
                 String serial = device.getSerialNumber();
                 throw new DeviceNotAvailableException(
