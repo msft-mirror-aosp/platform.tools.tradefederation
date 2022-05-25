@@ -2391,18 +2391,23 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     protected boolean performDeviceAction(String actionDescription, final DeviceAction action,
             int retryAttempts) throws DeviceNotAvailableException {
+        Exception lastException = null;
         for (int i = 0; i < retryAttempts + 1; i++) {
             boolean shouldRecover = true;
             try {
                 return action.run();
             } catch (TimeoutException e) {
                 logDeviceActionException(actionDescription, e, false);
+                lastException = e;
             } catch (IOException e) {
                 logDeviceActionException(actionDescription, e, true);
+                lastException = e;
             } catch (InstallException e) {
                 logDeviceActionException(actionDescription, e, true);
+                lastException = e;
             } catch (SyncException e) {
                 logDeviceActionException(actionDescription, e, true);
+                lastException = e;
                 // a SyncException is not necessarily a device communication problem
                 // do additional diagnosis
                 if (!e.getErrorCode().equals(SyncError.BUFFER_OVERRUN) &&
@@ -2420,11 +2425,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                                     + " fastboot.");
                     return true;
                 }
+                lastException = e;
                 logDeviceActionException(actionDescription, e, false);
             } catch (ShellCommandUnresponsiveException e) {
                 // ShellCommandUnresponsiveException is thrown when no output occurs within the
                 // timeout. It doesn't necessarily mean the device is offline.
                 shouldRecover = false;
+                lastException = e;
                 CLog.w(
                         "Command: '%s' on '%s' went over its timeout for outputing a response.",
                         actionDescription, getSerialNumber());
@@ -2439,6 +2446,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                             "Attempted %s multiple times "
                                     + "on device %s without communication success. Aborting.",
                             actionDescription, getSerialNumber()),
+                    lastException,
                     getSerialNumber(),
                     DeviceErrorIdentifier.DEVICE_UNRESPONSIVE);
         }
@@ -2515,6 +2523,20 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     // Ignore exception thrown here to rethrow original exception.
                     CLog.e("Exception occurred during recovery adb root:");
                     CLog.e(e);
+                    Throwable cause = e.getCause();
+                    if (cause != null && cause instanceof AdbCommandRejectedException) {
+                        AdbCommandRejectedException adbException =
+                                (AdbCommandRejectedException) cause;
+                        if (adbException.isDeviceOffline()
+                                || adbException.wasErrorDuringDeviceSelection()) {
+                            // Upgrade exception to DNAE to reflect gravity
+                            throw new DeviceNotAvailableException(
+                                    cause.getMessage(),
+                                    adbException,
+                                    getSerialNumber(),
+                                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                        }
+                    }
                 }
                 mRecoveryMode = previousRecoveryMode;
                 throw due;
