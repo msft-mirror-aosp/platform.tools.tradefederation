@@ -621,8 +621,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 Throwable exception = (runException != null) ? runException : preparationException;
                 // Tear down
                 runTearDown(moduleInfo, exception);
-                // Verify device did not crash
-                checkEndModuleDevice(moduleInfo);
+                // If still available, verify that device didn't crash
+                if (runException == null) {
+                    checkEndModuleDevice(moduleInfo);
+                }
             } catch (DeviceNotAvailableException dnae) {
                 CLog.e(
                         "Module %s failed during tearDown with: %s",
