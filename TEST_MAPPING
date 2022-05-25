@@ -17,21 +17,12 @@
       "host": true
     },
     {
-      // Instrumentation Test with FilePusher/ApkInstaller/RumCommandTargetPreparer.
+      // Instrumentation Test with FilePusher/ApkInstaller/RunCommandTargetPreparer.
       "name": "CtsApacheHttpLegacy27ApiSignatureTestCases"
     },
     {
       // Gtest with FilePusher to push the whole testdata(libs/files).
       "name": "ziparchive-tests"
-    },
-    {
-      // Instrumentation Test with Class Filter/ApkInstaller.
-      "name": "CtsDpiTestCases",
-      "options": [
-        {
-          "include-filter": "android.dpi.cts.ConfigurationScreenLayoutTest"
-        }
-      ]
     },
     {
       // Jar Host with ApkInstaller.
