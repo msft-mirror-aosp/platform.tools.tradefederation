@@ -40,6 +40,7 @@ import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.sandbox.SandboxOptions;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
+import com.android.tradefed.targetprep.ILabPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.multi.IMultiTargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
@@ -157,7 +158,7 @@ public class Configuration implements IConfiguration {
             sObjTypeMap.put(BUILD_PROVIDER_TYPE_NAME, new ObjTypeInfo(IBuildProvider.class, false));
             sObjTypeMap.put(TARGET_PREPARER_TYPE_NAME,
                     new ObjTypeInfo(ITargetPreparer.class, true));
-            sObjTypeMap.put(LAB_PREPARER_TYPE_NAME, new ObjTypeInfo(ITargetPreparer.class, true));
+            sObjTypeMap.put(LAB_PREPARER_TYPE_NAME, new ObjTypeInfo(ILabPreparer.class, true));
             sObjTypeMap.put(
                     MULTI_PRE_TARGET_PREPARER_TYPE_NAME,
                     new ObjTypeInfo(IMultiTargetPreparer.class, true));
