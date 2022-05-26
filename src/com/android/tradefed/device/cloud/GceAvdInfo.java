@@ -300,7 +300,7 @@ public class GceAvdInfo {
                     String.format(
                             "OxygenClient - CommandStatus: %s, output: %s",
                             oxygenCliStatus, oxygenRes.getStdout() + " " + oxygenRes.getStderr()),
-                    InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_ERROR);
+                    refineOxygenErrorType(oxygenRes.getStderr()));
         }
     }
 
@@ -355,6 +355,8 @@ public class GceAvdInfo {
             return InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED;
         } else if (errors.contains("502:Bad Gateway")) {
             return InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE;
+        } else if (errors.contains("OxygenClient")) {
+            return InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR;
         }
 
         return InfraErrorIdentifier.ACLOUD_OXYGEN_LEASE_ERROR;
