@@ -38,6 +38,7 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.proto.FileProtoResultReporter;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.service.management.DeviceManagementGrpcServer;
 import com.android.tradefed.service.management.TestInvocationManagementServer;
 import com.android.tradefed.testtype.suite.TestSuiteInfo;
 import com.android.tradefed.util.ArrayUtil;
@@ -1284,12 +1285,15 @@ public class Console extends Thread {
     private static class TerminateGRPCServers extends Thread {
         private final TradefedFeatureServer mFeatureServer;
         private final TestInvocationManagementServer mInvocationServer;
+        private final DeviceManagementGrpcServer mDeviceServer;
 
         public TerminateGRPCServers(
                 TradefedFeatureServer featureServer,
-                TestInvocationManagementServer invocationServer) {
+                TestInvocationManagementServer invocationServer,
+                DeviceManagementGrpcServer deviceServer) {
             mFeatureServer = featureServer;
             mInvocationServer = invocationServer;
+            mDeviceServer = deviceServer;
         }
 
         @Override
@@ -1304,6 +1308,13 @@ public class Console extends Thread {
             if (mInvocationServer != null) {
                 try {
                     mInvocationServer.shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
+            if (mDeviceServer != null) {
+                try {
+                    mDeviceServer.shutdown();
                 } catch (InterruptedException e) {
                     CLog.e(e);
                 }
@@ -1348,6 +1359,7 @@ public class Console extends Thread {
             System.out.println(String.format("Error starting feature server: %s", e));
         }
         TestInvocationManagementServer invocationManagementServer = null;
+        DeviceManagementGrpcServer deviceManagementServer = null;
         try {
             List<String> nonGlobalArgs = GlobalConfiguration.createGlobalConfiguration(args);
             GlobalConfiguration.getInstance().setup();
@@ -1386,9 +1398,23 @@ public class Console extends Thread {
                     System.out.println(String.format("Error starting invocation server: %s", e));
                 }
             }
+            Integer deviceManagementPort = DeviceManagementGrpcServer.getPort();
+            if (deviceManagementPort != null) {
+                try {
+                    deviceManagementServer = new DeviceManagementGrpcServer(deviceManagementPort);
+                    GlobalConfiguration.getInstance()
+                            .setDeviceManagementServer(deviceManagementServer);
+                    deviceManagementServer.start();
+                } catch (RuntimeException e) {
+                    System.out.println(
+                            String.format("Error starting device management server: %s", e));
+                }
+            }
         } finally {
             Runtime.getRuntime()
-                    .addShutdownHook(new TerminateGRPCServers(server, invocationManagementServer));
+                    .addShutdownHook(
+                            new TerminateGRPCServers(
+                                    server, invocationManagementServer, deviceManagementServer));
         }
     }
 }
