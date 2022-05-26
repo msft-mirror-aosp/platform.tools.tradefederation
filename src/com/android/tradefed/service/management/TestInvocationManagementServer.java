@@ -19,11 +19,14 @@ package com.android.tradefed.service.management;
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.command.ICommandScheduler;
 import com.android.tradefed.config.ConfigurationException;
+import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.proto.FileProtoResultReporter;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.StreamUtil;
 
+import com.proto.tradefed.invocation.CommandErrorInfo;
 import com.proto.tradefed.invocation.InvocationDetailRequest;
 import com.proto.tradefed.invocation.InvocationDetailResponse;
 import com.proto.tradefed.invocation.InvocationStatus;
@@ -122,6 +125,13 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
             // TODO: Expand proto to convey those errors
             // return a response without invocation id
             FileUtil.deleteFile(record);
+            CommandErrorInfo.Builder commandError = CommandErrorInfo.newBuilder();
+            commandError.setErrorMessage(StreamUtil.getStackTrace(e));
+            if (e instanceof IHarnessException && ((IHarnessException) e).getErrorId() != null) {
+                commandError.setErrorName(((IHarnessException) e).getErrorId().name());
+                commandError.setErrorCode(((IHarnessException) e).getErrorId().code());
+            }
+            responseBuilder.setCommandErrorInfo(commandError);
         }
         responseObserver.onNext(responseBuilder.build());
         responseObserver.onCompleted();
