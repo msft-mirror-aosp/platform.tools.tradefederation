@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.service.management;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -22,9 +24,9 @@ import static org.mockito.Mockito.verify;
 import com.android.tradefed.command.ICommandScheduler;
 import com.android.tradefed.command.ICommandScheduler.IScheduledInvocationListener;
 import com.android.tradefed.config.ConfigurationException;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
 
-import com.google.common.truth.Truth;
 import com.proto.tradefed.invocation.InvocationDetailRequest;
 import com.proto.tradefed.invocation.InvocationDetailResponse;
 import com.proto.tradefed.invocation.InvocationStatus;
@@ -86,23 +88,26 @@ public class TestInvocationManagementServerTest {
 
         verify(mRequestObserver).onNext(mResponseCaptor.capture());
         NewTestCommandResponse response = mResponseCaptor.getValue();
-        Truth.assertThat(response.getInvocationId()).isNotEmpty();
+        assertThat(response.getInvocationId()).isNotEmpty();
 
         InvocationDetailRequest.Builder detailBuilder =
                 InvocationDetailRequest.newBuilder().setInvocationId(response.getInvocationId());
         mServer.getInvocationDetail(detailBuilder.build(), mDetailObserver);
         verify(mDetailObserver).onNext(mResponseDetailCaptor.capture());
         InvocationDetailResponse responseDetails = mResponseDetailCaptor.getValue();
-        Truth.assertThat(responseDetails.getInvocationStatus().getStatus())
+        assertThat(responseDetails.getInvocationStatus().getStatus())
                 .isEqualTo(InvocationStatus.Status.DONE);
         File record = new File(responseDetails.getTestRecordPath());
-        Truth.assertThat(record.exists()).isTrue();
+        assertThat(record.exists()).isTrue();
         FileUtil.deleteFile(record);
     }
 
     @Test
     public void testSubmitTestCommand_schedulingError() throws Exception {
-        doThrow(new ConfigurationException("failed to schedule"))
+        doThrow(
+                        new ConfigurationException(
+                                "failed to schedule",
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR))
                 .when(mMockScheduler)
                 .execCommand(Mockito.any(), Mockito.any());
 
@@ -112,6 +117,11 @@ public class TestInvocationManagementServerTest {
 
         verify(mRequestObserver).onNext(mResponseCaptor.capture());
         NewTestCommandResponse response = mResponseCaptor.getValue();
-        Truth.assertThat(response.getInvocationId()).isEmpty();
+        assertThat(response.getInvocationId()).isEmpty();
+        assertThat(response.getCommandErrorInfo()).isNotNull();
+        assertThat(response.getCommandErrorInfo().getErrorName())
+                .isEqualTo(InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR.name());
+        assertThat(response.getCommandErrorInfo().getErrorCode())
+                .isEqualTo(InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR.code());
     }
 }
