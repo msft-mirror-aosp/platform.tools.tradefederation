@@ -1080,7 +1080,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         boolean result = performDeviceAction(String.format("run %s instrumentation tests",
                 runner.getPackageName()), runTestsAction, 0);
         if (failureListener.isRunFailure()) {
-            waitForDeviceAvailable(5000);
+            waitForDeviceAvailable();
         }
         return result;
     }
