@@ -431,7 +431,7 @@ public class BaseTestSuite extends ITestSuite {
     }
 
     /** Gets a copy of include-filters for the compatibility test */
-    protected Set<String> getIncludeFilter() {
+    public Set<String> getIncludeFilter() {
         return new HashSet<String>(mIncludeFilters);
     }
 
@@ -441,7 +441,7 @@ public class BaseTestSuite extends ITestSuite {
     }
 
     /** Gets a copy of exclude-filters for the compatibility test */
-    protected Set<String> getExcludeFilter() {
+    public Set<String> getExcludeFilter() {
         return new HashSet<String>(mExcludeFilters);
     }
 
