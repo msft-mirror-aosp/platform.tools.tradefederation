@@ -697,4 +697,10 @@ public class CommandOptions implements ICommandOptions {
     public Integer getMultiDeviceCount() {
         return mMultiDeviceCount;
     }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setMultiDeviceCount(int count) {
+        mMultiDeviceCount = count;
+    }
 }
