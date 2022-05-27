@@ -62,6 +62,7 @@ import com.android.tradefed.retry.RetryStrategy;
 import com.android.tradefed.suite.checker.ISystemStatusCheckerReceiver;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.IHostCleaner;
+import com.android.tradefed.targetprep.ILabPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.targetprep.multi.IMultiTargetPreparer;
@@ -358,6 +359,11 @@ public class InvocationExecution implements IInvocationExecution {
             if (preparer instanceof ITestLoggerReceiver) {
                 ((ITestLoggerReceiver) preparer).setTestLogger(logger);
             }
+
+            if (preparer instanceof ILabPreparer) {
+                CLog.d("%s is configured as a lab preparer.", preparer);
+            }
+
             long startTime = System.currentTimeMillis();
             CLog.d("starting preparer '%s' on device: '%s'", preparer, device.getSerialNumber());
             try {
