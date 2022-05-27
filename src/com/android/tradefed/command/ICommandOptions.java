@@ -253,4 +253,7 @@ public interface ICommandOptions {
 
     /** Return the number of devices for multi-device tests. */
     public Integer getMultiDeviceCount();
+
+    /** Sets the number of expected devices for multi-device tests. */
+    public void setMultiDeviceCount(int count);
 }
