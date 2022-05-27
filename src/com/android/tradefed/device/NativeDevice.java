@@ -131,6 +131,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private static final String BUGREPORTZ_CMD = "bugreportz";
     private static final String BUGREPORTZ_TMP_PATH = "/bugreports/";
 
+    /** On-device path where we expect ANRs to be generated. */
+    private static final String ANRS_PATH = "/data/anrs";
+
     /**
      * Allow up to 2 minutes to receives the full logcat dump.
      */
@@ -245,6 +248,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private final Object mCacheLock = new Object();
 
     private String mFastbootSerialNumber = null;
+    private File mUnpackedFastbootDir = null;
 
     /**
      * Interface for a generic device communication attempt.
@@ -420,7 +424,32 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throwIfNull(options);
         mOptions = options;
         if (mOptions.getFastbootBinary() != null) {
-            setFastbootPath(mOptions.getFastbootBinary().getAbsolutePath());
+            // Setup fastboot- if it's zipped, unzip it
+            // TODO: Dedup the logic with DeviceManager
+            if (".zip".equals(FileUtil.getExtension(mOptions.getFastbootBinary().getName()))) {
+                // Unzip the fastboot files
+                try {
+                    mUnpackedFastbootDir =
+                            ZipUtil2.extractZipToTemp(
+                                    mOptions.getFastbootBinary(), "unpacked-fastboot");
+                    File unpackedFastboot = FileUtil.findFile(mUnpackedFastbootDir, "fastboot");
+                    if (unpackedFastboot == null) {
+                        throw new HarnessRuntimeException(
+                                String.format(
+                                        "device-fastboot-binary was set, but didn't contain a"
+                                                + " fastboot binary."),
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                    }
+                    setFastbootPath(unpackedFastboot.getAbsolutePath());
+                } catch (IOException e) {
+                    CLog.e("Failed to unpacked zipped fastboot.");
+                    CLog.e(e);
+                    FileUtil.recursiveDelete(mUnpackedFastbootDir);
+                    mUnpackedFastbootDir = null;
+                }
+            } else {
+                setFastbootPath(mOptions.getFastbootBinary().getAbsolutePath());
+            }
         }
         mStateMonitor.setDefaultOnlineTimeout(options.getOnlineTimeout());
         mStateMonitor.setDefaultAvailableTimeout(options.getAvailableTimeout());
@@ -1051,7 +1080,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         boolean result = performDeviceAction(String.format("run %s instrumentation tests",
                 runner.getPackageName()), runTestsAction, 0);
         if (failureListener.isRunFailure()) {
-            waitForDeviceAvailable(5000);
+            waitForDeviceAvailable();
         }
         return result;
     }
@@ -1687,7 +1716,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public String getMountPoint(String mountName) {
-        return mStateMonitor.getMountPoint(mountName);
+        try {
+            return mStateMonitor.getMountPoint(mountName);
+        } catch (DeviceNotAvailableException e) {
+            CLog.e(e);
+            return null;
+        }
     }
 
     /**
@@ -2357,18 +2391,23 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     protected boolean performDeviceAction(String actionDescription, final DeviceAction action,
             int retryAttempts) throws DeviceNotAvailableException {
+        Exception lastException = null;
         for (int i = 0; i < retryAttempts + 1; i++) {
             boolean shouldRecover = true;
             try {
                 return action.run();
             } catch (TimeoutException e) {
                 logDeviceActionException(actionDescription, e, false);
+                lastException = e;
             } catch (IOException e) {
                 logDeviceActionException(actionDescription, e, true);
+                lastException = e;
             } catch (InstallException e) {
                 logDeviceActionException(actionDescription, e, true);
+                lastException = e;
             } catch (SyncException e) {
                 logDeviceActionException(actionDescription, e, true);
+                lastException = e;
                 // a SyncException is not necessarily a device communication problem
                 // do additional diagnosis
                 if (!e.getErrorCode().equals(SyncError.BUFFER_OVERRUN) &&
@@ -2386,11 +2425,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                                     + " fastboot.");
                     return true;
                 }
+                lastException = e;
                 logDeviceActionException(actionDescription, e, false);
             } catch (ShellCommandUnresponsiveException e) {
                 // ShellCommandUnresponsiveException is thrown when no output occurs within the
                 // timeout. It doesn't necessarily mean the device is offline.
                 shouldRecover = false;
+                lastException = e;
                 CLog.w(
                         "Command: '%s' on '%s' went over its timeout for outputing a response.",
                         actionDescription, getSerialNumber());
@@ -2405,6 +2446,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                             "Attempted %s multiple times "
                                     + "on device %s without communication success. Aborting.",
                             actionDescription, getSerialNumber()),
+                    lastException,
                     getSerialNumber(),
                     DeviceErrorIdentifier.DEVICE_UNRESPONSIVE);
         }
@@ -2481,6 +2523,20 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     // Ignore exception thrown here to rethrow original exception.
                     CLog.e("Exception occurred during recovery adb root:");
                     CLog.e(e);
+                    Throwable cause = e.getCause();
+                    if (cause != null && cause instanceof AdbCommandRejectedException) {
+                        AdbCommandRejectedException adbException =
+                                (AdbCommandRejectedException) cause;
+                        if (adbException.isDeviceOffline()
+                                || adbException.wasErrorDuringDeviceSelection()) {
+                            // Upgrade exception to DNAE to reflect gravity
+                            throw new DeviceNotAvailableException(
+                                    cause.getMessage(),
+                                    adbException,
+                                    getSerialNumber(),
+                                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                        }
+                    }
                 }
                 mRecoveryMode = previousRecoveryMode;
                 throw due;
@@ -2958,6 +3014,35 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             return null;
         }
         return new ByteArrayInputStreamSource(receiver.getOutput());
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean logAnrs(ITestLogger logger) throws DeviceNotAvailableException {
+        if (!doesFileExist(ANRS_PATH)) {
+            CLog.d("No ANRs at %s", ANRS_PATH);
+            return true;
+        }
+        File localDir = null;
+        try {
+            localDir = FileUtil.createTempDir("pulled-anrs");
+            boolean success = pullDir(ANRS_PATH, localDir);
+            if (!success) {
+                CLog.w("Failed to pull %s", ANRS_PATH);
+                return false;
+            }
+            for (File f : localDir.listFiles()) {
+                try (FileInputStreamSource source = new FileInputStreamSource(f)) {
+                    logger.testLog(f.getName(), LogDataType.ANRS, source);
+                }
+            }
+        } catch (IOException e) {
+            CLog.e(e);
+            return false;
+        } finally {
+            FileUtil.recursiveDelete(localDir);
+        }
+        return true;
     }
 
     /**
@@ -4916,6 +5001,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         mIsEncryptionSupported = null;
         FileUtil.deleteFile(mExecuteShellCommandLogs);
         mExecuteShellCommandLogs = null;
+        FileUtil.recursiveDelete(mUnpackedFastbootDir);
         // Default implementation
         if (getIDevice() instanceof StubDevice) {
             return;

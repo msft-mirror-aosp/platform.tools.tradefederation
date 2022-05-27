@@ -156,7 +156,50 @@ public class OxygenClientTest {
                         })
                 .when(mRunUtil)
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
-        CommandResult res = mOxygenClient.lease(mBuildInfo, mTestDeviceOptions);
+        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions);
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
+        assertEquals(res.getStderr(), EXPECTED_OUTPUT);
+    }
+
+    /** Test leasing multiple devices with Oxygen client binary. */
+    @Test
+    public void testLeaseMultipleDevice() throws Exception {
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                long timeout = mock.getArgument(0);
+                                List<String> cmd = new ArrayList<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    cmd.add(mock.getArgument(i));
+                                }
+                                String cmdString = Joiner.on(" ").join(cmd);
+                                String expectedCmdString =
+                                        mOxygenBinaryFile.getAbsolutePath()
+                                                + " -lease"
+                                                + " -build_target target,target"
+                                                + " -build_branch testBranch,testBranch"
+                                                + " -build_id P1234567,P1234567"
+                                                + " -multidevice_size 2"
+                                                + " -target_region us-east"
+                                                + " -accounting_user random1234@space.com"
+                                                + " -lease_length_secs 3600"
+                                                + " -arg1 value1";
+                                assertEquals(timeout, 900000);
+                                assertEquals(expectedCmdString, cmdString);
+
+                                CommandResult res = new CommandResult();
+                                res.setStatus(CommandStatus.SUCCESS);
+                                res.setStdout("");
+                                res.setStderr(EXPECTED_OUTPUT);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        CommandResult res =
+                mOxygenClient.leaseMultipleDevices(
+                        Arrays.asList(mBuildInfo, mBuildInfo), mTestDeviceOptions);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
@@ -191,6 +234,17 @@ public class OxygenClientTest {
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
         boolean isReleased =
                 mOxygenClient.release(mGceAvdInfo, mTestDeviceOptions.getGceCmdTimeout());
+        assertTrue(isReleased);
+    }
+
+    /** Test releasing an empty GceAvdInfo. */
+    @Test
+    public void testReleaseEmptyGceAvdInfo() throws Exception {
+        // Empty GceAvdInfo happen when the lease was unsuccessful
+        GceAvdInfo emptyGceAvdInfo = new GceAvdInfo(null, null);
+        boolean isReleased =
+                mOxygenClient.release(emptyGceAvdInfo, mTestDeviceOptions.getGceCmdTimeout());
+        // Should return true as there is nothing need to be released
         assertTrue(isReleased);
     }
 }

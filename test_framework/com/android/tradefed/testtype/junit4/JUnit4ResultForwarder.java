@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Result forwarder from JUnit4 Runner.
@@ -49,7 +50,6 @@ public class JUnit4ResultForwarder extends RunListener {
     private List<Throwable> mTestCaseFailures;
     private Description mRunDescription;
     private boolean mBeforeClass = true;
-    private boolean mTestFinished = false;
 
     private LogUploaderThread mLogUploaderThread;
 
@@ -60,7 +60,9 @@ public class JUnit4ResultForwarder extends RunListener {
 
     @Override
     public void testFailure(Failure failure) throws Exception {
-        mTestFinished = true;
+        if (mLogUploaderThread != null) {
+            mLogUploaderThread.cancel();
+        }
 
         Description description = failure.getDescription();
         if (description.getMethodName() == null) {
@@ -129,7 +131,6 @@ public class JUnit4ResultForwarder extends RunListener {
     @Override
     public void testStarted(Description description) throws Exception {
         mBeforeClass = false;
-        mTestFinished = false;
         mTestCaseFailures.clear();
         TestDescription testid =
                 new TestDescription(
@@ -145,7 +146,7 @@ public class JUnit4ResultForwarder extends RunListener {
 
     @Override
     public void testFinished(Description description) throws Exception {
-        mTestFinished = true;
+        mLogUploaderThread.cancel();
 
         TestDescription testid =
                 new TestDescription(
@@ -155,9 +156,7 @@ public class JUnit4ResultForwarder extends RunListener {
         try {
             handleFailures(testid);
         } finally {
-            while (mLogUploaderThread.isAlive()) {
-                // wait for it to finish
-            }
+            mLogUploaderThread.join();
             // run last time to make sure all logs uploaded
             pollLogsAndUpload(description);
 
@@ -218,6 +217,7 @@ public class JUnit4ResultForwarder extends RunListener {
      */
     private class LogUploaderThread extends Thread {
         private Description mDescription;
+        private AtomicBoolean mIsCancelled = new AtomicBoolean(false);
 
         public LogUploaderThread(Description description) {
             mDescription = description;
@@ -225,9 +225,13 @@ public class JUnit4ResultForwarder extends RunListener {
 
         @Override
         public void run() {
-            while (!mTestFinished) {
+            while (!mIsCancelled.get()) {
                 pollLogsAndUpload(mDescription);
             }
+        }
+
+        public void cancel() {
+            mIsCancelled.set(true);
         }
     }
 

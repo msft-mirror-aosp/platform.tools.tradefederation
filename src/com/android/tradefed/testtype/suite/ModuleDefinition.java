@@ -25,6 +25,7 @@ import com.android.tradefed.config.DeviceConfigurationHolder;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.dependencies.ExternalDependency;
 import com.android.tradefed.dependencies.IExternalDependency;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -155,6 +156,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     private List<ModuleListener> mRunListenersResults = new ArrayList<>();
     private int mExpectedTests = 0;
     private boolean mIsFailedModule = false;
+    private boolean mRetriedModulePreparationSuccess = false;
 
     // Tracking of preparers performance
     private long mElapsedPreparation = 0L;
@@ -240,25 +242,21 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         mModuleInvocationContext.addInvocationAttribute(MODULE_ID, mId);
 
         // Add External Dependencies of this module to the module context
-        if (preparersPerDevice != null) {
-            Set<ExternalDependency> externalDependencies = new LinkedHashSet<>();
-            for (String device : preparersPerDevice.keySet()) {
-                for (ITargetPreparer preparer : preparersPerDevice.get(device)) {
-                    if (preparer instanceof IExternalDependency) {
-                        externalDependencies.addAll(
-                                ((IExternalDependency) preparer).getDependencies());
-                    }
+        Set<ExternalDependency> externalDependencies = new LinkedHashSet<>();
+        for (IDeviceConfiguration deviceConfig : moduleConfig.getDeviceConfig()) {
+            for (Object obj : deviceConfig.getAllObjects()) {
+                if (obj instanceof IExternalDependency) {
+                    externalDependencies.addAll(((IExternalDependency) obj).getDependencies());
                 }
             }
-            // Add External Dependencies of this module to the module context
+        }
+        if (!externalDependencies.isEmpty()) {
             final List<String> dependencyClassNames =
                     externalDependencies.stream()
                             .map(dependency -> dependency.getClass().getName())
                             .collect(Collectors.toList());
-            if (!dependencyClassNames.isEmpty()) {
-                mModuleInvocationContext.addInvocationAttribute(
-                        MODULE_EXTERNAL_DEPENDENCIES, String.join(", ", dependencyClassNames));
-            }
+            mModuleInvocationContext.addInvocationAttribute(
+                    MODULE_EXTERNAL_DEPENDENCIES, String.join(", ", dependencyClassNames));
         }
 
         mMultiPreparers.addAll(multiPreparers);
@@ -482,6 +480,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 // This flag is set true for any target preparation error, set it false when the
                 // retrying succeed.
                 mIsFailedModule = false;
+                mRetriedModulePreparationSuccess = true;
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.DEVICE_RESET_MODULES_FOR_TARGET_PREPARER, this.getId());
             }
@@ -622,8 +621,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 Throwable exception = (runException != null) ? runException : preparationException;
                 // Tear down
                 runTearDown(moduleInfo, exception);
-                // Verify device did not crash
-                checkEndModuleDevice(moduleInfo);
+                // If still available, verify that device didn't crash
+                if (runException == null) {
+                    checkEndModuleDevice(moduleInfo);
+                }
             } catch (DeviceNotAvailableException dnae) {
                 CLog.e(
                         "Module %s failed during tearDown with: %s",
@@ -648,6 +649,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                         reportFinalResults(
                                 listener, mExpectedTests, mTestsResults, null, tearDownException);
                     } else {
+                        boolean reported = false;
                         // Push the attempts one by one
                         for (int i = 0; i < maxRunLimit; i++) {
                             // Get all the results for the attempt
@@ -664,7 +666,14 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                                 }
                             }
 
-                            if (!runResultList.isEmpty()) {
+                            if (!runResultList.isEmpty() || (
+                                !reported && mRetriedModulePreparationSuccess)) {
+                                if (runResultList.isEmpty()) {
+                                    reported = true;
+                                    CLog.i("Module preparation retry pass but no test cases were " +
+                                            "executed. Keep reporting the result to notify it " +
+                                            "failed in the 1st run but passed after retrying.");
+                                }
                                 reportFinalResults(
                                         listener,
                                         expectedCount,
