@@ -25,6 +25,11 @@ public class ExistingBuildProvider implements IBuildProvider {
     private final IBuildProvider mParentProvider;
     private boolean mBuildMarkedNotTested = false;
 
+    // TODO: clean up cloning after sharding with filters
+    public ExistingBuildProvider() {
+        this(null, null);
+    }
+
     /**
      * Creates a {@link ExistingBuildProvider}.
      *
