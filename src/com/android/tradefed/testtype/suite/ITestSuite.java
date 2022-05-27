@@ -371,6 +371,12 @@ public abstract class ITestSuite
         mDynamicResolver = resolver;
     }
 
+    @VisibleForTesting
+    public void setDirectModule(ModuleDefinition module) {
+        mDirectModule = module;
+        mIsSharded = true;
+    }
+
     /**
      * Get the current Guice {@link Injector} from the invocation. It should allow us to continue
      * the object injection of modules.
