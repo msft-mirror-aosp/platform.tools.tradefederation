@@ -152,6 +152,7 @@ java_library_host {
     srcs: [
         "src/**/*.java",
         "global_configuration/**/*.java",
+        "test_observatory/**/*.java",
     ],
     static_libs: [
         "tradefed-common-util",
