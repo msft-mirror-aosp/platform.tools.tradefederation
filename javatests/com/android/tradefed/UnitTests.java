@@ -166,6 +166,8 @@ import com.android.tradefed.monitoring.collector.DeviceInternetAccessibilityReso
 import com.android.tradefed.monitoring.collector.DeviceStorageAgeResourceMetricCollectorTest;
 import com.android.tradefed.monitoring.collector.DeviceWifiResourceMetricCollectorTest;
 import com.android.tradefed.monitoring.collector.ResourceMetricUtilTest;
+import com.android.tradefed.observatory.TestDiscoveryExecutorTests;
+import com.android.tradefed.observatory.TestDiscoveryInvokerTests;
 import com.android.tradefed.postprocessor.AggregatePostProcessorTest;
 import com.android.tradefed.postprocessor.AveragePostProcessorTest;
 import com.android.tradefed.postprocessor.BasePostProcessorTest;
@@ -656,6 +658,10 @@ import org.junit.runners.Suite.SuiteClasses;
     LogRegistryTest.class,
     SimpleFileLoggerTest.class,
     TerribleFailureEmailHandlerTest.class,
+
+    // observatory
+    TestDiscoveryExecutorTests.class,
+    TestDiscoveryInvokerTests.class,
 
     // postprocessor
     AggregatePostProcessorTest.class,
