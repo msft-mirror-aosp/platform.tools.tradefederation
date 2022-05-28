@@ -84,59 +84,77 @@ public class MoblyYamlResultParser {
         for (ITestInvocationListener listener : listeners) {
             listener.testRunStarted(mRunName, mTestCount);
         }
-        for (IMoblyYamlResultHandler.ITestResult result : resultCache) {
-            switch (result.getType()) {
-                case RECORD:
-                    MoblyYamlResultRecordHandler.Record record =
-                            (MoblyYamlResultRecordHandler.Record) result;
-                    TestDescription testDescription =
-                            new TestDescription(record.getTestClass(), record.getTestName());
-                    FailureDescription failureDescription =
-                            FailureDescription.create(
-                                    record.getStackTrace(),
-                                    TestRecordProto.FailureStatus.TEST_FAILURE);
-                    mRunStartTime =
-                            mRunStartTime == 0L
-                                    ? record.getBeginTime()
-                                    : Math.min(mRunStartTime, record.getBeginTime());
-                    mRunEndTime = Math.max(mRunEndTime, record.getEndTime());
-                    for (ITestInvocationListener listener : listeners) {
-                        listener.testStarted(testDescription, record.getBeginTime());
-                        if (MoblyYamlResultRecordHandler.RecordResult.SKIP.equals(
+        try {
+            boolean abort = false;
+            for (IMoblyYamlResultHandler.ITestResult result : resultCache) {
+                if (abort) {
+                    break;
+                }
+                switch (result.getType()) {
+                    case RECORD:
+                        MoblyYamlResultRecordHandler.Record record =
+                                (MoblyYamlResultRecordHandler.Record) result;
+                        TestDescription testDescription =
+                                new TestDescription(record.getTestClass(), record.getTestName());
+                        FailureDescription failureDescription =
+                                FailureDescription.create(
+                                        record.getStackTrace(),
+                                        TestRecordProto.FailureStatus.TEST_FAILURE);
+                        if (MoblyYamlResultRecordHandler.RecordResult.ERROR.equals(
                                 record.getResult())) {
-                            listener.testIgnored(testDescription);
-                        } else if (!MoblyYamlResultRecordHandler.RecordResult.PASS.equals(
-                                record.getResult())) {
-                            listener.testFailed(testDescription, failureDescription);
+                            for (ITestInvocationListener listener : listeners) {
+                                listener.testRunFailed(failureDescription);
+                            }
+                            abort = true;
+                            break;
                         }
-                        listener.testEnded(
-                                testDescription,
-                                record.getEndTime(),
-                                new HashMap<String, String>());
-                    }
-                    break;
-                case USER_DATA:
-                    long timestamp =
-                            ((MoblyYamlResultUserDataHandler.UserData) result).getTimeStamp();
-                    mRunStartTime =
-                            mRunStartTime == 0L ? timestamp : Math.min(mRunStartTime, timestamp);
-                    break;
-                case CONTROLLER_INFO:
-                    mRunEndTime =
-                            Math.max(
-                                    mRunEndTime,
-                                    ((MoblyYamlResultControllerInfoHandler.ControllerInfo) result)
-                                            .getTimeStamp());
-                    break;
-                case TEST_NAME_LIST:
-                    // Do nothing
-                    break;
-                default:
-                    // Do nothing
+                        mRunStartTime =
+                                mRunStartTime == 0L
+                                        ? record.getBeginTime()
+                                        : Math.min(mRunStartTime, record.getBeginTime());
+                        mRunEndTime = Math.max(mRunEndTime, record.getEndTime());
+                        for (ITestInvocationListener listener : listeners) {
+                            listener.testStarted(testDescription, record.getBeginTime());
+                            if (MoblyYamlResultRecordHandler.RecordResult.SKIP.equals(
+                                    record.getResult())) {
+                                listener.testIgnored(testDescription);
+                            } else if (!MoblyYamlResultRecordHandler.RecordResult.PASS.equals(
+                                    record.getResult())) {
+                                listener.testFailed(testDescription, failureDescription);
+                            }
+                            listener.testEnded(
+                                    testDescription,
+                                    record.getEndTime(),
+                                    new HashMap<String, String>());
+                        }
+                        break;
+                    case USER_DATA:
+                        long timestamp =
+                                ((MoblyYamlResultUserDataHandler.UserData) result).getTimeStamp();
+                        mRunStartTime =
+                                mRunStartTime == 0L
+                                        ? timestamp
+                                        : Math.min(mRunStartTime, timestamp);
+                        break;
+                    case CONTROLLER_INFO:
+                        mRunEndTime =
+                                Math.max(
+                                        mRunEndTime,
+                                        ((MoblyYamlResultControllerInfoHandler.ControllerInfo)
+                                                        result)
+                                                .getTimeStamp());
+                        break;
+                    case TEST_NAME_LIST:
+                        // Do nothing
+                        break;
+                    default:
+                        // Do nothing
+                }
             }
-        }
-        for (ITestInvocationListener listener : listeners) {
-            listener.testRunEnded(mRunEndTime - mRunStartTime, new HashMap<String, String>());
+        } finally {
+            for (ITestInvocationListener listener : listeners) {
+                listener.testRunEnded(mRunEndTime - mRunStartTime, new HashMap<String, String>());
+            }
         }
     }
 }
