@@ -24,16 +24,19 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto;
-
 import com.android.tradefed.testtype.mobly.MoblyYamlResultControllerInfoHandler.ControllerInfo;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultRecordHandler.Record;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultSummaryHandler.Summary;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultUserDataHandler.UserData;
+import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ResourceUtil;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -42,9 +45,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -58,6 +64,7 @@ public class MoblyYamlResultParserTest {
     private static final String DEFAULT_END_TIME = "1571681520407";
     private static final String DEFAULT_TEST_CLASS = "DefaultTestClass";
     private static final String DEFAULT_TEST_NAME = "default_test_name";
+    private static final String TEST_ERROR_YAML = "/testtype/test_summary_error.yaml";
     private static final String SAMPLE_STACK_TRACE =
             "\"Traceback (most recent call last):\\n"
                 + "  File"
@@ -395,6 +402,26 @@ public class MoblyYamlResultParserTest {
         spyParser.parse(inputStream);
         verify(spyParser, times(6)).parseDocumentMap(any(Map.class));
         verify(spyParser, times(1)).reportToListeners(any(), any());
+    }
+
+    @Test
+    public void testParseError() throws Exception {
+        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
+        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        File testErrorYaml = FileUtil.createTempFile("test_summary", "yaml");
+        ResourceUtil.extractResourceAsFile(TEST_ERROR_YAML, testErrorYaml);
+        try (FileInputStream inputStream = new FileInputStream(testErrorYaml)) {
+            mParser.parse(inputStream);
+        } finally {
+            FileUtil.deleteFile(testErrorYaml);
+        }
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).testRunStarted(mRunName, 1);
+        inOrder.verify(mMockListener).testRunFailed((FailureDescription) any());
+        inOrder.verify(mMockListener).testRunEnded(anyLong(), any(Map.class));
+
+        inOrder.verifyNoMoreInteractions();
+        verifyNoMoreInteractions(mMockListener);
     }
 
     private ImmutableMap<String, Object> buildTestRecordDocMap(Map<String, Object> propertyMap) {
