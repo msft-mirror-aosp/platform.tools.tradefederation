@@ -181,6 +181,13 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     // TODO(b/226453043): Eventually we need to remove this.
     private int mTargetPreparerRetryCount = 0;
 
+    @VisibleForTesting
+    public ModuleDefinition() {
+        mModuleInvocationContext = null;
+        mModuleConfiguration = null;
+        mId = "";
+    }
+
     /**
      * Constructor
      *
@@ -270,6 +277,11 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 mRequiredTokens.add(TokenProperty.valueOf(token.toUpperCase()));
             }
         }
+    }
+
+    /** Returns the number of devices expected to run this test. */
+    public int neededDevices() {
+        return mModuleConfiguration.getDeviceConfig().size();
     }
 
     /**
