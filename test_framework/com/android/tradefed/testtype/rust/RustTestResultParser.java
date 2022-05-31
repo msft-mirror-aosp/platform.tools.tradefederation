@@ -89,7 +89,7 @@ public class RustTestResultParser extends MultiLineReceiver {
 
     static final Pattern RUST_ONE_LINE_RESULT =
             Pattern.compile(
-                    "test (\\S*) (?:- should panic )?\\.\\.\\. (\\S*)(?: <(\\d+\\.\\d+)s>)?");
+                    "test (\\S*) (?:- should panic )?\\.\\.\\. ([\\w]*)(?: <(\\d+\\.\\d+)s>)?");
 
     static final Pattern RUNNING_PATTERN = Pattern.compile("running (.*) test[s]?");
 
@@ -246,7 +246,7 @@ public class RustTestResultParser extends MultiLineReceiver {
         String status;
         if (mCurrentTestStatus.equals("ok")) {
             status = null;
-        } else if (mCurrentTestStatus.equals("ignored")) {
+        } else if (mCurrentTestStatus.startsWith("ignored")) {
             status = SKIPPED_ENTRY;
         } else if (mCurrentTestStatus.equals("FAILED")) {
             // Rust tests report "FAILED" without stack trace.
