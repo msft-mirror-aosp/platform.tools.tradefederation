@@ -1401,7 +1401,10 @@ public class Console extends Thread {
             Integer deviceManagementPort = DeviceManagementGrpcServer.getPort();
             if (deviceManagementPort != null) {
                 try {
-                    deviceManagementServer = new DeviceManagementGrpcServer(deviceManagementPort);
+                    deviceManagementServer =
+                            new DeviceManagementGrpcServer(
+                                    deviceManagementPort,
+                                    GlobalConfiguration.getDeviceManagerInstance());
                     GlobalConfiguration.getInstance()
                             .setDeviceManagementServer(deviceManagementServer);
                     deviceManagementServer.start();
