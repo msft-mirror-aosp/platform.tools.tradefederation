@@ -26,6 +26,8 @@ import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
 
+import com.google.common.collect.ImmutableSet;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -61,6 +63,9 @@ import java.util.zip.ZipFile;
  * A helper class for file related operations
  */
 public class FileUtil {
+
+    private static final ImmutableSet<String> DISK_SPACE_ERRORS =
+            ImmutableSet.of("No space left on device");
 
     /**
      * The minimum allowed disk space in megabytes. File creation methods will throw
@@ -1376,5 +1381,18 @@ public class FileUtil {
             CLog.e(e);
         }
         return null;
+    }
+
+    /** Returns true if the message is an disk space error. */
+    public static boolean isDiskSpaceError(String message) {
+        return DISK_SPACE_ERRORS.contains(message);
+    }
+
+    /** Wraps error into a disk space error if needed. */
+    public static IOException convertToDiskSpaceIfNeeded(IOException e) {
+        if (isDiskSpaceError(e.getMessage())) {
+            return new HarnessIOException(e, InfraErrorIdentifier.NO_DISK_SPACE);
+        }
+        return e;
     }
 }
