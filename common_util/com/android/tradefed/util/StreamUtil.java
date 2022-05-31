@@ -220,15 +220,19 @@ public class StreamUtil {
         byte[] buf = new byte[BUF_SIZE];
         long totalRetrievedSize = 0;
         int retrievedSize = -1;
-        while ((retrievedSize = inStream.read(buf)) != -1) {
-            if (size > 0 && size < totalRetrievedSize + retrievedSize) {
-                retrievedSize = (int) (size - totalRetrievedSize);
+        try {
+            while ((retrievedSize = inStream.read(buf)) != -1) {
+                if (size > 0 && size < totalRetrievedSize + retrievedSize) {
+                    retrievedSize = (int) (size - totalRetrievedSize);
+                }
+                outStream.write(buf, 0, retrievedSize);
+                totalRetrievedSize += retrievedSize;
+                if (size == totalRetrievedSize) {
+                    break;
+                }
             }
-            outStream.write(buf, 0, retrievedSize);
-            totalRetrievedSize += retrievedSize;
-            if (size == totalRetrievedSize) {
-                break;
-            }
+        } catch (IOException e) {
+            throw FileUtil.convertToDiskSpaceIfNeeded(e);
         }
         if (size > 0 && size > totalRetrievedSize) {
             throw new IOException(
