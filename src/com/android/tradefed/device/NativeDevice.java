@@ -3024,12 +3024,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             return true;
         }
         File localDir = null;
+        long startTime = System.currentTimeMillis();
         try {
             localDir = FileUtil.createTempDir("pulled-anrs");
             boolean success = pullDir(ANRS_PATH, localDir);
             if (!success) {
                 CLog.w("Failed to pull %s", ANRS_PATH);
                 return false;
+            }
+            if (localDir.listFiles().length == 0) {
+                return true;
             }
             for (File f : localDir.listFiles()) {
                 try (FileInputStreamSource source = new FileInputStreamSource(f)) {
@@ -3042,6 +3046,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         } finally {
             FileUtil.recursiveDelete(localDir);
         }
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.ANR_TIME, System.currentTimeMillis() - startTime);
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.ANR_COUNT, 1);
         return true;
     }
 
