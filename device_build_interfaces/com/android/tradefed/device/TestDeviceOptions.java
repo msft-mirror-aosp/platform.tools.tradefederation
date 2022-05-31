@@ -86,6 +86,10 @@ public class TestDeviceOptions {
             "time in ms to wait for a device to boot into fastboot.")
     private int mFastbootTimeout = 1 * 60 * 1000;
 
+    @Option(name = "adb-command-timeout", description =
+            "time to wait for an adb command.", isTimeVal = true)
+    private long mAdbCommandTimeout = 2 * 60 * 1000;
+
     @Option(name = "adb-recovery-timeout", description =
             "time in ms to wait for a device to boot into recovery.")
     private int mAdbRecoveryTimeout = 1 * 60 * 1000;
@@ -394,6 +398,20 @@ public class TestDeviceOptions {
      */
     public void setMaxLogcatDataSize(long maxLogcatDataSize) {
         mMaxLogcatDataSize = maxLogcatDataSize;
+    }
+
+    /**
+     * @return the timeout to send a command in msecs.
+     */
+    public long getAdbCommandTimeout() {
+        return mAdbCommandTimeout;
+    }
+
+    /**
+     * @return the timeout to send a command in msecs.
+     */
+    public void setAdbCommandTimeout(long adbCommandTimeout) {
+        mAdbCommandTimeout = adbCommandTimeout;
     }
 
     /**
