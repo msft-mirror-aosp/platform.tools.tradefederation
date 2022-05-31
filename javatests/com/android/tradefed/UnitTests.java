@@ -216,6 +216,7 @@ import com.android.tradefed.sandbox.SandboxConfigDumpTest;
 import com.android.tradefed.sandbox.SandboxConfigUtilTest;
 import com.android.tradefed.sandbox.SandboxInvocationRunnerTest;
 import com.android.tradefed.sandbox.TradefedSandboxTest;
+import com.android.tradefed.service.management.DeviceManagementGrpcServerTest;
 import com.android.tradefed.service.management.TestInvocationManagementServerTest;
 import com.android.tradefed.suite.checker.ActivityStatusCheckerTest;
 import com.android.tradefed.suite.checker.DeviceBaselineCheckerTest;
@@ -788,6 +789,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TradefedSandboxTest.class,
 
     // service.management
+    DeviceManagementGrpcServerTest.class,
     TestInvocationManagementServerTest.class,
 
     // suite/checker
