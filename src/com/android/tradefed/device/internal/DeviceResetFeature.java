@@ -83,6 +83,11 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
             }
             index++;
         }
+        String response =
+                String.format(
+                        "Attempting device reset on %s (%s).",
+                        mTestInformation.getDevice().getSerialNumber(),
+                        mTestInformation.getDevice().getClass().getSimpleName());
         try {
             mTestInformation.setActiveDeviceIndex(index);
             if (mTestInformation.getDevice() instanceof RemoteAndroidVirtualDevice) {
@@ -96,7 +101,7 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
                             DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
                 }
             } else if (mTestInformation.getDevice() instanceof RemoteAndroidDevice) {
-                responseBuilder.setResponse("RemoteAndroidDevice has no powerwash support.");
+                response += " RemoteAndroidDevice has no powerwash support.";
             } else if (mTestInformation.getDevice() instanceof NestedRemoteDevice) {
                 boolean res =
                         ((NestedRemoteDevice) mTestInformation.getDevice()).resetVirtualDevice();
@@ -132,6 +137,7 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
         } finally {
             mTestInformation.setActiveDeviceIndex(0);
         }
+        responseBuilder.setResponse(response);
         return responseBuilder.build();
     }
 
