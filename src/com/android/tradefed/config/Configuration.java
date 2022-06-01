@@ -53,6 +53,7 @@ import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableSet;
 
 import org.kxml2.io.KXmlSerializer;
 
@@ -105,8 +106,14 @@ public class Configuration implements IConfiguration {
     public static final String GLOBAL_FILTERS_TYPE_NAME = "global_filters";
 
     private static Map<String, ObjTypeInfo> sObjTypeMap = null;
-    private static Set<String> sMultiDeviceSupportedTag = null;
-
+    private static Set<String> sMultiDeviceSupportedTag =
+            ImmutableSet.of(
+                    BUILD_PROVIDER_TYPE_NAME,
+                    TARGET_PREPARER_TYPE_NAME,
+                    LAB_PREPARER_TYPE_NAME,
+                    DEVICE_RECOVERY_TYPE_NAME,
+                    DEVICE_REQUIREMENTS_TYPE_NAME,
+                    DEVICE_OPTIONS_TYPE_NAME);
     // regexp pattern used to parse map option values
     private static final Pattern OPTION_KEY_VALUE_PATTERN = Pattern.compile("(?<!\\\\)=");
 
@@ -216,16 +223,7 @@ public class Configuration implements IConfiguration {
      * Return the {@link Set} of tags that are supported in a device tag for multi device
      * configuration.
      */
-    private static synchronized Set<String> getMultiDeviceSupportedTag() {
-        if (sMultiDeviceSupportedTag == null) {
-            sMultiDeviceSupportedTag = new HashSet<String>();
-            sMultiDeviceSupportedTag.add(BUILD_PROVIDER_TYPE_NAME);
-            sMultiDeviceSupportedTag.add(TARGET_PREPARER_TYPE_NAME);
-            sMultiDeviceSupportedTag.add(LAB_PREPARER_TYPE_NAME);
-            sMultiDeviceSupportedTag.add(DEVICE_RECOVERY_TYPE_NAME);
-            sMultiDeviceSupportedTag.add(DEVICE_REQUIREMENTS_TYPE_NAME);
-            sMultiDeviceSupportedTag.add(DEVICE_OPTIONS_TYPE_NAME);
-        }
+    public static synchronized Set<String> getMultiDeviceSupportedTag() {
         return sMultiDeviceSupportedTag;
     }
 
