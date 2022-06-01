@@ -748,7 +748,8 @@ public class TestInvocation implements ITestInvocation {
             IConfiguration config,
             IRescheduler rescheduler,
             ITestInvocationListener listener,
-            IInvocationExecution invocationPath) {
+            IInvocationExecution invocationPath)
+            throws Exception {
         CurrentInvocation.setActionInProgress(ActionInProgress.FETCHING_ARTIFACTS);
         Exception buildException = null;
         boolean res = false;
@@ -786,7 +787,9 @@ public class TestInvocation implements ITestInvocation {
         }
         reportHostLog(listener, config);
         reportInvocationEnded(config, testInfo.getContext(), listener, 0L);
-        return false;
+        // We rethrow so it's caught in CommandScheduler and properly release
+        // the device
+        throw buildException;
     }
 
     /**
@@ -805,7 +808,8 @@ public class TestInvocation implements ITestInvocation {
             IConfiguration config,
             ITestInvocationListener listener,
             IInvocationExecution invocationPath,
-            RunMode mode) {
+            RunMode mode)
+            throws BuildRetrievalError, ConfigurationException {
         try {
             // Don't resolve for remote invocation, wait until we are inside the remote.
             if (RunMode.REMOTE_INVOCATION.equals(mode)) {
@@ -836,7 +840,9 @@ public class TestInvocation implements ITestInvocation {
             }
             reportHostLog(listener, config);
             reportInvocationEnded(config, context, listener, 0L);
-            return false;
+            // We rethrow so it's caught in CommandScheduler and properly release
+            // the device
+            throw e;
         }
     }
 
@@ -1006,12 +1012,16 @@ public class TestInvocation implements ITestInvocation {
             getLogRegistry().registerLogger(leveledLogOutput);
             mStatus = "resolving dynamic options";
             long startDynamic = System.currentTimeMillis();
-            boolean resolverSuccess =
-                    invokeRemoteDynamic(context, config, listener, invocationPath, mode);
-            InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
-                    startDynamic,
-                    System.currentTimeMillis());
+            boolean resolverSuccess = false;
+            try {
+                resolverSuccess =
+                        invokeRemoteDynamic(context, config, listener, invocationPath, mode);
+            } finally {
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
+                        startDynamic,
+                        System.currentTimeMillis());
+            }
             if (!resolverSuccess) {
                 return;
             }
@@ -1025,16 +1035,21 @@ public class TestInvocation implements ITestInvocation {
             long start = System.currentTimeMillis();
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.FETCH_BUILD_START, start);
-            boolean providerSuccess =
-                    invokeFetchBuild(info, config, rescheduler, listener, invocationPath);
-            long end = System.currentTimeMillis();
-            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.FETCH_BUILD_END, end);
-            InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.FETCH_BUILD_PAIR, start, end);
-            long fetchBuildDuration = end - start;
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.FETCH_BUILD, fetchBuildDuration);
-            CLog.d("Fetch build duration: %s", TimeUtil.formatElapsedTime(fetchBuildDuration));
+            boolean providerSuccess = false;
+            try {
+                providerSuccess =
+                        invokeFetchBuild(info, config, rescheduler, listener, invocationPath);
+            } finally {
+                long end = System.currentTimeMillis();
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FETCH_BUILD_END, end);
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.FETCH_BUILD_PAIR, start, end);
+                long fetchBuildDuration = end - start;
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FETCH_BUILD, fetchBuildDuration);
+                CLog.d("Fetch build duration: %s", TimeUtil.formatElapsedTime(fetchBuildDuration));
+            }
             if (!providerSuccess) {
                 return;
             }
