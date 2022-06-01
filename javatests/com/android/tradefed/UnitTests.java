@@ -166,6 +166,8 @@ import com.android.tradefed.monitoring.collector.DeviceInternetAccessibilityReso
 import com.android.tradefed.monitoring.collector.DeviceStorageAgeResourceMetricCollectorTest;
 import com.android.tradefed.monitoring.collector.DeviceWifiResourceMetricCollectorTest;
 import com.android.tradefed.monitoring.collector.ResourceMetricUtilTest;
+import com.android.tradefed.observatory.TestDiscoveryExecutorTests;
+import com.android.tradefed.observatory.TestDiscoveryInvokerTests;
 import com.android.tradefed.postprocessor.AggregatePostProcessorTest;
 import com.android.tradefed.postprocessor.AveragePostProcessorTest;
 import com.android.tradefed.postprocessor.BasePostProcessorTest;
@@ -214,6 +216,7 @@ import com.android.tradefed.sandbox.SandboxConfigDumpTest;
 import com.android.tradefed.sandbox.SandboxConfigUtilTest;
 import com.android.tradefed.sandbox.SandboxInvocationRunnerTest;
 import com.android.tradefed.sandbox.TradefedSandboxTest;
+import com.android.tradefed.service.management.DeviceManagementGrpcServerTest;
 import com.android.tradefed.service.management.TestInvocationManagementServerTest;
 import com.android.tradefed.suite.checker.ActivityStatusCheckerTest;
 import com.android.tradefed.suite.checker.DeviceBaselineCheckerTest;
@@ -657,6 +660,10 @@ import org.junit.runners.Suite.SuiteClasses;
     SimpleFileLoggerTest.class,
     TerribleFailureEmailHandlerTest.class,
 
+    // observatory
+    TestDiscoveryExecutorTests.class,
+    TestDiscoveryInvokerTests.class,
+
     // postprocessor
     AggregatePostProcessorTest.class,
     AveragePostProcessorTest.class,
@@ -782,6 +789,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TradefedSandboxTest.class,
 
     // service.management
+    DeviceManagementGrpcServerTest.class,
     TestInvocationManagementServerTest.class,
 
     // suite/checker

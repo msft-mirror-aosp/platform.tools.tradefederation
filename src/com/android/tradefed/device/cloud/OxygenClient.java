@@ -240,7 +240,8 @@ public class OxygenClient {
     public boolean release(GceAvdInfo gceAvdInfo, long timeout) {
         // If gceAvdInfo is missing info, then it means the device wasn't get leased successfully.
         // In such case, there is no need to release the device.
-        if (gceAvdInfo.instanceName() == null
+        if (gceAvdInfo == null
+                || gceAvdInfo.instanceName() == null
                 || gceAvdInfo.hostAndPort() == null
                 || gceAvdInfo.hostAndPort().getHost() == null) {
             return true;

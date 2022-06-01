@@ -197,8 +197,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** Path of the device containing the tombstones */
     private static final String TOMBSTONE_PATH = "/data/tombstones/";
 
-    /** The time in ms to wait for a command to complete. */
-    private long mCmdTimeout = 2 * 60 * 1000L;
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
@@ -833,7 +831,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             public boolean run() throws TimeoutException, IOException,
                     AdbCommandRejectedException, ShellCommandUnresponsiveException {
                 getIDevice().executeShellCommand(command, receiver,
-                        mCmdTimeout, TimeUnit.MILLISECONDS);
+                        getCommandTimeout(), TimeUnit.MILLISECONDS);
                 return true;
             }
         };
@@ -2212,6 +2210,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public CommandResult executeFastbootCommand(String... cmdArgs)
             throws DeviceNotAvailableException, UnsupportedOperationException {
+        // TODO: fix mixed use of fastboot timeout and command timeout
         return doFastbootCommand(getCommandTimeout(), cmdArgs);
     }
 
@@ -2230,6 +2229,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public CommandResult executeLongFastbootCommand(String... cmdArgs)
             throws DeviceNotAvailableException, UnsupportedOperationException {
+        // TODO: fix mixed use of fastboot timeout and command timeout
         return doFastbootCommand(getLongCommandTimeout(), cmdArgs);
     }
 
@@ -2317,7 +2317,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** Get the max time allowed in ms for commands. */
     long getCommandTimeout() {
-        return mCmdTimeout;
+        return mOptions.getAdbCommandTimeout();
     }
 
     /**
@@ -2336,7 +2336,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** Set the max time allowed in ms for commands. */
     void setCommandTimeout(long timeout) {
-        mCmdTimeout = timeout;
+        mOptions.setAdbCommandTimeout(timeout);
     }
 
     /**
@@ -3024,12 +3024,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             return true;
         }
         File localDir = null;
+        long startTime = System.currentTimeMillis();
         try {
             localDir = FileUtil.createTempDir("pulled-anrs");
             boolean success = pullDir(ANRS_PATH, localDir);
             if (!success) {
                 CLog.w("Failed to pull %s", ANRS_PATH);
                 return false;
+            }
+            if (localDir.listFiles().length == 0) {
+                return true;
             }
             for (File f : localDir.listFiles()) {
                 try (FileInputStreamSource source = new FileInputStreamSource(f)) {
@@ -3042,6 +3046,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         } finally {
             FileUtil.recursiveDelete(localDir);
         }
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.ANR_TIME, System.currentTimeMillis() - startTime);
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.ANR_COUNT, 1);
         return true;
     }
 
