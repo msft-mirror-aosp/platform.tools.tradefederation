@@ -1148,7 +1148,7 @@ public class CommandSchedulerTest {
             IConfiguration configReplicat = new Configuration("test", "test");
             configReplicat.setDeviceConfig(new DeviceConfigurationHolder("serial"));
             when(mMockConfiguration.partialDeepClone(
-                            Arrays.asList(Configuration.DEVICE_NAME), mMockKeyStoreClient))
+                            Mockito.any(), Mockito.eq(mMockKeyStoreClient)))
                     .thenReturn(configReplicat);
         }
         mMockConfiguration.setDeviceConfigList(any());
