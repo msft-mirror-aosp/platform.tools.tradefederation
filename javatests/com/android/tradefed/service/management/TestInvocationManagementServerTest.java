@@ -49,14 +49,12 @@ import java.io.File;
 
 import io.grpc.Server;
 import io.grpc.stub.StreamObserver;
-import io.grpc.testing.GrpcCleanupRule;
 
 /** Unit tests for {@link TestInvocationManagementServer}. */
 @RunWith(JUnit4.class)
 public class TestInvocationManagementServerTest {
 
     @Rule public final MockitoRule mockito = MockitoJUnit.rule();
-    @Rule public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
 
     private TestInvocationManagementServer mServer;
     @Mock private ICommandScheduler mMockScheduler;
