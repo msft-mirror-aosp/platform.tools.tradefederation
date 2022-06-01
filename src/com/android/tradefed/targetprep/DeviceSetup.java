@@ -1011,7 +1011,9 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             return;
         }
 
-        mWifiSsidToPsk.put(mWifiSsid, mWifiPsk);
+        if (mWifiSsid != null) {
+            mWifiSsidToPsk.put(mWifiSsid, mWifiPsk);
+        }
         if (device.connectToWifiNetwork(mWifiSsidToPsk)) {
             return;
         }
