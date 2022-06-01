@@ -287,6 +287,6 @@ public class DeviceBatteryLevelCheckerTest {
             mBatteryLevel = null;
             return;
         }
-        mBatteryLevel = new AtomicInteger(level);
+        mBatteryLevel.set(level);
     }
 }
