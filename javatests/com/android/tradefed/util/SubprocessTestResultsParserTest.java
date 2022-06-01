@@ -573,7 +573,7 @@ public class SubprocessTestResultsParserTest {
             verify(mockRunListener)
                     .testLog(
                             Mockito.eq("subprocess-dataname"),
-                            Mockito.eq(LogDataType.TEXT),
+                            Mockito.eq(LogDataType.ZIP),
                             Mockito.any());
         } finally {
             StreamUtil.close(resultParser);
