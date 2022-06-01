@@ -493,7 +493,12 @@ public class MoblyBinaryHostTest
                     continue;
                 }
                 try (InputStreamSource dataStream = new FileInputStreamSource(subFile, true)) {
-                    listener.testLog(subFile.getName(), LogDataType.TEXT, dataStream);
+                    String cleanName = subFile.getName().replace(",", "_");
+                    LogDataType type = LogDataType.TEXT;
+                    if (cleanName.contains("logcat")) {
+                        type = LogDataType.LOGCAT;
+                    }
+                    listener.testLog(cleanName, type, dataStream);
                 }
             }
         }
