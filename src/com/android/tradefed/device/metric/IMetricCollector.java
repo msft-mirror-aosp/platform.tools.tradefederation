@@ -16,6 +16,7 @@
 package com.android.tradefed.device.metric;
 
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -69,7 +70,7 @@ public interface IMetricCollector extends ILogSaverListener, IDisableable {
      *
      * @param runData the {@link DeviceMetricData} holding the data for the run.
      */
-    public void onTestRunStart(DeviceMetricData runData);
+    public void onTestRunStart(DeviceMetricData runData) throws DeviceNotAvailableException;
 
     /**
      * Callback when a test run is ended. This should be the time for clean up.
@@ -79,14 +80,15 @@ public interface IMetricCollector extends ILogSaverListener, IDisableable {
      * @param currentRunMetrics the current map of metrics passed to {@link #testRunEnded(long,
      *     Map)}.
      */
-    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> currentRunMetrics);
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> currentRunMetrics)
+            throws DeviceNotAvailableException;
 
     /**
      * Callback when a test case is started.
      *
      * @param testData the {@link DeviceMetricData} holding the data for the test case.
      */
-    public void onTestStart(DeviceMetricData testData);
+    public void onTestStart(DeviceMetricData testData) throws DeviceNotAvailableException;
 
     /**
      * Callback when a test case fails.
@@ -94,7 +96,8 @@ public interface IMetricCollector extends ILogSaverListener, IDisableable {
      * @param testData the {@link DeviceMetricData} holding the data for the test case.
      * @param test the {@link TestDescription} of the test case in progress.
      */
-    public void onTestFail(DeviceMetricData testData, TestDescription test);
+    public void onTestFail(DeviceMetricData testData, TestDescription test)
+            throws DeviceNotAvailableException;
 
     /**
      * Callback when a test case fails with assumption failure.
@@ -102,7 +105,8 @@ public interface IMetricCollector extends ILogSaverListener, IDisableable {
      * @param testData the {@link DeviceMetricData} holding the data for the test case.
      * @param test the {@link TestDescription} of the test case in progress.
      */
-    public void onTestAssumptionFailure(DeviceMetricData testData, TestDescription test);
+    public void onTestAssumptionFailure(DeviceMetricData testData, TestDescription test)
+            throws DeviceNotAvailableException;
 
     /**
      * Callback when a test case is ended. This should be the time for clean up.
@@ -113,7 +117,8 @@ public interface IMetricCollector extends ILogSaverListener, IDisableable {
      *     #testEnded(TestDescription, Map)}.
      */
     public void onTestEnd(
-            DeviceMetricData testData, final Map<String, Metric> currentTestCaseMetrics);
+            DeviceMetricData testData, final Map<String, Metric> currentTestCaseMetrics)
+            throws DeviceNotAvailableException;
 
     /**
      * Callback when a test case is ended. This should be the time for clean up.
@@ -127,5 +132,6 @@ public interface IMetricCollector extends ILogSaverListener, IDisableable {
     public void onTestEnd(
             DeviceMetricData testData,
             final Map<String, Metric> currentTestCaseMetrics,
-            TestDescription test);
+            TestDescription test)
+            throws DeviceNotAvailableException;
 }
