@@ -20,6 +20,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -191,7 +192,8 @@ public class BundletoolUtil {
                     String.format(
                             "Failed to install split apk. Cmd: %s. Error: %s.",
                             installApksCmd.toString(), res.getStderr()),
-                    device.getDeviceDescriptor());
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
         }
         CLog.i("%s is installed successfully", apks.getName());
         return;
