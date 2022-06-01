@@ -475,6 +475,10 @@ public class AndroidJUnitTest extends InstrumentationTest
             if (!filterDirExists) {
                 device.executeShellCommand(
                         String.format("chown -R shell:shell %s", mTestFilterDir));
+                boolean filterExists = device.doesFileExist(destination);
+                if (!filterExists) {
+                    CLog.e("Filter '%s' wasn't found on device after pushing.", destination);
+                }
             }
         } catch (DeviceNotAvailableException e) {
             reportEarlyFailure(listener, e.getMessage());
