@@ -17,16 +17,24 @@ package com.android.tradefed.service.management;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.DeviceAllocationState;
+import com.android.tradefed.device.FreeDeviceState;
 import com.android.tradefed.device.IDeviceManager;
+import com.android.tradefed.device.ITestDevice;
 
 import com.proto.tradefed.device.DeviceStatus.ReservationStatus;
 import com.proto.tradefed.device.GetDevicesStatusRequest;
 import com.proto.tradefed.device.GetDevicesStatusResponse;
+import com.proto.tradefed.device.ReleaseReservationRequest;
+import com.proto.tradefed.device.ReleaseReservationResponse;
+import com.proto.tradefed.device.ReserveDeviceRequest;
+import com.proto.tradefed.device.ReserveDeviceResponse;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -36,6 +44,7 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
@@ -54,7 +63,11 @@ public class DeviceManagementGrpcServerTest {
     private DeviceManagementGrpcServer mServer;
     @Mock private IDeviceManager mMockDeviceManager;
     @Mock private StreamObserver<GetDevicesStatusResponse> mGetDevicesStatusObserver;
+    @Mock private StreamObserver<ReserveDeviceResponse> mReserveDeviceResponseObserver;
+    @Mock private StreamObserver<ReleaseReservationResponse> mReleaseReservationResponseObserver;
     @Captor ArgumentCaptor<GetDevicesStatusResponse> mGetDevicesStatusCaptor;
+    @Captor ArgumentCaptor<ReserveDeviceResponse> mReserveDeviceResponseCaptor;
+    @Captor ArgumentCaptor<ReleaseReservationResponse> mReleaseReservationResponseCaptor;
 
     @Before
     public void setUp() {
@@ -109,6 +122,75 @@ public class DeviceManagementGrpcServerTest {
         assertThat(response.getDeviceStatusList().get(0).getDeviceId()).isEqualTo("serial2");
         assertThat(response.getDeviceStatusList().get(0).getReservationStatus())
                 .isEqualTo(ReservationStatus.ALLOCATED);
+    }
+
+    @Test
+    public void testReserveAndRelease() {
+        when(mMockDeviceManager.getDeviceDescriptor("serial1"))
+                .thenReturn(createDescriptor("serial1", DeviceAllocationState.Available));
+        ITestDevice mockedDevice = Mockito.mock(ITestDevice.class);
+        when(mMockDeviceManager.allocateDevice(Mockito.any())).thenReturn(mockedDevice);
+        // Allocate a device
+        mServer.reserveDevice(
+                ReserveDeviceRequest.newBuilder().setDeviceId("serial1").build(),
+                mReserveDeviceResponseObserver);
+        verify(mReserveDeviceResponseObserver).onNext(mReserveDeviceResponseCaptor.capture());
+        ReserveDeviceResponse reservation = mReserveDeviceResponseCaptor.getValue();
+        assertThat(reservation.getResult()).isEqualTo(ReserveDeviceResponse.Result.SUCCEED);
+        String reservationId = reservation.getReservationId();
+        assertThat(reservationId).isNotEmpty();
+        // Release the device
+        mServer.releaseReservation(
+                ReleaseReservationRequest.newBuilder().setReservationId(reservationId).build(),
+                mReleaseReservationResponseObserver);
+        // Releasing again should fail since device is untracked
+        mServer.releaseReservation(
+                ReleaseReservationRequest.newBuilder().setReservationId(reservationId).build(),
+                mReleaseReservationResponseObserver);
+
+        verify(mReleaseReservationResponseObserver, times(2))
+                .onNext(mReleaseReservationResponseCaptor.capture());
+        List<ReleaseReservationResponse> releases =
+                mReleaseReservationResponseCaptor.getAllValues();
+        ReleaseReservationResponse release = releases.get(0);
+        assertThat(release.getResult()).isEqualTo(ReleaseReservationResponse.Result.SUCCEED);
+        verify(mMockDeviceManager).freeDevice(mockedDevice, FreeDeviceState.AVAILABLE);
+
+        ReleaseReservationResponse untracked = releases.get(1);
+        assertThat(untracked.getResult()).isEqualTo(ReleaseReservationResponse.Result.FAIL);
+    }
+
+    @Test
+    public void testReserve_allocated() {
+        when(mMockDeviceManager.getDeviceDescriptor("serial1"))
+                .thenReturn(createDescriptor("serial1", DeviceAllocationState.Allocated));
+
+        mServer.reserveDevice(
+                ReserveDeviceRequest.newBuilder().setDeviceId("serial1").build(),
+                mReserveDeviceResponseObserver);
+        verify(mReserveDeviceResponseObserver).onNext(mReserveDeviceResponseCaptor.capture());
+        ReserveDeviceResponse reservation = mReserveDeviceResponseCaptor.getValue();
+        assertThat(reservation.getResult())
+                .isEqualTo(ReserveDeviceResponse.Result.ALREADY_ALLOCATED);
+        String reservationId = reservation.getReservationId();
+        assertThat(reservationId).isEmpty();
+        verify(mMockDeviceManager, never()).allocateDevice(Mockito.any());
+    }
+
+    @Test
+    public void testReserve_unavailable() {
+        when(mMockDeviceManager.getDeviceDescriptor("serial1"))
+                .thenReturn(createDescriptor("serial1", DeviceAllocationState.Unavailable));
+
+        mServer.reserveDevice(
+                ReserveDeviceRequest.newBuilder().setDeviceId("serial1").build(),
+                mReserveDeviceResponseObserver);
+        verify(mReserveDeviceResponseObserver).onNext(mReserveDeviceResponseCaptor.capture());
+        ReserveDeviceResponse reservation = mReserveDeviceResponseCaptor.getValue();
+        assertThat(reservation.getResult()).isEqualTo(ReserveDeviceResponse.Result.UNAVAILABLE);
+        String reservationId = reservation.getReservationId();
+        assertThat(reservationId).isEmpty();
+        verify(mMockDeviceManager, never()).allocateDevice(Mockito.any());
     }
 
     private DeviceDescriptor createDescriptor(String serial, DeviceAllocationState state) {
