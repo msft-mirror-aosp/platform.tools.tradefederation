@@ -233,7 +233,7 @@ public class CommandOptions implements ICommandOptions {
             name = "delegated-early-device-release",
             description =
                     "Feature flag to enable early device release when running in delegated mode.")
-    private boolean mEnableDelegatedEarlyDeviceRelease = false;
+    private boolean mEnableDelegatedEarlyDeviceRelease = true;
 
     @Option(
             name = "dynamic-download-args",
