@@ -23,6 +23,7 @@ import com.android.os.StatsLog.StatsdStatsReport;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.util.statsd.ConfigUtil;
@@ -108,6 +109,7 @@ public class RuntimeRestartCollector extends BaseDeviceMetricCollector {
                 CLog.e(
                         "Failed to get statsd metadata from device %s. Exception: %s.",
                         device.getSerialNumber(), e);
+                continue;
             }
 
             // Register statsd config to collect app crashes.
@@ -121,6 +123,7 @@ public class RuntimeRestartCollector extends BaseDeviceMetricCollector {
                 CLog.e(
                         "Failed to push statsd config to device %s. Exception: %s.",
                         device.getSerialNumber(), e);
+                continue;
             }
         }
     }
@@ -133,6 +136,12 @@ public class RuntimeRestartCollector extends BaseDeviceMetricCollector {
     public void onTestRunEnd(
             DeviceMetricData runData, final Map<String, Metric> currentRunMetrics) {
         for (ITestDevice device : mTestDevices) {
+            if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                CLog.d(
+                        "Device '%s' is in state '%s' skipping RuntimeRestartCollector",
+                        device.getSerialNumber(), device.getDeviceState());
+                continue;
+            }
             // Pull statsd metadata again to look at the changes of system server crash timestamps
             // during the test run, and report them.
             // A copy of the list is created as the list returned by the proto is not modifiable.
@@ -200,6 +209,7 @@ public class RuntimeRestartCollector extends BaseDeviceMetricCollector {
                 CLog.e(
                         "Failed to retrieve event metric data from device %s. Exception: %s.",
                         device.getSerialNumber(), e);
+                continue;
             }
             addAtomBasedMetrics(currentRunMetrics, uptimeListNanos, device.getSerialNumber());
             try {
