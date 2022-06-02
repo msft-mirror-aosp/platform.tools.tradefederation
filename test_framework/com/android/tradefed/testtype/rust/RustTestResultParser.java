@@ -89,8 +89,9 @@ public class RustTestResultParser extends MultiLineReceiver {
 
     static final Pattern RUST_ONE_LINE_RESULT =
             Pattern.compile(
-                    "test (\\S*) (?:- should panic )?\\.\\.\\. ([\\w]*)(?: <(\\d+\\.\\d+)s>)?");
-
+                    "test (\\S*) (?:- should panic )?\\.\\.\\. (\\S*)(?: <(\\d+\\.\\d+)s>)?");
+    static final Pattern RUST_IGNORE_RESULT =
+            Pattern.compile("test (\\S*) (?:- should panic )?\\.\\.\\. (ignored).*");
     static final Pattern RUNNING_PATTERN = Pattern.compile("running (.*) test[s]?");
 
     static final Pattern TEST_FAIL_PATTERN = Pattern.compile("---- (\\S*) stdout ----");
@@ -131,7 +132,13 @@ public class RustTestResultParser extends MultiLineReceiver {
         }
 
         for (String line : lines) {
-            if (lineMatchesPattern(line, RUST_ONE_LINE_RESULT)) {
+            if (lineMatchesPattern(line, RUST_IGNORE_RESULT)) {
+                mCurrentTestName = mCurrentMatcher.group(1);
+                mCurrentTestStatus = mCurrentMatcher.group(2);
+                mCurrentTestTime = null;
+                mNumTestsEnded++;
+                reportTestResult();
+            } else if (lineMatchesPattern(line, RUST_ONE_LINE_RESULT)) {
                 mCurrentTestName = mCurrentMatcher.group(1);
                 mCurrentTestStatus = mCurrentMatcher.group(2);
                 mCurrentTestTime = mCurrentMatcher.group(3);
