@@ -350,11 +350,16 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
             pythonParser.processNewLines(testOutput.split("\n"));
         } catch (RuntimeException e) {
             StringBuilder message = new StringBuilder();
+            String stderr = "";
+            if (result != null) {
+                stderr = result.getStderr();
+            }
             message.append(
                     String.format(
                             "Failed to parse the python logs: %s. Please ensure that verbosity of "
-                                    + "output is high enough to be parsed.",
-                            e.getMessage()));
+                                    + "output is high enough to be parsed."
+                                    + " Stderr: %s",
+                            e.getMessage(), stderr));
 
             if (mUseTestOutputFile) {
                 message.append(
