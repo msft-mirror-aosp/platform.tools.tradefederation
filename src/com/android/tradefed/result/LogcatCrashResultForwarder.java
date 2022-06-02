@@ -20,6 +20,7 @@ import com.android.loganalysis.item.LogcatItem;
 import com.android.loganalysis.item.NativeCrashItem;
 import com.android.loganalysis.parser.LogcatParser;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -186,6 +187,12 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
      * @return A {@link LogcatItem} that contains the information inside the logcat.
      */
     private LogcatItem extractLogcat(ITestDevice device, long startTime) {
+        if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+            CLog.w(
+                    "Device is in state '%s' skip attempt to extract crash.",
+                    device.getDeviceState());
+            return null;
+        }
         try (InputStreamSource logSource = device.getLogcatSince(startTime)) {
             if (logSource == null) {
                 return null;
