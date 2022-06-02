@@ -92,8 +92,8 @@ import com.android.tradefed.device.cloud.GceRemoteCmdFormatterTest;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitorTest;
 import com.android.tradefed.device.cloud.ManagedRemoteDeviceTest;
 import com.android.tradefed.device.cloud.NestedRemoteDeviceTest;
-import com.android.tradefed.device.cloud.OxygenUtilTest;
 import com.android.tradefed.device.cloud.OxygenClientTest;
+import com.android.tradefed.device.cloud.OxygenUtilTest;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDeviceTest;
 import com.android.tradefed.device.cloud.RemoteFileUtilTest;
 import com.android.tradefed.device.contentprovider.ContentProviderHandlerTest;
@@ -147,6 +147,7 @@ import com.android.tradefed.invoker.logger.InvocationLocalTest;
 import com.android.tradefed.invoker.logger.InvocationMetricLoggerTest;
 import com.android.tradefed.invoker.logger.TfObjectTrackerTest;
 import com.android.tradefed.invoker.sandbox.ParentSandboxInvocationExecutionTest;
+import com.android.tradefed.invoker.shard.ParentShardReplicateTest;
 import com.android.tradefed.invoker.shard.ShardHelperTest;
 import com.android.tradefed.invoker.shard.StrictShardHelperTest;
 import com.android.tradefed.invoker.shard.TestsPoolPollerTest;
@@ -637,6 +638,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TfObjectTrackerTest.class,
 
     // invoker.shard
+    ParentShardReplicateTest.class,
     ShardHelperTest.class,
     StrictShardHelperTest.class,
     TestsPoolPollerTest.class,
