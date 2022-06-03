@@ -20,6 +20,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
@@ -45,6 +46,7 @@ public class LogcatCrashResultForwarderTest {
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
+        when(mMockDevice.getDeviceState()).thenReturn(TestDeviceState.ONLINE);
     }
 
     /** Test if a crash is detected but no crash is found in the logcat. */
