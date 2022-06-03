@@ -28,8 +28,8 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FileInputStreamSource;
-import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.AdbRootElevator;
 import com.android.tradefed.util.CommandResult;
@@ -43,16 +43,14 @@ import com.android.tradefed.util.TarUtil;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
 
-import org.jacoco.core.tools.ExecFileLoader;
-
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -81,14 +79,13 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                             + " individual measurements.")
     private boolean mMergeCoverageMeasurements = false;
 
-    private final ExecFileLoader mExecFileLoader = new ExecFileLoader();
-
     private JavaCodeCoverageFlusher mFlusher;
     private IConfiguration mConfiguration;
 
     @Override
     public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener) {
+            IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
         super.init(context, listener);
 
         verifyNotNull(mConfiguration);
@@ -98,8 +95,6 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
             for (ITestDevice device : getRealDevices()) {
                 try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
                     getCoverageFlusher(device).resetCoverage();
-                } catch (DeviceNotAvailableException e) {
-                    throw new RuntimeException(e);
                 }
             }
         }
