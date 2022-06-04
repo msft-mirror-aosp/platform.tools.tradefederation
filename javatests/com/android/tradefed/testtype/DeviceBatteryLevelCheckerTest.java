@@ -113,7 +113,7 @@ public class DeviceBatteryLevelCheckerTest {
 
         @Override
         public Integer getBattery() {
-            return mBatteryLevel == null ? null : mBatteryLevel.get();
+            return mBatteryLevel.get() == -99 ? null : mBatteryLevel.get();
         }
     }
 
@@ -284,8 +284,7 @@ public class DeviceBatteryLevelCheckerTest {
 
     private void expectBattLevel(Integer level) throws Exception {
         if (level == null) {
-            mBatteryLevel = null;
-            return;
+            level = -99;
         }
         mBatteryLevel.set(level);
     }
