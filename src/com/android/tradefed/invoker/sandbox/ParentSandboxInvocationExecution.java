@@ -70,7 +70,14 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
 
     /** {@inheritDoc} */
     @Override
-    protected List<ITargetPreparer> getPreparersToRun(IConfiguration config, String deviceName) {
+    protected List<ITargetPreparer> getTargetPreparersToRun(
+            IConfiguration config, String deviceName) {
+        return new ArrayList<>();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    protected List<ITargetPreparer> getLabPreparersToRun(IConfiguration config, String deviceName) {
         List<ITargetPreparer> preparersToRun = new ArrayList<>();
         preparersToRun.addAll(config.getDeviceConfigByName(deviceName).getLabPreparers());
         return preparersToRun;
