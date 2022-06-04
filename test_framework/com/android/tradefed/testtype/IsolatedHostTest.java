@@ -574,7 +574,14 @@ public class IsolatedHostTest
                                                 new TestDescription(
                                                         event.getClassName(),
                                                         event.getMethodName());
+                                        // Use endTime for both events since
+                                        // ignored test do not really run.
+                                        listener.testStarted(desc, event.getEndTime());
                                         listener.testIgnored(desc);
+                                        listener.testEnded(
+                                                desc,
+                                                event.getEndTime(),
+                                                new HashMap<String, Metric>());
                                         break;
                                     case TOPIC_RUN_STARTED:
                                         runStarted = true;
