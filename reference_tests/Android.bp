@@ -69,6 +69,19 @@ java_test_host {
 }
 
 java_test_host {
+    name: "PassIgnoreAssumeTest",
+    srcs: [
+        "src/java/com/android/tradefed/referencetests/PassIgnoreAssumeTest.java",
+    ],
+    static_libs: [
+        "junit",
+    ],
+    test_options: {
+        unit_test: false,
+    },
+}
+
+java_test_host {
     name: "MultipleClassesTest",
     srcs: [
         "src/java/com/android/tradefed/referencetests/SimplePassingTest.java",
