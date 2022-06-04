@@ -20,6 +20,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.log.ILeveledLogOutput;
@@ -56,7 +57,7 @@ public class DebugHostLogOnFailureCollectorTest {
         public boolean mOnTestFailCalled = false;
 
         @Override
-        public void onTestStart(DeviceMetricData testData) {
+        public void onTestStart(DeviceMetricData testData) throws DeviceNotAvailableException {
             super.onTestStart(testData);
             mOnTestStartCalled = true;
         }
