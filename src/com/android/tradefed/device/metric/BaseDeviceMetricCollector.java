@@ -19,6 +19,7 @@ import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.Option;
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -156,38 +157,49 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     }
 
     @Override
-    public void onTestRunStart(DeviceMetricData runData) {
+    public void onTestRunStart(DeviceMetricData runData) throws DeviceNotAvailableException {
         // Does nothing
     }
 
-    public void onTestRunFailed(DeviceMetricData testData, FailureDescription failure) {
-        // Does nothing
-    }
-
-    @Override
-    public void onTestRunEnd(
-            DeviceMetricData runData, final Map<String, Metric> currentRunMetrics) {
-        // Does nothing
-    }
-
-    @Override
-    public void onTestStart(DeviceMetricData testData) {
-        // Does nothing
-    }
-
-    @Override
-    public void onTestFail(DeviceMetricData testData, TestDescription test) {
+    /**
+     * Callback for testRunFailed events
+     *
+     * @param testData
+     * @param failure
+     * @throws DeviceNotAvailableException
+     */
+    public void onTestRunFailed(DeviceMetricData testData, FailureDescription failure)
+            throws DeviceNotAvailableException {
         // Does nothing
     }
 
     @Override
-    public void onTestAssumptionFailure(DeviceMetricData testData, TestDescription test) {
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> currentRunMetrics)
+            throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    @Override
+    public void onTestStart(DeviceMetricData testData) throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    @Override
+    public void onTestFail(DeviceMetricData testData, TestDescription test)
+            throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    @Override
+    public void onTestAssumptionFailure(DeviceMetricData testData, TestDescription test)
+            throws DeviceNotAvailableException {
         // Does nothing
     }
 
     @Override
     public void onTestEnd(
-            DeviceMetricData testData, final Map<String, Metric> currentTestCaseMetrics) {
+            DeviceMetricData testData, final Map<String, Metric> currentTestCaseMetrics)
+            throws DeviceNotAvailableException {
         // Does nothing
     }
 
@@ -195,7 +207,8 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     public void onTestEnd(
             DeviceMetricData testData,
             final Map<String, Metric> currentTestCaseMetrics,
-            TestDescription test) {
+            TestDescription test)
+            throws DeviceNotAvailableException {
         // Call the default implementation of onTestEnd if not overridden
         onTestEnd(testData, currentTestCaseMetrics);
     }
