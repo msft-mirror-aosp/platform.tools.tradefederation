@@ -19,6 +19,7 @@ package com.android.tradefed.service.management;
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.command.ICommandScheduler;
 import com.android.tradefed.config.ConfigurationException;
+import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -55,6 +56,7 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
 
     private final Server mServer;
     private final ICommandScheduler mCommandScheduler;
+    private final DeviceManagementGrpcServer mDeviceReservationManager;
     private Map<String, ScheduledInvocationForwarder> mTracker = new HashMap<>();
 
     /** Returns the port used by the server. */
@@ -64,21 +66,31 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
                 : null;
     }
 
-    public TestInvocationManagementServer(int port, ICommandScheduler commandScheduler) {
-        this(ServerBuilder.forPort(port), commandScheduler);
+    public TestInvocationManagementServer(
+            int port,
+            ICommandScheduler commandScheduler,
+            DeviceManagementGrpcServer deviceReservationManager) {
+        this(ServerBuilder.forPort(port), commandScheduler, deviceReservationManager);
     }
 
     @VisibleForTesting
     public TestInvocationManagementServer(
-            ServerBuilder<?> serverBuilder, ICommandScheduler commandScheduler) {
+            ServerBuilder<?> serverBuilder,
+            ICommandScheduler commandScheduler,
+            DeviceManagementGrpcServer deviceReservationManager) {
         mServer = serverBuilder.addService(this).build();
         mCommandScheduler = commandScheduler;
+        mDeviceReservationManager = deviceReservationManager;
     }
 
     @VisibleForTesting
-    public TestInvocationManagementServer(Server server, ICommandScheduler commandScheduler) {
+    public TestInvocationManagementServer(
+            Server server,
+            ICommandScheduler commandScheduler,
+            DeviceManagementGrpcServer deviceReservationManager) {
         mServer = server;
         mCommandScheduler = commandScheduler;
+        mDeviceReservationManager = deviceReservationManager;
     }
 
     /** Start the grpc server. */
@@ -116,7 +128,15 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
             fileReporter.setGranularResults(false);
             ScheduledInvocationForwarder forwarder =
                     new ScheduledInvocationForwarder(handler, fileReporter);
-            mCommandScheduler.execCommand(forwarder, command);
+            ITestDevice device = null;
+            if (!request.getReservationIdList().isEmpty()) {
+                device = getReservedDevices(request.getReservationIdList());
+            }
+            if (device == null) {
+                mCommandScheduler.execCommand(forwarder, command);
+            } else {
+                mCommandScheduler.execCommand(forwarder, device, command);
+            }
             // TODO: Align trackerId with true invocation id
             String trackerId = UUID.randomUUID().toString();
             mTracker.put(trackerId, forwarder);
@@ -181,6 +201,20 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
         for (ITestInvocationListener listener : listeners) {
             if (listener instanceof FileProtoResultReporter) {
                 return ((FileProtoResultReporter) listener).getOutputFile().getAbsolutePath();
+            }
+        }
+        return null;
+    }
+
+    /** Fetch the device associated with reservation. TODO: Support multi-devices */
+    private ITestDevice getReservedDevices(List<String> reservationIds) {
+        if (mDeviceReservationManager == null) {
+            return null;
+        }
+        for (String id : reservationIds) {
+            ITestDevice device = mDeviceReservationManager.getDeviceFromReservation(id);
+            if (device != null) {
+                return device;
             }
         }
         return null;
