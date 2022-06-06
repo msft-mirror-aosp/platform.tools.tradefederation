@@ -462,6 +462,13 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
         // Ensure that command is not too long for adb
         if (shellCmd.length() < ADB_CMD_CHAR_LIMIT) {
             if (outputReceiver == null) {
+                // TODO(b/233709366): Migrate to executeShellV2Command for all other device command
+                //  execution. Stderr output of list tests command contain extra wording
+                //  (ex: using --testdata=/xxx/xxx/...) which breaks the parser, only use stdout for
+                //  parsing the result of list tests.
+                if (cmd.contains(GBENCHMARK_LIST_TESTS_OPTION)) {
+                    return testDevice.executeShellV2Command(shellCmd).getStdout();
+                }
                 return testDevice.executeShellCommand(shellCmd);
             }
             testDevice.executeShellCommand(
@@ -488,7 +495,17 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
         String shellOutput = null;
         try {
             if (outputReceiver == null) {
-                shellOutput = testDevice.executeShellCommand(String.format("sh %s", tmpFileDevice));
+                // TODO(b/233709366): Migrate to executeShellV2Command for all other device command
+                //  execution.
+                if (cmd.contains(GBENCHMARK_LIST_TESTS_OPTION)) {
+                    shellOutput =
+                            testDevice
+                                    .executeShellV2Command(String.format("sh %s", tmpFileDevice))
+                                    .getStdout();
+                } else {
+                    shellOutput =
+                            testDevice.executeShellCommand(String.format("sh %s", tmpFileDevice));
+                }
             } else {
                 testDevice.executeShellCommand(
                         String.format("sh %s", tmpFileDevice),
