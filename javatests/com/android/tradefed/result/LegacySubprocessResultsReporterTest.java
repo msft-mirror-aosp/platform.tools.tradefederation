@@ -46,7 +46,7 @@ public class LegacySubprocessResultsReporterTest {
 
     @Before
     public void setUp() {
-        mReporter = new LegacySubprocessResultsReporter();
+        mReporter = new LegacySubprocessResultsReporter(false);
     }
 
     /** Test deprecated method that when none of the option for reporting is set, nothing happen. */
