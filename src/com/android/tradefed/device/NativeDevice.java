@@ -132,7 +132,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private static final String BUGREPORTZ_TMP_PATH = "/bugreports/";
 
     /** On-device path where we expect ANRs to be generated. */
-    private static final String ANRS_PATH = "/data/anrs";
+    private static final String ANRS_PATH = "/data/anr";
 
     /**
      * Allow up to 2 minutes to receives the full logcat dump.
