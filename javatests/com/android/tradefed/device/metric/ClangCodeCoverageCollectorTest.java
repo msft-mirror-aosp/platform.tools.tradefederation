@@ -78,7 +78,7 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 
-/** Unit tests for {@link ClangCodeCoverageListener}. */
+/** Unit tests for {@link ClangCodeCoverageCollector}. */
 @RunWith(JUnit4.class)
 public class ClangCodeCoverageCollectorTest {
 
@@ -141,7 +141,7 @@ public class ClangCodeCoverageCollectorTest {
     }
 
     @Test
-    public void coverageDisabled_noCoverageLog() {
+    public void coverageDisabled_noCoverageLog() throws Exception {
         mListener.init(mMockContext, mFakeListener);
 
         // Simulate a test run.

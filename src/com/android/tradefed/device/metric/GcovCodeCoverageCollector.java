@@ -73,7 +73,8 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
 
     @Override
     public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener) {
+            IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
         super.init(context, listener);
 
         if (isGcovCoverageEnabled()) {
@@ -81,8 +82,6 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
                 // Clear coverage measurements on the device.
                 try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
                     getCoverageFlusher(device).resetCoverage();
-                } catch (DeviceNotAvailableException e) {
-                    throw new RuntimeException(e);
                 }
             }
         }

@@ -760,7 +760,7 @@ public class BasePostProcessorTest {
     }
 
     @Test
-    public void testNoDoubleLoggingFilesFromOutsideLogSaverForwarder() throws IOException {
+    public void testNoDoubleLoggingFilesFromOutsideLogSaverForwarder() throws Exception {
         mProcessor.setSavesFile();
         ArgumentCaptor<String> savedLogsCapture = ArgumentCaptor.forClass(String.class);
         captureSavedFiles(mMockLogSaver, savedLogsCapture);
@@ -931,7 +931,7 @@ public class BasePostProcessorTest {
     }
 
     @Test
-    public void testLogsFromOutsidePostProcessorsAreForwarded() throws IOException {
+    public void testLogsFromOutsidePostProcessorsAreForwarded() throws Exception {
         mProcessor.setSavesFile();
         expectAnyFiles(mMockLogSaver);
 
