@@ -16,6 +16,7 @@
 package com.android.tradefed.invoker;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -212,8 +213,13 @@ public class TestInvocationMultiTest {
 
         when(mMockTestListener.getSummary()).thenReturn(null);
 
-        mInvocation.invoke(
-                mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+        try {
+            mInvocation.invoke(
+                    mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
         verify(mMockLogger, times(3)).init();
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
@@ -296,8 +302,13 @@ public class TestInvocationMultiTest {
 
         when(mMockTestListener.getSummary()).thenReturn(null);
 
-        mInvocation.invoke(
-                mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+        try {
+            mInvocation.invoke(
+                    mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+            fail("Should have thrown an exception.");
+        } catch (ConfigurationException expected) {
+            // Expected
+        }
         verify(mMockLogger, times(3)).init();
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
@@ -360,8 +371,13 @@ public class TestInvocationMultiTest {
 
         // A second build from the BuildRetrievalError is generated but still cleaned.
 
-        mInvocation.invoke(
-                mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+        try {
+            mInvocation.invoke(
+                    mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
         verify(mMockLogger, times(3)).init();
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
@@ -430,8 +446,13 @@ public class TestInvocationMultiTest {
         // A second build from the BuildRetrievalError is generated but still cleaned, even if the
         // first clean up failed.
 
-        mInvocation.invoke(
-                mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+        try {
+            mInvocation.invoke(
+                    mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
         verify(mMockLogger, times(3)).init();
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
