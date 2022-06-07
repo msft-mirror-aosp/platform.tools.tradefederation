@@ -54,7 +54,8 @@ public interface IMetricCollector extends ILogSaverListener, IDisableable {
      * @return the new listener wrapping the original one.
      */
     public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener);
+            IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException;
 
     /** Returns the list of devices available in the invocation. */
     public List<ITestDevice> getDevices();
