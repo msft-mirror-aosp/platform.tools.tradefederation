@@ -1434,6 +1434,18 @@ public class DeviceSetupTest {
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
+    @Test
+    public void testSetup_disable_device_config_sync() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+
+        OptionSetter setter = new OptionSetter(mDeviceSetup);
+        setter.setOptionValue("disable-device-config-sync", "true");
+        mDeviceSetup.setUp(mTestInfo);
+        verify(mMockDevice)
+                .executeShellCommand("device_config set_sync_disabled_for_tests persistent");
+    }
+
     /** Set EasyMock expectations for a normal setup call */
     private void doSetupExpectations() throws DeviceNotAvailableException, ConfigurationException {
         doSetupExpectations(
