@@ -470,4 +470,43 @@ public class IsolatedHostTestTest {
         final String ldLibraryPath = mHostTest.compileLdLibraryPath();
         assertEquals(expectedLdLibraryPath, ldLibraryPath);
     }
+
+    @Test
+    public void testIgnoreAndAssumptionFailure() throws Exception {
+        final String jarName = "PassIgnoreAssumeTest.jar";
+        final String className = "com.android.tradefed.referencetests.PassIgnoreAssumeTest";
+        setUpSimpleMockJarTest(jarName);
+        TestInformation testInfo = TestInformation.newBuilder().build();
+        TestDescription testPass = new TestDescription(className, "testPass");
+        TestDescription testIgnore = new TestDescription(className, "testDoesNotRun");
+        TestDescription testAssumption = new TestDescription(className, "testAssume");
+
+        mHostTest.run(testInfo, mListener);
+
+        verify(mListener).testRunStarted((String) Mockito.any(), Mockito.eq(3));
+        verify(mListener).testStarted(Mockito.eq(testPass), Mockito.anyLong());
+        verify(mListener)
+                .testEnded(
+                        Mockito.eq(testPass),
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, Metric>>any());
+        verify(mListener).testStarted(Mockito.eq(testIgnore), Mockito.anyLong());
+        verify(mListener).testIgnored(testIgnore);
+        verify(mListener)
+                .testEnded(
+                        Mockito.eq(testIgnore),
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, Metric>>any());
+        verify(mListener).testStarted(Mockito.eq(testAssumption), Mockito.anyLong());
+        verify(mListener).testAssumptionFailure(Mockito.eq(testAssumption), (String) Mockito.any());
+        verify(mListener)
+                .testEnded(
+                        Mockito.eq(testAssumption),
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, Metric>>any());
+
+        verify(mListener)
+                .testLog((String) Mockito.any(), Mockito.eq(LogDataType.TEXT), Mockito.any());
+        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+    }
 }
