@@ -453,6 +453,12 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             description = "Whether or not to skip the teardown if it's a virtual device.")
     private boolean mSkipVirtualDeviceTeardown = true;
 
+    @Option(
+            name = "disable-device-config-sync",
+            description = "Disable syncing device config with remote configuration server.")
+    private boolean mDisableDeviceConfigSync = false;
+    // device_config set_sync_disabled_for_tests persistent
+
     private static final String PERSIST_PREFIX = "persist.";
 
     public ITestDevice getDevice(TestInformation testInfo) {
@@ -752,6 +758,10 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
 
         if (mDisableDalvikVerifier) {
             mSetProps.put("dalvik.vm.dexopt-flags", "v=n");
+        }
+
+        if (mDisableDeviceConfigSync) {
+            mRunCommandBeforeSettings.add("device_config set_sync_disabled_for_tests persistent");
         }
     }
 
