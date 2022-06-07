@@ -51,7 +51,7 @@ public class AtraceRunMetricCollectorTest {
     private IInvocationContext mContext;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         mContext = new InvocationContext();
         mContext.addAllocatedDevice("default", mMockDevice);

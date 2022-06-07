@@ -97,7 +97,8 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener) {
+            IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
         mContext = context;
         mForwarder = listener;
         if (mWasInitDone) {
