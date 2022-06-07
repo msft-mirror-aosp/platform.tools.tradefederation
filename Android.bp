@@ -237,6 +237,7 @@ droiddoc_host {
         ":tradefed-doc-stubs",
     ],
     libs: [
+        "error_prone_annotations",
         "kotlin-annotations",
         "loganalysis",
         "tradefed",
