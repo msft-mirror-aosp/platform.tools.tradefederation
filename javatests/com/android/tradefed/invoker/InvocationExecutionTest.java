@@ -185,7 +185,8 @@ public class InvocationExecutionTest {
 
         @Override
         public ITestInvocationListener init(
-                IInvocationContext context, ITestInvocationListener listener) {
+                IInvocationContext context, ITestInvocationListener listener)
+                throws DeviceNotAvailableException {
             if (mFirstInit) {
                 sTotalInit++;
                 mFirstInit = false;
