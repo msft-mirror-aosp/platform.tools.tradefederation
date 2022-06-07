@@ -70,8 +70,7 @@ public class CecControllerTokenProvider implements ITokenProvider {
             throws IOException {
         long startTime = System.currentTimeMillis();
         long endTime = startTime;
-
-        while ((endTime - startTime <= timeoutMillis)) {
+        do {
             if (inputConsole.ready()) {
                 String line = inputConsole.readLine();
                 if (line != null && line.toLowerCase().contains(expectedMessage)) {
@@ -80,17 +79,17 @@ public class CecControllerTokenProvider implements ITokenProvider {
                 }
             }
             endTime = System.currentTimeMillis();
-        }
+        } while ((endTime - startTime <= timeoutMillis));
         return false;
     }
 
     List<String> getValidCecClientPorts() throws IOException, InterruptedException {
-        List<String> listPortsCommand = new ArrayList();
+        List<String> listPortsCommand = new ArrayList<>();
 
         listPortsCommand.add("cec-client");
         listPortsCommand.add("-l");
 
-        List<String> comPorts = new ArrayList();
+        List<String> comPorts = new ArrayList<>();
         Process cecClient = RunUtil.getDefault().runCmdInBackground(listPortsCommand);
         try (BufferedReader inputConsole =
                 new BufferedReader(new InputStreamReader(cecClient.getInputStream()))) {
@@ -143,7 +142,7 @@ public class CecControllerTokenProvider implements ITokenProvider {
 
     @VisibleForTesting
     boolean isCecAdapterConnected(ITestDevice device) throws DeviceNotAvailableException {
-        List<String> launchCommand = new ArrayList();
+        List<String> launchCommand = new ArrayList<>();
         Process mCecClient;
         String serialNo = device.getProperty("ro.serialno");
 
