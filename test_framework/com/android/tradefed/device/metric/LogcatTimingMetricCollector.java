@@ -53,8 +53,6 @@ import java.util.stream.Collectors;
 public class LogcatTimingMetricCollector extends BaseDeviceMetricCollector {
 
     private static final String LOGCAT_NAME_FORMAT = "device_%s_test_logcat";
-    // Use logcat -T 'count' to only print a few line before we start and not the full buffer
-    private static final String LOGCAT_CMD = "logcat *:D -T 150";
 
     @Option(
             name = "start-pattern",
@@ -91,7 +89,7 @@ public class LogcatTimingMetricCollector extends BaseDeviceMetricCollector {
     private String mLogcatCmd = "logcat *:D -T 150";
 
     @Override
-    public void onTestRunStart(DeviceMetricData testData) {
+    public void onTestRunStart(DeviceMetricData testData) throws DeviceNotAvailableException {
         // Adding patterns
         mParser.clearDurationPatterns();
         for (Map.Entry<String, String> entry : mStartPatterns.entrySet()) {
@@ -123,7 +121,7 @@ public class LogcatTimingMetricCollector extends BaseDeviceMetricCollector {
     }
 
     @Override
-    public void onTestStart(DeviceMetricData testData) {
+    public void onTestStart(DeviceMetricData testData) throws DeviceNotAvailableException {
         if (!mPerRun) {
             startCollection();
         }
@@ -150,20 +148,13 @@ public class LogcatTimingMetricCollector extends BaseDeviceMetricCollector {
         stopCollection();
     }
 
-    private void startCollection() {
+    private void startCollection() throws DeviceNotAvailableException {
         for (ITestDevice device : getDevices()) {
             CLog.d(
                     "Creating logcat receiver on device %s with command %s",
                     device.getSerialNumber(), mLogcatCmd);
             mLogcatReceivers.put(device, createLogcatReceiver(device, mLogcatCmd));
-            try {
-                device.executeShellCommand("logcat -c");
-            } catch (DeviceNotAvailableException e) {
-                CLog.e(
-                        "Device not available when clear logcat. Skip logcat collection on %s",
-                        device.getSerialNumber());
-                continue;
-            }
+            device.executeShellCommand("logcat -c");
             mLogcatReceivers.get(device).start();
         }
     }
