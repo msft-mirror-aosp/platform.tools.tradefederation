@@ -29,7 +29,6 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.IDeviceSelection;
 import com.android.tradefed.invoker.IInvocationContext;
-import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.log.FileLogger;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -65,7 +64,6 @@ public class RetryReschedulerTest {
     @Mock IDeviceSelection mMockRequirements;
 
     @Mock ITestSuiteResultLoader mMockLoader;
-    @Mock IRescheduler mMockRescheduler;
     @Mock IConfigurationFactory mMockFactory;
     private BaseTestSuite mSuite;
 
@@ -86,7 +84,6 @@ public class RetryReschedulerTest {
         mTopConfiguration.setConfigurationObject(
                 RetryRescheduler.PREVIOUS_LOADER_NAME, mMockLoader);
         mTest.setConfiguration(mTopConfiguration);
-        mTest.setRescheduler(mMockRescheduler);
         mTest.setConfigurationFactory(mMockFactory);
 
         mSuite = Mockito.mock(BaseTestSuite.class);
@@ -112,8 +109,6 @@ public class RetryReschedulerTest {
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
@@ -141,8 +136,6 @@ public class RetryReschedulerTest {
         // Shard count is carried from retry attempt
         Mockito.reset(mMockCommandOptions);
 
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
-
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
         verify(mMockLoader).init();
@@ -166,8 +159,6 @@ public class RetryReschedulerTest {
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
@@ -194,8 +185,6 @@ public class RetryReschedulerTest {
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
-
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
         verify(mMockLoader).init();
@@ -220,8 +209,6 @@ public class RetryReschedulerTest {
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
@@ -253,8 +240,6 @@ public class RetryReschedulerTest {
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
-
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
         verify(mMockLoader).init();
@@ -279,8 +264,6 @@ public class RetryReschedulerTest {
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
@@ -311,8 +294,6 @@ public class RetryReschedulerTest {
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
-
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
         verify(mMockLoader).init();
@@ -340,8 +321,6 @@ public class RetryReschedulerTest {
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
-
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
         verify(mMockLoader).init();
@@ -365,8 +344,6 @@ public class RetryReschedulerTest {
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
@@ -401,8 +378,6 @@ public class RetryReschedulerTest {
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
