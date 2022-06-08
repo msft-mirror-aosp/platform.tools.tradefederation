@@ -27,11 +27,9 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IDeviceSelection;
-import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.FileLogger;
 import com.android.tradefed.log.ILeveledLogOutput;
-import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
@@ -43,8 +41,6 @@ import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.QuotationAwareTokenizer;
-
-import com.google.inject.Inject;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -95,7 +91,6 @@ public final class RetryRescheduler implements IRemoteTest, IConfigurationReceiv
     public static final String PREVIOUS_LOADER_NAME = "previous_loader";
 
     private IConfiguration mConfiguration;
-    private IRescheduler mRescheduler;
 
     private IConfigurationFactory mFactory;
 
@@ -180,19 +175,6 @@ public final class RetryRescheduler implements IRemoteTest, IConfigurationReceiv
         customizeConfig(previousLoader, originalConfig);
 
         mRescheduledConfiguration = originalConfig;
-
-        if (mRescheduler != null) {
-            // At the end, reschedule if requested
-            boolean res = mRescheduler.scheduleConfig(originalConfig);
-            if (!res) {
-                CLog.e("Something went wrong, failed to kick off the retry run.");
-            }
-        }
-    }
-
-    @Inject
-    public void setRescheduler(IRescheduler rescheduler) {
-        mRescheduler = rescheduler;
     }
 
     @Override

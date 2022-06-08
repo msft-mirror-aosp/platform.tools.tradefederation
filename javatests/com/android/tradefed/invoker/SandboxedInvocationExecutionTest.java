@@ -23,8 +23,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
@@ -38,7 +38,6 @@ import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.guice.InvocationScope;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.sandbox.SandboxedInvocationExecution;
 import com.android.tradefed.log.ILogRegistry;
@@ -115,12 +114,6 @@ public class SandboxedInvocationExecutionTest {
                     }
 
                     @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
-                    }
-
-                    @Override
                     public IInvocationExecution createInvocationExec(RunMode mode) {
                         mSpyExec =
                                 (InvocationExecution) Mockito.spy(super.createInvocationExec(mode));
@@ -183,12 +176,6 @@ public class SandboxedInvocationExecutionTest {
                     @Override
                     protected void setExitCode(ExitCode code, Throwable stack) {
                         // empty on purpose
-                    }
-
-                    @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
                     }
 
                     @Override
@@ -289,12 +276,6 @@ public class SandboxedInvocationExecutionTest {
                     }
 
                     @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
-                    }
-
-                    @Override
                     public IInvocationExecution createInvocationExec(RunMode mode) {
                         mSpyExec =
                                 (InvocationExecution) Mockito.spy(super.createInvocationExec(mode));
@@ -349,12 +330,6 @@ public class SandboxedInvocationExecutionTest {
                     @Override
                     protected void setExitCode(ExitCode code, Throwable stack) {
                         // empty on purpose
-                    }
-
-                    @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
                     }
 
                     @Override

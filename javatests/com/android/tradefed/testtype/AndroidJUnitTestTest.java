@@ -33,7 +33,6 @@ import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.guice.InvocationScope;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -44,7 +43,6 @@ import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.FileUtil;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -80,17 +78,9 @@ public class AndroidJUnitTestTest {
     @Mock ITestInvocationListener mMockListener;
     private TestInformation mTestInfo;
 
-    // Guice scope
-    private InvocationScope mScope;
-
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
-
-        // Start with the Guice scope setup
-        mScope = new InvocationScope();
-        mScope.enter();
-
         when(mMockTestDevice.getIDevice()).thenReturn(mMockIDevice);
         when(mMockTestDevice.getSerialNumber()).thenReturn("serial");
 
@@ -119,12 +109,6 @@ public class AndroidJUnitTestTest {
                 AndroidJUnitTest.NEW_RUN_LISTENER_ORDER_KEY, "true");
         IInvocationContext context = new InvocationContext();
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
-    }
-
-    @After
-    public void tearDown() {
-        // Always exit the scope at the end.
-        mScope.exit();
     }
 
     /** Test list of tests to run is filtered by include filters. */
