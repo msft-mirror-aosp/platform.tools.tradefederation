@@ -129,8 +129,8 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     @Override
-    public void onTestRunEnd(
-            DeviceMetricData runData, final Map<String, Metric> currentRunMetrics) {
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> currentRunMetrics)
+            throws DeviceNotAvailableException {
         if (!isClangCoverageEnabled()) {
             return;
         }
@@ -141,7 +141,7 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
                     getCoverageFlusher(device).forceCoverageFlush();
                 }
                 logCoverageMeasurement(device, getRunName());
-            } catch (DeviceNotAvailableException | IOException e) {
+            } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         }

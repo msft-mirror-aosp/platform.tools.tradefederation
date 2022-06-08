@@ -124,6 +124,7 @@ import com.android.tradefed.device.metric.RebootReasonCollectorTest;
 import com.android.tradefed.device.metric.RuntimeRestartCollectorTest;
 import com.android.tradefed.device.metric.ScreenshotOnFailureCollectorTest;
 import com.android.tradefed.device.metric.ShowmapPullerMetricCollectorTest;
+import com.android.tradefed.device.metric.TraceCmdCollectorTest;
 import com.android.tradefed.device.recovery.BatteryUnavailableDeviceRecoveryTest;
 import com.android.tradefed.device.recovery.RunConfigDeviceRecoveryTest;
 import com.android.tradefed.device.recovery.UsbResetMultiDeviceRecoveryTest;
@@ -590,6 +591,7 @@ import org.junit.runners.Suite.SuiteClasses;
     FilePullerDeviceMetricCollectorTest.class,
     FilePullerLogCollectorTest.class,
     GcovCodeCoverageCollectorTest.class,
+    HostStatsdMetricCollectorTest.class,
     JavaCodeCoverageCollectorTest.class,
     LogcatOnFailureCollectorTest.class,
     LogcatTimingMetricCollectorTest.class,
@@ -598,7 +600,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RuntimeRestartCollectorTest.class,
     ScreenshotOnFailureCollectorTest.class,
     ShowmapPullerMetricCollectorTest.class,
-    HostStatsdMetricCollectorTest.class,
+    TraceCmdCollectorTest.class,
 
     // device.recovery
     BatteryUnavailableDeviceRecoveryTest.class,

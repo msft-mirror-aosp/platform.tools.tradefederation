@@ -127,7 +127,8 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     @Override
-    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> runMetrics) {
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> runMetrics)
+            throws DeviceNotAvailableException {
         if (!isJavaCoverageEnabled()) {
             return;
         }
@@ -193,7 +194,7 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                 for (String coveragePath : FileUtil.findFiles(untarDir, ".*\\.ec")) {
                     logCoverageMeasurement(new File(coveragePath));
                 }
-            } catch (DeviceNotAvailableException | IOException e) {
+            } catch (IOException e) {
                 throw new RuntimeException(e);
             } finally {
                 // Clean up local coverage files.
@@ -221,7 +222,7 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     /** Cleans up .ec files in /data/misc/trace. */
-    private void cleanUpDeviceCoverageFiles(ITestDevice device) {
+    private void cleanUpDeviceCoverageFiles(ITestDevice device) throws DeviceNotAvailableException {
         try (AdbRootElevator root = new AdbRootElevator(device)) {
             List<Integer> activePids = getRunningProcessIds(device);
 
@@ -240,9 +241,6 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                     device.deleteFile(devicePath);
                 }
             }
-        } catch (DeviceNotAvailableException e) {
-            CLog.e("Failed to clean up Java coverage files on the device.");
-            CLog.e(e);
         }
     }
 
