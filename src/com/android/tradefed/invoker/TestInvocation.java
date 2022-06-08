@@ -51,7 +51,6 @@ import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.device.internal.DeviceReleaseReporter;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
-import com.android.tradefed.guice.InvocationScope;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -996,12 +995,6 @@ public class TestInvocation implements ITestInvocation {
         IInvocationExecution invocationPath = createInvocationExec(mode);
         updateInvocationContext(context, config);
 
-        // Create the Guice scope
-        InvocationScope scope = getInvocationScope();
-        scope.enter();
-        // Seed our TF objects to the Guice scope
-        scope.seed(IRescheduler.class, rescheduler);
-        scope.seedConfiguration(config);
         boolean sharding = false;
         try {
             ILeveledLogOutput leveledLogOutput = config.getLogOutput();
@@ -1189,7 +1182,6 @@ public class TestInvocation implements ITestInvocation {
         } catch (IOException e) {
             CLog.e(e);
         } finally {
-            scope.exit();
             // Ensure build infos are always cleaned up at the end of invocation.
             CLog.i("Cleaning up builds");
             invocationPath.cleanUpBuilds(context, config);
@@ -1210,12 +1202,6 @@ public class TestInvocation implements ITestInvocation {
 
             Runtime.getRuntime().removeShutdownHook(cleanUpThread);
         }
-    }
-
-    /** Returns the current {@link InvocationScope}. */
-    @VisibleForTesting
-    InvocationScope getInvocationScope() {
-        return InvocationScope.getDefault();
     }
 
     @VisibleForTesting

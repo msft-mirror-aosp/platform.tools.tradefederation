@@ -131,7 +131,6 @@ import com.android.tradefed.device.recovery.UsbResetMultiDeviceRecoveryTest;
 import com.android.tradefed.device.recovery.UsbResetRunConfigRecoveryTest;
 import com.android.tradefed.error.HarnessExceptionTest;
 import com.android.tradefed.external_dependency.ExternalDependencyTest;
-import com.android.tradefed.guice.InvocationScopeTest;
 import com.android.tradefed.host.LocalHostResourceManagerTest;
 import com.android.tradefed.host.gcs.GCSHostResourceManagerTest;
 import com.android.tradefed.invoker.InvocationContextTest;
@@ -613,9 +612,6 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // external_dependency
     ExternalDependencyTest.class,
-
-    // Guice
-    InvocationScopeTest.class,
 
     // host
     LocalHostResourceManagerTest.class,

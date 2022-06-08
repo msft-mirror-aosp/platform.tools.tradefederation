@@ -18,7 +18,6 @@ package com.android.tradefed.testtype.suite;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -54,8 +53,6 @@ import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.error.HarnessRuntimeException;
-import com.android.tradefed.guice.InvocationScope;
-import com.android.tradefed.guice.InvocationScopeModule;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -90,10 +87,6 @@ import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.MultiMap;
 
-import com.google.inject.Guice;
-import com.google.inject.Injector;
-
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -137,11 +130,6 @@ public class ITestSuiteTest {
     @Mock ILogSaver mMockLogSaver;
     @Mock IRetryDecision mMockDecision;
     private BaseTargetPreparer mMockPreparer;
-
-    // Guice scope and objects for testing
-    private InvocationScope mScope;
-    private Injector mInjector;
-    private InvocationScopeModule mInvocationScope;
     private String mTestFailedMessage = "I failed!";
 
     /** Very basic implementation of {@link ITestSuite} to test it. */
@@ -312,12 +300,6 @@ public class ITestSuiteTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
-        // Start with the Guice scope setup
-        mScope = new InvocationScope();
-        mScope.enter();
-        mInvocationScope = new InvocationScopeModule(mScope);
-        mInjector = Guice.createInjector(mInvocationScope);
-
         mMockPreparer = Mockito.mock(BaseTargetPreparer.class);
         mTestSuite = new TestSuiteImpl(1, mMockPreparer);
         mTestSuite.setSystemStatusChecker(new ArrayList<>());
@@ -341,12 +323,6 @@ public class ITestSuiteTest {
         mListCollectors = new ArrayList<>();
         mListCollectors.add(new TestMetricCollector("metric1", "value1"));
         mListCollectors.add(new TestMetricCollector("metric2", "value2"));
-    }
-
-    @After
-    public void tearDown() {
-        // Always exit the scope at the end.
-        mScope.exit();
     }
 
     public static class TestMetricCollector extends BaseDeviceMetricCollector {
@@ -1778,13 +1754,6 @@ public class ITestSuiteTest {
                     "Device 'SERIAL' was not online to query ro.product.cpu.abi",
                     expected.getMessage());
         }
-    }
-
-    /** Test that when {@link ITestSuite} is within a Guice scope it can receive the injector. */
-    @Test
-    public void testInjector_guice() throws Exception {
-        mInjector.injectMembers(mTestSuite);
-        assertNotNull(mTestSuite.getInjector());
     }
 
     /**
