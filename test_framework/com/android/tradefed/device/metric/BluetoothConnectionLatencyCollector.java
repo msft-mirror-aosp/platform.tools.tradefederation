@@ -21,6 +21,7 @@ import com.android.os.StatsLog.ConfigMetricsReportList;
 import com.android.os.StatsLog.DurationBucketInfo;
 import com.android.os.StatsLog.DurationMetricData;
 import com.android.os.StatsLog.StatsLogReport.DurationMetricDataWrapper;
+import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -28,35 +29,33 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.util.Sl4aBluetoothUtil.BluetoothProfile;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
+import com.google.common.collect.ImmutableMap;
+
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * The collector will push a pre-defined statsd duration metric config to devices and collect
  * Bluetooth connection duration for each profile.
  */
+@OptionClass(alias = "bluetooth-connection-latency-collector")
 public class BluetoothConnectionLatencyCollector extends HostStatsdMetricCollector {
 
     private static final String BLUETOOTH_CONNECTION_LATENCY_METRIC_KEY =
             "bluetooth_connection_latency";
 
     /** A map associates Bluetooth profile number to the descriptive name used for metric key. */
-    private final Map<Integer, String> bluetoothProfilesMap;
-
-    public BluetoothConnectionLatencyCollector() {
-        bluetoothProfilesMap = new HashMap<>();
-        bluetoothProfilesMap.put(BluetoothProfile.HEADSET.getProfile(), "headset");
-        bluetoothProfilesMap.put(BluetoothProfile.A2DP.getProfile(), "a2dp");
-        bluetoothProfilesMap.put(BluetoothProfile.PAN.getProfile(), "pan");
-        bluetoothProfilesMap.put(BluetoothProfile.MAP.getProfile(), "map");
-        bluetoothProfilesMap.put(BluetoothProfile.A2DP_SINK.getProfile(), "a2dp_sink");
-        bluetoothProfilesMap.put(
-                BluetoothProfile.AVRCP_CONTROLLER.getProfile(), "avrcp_controller");
-        bluetoothProfilesMap.put(BluetoothProfile.HEADSET_CLIENT.getProfile(), "headset_client");
-        bluetoothProfilesMap.put(BluetoothProfile.PBAP_CLIENT.getProfile(), "pbap_client");
-        bluetoothProfilesMap.put(BluetoothProfile.MAP_CLIENT.getProfile(), "map_client");
-    }
+    protected static final ImmutableMap<Integer, String> bluetoothProfilesMap =
+            ImmutableMap.<Integer, String>builder()
+                    .put(BluetoothProfile.HEADSET.getProfile(), "headset")
+                    .put(BluetoothProfile.A2DP.getProfile(), "a2dp")
+                    .put(BluetoothProfile.PAN.getProfile(), "pan")
+                    .put(BluetoothProfile.MAP.getProfile(), "map")
+                    .put(BluetoothProfile.A2DP_SINK.getProfile(), "a2dp_sink")
+                    .put(BluetoothProfile.AVRCP_CONTROLLER.getProfile(), "avrcp_controller")
+                    .put(BluetoothProfile.HEADSET_CLIENT.getProfile(), "headset_client")
+                    .put(BluetoothProfile.PBAP_CLIENT.getProfile(), "pbap_client")
+                    .put(BluetoothProfile.MAP_CLIENT.getProfile(), "map_client")
+                    .build();
 
     @Override
     protected void processStatsReport(
