@@ -16,6 +16,7 @@
 
 package com.android.tradefed.device.metric;
 
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -79,15 +80,6 @@ public final class TraceCmdCollectorTest {
      */
     @Test
     public void testStartsAtraceAndTraceCmdOptions() throws Exception {
-        String expectedCLI =
-                "nohup "
-                        + mTraceCmdPath
-                        + " record -o "
-                        + mDefaultLogPath
-                        + " "
-                        + mTraceCmdOptions
-                        + " > /dev/null 2>&1 &";
-
         mOptionSetter.setOptionValue("trace-cmd-binary", mTraceCmdPath);
         mOptionSetter.setOptionValue("trace-cmd-recording-args", mTraceCmdOptions);
 
@@ -116,7 +108,6 @@ public final class TraceCmdCollectorTest {
      */
     @Test
     public void testStartsAtraceAndTraceCmdFails() throws Exception {
-
         doThrow(new DeviceNotAvailableException("test", "serial"))
                 .when(mMockDevice)
                 .executeShellCommand(
@@ -128,14 +119,12 @@ public final class TraceCmdCollectorTest {
 
         mOptionSetter.setOptionValue("trace-cmd-binary", mTraceCmdPath);
 
-        mTraceCmd.onTestStart(new DeviceMetricData(mMockInvocationContext));
-        verify(mMockDevice, times(1))
-                .executeShellCommand(
-                        Mockito.eq("atrace --async_start -z " + mCategories),
-                        Mockito.any(),
-                        Mockito.eq(1L),
-                        Mockito.any(),
-                        Mockito.eq(1));
+        try {
+            mTraceCmd.onTestStart(new DeviceMetricData(mMockInvocationContext));
+            fail("Should have thrown an exception.");
+        } catch (DeviceNotAvailableException expected) {
+            // Expected
+        }
     }
 
     /**
