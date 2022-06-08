@@ -60,7 +60,6 @@ import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
 import com.android.tradefed.device.metric.IMetricCollector;
-import com.android.tradefed.guice.InvocationScope;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.shard.IShardHelper;
 import com.android.tradefed.invoker.shard.ShardHelper;
@@ -309,12 +308,6 @@ public class TestInvocationTest {
                     @Override
                     protected void setExitCode(ExitCode code, Throwable stack) {
                         // Empty on purpose
-                    }
-
-                    @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
                     }
 
                     @Override
@@ -1995,12 +1988,6 @@ public class TestInvocationTest {
                     }
 
                     @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
-                    }
-
-                    @Override
                     protected void applyAutomatedReporters(IConfiguration config) {
                         // Empty on purpose
                     }
@@ -2097,12 +2084,6 @@ public class TestInvocationTest {
                         @Override
                         protected void setExitCode(ExitCode code, Throwable stack) {
                             // empty on purpose
-                        }
-
-                        @Override
-                        InvocationScope getInvocationScope() {
-                            // Avoid re-entry in the current TF invocation scope for unit tests.
-                            return new InvocationScope();
                         }
 
                         @Override
@@ -2215,12 +2196,6 @@ public class TestInvocationTest {
                         @Override
                         protected void applyAutomatedReporters(IConfiguration config) {
                             // Empty on purpose
-                        }
-
-                        @Override
-                        InvocationScope getInvocationScope() {
-                            // Avoid re-entry in the current TF invocation scope for unit tests.
-                            return new InvocationScope();
                         }
 
                         @Override
@@ -2502,12 +2477,6 @@ public class TestInvocationTest {
                     @Override
                     protected void setExitCode(ExitCode code, Throwable stack) {
                         // Empty on purpose
-                    }
-
-                    @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
                     }
 
                     @Override

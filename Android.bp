@@ -173,7 +173,6 @@ java_library_host {
         "google-api-services-compute",
         "google-api-services-storage",
         "gson-prebuilt-jar",
-        "guice",
         "jacoco-cli",
         "jline",
         "junit-params",
