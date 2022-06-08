@@ -193,12 +193,29 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
         }
     }
 
-    private ITestDevice getDeviceFromReservationAndClear(String reservationId) {
+    private Entry<String, ReservationInformation> getDeviceEntryFromReservation(
+            String reservationId) {
         for (Entry<String, ReservationInformation> info : mSerialToReservation.entrySet()) {
             if (info.getValue().reservationId.equals(reservationId)) {
-                mSerialToReservation.remove(info.getKey());
-                return info.getValue().device;
+                return info;
             }
+        }
+        return null;
+    }
+
+    private ITestDevice getDeviceFromReservationAndClear(String reservationId) {
+        Entry<String, ReservationInformation> entry = getDeviceEntryFromReservation(reservationId);
+        if (entry != null) {
+            mSerialToReservation.remove(entry.getKey());
+            return entry.getValue().device;
+        }
+        return null;
+    }
+
+    public ITestDevice getDeviceFromReservation(String reservationId) {
+        Entry<String, ReservationInformation> entry = getDeviceEntryFromReservation(reservationId);
+        if (entry != null) {
+            return entry.getValue().device;
         }
         return null;
     }
