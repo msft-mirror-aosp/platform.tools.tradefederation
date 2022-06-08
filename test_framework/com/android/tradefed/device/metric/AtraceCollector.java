@@ -154,7 +154,7 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
         }
     }
 
-    protected void startTracing(ITestDevice device) {
+    protected void startTracing(ITestDevice device) throws DeviceNotAvailableException {
         //atrace --async_start will set a variety of sysfs entries, and then exit.
         String cmd = "atrace --async_start ";
         if (mCompressDump) {
@@ -163,18 +163,12 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
         cmd += String.join(" ", mCategories);
         CollectingOutputReceiver c = new CollectingOutputReceiver();
         CLog.i("issuing command : %s to device: %s", cmd, device.getSerialNumber());
-
-        try {
-            device.executeShellCommand(cmd, c, 1, TimeUnit.SECONDS, 1);
-        } catch (DeviceNotAvailableException e) {
-            CLog.e("Error starting atrace:");
-            CLog.e(e);
-        }
+        device.executeShellCommand(cmd, c, 1, TimeUnit.SECONDS, 1);
         CLog.i("command output: %s", c.getOutput());
     }
 
     @Override
-    public void onTestStart(DeviceMetricData testData) {
+    public void onTestStart(DeviceMetricData testData) throws DeviceNotAvailableException {
         if (mCategories.isEmpty()) {
             CLog.d("no categories specified to trace, not running AtraceMetricCollector");
             return;
@@ -197,6 +191,8 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
                     CLog.e(e);
                 }
             });
+            mThread.setDaemon(true);
+            mThread.setName("AtraceCollector-on-boot");
             mThread.start();
         } else {
             for (ITestDevice device : getDevices()) {
@@ -205,19 +201,14 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
         }
     }
 
-    protected void stopTracing(ITestDevice device) {
+    protected void stopTracing(ITestDevice device) throws DeviceNotAvailableException {
         CLog.i("collecting atrace log from device: %s", device.getSerialNumber());
-        try {
-            device.executeShellCommand(
-                    "atrace --async_stop -o " + fullLogPath(),
-                    new NullOutputReceiver(),
-                    60,
-                    TimeUnit.SECONDS,
-                    1);
-        } catch (DeviceNotAvailableException e) {
-            CLog.e("Error stopping atrace");
-            CLog.e(e);
-        }
+        device.executeShellCommand(
+                "atrace --async_stop -o " + fullLogPath(),
+                new NullOutputReceiver(),
+                60,
+                TimeUnit.SECONDS,
+                1);
     }
 
     private void postProcess(File trace) {
@@ -278,7 +269,8 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
     public void onTestEnd(
             DeviceMetricData testData,
             final Map<String, Metric> currentTestCaseMetrics,
-            TestDescription test) {
+            TestDescription test)
+            throws DeviceNotAvailableException {
 
         if (mCategories.isEmpty()) {
             return;
@@ -313,7 +305,7 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
                 else {
                     CLog.w("preserving ondevice atrace log: %s", fullLogPath());
                 }
-            } catch (DeviceNotAvailableException | DeviceRuntimeException e) {
+            } catch (DeviceRuntimeException e) {
                 CLog.e("Error retrieving atrace log! device not available:");
                 CLog.e(e);
             }
