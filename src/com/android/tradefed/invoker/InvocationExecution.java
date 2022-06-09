@@ -894,7 +894,11 @@ public class InvocationExecution implements IInvocationExecution {
         } finally {
             TestInvocation.printStageDelimiter(Stage.TEST, true);
             // TODO: Look if this can be improved to DeviceNotAvailableException too.
-            Runtime.getRuntime().removeShutdownHook(reporterThread);
+            try {
+                Runtime.getRuntime().removeShutdownHook(reporterThread);
+            } catch (IllegalStateException e) {
+                // Ignore as it would throw only if JVM shutdown is in progress.
+            }
             // Only log if it was no already logged to keep the value closest to execution
             if (!InvocationMetricLogger.getInvocationMetrics()
                     .containsKey(InvocationMetricKey.TEST_PAIR.toString())) {
