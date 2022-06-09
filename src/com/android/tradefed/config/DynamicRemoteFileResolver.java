@@ -198,20 +198,22 @@ public class DynamicRemoteFileResolver {
                     } else if (value instanceof Collection) {
                         @SuppressWarnings("unchecked")  // Mostly-safe, see above comment.
                         Collection<Object> c = (Collection<Object>) value;
-                        Collection<Object> copy = new ArrayList<>(c);
-                        for (Object o : copy) {
-                            if (o instanceof File) {
-                                File consideredFile = (File) o;
-                                ResolvedFile resolvedFile =
-                                        resolveRemoteFiles(consideredFile, option);
-                                if (resolvedFile != null) {
-                                    File downloadedFile = resolvedFile.getResolvedFile();
-                                    if (resolvedFile.shouldCleanUp()) {
-                                        downloadedFiles.add(downloadedFile);
+                        synchronized (c) {
+                            Collection<Object> copy = new ArrayList<>(c);
+                            for (Object o : copy) {
+                                if (o instanceof File) {
+                                    File consideredFile = (File) o;
+                                    ResolvedFile resolvedFile =
+                                            resolveRemoteFiles(consideredFile, option);
+                                    if (resolvedFile != null) {
+                                        File downloadedFile = resolvedFile.getResolvedFile();
+                                        if (resolvedFile.shouldCleanUp()) {
+                                            downloadedFiles.add(downloadedFile);
+                                        }
+                                        // TODO: See if order could be preserved.
+                                        c.remove(consideredFile);
+                                        c.add(downloadedFile);
                                     }
-                                    // TODO: See if order could be preserved.
-                                    c.remove(consideredFile);
-                                    c.add(downloadedFile);
                                 }
                             }
                         }
