@@ -43,6 +43,7 @@ import java.util.regex.Pattern;
  * test LexError ... ok <0.001s>
  * test idents ... FAILED <0.000s>
  * test make_sure_no_proc_macro ... ignored
+ * test test_scalar_div_rem_zero ... ignored, Android sometimes uses panic_abort
  * ...
  * ---- tests::idents stdout ----
  * thread 'main' panicked at 'assertion failed: `(left == right)`
