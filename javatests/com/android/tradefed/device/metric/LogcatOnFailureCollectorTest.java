@@ -21,19 +21,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.config.ConfigurationDef;
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ILogcatReceiver;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
@@ -51,6 +42,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.util.HashMap;
 
@@ -79,7 +73,8 @@ public class LogcatOnFailureCollectorTest {
         }
 
         @Override
-        public void onTestFail(DeviceMetricData testData, TestDescription test) {
+        public void onTestFail(DeviceMetricData testData, TestDescription test)
+                throws DeviceNotAvailableException {
             super.onTestFail(testData, test);
             mOnTestFailCalled = true;
         }

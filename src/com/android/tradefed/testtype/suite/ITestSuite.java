@@ -83,8 +83,6 @@ import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.inject.Inject;
-import com.google.inject.Injector;
 import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
@@ -351,9 +349,6 @@ public abstract class ITestSuite
     private ModuleDefinition mDirectModule = null;
     private boolean mShouldMakeDynamicModule = true;
 
-    // Guice object
-    private Injector mInjector;
-
     // Current modules to run, null if not started to run yet.
     private List<ModuleDefinition> mRunModules = null;
     private ModuleDefinition mModuleInProgress = null;
@@ -375,29 +370,6 @@ public abstract class ITestSuite
     public void setDirectModule(ModuleDefinition module) {
         mDirectModule = module;
         mIsSharded = true;
-    }
-
-    /**
-     * Get the current Guice {@link Injector} from the invocation. It should allow us to continue
-     * the object injection of modules.
-     */
-    @Inject
-    public void setInvocationInjector(Injector injector) {
-        mInjector = injector;
-    }
-
-    /** Forward our invocation scope guice objects to whoever needs them in modules. */
-    private void applyGuiceInjection(LinkedHashMap<String, IConfiguration> runConfig) {
-        if (mInjector == null) {
-            // TODO: Convert to a strong failure
-            CLog.d("No injector received by the suite.");
-            return;
-        }
-        for (IConfiguration config : runConfig.values()) {
-            for (IRemoteTest test : config.getTests()) {
-                mInjector.injectMembers(test);
-            }
-        }
     }
 
     /**
@@ -435,8 +407,6 @@ public abstract class ITestSuite
             CLog.i("No config were loaded. Nothing to run.");
             return runConfig;
         }
-        // Apply our guice scope to all modules objects
-        applyGuiceInjection(runConfig);
 
         Set<String> moduleNames = new HashSet<>();
         LinkedHashMap<String, IConfiguration> filteredConfig = new LinkedHashMap<>();
@@ -1426,12 +1396,6 @@ public abstract class ITestSuite
     /** Returns the abi requested with the option -a or --abi. */
     public final String getRequestedAbi() {
         return mAbiName;
-    }
-
-    /** Getter used to validate the proper Guice injection. */
-    @VisibleForTesting
-    final Injector getInjector() {
-        return mInjector;
     }
 
     /**
