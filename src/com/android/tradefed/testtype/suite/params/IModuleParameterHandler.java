@@ -26,6 +26,8 @@ public interface IModuleParameterHandler {
     /**
      * Adds to {@link IConfiguration} with the parameter specific needs. For example, insert or
      * remove target preparers from configuration.
+     *
+     * @param moduleConfiguration the {@link IConfiguration} of the module
      */
     default void addParameterSpecificConfig(IConfiguration moduleConfiguration) {}
 
