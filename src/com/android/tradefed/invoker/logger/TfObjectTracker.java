@@ -18,13 +18,13 @@ package com.android.tradefed.invoker.logger;
 import com.android.tradefed.build.IBuildProvider;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.postprocessor.IPostProcessor;
+import com.android.tradefed.targetprep.ILabPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.multi.IMultiTargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
 
-import com.google.common.collect.ImmutableSet;
-
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,14 +33,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TfObjectTracker {
 
     public static final String TF_OBJECTS_TRACKING_KEY = "tf_objects_tracking";
-    private static final Set<Class<?>> TRACKED_CLASSES =
-            ImmutableSet.of(
-                    IBuildProvider.class,
-                    IMetricCollector.class,
-                    IMultiTargetPreparer.class,
-                    IPostProcessor.class,
-                    IRemoteTest.class,
-                    ITargetPreparer.class);
+    private static final Set<Class<?>> TRACKED_CLASSES = new LinkedHashSet<Class<?>>();
+
+    static {
+        TRACKED_CLASSES.add(IBuildProvider.class);
+        TRACKED_CLASSES.add(IMetricCollector.class);
+        TRACKED_CLASSES.add(IMultiTargetPreparer.class);
+        TRACKED_CLASSES.add(IPostProcessor.class);
+        TRACKED_CLASSES.add(IRemoteTest.class);
+        TRACKED_CLASSES.add(ILabPreparer.class);
+        TRACKED_CLASSES.add(ITargetPreparer.class);
+    }
 
     private TfObjectTracker() {}
 
