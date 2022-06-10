@@ -278,8 +278,8 @@ public class GceAvdInfo {
      *
      * @param oxygenRes the {@link CommandResult} from Oxygen client command execution.
      * @param remoteAdbPort the remote port that should be used for adb connection
-     * @return {@link List<GceAvdInfo>} of the devices successfully leased. Will throw {@link
-     *     TargetSetupError} if failed to lease a device.
+     * @return {@link List} of the devices successfully leased. Will throw {@link TargetSetupError}
+     *     if failed to lease a device.
      */
     public static List<GceAvdInfo> parseGceInfoFromOxygenClientOutput(
             CommandResult oxygenRes, int remoteAdbPort) throws TargetSetupError {
