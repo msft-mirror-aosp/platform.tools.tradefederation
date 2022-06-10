@@ -22,6 +22,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -41,6 +43,7 @@ import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.FuseUtil;
 import com.android.tradefed.util.IRunUtil;
 
 import org.junit.Before;
@@ -50,6 +53,8 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -57,6 +62,7 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Map;
 
 /** Unit tests for {@link FastbootDeviceFlasher}. */
 @RunWith(JUnit4.class)
@@ -71,6 +77,7 @@ public class FastbootDeviceFlasherTest {
     @Mock IFlashingResourcesRetriever mMockRetriever;
     @Mock IFlashingResourcesParser mMockParser;
     @Mock IRunUtil mMockRunUtil;
+    @Mock FuseUtil mMockFuseUtil;
 
     @Before
     public void setUp() throws Exception {
@@ -96,6 +103,11 @@ public class FastbootDeviceFlasherTest {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
+                    }
+
+                    @Override
+                    protected FuseUtil getFuseUtil() {
+                        return mMockFuseUtil;
                     }
                 };
         mFlasher.setFlashingResourcesRetriever(mMockRetriever);
@@ -585,8 +597,55 @@ public class FastbootDeviceFlasherTest {
             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
             res.setStderr("flashing");
             when(mMockDevice.executeLongFastbootCommand(
-                            Mockito.eq("update"), Mockito.eq(deviceImage.getAbsolutePath())))
+                            Mockito.anyMap(),
+                            Mockito.eq("update"),
+                            Mockito.eq(deviceImage.getAbsolutePath())))
                     .thenReturn(res);
+
+            assertTrue(mFlasher.checkAndFlashSystem(mMockDevice, buildId, null, mockBuild));
+
+            assertEquals(
+                    "system flashing status should be \"SUCCESS\"",
+                    CommandStatus.SUCCESS,
+                    mFlasher.getSystemFlashingStatus());
+        } finally {
+            FileUtil.deleteFile(deviceImage);
+        }
+    }
+
+    /**
+     * Test {@link FastbootDeviceFlasher#checkAndFlashSystem(ITestDevice, String, String,
+     * IDeviceBuildInfo)} with fuse-zip to mount device image and flash with fastboot flashall.
+     */
+    @Test
+    public void testCheckAndFlashSystemWithFlashall() throws Exception {
+        final String buildId = "systemBuildId";
+        IDeviceBuildInfo mockBuild = mock(IDeviceBuildInfo.class);
+        when(mockBuild.getDeviceBuildId()).thenReturn(buildId);
+        File deviceImage = FileUtil.createTempFile("fakeDeviceImage", "");
+        mFlasher.setFlashWithFuseZip(true);
+        when(mMockFuseUtil.canMountZip()).thenReturn(true);
+        try {
+            when(mockBuild.getDeviceImageFile()).thenReturn(deviceImage);
+            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+            res.setStderr("flashing");
+            Mockito.doAnswer(
+                            new Answer<Object>() {
+                                @Override
+                                public Object answer(InvocationOnMock mock) throws Throwable {
+                                    Map<String, String> envVarMap = mock.getArgument(0);
+                                    String cmd = mock.getArgument(1);
+                                    assertTrue(envVarMap.containsKey("ANDROID_PRODUCT_OUT"));
+                                    assertEquals("flashall", cmd);
+                                    return res;
+                                }
+                            })
+                    .when(mMockDevice)
+                    .executeLongFastbootCommand(Mockito.anyMap(), Mockito.anyString());
+
+            doNothing()
+                    .when(mMockFuseUtil)
+                    .mountZip(Mockito.eq(deviceImage.getAbsoluteFile()), isA(File.class));
 
             assertTrue(mFlasher.checkAndFlashSystem(mMockDevice, buildId, null, mockBuild));
 
@@ -619,12 +678,14 @@ public class FastbootDeviceFlasherTest {
             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
             res.setStderr("flashing");
             when(mMockDevice.executeLongFastbootCommand(
+                            Mockito.anyMap(),
                             Mockito.eq("--skip-reboot"),
                             Mockito.eq("update"),
                             Mockito.eq(deviceImage.getAbsolutePath())))
                     .thenReturn(res);
 
             when(mMockDevice.executeLongFastbootCommand(
+                            Mockito.anyMap(),
                             Mockito.eq("flash"),
                             Mockito.eq("boot"),
                             Mockito.eq(ramdisk.getAbsolutePath())))
@@ -664,6 +725,7 @@ public class FastbootDeviceFlasherTest {
             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
             res.setStderr("flashing");
             when(mMockDevice.executeLongFastbootCommand(
+                            Mockito.anyMap(),
                             Mockito.eq("flash"),
                             Mockito.eq("vendor_boot"),
                             Mockito.eq(ramdisk.getAbsolutePath())))
@@ -697,6 +759,7 @@ public class FastbootDeviceFlasherTest {
             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
             res.setStderr("flashing");
             when(mMockDevice.executeLongFastbootCommand(
+                            Mockito.anyMap(),
                             Mockito.eq("--foo"),
                             Mockito.eq("--bar"),
                             Mockito.eq("update"),
@@ -729,7 +792,9 @@ public class FastbootDeviceFlasherTest {
             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
             res.setStderr("flashing");
             when(mMockDevice.executeLongFastbootCommand(
-                            Mockito.eq("update"), Mockito.eq(deviceImage.getAbsolutePath())))
+                            Mockito.anyMap(),
+                            Mockito.eq("update"),
+                            Mockito.eq(deviceImage.getAbsolutePath())))
                     .thenThrow(new DeviceNotAvailableException("test", "serial"));
 
             try {
@@ -828,7 +893,10 @@ public class FastbootDeviceFlasherTest {
         result.setStderr("success");
         result.setStdout("");
         when(mockDevice.executeLongFastbootCommand(
-                        Mockito.eq("flash"), Mockito.eq(image), (String) Mockito.any()))
+                        Mockito.anyMap(),
+                        Mockito.eq("flash"),
+                        Mockito.eq(image),
+                        (String) Mockito.any()))
                 .thenReturn(result);
     }
 
