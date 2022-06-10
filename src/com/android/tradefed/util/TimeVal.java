@@ -26,10 +26,9 @@ import java.util.regex.Pattern;
  * parsing machinery that a particular value should be parsed as if it were a string representing a
  * time value.
  *
- * @deprecated use {@link java.time.Duration} instead.
+ * <p>We recommend using {@link java.time.Duration} instead.
  */
 @SuppressWarnings("serial")
-@Deprecated
 public class TimeVal extends Number implements Comparable<Long> {
     private static final Pattern TIME_PATTERN =
             Pattern.compile("(?i)" +  // case insensitive

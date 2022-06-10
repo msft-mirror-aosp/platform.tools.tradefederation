@@ -32,6 +32,7 @@ import com.android.tradefed.util.ZipUtil;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -256,7 +257,7 @@ public class CommonLogRemoteFileUtil {
                 GceManager.remoteSshCommandExecution(
                         gceAvd, options, runUtil, 60000, remoteCommand);
         StringBuilder builder = new StringBuilder();
-        builder.append(String.format("Command: %s\n", remoteCommand));
+        builder.append(String.format("Command: %s\n", Arrays.asList(remoteCommand)));
         builder.append(
                 String.format(
                         "Exit code: %d, Status: %s\n",

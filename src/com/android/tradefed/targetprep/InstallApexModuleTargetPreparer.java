@@ -194,7 +194,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * Check if all apexes are activated.
      *
      * @param device under test.
-     * @throws Exception if activation failed.
+     * @throws TargetSetupError if activation failed.
      */
     protected void checkApexActivation(ITestDevice device)
             throws DeviceNotAvailableException, TargetSetupError {
@@ -344,22 +344,6 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             }
         }
         return apkModuleInData;
-    }
-
-    /**
-     * Check if the files to be installed contain .apk or .apks.
-     *
-     * @param testAppFiles List<File> of the modules that will be installed on the device.
-     * @return true if the files contain .apk or .apks, otherwise false.
-     */
-    private boolean hasApkFilesToInstall(List<File> testAppFiles) {
-        List<String> checkLists = Arrays.asList(".apk", ".apks");
-        for (File testAppFile : testAppFiles) {
-            if (checkLists.stream().anyMatch(entry -> testAppFile.getName().endsWith(entry))) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @Override

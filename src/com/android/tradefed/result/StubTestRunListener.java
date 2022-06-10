@@ -81,10 +81,9 @@ public class StubTestRunListener implements ITestRunListener {
         // ignore
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
+    @Deprecated
     public void testRunStopped(long elapsedTime) {
         // ignore
     }
