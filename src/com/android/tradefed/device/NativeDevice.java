@@ -93,6 +93,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -2229,24 +2230,47 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public CommandResult executeLongFastbootCommand(String... cmdArgs)
             throws DeviceNotAvailableException, UnsupportedOperationException {
+        return executeLongFastbootCommand(new HashMap<>(), cmdArgs);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CommandResult executeLongFastbootCommand(
+            Map<String, String> envVarMap, String... cmdArgs)
+            throws DeviceNotAvailableException, UnsupportedOperationException {
         // TODO: fix mixed use of fastboot timeout and command timeout
-        return doFastbootCommand(getLongCommandTimeout(), cmdArgs);
+        return doFastbootCommand(getLongCommandTimeout(), envVarMap, cmdArgs);
     }
 
     /**
+     * Do a fastboot command with environment variables set
+     *
+     * @param timeout timeout for the fastboot command
+     * @param envVarMap environment variables that needs to be set before execute the fastboot
+     *     command
      * @param cmdArgs
+     * @return {@link CommandResult} of the fastboot command
      * @throws DeviceNotAvailableException
+     * @throws UnsupportedOperationException
      */
-    private CommandResult doFastbootCommand(final long timeout, String... cmdArgs)
+    private CommandResult doFastbootCommand(
+            final long timeout, Map<String, String> envVarMap, String... cmdArgs)
             throws DeviceNotAvailableException, UnsupportedOperationException {
         if (!mFastbootEnabled) {
             throw new UnsupportedOperationException(String.format(
                     "Attempted to fastboot on device %s , but fastboot is not available. Aborting.",
                     getSerialNumber()));
         }
+
+        File fastbootTmpDir = getHostOptions().getFastbootTmpDir();
+        if (fastbootTmpDir != null) {
+            envVarMap.put("TMPDIR", fastbootTmpDir.getAbsolutePath());
+        }
+
         final String[] fullCmd = buildFastbootCommand(cmdArgs);
+
         for (int i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
-            CommandResult result = simpleFastbootCommand(timeout, fullCmd);
+            CommandResult result = simpleFastbootCommand(timeout, envVarMap, fullCmd);
             if (!isRecoveryNeeded(result)) {
                 return result;
             }
@@ -2257,9 +2281,26 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
             recoverDeviceFromBootloader();
         }
-        throw new DeviceUnresponsiveException(String.format("Attempted fastboot %s multiple "
-                + "times on device %s without communication success. Aborting.", cmdArgs[0],
-                getSerialNumber()), getSerialNumber());
+        throw new DeviceUnresponsiveException(
+                String.format(
+                        "Attempted fastboot %s multiple "
+                                + "times on device %s without communication success. Aborting.",
+                        cmdArgs[0], getSerialNumber()),
+                getSerialNumber());
+    }
+
+    /**
+     * Do a fastboot command
+     *
+     * @param timeout timeout for the fastboot command
+     * @param cmdArgs
+     * @return {@link CommandResult} of the fastboot command
+     * @throws DeviceNotAvailableException
+     * @throws UnsupportedOperationException
+     */
+    private CommandResult doFastbootCommand(final long timeout, String... cmdArgs)
+            throws DeviceNotAvailableException, UnsupportedOperationException {
+        return doFastbootCommand(timeout, new HashMap<>(), cmdArgs);
     }
 
     /**
@@ -5707,6 +5748,17 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @VisibleForTesting
     protected CommandResult simpleFastbootCommand(final long timeout, String[] fullCmd)
             throws UnsupportedOperationException {
+        return simpleFastbootCommand(timeout, new HashMap<>(), fullCmd);
+    }
+
+    /**
+     * Executes a simple fastboot command with environment variables and report the status of the
+     * command.
+     */
+    @VisibleForTesting
+    protected CommandResult simpleFastbootCommand(
+            final long timeout, Map<String, String> envVarMap, String[] fullCmd)
+            throws UnsupportedOperationException {
         if (!mFastbootEnabled) {
             throw new UnsupportedOperationException(
                     String.format(
@@ -5714,13 +5766,17 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                                     + "is disabled. Aborting.",
                             getSerialNumber()));
         }
-        File fastbootTmpDir = getHostOptions().getFastbootTmpDir();
-        IRunUtil runUtil = null;
-        if (fastbootTmpDir != null) {
+        IRunUtil runUtil;
+        if (!envVarMap.isEmpty()) {
             runUtil = new RunUtil();
-            runUtil.setEnvVariable("TMPDIR", fastbootTmpDir.getAbsolutePath());
         } else {
             runUtil = getRunUtil();
+        }
+        for (Map.Entry<String, String> entry : envVarMap.entrySet()) {
+            CLog.v(
+                    String.format(
+                            "Set environment variable %s to %s", entry.getKey(), entry.getValue()));
+            runUtil.setEnvVariable(entry.getKey(), entry.getValue());
         }
         CommandResult result = new CommandResult(CommandStatus.EXCEPTION);
         // block state changes while executing a fastboot command, since
