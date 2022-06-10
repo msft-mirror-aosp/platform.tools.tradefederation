@@ -16,6 +16,7 @@
 
 package com.android.tradefed.observatory;
 
+import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.IConfiguration;
@@ -61,7 +62,7 @@ public class TestDiscoveryExecutor {
     public static void main(String[] args) {
         TestDiscoveryExecutor testDiscoveryExecutor = new TestDiscoveryExecutor();
         try {
-            String testModules = testDiscoveryExecutor.discoverTestModules(args);
+            String testModules = testDiscoveryExecutor.discoverDependencies(args);
             System.out.print(testModules);
             // Exit with code 0 to signal success discovery
             System.exit(0);
@@ -73,12 +74,12 @@ public class TestDiscoveryExecutor {
     }
 
     /**
-     * Discover test modules base on command line args.
+     * Discover test dependencies base on command line args.
      *
      * @param args the command line args of the test.
      * @return A JSON string with test module names.
      */
-    public String discoverTestModules(String[] args) throws Exception {
+    public String discoverDependencies(String[] args) throws Exception {
         // Create IConfiguration base on command line args.
         IConfiguration config = getConfiguration(args);
         List<IRemoteTest> tests = config.getTests();
@@ -89,13 +90,15 @@ public class TestDiscoveryExecutor {
                     "Tradefed Observatory discovered no tests from the IConfiguration created from"
                             + " command line args.");
         }
-        List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));
+        Set<String> allDependencies = new HashSet<>(discoverTestModulesFromTests(tests));
+        allDependencies.addAll(discoverDependencies(config));
+        List<String> allDependenciesList = new ArrayList<>(allDependencies);
 
         // Sort it so that it's always in the same order
-        Collections.sort(testModules);
+        Collections.sort(allDependenciesList);
         JSONObject jsonObject = new JSONObject();
-        JSONArray jsonArray = new JSONArray(testModules);
-        jsonObject.put("TestModules", jsonArray);
+        JSONArray jsonArray = new JSONArray(allDependenciesList);
+        jsonObject.put(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, jsonArray);
         return jsonObject.toString();
     }
 
@@ -154,5 +157,16 @@ public class TestDiscoveryExecutor {
             }
         }
         return testModuleNames;
+    }
+
+    private Set<String> discoverDependencies(IConfiguration config) {
+        Set<String> dependencies = new HashSet<>();
+        for (Object o :
+                config.getAllConfigurationObjectsOfType(Configuration.TARGET_PREPARER_TYPE_NAME)) {
+            if (o instanceof IDiscoverDependencies) {
+                dependencies.addAll(((IDiscoverDependencies) o).reportDependencies());
+            }
+        }
+        return dependencies;
     }
 }
