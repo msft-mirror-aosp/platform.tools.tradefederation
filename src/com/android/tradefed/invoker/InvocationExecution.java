@@ -62,6 +62,7 @@ import com.android.tradefed.retry.RetryStrategy;
 import com.android.tradefed.suite.checker.ISystemStatusCheckerReceiver;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.IHostCleaner;
+import com.android.tradefed.targetprep.ILabPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.targetprep.multi.IMultiTargetPreparer;
@@ -369,6 +370,12 @@ public class InvocationExecution implements IInvocationExecution {
                 CLog.d("%s has been disabled. skipping.", preparer);
                 continue;
             }
+            // Track object invoked as lab_preparer that are not ILabPreparer
+            if (!(preparer instanceof ILabPreparer)) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.LAB_PREPARER_NOT_ILAB,
+                        preparer.getClass().getCanonicalName());
+            }
 
             TfObjectTracker.countWithParents(preparer.getClass());
             if (preparer instanceof ITestLoggerReceiver) {
@@ -405,6 +412,12 @@ public class InvocationExecution implements IInvocationExecution {
             if (preparer.isDisabled()) {
                 CLog.d("%s has been disabled. skipping.", preparer);
                 continue;
+            }
+            // Track object invoked as target_preparer but is ILabPreparer
+            if (preparer instanceof ILabPreparer) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.TARGET_PREPARER_IS_ILAB,
+                        preparer.getClass().getCanonicalName());
             }
 
             TfObjectTracker.countWithParents(preparer.getClass());
