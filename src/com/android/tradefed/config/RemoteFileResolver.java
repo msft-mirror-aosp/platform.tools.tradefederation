@@ -16,6 +16,7 @@
 package com.android.tradefed.config;
 
 import com.android.tradefed.build.BuildRetrievalError;
+import com.android.tradefed.config.DynamicRemoteFileResolver.ServiceFileResolverLoader;
 import com.android.tradefed.config.remote.IRemoteFileResolver;
 import com.android.tradefed.config.remote.IRemoteFileResolver.RemoteFileResolverArgs;
 import com.android.tradefed.invoker.logger.InvocationLocal;
@@ -52,15 +53,7 @@ public class RemoteFileResolver {
                 }
             };
 
-    private final IFileResolverLoader mFileResolverLoader;
-
-    public RemoteFileResolver() {
-        this(DEFAULT_FILE_RESOLVER_LOADER);
-    }
-
-    public RemoteFileResolver(IFileResolverLoader loader) {
-        this.mFileResolverLoader = loader;
-    }
+    public RemoteFileResolver() {}
 
     /**
      * Load a file specified by a URI and place it in the destination directory
