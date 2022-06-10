@@ -86,9 +86,9 @@ public class LocalRunInstructionBuilder {
     /**
      * Return a command to run a test locally.
      *
-     * @param configDescriptor {@link ConfiguratonDescriptor} configuration for the test run.
+     * @param configDescriptor {@link ConfigurationDescriptor} configuration for the test run.
      * @param testId {@link TestDescription} to specify which test to run.
-     * @param LocalTestRunner {@link LocalTestRunner} to use for running the test.
+     * @param runner {@link LocalTestRunner} to use for running the test.
      * @return {@link String} command to run the test locally.
      */
     public static String getCommand(

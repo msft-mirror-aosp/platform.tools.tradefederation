@@ -104,7 +104,7 @@ public class AaptParser {
         public abstract String[] dumpBadgingCommand(File apkFile);
 
         public abstract String[] dumpXmlTreeCommand(File apkFile);
-    };
+    }
 
     private String mPackageName;
     private String mVersionCode;
