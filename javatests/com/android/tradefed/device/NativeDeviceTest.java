@@ -1852,7 +1852,8 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    protected CommandResult simpleFastbootCommand(long timeout, String[] fullCmd)
+                    protected CommandResult simpleFastbootCommand(
+                            long timeout, Map<String, String> envVarMap, String[] fullCmd)
                             throws UnsupportedOperationException {
                         return new CommandResult(CommandStatus.SUCCESS);
                     }
@@ -1892,7 +1893,8 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    protected CommandResult simpleFastbootCommand(long timeout, String[] fullCmd)
+                    protected CommandResult simpleFastbootCommand(
+                            long timeout, Map<String, String> envVarMap, String[] fullCmd)
                             throws UnsupportedOperationException {
                         return new CommandResult(CommandStatus.SUCCESS);
                     }
