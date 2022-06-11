@@ -58,7 +58,7 @@ public class TestDiscoveryInvoker {
     private final File mRootDir;
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
-    public static final String TEST_MODULE_LIST_KEY = "TestModules";
+    public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
@@ -202,7 +202,7 @@ public class TestDiscoveryInvoker {
     private List<String> parseTestModules(String discoveryOutput) throws JSONException {
         JSONObject jsonObject = new JSONObject(discoveryOutput);
         List<String> testModules = new ArrayList<>();
-        JSONArray jsonArray = jsonObject.getJSONArray(TEST_MODULE_LIST_KEY);
+        JSONArray jsonArray = jsonObject.getJSONArray(TEST_DEPENDENCIES_LIST_KEY);
         for (int i = 0; i < jsonArray.length(); i++) {
             testModules.add(jsonArray.getString(i));
         }
