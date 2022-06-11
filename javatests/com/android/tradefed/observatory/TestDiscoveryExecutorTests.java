@@ -102,9 +102,9 @@ public class TestDiscoveryExecutorTests {
         // the test module names will be different with respect to those test config resource files
         // can be changed in different builds.
         try {
-            String output = mTestDiscoveryExecutor.discoverTestModules(new String[0]);
+            String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
             String expected =
-                    "{\"TestModules\":[\"TestModule1\",\"TestModule2\",\"TestModule3\","
+                    "{\"TestDependencies\":[\"TestModule1\",\"TestModule2\",\"TestModule3\","
                             + "\"TestModule4\",\"TestModule5\",\"TestModule6\"]}";
             assertEquals(expected, output);
         } catch (Exception e) {
@@ -129,7 +129,7 @@ public class TestDiscoveryExecutorTests {
         // the test module names will be different with respect to those test config resource files
         // can be changed in different builds.
         try {
-            String output = mTestDiscoveryExecutor.discoverTestModules(new String[0]);
+            mTestDiscoveryExecutor.discoverDependencies(new String[0]);
             fail("Should throw an IllegalStateException");
         } catch (Exception e) {
             assertTrue(e instanceof IllegalStateException);

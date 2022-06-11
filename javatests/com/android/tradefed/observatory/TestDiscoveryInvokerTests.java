@@ -103,7 +103,7 @@ public class TestDiscoveryInvokerTests {
     @Test
     public void testSuccessTestDiscoveryInvocation() throws Exception {
         String successStdout =
-                "{\"TestModules\":[" + TEST_MODULE_1_NAME + "," + TEST_MODULE_2_NAME + "]}";
+                "{\"TestDependencies\":[" + TEST_MODULE_1_NAME + "," + TEST_MODULE_2_NAME + "]}";
         String commandLine =
                 String.format(
                         "random/test/name --cts-package-name android-cts.zip --cts-params"
@@ -212,7 +212,7 @@ public class TestDiscoveryInvokerTests {
                 .when(mRunUtil)
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
         try {
-            List<String> testModules = mTestDiscoveryInvoker.discoverTestModuleNames();
+            mTestDiscoveryInvoker.discoverTestModuleNames();
             fail("Should throw a ConfigurationException");
         } catch (Exception e) {
             assertTrue(e instanceof ConfigurationException);
