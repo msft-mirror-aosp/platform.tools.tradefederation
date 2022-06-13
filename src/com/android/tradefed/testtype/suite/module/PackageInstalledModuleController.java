@@ -19,7 +19,6 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
-import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 
@@ -35,25 +34,19 @@ public class PackageInstalledModuleController extends BaseModuleController {
     private Set<String> mPackages = new HashSet<>();
 
     @Override
-    public RunStrategy shouldRun(IInvocationContext context) {
+    public RunStrategy shouldRun(IInvocationContext context) throws DeviceNotAvailableException {
         for (ITestDevice device : context.getDevices()) {
             if (device.getIDevice() instanceof StubDevice) {
                 continue;
             }
-            try {
-                Set<String> installedPackageNames = device.getInstalledPackageNames();
-                for (String packageName : mPackages) {
-                    if (!installedPackageNames.contains(packageName)) {
-                        CLog.d(
-                                "Skipping module %s because the device does not have package %s.",
-                                getModuleName(), packageName);
-                        return RunStrategy.FULL_MODULE_BYPASS;
-                    }
+            Set<String> installedPackageNames = device.getInstalledPackageNames();
+            for (String packageName : mPackages) {
+                if (!installedPackageNames.contains(packageName)) {
+                    CLog.d(
+                            "Skipping module %s because the device does not have package %s.",
+                            getModuleName(), packageName);
+                    return RunStrategy.FULL_MODULE_BYPASS;
                 }
-            } catch (DeviceNotAvailableException e) {
-                CLog.e("Couldn't get packages on %s", device.getSerialNumber());
-                CLog.e(e);
-                throw new HarnessRuntimeException(e.getMessage(), e, e.getErrorId());
             }
         }
         return RunStrategy.RUN;
