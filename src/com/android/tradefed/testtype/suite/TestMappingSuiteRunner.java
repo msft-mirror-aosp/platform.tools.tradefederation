@@ -271,24 +271,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         return mUseTestMappingPath;
     }
 
-    /** Ensure there are no collisions of TEST_MAPPING paths between different test mapping zips. */
-    private void validateTestMappingSource(Set<TestInfo> base, Set<TestInfo> target, String name) {
-        Set<String> baseSorces = new HashSet<>();
-        for (TestInfo testInfo : base) {
-            baseSorces.addAll(testInfo.getSources());
-        }
-        for (TestInfo testInfo : target) {
-            for (String src : testInfo.getSources()) {
-                if (baseSorces.contains(src)) {
-                    throw new HarnessRuntimeException(
-                            String.format("Collision of Test Mapping file: %s/TEST_MAPPING in " +
-                                    "artifact: %s.", src, name),
-                            InfraErrorIdentifier.TEST_MAPPING_PATH_COLLISION);
-                }
-            }
-        }
-    }
-
     /**
      * Create individual tests with test infos for a module.
      *
