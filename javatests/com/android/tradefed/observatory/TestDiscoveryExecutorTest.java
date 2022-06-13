@@ -19,85 +19,88 @@ package com.android.tradefed.observatory;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
+
+import com.google.common.collect.ImmutableSet;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/** Unit tests for {@link TestDiscoveryExecutor}. */
 @RunWith(JUnit4.class)
-public class TestDiscoveryExecutorTests {
+public class TestDiscoveryExecutorTest {
 
-    private static final ConfigurationFactory CONFIG_FACTORY =
-            Mockito.mock(ConfigurationFactory.class);
-    private static final Configuration CONFIG = Mockito.mock(Configuration.class);
+    private ConfigurationFactory mMockConfigFactory;
+    private Configuration mMockedConfiguration;
     private TestDiscoveryExecutor mTestDiscoveryExecutor;
 
     @Before
     public void setUp() throws Exception {
+        mMockConfigFactory = Mockito.mock(ConfigurationFactory.class);
+        mMockedConfiguration = Mockito.mock(Configuration.class);
         mTestDiscoveryExecutor =
                 new TestDiscoveryExecutor() {
                     @Override
                     IConfigurationFactory getConfigurationFactory() {
-                        return CONFIG_FACTORY;
+                        return mMockConfigFactory;
                     }
                 };
-        Mockito.doAnswer(
-                        new Answer<Object>() {
-                            @Override
-                            public Object answer(InvocationOnMock mock) throws Throwable {
-                                return CONFIG;
-                            }
-                        })
-                .when(CONFIG_FACTORY)
-                .createConfigurationFromArgs(Mockito.any());
+        when(mMockConfigFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mMockedConfiguration);
+    }
+
+    public static class DiscoverablePreparer extends BaseTargetPreparer
+            implements IDiscoverDependencies {
+        @Override
+        public Set<String> reportDependencies() {
+            return ImmutableSet.of("someapk.apk");
+        }
     }
 
     /** Test the executor to discover test modules from multiple tests. */
     @Test
     public void testDiscoverTestModules() throws Exception {
         // Mock to return some include filters
-        Mockito.doAnswer(
-                        new Answer<Object>() {
-                            @Override
-                            public Object answer(InvocationOnMock mock) throws Throwable {
-                                BaseTestSuite test1 = new BaseTestSuite();
-                                Set<String> includeFilters1 = new HashSet<>();
-                                includeFilters1.add("TestModule1 class#function1");
-                                includeFilters1.add("TestModule2");
-                                includeFilters1.add("x86_64 TestModule3 class#function3");
-                                test1.setIncludeFilter(includeFilters1);
+        BaseTestSuite test1 = new BaseTestSuite();
+        Set<String> includeFilters1 = new HashSet<>();
+        includeFilters1.add("TestModule1 class#function1");
+        includeFilters1.add("TestModule2");
+        includeFilters1.add("x86_64 TestModule3 class#function3");
+        test1.setIncludeFilter(includeFilters1);
 
-                                BaseTestSuite test2 = new BaseTestSuite();
-                                Set<String> includeFilters2 = new HashSet<>();
-                                includeFilters2.add("TestModule1 class#function6");
-                                includeFilters2.add("x86 TestModule4");
-                                includeFilters2.add("TestModule5 class#function2");
-                                includeFilters2.add("TestModule6");
-                                test2.setIncludeFilter(includeFilters2);
+        BaseTestSuite test2 = new BaseTestSuite();
+        Set<String> includeFilters2 = new HashSet<>();
+        includeFilters2.add("TestModule1 class#function6");
+        includeFilters2.add("x86 TestModule4");
+        includeFilters2.add("TestModule5 class#function2");
+        includeFilters2.add("TestModule6");
+        test2.setIncludeFilter(includeFilters2);
 
-                                List<IRemoteTest> testList = new ArrayList<>();
-                                testList.add(test1);
-                                testList.add(test2);
-                                return testList;
-                            }
-                        })
-                .when(CONFIG)
-                .getTests();
+        List<IRemoteTest> testList = new ArrayList<>();
+        testList.add(test1);
+        testList.add(test2);
+        when(mMockedConfiguration.getTests()).thenReturn(testList);
+        List<Object> preparers = new ArrayList<>();
+        preparers.add(new DiscoverablePreparer());
+        when(mMockedConfiguration.getAllConfigurationObjectsOfType(
+                        Configuration.TARGET_PREPARER_TYPE_NAME))
+                .thenReturn(preparers);
+
         // We don't test with real command line input here. Because for a real command line input,
         // the test module names will be different with respect to those test config resource files
         // can be changed in different builds.
@@ -105,7 +108,8 @@ public class TestDiscoveryExecutorTests {
             String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
             String expected =
                     "{\"TestDependencies\":[\"TestModule1\",\"TestModule2\",\"TestModule3\","
-                            + "\"TestModule4\",\"TestModule5\",\"TestModule6\"]}";
+                            + "\"TestModule4\",\"TestModule5\",\"TestModule6\""
+                            + ",\"someapk.apk\"]}";
             assertEquals(expected, output);
         } catch (Exception e) {
             fail(String.format("Should not throw exception %s", e.getMessage()));
@@ -116,15 +120,7 @@ public class TestDiscoveryExecutorTests {
     @Test
     public void testDiscoverNoTestModules() throws Exception {
         // Mock to return no include filters
-        Mockito.doAnswer(
-                        new Answer<Object>() {
-                            @Override
-                            public Object answer(InvocationOnMock mock) throws Throwable {
-                                return new ArrayList<>();
-                            }
-                        })
-                .when(CONFIG)
-                .getTests();
+        when(mMockedConfiguration.getTests()).thenReturn(new ArrayList<>());
         // We don't test with real command line input here. Because for a real command line input,
         // the test module names will be different with respect to those test config resource files
         // can be changed in different builds.
