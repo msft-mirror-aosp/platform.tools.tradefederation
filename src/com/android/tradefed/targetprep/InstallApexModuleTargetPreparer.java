@@ -295,7 +295,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     Set<String> getApexInData(Set<ApexInfo> activatedApexes) {
         Set<String> apexInData = new HashSet<>();
         for (ApexInfo apex : activatedApexes) {
-            if (apex.sourceDir.startsWith(ACTIVATED_APEX_SOURCEDIR_PREFIX, 1)) {
+            if (apex.sourceDir.startsWith(APEX_DATA_DIR, 0) ||
+                apex.sourceDir.startsWith(STAGING_DATA_DIR, 0) ||
+                apex.sourceDir.startsWith(SESSION_DATA_DIR, 0)) {
                 apexInData.add(apex.name);
             }
         }
