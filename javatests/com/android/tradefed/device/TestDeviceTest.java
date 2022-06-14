@@ -55,6 +55,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -152,6 +153,11 @@ public class TestDeviceTest {
         @Override
         public boolean isAdbTcp() {
             return false;
+        }
+
+        @Override
+        protected AaptParser createParser(File appFile) {
+            return null;
         }
     }
 
