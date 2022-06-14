@@ -35,42 +35,34 @@ public class MinApiLevelModuleController extends BaseModuleController {
     private Integer mMinApiLevel = 0;
 
     @Override
-    public RunStrategy shouldRun(IInvocationContext context) {
+    public RunStrategy shouldRun(IInvocationContext context) throws DeviceNotAvailableException {
         for (ITestDevice device : context.getDevices()) {
             if (device.getIDevice() instanceof StubDevice) {
                 continue;
             }
+            String apiLevelString = device.getProperty(mApiLevelProp);
+            int apiLevel = -1;
             try {
-                String apiLevelString = device.getProperty(mApiLevelProp);
-                int apiLevel = -1;
-                try {
-                    if (apiLevelString != null) {
-                        apiLevel = Integer.parseInt(apiLevelString);
-                    } else {
-                        CLog.d("Cannot get the API Level.");
-                    }
-                } catch (NumberFormatException e) {
-                    if (VNDK_PROP.equals(mApiLevelProp)) {
-                        // If VNDK property has a non integer value, it means current version.
-                        apiLevel = 10000;
-                    } else {
-                        CLog.d(
-                                "Error parsing system property %s: %s",
-                                mApiLevelProp, e.getMessage());
-                    }
+                if (apiLevelString != null) {
+                    apiLevel = Integer.parseInt(apiLevelString);
+                } else {
+                    CLog.d("Cannot get the API Level.");
                 }
-                if (apiLevel >= mMinApiLevel) {
-                    continue;
+            } catch (NumberFormatException e) {
+                if (VNDK_PROP.equals(mApiLevelProp)) {
+                    // If VNDK property has a non integer value, it means current version.
+                    apiLevel = 10000;
+                } else {
+                    CLog.d("Error parsing system property %s: %s", mApiLevelProp, e.getMessage());
                 }
-                CLog.d(
-                        "Skipping module %s because API Level %d is < %d.",
-                        getModuleName(), apiLevel, mMinApiLevel);
-                return RunStrategy.FULL_MODULE_BYPASS;
-            } catch (DeviceNotAvailableException e) {
-                CLog.e("Couldn't check API Level on %s", device.getSerialNumber());
-                CLog.e(e);
-                throw new RuntimeException(e);
             }
+            if (apiLevel >= mMinApiLevel) {
+                continue;
+            }
+            CLog.d(
+                    "Skipping module %s because API Level %d is < %d.",
+                    getModuleName(), apiLevel, mMinApiLevel);
+            return RunStrategy.FULL_MODULE_BYPASS;
         }
         return RunStrategy.RUN;
     }

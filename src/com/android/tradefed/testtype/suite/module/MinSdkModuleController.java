@@ -39,39 +39,30 @@ public class MinSdkModuleController extends BaseModuleController {
     }
 
     @Override
-    public RunStrategy shouldRun(IInvocationContext context) {
+    public RunStrategy shouldRun(IInvocationContext context) throws DeviceNotAvailableException {
         for (ITestDevice device : context.getDevices()) {
             if (device.getIDevice() instanceof StubDevice) {
                 continue;
             }
+            String sdkVersionString = device.getProperty(SDK_VERSION_PROP);
+            int sdkVersion = -1;
             try {
-                String sdkVersionString = device.getProperty(SDK_VERSION_PROP);
-                int sdkVersion = -1;
-                try {
-                    if (sdkVersionString != null) {
-                        sdkVersion = Integer.parseInt(sdkVersionString);
-                    } else {
-                        CLog.d("SDK version is null");
-                    }
-                } catch (NumberFormatException e) {
-                    CLog.d(
-                            "Error parsing system property "
-                                    + SDK_VERSION_PROP
-                                    + ": "
-                                    + e.getMessage());
+                if (sdkVersionString != null) {
+                    sdkVersion = Integer.parseInt(sdkVersionString);
+                } else {
+                    CLog.d("SDK version is null");
                 }
-                if (sdkVersion >= mMinSdkVersion) {
-                    continue;
-                }
-                CLog.d(
-                        "Skipping module %s because SDK version %d is < " + mMinSdkVersion + ".",
-                        getModuleName(),
-                        sdkVersion);
-                return RunStrategy.FULL_MODULE_BYPASS;
-            } catch (DeviceNotAvailableException e) {
-                CLog.e("Couldn't check SDK version on %s", device.getSerialNumber());
-                CLog.e(e);
+            } catch (NumberFormatException e) {
+                CLog.d("Error parsing system property " + SDK_VERSION_PROP + ": " + e.getMessage());
             }
+            if (sdkVersion >= mMinSdkVersion) {
+                continue;
+            }
+            CLog.d(
+                    "Skipping module %s because SDK version %d is < " + mMinSdkVersion + ".",
+                    getModuleName(),
+                    sdkVersion);
+            return RunStrategy.FULL_MODULE_BYPASS;
         }
         return RunStrategy.RUN;
     }
