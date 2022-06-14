@@ -1312,14 +1312,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     protected IConfiguration createConfiguration(String[] args) throws ConfigurationException {
         TradefedDelegator delegator = checkDelegation(args);
         if (delegator.shouldUseDelegation()) {
-            if (!delegator.getTfRootDir().exists() || !delegator.getTfRootDir().isDirectory()) {
-                throw new ConfigurationException(
-                        String.format(
-                                "delegated-tf was misconfigured and doesn't point to a valid"
-                                        + " location: %s",
-                                delegator.getTfRootDir()),
-                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-            }
             args = TradefedDelegator.clearCommandline(args);
             // Do not use delegation on staging
             if (!delegator.isStaging()) {
