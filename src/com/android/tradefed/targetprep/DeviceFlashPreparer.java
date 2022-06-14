@@ -118,6 +118,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                             + "should be flashed to")
     private String mRamdiskPartition = "boot";
 
+    @Option(
+            name = "flash-with-fuse-zip",
+            description = "Use fuse zip to mount to ANDROID_PRODUCT_OUT then flash by flashall")
+    private boolean mFlashWithFuseZip = false;
+
     /**
      * Sets the device boot time
      * <p/>
@@ -212,6 +217,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 }
                 if (flasher instanceof FastbootDeviceFlasher) {
                     ((FastbootDeviceFlasher) flasher).setFlashOptions(mFastbootFlashOptions);
+                    ((FastbootDeviceFlasher) flasher).setFlashWithFuseZip(mFlashWithFuseZip);
                 }
                 start = System.currentTimeMillis();
                 flasher.preFlashOperations(device, deviceBuild);

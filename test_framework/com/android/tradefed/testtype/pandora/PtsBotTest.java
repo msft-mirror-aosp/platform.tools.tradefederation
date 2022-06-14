@@ -153,7 +153,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         // As mmi2grpc is a folder we cannot use getDependencyFile
         if (!mmi2grpc.exists()) {
             try {
-                File testsDir = testInfo.executionFiles().get(FilesKey.TARGET_TESTS_DIRECTORY);
+                File testsDir = testInfo.executionFiles().get(FilesKey.TESTS_DIRECTORY);
                 mmi2grpc = FileUtil.findDirectory(mmi2grpc.getName(), testsDir);
             } catch (IOException e) {
                 throw new RuntimeException(e);

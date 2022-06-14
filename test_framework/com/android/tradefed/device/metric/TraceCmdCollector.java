@@ -86,7 +86,7 @@ public class TraceCmdCollector extends AtraceCollector {
     }
 
     @Override
-    protected void startTracing(ITestDevice device) {
+    protected void startTracing(ITestDevice device) throws DeviceNotAvailableException {
         if (mTraceCmdBinary == null) {
             CLog.w("--trace-cmd-binary was not set, skipping trace metric collection");
             return;
@@ -107,39 +107,28 @@ public class TraceCmdCollector extends AtraceCollector {
         traceCmd.append(" > /dev/null 2>&1 &");
         CLog.i("Issuing trace-cmd: %s ", traceCmd.toString());
         CollectingOutputReceiver c = new CollectingOutputReceiver();
-        try {
-            device.executeShellCommand("chmod +x " + mTraceCmdBinary, c, 1, TimeUnit.SECONDS, 1);
-            device.executeShellCommand(traceCmd.toString(), c, 1, TimeUnit.SECONDS, 1);
-        } catch (DeviceNotAvailableException e) {
-            CLog.e("Error starting trace-cmd:");
-            CLog.e(e);
-        }
+        device.executeShellCommand("chmod +x " + mTraceCmdBinary, c, 1, TimeUnit.SECONDS, 1);
+        device.executeShellCommand(traceCmd.toString(), c, 1, TimeUnit.SECONDS, 1);
     }
 
     @Override
-    protected void stopTracing(ITestDevice device) {
+    protected void stopTracing(ITestDevice device) throws DeviceNotAvailableException {
         if (mTraceCmdBinary == null) {
             CLog.w("trace-cmd was not set, skipping attempt to stop trace collection");
             return;
         }
 
-        try {
-            // sigterm the trace process and monitor for the process's demise.
-            // Failure to wait can result in a partial log being pulled.
-            // Since it was started with nohup in a separate shell, trace-cmd is not a child
-            // of this shell, and 'wait' won't work.
-            CLog.i("Collecting trace-cmd log from device: " + device.getSerialNumber());
-            device.executeShellCommand(
-                    "for PID in $(pidof trace-cmd); "
-                            + "do while kill -s sigint $PID; do sleep 0.3; done; done;",
-                    new NullOutputReceiver(),
-                    60,
-                    TimeUnit.SECONDS,
-                    1);
-
-        } catch (DeviceNotAvailableException e) {
-            CLog.e("Error stopping atrace");
-            CLog.e(e);
-        }
+        // sigterm the trace process and monitor for the process's demise.
+        // Failure to wait can result in a partial log being pulled.
+        // Since it was started with nohup in a separate shell, trace-cmd is not a child
+        // of this shell, and 'wait' won't work.
+        CLog.i("Collecting trace-cmd log from device: " + device.getSerialNumber());
+        device.executeShellCommand(
+                "for PID in $(pidof trace-cmd); "
+                        + "do while kill -s sigint $PID; do sleep 0.3; done; done;",
+                new NullOutputReceiver(),
+                60,
+                TimeUnit.SECONDS,
+                1);
     }
 }

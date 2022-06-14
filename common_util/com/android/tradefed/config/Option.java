@@ -102,10 +102,7 @@ public @interface Option {
      * h} may only appear before {@code m}, and may only appear after {@code d}. As a specific
      * example, "1d2h3m4s5ms" would be a valid time value, as would "4" or "4ms". All embedded
      * whitespace is discarded.
-     *
-     * @deprecated use Duration type instead.
      */
-    @Deprecated
     boolean isTimeVal() default false;
 
     /**

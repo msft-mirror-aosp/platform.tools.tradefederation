@@ -73,7 +73,8 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
 
     @Override
     public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener) {
+            IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
         super.init(context, listener);
 
         if (isGcovCoverageEnabled()) {
@@ -81,8 +82,6 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
                 // Clear coverage measurements on the device.
                 try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
                     getCoverageFlusher(device).resetCoverage();
-                } catch (DeviceNotAvailableException e) {
-                    throw new RuntimeException(e);
                 }
             }
         }
@@ -130,7 +129,8 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     @Override
-    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> runMetrics) {
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> runMetrics)
+            throws DeviceNotAvailableException {
         if (!isGcovCoverageEnabled()) {
             return;
         }
@@ -143,7 +143,8 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     /** Pulls native coverage measurements from the device and logs them. */
-    public void logCoverageMeasurements(ITestDevice device, String runName) {
+    public void logCoverageMeasurements(ITestDevice device, String runName)
+            throws DeviceNotAvailableException {
         File coverageTar = null;
         File coverageZip = null;
 
@@ -171,7 +172,7 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
 
             // Delete coverage files on the device.
             device.executeShellCommand(DELETE_COVERAGE_FILES_COMMAND);
-        } catch (DeviceNotAvailableException | IOException e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         } finally {
             FileUtil.deleteFile(coverageTar);

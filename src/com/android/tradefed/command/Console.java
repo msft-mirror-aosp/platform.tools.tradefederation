@@ -1384,20 +1384,6 @@ public class Console extends Thread {
             console.registerShutdownSignals();
 
             // Gate the server starting to a port being explicitly defined
-            Integer port = TestInvocationManagementServer.getPort();
-            if (port != null) {
-                try {
-                    invocationManagementServer =
-                            new TestInvocationManagementServer(
-                                    port, GlobalConfiguration.getInstance().getCommandScheduler());
-                    GlobalConfiguration.getInstance()
-                            .setInvocationServer(invocationManagementServer);
-                    // Start the server last to ensure that command scheduler is started
-                    invocationManagementServer.start();
-                } catch (RuntimeException e) {
-                    System.out.println(String.format("Error starting invocation server: %s", e));
-                }
-            }
             Integer deviceManagementPort = DeviceManagementGrpcServer.getPort();
             if (deviceManagementPort != null) {
                 try {
@@ -1411,6 +1397,22 @@ public class Console extends Thread {
                 } catch (RuntimeException e) {
                     System.out.println(
                             String.format("Error starting device management server: %s", e));
+                }
+            }
+            Integer port = TestInvocationManagementServer.getPort();
+            if (port != null) {
+                try {
+                    invocationManagementServer =
+                            new TestInvocationManagementServer(
+                                    port,
+                                    GlobalConfiguration.getInstance().getCommandScheduler(),
+                                    deviceManagementServer);
+                    GlobalConfiguration.getInstance()
+                            .setInvocationServer(invocationManagementServer);
+                    // Start the server last to ensure that command scheduler is started
+                    invocationManagementServer.start();
+                } catch (RuntimeException e) {
+                    System.out.println(String.format("Error starting invocation server: %s", e));
                 }
             }
         } finally {

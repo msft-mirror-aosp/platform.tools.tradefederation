@@ -26,6 +26,7 @@ import com.android.tradefed.config.yaml.YamlClassOptionsParser.ClassAndOptions;
 import com.google.common.collect.ImmutableList;
 
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 import org.yaml.snakeyaml.error.YAMLException;
 
 import java.io.InputStream;
@@ -68,7 +69,7 @@ public final class ConfigurationYamlParser {
         mCreatedAsModule = createdAsModule;
         // We don't support multi-device in YAML
         configDef.setMultiDeviceMode(false);
-        Yaml yaml = new Yaml();
+        Yaml yaml = new Yaml(new SafeConstructor());
         try {
             configDef.addOptionDef(
                     CommandOptions.TEST_TAG_OPTION,
