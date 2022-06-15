@@ -127,7 +127,8 @@ public class DeviceManagementGrpcServerTest {
     @Test
     public void testReserveAndRelease() {
         when(mMockDeviceManager.getDeviceDescriptor("serial1"))
-                .thenReturn(createDescriptor("serial1", DeviceAllocationState.Available));
+                .thenReturn(createDescriptor("serial1", DeviceAllocationState.Available))
+                .thenReturn(createDescriptor("serial1", DeviceAllocationState.Allocated));
         ITestDevice mockedDevice = Mockito.mock(ITestDevice.class);
         when(mMockDeviceManager.allocateDevice(Mockito.any())).thenReturn(mockedDevice);
         // Allocate a device
@@ -139,6 +140,15 @@ public class DeviceManagementGrpcServerTest {
         assertThat(reservation.getResult()).isEqualTo(ReserveDeviceResponse.Result.SUCCEED);
         String reservationId = reservation.getReservationId();
         assertThat(reservationId).isNotEmpty();
+        // Get status of reserved device
+        GetDevicesStatusRequest.Builder requestBuilder =
+                GetDevicesStatusRequest.newBuilder().addDeviceId("serial1");
+        mServer.getDevicesStatus(requestBuilder.build(), mGetDevicesStatusObserver);
+        verify(mGetDevicesStatusObserver).onNext(mGetDevicesStatusCaptor.capture());
+        GetDevicesStatusResponse response = mGetDevicesStatusCaptor.getValue();
+        assertThat(response.getDeviceStatusList()).hasSize(1);
+        assertThat(response.getDeviceStatus(0).getReservationStatus())
+                .isEqualTo(ReservationStatus.RESERVED);
         // Release the device
         mServer.releaseReservation(
                 ReleaseReservationRequest.newBuilder().setReservationId(reservationId).build(),
