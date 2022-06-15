@@ -859,8 +859,8 @@ public class GceManager {
             remoteFile =
                     RemoteFileUtil.fetchRemoteDir(
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
-            // Default files under a directory to be text files.
-            type = LogDataType.TEXT;
+            // Default files under a directory to be CUTTLEFISH_LOG to avoid compression.
+            type = LogDataType.CUTTLEFISH_LOG;
             if (remoteFile != null) {
                 // If we happened to fetch a directory, log all the subfiles
                 logDirectory(remoteFile, baseName, logger, type);

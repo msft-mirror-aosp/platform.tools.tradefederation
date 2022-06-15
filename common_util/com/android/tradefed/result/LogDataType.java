@@ -88,6 +88,7 @@ public enum LogDataType {
             "text/plain",
             true, // b/230070438: don't compress this file
             true), // ScreenshotTest proto result
+    CUTTLEFISH_LOG("txt", "text/plain", true, true), // Log from cuttlefish instance
     /* Unknown file type */
     UNKNOWN("dat", "text/plain", false, false);
 
