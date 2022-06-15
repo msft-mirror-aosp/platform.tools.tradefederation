@@ -254,7 +254,9 @@ public class FileDownloadCache {
                 if (!fileLock.hasQueuedThreads()) {
                     mFileLocks.remove(remoteFilePath);
                 }
-                fileLock.unlock();
+                if (fileLock.isHeldByCurrentThread()) {
+                    fileLock.unlock();
+                }
             }
         }
         // Release the JVM level lock
