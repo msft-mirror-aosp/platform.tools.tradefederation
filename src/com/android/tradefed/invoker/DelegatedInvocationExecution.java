@@ -132,6 +132,14 @@ public class DelegatedInvocationExecution extends InvocationExecution {
         TradefedDelegator delegator =
                 (TradefedDelegator)
                         config.getConfigurationObject(TradefedDelegator.DELEGATE_OBJECT);
+        if (!delegator.getTfRootDir().exists() || !delegator.getTfRootDir().isDirectory()) {
+            throw new ConfigurationException(
+                    String.format(
+                            "delegated-tf was misconfigured and doesn't point to a valid"
+                                    + " location: %s",
+                            delegator.getTfRootDir()),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
         List<String> commandLine = new ArrayList<>();
         commandLine.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
         mTmpDelegatedDir =
