@@ -19,27 +19,20 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
-import com.android.tradefed.log.LogUtil.CLog;
 
 /** Base class for a module controller to not run tests on HWASan builds. */
 public class SkipHWASanModuleController extends BaseModuleController {
     private static final String PRODUCT_NAME_PROP = "ro.product.name";
 
     @Override
-    public RunStrategy shouldRun(IInvocationContext context) {
+    public RunStrategy shouldRun(IInvocationContext context) throws DeviceNotAvailableException {
         for (ITestDevice device : context.getDevices()) {
             if (device.getIDevice() instanceof StubDevice) {
                 continue;
             }
-            try {
-                String productNameString = device.getProperty(PRODUCT_NAME_PROP);
-                if (productNameString.contains("_hwasan")) {
-                    return RunStrategy.FULL_MODULE_BYPASS;
-                }
-            } catch (DeviceNotAvailableException e) {
-                CLog.e("Couldn't check for HWASan build on %s", device.getSerialNumber());
-                CLog.e(e);
-                throw new RuntimeException(e);
+            String productNameString = device.getProperty(PRODUCT_NAME_PROP);
+            if (productNameString.contains("_hwasan")) {
+                return RunStrategy.FULL_MODULE_BYPASS;
             }
         }
         return RunStrategy.RUN;
