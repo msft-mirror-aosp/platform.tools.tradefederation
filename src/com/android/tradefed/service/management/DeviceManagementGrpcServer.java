@@ -173,15 +173,19 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
         DeviceStatus.Builder deviceStatusBuilder = DeviceStatus.newBuilder();
         deviceStatusBuilder.setDeviceId(descriptor.getSerial());
         deviceStatusBuilder.setReservationStatus(
-                allocationStateToReservation(descriptor.getState()));
+                allocationStateToReservation(descriptor.getState(), descriptor.getSerial()));
         return deviceStatusBuilder.build();
     }
 
-    private ReservationStatus allocationStateToReservation(DeviceAllocationState state) {
+    private ReservationStatus allocationStateToReservation(
+            DeviceAllocationState state, String serial) {
         switch (state) {
             case Available:
                 return ReservationStatus.READY;
             case Allocated:
+                if (mSerialToReservation.containsKey(serial)) {
+                    return ReservationStatus.RESERVED;
+                }
                 return ReservationStatus.ALLOCATED;
             case Unavailable:
             case Ignored:
