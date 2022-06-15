@@ -118,6 +118,12 @@ public class SandboxConfigUtil {
         if (result.getStderr().contains(InfraErrorIdentifier.KEYSTORE_CONFIG_ERROR.name())) {
             error = InfraErrorIdentifier.KEYSTORE_CONFIG_ERROR;
         }
+        if (result.getStderr().contains(InfraErrorIdentifier.CLASS_NOT_FOUND.name())) {
+            error = InfraErrorIdentifier.CLASS_NOT_FOUND;
+        }
+        if (result.getStderr().contains(InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR.name())) {
+            error = InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR;
+        }
         throw new SandboxConfigurationException(errorMessage, error);
     }
 
