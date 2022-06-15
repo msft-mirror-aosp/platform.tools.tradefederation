@@ -51,7 +51,7 @@ public class MainlineTestModuleControllerTest {
     private Set<ApexInfo> mFakeApexes;
 
     @Before
-    public void setUp() throws ConfigurationException {
+    public void setUp() {
         MockitoAnnotations.initMocks(this);
 
         mController = new MainlineTestModuleController();
