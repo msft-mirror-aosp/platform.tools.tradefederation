@@ -245,6 +245,7 @@ import com.android.tradefed.targetprep.DeviceStringPusherTest;
 import com.android.tradefed.targetprep.DisableSELinuxTargetPreparerTest;
 import com.android.tradefed.targetprep.DynamicSystemPreparerTest;
 import com.android.tradefed.targetprep.FastbootDeviceFlasherTest;
+import com.android.tradefed.targetprep.FeatureFlagTargetPreparerTest;
 import com.android.tradefed.targetprep.FlashingResourcesParserTest;
 import com.android.tradefed.targetprep.GkiDeviceFlashPreparerTest;
 import com.android.tradefed.targetprep.GsiDeviceFlashPreparerTest;
@@ -737,6 +738,7 @@ import org.junit.runners.Suite.SuiteClasses;
     DisableSELinuxTargetPreparerTest.class,
     DynamicSystemPreparerTest.class,
     FastbootDeviceFlasherTest.class,
+    FeatureFlagTargetPreparerTest.class,
     FlashingResourcesParserTest.class,
     GkiDeviceFlashPreparerTest.class,
     GsiDeviceFlashPreparerTest.class,
