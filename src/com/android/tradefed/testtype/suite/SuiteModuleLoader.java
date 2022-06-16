@@ -28,6 +28,7 @@ import com.android.tradefed.device.DeviceFoldableState;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IAbiReceiver;
@@ -625,7 +626,8 @@ public class SuiteModuleLoader {
             }
             out.flush();
         } catch (IOException e) {
-            throw new RuntimeException("Failed to create filter file");
+            throw new HarnessRuntimeException(
+                    "Failed to create filter file", e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         } finally {
             StreamUtil.close(out);
         }
