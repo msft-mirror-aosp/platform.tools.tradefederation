@@ -22,22 +22,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
-
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.build.DeviceBuildInfo;
@@ -60,10 +44,15 @@ import com.android.tradefed.testtype.suite.params.ModuleParameters;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
 
+import com.google.common.truth.Truth;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.io.IOException;
@@ -149,17 +138,15 @@ public class BaseTestSuiteTest {
             mRunner.setExcludeFilter(excludeFilter);
             mRunner.setupFilters(tmpDir);
             assertEquals(1, mRunner.getIncludeFilter().size());
-            assertThat(
-                    mRunner.getIncludeFilter(),
-                    hasItem(
+            Truth.assertThat(mRunner.getIncludeFilter())
+                    .contains(
                             new SuiteTestFilter(
                                             mRunner.getRequestedAbi(), "CtsGestureTestCases", null)
-                                    .toString()));
-            assertThat(
-                    mRunner.getExcludeFilter(),
-                    hasItem(
+                                    .toString());
+            Truth.assertThat(mRunner.getExcludeFilter())
+                    .contains(
                             new SuiteTestFilter("arm64-v8a", "CtsGestureTestCases[instant]", null)
-                                    .toString()));
+                                    .toString());
         } finally {
             FileUtil.recursiveDelete(tmpDir);
         }
@@ -178,20 +165,18 @@ public class BaseTestSuiteTest {
             setter.setOptionValue("enable-parameterized-modules", "true");
             setter.setOptionValue("module", "Gesture");
             mRunner.setupFilters(tmpDir);
-            assertThat(
-                    mRunner.getIncludeFilter(),
-                    hasItem(
+            Truth.assertThat(mRunner.getIncludeFilter())
+                    .contains(
                             new SuiteTestFilter(
                                             mRunner.getRequestedAbi(), "CtsGestureTestCases", null)
-                                    .toString()));
-            assertThat(
-                    mRunner.getIncludeFilter(),
-                    hasItem(
+                                    .toString());
+            Truth.assertThat(mRunner.getIncludeFilter())
+                    .contains(
                             new SuiteTestFilter(
                                             mRunner.getRequestedAbi(),
                                             "CtsGestureTestCases[instant]",
                                             null)
-                                    .toString()));
+                                    .toString());
         } finally {
             FileUtil.recursiveDelete(tmpDir);
         }
@@ -206,12 +191,11 @@ public class BaseTestSuiteTest {
             setter.setOptionValue("module", "Gesture");
             mRunner.setupFilters(tmpDir);
             assertEquals(1, mRunner.getIncludeFilter().size());
-            assertThat(
-                    mRunner.getIncludeFilter(),
-                    hasItem(
+            Truth.assertThat(mRunner.getIncludeFilter())
+                    .contains(
                             new SuiteTestFilter(
                                             mRunner.getRequestedAbi(), "CtsGestureTestCases", null)
-                                    .toString()));
+                                    .toString());
         } finally {
             FileUtil.recursiveDelete(tmpDir);
         }
@@ -230,11 +214,10 @@ public class BaseTestSuiteTest {
             setter.setOptionValue("module", "module_name2");
             mRunner.setupFilters(tmpDir);
             assertEquals(1, mRunner.getIncludeFilter().size());
-            assertThat(
-                    mRunner.getIncludeFilter(),
-                    hasItem(
+            Truth.assertThat(mRunner.getIncludeFilter())
+                    .contains(
                             new SuiteTestFilter(mRunner.getRequestedAbi(), "module_name2", null)
-                                    .toString()));
+                                    .toString());
         } finally {
             FileUtil.recursiveDelete(tmpDir);
         }
@@ -255,9 +238,9 @@ public class BaseTestSuiteTest {
             mRunner.setupFilters(tmpDir);
             fail("Should have thrown exception");
         } catch (HarnessRuntimeException expected) {
-            assertThat(
-                    expected.getMessage(),
-                    containsString("Multiple modules found matching module_name:"));
+            Truth.assertThat(expected)
+                    .hasMessageThat()
+                    .contains("Multiple modules found matching module_name:");
         } finally {
             FileUtil.recursiveDelete(tmpDir);
         }
@@ -277,11 +260,10 @@ public class BaseTestSuiteTest {
             setter.setOptionValue("module", "module_name");
             mRunner.setupFilters(tmpDir);
             assertEquals(1, mRunner.getIncludeFilter().size());
-            assertThat(
-                    mRunner.getIncludeFilter(),
-                    hasItem(
+            Truth.assertThat(mRunner.getIncludeFilter())
+                    .contains(
                             new SuiteTestFilter(mRunner.getRequestedAbi(), "module_name", null)
-                                    .toString()));
+                                    .toString());
         } finally {
             FileUtil.recursiveDelete(tmpDir);
         }
