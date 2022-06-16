@@ -37,32 +37,26 @@ public class DeviceFeatureModuleController extends BaseModuleController {
     private Set<String> mForbiddenFeatures = new HashSet<>();
 
     @Override
-    public RunStrategy shouldRun(IInvocationContext context) {
+    public RunStrategy shouldRun(IInvocationContext context) throws DeviceNotAvailableException {
         for (ITestDevice device : context.getDevices()) {
             if (device.getIDevice() instanceof StubDevice) {
                 continue;
             }
-            try {
-                for (String feature : mRequiredFeatures) {
-                    if (!device.hasFeature(feature)) {
-                        CLog.d(
-                                "Skipping module %s because the device does not have feature %s.",
-                                getModuleName(), feature);
-                        return RunStrategy.FULL_MODULE_BYPASS;
-                    }
+            for (String feature : mRequiredFeatures) {
+                if (!device.hasFeature(feature)) {
+                    CLog.d(
+                            "Skipping module %s because the device does not have feature %s.",
+                            getModuleName(), feature);
+                    return RunStrategy.FULL_MODULE_BYPASS;
                 }
-                for (String feature : mForbiddenFeatures) {
-                    if (device.hasFeature(feature)) {
-                        CLog.d(
-                                "Skipping module %s because the device has forbidden feature %s.",
-                                getModuleName(), feature);
-                        return RunStrategy.FULL_MODULE_BYPASS;
-                    }
+            }
+            for (String feature : mForbiddenFeatures) {
+                if (device.hasFeature(feature)) {
+                    CLog.d(
+                            "Skipping module %s because the device has forbidden feature %s.",
+                            getModuleName(), feature);
+                    return RunStrategy.FULL_MODULE_BYPASS;
                 }
-            } catch (DeviceNotAvailableException e) {
-                CLog.e("Couldn't get device features on %s", device.getSerialNumber());
-                CLog.e(e);
-                throw new RuntimeException(e);
             }
         }
         return RunStrategy.RUN;

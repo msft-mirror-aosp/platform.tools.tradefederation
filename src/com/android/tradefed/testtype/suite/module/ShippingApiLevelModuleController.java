@@ -98,45 +98,36 @@ public class ShippingApiLevelModuleController extends BaseModuleController {
      * @throws RuntimeException if device is not available
      */
     @Override
-    public RunStrategy shouldRun(IInvocationContext context) {
+    public RunStrategy shouldRun(IInvocationContext context) throws DeviceNotAvailableException {
         for (ITestDevice device : context.getDevices()) {
             if (device.getIDevice() instanceof StubDevice) {
                 continue;
             }
-            try {
-                // Check system shipping api level against the min-api-level.
-                // The base property to see the shipping api level of the device is the
-                // "ro.product.first_api_level". If it is not defined, the current api level will be
-                // read from the "ro.build.version.sdk"
-                if (!shouldRunTestWithApiLevel(
-                        device,
-                        SYSTEM_SHIPPING_API_LEVEL_PROP,
-                        SYSTEM_API_LEVEL_PROP,
-                        mMinApiLevel)) {
-                    return RunStrategy.FULL_MODULE_BYPASS;
-                }
-                // Check system shipping api level against the vsr-min-api-level.
-                if (!shouldRunTestWithApiLevel(
-                        device,
-                        SYSTEM_SHIPPING_API_LEVEL_PROP,
-                        SYSTEM_API_LEVEL_PROP,
-                        mVsrMinApiLevel)) {
-                    return RunStrategy.FULL_MODULE_BYPASS;
-                }
-                // vsr-min-api-level also requires to check the api level of the vendor
-                // implementation.
-                // If "ro.board.api_level" is not defined, read "ro.board.first_api_level" instead.
-                if (!shouldRunTestWithApiLevel(
-                        device,
-                        VENDOR_API_LEVEL_PROP,
-                        VENDOR_SHIPPING_API_LEVEL_PROP,
-                        mVsrMinApiLevel)) {
-                    return RunStrategy.FULL_MODULE_BYPASS;
-                }
-            } catch (DeviceNotAvailableException e) {
-                CLog.e("Couldn't check API Levels on %s", device.getSerialNumber());
-                CLog.e(e);
-                throw new RuntimeException(e);
+            // Check system shipping api level against the min-api-level.
+            // The base property to see the shipping api level of the device is the
+            // "ro.product.first_api_level". If it is not defined, the current api level will be
+            // read from the "ro.build.version.sdk"
+            if (!shouldRunTestWithApiLevel(
+                    device, SYSTEM_SHIPPING_API_LEVEL_PROP, SYSTEM_API_LEVEL_PROP, mMinApiLevel)) {
+                return RunStrategy.FULL_MODULE_BYPASS;
+            }
+            // Check system shipping api level against the vsr-min-api-level.
+            if (!shouldRunTestWithApiLevel(
+                    device,
+                    SYSTEM_SHIPPING_API_LEVEL_PROP,
+                    SYSTEM_API_LEVEL_PROP,
+                    mVsrMinApiLevel)) {
+                return RunStrategy.FULL_MODULE_BYPASS;
+            }
+            // vsr-min-api-level also requires to check the api level of the vendor
+            // implementation.
+            // If "ro.board.api_level" is not defined, read "ro.board.first_api_level" instead.
+            if (!shouldRunTestWithApiLevel(
+                    device,
+                    VENDOR_API_LEVEL_PROP,
+                    VENDOR_SHIPPING_API_LEVEL_PROP,
+                    mVsrMinApiLevel)) {
+                return RunStrategy.FULL_MODULE_BYPASS;
             }
         }
         return RunStrategy.RUN;
