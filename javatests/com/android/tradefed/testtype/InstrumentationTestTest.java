@@ -384,7 +384,11 @@ public class InstrumentationTestTest {
 
         mInstrumentationTest.run(mTestInfo, mMockListener);
 
-        // note: expect run to not be reported
+        // Report an empty run since nothing had to be run.
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).testRunStarted(TEST_PACKAGE_VALUE, 0);
+        inOrder.verify(mMockListener).testRunEnded(0, new HashMap<String, Metric>());
+        inOrder.verifyNoMoreInteractions();
         Mockito.verifyNoMoreInteractions(mMockListener);
     }
 
