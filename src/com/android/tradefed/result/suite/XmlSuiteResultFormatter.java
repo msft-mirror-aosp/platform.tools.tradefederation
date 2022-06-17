@@ -60,9 +60,11 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * Utility class to save a suite run as an XML. TODO: Remove all the special Compatibility Test
@@ -224,11 +226,11 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         if (serialsShards.isEmpty()) {
             deviceList = String.join(",", holder.context.getSerials());
         } else {
-            List<String> subList = new ArrayList<>();
+            Set<String> subSet = new LinkedHashSet<>();
             for (List<String> list : serialsShards.values()) {
-                subList.add(String.join(",", list));
+                subSet.addAll(list);
             }
-            deviceList = String.join(",", subList);
+            deviceList = String.join(",", subSet);
         }
         serializer.attribute(NS, DEVICES_ATTR, deviceList);
 
