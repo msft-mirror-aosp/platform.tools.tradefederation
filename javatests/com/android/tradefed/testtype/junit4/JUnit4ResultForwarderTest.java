@@ -47,7 +47,7 @@ public class JUnit4ResultForwarderTest {
      * Number of logs produced for test. Set to a high number to be able to test possible
      * multithreading issues
      */
-    private int mTimesToLogMessage = 10000;
+    private int mTimesToLogMessage = 1000;
 
     @Before
     public void setUp() throws Exception {
@@ -120,13 +120,13 @@ public class JUnit4ResultForwarderTest {
      */
     @Test
     public void testLoggedWithMultipleTestExecutions() throws Exception {
-        for (int i = 0; i < mTimesToLogMessage; i++) {
+        for (int i = 0; i < 5; i++) {
             mJUnit4ResultForwarder.testStarted(mDescription);
             mTestLogData.addTestLog(
                     "", LogDataType.ADB_HOST_LOG, new ByteArrayInputStreamSource(new byte[] {}));
             mJUnit4ResultForwarder.testFinished(mDescription);
         }
-        verify(mTestInvocationListener, times(mTimesToLogMessage))
+        verify(mTestInvocationListener, times(5))
                 .testLog(anyString(), any(LogDataType.class), any(InputStreamSource.class));
     }
 }

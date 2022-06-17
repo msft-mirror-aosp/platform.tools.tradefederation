@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.command.ICommandOptions;
 import com.android.tradefed.config.ConfigurationException;
@@ -44,8 +45,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/** Unit tests for {@link TestDiscoveryInvoker}. */
 @RunWith(JUnit4.class)
-public class TestDiscoveryInvokerTests {
+public class TestDiscoveryInvokerTest {
     private IRunUtil mRunUtil;
     private File mRootDir;
     private File mTradefedJar;
@@ -62,24 +64,8 @@ public class TestDiscoveryInvokerTests {
         mRunUtil = Mockito.mock(IRunUtil.class);
         mConfiguration = Mockito.mock(IConfiguration.class);
         mCommandOptions = Mockito.mock(ICommandOptions.class);
-        Mockito.doAnswer(
-                        new Answer<Object>() {
-                            @Override
-                            public Object answer(InvocationOnMock mock) throws Throwable {
-                                return mCommandOptions;
-                            }
-                        })
-                .when(mConfiguration)
-                .getCommandOptions();
-        Mockito.doAnswer(
-                        new Answer<Object>() {
-                            @Override
-                            public Object answer(InvocationOnMock mock) throws Throwable {
-                                return new UniqueMultiMap<String, String>();
-                            }
-                        })
-                .when(mCommandOptions)
-                .getInvocationData();
+        when(mConfiguration.getCommandOptions()).thenReturn(mCommandOptions);
+        when(mCommandOptions.getInvocationData()).thenReturn(new UniqueMultiMap<String, String>());
         mRootDir = FileUtil.createTempDir("test_suite_root");
         File mainDir = FileUtil.createNamedTempDir(mRootDir, "android-xts");
         mTestDiscoveryInvoker =
@@ -117,15 +103,7 @@ public class TestDiscoveryInvokerTests {
                             + " --test-tag --cts-params camera-presubmit --test-tag"
                             + " camera-presubmit --post-method=TEST_ARTIFACT",
                         CONFIG_NAME, TEST_MODULE_1_NAME, TEST_MODULE_2_NAME);
-        Mockito.doAnswer(
-                        new Answer<Object>() {
-                            @Override
-                            public Object answer(InvocationOnMock mock) throws Throwable {
-                                return commandLine;
-                            }
-                        })
-                .when(mConfiguration)
-                .getCommandLine();
+        when(mConfiguration.getCommandLine()).thenReturn(commandLine);
         Mockito.doAnswer(
                         new Answer<Object>() {
                             @Override
@@ -189,33 +167,12 @@ public class TestDiscoveryInvokerTests {
                             + " --test-tag --cts-params camera-presubmit --test-tag"
                             + " camera-presubmit --post-method=TEST_ARTIFACT",
                         TEST_MODULE_1_NAME, TEST_MODULE_2_NAME);
-        Mockito.doAnswer(
-                        new Answer<Object>() {
-                            @Override
-                            public Object answer(InvocationOnMock mock) throws Throwable {
-                                return commandLine;
-                            }
-                        })
-                .when(mConfiguration)
-                .getCommandLine();
-        Mockito.doAnswer(
-                        new Answer<Object>() {
-                            @Override
-                            public Object answer(InvocationOnMock mock) throws Throwable {
-                                fail(
-                                        "TestDiscoveryInvoker should not able to build a Java cmd"
-                                            + " to invoke tradefed observatory without config-name"
-                                            + " in parent test's command line options");
-                                return null;
-                            }
-                        })
-                .when(mRunUtil)
-                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        when(mConfiguration.getCommandLine()).thenReturn(commandLine);
         try {
             mTestDiscoveryInvoker.discoverTestModuleNames();
             fail("Should throw a ConfigurationException");
-        } catch (Exception e) {
-            assertTrue(e instanceof ConfigurationException);
+        } catch (ConfigurationException expected) {
+            // Expected
         }
     }
 }
