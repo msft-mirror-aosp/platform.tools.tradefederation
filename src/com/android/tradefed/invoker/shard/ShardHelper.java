@@ -157,7 +157,9 @@ public class ShardHelper implements IShardHelper {
                 // We shuffle the tests for best results: avoid having the same module sub-tests
                 // contiguously in the list.
                 Collections.shuffle(shardableTests);
-                CountDownLatch tracker = new CountDownLatch(expectedShard);
+                // Rectify the expected number of poller to match
+                CountDownLatch tracker =
+                        new CountDownLatch(expectedShard - multiDevicesShards.size());
                 Collection<ITokenRequest> tokenPool = null;
                 if (config.getCommandOptions().shouldUseTokenSharding()) {
                     tokenPool = extractTokenTests(shardableTests);
