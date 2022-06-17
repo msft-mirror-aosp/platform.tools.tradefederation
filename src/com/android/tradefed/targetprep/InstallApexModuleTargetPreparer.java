@@ -23,6 +23,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.ApexInfo;
 import com.android.tradefed.device.PackageInfo;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -381,10 +382,10 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                         if (output.contains("Success")) {
                             break;
                         } else {
-                            throw new RuntimeException(
+                            throw new HarnessRuntimeException(
                                     String.format(
-                                            "Failed to rollback %s, Output: %s",
-                                            apex.name, output));
+                                            "Failed to rollback %s, Output: %s", apex.name, output),
+                                    DeviceErrorIdentifier.APEX_ROLLBACK_FAILED);
                         }
                     }
                     CLog.i("Wait for rollback fully done.");
