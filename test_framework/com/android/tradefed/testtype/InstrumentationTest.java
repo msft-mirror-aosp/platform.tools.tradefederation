@@ -39,6 +39,7 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
@@ -896,6 +897,8 @@ public class InstrumentationTest
             runWithRerun(testInfo, listener, instrumentationListener, testsToRun);
         } else {
             CLog.i("No tests expected for %s, skipping", mPackageName);
+            listener.testRunStarted(mPackageName, 0);
+            listener.testRunEnded(0, new HashMap<String, Metric>());
         }
     }
 
