@@ -256,8 +256,20 @@ public class InvocationExecution implements IInvocationExecution {
     public void doSetup(TestInformation testInfo, IConfiguration config, final ITestLogger listener)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         long start = System.currentTimeMillis();
+        mTrackLabPreparers = new ConcurrentHashMap<>();
+        mTrackTargetPreparers = new ConcurrentHashMap<>();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_START, start);
         try {
+            for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
+                ITestDevice device = testInfo.getContext().getDevice(deviceName);
+                CLog.d("Starting setup for device: '%s'", device.getSerialNumber());
+                if (device instanceof ITestLoggerReceiver) {
+                    ((ITestLoggerReceiver) testInfo.getContext().getDevice(deviceName))
+                            .setTestLogger(listener);
+                }
+                mTrackLabPreparers.put(deviceName, new HashSet<>());
+                mTrackTargetPreparers.put(deviceName, new HashSet<>());
+            }
             // Before all the individual setup, make the multi-pre-target-preparer devices setup
             runMultiTargetPreparers(
                     config.getMultiPreTargetPreparers(),
@@ -292,11 +304,9 @@ public class InvocationExecution implements IInvocationExecution {
         }
     }
 
-    protected void runPreparersSetup(
+    private void runPreparersSetup(
             TestInformation testInfo, IConfiguration config, ITestLogger listener)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
-        mTrackLabPreparers = new ConcurrentHashMap<>();
-        mTrackTargetPreparers = new ConcurrentHashMap<>();
         int index = 0;
         if ((config.getCommandOptions().shouldUseParallelSetup()
                         || config.getCommandOptions().shouldUseReplicateSetup())
@@ -306,16 +316,27 @@ public class InvocationExecution implements IInvocationExecution {
                     new ParallelDeviceExecutor<>(testInfo.getContext().getDevices().size());
             List<Callable<Boolean>> callableTasks = new ArrayList<>();
             for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
-                mTrackLabPreparers.put(deviceName, new HashSet<>());
-                mTrackTargetPreparers.put(deviceName, new HashSet<>());
                 final int deviceIndex = index;
                 // Replicate TestInfo
                 TestInformation replicated =
                         TestInformation.createModuleTestInfo(testInfo, testInfo.getContext());
                 Callable<Boolean> callableTask =
                         () -> {
+                            // Lab preparer then target preparer
+                            runLabPreparationOnDevice(
+                                    replicated,
+                                    deviceName,
+                                    deviceIndex,
+                                    getLabPreparersToRun(config, deviceName),
+                                    mTrackLabPreparers.get(deviceName),
+                                    listener);
                             runPreparationOnDevice(
-                                    replicated, deviceName, deviceIndex, config, listener);
+                                    replicated,
+                                    deviceName,
+                                    deviceIndex,
+                                    getTargetPreparersToRun(config, deviceName),
+                                    mTrackTargetPreparers.get(deviceName),
+                                    listener);
                             return true;
                         };
                 callableTasks.add(callableTask);
@@ -341,30 +362,37 @@ public class InvocationExecution implements IInvocationExecution {
             }
         } else {
             for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
-                mTrackLabPreparers.put(deviceName, new HashSet<>());
-                mTrackTargetPreparers.put(deviceName, new HashSet<>());
-                runPreparationOnDevice(testInfo, deviceName, index, config, listener);
+                // Lab preparer then target preparer
+                runLabPreparationOnDevice(
+                        testInfo,
+                        deviceName,
+                        index,
+                        getLabPreparersToRun(config, deviceName),
+                        mTrackLabPreparers.get(deviceName),
+                        listener);
+                runPreparationOnDevice(
+                        testInfo,
+                        deviceName,
+                        index,
+                        getTargetPreparersToRun(config, deviceName),
+                        mTrackTargetPreparers.get(deviceName),
+                        listener);
                 index++;
             }
         }
     }
 
-    private void runPreparationOnDevice(
+    private void runLabPreparationOnDevice(
             TestInformation testInfo,
             String deviceName,
             int index,
-            IConfiguration config,
+            List<ITargetPreparer> labPreparersToRun,
+            Set<ITargetPreparer> trackLabPreparers,
             ITestLogger logger)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         ITestDevice device = testInfo.getContext().getDevice(deviceName);
-        CLog.d("Starting setup for device: '%s'", device.getSerialNumber());
-        if (device instanceof ITestLoggerReceiver) {
-            ((ITestLoggerReceiver) testInfo.getContext().getDevice(deviceName))
-                    .setTestLogger(logger);
-        }
 
         // Run lab preparers on the device
-        List<ITargetPreparer> labPreparersToRun = getLabPreparersToRun(config, deviceName);
         for (ITargetPreparer preparer : labPreparersToRun) {
             if (preparer.isDisabled()) {
                 CLog.d("%s has been disabled. skipping.", preparer);
@@ -394,7 +422,7 @@ public class InvocationExecution implements IInvocationExecution {
             }
 
             // Track which lab preparers were executed separately from the target preparers
-            mTrackLabPreparers.get(deviceName).add(preparer);
+            trackLabPreparers.add(preparer);
             long elapsedTime = System.currentTimeMillis() - startTime;
 
             CLog.d(
@@ -406,8 +434,17 @@ public class InvocationExecution implements IInvocationExecution {
                     preparer.getClass().getName(),
                     elapsedTime);
         }
+    }
 
-        List<ITargetPreparer> targetPreparersToRun = getTargetPreparersToRun(config, deviceName);
+    private void runPreparationOnDevice(
+            TestInformation testInfo,
+            String deviceName,
+            int index,
+            List<ITargetPreparer> targetPreparersToRun,
+            Set<ITargetPreparer> trackPreparers,
+            ITestLogger logger)
+            throws TargetSetupError, BuildError, DeviceNotAvailableException {
+        ITestDevice device = testInfo.getContext().getDevice(deviceName);
         for (ITargetPreparer preparer : targetPreparersToRun) {
             if (preparer.isDisabled()) {
                 CLog.d("%s has been disabled. skipping.", preparer);
@@ -434,7 +471,7 @@ public class InvocationExecution implements IInvocationExecution {
                 testInfo.setActiveDeviceIndex(0);
             }
 
-            mTrackTargetPreparers.get(deviceName).add(preparer);
+            trackPreparers.add(preparer);
             long elapsedTime = System.currentTimeMillis() - startTime;
 
             CLog.d(
