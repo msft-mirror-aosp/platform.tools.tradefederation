@@ -167,8 +167,8 @@ import com.android.tradefed.monitoring.collector.DeviceInternetAccessibilityReso
 import com.android.tradefed.monitoring.collector.DeviceStorageAgeResourceMetricCollectorTest;
 import com.android.tradefed.monitoring.collector.DeviceWifiResourceMetricCollectorTest;
 import com.android.tradefed.monitoring.collector.ResourceMetricUtilTest;
-import com.android.tradefed.observatory.TestDiscoveryExecutorTests;
-import com.android.tradefed.observatory.TestDiscoveryInvokerTests;
+import com.android.tradefed.observatory.TestDiscoveryExecutorTest;
+import com.android.tradefed.observatory.TestDiscoveryInvokerTest;
 import com.android.tradefed.postprocessor.AggregatePostProcessorTest;
 import com.android.tradefed.postprocessor.AveragePostProcessorTest;
 import com.android.tradefed.postprocessor.BasePostProcessorTest;
@@ -245,6 +245,7 @@ import com.android.tradefed.targetprep.DeviceStringPusherTest;
 import com.android.tradefed.targetprep.DisableSELinuxTargetPreparerTest;
 import com.android.tradefed.targetprep.DynamicSystemPreparerTest;
 import com.android.tradefed.targetprep.FastbootDeviceFlasherTest;
+import com.android.tradefed.targetprep.FeatureFlagTargetPreparerTest;
 import com.android.tradefed.targetprep.FlashingResourcesParserTest;
 import com.android.tradefed.targetprep.GkiDeviceFlashPreparerTest;
 import com.android.tradefed.targetprep.GsiDeviceFlashPreparerTest;
@@ -661,8 +662,8 @@ import org.junit.runners.Suite.SuiteClasses;
     TerribleFailureEmailHandlerTest.class,
 
     // observatory
-    TestDiscoveryExecutorTests.class,
-    TestDiscoveryInvokerTests.class,
+    TestDiscoveryExecutorTest.class,
+    TestDiscoveryInvokerTest.class,
 
     // postprocessor
     AggregatePostProcessorTest.class,
@@ -737,6 +738,7 @@ import org.junit.runners.Suite.SuiteClasses;
     DisableSELinuxTargetPreparerTest.class,
     DynamicSystemPreparerTest.class,
     FastbootDeviceFlasherTest.class,
+    FeatureFlagTargetPreparerTest.class,
     FlashingResourcesParserTest.class,
     GkiDeviceFlashPreparerTest.class,
     GsiDeviceFlashPreparerTest.class,

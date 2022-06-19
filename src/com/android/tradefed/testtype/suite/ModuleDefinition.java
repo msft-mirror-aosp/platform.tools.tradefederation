@@ -1173,7 +1173,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 // Bypass token since the module isn't expected to run
                 return null;
             }
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | DeviceNotAvailableException e) {
             CLog.e(e);
         }
         return mRequiredTokens;
@@ -1305,7 +1305,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
      * @param failureListener The {@link TestFailureListener} taking actions on tests failures.
      * @return The strategy to use to run the tests.
      */
-    private RunStrategy applyConfigurationControl(TestFailureListener failureListener) {
+    private RunStrategy applyConfigurationControl(TestFailureListener failureListener)
+            throws DeviceNotAvailableException {
         List<?> ctrlObjectList = mModuleConfiguration.getConfigurationObjectList(MODULE_CONTROLLER);
         if (ctrlObjectList == null) {
             return RunStrategy.RUN;
@@ -1330,7 +1331,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         return shouldRunWithController(mModuleInvocationContext);
     }
 
-    private RunStrategy shouldRunWithController(IInvocationContext context) {
+    private RunStrategy shouldRunWithController(IInvocationContext context)
+            throws DeviceNotAvailableException {
         List<?> ctrlObjectList = mModuleConfiguration.getConfigurationObjectList(MODULE_CONTROLLER);
         if (ctrlObjectList == null) {
             return RunStrategy.RUN;

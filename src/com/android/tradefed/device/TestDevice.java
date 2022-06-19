@@ -489,7 +489,7 @@ public class TestDevice extends NativeDevice {
      */
     private void allowLegacyStorageForApps(List<File> appFiles) throws DeviceNotAvailableException {
         for (File appFile : appFiles) {
-            AaptParser aaptParser = AaptParser.parse(appFile);
+            AaptParser aaptParser = createParser(appFile);
             if (aaptParser != null
                     && aaptParser.getTargetSdkVersion() > 29
                     && aaptParser.isRequestingLegacyStorage()) {
@@ -529,6 +529,11 @@ public class TestDevice extends NativeDevice {
                     "Failed to persist MANAGE_EXTERNAL_STORAGE App Op over `adb reboot`: %s",
                     persistFileManagerAppOpResult.getStderr());
         }
+    }
+
+    @VisibleForTesting
+    protected AaptParser createParser(File appFile) {
+        return AaptParser.parse(appFile);
     }
 
     /** {@inheritDoc} */
