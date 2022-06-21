@@ -41,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Collect test results for an entire suite invocation and output the final results. */
 public class SuiteResultReporter extends CollectingTestListener {
@@ -50,8 +51,8 @@ public class SuiteResultReporter extends CollectingTestListener {
     private long mStartTime = 0L;
     private long mEndTime = 0L;
 
-    private int mTotalModules = 0;
-    private int mCompleteModules = 0;
+    private AtomicInteger mTotalModules = new AtomicInteger(0);
+    private AtomicInteger mCompleteModules = new AtomicInteger(0);
 
     private long mTotalTests = 0L;
     private long mPassedTests = 0L;
@@ -122,11 +123,11 @@ public class SuiteResultReporter extends CollectingTestListener {
         Collection<TestRunResult> results = getMergedTestRunResults();
         List<TestRunResult> moduleCheckers = extractModuleCheckers(results);
 
-        mTotalModules = results.size();
+        mTotalModules.set(results.size());
 
         for (TestRunResult moduleResult : results) {
             if (!moduleResult.isRunFailure()) {
-                mCompleteModules++;
+                mCompleteModules.incrementAndGet();
             } else {
                 mFailedModule.put(moduleResult.getName(), moduleResult.getRunFailureMessage());
             }
@@ -196,7 +197,7 @@ public class SuiteResultReporter extends CollectingTestListener {
             mSummary.append(String.format("ASSUMPTION_FAILURE: %s\n", mAssumeFailureTests));
         }
 
-        if (mCompleteModules != mTotalModules) {
+        if (mCompleteModules.get() != mTotalModules.get()) {
             mSummary.append(
                     "IMPORTANT: Some modules failed to run to completion, tests counts "
                             + "may be inaccurate.\n");
@@ -363,11 +364,11 @@ public class SuiteResultReporter extends CollectingTestListener {
     }
 
     public int getTotalModules() {
-        return mTotalModules;
+        return mTotalModules.get();
     }
 
     public int getCompleteModules() {
-        return mCompleteModules;
+        return mCompleteModules.get();
     }
 
     public long getTotalTests() {
