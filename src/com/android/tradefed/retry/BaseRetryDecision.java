@@ -173,10 +173,6 @@ public class BaseRetryDecision
                 // Continue the logic for retry the failures.
                 break;
         }
-        if (!mModulePreparationRetry) {
-            // No need to retry if `module-preparation-retry` is not set.
-            return decision;
-        }
         if (attempt == maxAttempt) {
             // No need to retry if it reaches the maximum retry count.
             return decision;
