@@ -48,7 +48,7 @@ public class SuiteResultReporter extends CollectingTestListener {
 
     public static final String SUITE_REPORTER_SOURCE = SuiteResultReporter.class.getName();
 
-    private long mStartTime = 0L;
+    private Long mStartTime = null;
     private long mEndTime = 0L;
 
     private AtomicInteger mTotalModules = new AtomicInteger(0);
@@ -86,7 +86,9 @@ public class SuiteResultReporter extends CollectingTestListener {
     @Override
     public void invocationStarted(IInvocationContext context) {
         super.invocationStarted(context);
-        mStartTime = getCurrentTime();
+        if (mStartTime == null) {
+            mStartTime = getCurrentTime();
+        }
     }
 
     @Override
@@ -175,6 +177,9 @@ public class SuiteResultReporter extends CollectingTestListener {
         printModuleRetriesInformation();
         mSummary.append("=============== Summary ===============\n");
         // Print the time from invocation start to end
+        if (mStartTime == null) {
+            mStartTime = 0L;
+        }
         mSummary.append(
                 String.format(
                         "Total Run time: %s\n", TimeUtil.formatElapsedTime(mEndTime - mStartTime)));
