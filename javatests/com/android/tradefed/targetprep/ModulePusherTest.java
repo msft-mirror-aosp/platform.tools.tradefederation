@@ -236,6 +236,23 @@ public final class ModulePusherTest {
         assertArrayEquals(results, actual);
     }
 
+    /** Test getting preload paths for /data/apex/decompressed */
+    @Test
+    public void testGetPreLoadPathsOverridesApexDecompressedPath() throws Exception {
+        File[] files = new File[] {mFakeApex};
+        when(mMockDevice.executeShellV2Command("pm path " + APEX_PACKAGE_NAME))
+                .thenReturn(
+                        getCommandResult(
+                                "package:/data/apex/decompressed/"
+                                        + APEX_PACKAGE_NAME
+                                        + "@310000000.decompressed.apex\n"));
+        Path[] actual = new Path[] {Paths.get(APEX_PATH_ON_DEVICE)};
+
+        Path[] results = mPusher.getPreloadPaths(mMockDevice, files, APEX_PACKAGE_NAME, 31);
+
+        assertArrayEquals(results, actual);
+    }
+
     /** Test install modules when there are non-split files to push. */
     @Test
     public void testInstallModulesSuccess() throws Exception {
