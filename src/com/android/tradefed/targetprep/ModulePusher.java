@@ -427,8 +427,10 @@ public class ModulePusher {
             // Log the cases for debugging.
             if (hasExtension(APEX_SUFFIX, moduleFiles[0]) && !paths[0].startsWith(APEX_DIR)) {
                 LogUtil.CLog.w(
-                        "The path of the system apex is not /system/apex. Actual paths are: %s",
-                        Arrays.toString(paths));
+                        "The path of the system apex is not /system/apex. Actual source paths are:"
+                                + " %s. Expect to override them with packages in %s after reboot.",
+                        Arrays.toString(paths), APEX_DIR);
+                return new Path[] {Paths.get(APEX_DIR, packageName + APEX_SUFFIX)};
             }
             return new Path[] {Paths.get(paths[0])};
         }
