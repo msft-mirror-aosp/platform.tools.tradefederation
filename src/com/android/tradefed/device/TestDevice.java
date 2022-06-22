@@ -2009,15 +2009,20 @@ public class TestDevice extends NativeDevice {
         CommandResult result = executeShellV2Command("cmd device_state print-states");
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             // Can't throw an exception since it would fail on non-supported version
-            CLog.w("Failed to enumerate foldable configurations. stderr: %s", result.getStderr());
             return new HashSet<>();
         }
         Set<DeviceFoldableState> foldableStates = new LinkedHashSet<>();
         Pattern deviceStatePattern =
-                Pattern.compile("DeviceState\\{identifier=(\\d+), name='(\\S+)'\\}\\S*");
+                Pattern.compile(
+                        "DeviceState\\{identifier=(\\d+), name='(\\S+)'"
+                                + "(?:, app_accessible=)?(\\S+)?\\}\\S*");
         for (String line : result.getStdout().split("\n")) {
             Matcher m = deviceStatePattern.matcher(line.trim());
             if (m.matches()) {
+                // Move onto the next state if the device state is not accessible by apps
+                if (m.groupCount() > 2 && m.group(3) != null && !Boolean.parseBoolean(m.group(3))) {
+                    continue;
+                }
                 foldableStates.add(
                         new DeviceFoldableState(Integer.parseInt(m.group(1)), m.group(2)));
             }
@@ -2033,7 +2038,8 @@ public class TestDevice extends NativeDevice {
         CommandResult result = executeShellV2Command("cmd device_state state");
         Pattern deviceStatePattern =
                 Pattern.compile(
-                        "Committed state: DeviceState\\{identifier=(\\d+), name='(\\S+)'\\}\\S*");
+                        "Committed state: DeviceState\\{identifier=(\\d+), name='(\\S+)'"
+                                + "(?:, app_accessible=)?(\\S+)?\\}\\S*");
         for (String line : result.getStdout().split("\n")) {
             Matcher m = deviceStatePattern.matcher(line.trim());
             if (m.matches()) {
