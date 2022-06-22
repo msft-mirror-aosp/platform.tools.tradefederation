@@ -430,7 +430,7 @@ public class InvocationExecution implements IInvocationExecution {
                     preparer, device.getSerialNumber(), TimeUtil.formatElapsedTime(elapsedTime));
 
             InvocationMetricLogger.addInvocationMetrics(
-                    InvocationGroupMetricKey.TARGET_PREPARER_SETUP_LATENCY,
+                    InvocationGroupMetricKey.LAB_PREPARER_SETUP_LATENCY,
                     preparer.getClass().getName(),
                     elapsedTime);
         }
