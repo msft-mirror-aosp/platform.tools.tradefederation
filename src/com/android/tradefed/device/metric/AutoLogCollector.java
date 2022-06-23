@@ -26,7 +26,8 @@ public enum AutoLogCollector {
     HOSTLOG_ON_FAILURE(DebugHostLogOnFailureCollector.class),
     JAVA_COVERAGE(JavaCodeCoverageCollector.class),
     LOGCAT_ON_FAILURE(LogcatOnFailureCollector.class),
-    SCREENSHOT_ON_FAILURE(ScreenshotOnFailureCollector.class);
+    SCREENSHOT_ON_FAILURE(ScreenshotOnFailureCollector.class),
+    MODULE_LOGCAT(ModuleLogcatCollector.class);
 
     private Class<?> mClass;
 
