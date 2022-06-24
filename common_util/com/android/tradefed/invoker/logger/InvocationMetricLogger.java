@@ -227,6 +227,8 @@ public class InvocationMetricLogger {
         TEST_TYPE_COUNT("test-type-count", true),
         TARGET_PREPARER_SETUP_LATENCY("target-preparer-setup-latency", true),
         TARGET_PREPARER_TEARDOWN_LATENCY("target-preparer-teardown-latency", true),
+        LAB_PREPARER_SETUP_LATENCY("lab-preparer-setup-latency", true),
+        LAB_PREPARER_TEARDOWN_LATENCY("lab-preparer-teardown-latency", true),
         MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true);
 
         private final String mGroupName;
