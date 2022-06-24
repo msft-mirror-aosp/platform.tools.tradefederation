@@ -1232,6 +1232,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         return mModuleInvocationContext;
     }
 
+    public IConfiguration getModuleConfiguration() {
+        return mModuleConfiguration;
+    }
+
     /** Report completely not executed modules. */
     public final void reportNotExecuted(ITestInvocationListener listener, String message) {
         if (mStartModuleRunDate == null) {
