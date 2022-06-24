@@ -570,7 +570,7 @@ public class GceManager {
         try {
             File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
             OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
-            return oxygenClient.release(mGceAvdInfo, getTestDeviceOptions().getGceCmdTimeout());
+            return oxygenClient.release(mGceAvdInfo, getTestDeviceOptions());
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.OXYGEN_DEVICE_DIRECT_RELEASE_COUNT, 1);
