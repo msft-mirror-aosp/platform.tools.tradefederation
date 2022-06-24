@@ -754,6 +754,10 @@ public abstract class ITestSuite
                         if (collector.isDisabled()) {
                             CLog.d("%s has been disabled. Skipping.", collector);
                         } else {
+                            if (collector instanceof IConfigurationReceiver) {
+                                ((IConfigurationReceiver) collector)
+                                        .setConfiguration(module.getModuleConfiguration());
+                            }
                             listenerWithCollectors =
                                     collector.init(
                                             module.getModuleInvocationContext(),
