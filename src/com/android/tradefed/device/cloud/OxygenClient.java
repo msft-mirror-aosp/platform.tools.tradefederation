@@ -234,10 +234,10 @@ public class OxygenClient {
      * Attempt to release a device by using Oxygen client binary.
      *
      * @param gceAvdInfo {@link GceAvdInfo}
-     * @param timeout
+     * @param deviceOptions {@link TestDeviceOptions}
      * @return a boolean which indicate whether the device release is successful.
      */
-    public boolean release(GceAvdInfo gceAvdInfo, long timeout) {
+    public boolean release(GceAvdInfo gceAvdInfo, TestDeviceOptions deviceOptions) {
         // If gceAvdInfo is missing info, then it means the device wasn't get leased successfully.
         // In such case, there is no need to release the device.
         if (gceAvdInfo == null
@@ -247,6 +247,14 @@ public class OxygenClient {
             return true;
         }
         List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
+
+        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
+            oxygenClientArgs.add("-" + arg.getKey());
+            if (!Strings.isNullOrEmpty(arg.getValue())) {
+                oxygenClientArgs.add(arg.getValue());
+            }
+        }
+
         oxygenClientArgs.add("-release");
         oxygenClientArgs.add("-server_url");
         oxygenClientArgs.add(gceAvdInfo.hostAndPort().getHost());
@@ -255,7 +263,8 @@ public class OxygenClient {
         CLog.i("Releasing device from oxygen client with command %s", oxygenClientArgs.toString());
         CommandResult res =
                 runOxygenTimedCmd(
-                        oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]), timeout);
+                        oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]),
+                        deviceOptions.getGceCmdTimeout());
         return res.getStatus().equals(CommandStatus.SUCCESS);
     }
 
