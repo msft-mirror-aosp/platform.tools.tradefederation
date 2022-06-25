@@ -135,4 +135,18 @@ public interface IMetricCollector extends ILogSaverListener, IDisableable {
             final Map<String, Metric> currentTestCaseMetrics,
             TestDescription test)
             throws DeviceNotAvailableException;
+
+    /**
+     * Allows capturing the module started event.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public default void onTestModuleStarted() throws DeviceNotAvailableException {};
+
+    /**
+     * Allows capturing the module ended event.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public default void onTestModuleEnded() throws DeviceNotAvailableException {};
 }

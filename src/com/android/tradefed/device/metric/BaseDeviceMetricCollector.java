@@ -161,6 +161,16 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     }
 
     @Override
+    public void onTestModuleStarted() throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    @Override
+    public void onTestModuleEnded() throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    @Override
     public void onTestRunStart(DeviceMetricData runData) throws DeviceNotAvailableException {
         // Does nothing
     }
@@ -246,12 +256,29 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testModuleStarted(IInvocationContext moduleContext) {
-        mForwarder.testModuleStarted(moduleContext);
+        try {
+            onTestModuleStarted();
+        } catch (DeviceNotAvailableException dnae) {
+            mDeviceNoAvailable = true;
+            CLog.e(dnae);
+        } catch (Throwable t) {
+            CLog.e(t);
+        } finally {
+            mForwarder.testModuleStarted(moduleContext);
+        }
     }
 
     @Override
     public final void testModuleEnded() {
-        mForwarder.testModuleEnded();
+        try {
+            onTestModuleEnded();
+        } catch (DeviceNotAvailableException dnae) {
+            CLog.e(dnae);
+        } catch (Throwable t) {
+            CLog.e(t);
+        } finally {
+            mForwarder.testModuleEnded();
+        }
     }
 
     /** Test run callbacks */

@@ -5231,6 +5231,31 @@ public class TestDeviceTest {
     }
 
     @Test
+    public void testGetFoldableStatesVersionT() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Supported states: [\n"
+                                        + " DeviceState{identifier=0, name='CLOSED',"
+                                        + " app_accessible=false},\n"
+                                        + " DeviceState{identifier=1, name='HALF_OPENED',"
+                                        + " app_accessible=true},\n"
+                                        + " DeviceState{identifier=2, name='OPENED',"
+                                        + " app_accessible=true},\n"
+                                        + "]\n");
+                        return result;
+                    }
+                };
+
+        Set<DeviceFoldableState> states = mTestDevice.getFoldableStates();
+        assertEquals(2, states.size());
+    }
+
+    @Test
     public void testGetCurrentFoldableState() throws Exception {
         mTestDevice =
                 new TestableTestDevice() {
@@ -5240,6 +5265,25 @@ public class TestDeviceTest {
                         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
                         result.setStdout(
                                 "Committed state: DeviceState{identifier=2, name='DEFAULT'}\n");
+                        return result;
+                    }
+                };
+
+        DeviceFoldableState state = mTestDevice.getCurrentFoldableState();
+        assertEquals(2, state.getIdentifier());
+    }
+
+    @Test
+    public void testGetCurrentFoldableStateVersionT() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Committed state: DeviceState{identifier=2, name='DEFAULT',"
+                                        + " app_accessible=true}\n");
                         return result;
                     }
                 };
