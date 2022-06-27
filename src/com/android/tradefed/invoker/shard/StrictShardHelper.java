@@ -17,11 +17,13 @@ package com.android.tradefed.invoker.shard;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestLoggerReceiver;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IInvocationContextReceiver;
@@ -115,9 +117,12 @@ public class StrictShardHelper extends ShardHelper {
         if (m.find()) {
             return m.group(1);
         }
-        throw new RuntimeException(
-                String.format("Module: %s doesn't match the pattern for mainline modules. The " +
-                        "pattern should end with apk/apex/apks.", id));
+        throw new HarnessRuntimeException(
+                String.format(
+                        "Module: %s doesn't match the pattern for mainline modules. The "
+                                + "pattern should end with apk/apex/apks.",
+                        id),
+                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
     }
 
     /**

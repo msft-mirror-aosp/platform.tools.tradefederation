@@ -746,7 +746,27 @@ public abstract class ITestSuite
                                     ModuleDefinition.MODULE_ISOLATED,
                                     CurrentInvocation.moduleCurrentIsolation().toString());
                 }
-                listener.testModuleStarted(module.getModuleInvocationContext());
+                // Only the module callback will be called here.
+                ITestInvocationListener listenerWithCollectors = listener;
+                if (mMetricCollectors != null) {
+                    for (IMetricCollector collector :
+                         CollectorHelper.cloneCollectors(mMetricCollectors)) {
+                        if (collector.isDisabled()) {
+                            CLog.d("%s has been disabled. Skipping.", collector);
+                        } else {
+                            if (collector instanceof IConfigurationReceiver) {
+                                ((IConfigurationReceiver) collector)
+                                        .setConfiguration(module.getModuleConfiguration());
+                            }
+                            listenerWithCollectors =
+                                    collector.init(
+                                            module.getModuleInvocationContext(),
+                                            listenerWithCollectors);
+                            TfObjectTracker.countWithParents(collector.getClass());
+                        }
+                    }
+                }
+                listenerWithCollectors.testModuleStarted(module.getModuleInvocationContext());
                 mModuleInProgress = module;
                 // Trigger module start on module level listener too
                 new ResultForwarder(moduleListeners)
@@ -761,7 +781,7 @@ public abstract class ITestSuite
                     new ResultForwarder(moduleListeners).testModuleEnded();
                     // clear out module invocation context since we are now done with module
                     // execution
-                    listener.testModuleEnded();
+                    listenerWithCollectors.testModuleEnded();
                     mModuleInProgress = null;
                     // Following modules will not be isolated if no action is taken
                     CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
