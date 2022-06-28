@@ -53,6 +53,8 @@ public class InvocationMetricLogger {
         DOWNLOAD_RETRY_COUNT("download_retry_count", true),
         XTS_STAGE_TESTS_TIME("xts_stage_tests_time_ms", true),
         XTS_STAGE_TESTS_BYTES("xts_stage_tests_bytes", true),
+        XTS_PARTIAL_DOWNLOAD_FALLBACK_COUNT("xts_partial_download_fallback_count", true),
+        XTS_PARTIAL_DOWNLOAD_TOTAL_COUNT("xts_partial_download_total_count", true),
         // -- Disk memory usage --
         // Approximate peak disk space usage of the invocation
         // Represent files that would usually live for the full invocation (min usage)
