@@ -438,8 +438,8 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
         Map<String, Metric.Builder> convertedMetrics = new HashMap<String, Metric.Builder>();
         List<String> keyPrefixes = new ArrayList<String>();
 
-        // Keys that will be used to prefix the other keys in the same proto message.
-        List<String> keyPrefixOtherFields = new ArrayList<>();
+        // Key that will be used to prefix the other keys in the same proto message.
+        String keyPrefixOtherFields = "";
 
         // TODO(b/15014555): Cleanup the parsing logic.
         for (Entry<FieldDescriptor, Object> entry : fields.entrySet()) {
@@ -448,7 +448,10 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                     // Check if the current field has to be used as prefix for other fields
                     // and add it to the list of prefixes.
                     if (mPerfettoPrefixKeyFields.contains(entry.getKey().toString())) {
-                        keyPrefixOtherFields.add(String.format("%s-%s",
+                        if (!keyPrefixOtherFields.isEmpty()) {
+                            keyPrefixOtherFields = keyPrefixOtherFields.concat("-");
+                        }
+                        keyPrefixOtherFields = keyPrefixOtherFields.concat(String.format("%s-%s",
                                 entry.getKey().getName().toString(), entry.getValue().toString()));
                         continue;
                     }
@@ -476,7 +479,10 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                                     entry.getKey().getName().toString(),
                                     entry.getValue().toString()));
                     if (mPerfettoPrefixKeyFields.contains(entry.getKey().toString())) {
-                        keyPrefixOtherFields.add(String.format("%s-%s",
+                        if (!keyPrefixOtherFields.isEmpty()) {
+                            keyPrefixOtherFields = keyPrefixOtherFields.concat("-");
+                        }
+                        keyPrefixOtherFields =  keyPrefixOtherFields.concat(String.format("%s-%s",
                                 entry.getKey().getName().toString(), entry.getValue().toString()));
                     }
                 }
@@ -556,9 +562,9 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
         // Add prefix key to all the keys in current proto message which has numeric values.
         Map<String, Metric.Builder> additionalConvertedMetrics =
                 new HashMap<String, Metric.Builder>();
-        for (String prefix : keyPrefixOtherFields) {
+        if (!keyPrefixOtherFields.isEmpty()) {
             for (Map.Entry<String, Metric.Builder> currentMetric : convertedMetrics.entrySet()) {
-                additionalConvertedMetrics.put(String.format("%s-%s", prefix,
+                additionalConvertedMetrics.put(String.format("%s-%s", keyPrefixOtherFields,
                         currentMetric.getKey()), currentMetric.getValue());
             }
         }
