@@ -79,6 +79,7 @@ public class TestDiscoveryExecutor {
      * @param args the command line args of the test.
      * @return A JSON string with test module names.
      */
+    @Deprecated(forRemoval = true)
     public String discoverDependencies(String[] args) throws Exception {
         // Create IConfiguration base on command line args.
         IConfiguration config = getConfiguration(args);
@@ -99,6 +100,37 @@ public class TestDiscoveryExecutor {
         JSONObject jsonObject = new JSONObject();
         JSONArray jsonArray = new JSONArray(allDependenciesList);
         jsonObject.put(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, jsonArray);
+        return jsonObject.toString();
+    }
+
+    /**
+     * Discover test dependencies base on command line args.
+     *
+     * @param args the command line args of the test.
+     * @return A JSON string with one test module names array and one other test dependency array.
+     */
+    public String discoverDependenciesV2(String[] args) throws Exception {
+        // Create IConfiguration base on command line args.
+        IConfiguration config = getConfiguration(args);
+        List<IRemoteTest> tests = config.getTests();
+
+        // Tests could be empty if input args are corrupted.
+        if (tests == null || tests.isEmpty()) {
+            throw new TestDiscoveryException(
+                    "Tradefed Observatory discovered no tests from the IConfiguration created from"
+                            + " command line args.");
+        }
+
+        List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));
+        List<String> testDependencies = new ArrayList<>(discoverDependencies(config));
+        Collections.sort(testModules);
+        Collections.sort(testDependencies);
+
+        JSONObject jsonObject = new JSONObject();
+        JSONArray testModulesArray = new JSONArray(testModules);
+        JSONArray testDependenciesArray = new JSONArray(testDependencies);
+        jsonObject.put(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, testModulesArray);
+        jsonObject.put(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
         return jsonObject.toString();
     }
 

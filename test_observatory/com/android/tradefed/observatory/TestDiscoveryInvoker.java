@@ -41,7 +41,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A class for test launcher to call the TradeFed jar that packaged in the test suite to discover
@@ -59,6 +61,7 @@ public class TestDiscoveryInvoker {
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
     public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
+    public static final String TEST_MODULES_LIST_KEY = "TestModules";
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
@@ -78,6 +81,7 @@ public class TestDiscoveryInvoker {
      * @throws JSONException
      * @throws ConfigurationException
      */
+    @Deprecated(forRemoval = true)
     public List<String> discoverTestModuleNames()
             throws IOException, JSONException, ConfigurationException {
         List<String> testModuleNames = new ArrayList<>();
@@ -89,7 +93,7 @@ public class TestDiscoveryInvoker {
         CommandResult res = getRunUtil().runTimedCmd(20000, subprocessArgs);
         if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
             CLog.e(
-                    "Tradefed observatory error, unable to discovery test module names. command"
+                    "Tradefed observatory error, unable to discover test module names. command"
                             + " used: %s error: %s",
                     Joiner.on(" ").join(subprocessArgs), res.getStderr());
             return testModuleNames;
@@ -98,6 +102,46 @@ public class TestDiscoveryInvoker {
         CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
         testModuleNames.addAll(parseTestModules(stdout));
         return testModuleNames;
+    }
+
+    /**
+     * Retrieve a map of test dependency names - categorized by either test modules or other test
+     * dependencies.
+     *
+     * @return A map of test dependencies which grouped by TEST_MODULES_LIST_KEY and
+     *     TEST_DEPENDENCIES_LIST_KEY.
+     * @throws IOException
+     * @throws JSONException
+     * @throws ConfigurationException
+     * @throws TestDiscoveryException
+     */
+    public Map<String, List<String>> discoverTestDependencies()
+            throws IOException, JSONException, ConfigurationException, TestDiscoveryException {
+        Map<String, List<String>> dependencies = new HashMap<>();
+        // Build the classpath base on test root directory which should contain all the jars
+        String classPath = buildClasspath(mRootDir);
+        // Build command line args to query the tradefed.jar in the root directory
+        List<String> args = buildJavaCmdForXtsDiscovery(classPath);
+        String[] subprocessArgs = args.toArray(new String[args.size()]);
+        CommandResult res = getRunUtil().runTimedCmd(20000, subprocessArgs);
+        if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
+            throw new TestDiscoveryException(
+                    String.format(
+                            "Tradefed observatory error, unable to discover test module names."
+                                    + " command used: %s error: %s",
+                            Joiner.on(" ").join(subprocessArgs), res.getStderr()),
+                    null);
+        }
+        String stdout = res.getStdout();
+        CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
+        List<String> testModules = parseTestDiscoveryOutput(stdout, TEST_MODULES_LIST_KEY);
+        dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+        List<String> testDependencies =
+                parseTestDiscoveryOutput(stdout, TEST_DEPENDENCIES_LIST_KEY);
+        if (!testDependencies.isEmpty()) {
+            dependencies.put(TEST_DEPENDENCIES_LIST_KEY, testDependencies);
+        }
+        return dependencies;
     }
 
     /**
@@ -205,6 +249,27 @@ public class TestDiscoveryInvoker {
         JSONArray jsonArray = jsonObject.getJSONArray(TEST_DEPENDENCIES_LIST_KEY);
         for (int i = 0; i < jsonArray.length(); i++) {
             testModules.add(jsonArray.getString(i));
+        }
+        return testModules;
+    }
+
+    /**
+     * Parse test module names from the tradefed observatory's output JSON string.
+     *
+     * @param discoveryOutput JSON string from test discovery
+     * @param dependencyListKey test dependency type
+     * @return A list of test module names.
+     * @throws JSONException
+     */
+    private List<String> parseTestDiscoveryOutput(String discoveryOutput, String dependencyListKey)
+            throws JSONException {
+        JSONObject jsonObject = new JSONObject(discoveryOutput);
+        List<String> testModules = new ArrayList<>();
+        if (jsonObject.has(dependencyListKey)) {
+            JSONArray jsonArray = jsonObject.getJSONArray(dependencyListKey);
+            for (int i = 0; i < jsonArray.length(); i++) {
+                testModules.add(jsonArray.getString(i));
+            }
         }
         return testModules;
     }
