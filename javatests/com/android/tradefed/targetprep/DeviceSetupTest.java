@@ -79,6 +79,8 @@ public class DeviceSetupTest {
 
         mMockBuildInfo = new DeviceBuildInfo("0", "");
         mDeviceSetup = new DeviceSetup();
+        OptionSetter setter = new OptionSetter(mDeviceSetup);
+        setter.setOptionValue("optimized-property-setting", Boolean.toString(false));
         mTmpDir = FileUtil.createTempDir("tmp");
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockDevice);
@@ -119,14 +121,14 @@ public class DeviceSetupTest {
     public void testSetup_airplane_mode_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "airplane_mode_on", "1");
-        doCommandsExpectations(
-                "am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true");
 
         mDeviceSetup.setAirplaneMode(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "airplane_mode_on", "1");
+        verify(mMockDevice)
+                .executeShellCommand(
+                        "am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -134,14 +136,14 @@ public class DeviceSetupTest {
     public void testSetup_airplane_mode_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "airplane_mode_on", "0");
-        doCommandsExpectations(
-                "am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false");
 
         mDeviceSetup.setAirplaneMode(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "airplane_mode_on", "0");
+        verify(mMockDevice)
+                .executeShellCommand(
+                        "am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -149,13 +151,12 @@ public class DeviceSetupTest {
     public void testSetup_data_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "mobile_data", "1");
-        doCommandsExpectations("svc data enable");
 
         mDeviceSetup.setData(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "mobile_data", "1");
+        verify(mMockDevice).executeShellCommand("svc data enable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -163,13 +164,12 @@ public class DeviceSetupTest {
     public void testSetup_data_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "mobile_data", "0");
-        doCommandsExpectations("svc data disable");
 
         mDeviceSetup.setData(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "mobile_data", "0");
+        verify(mMockDevice).executeShellCommand("svc data disable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -177,7 +177,6 @@ public class DeviceSetupTest {
     public void testSetup_cell_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "cell_on", "1");
 
         mDeviceSetup.setCell(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -190,7 +189,6 @@ public class DeviceSetupTest {
     public void testSetup_cell_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "cell_on", "0");
 
         mDeviceSetup.setCell(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -203,7 +201,6 @@ public class DeviceSetupTest {
     public void testSetup_cell_auto_setting_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "clockwork_cell_auto_setting", "1");
 
         mDeviceSetup.setCellAutoSetting(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -216,7 +213,6 @@ public class DeviceSetupTest {
     public void testSetup_cell_auto_setting_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "clockwork_cell_auto_setting", "0");
 
         mDeviceSetup.setCellAutoSetting(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -229,13 +225,12 @@ public class DeviceSetupTest {
     public void testSetup_wifi_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_on", "1");
-        doCommandsExpectations("svc wifi enable");
 
         mDeviceSetup.setWifi(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
+        verify(mMockDevice).executeShellCommand("svc wifi enable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -243,13 +238,12 @@ public class DeviceSetupTest {
     public void testSetup_wifi_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_on", "0");
-        doCommandsExpectations("svc wifi disable");
 
         mDeviceSetup.setWifi(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "wifi_on", "0");
+        verify(mMockDevice).executeShellCommand("svc wifi disable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -257,9 +251,9 @@ public class DeviceSetupTest {
     public void testSetup_wifi_network_name() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_on", "1");
-        doCommandsExpectations("svc wifi enable");
-        when(mMockDevice.connectToWifiNetwork("wifi_network", "psk")).thenReturn(true);
+        LinkedHashMap<String, String> ssidToPsk = new LinkedHashMap<>();
+        ssidToPsk.put("wifi_network", "psk");
+        when(mMockDevice.connectToWifiNetwork(ssidToPsk)).thenReturn(true);
 
         mDeviceSetup.setWifiNetwork("wifi_network");
         mDeviceSetup.setWifiPsk("psk");
@@ -268,6 +262,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
+        verify(mMockDevice).executeShellCommand("svc wifi enable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -275,17 +270,18 @@ public class DeviceSetupTest {
     public void testSetup_wifi_network_name_emptyPsk() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_on", "1");
-        doCommandsExpectations("svc wifi enable");
-        when(mMockDevice.connectToWifiNetwork("wifi_network", null)).thenReturn(true);
+        LinkedHashMap<String, String> ssidToPsk = new LinkedHashMap<>();
+        ssidToPsk.put("wifi_network", "");
+        when(mMockDevice.connectToWifiNetwork(ssidToPsk)).thenReturn(true);
 
         mDeviceSetup.setWifiNetwork("wifi_network");
-        mDeviceSetup.setWifiPsk(""); // empty psk becomes null in connectToWifiNetwork
+        mDeviceSetup.setWifiPsk("");
 
         mDeviceSetup.setWifi(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
+        verify(mMockDevice).executeShellCommand("svc wifi enable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -293,8 +289,6 @@ public class DeviceSetupTest {
     public void testSetup_wifi_network_empty() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_on", "1");
-        doCommandsExpectations("svc wifi enable");
 
         mDeviceSetup.setWifiNetwork("");
         mDeviceSetup.setWifiPsk("psk");
@@ -303,6 +297,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
+        verify(mMockDevice).executeShellCommand("svc wifi enable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -310,11 +305,11 @@ public class DeviceSetupTest {
     public void testSetup_wifi_multiple_network_names() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_on", "1");
-        doCommandsExpectations("svc wifi enable");
-        when(mMockDevice.connectToWifiNetwork("old_network", "abc")).thenReturn(false);
-        when(mMockDevice.connectToWifiNetwork("network", "def")).thenReturn(false);
-        when(mMockDevice.connectToWifiNetwork("new_network", "ghi")).thenReturn(true);
+        LinkedHashMap<String, String> ssidToPskExpected = new LinkedHashMap<>();
+        ssidToPskExpected.put("old_network", "abc");
+        ssidToPskExpected.put("network", "def");
+        ssidToPskExpected.put("new_network", "ghi");
+        when(mMockDevice.connectToWifiNetwork(ssidToPskExpected)).thenReturn(true);
 
         mDeviceSetup.setWifiNetwork("old_network");
         mDeviceSetup.setWifiPsk("abc");
@@ -327,6 +322,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
+        verify(mMockDevice).executeShellCommand("svc wifi enable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -334,11 +330,11 @@ public class DeviceSetupTest {
     public void testSetup_wifi_multiple_network_names_unsecured() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_on", "1");
-        doCommandsExpectations("svc wifi enable");
-        when(mMockDevice.connectToWifiNetwork("old_network", null)).thenReturn(false);
-        when(mMockDevice.connectToWifiNetwork("network", null)).thenReturn(false);
-        when(mMockDevice.connectToWifiNetwork("new_network", null)).thenReturn(true);
+        LinkedHashMap<String, String> ssidToPskExpected = new LinkedHashMap<>();
+        ssidToPskExpected.put("old_network", null);
+        ssidToPskExpected.put("network", "");
+        ssidToPskExpected.put("new_network", "");
+        when(mMockDevice.connectToWifiNetwork(ssidToPskExpected)).thenReturn(true);
 
         mDeviceSetup.setWifiNetwork("old_network");
         mDeviceSetup.setWifiPsk(null);
@@ -351,6 +347,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
+        verify(mMockDevice).executeShellCommand("svc wifi enable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -358,7 +355,6 @@ public class DeviceSetupTest {
     public void testSetup_wifi_watchdog_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_watchdog", "1");
 
         mDeviceSetup.setWifiWatchdog(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -371,7 +367,6 @@ public class DeviceSetupTest {
     public void testSetup_wifi_watchdog_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_watchdog", "0");
 
         mDeviceSetup.setWifiWatchdog(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -384,7 +379,6 @@ public class DeviceSetupTest {
     public void testSetup_disable_cw_wifi_mediator_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "cw_disable_wifimediator", "1");
 
         mDeviceSetup.setDisableCwWifiMediator(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -397,7 +391,6 @@ public class DeviceSetupTest {
     public void testSetup_disable_cw_wifi_mediator_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "cw_disable_wifimediator", "0");
 
         mDeviceSetup.setDisableCwWifiMediator(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -410,7 +403,6 @@ public class DeviceSetupTest {
     public void testSetup_wifi_scan_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_scan_always_enabled", "1");
 
         mDeviceSetup.setWifiScanAlwaysEnabled(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -423,7 +415,6 @@ public class DeviceSetupTest {
     public void testSetup_wifi_scan_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_scan_always_enabled", "0");
 
         mDeviceSetup.setWifiScanAlwaysEnabled(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -436,11 +427,11 @@ public class DeviceSetupTest {
     public void testSetup_ethernet_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doCommandsExpectations("ifconfig eth0 up");
 
         mDeviceSetup.setEthernet(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
 
+        verify(mMockDevice).executeShellCommand("ifconfig eth0 up");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -448,11 +439,11 @@ public class DeviceSetupTest {
     public void testSetup_ethernet_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doCommandsExpectations("ifconfig eth0 down");
 
         mDeviceSetup.setEthernet(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
 
+        verify(mMockDevice).executeShellCommand("ifconfig eth0 down");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -460,11 +451,11 @@ public class DeviceSetupTest {
     public void testSetup_bluetooth_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doCommandsExpectations("svc bluetooth enable");
 
         mDeviceSetup.setBluetooth(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
 
+        verify(mMockDevice).executeShellCommand("svc bluetooth enable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -472,11 +463,11 @@ public class DeviceSetupTest {
     public void testSetup_bluetooth_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doCommandsExpectations("svc bluetooth disable");
 
         mDeviceSetup.setBluetooth(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
 
+        verify(mMockDevice).executeShellCommand("svc bluetooth disable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -484,11 +475,11 @@ public class DeviceSetupTest {
     public void testSetup_nfc_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doCommandsExpectations("svc nfc enable");
 
         mDeviceSetup.setNfc(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
 
+        verify(mMockDevice).executeShellCommand("svc nfc enable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -496,11 +487,11 @@ public class DeviceSetupTest {
     public void testSetup_nfc_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doCommandsExpectations("svc nfc disable");
 
         mDeviceSetup.setNfc(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
 
+        verify(mMockDevice).executeShellCommand("svc nfc disable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -508,7 +499,6 @@ public class DeviceSetupTest {
     public void testSetup_screen_adaptive_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("system", "screen_brightness_mode", "1");
 
         mDeviceSetup.setScreenAdaptiveBrightness(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -521,7 +511,6 @@ public class DeviceSetupTest {
     public void testSetup_screen_adaptive_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("system", "screen_brightness_mode", "0");
 
         mDeviceSetup.setScreenAdaptiveBrightness(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -534,7 +523,6 @@ public class DeviceSetupTest {
     public void testSetup_screen_brightness() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("system", "screen_brightness", "50");
 
         mDeviceSetup.setScreenBrightness(50);
         mDeviceSetup.setUp(mTestInfo);
@@ -560,11 +548,11 @@ public class DeviceSetupTest {
         doSetupExpectations(
                 false /* Expect no screen on command */, ArgumentCaptor.forClass(String.class));
         doCheckExternalStoreSpaceExpectations();
-        doCommandsExpectations("svc power stayon false");
 
         mDeviceSetup.setScreenAlwaysOn(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
 
+        verify(mMockDevice).executeShellCommand("svc power stayon false");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -573,7 +561,6 @@ public class DeviceSetupTest {
         doSetupExpectations(
                 false /* Expect no screen on command */, ArgumentCaptor.forClass(String.class));
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("system", "screen_off_timeout", "5000");
 
         mDeviceSetup.setScreenAlwaysOn(BinaryState.IGNORE);
         mDeviceSetup.setScreenTimeoutSecs(5L);
@@ -587,7 +574,6 @@ public class DeviceSetupTest {
     public void testSetup_screen_ambient_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "doze_enabled", "1");
 
         mDeviceSetup.setScreenAmbientMode(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -600,7 +586,6 @@ public class DeviceSetupTest {
     public void testSetup_screen_ambient_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "doze_enabled", "0");
 
         mDeviceSetup.setScreenAmbientMode(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -613,7 +598,6 @@ public class DeviceSetupTest {
     public void testSetup_wake_gesture_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "wake_gesture_enabled", "1");
 
         mDeviceSetup.setWakeGesture(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -626,7 +610,6 @@ public class DeviceSetupTest {
     public void testSetup_wake_gesture_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "wake_gesture_enabled", "0");
 
         mDeviceSetup.setWakeGesture(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -639,7 +622,6 @@ public class DeviceSetupTest {
     public void testSetup_screen_saver_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "screensaver_enabled", "1");
 
         mDeviceSetup.setScreenSaver(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -652,7 +634,6 @@ public class DeviceSetupTest {
     public void testSetup_screen_saver_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "screensaver_enabled", "0");
 
         mDeviceSetup.setScreenSaver(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -665,7 +646,6 @@ public class DeviceSetupTest {
     public void testSetup_notification_led_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("system", "notification_light_pulse", "1");
 
         mDeviceSetup.setNotificationLed(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -678,7 +658,6 @@ public class DeviceSetupTest {
     public void testSetup_notification_led_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("system", "notification_light_pulse", "0");
 
         mDeviceSetup.setNotificationLed(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -691,7 +670,6 @@ public class DeviceSetupTest {
     public void testInstallNonMarketApps_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "install_non_market_apps", "1");
 
         mDeviceSetup.setInstallNonMarketApps(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -704,7 +682,6 @@ public class DeviceSetupTest {
     public void testInstallNonMarketApps_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "install_non_market_apps", "0");
 
         mDeviceSetup.setInstallNonMarketApps(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -717,13 +694,14 @@ public class DeviceSetupTest {
     public void testSetup_trigger_media_mounted() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doCommandsExpectations(
-                "am broadcast -a android.intent.action.MEDIA_MOUNTED "
-                        + "-d file://${EXTERNAL_STORAGE} --receiver-include-background");
 
         mDeviceSetup.setTriggerMediaMounted(true);
         mDeviceSetup.setUp(mTestInfo);
 
+        verify(mMockDevice)
+                .executeShellCommand(
+                        "am broadcast -a android.intent.action.MEDIA_MOUNTED "
+                                + "-d file://${EXTERNAL_STORAGE} --receiver-include-background");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -731,7 +709,6 @@ public class DeviceSetupTest {
     public void testSetup_location_gps_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "location_providers_allowed", "+gps");
 
         mDeviceSetup.setLocationGps(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -744,7 +721,6 @@ public class DeviceSetupTest {
     public void testSetup_location_gps_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "location_providers_allowed", "-gps");
 
         mDeviceSetup.setLocationGps(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -757,7 +733,6 @@ public class DeviceSetupTest {
     public void testSetup_location_network_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "location_providers_allowed", "+network");
 
         mDeviceSetup.setLocationNetwork(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -770,7 +745,6 @@ public class DeviceSetupTest {
     public void testSetup_location_network_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("secure", "location_providers_allowed", "-network");
 
         mDeviceSetup.setLocationNetwork(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -783,7 +757,6 @@ public class DeviceSetupTest {
     public void testSetup_rotate_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("system", "accelerometer_rotation", "1");
 
         mDeviceSetup.setAutoRotate(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -796,7 +769,6 @@ public class DeviceSetupTest {
     public void testSetup_rotate_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("system", "accelerometer_rotation", "0");
 
         mDeviceSetup.setAutoRotate(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -809,13 +781,12 @@ public class DeviceSetupTest {
     public void testSetup_battery_saver_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "low_power", "1");
-        doCommandsExpectations("dumpsys battery unplug");
 
         mDeviceSetup.setBatterySaver(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "low_power", "1");
+        verify(mMockDevice).executeShellCommand("dumpsys battery unplug");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -823,13 +794,13 @@ public class DeviceSetupTest {
     public void testSetup_legacy_battery_saver_on() throws Exception {
         doSetupExpectations(21); // API level Lollipop
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "low_power", "1");
-        doCommandsExpectations("dumpsys battery set usb 0");
 
+        OptionSetter setter = new OptionSetter(mDeviceSetup);
+        setter.setOptionValue("force-skip-settings", "true"); // Changing settings requires API 22+.
         mDeviceSetup.setBatterySaver(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
 
-        verify(mMockDevice).setSetting("global", "low_power", "1");
+        verify(mMockDevice).executeShellCommand("dumpsys battery set usb 0");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -837,7 +808,6 @@ public class DeviceSetupTest {
     public void testSetup_battery_saver_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "low_power", "0");
 
         mDeviceSetup.setBatterySaver(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -850,7 +820,6 @@ public class DeviceSetupTest {
     public void testSetup_battery_saver_trigger() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "low_power_trigger_level", "50");
 
         mDeviceSetup.setBatterySaverTrigger(50);
         mDeviceSetup.setUp(mTestInfo);
@@ -863,11 +832,11 @@ public class DeviceSetupTest {
     public void testSetup_enable_full_battery_stats_history() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doCommandsExpectations("dumpsys batterystats --enable full-history");
 
         mDeviceSetup.setEnableFullBatteryStatsHistory(true);
         mDeviceSetup.setUp(mTestInfo);
 
+        verify(mMockDevice).executeShellCommand("dumpsys batterystats --enable full-history");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -875,11 +844,11 @@ public class DeviceSetupTest {
     public void testSetup_disable_doze() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doCommandsExpectations("dumpsys deviceidle disable");
 
         mDeviceSetup.setDisableDoze(true);
         mDeviceSetup.setUp(mTestInfo);
 
+        verify(mMockDevice).executeShellCommand("dumpsys deviceidle disable");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -887,7 +856,6 @@ public class DeviceSetupTest {
     public void testSetup_update_time_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "auto_time", "1");
 
         mDeviceSetup.setAutoUpdateTime(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -900,7 +868,6 @@ public class DeviceSetupTest {
     public void testSetup_update_time_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "auto_time", "0");
 
         mDeviceSetup.setAutoUpdateTime(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -913,7 +880,6 @@ public class DeviceSetupTest {
     public void testSetup_update_timezone_on() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "auto_timezone", "1");
 
         mDeviceSetup.setAutoUpdateTimezone(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
@@ -926,7 +892,6 @@ public class DeviceSetupTest {
     public void testSetup_update_timezone_off() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "auto_timezone", "0");
 
         mDeviceSetup.setAutoUpdateTimezone(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
@@ -969,7 +934,6 @@ public class DeviceSetupTest {
     public void testSetup_sim_data() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "multi_sim_data_call", "1");
 
         mDeviceSetup.setDefaultSimData(1);
         mDeviceSetup.setUp(mTestInfo);
@@ -982,7 +946,6 @@ public class DeviceSetupTest {
     public void testSetup_sim_voice() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "multi_sim_voice_call", "1");
 
         mDeviceSetup.setDefaultSimVoice(1);
         mDeviceSetup.setUp(mTestInfo);
@@ -995,7 +958,6 @@ public class DeviceSetupTest {
     public void testSetup_sim_sms() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "multi_sim_sms", "1");
 
         mDeviceSetup.setDefaultSimSms(1);
         mDeviceSetup.setUp(mTestInfo);
@@ -1080,8 +1042,6 @@ public class DeviceSetupTest {
     public void testSetup_connectToWifiFailed() throws Exception {
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_on", "1");
-        doCommandsExpectations("svc wifi enable");
         when(mMockDevice.connectToWifiNetwork("wifi_network", "psk")).thenReturn(false);
 
         mDeviceSetup.setWifiNetwork("wifi_network");
@@ -1111,8 +1071,6 @@ public class DeviceSetupTest {
 
         doSetupExpectations();
         doCheckExternalStoreSpaceExpectations();
-        doSettingExpectations("global", "wifi_on", "1");
-        doCommandsExpectations("svc wifi enable");
 
         when(mMockDevice.connectToWifiNetwork("wifi_network", "psk")).thenReturn(false);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
@@ -1424,6 +1382,18 @@ public class DeviceSetupTest {
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
+    @Test
+    public void testSetup_disable_device_config_sync() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+
+        OptionSetter setter = new OptionSetter(mDeviceSetup);
+        setter.setOptionValue("disable-device-config-sync", "true");
+        mDeviceSetup.setUp(mTestInfo);
+        verify(mMockDevice)
+                .executeShellCommand("device_config set_sync_disabled_for_tests persistent");
+    }
+
     /** Set EasyMock expectations for a normal setup call */
     private void doSetupExpectations() throws DeviceNotAvailableException, ConfigurationException {
         doSetupExpectations(
@@ -1550,16 +1520,5 @@ public class DeviceSetupTest {
 
     private void doCheckExternalStoreSpaceExpectations() throws DeviceNotAvailableException {
         when(mMockDevice.getExternalStoreFreeSpace()).thenReturn(1000L);
-    }
-
-    private void doCommandsExpectations(String... commands) throws DeviceNotAvailableException {
-        for (String command : commands) {
-            when(mMockDevice.executeShellCommand(command)).thenReturn("");
-        }
-    }
-
-    private void doSettingExpectations(String namespace, String key, String value)
-            throws DeviceNotAvailableException {
-        when(mMockDevice.getApiLevel()).thenReturn(22);
     }
 }

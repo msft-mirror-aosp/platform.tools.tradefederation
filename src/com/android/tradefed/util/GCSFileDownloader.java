@@ -185,7 +185,7 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         }
     }
 
-    private boolean isFileFresh(File localFile, StorageObject remoteFile) throws IOException {
+    private boolean isFileFresh(File localFile, StorageObject remoteFile) {
         if (localFile == null && remoteFile == null) {
             return true;
         }

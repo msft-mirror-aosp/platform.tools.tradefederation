@@ -29,6 +29,7 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -117,11 +118,10 @@ public class OxygenClient {
      * @param deviceOptions {@link TestDeviceOptions}
      * @return a {@link CommandResult} that Oxygen binary returned.
      */
-    public CommandResult lease(IBuildInfo b, TestDeviceOptions deviceOptions) {
+    public CommandResult leaseDevice(IBuildInfo b, TestDeviceOptions deviceOptions) {
         List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
         List<String> gceDriverParams = deviceOptions.getGceDriverParams();
         oxygenClientArgs.add("-lease");
-
         // Add options from GceDriverParams
         for (int i = 0; i < gceDriverParams.size(); i = i + 2) {
             String gceDriverOption = gceDriverParams.get(i);
@@ -170,14 +170,91 @@ public class OxygenClient {
     }
 
     /**
+     * Attempt to lease multiple devices by calling Oxygen client binary.
+     *
+     * @param buildInfos {@link List<IBuildInfo>}
+     * @param deviceOptions {@link TestDeviceOptions}
+     * @return {@link CommandResult} that Oxygen binary returned.
+     */
+    public CommandResult leaseMultipleDevices(
+            List<IBuildInfo> buildInfos, TestDeviceOptions deviceOptions) {
+        List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
+        oxygenClientArgs.add("-lease");
+
+        List<String> buildTargets = new ArrayList<>();
+        List<String> buildBranches = new ArrayList<>();
+        List<String> buildIds = new ArrayList<>();
+
+        for (IBuildInfo b : buildInfos) {
+            if (b.getBuildTargetName().isEmpty()) {
+                buildTargets.add(b.getBuildFlavor());
+            } else {
+                buildTargets.add(b.getBuildTargetName());
+            }
+            buildBranches.add(b.getBuildBranch());
+            buildIds.add(b.getBuildId());
+        }
+
+        if (buildTargets.size() > 0) {
+            oxygenClientArgs.add("-build_target");
+            oxygenClientArgs.add(String.join(",", buildTargets));
+        }
+
+        if (buildBranches.size() > 0) {
+            oxygenClientArgs.add("-build_branch");
+            oxygenClientArgs.add(String.join(",", buildBranches));
+        }
+        if (buildIds.size() > 0) {
+            oxygenClientArgs.add("-build_id");
+            oxygenClientArgs.add(String.join(",", buildIds));
+        }
+        oxygenClientArgs.add("-multidevice_size");
+        oxygenClientArgs.add(String.valueOf(buildInfos.size()));
+        oxygenClientArgs.add("-target_region");
+        oxygenClientArgs.add(deviceOptions.getOxygenTargetRegion());
+        oxygenClientArgs.add("-accounting_user");
+        oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
+        oxygenClientArgs.add("-lease_length_secs");
+        oxygenClientArgs.add(Long.toString(deviceOptions.getOxygenLeaseLength() / 1000));
+
+        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
+            oxygenClientArgs.add("-" + arg.getKey());
+            if (!Strings.isNullOrEmpty(arg.getValue())) {
+                oxygenClientArgs.add(arg.getValue());
+            }
+        }
+
+        CLog.i("Leasing multiple devices from oxygen client with %s", oxygenClientArgs.toString());
+        return runOxygenTimedCmd(
+                oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]),
+                deviceOptions.getGceCmdTimeout());
+    }
+
+    /**
      * Attempt to release a device by using Oxygen client binary.
      *
      * @param gceAvdInfo {@link GceAvdInfo}
-     * @param timeout
+     * @param deviceOptions {@link TestDeviceOptions}
      * @return a boolean which indicate whether the device release is successful.
      */
-    public boolean release(GceAvdInfo gceAvdInfo, long timeout) {
+    public boolean release(GceAvdInfo gceAvdInfo, TestDeviceOptions deviceOptions) {
+        // If gceAvdInfo is missing info, then it means the device wasn't get leased successfully.
+        // In such case, there is no need to release the device.
+        if (gceAvdInfo == null
+                || gceAvdInfo.instanceName() == null
+                || gceAvdInfo.hostAndPort() == null
+                || gceAvdInfo.hostAndPort().getHost() == null) {
+            return true;
+        }
         List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
+
+        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
+            oxygenClientArgs.add("-" + arg.getKey());
+            if (!Strings.isNullOrEmpty(arg.getValue())) {
+                oxygenClientArgs.add(arg.getValue());
+            }
+        }
+
         oxygenClientArgs.add("-release");
         oxygenClientArgs.add("-server_url");
         oxygenClientArgs.add(gceAvdInfo.hostAndPort().getHost());
@@ -186,7 +263,8 @@ public class OxygenClient {
         CLog.i("Releasing device from oxygen client with command %s", oxygenClientArgs.toString());
         CommandResult res =
                 runOxygenTimedCmd(
-                        oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]), timeout);
+                        oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]),
+                        deviceOptions.getGceCmdTimeout());
         return res.getStatus().equals(CommandStatus.SUCCESS);
     }
 

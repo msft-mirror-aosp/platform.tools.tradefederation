@@ -32,6 +32,7 @@ import com.android.tradefed.util.ZipUtil;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -69,11 +70,11 @@ public class CommonLogRemoteFileUtil {
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.CUTTLEFISH,
                 new KnownLogFileEntry(
-                        "/home/%s/fetcher_config.json", null, LogDataType.TEXT));
+                        "/home/%s/fetcher_config.json", null, LogDataType.CUTTLEFISH_LOG));
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.CUTTLEFISH,
                 new KnownLogFileEntry(
-                        NESTED_REMOTE_LOG_DIR + "kernel.log", null, LogDataType.TEXT));
+                        NESTED_REMOTE_LOG_DIR + "kernel.log", null, LogDataType.CUTTLEFISH_LOG));
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.CUTTLEFISH,
                 new KnownLogFileEntry(
@@ -81,16 +82,31 @@ public class CommonLogRemoteFileUtil {
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.CUTTLEFISH,
                 new KnownLogFileEntry(
-                        NESTED_REMOTE_LOG_DIR + "cuttlefish_config.json", null, LogDataType.TEXT));
+                        NESTED_REMOTE_LOG_DIR + "cuttlefish_config.json",
+                        null,
+                        LogDataType.CUTTLEFISH_LOG));
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.CUTTLEFISH,
                 new KnownLogFileEntry(
                         NESTED_REMOTE_LOG_DIR + "launcher.log",
                         "cuttlefish_launcher.log",
-                        LogDataType.TEXT));
+                        LogDataType.CUTTLEFISH_LOG));
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.CUTTLEFISH,
-                new KnownLogFileEntry("/var/log/kern.log", "host_kernel.log", LogDataType.TEXT));
+                new KnownLogFileEntry(
+                        NESTED_REMOTE_LOG_DIR + "crosvm_openwrt_boot.log",
+                        null,
+                        LogDataType.CUTTLEFISH_LOG));
+        KNOWN_FILES_TO_FETCH.put(
+                InstanceType.CUTTLEFISH,
+                new KnownLogFileEntry(
+                        NESTED_REMOTE_LOG_DIR + "crosvm_openwrt.log",
+                        null,
+                        LogDataType.CUTTLEFISH_LOG));
+        KNOWN_FILES_TO_FETCH.put(
+                InstanceType.CUTTLEFISH,
+                new KnownLogFileEntry(
+                        "/var/log/kern.log", "host_kernel.log", LogDataType.CUTTLEFISH_LOG));
         // Emulator known files to collect
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.EMULATOR,
@@ -100,32 +116,47 @@ public class CommonLogRemoteFileUtil {
                         LogDataType.LOGCAT));
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.EMULATOR,
-                new KnownLogFileEntry(EMULATOR_REMOTE_LOG_DIR + "adb.log", null, LogDataType.TEXT));
+                new KnownLogFileEntry(
+                        EMULATOR_REMOTE_LOG_DIR + "adb.log", null, LogDataType.CUTTLEFISH_LOG));
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.EMULATOR,
                 new KnownLogFileEntry(
-                        EMULATOR_REMOTE_LOG_DIR + "kernel.log", null, LogDataType.TEXT));
+                        EMULATOR_REMOTE_LOG_DIR + "kernel.log", null, LogDataType.CUTTLEFISH_LOG));
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.EMULATOR,
-                new KnownLogFileEntry("/var/log/daemon.log", null, LogDataType.TEXT));
+                new KnownLogFileEntry("/var/log/daemon.log", null, LogDataType.CUTTLEFISH_LOG));
         KNOWN_FILES_TO_FETCH.put(
                 InstanceType.EMULATOR,
-                new KnownLogFileEntry("/var/log/kern.log", "host_kernel.log", LogDataType.TEXT));
+                new KnownLogFileEntry(
+                        "/var/log/kern.log", "host_kernel.log", LogDataType.CUTTLEFISH_LOG));
 
         OXYGEN_LOG_FILES.add(new KnownLogFileEntry(OXYGEN_EMULATOR_LOG_DIR, null, LogDataType.DIR));
         OXYGEN_LOG_FILES.add(
                 new KnownLogFileEntry(OXYGEN_CUTTLEFISH_LOG_DIR, null, LogDataType.DIR));
         OXYGEN_LOG_FILES_FALLBACK.add(
                 new KnownLogFileEntry(
-                        OXYGEN_RUNTIME_LOG_DIR + "launcher.log", null, LogDataType.TEXT));
+                        OXYGEN_RUNTIME_LOG_DIR + "launcher.log", null, LogDataType.CUTTLEFISH_LOG));
         OXYGEN_LOG_FILES_FALLBACK.add(
                 new KnownLogFileEntry(
-                        OXYGEN_RUNTIME_LOG_DIR + "vdl_stdout.txt", null, LogDataType.TEXT));
+                        OXYGEN_RUNTIME_LOG_DIR + "crosvm_openwrt_boot.log",
+                        null,
+                        LogDataType.CUTTLEFISH_LOG));
         OXYGEN_LOG_FILES_FALLBACK.add(
                 new KnownLogFileEntry(
-                        OXYGEN_RUNTIME_LOG_DIR + "kernel.log", null, LogDataType.TEXT));
+                        OXYGEN_RUNTIME_LOG_DIR + "crosvm_openwrt.log",
+                        null,
+                        LogDataType.CUTTLEFISH_LOG));
         OXYGEN_LOG_FILES_FALLBACK.add(
-                new KnownLogFileEntry(OXYGEN_RUNTIME_LOG_DIR + "logcat", null, LogDataType.TEXT));
+                new KnownLogFileEntry(
+                        OXYGEN_RUNTIME_LOG_DIR + "vdl_stdout.txt",
+                        null,
+                        LogDataType.CUTTLEFISH_LOG));
+        OXYGEN_LOG_FILES_FALLBACK.add(
+                new KnownLogFileEntry(
+                        OXYGEN_RUNTIME_LOG_DIR + "kernel.log", null, LogDataType.CUTTLEFISH_LOG));
+        OXYGEN_LOG_FILES_FALLBACK.add(
+                new KnownLogFileEntry(
+                        OXYGEN_RUNTIME_LOG_DIR + "logcat", null, LogDataType.CUTTLEFISH_LOG));
     }
 
     /** A representation of a known log entry for remote devices. */
@@ -187,8 +218,33 @@ public class CommonLogRemoteFileUtil {
         }
         for (String file : options.getRemoteFetchFilePattern()) {
             // TODO: Improve type of files.
-            LogRemoteFile(testLogger, gceAvd, options, runUtil, file, LogDataType.TEXT, null);
+            LogRemoteFile(
+                    testLogger, gceAvd, options, runUtil, file, LogDataType.CUTTLEFISH_LOG, null);
         }
+    }
+
+    /**
+     * Execute a command to validate the ssh connection to the remote GCE instance.
+     *
+     * @param gceAvd The {@link GceAvdInfo} that describe the device.
+     * @param options a {@link TestDeviceOptions} describing the device options to be used for the
+     *     GCE device.
+     * @param runUtil a {@link IRunUtil} to execute commands.
+     * @return A boolean which indicate whether the remote GCE is reachable by ssh.
+     */
+    public static boolean isRemoteGceReachableBySsh(
+            GceAvdInfo gceAvd, TestDeviceOptions options, IRunUtil runUtil) {
+        CommandStatus sshAttemptStatus =
+                RemoteSshUtil.remoteSshCommandExec(gceAvd, options, runUtil, 10000, "exit")
+                        .getStatus();
+        if (!CommandStatus.SUCCESS.equals(sshAttemptStatus)) {
+            CLog.e(
+                    String.format(
+                            "Unable to ssh to the remote GCE, ssh failed with status %s.",
+                            sshAttemptStatus));
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -216,7 +272,7 @@ public class CommonLogRemoteFileUtil {
                 GceManager.remoteSshCommandExecution(
                         gceAvd, options, runUtil, 60000, remoteCommand);
         StringBuilder builder = new StringBuilder();
-        builder.append(String.format("Command: %s\n", remoteCommand));
+        builder.append(String.format("Command: %s\n", Arrays.asList(remoteCommand)));
         builder.append(
                 String.format(
                         "Exit code: %d, Status: %s\n",
@@ -225,7 +281,7 @@ public class CommonLogRemoteFileUtil {
         builder.append(String.format("stderr:\n%s\n", commandResult.getStderr()));
         testLogger.testLog(
                 logName,
-                LogDataType.TEXT,
+                LogDataType.CUTTLEFISH_LOG,
                 new ByteArrayInputStreamSource(builder.toString().getBytes()));
     }
 

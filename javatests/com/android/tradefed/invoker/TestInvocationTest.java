@@ -31,7 +31,9 @@ import static org.mockito.Mockito.when;
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.build.IBuildInfo.BuildInfoProperties;
 import com.android.tradefed.build.IBuildProvider;
+import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.build.IDeviceBuildProvider;
 import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.command.CommandRunner.ExitCode;
@@ -57,7 +59,7 @@ import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
-import com.android.tradefed.guice.InvocationScope;
+import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.shard.IShardHelper;
 import com.android.tradefed.invoker.shard.ShardHelper;
@@ -82,11 +84,13 @@ import com.android.tradefed.result.TestSummary;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.targetprep.BuildError;
+import com.android.tradefed.targetprep.ITargetCleaner;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IInvocationContextReceiver;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
 
 import org.junit.Before;
@@ -304,12 +308,6 @@ public class TestInvocationTest {
                     @Override
                     protected void setExitCode(ExitCode code, Throwable stack) {
                         // Empty on purpose
-                    }
-
-                    @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
                     }
 
                     @Override
@@ -957,7 +955,12 @@ public class TestInvocationTest {
         mStubConfiguration.setCommandOptions(cmdOptions);
         mStubConfiguration.setTest(test);
 
-        mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+        try {
+            mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
 
         // Needed a full custom set of verifications because it is messy
         try {
@@ -997,7 +1000,12 @@ public class TestInvocationTest {
 
         mStubConfiguration.setCommandLine(new String[] {"empty", "--build-id", "5"});
 
-        mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+        try {
+            mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+            fail("Should have thrown an exception.");
+        } catch (RuntimeException expected) {
+            // Expected
+        }
 
         verify(mMockBuildProvider).cleanUp(captured.capture());
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
@@ -1026,7 +1034,12 @@ public class TestInvocationTest {
         when(mMockDevice.getLogcat()).thenReturn(mLogcatSetupSource).thenReturn(mLogcatTestSource);
         ArgumentCaptor<IBuildInfo> captured = ArgumentCaptor.forClass(IBuildInfo.class);
 
-        mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+        try {
+            mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
 
         verify(mMockBuildProvider).cleanUp(captured.capture());
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
@@ -1060,7 +1073,12 @@ public class TestInvocationTest {
         when(mMockDevice.getLogcat()).thenReturn(mLogcatSetupSource).thenReturn(mLogcatTestSource);
         ArgumentCaptor<IBuildInfo> captured = ArgumentCaptor.forClass(IBuildInfo.class);
 
-        mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+        try {
+            mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
 
         verify(mMockBuildProvider).cleanUp(captured.capture());
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
@@ -1970,12 +1988,6 @@ public class TestInvocationTest {
                     }
 
                     @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
-                    }
-
-                    @Override
                     protected void applyAutomatedReporters(IConfiguration config) {
                         // Empty on purpose
                     }
@@ -2072,12 +2084,6 @@ public class TestInvocationTest {
                         @Override
                         protected void setExitCode(ExitCode code, Throwable stack) {
                             // empty on purpose
-                        }
-
-                        @Override
-                        InvocationScope getInvocationScope() {
-                            // Avoid re-entry in the current TF invocation scope for unit tests.
-                            return new InvocationScope();
                         }
 
                         @Override
@@ -2190,12 +2196,6 @@ public class TestInvocationTest {
                         @Override
                         protected void applyAutomatedReporters(IConfiguration config) {
                             // Empty on purpose
-                        }
-
-                        @Override
-                        InvocationScope getInvocationScope() {
-                            // Avoid re-entry in the current TF invocation scope for unit tests.
-                            return new InvocationScope();
                         }
 
                         @Override
@@ -2477,12 +2477,6 @@ public class TestInvocationTest {
                     @Override
                     protected void setExitCode(ExitCode code, Throwable stack) {
                         // Empty on purpose
-                    }
-
-                    @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
                     }
 
                     @Override

@@ -96,7 +96,8 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
 
     @Override
     public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener) {
+            IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
         super.init(context, listener);
 
         verifyNotNull(mConfiguration);
@@ -107,8 +108,6 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
                 // Clear coverage measurements on the device.
                 try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
                     getCoverageFlusher(device).resetCoverage();
-                } catch (DeviceNotAvailableException e) {
-                    throw new HarnessRuntimeException(e.getMessage(), e, e.getErrorId());
                 }
             }
         }
@@ -130,8 +129,8 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     @Override
-    public void onTestRunEnd(
-            DeviceMetricData runData, final Map<String, Metric> currentRunMetrics) {
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> currentRunMetrics)
+            throws DeviceNotAvailableException {
         if (!isClangCoverageEnabled()) {
             return;
         }
@@ -142,7 +141,7 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
                     getCoverageFlusher(device).forceCoverageFlush();
                 }
                 logCoverageMeasurement(device, getRunName());
-            } catch (DeviceNotAvailableException | IOException e) {
+            } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         }

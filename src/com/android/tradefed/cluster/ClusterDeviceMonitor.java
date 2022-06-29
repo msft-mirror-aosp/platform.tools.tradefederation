@@ -123,6 +123,9 @@ public class ClusterDeviceMonitor extends LabResourceDeviceMonitor {
                     // finish.
                     continue;
                 }
+                if (ClusterHostUtil.isLocalhostIpPort(device.getSerial())) {
+                    continue;
+                }
                 final ClusterDeviceInfo.Builder deviceBuilder = new ClusterDeviceInfo.Builder();
                 String runTargetFormat = getClusterOptions().getRunTargetFormat();
                 deviceBuilder.setDeviceDescriptor(device);

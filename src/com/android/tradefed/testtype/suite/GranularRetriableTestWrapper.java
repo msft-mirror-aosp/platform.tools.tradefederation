@@ -213,7 +213,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
      *     TestFailureListener}, and wrapped by RunMetricsCollector and Module MetricCollector (if
      *     not initialized).
      */
-    private ITestInvocationListener initializeListeners() {
+    private ITestInvocationListener initializeListeners() throws DeviceNotAvailableException {
         List<ITestInvocationListener> currentTestListener = new ArrayList<>();
         // Add all the module level listeners, including TestFailureListener
         if (mModuleLevelListeners != null) {

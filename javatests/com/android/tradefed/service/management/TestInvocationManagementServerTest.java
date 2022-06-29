@@ -15,16 +15,20 @@
  */
 package com.android.tradefed.service.management;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.command.ICommandScheduler;
 import com.android.tradefed.command.ICommandScheduler.IScheduledInvocationListener;
 import com.android.tradefed.config.ConfigurationException;
+import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
 
-import com.google.common.truth.Truth;
 import com.proto.tradefed.invocation.InvocationDetailRequest;
 import com.proto.tradefed.invocation.InvocationDetailResponse;
 import com.proto.tradefed.invocation.InvocationStatus;
@@ -47,17 +51,16 @@ import java.io.File;
 
 import io.grpc.Server;
 import io.grpc.stub.StreamObserver;
-import io.grpc.testing.GrpcCleanupRule;
 
 /** Unit tests for {@link TestInvocationManagementServer}. */
 @RunWith(JUnit4.class)
 public class TestInvocationManagementServerTest {
 
     @Rule public final MockitoRule mockito = MockitoJUnit.rule();
-    @Rule public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
 
     private TestInvocationManagementServer mServer;
     @Mock private ICommandScheduler mMockScheduler;
+    @Mock private DeviceManagementGrpcServer mMockDeviceManagement;
     @Mock private StreamObserver<NewTestCommandResponse> mRequestObserver;
     @Mock private StreamObserver<InvocationDetailResponse> mDetailObserver;
     @Captor ArgumentCaptor<NewTestCommandResponse> mResponseCaptor;
@@ -66,7 +69,7 @@ public class TestInvocationManagementServerTest {
     @Before
     public void setUp() {
         Server server = null;
-        mServer = new TestInvocationManagementServer(server, mMockScheduler);
+        mServer = new TestInvocationManagementServer(server, mMockScheduler, mMockDeviceManagement);
     }
 
     @Test
@@ -86,23 +89,26 @@ public class TestInvocationManagementServerTest {
 
         verify(mRequestObserver).onNext(mResponseCaptor.capture());
         NewTestCommandResponse response = mResponseCaptor.getValue();
-        Truth.assertThat(response.getInvocationId()).isNotEmpty();
+        assertThat(response.getInvocationId()).isNotEmpty();
 
         InvocationDetailRequest.Builder detailBuilder =
                 InvocationDetailRequest.newBuilder().setInvocationId(response.getInvocationId());
         mServer.getInvocationDetail(detailBuilder.build(), mDetailObserver);
         verify(mDetailObserver).onNext(mResponseDetailCaptor.capture());
         InvocationDetailResponse responseDetails = mResponseDetailCaptor.getValue();
-        Truth.assertThat(responseDetails.getInvocationStatus().getStatus())
+        assertThat(responseDetails.getInvocationStatus().getStatus())
                 .isEqualTo(InvocationStatus.Status.DONE);
         File record = new File(responseDetails.getTestRecordPath());
-        Truth.assertThat(record.exists()).isTrue();
+        assertThat(record.exists()).isTrue();
         FileUtil.deleteFile(record);
     }
 
     @Test
     public void testSubmitTestCommand_schedulingError() throws Exception {
-        doThrow(new ConfigurationException("failed to schedule"))
+        doThrow(
+                        new ConfigurationException(
+                                "failed to schedule",
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR))
                 .when(mMockScheduler)
                 .execCommand(Mockito.any(), Mockito.any());
 
@@ -112,6 +118,47 @@ public class TestInvocationManagementServerTest {
 
         verify(mRequestObserver).onNext(mResponseCaptor.capture());
         NewTestCommandResponse response = mResponseCaptor.getValue();
-        Truth.assertThat(response.getInvocationId()).isEmpty();
+        assertThat(response.getInvocationId()).isEmpty();
+        assertThat(response.getCommandErrorInfo()).isNotNull();
+        assertThat(response.getCommandErrorInfo().getErrorName())
+                .isEqualTo(InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR.name());
+        assertThat(response.getCommandErrorInfo().getErrorCode())
+                .isEqualTo(InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR.code());
+    }
+
+    @Test
+    public void testSubmitTestCommand_reservedDevice() throws Exception {
+        ITestDevice mockDevice = Mockito.mock(ITestDevice.class);
+        doAnswer(
+                        invocation -> {
+                            Object listeners = invocation.getArgument(0);
+                            ((IScheduledInvocationListener) listeners)
+                                    .invocationComplete(null, null);
+                            return null;
+                        })
+                .when(mMockScheduler)
+                .execCommand(Mockito.any(), Mockito.eq(mockDevice), Mockito.any());
+        when(mMockDeviceManagement.getDeviceFromReservation(Mockito.eq("reservation-1")))
+                .thenReturn(mockDevice);
+        NewTestCommandRequest.Builder requestBuilder =
+                NewTestCommandRequest.newBuilder()
+                        .addArgs("empty")
+                        .addReservationId("reservation-1");
+        mServer.submitTestCommand(requestBuilder.build(), mRequestObserver);
+
+        verify(mRequestObserver).onNext(mResponseCaptor.capture());
+        NewTestCommandResponse response = mResponseCaptor.getValue();
+        assertThat(response.getInvocationId()).isNotEmpty();
+
+        InvocationDetailRequest.Builder detailBuilder =
+                InvocationDetailRequest.newBuilder().setInvocationId(response.getInvocationId());
+        mServer.getInvocationDetail(detailBuilder.build(), mDetailObserver);
+        verify(mDetailObserver).onNext(mResponseDetailCaptor.capture());
+        InvocationDetailResponse responseDetails = mResponseDetailCaptor.getValue();
+        assertThat(responseDetails.getInvocationStatus().getStatus())
+                .isEqualTo(InvocationStatus.Status.DONE);
+        File record = new File(responseDetails.getTestRecordPath());
+        assertThat(record.exists()).isTrue();
+        FileUtil.deleteFile(record);
     }
 }

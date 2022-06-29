@@ -18,11 +18,15 @@ package com.android.tradefed.util;
 import com.android.tradefed.command.FatalHostError;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.error.IHarnessException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
+
+import com.google.common.collect.ImmutableSet;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -59,6 +63,9 @@ import java.util.zip.ZipFile;
  * A helper class for file related operations
  */
 public class FileUtil {
+
+    private static final ImmutableSet<String> DISK_SPACE_ERRORS =
+            ImmutableSet.of("No space left on device");
 
     /**
      * The minimum allowed disk space in megabytes. File creation methods will throw
@@ -1198,10 +1205,17 @@ public class FileUtil {
      * @return md5 of the file
      */
     public static String calculateMd5(File file) {
+        long startTime = System.currentTimeMillis();
         try (FileInputStream inputSource = new FileInputStream(file)) {
             return StreamUtil.calculateMd5(inputSource);
         } catch (IOException e) {
             CLog.e(e);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MD5_CALCULATION_TIME,
+                    System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MD5_CALCULATION_COUNT, 1);
         }
         return "-1";
     }
@@ -1367,5 +1381,18 @@ public class FileUtil {
             CLog.e(e);
         }
         return null;
+    }
+
+    /** Returns true if the message is an disk space error. */
+    public static boolean isDiskSpaceError(String message) {
+        return DISK_SPACE_ERRORS.contains(message);
+    }
+
+    /** Wraps error into a disk space error if needed. */
+    public static IOException convertToDiskSpaceIfNeeded(IOException e) {
+        if (isDiskSpaceError(e.getMessage())) {
+            return new HarnessIOException(e, InfraErrorIdentifier.NO_DISK_SPACE);
+        }
+        return e;
     }
 }

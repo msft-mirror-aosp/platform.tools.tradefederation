@@ -517,6 +517,22 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
+     * Helper method which executes a long running fastboot command as a system command with system
+     * environment variables.
+     *
+     * <p>Identical to {@link #executeFastbootCommand(String...)} except uses a longer timeout.
+     *
+     * @param envVarMap the system environment variables that the fastboot command run with
+     * @param commandArgs the fastboot command and arguments to run
+     * @return the CommandResult containing output of command
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public CommandResult executeLongFastbootCommand(
+            Map<String, String> envVarMap, String... commandArgs)
+            throws DeviceNotAvailableException;
+
+    /**
      * Get whether to use fastboot erase or fastboot format to wipe a partition on the device.
      *
      * @return {@code true} if fastboot erase will be used or {@code false} if fastboot format will
@@ -1219,6 +1235,14 @@ public interface INativeDevice {
     public boolean waitForDeviceNotAvailable(final long waitTime);
 
     /**
+     * Blocks until device is visible via fastboot. Use default timeout.
+     *
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public void waitForDeviceBootloader() throws DeviceNotAvailableException;
+
+    /**
      * Blocks for the device to be in the 'adb recovery' state (note this is distinct from
      * {@link IDeviceRecovery}).
      *
@@ -1434,6 +1458,14 @@ public interface INativeDevice {
      * File referenced in the Bugreport object need to be cleaned via {@link Bugreport#close()}.
      */
     public Bugreport takeBugreport();
+
+    /**
+     * Collects and log ANRs from the device.
+     *
+     * @param logger an {@link ITestLogger} to log the ANRs.
+     * @return True if the logging was successful, false otherwise.
+     */
+    public boolean logAnrs(ITestLogger logger) throws DeviceNotAvailableException;
 
     /**
      * Get the device class.

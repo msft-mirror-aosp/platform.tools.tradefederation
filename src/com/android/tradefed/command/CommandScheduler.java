@@ -74,6 +74,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.suite.SuiteResultReporter;
 import com.android.tradefed.sandbox.ISandbox;
 import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.service.management.DeviceManagementGrpcServer;
 import com.android.tradefed.service.management.TestInvocationManagementServer;
 import com.android.tradefed.targetprep.DeviceFailedToBootError;
 import com.android.tradefed.testtype.IRemoteTest;
@@ -668,18 +669,19 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     setLastInvocationExitCode(
                             instance.getExitInfo().mExitCode, instance.getExitInfo().mStack);
                 }
-                if (config.getCommandOptions().reportInvocationComplete()) {
-                    LogSaverResultForwarder.reportEndHostLog(
-                            config.getLogSaver(), TestInvocation.TRADEFED_INVOC_COMPLETE_HOST_LOG);
-                    config.getLogOutput().closeLog();
-                    LogRegistry.getLogRegistry().unregisterLogger();
-                }
                 if (getFeatureServer() != null) {
                     getFeatureServer().unregisterInvocation(config);
                 }
                 mCmd.commandFinished(elapsedTime);
                 logInvocationEndedEvent(
                         mCmd.getCommandTracker().getId(), elapsedTime, mInvocationContext);
+                CLog.d("Finalizing the logger and invocation.");
+                if (config.getCommandOptions().reportInvocationComplete()) {
+                    LogSaverResultForwarder.reportEndHostLog(
+                            config.getLogSaver(), TestInvocation.TRADEFED_INVOC_COMPLETE_HOST_LOG);
+                    config.getLogOutput().closeLog();
+                    LogRegistry.getLogRegistry().unregisterLogger();
+                }
             }
         }
 
@@ -1032,6 +1034,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return GlobalConfiguration.getInstance().getTestInvocationManagementSever();
     }
 
+    protected DeviceManagementGrpcServer getDeviceManagementServer() {
+        return GlobalConfiguration.getInstance().getDeviceManagementServer();
+    }
+
     /**
      * Fetches a {@link IKeyStoreClient} using the {@link IKeyStoreFactory}
      * declared in {@link IGlobalConfiguration} or null if none is defined.
@@ -1089,13 +1095,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             // potentially create more invocations.
             manager.terminateDeviceRecovery();
             manager.terminateDeviceMonitor();
-            if (getFeatureServer() != null) {
-                try {
-                    getFeatureServer().shutdown();
-                } catch (InterruptedException e) {
-                    CLog.e(e);
-                }
-            }
             if (getTestInvocationManagementServer() != null) {
                 try {
                     getTestInvocationManagementServer().shutdown();
@@ -1108,6 +1107,22 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             exit(manager);
             cleanUp();
             CLog.logAndDisplay(LogLevel.INFO, "All done");
+            // Stop Feature Server after invocations are completed in case
+            // they still need it during shutdown.
+            if (getFeatureServer() != null) {
+                try {
+                    getFeatureServer().shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
+            if (getDeviceManagementServer() != null) {
+                try {
+                    getDeviceManagementServer().shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
             if (mClient != null) {
                 mClient.stop();
             }

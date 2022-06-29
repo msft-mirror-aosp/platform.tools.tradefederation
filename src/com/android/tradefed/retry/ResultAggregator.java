@@ -23,7 +23,6 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.EventsLoggerListener;
 import com.android.tradefed.result.FailureDescription;
-import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -550,12 +549,10 @@ public class ResultAggregator extends CollectingTestListener {
 
     private void saveEventsLog(File eventsLog, String key) {
         if (eventsLog != null && eventsLog.length() > 0 && mLogSaver != null) {
-            try (FileInputStreamSource source = new FileInputStreamSource(eventsLog, true)) {
+            try {
                 LogFile logged =
-                        mLogSaver.saveLogData(
-                                eventsLog.getName(),
-                                LogDataType.TF_EVENTS,
-                                source.createInputStream());
+                        mLogSaver.saveLogFile(
+                                eventsLog.getName(), LogDataType.TF_EVENTS, eventsLog);
                 if (logged != null) {
                     mAggregatedForwarder.logAssociation(key, logged);
                     mDetailedForwarder.logAssociation(key, logged);

@@ -33,6 +33,8 @@ public class InvocationMetricLogger {
         // Bugreport time and count
         BUGREPORT_TIME("bugreport_time", true),
         BUGREPORT_COUNT("bugreport_count", true),
+        ANR_TIME("anr_time", true),
+        ANR_COUNT("anr_count", true),
         // Logcat dump time and count
         LOGCAT_DUMP_TIME("logcat_dump_time", true),
         LOGCAT_DUMP_COUNT("logcat_dump_count", true),
@@ -49,6 +51,10 @@ public class InvocationMetricLogger {
         INSTRUMENTATION_RERUN_FROM_FILE("instrumentation_rerun_from_file", true),
         INSTRUMENTATION_RERUN_SERIAL("instrumentation_rerun_serial", true),
         DOWNLOAD_RETRY_COUNT("download_retry_count", true),
+        XTS_STAGE_TESTS_TIME("xts_stage_tests_time_ms", true),
+        XTS_STAGE_TESTS_BYTES("xts_stage_tests_bytes", true),
+        XTS_PARTIAL_DOWNLOAD_FALLBACK_COUNT("xts_partial_download_fallback_count", true),
+        XTS_PARTIAL_DOWNLOAD_TOTAL_COUNT("xts_partial_download_total_count", true),
         // -- Disk memory usage --
         // Approximate peak disk space usage of the invocation
         // Represent files that would usually live for the full invocation (min usage)
@@ -86,6 +92,10 @@ public class InvocationMetricLogger {
         POSTBOOT_WIFI_SETUP_TIME("postboot_wifi_setup_time", true),
         // Represents how often we go through postboot wifi setup
         POSTBOOT_WIFI_SETUP_COUNT("postboot_wifi_setup_count", true),
+        // Represents the time we spend during md5 calculation
+        MD5_CALCULATION_TIME("md5_calculation_time", true),
+        // Represents how often we go through md5 calculation
+        MD5_CALCULATION_COUNT("md5_calculation_count", true),
 
         // Represents the time we spend pulling file from device.
         PULL_FILE_TIME("pull_file_time_ms", true),
@@ -190,6 +200,9 @@ public class InvocationMetricLogger {
 
         MODULE_SETUP_PAIR("tf_module_setup_pair_timestamp", true),
         MODULE_TEARDOWN_PAIR("tf_module_teardown_pair_timestamp", true),
+
+        LAB_PREPARER_NOT_ILAB("lab_preparer_not_ilab", true),
+        TARGET_PREPARER_IS_ILAB("target_preparer_is_ilab", true),
         ;
 
         private final String mKeyName;
@@ -216,6 +229,8 @@ public class InvocationMetricLogger {
         TEST_TYPE_COUNT("test-type-count", true),
         TARGET_PREPARER_SETUP_LATENCY("target-preparer-setup-latency", true),
         TARGET_PREPARER_TEARDOWN_LATENCY("target-preparer-teardown-latency", true),
+        LAB_PREPARER_SETUP_LATENCY("lab-preparer-setup-latency", true),
+        LAB_PREPARER_TEARDOWN_LATENCY("lab-preparer-teardown-latency", true),
         MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true);
 
         private final String mGroupName;

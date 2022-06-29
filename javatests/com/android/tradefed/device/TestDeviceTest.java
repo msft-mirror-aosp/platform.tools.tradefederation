@@ -55,6 +55,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -152,6 +153,11 @@ public class TestDeviceTest {
         @Override
         public boolean isAdbTcp() {
             return false;
+        }
+
+        @Override
+        protected AaptParser createParser(File appFile) {
+            return null;
         }
     }
 
@@ -1079,21 +1085,12 @@ public class TestDeviceTest {
      */
     @Test
     public void testExecuteFastbootCommand_state() throws Exception {
-        final long waitTimeMs = 150;
-        // build a fastboot response that will block
+        // build a fastboot response that will change state
         Answer<CommandResult> blockResult =
                 invocation -> {
-                    synchronized (this) {
-                        // first inform this test that fastboot cmd is executing
-                        notifyAll();
-                        // now wait for test to unblock us when its done testing logic
-                        long now = System.currentTimeMillis();
-                        long deadline = now + waitTimeMs;
-                        while (now < deadline) {
-                            wait(deadline - now);
-                            now = System.currentTimeMillis();
-                        }
-                    }
+                    // Expect this to be ignored
+                    mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
+                    assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
                     return new CommandResult(CommandStatus.SUCCESS);
                 };
         when(mMockRunUtil.runTimedCmd(
@@ -1106,33 +1103,12 @@ public class TestDeviceTest {
 
         mTestDevice.setDeviceState(TestDeviceState.FASTBOOT);
         assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
-
-        // start fastboot command in background thread
-        Thread fastbootThread =
-                new Thread() {
-                    @Override
-                    public void run() {
-                        try {
-                            mTestDevice.executeFastbootCommand("foo");
-                        } catch (DeviceNotAvailableException e) {
-                            CLog.e(e);
-                        }
-                    }
-                };
-        fastbootThread.setName(getClass().getCanonicalName() + "#testExecuteFastbootCommand_state");
-        fastbootThread.start();
         try {
-            synchronized (blockResult) {
-                blockResult.wait(waitTimeMs);
-            }
-            // expect to ignore this
-            mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
-        } finally {
-            synchronized (blockResult) {
-                blockResult.notifyAll();
-            }
+            mTestDevice.executeFastbootCommand("foo");
+            fail("Should have thrown an exception");
+        } catch (DeviceNotAvailableException expected) {
+            // Expected
         }
-        fastbootThread.join();
         assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
         mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
         assertEquals(TestDeviceState.NOT_AVAILABLE, mTestDevice.getDeviceState());
@@ -5255,6 +5231,31 @@ public class TestDeviceTest {
     }
 
     @Test
+    public void testGetFoldableStatesVersionT() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Supported states: [\n"
+                                        + " DeviceState{identifier=0, name='CLOSED',"
+                                        + " app_accessible=false},\n"
+                                        + " DeviceState{identifier=1, name='HALF_OPENED',"
+                                        + " app_accessible=true},\n"
+                                        + " DeviceState{identifier=2, name='OPENED',"
+                                        + " app_accessible=true},\n"
+                                        + "]\n");
+                        return result;
+                    }
+                };
+
+        Set<DeviceFoldableState> states = mTestDevice.getFoldableStates();
+        assertEquals(2, states.size());
+    }
+
+    @Test
     public void testGetCurrentFoldableState() throws Exception {
         mTestDevice =
                 new TestableTestDevice() {
@@ -5264,6 +5265,25 @@ public class TestDeviceTest {
                         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
                         result.setStdout(
                                 "Committed state: DeviceState{identifier=2, name='DEFAULT'}\n");
+                        return result;
+                    }
+                };
+
+        DeviceFoldableState state = mTestDevice.getCurrentFoldableState();
+        assertEquals(2, state.getIdentifier());
+    }
+
+    @Test
+    public void testGetCurrentFoldableStateVersionT() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Committed state: DeviceState{identifier=2, name='DEFAULT',"
+                                        + " app_accessible=true}\n");
                         return result;
                     }
                 };

@@ -50,6 +50,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Unit tests for {@link DeviceBatteryLevelChecker}. */
 @RunWith(JUnit4.class)
@@ -59,7 +60,7 @@ public class DeviceBatteryLevelCheckerTest {
     private ITestDevice mDevice = null;
     private TestInformation mTestInfo = null;
     @Mock ITestDevice mFakeTestDevice;
-    public Integer mBatteryLevel = 10;
+    public AtomicInteger mBatteryLevel = new AtomicInteger(10);
     private TestDescription mTestDescription = new TestDescription("BatteryCharging", "charge");
     private TestDescription mTestDescription2 = new TestDescription("BatteryCharging", "speed");
 
@@ -112,7 +113,7 @@ public class DeviceBatteryLevelCheckerTest {
 
         @Override
         public Integer getBattery() {
-            return mBatteryLevel;
+            return mBatteryLevel.get() == -99 ? null : mBatteryLevel.get();
         }
     }
 
@@ -282,6 +283,9 @@ public class DeviceBatteryLevelCheckerTest {
     }
 
     private void expectBattLevel(Integer level) throws Exception {
-        mBatteryLevel = level;
+        if (level == null) {
+            level = -99;
+        }
+        mBatteryLevel.set(level);
     }
 }

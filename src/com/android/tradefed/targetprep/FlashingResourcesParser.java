@@ -265,11 +265,10 @@ public class FlashingResourcesParser implements IFlashingResourcesParser {
      */
     static AndroidInfo getBuildRequirements(File deviceImgZipFile,
             Map<String, Constraint> constraints) throws TargetSetupError {
-        if (!deviceImgZipFile.exists()) {
+        if (deviceImgZipFile == null || !deviceImgZipFile.exists()) {
             throw new TargetSetupError(
-                    String.format(
-                            "Device image zip %s doesn't not exist", deviceImgZipFile.getName()),
-                    InfraErrorIdentifier.UNDETERMINED);
+                    String.format("Device image zip %s doesn't not exist", deviceImgZipFile),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         ZipFile deviceZip = null;

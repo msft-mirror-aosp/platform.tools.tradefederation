@@ -198,6 +198,34 @@ public class GceManager {
     }
 
     /**
+     * Attempt to start multi devices gce instance with Oxygen.
+     *
+     * @param buildInfos {@link List<IBuildInfo>}
+     * @return a {@link List<GceAvdInfo>} describing the GCE Avd Info.
+     */
+    public List<GceAvdInfo> startMultiDevicesGce(List<IBuildInfo> buildInfos)
+            throws TargetSetupError {
+        List<GceAvdInfo> gceAvdInfos;
+        long startTime = System.currentTimeMillis();
+        try {
+            File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
+            OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
+            CommandResult res =
+                    oxygenClient.leaseMultipleDevices(buildInfos, getTestDeviceOptions());
+            gceAvdInfos =
+                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(
+                            res, mDeviceOptions.getRemoteAdbPort());
+            mGceAvdInfo = gceAvdInfos.get(0);
+            return gceAvdInfos;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_DIRECT_LEASE_COUNT, 2);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_LAUNCH_CVD_TIME, System.currentTimeMillis() - startTime);
+        }
+    }
+
+    /**
      * Attempt to start a gce instance with Oxygen.
      *
      * @return a {@link GceAvdInfo} describing the GCE instance.
@@ -207,10 +235,11 @@ public class GceManager {
         try {
             File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
             OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
-            CommandResult res = oxygenClient.lease(mBuildInfo, getTestDeviceOptions());
+            CommandResult res = oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions());
             GceAvdInfo oxygenDeviceInfo =
                     GceAvdInfo.parseGceInfoFromOxygenClientOutput(
-                            res, mDeviceOptions.getRemoteAdbPort());
+                                    res, mDeviceOptions.getRemoteAdbPort())
+                            .get(0);
             mGceAvdInfo = oxygenDeviceInfo;
             return oxygenDeviceInfo;
         } finally {
@@ -541,7 +570,7 @@ public class GceManager {
         try {
             File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
             OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
-            return oxygenClient.release(mGceAvdInfo, getTestDeviceOptions().getGceCmdTimeout());
+            return oxygenClient.release(mGceAvdInfo, getTestDeviceOptions());
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.OXYGEN_DEVICE_DIRECT_RELEASE_COUNT, 1);
@@ -830,8 +859,8 @@ public class GceManager {
             remoteFile =
                     RemoteFileUtil.fetchRemoteDir(
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
-            // Default files under a directory to be text files.
-            type = LogDataType.TEXT;
+            // Default files under a directory to be CUTTLEFISH_LOG to avoid compression.
+            type = LogDataType.CUTTLEFISH_LOG;
             if (remoteFile != null) {
                 // If we happened to fetch a directory, log all the subfiles
                 logDirectory(remoteFile, baseName, logger, type);

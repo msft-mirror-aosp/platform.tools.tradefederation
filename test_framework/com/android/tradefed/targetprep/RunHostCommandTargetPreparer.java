@@ -31,6 +31,7 @@ import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
@@ -180,7 +181,10 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
             replaceExtraFile(mSetUpCommands, buildInfo);
             runBgCommandList(mBgCommands, mBgCommandLogs);
         } catch (IOException e) {
-            throw new TargetSetupError(e.toString(), device.getDeviceDescriptor());
+            throw new TargetSetupError(
+                    e.toString(),
+                    device.getDeviceDescriptor(),
+                    TestErrorIdentifier.HOST_COMMAND_FAILED);
         }
     }
 
@@ -245,19 +249,23 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
                             String.format(
                                     "Command %s failed, stdout = [%s], stderr = [%s].",
                                     command, result.getStdout(), result.getStderr()),
-                            device.getDeviceDescriptor());
+                            device.getDeviceDescriptor(),
+                            TestErrorIdentifier.HOST_COMMAND_FAILED);
                 case TIMED_OUT:
                     throw new TargetSetupError(
                             String.format(
                                     "Command %s timed out, stdout = [%s], stderr = [%s].",
                                     command, result.getStdout(), result.getStderr()),
-                            device.getDeviceDescriptor());
+                            device.getDeviceDescriptor(),
+                            TestErrorIdentifier.HOST_COMMAND_FAILED);
                 case EXCEPTION:
                     throw new TargetSetupError(
                             String.format(
-                                    "Exception occurred when running command %s, stdout = [%s], stderr = [%s].",
+                                    "Exception occurred when running command %s, stdout = [%s],"
+                                            + " stderr = [%s].",
                                     command, result.getStdout(), result.getStderr()),
-                            device.getDeviceDescriptor());
+                            device.getDeviceDescriptor(),
+                            TestErrorIdentifier.HOST_COMMAND_FAILED);
             }
         }
     }
