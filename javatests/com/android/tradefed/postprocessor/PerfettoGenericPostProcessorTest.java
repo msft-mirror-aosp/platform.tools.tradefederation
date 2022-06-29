@@ -331,6 +331,32 @@ public class PerfettoGenericPostProcessorTest {
                 15120269);
     }
 
+    /** Test metrics enabled with multiple key and string value prefixing. */
+    @Test
+    public void testParsingWithMultipleKeyAndStringValuePrefixing()
+            throws ConfigurationException, IOException {
+        setupPerfettoMetricFile(METRIC_FILE_FORMAT.text, true, true);
+        mOptionSetter.setOptionValue(PREFIX_OPTION, PREFIX_OPTION_VALUE);
+        mOptionSetter.setOptionValue(KEY_PREFIX_OPTION,
+                "perfetto.protos.ProcessRenderInfo.process_name");
+        mOptionSetter.setOptionValue(KEY_PREFIX_OPTION,
+                "perfetto.protos.ProcessRenderInfo.rt_cpu_time_ms");
+        mOptionSetter.setOptionValue(ALL_METRICS_OPTION, "true");
+        Map<String, LogFile> testLogs = new HashMap<>();
+        testLogs.put(
+                PREFIX_OPTION_VALUE,
+                new LogFile(
+                        perfettoMetricProtoFile.getAbsolutePath(), "some.url", LogDataType.TEXTPB));
+        Map<String, Metric.Builder> parsedMetrics = mProcessor
+                .processRunMetricsAndLogs(new HashMap<>(), testLogs);
+
+        assertMetricsContain(
+                parsedMetrics,
+                "perfetto_android_hwui_metric-process_info-process_name-com.android.systemui-"
+                + "rt_cpu_time_ms-2481-all_mem_min",
+                15120269);
+    }
+
     /** Test metrics enabled with key and integer value prefixing. */
     @Test
     public void testParsingWithKeyAndIntegerValuePrefixing()
