@@ -61,7 +61,7 @@ public class HostStatsdMetricCollector extends BaseDeviceMetricCollector {
 
     @Override
     public void onTestRunStart(DeviceMetricData runData) throws DeviceNotAvailableException {
-        if (mPerRun) {
+        if (mPerRun && mBinaryConfig != null) {
             mDeviceConfigIds.clear();
             startCollection();
         }
@@ -69,7 +69,7 @@ public class HostStatsdMetricCollector extends BaseDeviceMetricCollector {
 
     @Override
     public void onTestStart(DeviceMetricData testData) throws DeviceNotAvailableException {
-        if (!mPerRun) {
+        if (!mPerRun && mBinaryConfig != null) {
             mDeviceConfigIds.clear();
             startCollection();
         }
@@ -84,7 +84,7 @@ public class HostStatsdMetricCollector extends BaseDeviceMetricCollector {
     public void onTestEnd(
             DeviceMetricData testData, final Map<String, Metric> currentTestCaseMetrics)
             throws DeviceNotAvailableException {
-        if (!mPerRun) {
+        if (!mPerRun && mBinaryConfig != null) {
             stopCollection(testData, !mTestFailed);
         }
         mTestCount++;
@@ -94,7 +94,7 @@ public class HostStatsdMetricCollector extends BaseDeviceMetricCollector {
     @Override
     public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> currentRunMetrics)
             throws DeviceNotAvailableException {
-        if (mPerRun) {
+        if (mPerRun && mBinaryConfig != null) {
             stopCollection(runData, true);
         }
     }
