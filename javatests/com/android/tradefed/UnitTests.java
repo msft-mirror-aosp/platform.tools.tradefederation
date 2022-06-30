@@ -231,6 +231,9 @@ import com.android.tradefed.suite.checker.SystemServerFileDescriptorCheckerTest;
 import com.android.tradefed.suite.checker.SystemServerStatusCheckerTest;
 import com.android.tradefed.suite.checker.TimeStatusCheckerTest;
 import com.android.tradefed.suite.checker.UserCheckerTest;
+import com.android.tradefed.suite.checker.baseline.DeviceBaselineSetterTest;
+import com.android.tradefed.suite.checker.baseline.LockSettingsBaselineSetterTest;
+import com.android.tradefed.suite.checker.baseline.SettingsBaselineSetterTest;
 import com.android.tradefed.targetprep.AllTestAppsInstallSetupTest;
 import com.android.tradefed.targetprep.AoaTargetPreparerTest;
 import com.android.tradefed.targetprep.AppSetupTest;
@@ -807,6 +810,11 @@ import org.junit.runners.Suite.SuiteClasses;
     SystemServerStatusCheckerTest.class,
     TimeStatusCheckerTest.class,
     UserCheckerTest.class,
+
+    // suite/checker/baseline
+    DeviceBaselineSetterTest.class,
+    LockSettingsBaselineSetterTest.class,
+    SettingsBaselineSetterTest.class,
 
     // testtype
     AndroidJUnitTestTest.class,
