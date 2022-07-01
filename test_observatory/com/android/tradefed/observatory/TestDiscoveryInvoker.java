@@ -74,37 +74,6 @@ public class TestDiscoveryInvoker {
     }
 
     /**
-     * Retrieve a list of test module names by using Tradefed Observatory.
-     *
-     * @return A list of test module names.
-     * @throws IOException
-     * @throws JSONException
-     * @throws ConfigurationException
-     */
-    @Deprecated(forRemoval = true)
-    public List<String> discoverTestModuleNames()
-            throws IOException, JSONException, ConfigurationException {
-        List<String> testModuleNames = new ArrayList<>();
-        // Build the classpath base on test root directory which should contain all the jars
-        String classPath = buildClasspath(mRootDir);
-        // Build command line args to query the tradefed.jar in the root directory
-        List<String> args = buildJavaCmdForXtsDiscovery(classPath);
-        String[] subprocessArgs = args.toArray(new String[args.size()]);
-        CommandResult res = getRunUtil().runTimedCmd(20000, subprocessArgs);
-        if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
-            CLog.e(
-                    "Tradefed observatory error, unable to discover test module names. command"
-                            + " used: %s error: %s",
-                    Joiner.on(" ").join(subprocessArgs), res.getStderr());
-            return testModuleNames;
-        }
-        String stdout = res.getStdout();
-        CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
-        testModuleNames.addAll(parseTestModules(stdout));
-        return testModuleNames;
-    }
-
-    /**
      * Retrieve a map of test dependency names - categorized by either test modules or other test
      * dependencies.
      *
