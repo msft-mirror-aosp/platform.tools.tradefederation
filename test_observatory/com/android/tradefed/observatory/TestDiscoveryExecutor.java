@@ -63,7 +63,7 @@ public class TestDiscoveryExecutor {
     public static void main(String[] args) {
         TestDiscoveryExecutor testDiscoveryExecutor = new TestDiscoveryExecutor();
         try {
-            String testModules = testDiscoveryExecutor.discoverDependencies(args);
+            String testModules = testDiscoveryExecutor.discoverDependenciesV2(args);
             System.out.print(testModules);
             // Exit with code 0 to signal success discovery
             System.exit(0);
@@ -123,6 +123,12 @@ public class TestDiscoveryExecutor {
         }
 
         List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));
+
+        if (testModules == null || testModules.isEmpty()) {
+            throw new TestDiscoveryException(
+                    "Tradefed Observatory discovered no test modules from the test config, it"
+                            + " might be component-based.");
+        }
         List<String> testDependencies = new ArrayList<>(discoverDependencies(config));
         Collections.sort(testModules);
         Collections.sort(testDependencies);
