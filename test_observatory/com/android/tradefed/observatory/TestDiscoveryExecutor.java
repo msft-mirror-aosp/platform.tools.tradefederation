@@ -25,8 +25,9 @@ import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -62,7 +63,7 @@ public class TestDiscoveryExecutor {
     public static void main(String[] args) {
         TestDiscoveryExecutor testDiscoveryExecutor = new TestDiscoveryExecutor();
         try {
-            String testModules = testDiscoveryExecutor.discoverDependencies(args);
+            String testModules = testDiscoveryExecutor.discoverDependenciesV2(args);
             System.out.print(testModules);
             // Exit with code 0 to signal success discovery
             System.exit(0);
@@ -97,9 +98,9 @@ public class TestDiscoveryExecutor {
 
         // Sort it so that it's always in the same order
         Collections.sort(allDependenciesList);
-        JSONObject jsonObject = new JSONObject();
-        JSONArray jsonArray = new JSONArray(allDependenciesList);
-        jsonObject.put(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, jsonArray);
+        JsonObject jsonObject = new JsonObject();
+        JsonArray jsonArray = new Gson().toJsonTree(allDependenciesList).getAsJsonArray();
+        jsonObject.add(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, jsonArray);
         return jsonObject.toString();
     }
 
@@ -122,15 +123,22 @@ public class TestDiscoveryExecutor {
         }
 
         List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));
+
+        if (testModules == null || testModules.isEmpty()) {
+            throw new TestDiscoveryException(
+                    "Tradefed Observatory discovered no test modules from the test config, it"
+                            + " might be component-based.");
+        }
         List<String> testDependencies = new ArrayList<>(discoverDependencies(config));
         Collections.sort(testModules);
         Collections.sort(testDependencies);
 
-        JSONObject jsonObject = new JSONObject();
-        JSONArray testModulesArray = new JSONArray(testModules);
-        JSONArray testDependenciesArray = new JSONArray(testDependencies);
-        jsonObject.put(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, testModulesArray);
-        jsonObject.put(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
+        JsonObject jsonObject = new JsonObject();
+        Gson gson = new Gson();
+        JsonArray testModulesArray = gson.toJsonTree(testModules).getAsJsonArray();
+        JsonArray testDependenciesArray = gson.toJsonTree(testDependencies).getAsJsonArray();
+        jsonObject.add(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, testModulesArray);
+        jsonObject.add(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
         return jsonObject.toString();
     }
 
