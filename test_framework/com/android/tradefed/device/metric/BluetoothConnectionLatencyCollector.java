@@ -44,7 +44,7 @@ public class BluetoothConnectionLatencyCollector extends HostStatsdMetricCollect
             "bluetooth_connection_latency";
 
     /** A map associates Bluetooth profile number to the descriptive name used for metric key. */
-    protected static final ImmutableMap<Integer, String> bluetoothProfilesMap =
+    protected static final ImmutableMap<Integer, String> BLUETOOTH_PROFILES_MAP =
             ImmutableMap.<Integer, String>builder()
                     .put(BluetoothProfile.HEADSET.getProfile(), "headset")
                     .put(BluetoothProfile.A2DP.getProfile(), "a2dp")
@@ -105,12 +105,12 @@ public class BluetoothConnectionLatencyCollector extends HostStatsdMetricCollect
             }
             int bluetoothProfile = metric.getDimensionLeafValuesInWhat(0).getValueInt();
             String metricKey;
-            if (bluetoothProfilesMap.containsKey(bluetoothProfile)) {
+            if (BLUETOOTH_PROFILES_MAP.containsKey(bluetoothProfile)) {
                 metricKey =
                         String.join(
                                 "_",
                                 BLUETOOTH_CONNECTION_LATENCY_METRIC_KEY,
-                                bluetoothProfilesMap.get(bluetoothProfile),
+                                BLUETOOTH_PROFILES_MAP.get(bluetoothProfile),
                                 "ms");
             } else {
                 metricKey =
