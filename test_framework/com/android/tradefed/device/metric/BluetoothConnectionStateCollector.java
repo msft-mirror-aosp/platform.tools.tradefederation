@@ -69,15 +69,15 @@ public class BluetoothConnectionStateCollector extends BluetoothConnectionLatenc
             HashMap<String, List<Long>> btProfilesStates) {
         for (String key : btProfilesStates.keySet()) {
             List<Long> states = btProfilesStates.get(key);
-            String metricKey2 = String.join("_", key, "connection_state_changed");
+            String metricKey = String.join("_", key, "connection_state_changed");
             NumericValues values = NumericValues.newBuilder().addAllNumericValue(states).build();
             Measurements measurements = Measurements.newBuilder().setNumericValues(values).build();
 
             CLog.d(
                     "Adding metric on device %s with key %s and values %s",
-                    device.getSerialNumber(), metricKey2, states.toString());
+                    device.getSerialNumber(), metricKey, states.toString());
             runData.addMetricForDevice(
-                    device, metricKey2, Metric.newBuilder().setMeasurements(measurements));
+                    device, metricKey, Metric.newBuilder().setMeasurements(measurements));
         }
     }
 
@@ -85,25 +85,28 @@ public class BluetoothConnectionStateCollector extends BluetoothConnectionLatenc
             ITestDevice device,
             EventMetricData metric,
             HashMap<String, List<Long>> btProfilesStates) {
-        Atom atom = metric.getAtom();
-        if (atom.hasBluetoothConnectionStateChanged()) {
-            BluetoothConnectionStateChanged bluetoothConnectionStateChanged =
-                    atom.getBluetoothConnectionStateChanged();
-            int btState = bluetoothConnectionStateChanged.getState().getNumber();
-            int btProfile = bluetoothConnectionStateChanged.getBtProfile();
+        Atom atom = metric.hasAtom() ? metric.getAtom() : metric.getAggregatedAtomInfo().getAtom();
+        if (!atom.hasBluetoothConnectionStateChanged()) {
             CLog.d(
-                    "Processing connection state changed atom on device %s for profile number %d",
-                    device.getSerialNumber(), btProfile);
-            if (bluetoothProfilesMap.containsKey(btProfile)) {
-                String btProfileName = bluetoothProfilesMap.get(btProfile);
-                List<Long> states =
-                        btProfilesStates.getOrDefault(btProfileName, new ArrayList<Long>());
-                states.add((long) btState);
-                btProfilesStates.put(btProfileName, states);
-                CLog.d(
-                        "Processed connection state changed atom on device %s profile %s value %d",
-                        device.getSerialNumber(), btProfileName, btState);
-            }
+                    "Atom does not have a bluetooth_connection_state_changed info."
+                            + " Skipping reporting");
+            return;
+        }
+        BluetoothConnectionStateChanged bluetoothConnectionStateChanged =
+                atom.getBluetoothConnectionStateChanged();
+        int btState = bluetoothConnectionStateChanged.getState().getNumber();
+        int btProfile = bluetoothConnectionStateChanged.getBtProfile();
+        CLog.d(
+                "Processing connection state changed atom on device %s for profile number %d",
+                device.getSerialNumber(), btProfile);
+        if (BLUETOOTH_PROFILES_MAP.containsKey(btProfile)) {
+            String btProfileName = BLUETOOTH_PROFILES_MAP.get(btProfile);
+            List<Long> states = btProfilesStates.getOrDefault(btProfileName, new ArrayList<Long>());
+            states.add((long) btState);
+            btProfilesStates.put(btProfileName, states);
+            CLog.d(
+                    "Processed connection state changed atom on device %s profile %s value %d",
+                    device.getSerialNumber(), btProfileName, btState);
         }
     }
 }
