@@ -121,7 +121,8 @@ public class LocalAndroidVirtualDeviceTest {
                     + "    \"logs\": ["
                     + "     {"
                     + "      \"path\": \"%s\","
-                    + "      \"type\": \"KERNEL_LOG\""
+                    + "      \"type\": \"KERNEL_LOG\","
+                    + "      \"name\": \"kernel.1.log\""
                     + "     }"
                     + "    ]"
                     + "   }"
@@ -141,7 +142,8 @@ public class LocalAndroidVirtualDeviceTest {
                     + "    \"logs\": ["
                     + "     {"
                     + "      \"path\": \"%s\","
-                    + "      \"type\": \"KERNEL_LOG\""
+                    + "      \"type\": \"KERNEL_LOG\","
+                    + "      \"name\": \"kernel.1.log\""
                     + "     }"
                     + "    ]"
                     + "   }"
@@ -445,7 +447,7 @@ public class LocalAndroidVirtualDeviceTest {
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
         verify(acloudDeleteRunUtil).setEnvVariable(eq("TMPDIR"), any());
-        verify(testLogger).testLog(any(), eq(LogDataType.KERNEL_LOG), any());
+        verify(testLogger).testLog(eq("kernel.1.log"), eq(LogDataType.KERNEL_LOG), any());
 
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         for (Map.Entry<String, ArgumentCaptor<String>> entry : captureDirs.entrySet()) {
@@ -501,7 +503,7 @@ public class LocalAndroidVirtualDeviceTest {
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
         verify(acloudDeleteRunUtil).setEnvVariable(eq("TMPDIR"), any());
-        verify(testLogger).testLog(any(), eq(LogDataType.KERNEL_LOG), any());
+        verify(testLogger).testLog(eq("kernel.1.log"), eq(LogDataType.KERNEL_LOG), any());
 
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         Assert.assertFalse(capturedHostPackageDir.exists());
@@ -553,7 +555,7 @@ public class LocalAndroidVirtualDeviceTest {
         mLocalAvd.postInvocationTearDown(expectedException);
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
-        verify(testLogger).testLog(any(), eq(LogDataType.KERNEL_LOG), any());
+        verify(testLogger).testLog(eq("kernel.1.log"), eq(LogDataType.KERNEL_LOG), any());
 
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         Assert.assertFalse(capturedHostPackageDir.exists());
