@@ -26,7 +26,6 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
-import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
@@ -49,7 +48,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 /** The class for local virtual devices running on TradeFed host. */
 public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements ITestLoggerReceiver {
@@ -559,12 +557,15 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
             CLog.e(ex);
             return;
         }
-        for (Map.Entry<String, LogDataType> log : mGceAvdInfo.getLogs().entrySet()) {
-            File file = new File(log.getKey());
+        for (GceAvdInfo.LogFileEntry log : mGceAvdInfo.getLogs()) {
+            File file = new File(log.path);
             if (file.exists()) {
                 try (InputStreamSource source = new FileInputStreamSource(file)) {
                     if (file.toPath().toRealPath().startsWith(realInstanceDir)) {
-                        mTestLogger.testLog(file.getName(), log.getValue(), source);
+                        mTestLogger.testLog(
+                                Strings.isNullOrEmpty(log.name) ? file.getName() : log.name,
+                                log.type,
+                                source);
                     } else {
                         CLog.w("%s is not in instance directory.", file.getAbsolutePath());
                     }

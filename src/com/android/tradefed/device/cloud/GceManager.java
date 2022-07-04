@@ -822,15 +822,16 @@ public class GceManager {
      * @param runUtil a {@link IRunUtil} to execute commands.
      * @param remoteFilePath The remote path where to find the file.
      * @param type the {@link LogDataType} of the logged file.
+     * @return whether the file is logged successfully.
      */
-    public static void logNestedRemoteFile(
+    public static boolean logNestedRemoteFile(
             ITestLogger logger,
             GceAvdInfo gceAvd,
             TestDeviceOptions options,
             IRunUtil runUtil,
             String remoteFilePath,
             LogDataType type) {
-        logNestedRemoteFile(logger, gceAvd, options, runUtil, remoteFilePath, type, null);
+        return logNestedRemoteFile(logger, gceAvd, options, runUtil, remoteFilePath, type, null);
     }
 
     /**
@@ -845,8 +846,9 @@ public class GceManager {
      * @param type the {@link LogDataType} of the logged file.
      * @param baseName The base name to use to log the file. If null the actual file name will be
      *     used.
+     * @return whether the file is logged successfully.
      */
-    public static void logNestedRemoteFile(
+    public static boolean logNestedRemoteFile(
             ITestLogger logger,
             GceAvdInfo gceAvd,
             TestDeviceOptions options,
@@ -864,6 +866,7 @@ public class GceManager {
             if (remoteFile != null) {
                 // If we happened to fetch a directory, log all the subfiles
                 logDirectory(remoteFile, baseName, logger, type);
+                return true;
             }
         } else {
             remoteFile =
@@ -871,8 +874,10 @@ public class GceManager {
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
             if (remoteFile != null) {
                 logFile(remoteFile, baseName, logger, type);
+                return true;
             }
         }
+        return false;
     }
 
     private static void logDirectory(
