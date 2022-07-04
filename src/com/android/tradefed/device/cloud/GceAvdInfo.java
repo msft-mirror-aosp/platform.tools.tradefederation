@@ -41,12 +41,40 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Structure to hold relevant data for a given GCE AVD instance. */
 public class GceAvdInfo {
+
+    public static class LogFileEntry {
+        public final String path;
+        public final LogDataType type;
+        // The name is optional and defaults to an empty string.
+        public final String name;
+
+        @VisibleForTesting
+        LogFileEntry(String path, LogDataType type, String name) {
+            this.path = path;
+            this.type = type;
+            this.name = name;
+        }
+
+        LogFileEntry(JSONObject log) throws JSONException {
+            path = log.getString("path");
+            type = parseLogDataType(log.getString("type"));
+            name = log.optString("name", "");
+        }
+
+        private LogDataType parseLogDataType(String typeString) {
+            try {
+                return LogDataType.valueOf(typeString);
+            } catch (IllegalArgumentException e) {
+                CLog.w("Unknown log type in GCE AVD info: %s", typeString);
+                return LogDataType.UNKNOWN;
+            }
+        }
+    }
 
     public static final List<String> BUILD_VARS =
             Arrays.asList(
@@ -69,7 +97,7 @@ public class GceAvdInfo {
     private String mErrors;
     private GceStatus mStatus;
     private HashMap<String, String> mBuildVars;
-    private Map<String, LogDataType> mLogs;
+    private List<LogFileEntry> mLogs;
     private boolean mIsIpPreconfigured = false;
 
     public static enum GceStatus {
@@ -83,7 +111,7 @@ public class GceAvdInfo {
         mInstanceName = instanceName;
         mHostAndPort = hostAndPort;
         mBuildVars = new HashMap<String, String>();
-        mLogs = new HashMap<String, LogDataType>();
+        mLogs = new ArrayList<LogFileEntry>();
     }
 
     public GceAvdInfo(
@@ -137,7 +165,7 @@ public class GceAvdInfo {
     }
 
     /** Return the map from local or remote log paths to types. */
-    public Map<String, LogDataType> getLogs() {
+    public List<LogFileEntry> getLogs() {
         return mLogs;
     }
 
@@ -245,7 +273,7 @@ public class GceAvdInfo {
                                     errorId,
                                     errors,
                                     gceStatus);
-                    avdInfo.mLogs.putAll(parseLogField(d));
+                    avdInfo.mLogs.addAll(parseLogField(d));
                     for (String buildVar : BUILD_VARS) {
                         if (d.has(buildVar) && !d.getString(buildVar).trim().isEmpty()) {
                             avdInfo.addBuildVar(buildVar, d.getString(buildVar).trim());
@@ -376,29 +404,18 @@ public class GceAvdInfo {
      * Parse log paths from a device object.
      *
      * @param device the device object in JSON.
-     * @return a map from log paths to {@link LogDataType}.
+     * @return a list of {@link LogFileEntry}.
      * @throws JSONException if any required property is missing.
      */
-    private static Map<String, LogDataType> parseLogField(JSONObject device) throws JSONException {
-        Map<String, LogDataType> logs = new HashMap<String, LogDataType>();
+    private static List<LogFileEntry> parseLogField(JSONObject device) throws JSONException {
+        List<LogFileEntry> logs = new ArrayList<LogFileEntry>();
         JSONArray logArray = device.optJSONArray("logs");
         if (logArray == null) {
             return logs;
         }
         for (int i = 0; i < logArray.length(); i++) {
             JSONObject logObject = logArray.getJSONObject(i);
-            String path = logObject.getString("path");
-            String typeString = logObject.getString("type");
-            LogDataType type;
-            try {
-                type = LogDataType.valueOf(typeString);
-            } catch (IllegalArgumentException e) {
-                CLog.w("Unknown log type in GCE AVD info: %s", typeString);
-                type = LogDataType.UNKNOWN;
-            }
-            if (logs.put(path, type) != null) {
-                CLog.w("Repeated log path in GCE AVD info: %s", path);
-            }
+            logs.add(new LogFileEntry(logObject));
         }
         return logs;
     }

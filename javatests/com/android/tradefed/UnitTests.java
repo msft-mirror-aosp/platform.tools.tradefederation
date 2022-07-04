@@ -86,6 +86,7 @@ import com.android.tradefed.device.TestDeviceTest;
 import com.android.tradefed.device.WaitDeviceRecoveryTest;
 import com.android.tradefed.device.WifiHelperTest;
 import com.android.tradefed.device.cloud.AcloudConfigParserTest;
+import com.android.tradefed.device.cloud.CommonLogRemoteFileUtilTest;
 import com.android.tradefed.device.cloud.GceAvdInfoTest;
 import com.android.tradefed.device.cloud.GceManagerTest;
 import com.android.tradefed.device.cloud.GceRemoteCmdFormatterTest;
@@ -557,6 +558,7 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // device.cloud
     AcloudConfigParserTest.class,
+    CommonLogRemoteFileUtilTest.class,
     GceAvdInfoTest.class,
     GceManagerTest.class,
     GceRemoteCmdFormatterTest.class,
