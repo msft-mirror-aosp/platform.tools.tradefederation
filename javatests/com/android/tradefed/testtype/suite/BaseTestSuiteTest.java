@@ -47,7 +47,9 @@ import com.android.tradefed.util.FileUtil;
 import com.google.common.truth.Truth;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
@@ -66,6 +68,8 @@ import java.util.Set;
 /** Unit tests for {@link BaseTestSuite}. */
 @RunWith(JUnit4.class)
 public class BaseTestSuiteTest {
+    @Rule public TemporaryFolder mTempFolder = new TemporaryFolder();
+
     private BaseTestSuite mRunner;
     private IDeviceBuildInfo mBuildInfo;
     @Mock ITestDevice mMockDevice;
@@ -81,6 +85,8 @@ public class BaseTestSuiteTest {
         mRunner = new AbiBaseTestSuite();
         mRunner.setBuild(mBuildInfo);
         mRunner.setDevice(mMockDevice);
+
+        mBuildInfo.setTestsDir(mTempFolder.newFolder(), "testsdir");
 
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice(ConfigurationDef.DEFAULT_DEVICE_NAME, mMockDevice);
