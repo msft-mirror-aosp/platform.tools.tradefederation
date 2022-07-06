@@ -394,8 +394,12 @@ public abstract class ITestSuite
 
     public File getTestsDir() throws FileNotFoundException {
         IBuildInfo build = getBuildInfo();
+        File testsDir = null;
         if (build instanceof IDeviceBuildInfo) {
-            return ((IDeviceBuildInfo) build).getTestsDir();
+            testsDir = ((IDeviceBuildInfo) build).getTestsDir();
+        }
+        if (testsDir != null && testsDir.exists()) {
+            return testsDir;
         }
         // TODO: handle multi build?
         throw new FileNotFoundException("Could not found a tests dir folder.");
