@@ -54,7 +54,9 @@ import com.android.tradefed.util.testmapping.TestMapping;
 import com.android.tradefed.util.testmapping.TestOption;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
@@ -81,11 +83,12 @@ import java.util.Set;
 @RunWith(JUnit4.class)
 public class TestMappingSuiteRunnerTest {
 
+    @Rule public TemporaryFolder mTempFolder = new TemporaryFolder();
+
     private static final String ABI_1 = "arm64-v8a";
     private static final String ABI_2 = "armeabi-v7a";
     private static final String DISABLED_PRESUBMIT_TESTS = "disabled-presubmit-tests";
     private static final String EMPTY_CONFIG = "empty";
-    private static final String NON_EXISTING_DIR = "non-existing-dir";
     private static final String TEST_CONFIG_NAME = "test";
     private static final String TEST_DATA_DIR = "testdata";
     private static final String TEST_MAPPING = "TEST_MAPPING";
@@ -140,7 +143,7 @@ public class TestMappingSuiteRunnerTest {
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
 
         when(mBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-        when(mBuildInfo.getTestsDir()).thenReturn(new File(NON_EXISTING_DIR));
+        when(mBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
         when(mMockDevice.getProperty(Mockito.any())).thenReturn(ABI_1);
         when(mMockDevice.getProperty(Mockito.any())).thenReturn(ABI_2);
         when(mMockDevice.getIDevice()).thenReturn(mock(IDevice.class));
@@ -236,7 +239,7 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
 
             mRunner.setBuild(mockBuildInfo);
@@ -330,7 +333,7 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
 
             mRunner.setBuild(mockBuildInfo);
@@ -395,7 +398,7 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
 
             mRunner.setBuild(mockBuildInfo);
@@ -508,7 +511,7 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.HOST_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
 
             mRunner.setBuild(mockBuildInfo);
@@ -551,7 +554,7 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
             when(mockBuildInfo.getRemoteFiles()).thenReturn(null);
 
@@ -595,7 +598,7 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
 
             mTestInfo
@@ -630,7 +633,7 @@ public class TestMappingSuiteRunnerTest {
             ZipUtil.createZip(srcDir, zipFile);
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
 
             mRunner.setBuild(mockBuildInfo);
@@ -689,7 +692,7 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
 
             mRunner.setBuild(mockBuildInfo);
@@ -738,7 +741,7 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
 
             mRunner.setBuild(mockBuildInfo);
@@ -879,7 +882,6 @@ public class TestMappingSuiteRunnerTest {
     @Test
     public void testLoadTests_moduleDifferentoptions() throws Exception {
         File tempDir = null;
-        File tempTestsDir = null;
         try {
             mOptionSetter.setOptionValue("test-mapping-test-group", "presubmit");
 
@@ -899,7 +901,7 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(tempTestsDir);
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
             when(mockBuildInfo.getBuildBranch()).thenReturn("branch");
             when(mockBuildInfo.getBuildFlavor()).thenReturn("flavor");
@@ -927,7 +929,6 @@ public class TestMappingSuiteRunnerTest {
             }
         } finally {
             FileUtil.recursiveDelete(tempDir);
-            FileUtil.recursiveDelete(tempTestsDir);
         }
     }
 
@@ -1046,7 +1047,7 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
             mRunner.setBuild(mockBuildInfo);
             mRunner.setPrioritizeHostConfig(true);
@@ -1114,12 +1115,12 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
             when(mockBuildInfo.getFile("extra-zip")).thenReturn(zipFile);
             mRunner.setBuild(mockBuildInfo);
 
-            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
+            mRunner.loadTests();
             fail("Should have thrown an exception.");
         } catch (HarnessRuntimeException expected) {
             // expected
@@ -1146,7 +1147,7 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
             when(mockBuildInfo.getFile("extra-zip")).thenReturn(zipFile2);
             mRunner.setBuild(mockBuildInfo);
@@ -1175,11 +1176,11 @@ public class TestMappingSuiteRunnerTest {
 
             IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
             when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
-            when(mockBuildInfo.getTestsDir()).thenReturn(new File("non-existing-dir"));
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
             when(mockBuildInfo.getFile("extra-zip")).thenReturn(null);
             mRunner.setBuild(mockBuildInfo);
-            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
+            mRunner.loadTests();
             fail("Should have thrown an exception.");
         } catch (HarnessRuntimeException expected) {
             // expected
