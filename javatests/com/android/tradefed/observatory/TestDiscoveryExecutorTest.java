@@ -74,7 +74,7 @@ public class TestDiscoveryExecutorTest {
 
     /** Test the executor to discover test modules from multiple tests. */
     @Test
-    public void testDiscoverTestModules() throws Exception {
+    public void testDiscoverTestDependencies() throws Exception {
         // Mock to return some include filters
         BaseTestSuite test1 = new BaseTestSuite();
         Set<String> includeFilters1 = new HashSet<>();
@@ -107,66 +107,6 @@ public class TestDiscoveryExecutorTest {
         try {
             String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
             String expected =
-                    "{\"TestDependencies\":[\"TestModule1\",\"TestModule2\",\"TestModule3\","
-                            + "\"TestModule4\",\"TestModule5\",\"TestModule6\""
-                            + ",\"someapk.apk\"]}";
-            assertEquals(expected, output);
-        } catch (Exception e) {
-            fail(String.format("Should not throw exception %s", e.getMessage()));
-        }
-    }
-
-    /** Test the executor to handle where there is no tests from the config. */
-    @Test
-    public void testDiscoverNoTestModules() throws Exception {
-        // Mock to return no include filters
-        when(mMockedConfiguration.getTests()).thenReturn(new ArrayList<>());
-        // We don't test with real command line input here. Because for a real command line input,
-        // the test module names will be different with respect to those test config resource files
-        // can be changed in different builds.
-        try {
-            mTestDiscoveryExecutor.discoverDependencies(new String[0]);
-            fail("Should throw an IllegalStateException");
-        } catch (Exception e) {
-            assertTrue(e instanceof IllegalStateException);
-        }
-    }
-
-    /** Test the executor to discover test modules from multiple tests. */
-    @Test
-    public void testDiscoverTestDependenciesV2() throws Exception {
-        // Mock to return some include filters
-        BaseTestSuite test1 = new BaseTestSuite();
-        Set<String> includeFilters1 = new HashSet<>();
-        includeFilters1.add("TestModule1 class#function1");
-        includeFilters1.add("TestModule2");
-        includeFilters1.add("x86_64 TestModule3 class#function3");
-        test1.setIncludeFilter(includeFilters1);
-
-        BaseTestSuite test2 = new BaseTestSuite();
-        Set<String> includeFilters2 = new HashSet<>();
-        includeFilters2.add("TestModule1 class#function6");
-        includeFilters2.add("x86 TestModule4");
-        includeFilters2.add("TestModule5 class#function2");
-        includeFilters2.add("TestModule6");
-        test2.setIncludeFilter(includeFilters2);
-
-        List<IRemoteTest> testList = new ArrayList<>();
-        testList.add(test1);
-        testList.add(test2);
-        when(mMockedConfiguration.getTests()).thenReturn(testList);
-        List<Object> preparers = new ArrayList<>();
-        preparers.add(new DiscoverablePreparer());
-        when(mMockedConfiguration.getAllConfigurationObjectsOfType(
-                        Configuration.TARGET_PREPARER_TYPE_NAME))
-                .thenReturn(preparers);
-
-        // We don't test with real command line input here. Because for a real command line input,
-        // the test module names will be different with respect to those test config resource files
-        // can be changed in different builds.
-        try {
-            String output = mTestDiscoveryExecutor.discoverDependenciesV2(new String[0]);
-            String expected =
                     "{\"TestModules\":[\"TestModule1\",\"TestModule2\",\"TestModule3\","
                             + "\"TestModule4\",\"TestModule5\",\"TestModule6\"],"
                             + "\"TestDependencies\":[\"someapk.apk\"]}";
@@ -178,12 +118,12 @@ public class TestDiscoveryExecutorTest {
 
     /** Test the executor to handle where there is no tests from the config. */
     @Test
-    public void testDiscoverDependenciesV2_NoTestModules() throws Exception {
+    public void testDiscoverDependencies_NoTestModules() throws Exception {
         // Mock to return no include filters
         when(mMockedConfiguration.getTests()).thenReturn(new ArrayList<>());
 
         try {
-            mTestDiscoveryExecutor.discoverDependenciesV2(new String[0]);
+            mTestDiscoveryExecutor.discoverDependencies(new String[0]);
             fail("Should throw an TestDiscoveryException");
         } catch (Exception e) {
             assertTrue(e instanceof TestDiscoveryException);
