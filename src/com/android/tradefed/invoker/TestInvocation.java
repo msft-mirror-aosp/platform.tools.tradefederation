@@ -187,6 +187,8 @@ public class TestInvocation implements ITestInvocation {
     private String mStopCause = null;
     private ErrorIdentifier mStopErrorId = null;
     private Long mStopRequestTime = null;
+    private Long mSoftStopRequestTime = null;
+    private boolean mShutdownBeforeTest = false;
     private boolean mTestStarted = false;
     private boolean mInvocationFailed = false;
     private boolean mDelegatedInvocation = false;
@@ -438,6 +440,14 @@ public class TestInvocation implements ITestInvocation {
             try {
                 // Clean up host.
                 invocationPath.doCleanUp(context, config, exception);
+                if (mSoftStopRequestTime != null) {
+                    long latency = System.currentTimeMillis() - mSoftStopRequestTime;
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.SHUTDOWN_LATENCY, latency);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.SHUTDOWN_BEFORE_TEST,
+                            Boolean.toString(mShutdownBeforeTest));
+                }
                 if (mStopCause != null) {
                     String message =
                             String.format(
@@ -1234,11 +1244,20 @@ public class TestInvocation implements ITestInvocation {
     }
 
     @Override
-    public void notifyInvocationStopped(String message, ErrorIdentifier errorId) {
+    public void notifyInvocationForceStopped(String message, ErrorIdentifier errorId) {
         mStopCause = message;
         mStopErrorId = errorId;
         if (mStopRequestTime == null) {
             mStopRequestTime = System.currentTimeMillis();
+        }
+    }
+
+    @Override
+    public void notifyInvocationStopped(String message) {
+        if (mSoftStopRequestTime == null) {
+            mSoftStopRequestTime = System.currentTimeMillis();
+            // If test isn't started yet, we know we could have stopped.
+            mShutdownBeforeTest = !mTestStarted;
         }
     }
 

@@ -1159,7 +1159,8 @@ public class TestInvocationTest {
         stubMockStoppedListeners();
         stubNormalInvoke(test);
 
-        mTestInvocation.notifyInvocationStopped("Stopped", InfraErrorIdentifier.INVOCATION_TIMEOUT);
+        mTestInvocation.notifyInvocationForceStopped(
+                "Stopped", InfraErrorIdentifier.INVOCATION_TIMEOUT);
         mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
 
         verify(test).run(Mockito.any(), Mockito.any());
