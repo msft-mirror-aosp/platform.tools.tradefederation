@@ -82,6 +82,11 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
     private String mDtboImageName = "dtbo.img";
 
     @Option(
+            name = "vendor-dlkm-image-name",
+            description = "The file name in BuildInfo that provides vendor_dlkm image.")
+    private String mVendorDlkmImageName = "vendor_dlkm.img";
+
+    @Option(
             name = "boot-image-file-name",
             description =
                     "The boot image file name to search for if gki-boot-image-name in "
@@ -103,6 +108,13 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
     private String mDtboImageFileName = "dtbo.img";
 
     @Option(
+            name = "vendor-dlkm-image-file-name",
+            description =
+                    "The vendor_dlkm image file name to search for if vendor-dlkm-image-name in "
+                            + "BuildInfo is a zip file or directory, for example vendor_dlkm.img.")
+    private String mVendorDlkmImageFileName = "vendor_dlkm.img";
+
+    @Option(
             name = "post-reboot-device-into-user-space",
             description = "whether to boot the device in user space after flash.")
     private boolean mPostRebootDeviceIntoUserSpace = true;
@@ -111,6 +123,9 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
             name = "wipe-device-after-gki-flash",
             description = "Whether to wipe device after GKI boot image flash.")
     private boolean mShouldWipeDevice = true;
+
+    @Option(name = "oem-disable-verity", description = "Whether to run oem disable-verity.")
+    private boolean mShouldDisableOemVerity = false;
 
     @Option(
             name = "boot-header-version",
@@ -193,6 +208,9 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
     private void flashGki(ITestDevice device, IBuildInfo buildInfo, File tmpDir)
             throws TargetSetupError, DeviceNotAvailableException {
         device.rebootIntoBootloader();
+        if (mShouldDisableOemVerity) {
+            executeFastbootCmd(device, "oem disable-verity");
+        }
         long start = System.currentTimeMillis();
         getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
         CLog.v(
@@ -219,7 +237,19 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
                                 tmpDir);
                 executeFastbootCmd(device, "flash", "dtbo", dtboImg.getAbsolutePath());
             }
+
             executeFastbootCmd(device, "flash", "boot", mBootImg.getAbsolutePath());
+
+            if (buildInfo.getFile(mVendorDlkmImageName) != null) {
+                File vendorDlkmImg =
+                        getRequestedFile(
+                                device,
+                                mVendorDlkmImageFileName,
+                                buildInfo.getFile(mVendorDlkmImageName),
+                                tmpDir);
+                device.rebootIntoFastbootd();
+                executeFastbootCmd(device, "flash", "vendor_dlkm", vendorDlkmImg.getAbsolutePath());
+            }
 
             if (mShouldWipeDevice) {
                 executeFastbootCmd(device, "-w");
