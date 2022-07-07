@@ -285,6 +285,58 @@ public class GkiDeviceFlashPreparerTest {
         verify(mMockDevice).postBootSetup();
     }
 
+    /* Verifies that preparer can flash GKI boot image and vendor_boot, vendor_dlkm, dtbo images */
+    @Test
+    public void testSetup_vendor_img_Success() throws Exception {
+        File imgDir = FileUtil.createTempDir("img_folder", mTmpDir);
+        File bootImg = new File(imgDir, "boot-5.4.img");
+        File vendorBootImg = new File(imgDir, "vendor_boot.img");
+        File dtboImg = new File(imgDir, "dtbo.img");
+        File vendorDlkmImg = new File(imgDir, "vendor_dlkm.img");
+        FileUtil.writeToFile("ddd", bootImg);
+        FileUtil.writeToFile("123", vendorBootImg);
+        FileUtil.writeToFile("456", dtboImg);
+        FileUtil.writeToFile("789", vendorDlkmImg);
+        mBuildInfo.setFile("gki_boot.img", bootImg, "0");
+        mBuildInfo.setFile("vendor_boot.img", vendorBootImg, "0");
+        mBuildInfo.setFile("vendor_dlkm.img", vendorDlkmImg, "0");
+        mBuildInfo.setFile("dtbo.img", dtboImg, "0");
+
+        when(mMockDevice.executeLongFastbootCommand(
+                        "flash", "boot", mBuildInfo.getFile("gki_boot.img").getAbsolutePath()))
+                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand(
+                        "flash",
+                        "vendor_boot",
+                        mBuildInfo.getFile("vendor_boot.img").getAbsolutePath()))
+                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand(
+                        "flash",
+                        "vendor_dlkm",
+                        mBuildInfo.getFile("vendor_dlkm.img").getAbsolutePath()))
+                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand(
+                        "flash", "dtbo", mBuildInfo.getFile("dtbo.img").getAbsolutePath()))
+                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
+
+        when(mMockDevice.enableAdbRoot()).thenReturn(Boolean.TRUE);
+
+        mPreparer.setUp(mTestInfo);
+        mPreparer.tearDown(mTestInfo, null);
+
+        verify(mMockDevice).rebootIntoBootloader();
+        verify(mMockRunUtil).allowInterrupt(false);
+        verify(mMockRunUtil).allowInterrupt(true);
+        verify(mMockDevice).rebootIntoFastbootd();
+        verify(mMockRunUtil).sleep(anyLong());
+        verify(mMockDevice).rebootUntilOnline();
+        verify(mMockDevice).setDate(null);
+        verify(mMockDevice).waitForDeviceAvailable(anyLong());
+        verify(mMockDevice).setRecoveryMode(RecoveryMode.AVAILABLE);
+        verify(mMockDevice).postBootSetup();
+    }
+
     /* Verifies that preparer can flash GKI boot image from a Zip file*/
     @Test
     public void testSetup_Success_FromZip() throws Exception {
