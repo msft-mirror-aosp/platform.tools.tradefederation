@@ -124,6 +124,9 @@ public class SandboxConfigUtil {
         if (result.getStderr().contains(InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR.name())) {
             error = InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR;
         }
+        if (result.getStderr().contains(InfraErrorIdentifier.GCS_ERROR.name())) {
+            error = InfraErrorIdentifier.GCS_ERROR;
+        }
         throw new SandboxConfigurationException(errorMessage, error);
     }
 
