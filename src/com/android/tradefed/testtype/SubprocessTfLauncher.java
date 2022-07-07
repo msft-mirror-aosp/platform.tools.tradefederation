@@ -25,6 +25,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.DelegatedInvocationExecution;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.RemoteInvocationExecution;
 import com.android.tradefed.invoker.TestInformation;
@@ -276,6 +277,7 @@ public abstract class SubprocessTfLauncher
         mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
         mRunUtil.unsetEnvVariable(ANDROID_SERIAL_VAR);
         mRunUtil.unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
+        mRunUtil.unsetEnvVariable(DelegatedInvocationExecution.DELEGATED_MODE_VAR);
         for (String variable : AutomatedReporters.REPORTER_MAPPING) {
             mRunUtil.unsetEnvVariable(variable);
         }
