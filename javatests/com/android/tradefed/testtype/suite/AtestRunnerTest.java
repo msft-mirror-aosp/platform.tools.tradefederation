@@ -17,12 +17,9 @@ package com.android.tradefed.testtype.suite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
-import com.android.tradefed.build.DeviceBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
@@ -41,7 +38,9 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -57,6 +56,8 @@ import java.util.Set;
 /** Unit tests for {@link AtestRunner}. */
 @RunWith(JUnit4.class)
 public class AtestRunnerTest {
+
+    @Rule public TemporaryFolder mTempFolder = new TemporaryFolder();
 
     private static final String TEST_CONFIG =
         "<configuration description=\"Runs a stub tests part of some suite\">\n"
@@ -93,12 +94,12 @@ public class AtestRunnerTest {
     @Before
     public void setUp() throws Exception {
         mRunner = new AbiAtestRunner();
-        mBuildInfo = spy(new DeviceBuildInfo());
+        mBuildInfo = mock(IDeviceBuildInfo.class);
         mMockDevice = mock(ITestDevice.class);
         mRunner.setBuild(mBuildInfo);
         mRunner.setDevice(mMockDevice);
 
-        doReturn(new File("some-dir")).when(mBuildInfo).getTestsDir();
+        when(mBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
         result.setStdout("Supported states: [\n" +
