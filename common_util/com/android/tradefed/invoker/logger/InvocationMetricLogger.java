@@ -137,6 +137,7 @@ public class InvocationMetricLogger {
         CLOUD_DEVICE_STABLE_HOST_IMAGE_PROJECT("stable_host_image_project", false),
 
         SHUTDOWN_BEFORE_TEST("shutdown_before_test", false),
+        SHUTDOWN_AFTER_TEST("shutdown_after_test", false),
         SHUTDOWN_LATENCY("shutdown_latency_ms", false),
         SHUTDOWN_HARD_LATENCY("shutdown_hard_latency_ms", false),
         DEVICE_COUNT("device_count", false),
