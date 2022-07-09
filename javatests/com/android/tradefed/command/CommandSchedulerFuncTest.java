@@ -271,7 +271,7 @@ public class CommandSchedulerFuncTest {
         }
 
         @Override
-        public void notifyInvocationStopped(String message, ErrorIdentifier errorId) {
+        public void notifyInvocationForceStopped(String message, ErrorIdentifier errorId) {
             printedStop = true;
         }
     }

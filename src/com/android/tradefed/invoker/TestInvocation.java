@@ -187,7 +187,12 @@ public class TestInvocation implements ITestInvocation {
     private String mStopCause = null;
     private ErrorIdentifier mStopErrorId = null;
     private Long mStopRequestTime = null;
+    private Long mSoftStopRequestTime = null;
+    private boolean mShutdownBeforeTest = false;
     private boolean mTestStarted = false;
+    private boolean mTestDone = false;
+    private boolean mForcedStopRequestedAfterTest = false;
+
     private boolean mInvocationFailed = false;
     private boolean mDelegatedInvocation = false;
     private List<IScheduledInvocationListener> mSchedulerListeners = new ArrayList<>();
@@ -329,6 +334,7 @@ public class TestInvocation implements ITestInvocation {
                 throw t;
             }
         } finally {
+            mTestDone = true;
             // Only capture logcat for TEST if we started the test phase.
             if (mTestStarted) {
                 for (ITestDevice device : context.getDevices()) {
@@ -438,21 +444,38 @@ public class TestInvocation implements ITestInvocation {
             try {
                 // Clean up host.
                 invocationPath.doCleanUp(context, config, exception);
+                if (mSoftStopRequestTime != null) {
+                    long latency = System.currentTimeMillis() - mSoftStopRequestTime;
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.SHUTDOWN_LATENCY, latency);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.SHUTDOWN_BEFORE_TEST,
+                            Boolean.toString(mShutdownBeforeTest));
+                }
                 if (mStopCause != null) {
-                    String message =
-                            String.format(
-                                    "Invocation was interrupted due to: %s, results will be "
-                                            + "affected.",
-                                    mStopCause);
-                    if (mStopErrorId == null) {
-                        mStopErrorId = InfraErrorIdentifier.INVOCATION_CANCELLED;
+                    if (mForcedStopRequestedAfterTest) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.SHUTDOWN_AFTER_TEST, "true");
+                        CLog.d(
+                                "Forced shutdown occurred after test phase execution. It shouldn't"
+                                        + " have impact on test results.");
+                    } else {
+                        String message =
+                                String.format(
+                                        "Invocation was interrupted due to: %s, results will be "
+                                                + "affected.",
+                                        mStopCause);
+                        if (mStopErrorId == null) {
+                            mStopErrorId = InfraErrorIdentifier.INVOCATION_CANCELLED;
+                        }
+                        FailureDescription failure =
+                                FailureDescription.create(message)
+                                        .setErrorIdentifier(mStopErrorId)
+                                        .setCause(
+                                                new HarnessRuntimeException(message, mStopErrorId));
+                        reportFailure(failure, listener);
+                        PrettyPrintDelimiter.printStageDelimiter(message);
                     }
-                    FailureDescription failure =
-                            FailureDescription.create(message)
-                                    .setErrorIdentifier(mStopErrorId)
-                                    .setCause(new HarnessRuntimeException(message, mStopErrorId));
-                    reportFailure(failure, listener);
-                    PrettyPrintDelimiter.printStageDelimiter(message);
                     if (mStopRequestTime != null) {
                         // This is not 100% perfect since result reporting can still run a bit
                         // longer, but this is our last opportunity to report it.
@@ -1234,11 +1257,21 @@ public class TestInvocation implements ITestInvocation {
     }
 
     @Override
-    public void notifyInvocationStopped(String message, ErrorIdentifier errorId) {
+    public void notifyInvocationForceStopped(String message, ErrorIdentifier errorId) {
         mStopCause = message;
         mStopErrorId = errorId;
         if (mStopRequestTime == null) {
             mStopRequestTime = System.currentTimeMillis();
+            mForcedStopRequestedAfterTest = mTestDone;
+        }
+    }
+
+    @Override
+    public void notifyInvocationStopped(String message) {
+        if (mSoftStopRequestTime == null) {
+            mSoftStopRequestTime = System.currentTimeMillis();
+            // If test isn't started yet, we know we could have stopped.
+            mShutdownBeforeTest = !mTestStarted;
         }
     }
 

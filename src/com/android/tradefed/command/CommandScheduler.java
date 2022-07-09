@@ -738,6 +738,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             return mInvocationContext;
         }
 
+        /** Notify invocation on {@link CommandScheduler#shutdown()}. */
+        public void notifyInvocationStop(String message) {
+            getInvocation().notifyInvocationStopped(message);
+        }
+
         /**
          * Stops a running invocation. {@link CommandScheduler#shutdownHard()} will stop all running
          * invocations.
@@ -751,7 +756,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
          * invocations.
          */
         public void stopInvocation(String message, ErrorIdentifier errorId) {
-            getInvocation().notifyInvocationStopped(message, errorId);
+            getInvocation().notifyInvocationForceStopped(message, errorId);
             for (ITestDevice device : mInvocationContext.getDevices()) {
                 if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
                     // Kill all running processes on device.
@@ -1853,6 +1858,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     public synchronized void shutdown() {
         setHostState(HostState.QUITTING);
         doShutdown();
+        String reason = "Tradefed is notified to stop";
+        for (InvocationThread thread : mInvocationThreadMap.values()) {
+            thread.notifyInvocationStop(reason);
+        }
     }
 
     private synchronized void doShutdown() {

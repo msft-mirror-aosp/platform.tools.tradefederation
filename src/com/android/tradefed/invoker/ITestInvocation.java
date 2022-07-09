@@ -47,8 +47,16 @@ public interface ITestInvocation {
      * Notify the {@link TestInvocation} that TradeFed has been requested to stop.
      *
      * @param message The message associated with stopping the invocation
+     * @param errorId Identifier associated with the forced stop
      */
-    public default void notifyInvocationStopped(String message, ErrorIdentifier errorId) {}
+    public default void notifyInvocationForceStopped(String message, ErrorIdentifier errorId) {}
+
+    /**
+     * Notify the {@link TestInvocation} that TradeFed will eventually shutdown.
+     *
+     * @param message The message associated with stopping the invocation
+     */
+    public default void notifyInvocationStopped(String message) {}
 
     /** The exit information of the given invocation. */
     public default ExitInformation getExitInfo() {
