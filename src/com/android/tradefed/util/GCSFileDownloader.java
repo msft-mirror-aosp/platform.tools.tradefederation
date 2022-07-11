@@ -248,8 +248,10 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         for (String subRemoteFolder : subRemoteFolders) {
             String subFolderName = Paths.get(subRemoteFolder).getFileName().toString();
             File subFolder = new File(localFolder, subFolderName);
-            if (new File(localFolder, subFolderName).exists()
-                    && !new File(localFolder, subFolderName).isDirectory()) {
+            if (!subFolder.exists()) {
+                return false;
+            }
+            if (!subFolder.isDirectory()) {
                 CLog.w("%s exists as a non-directory.", subFolder);
                 subFolder = new File(localFolder, subFolderName + "_folder");
             }
