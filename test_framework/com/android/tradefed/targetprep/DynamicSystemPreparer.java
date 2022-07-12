@@ -15,8 +15,6 @@
  */
 package com.android.tradefed.targetprep;
 
-import static com.android.tradefed.util.SparseImageUtil.SparseInputStream;
-
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -30,6 +28,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.SparseImageUtil.SparseInputStream;
 import com.android.tradefed.util.StreamUtil;
 
 import java.io.BufferedInputStream;
@@ -54,7 +53,7 @@ import java.util.zip.ZipOutputStream;
  * System Update.
  */
 @OptionClass(alias = "dynamic-system-update")
-public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPreparer {
+public class DynamicSystemPreparer extends BaseTargetPreparer {
     static final int DSU_MAX_WAIT_SEC = 10 * 60;
 
     private static final int ANDROID_API_R = 30;
