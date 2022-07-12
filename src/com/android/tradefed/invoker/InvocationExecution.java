@@ -276,7 +276,15 @@ public class InvocationExecution implements IInvocationExecution {
                     listener,
                     testInfo,
                     "multi pre target preparer setup");
-
+            runLabPreparersSetup(testInfo, config, listener);
+        } finally {
+            long end = System.currentTimeMillis();
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_END, end);
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.SETUP_PAIR, start, end);
+        }
+        long startPreparer = System.currentTimeMillis();
+        try {
             runPreparersSetup(testInfo, config, listener);
 
             // After all the individual setup, make the multi-devices setup
@@ -291,12 +299,11 @@ public class InvocationExecution implements IInvocationExecution {
             // Note: These metrics are handled in a try in case of a kernel reset or device issue.
             // Setup timing metric. It does not include flashing time on boot tests.
             long end = System.currentTimeMillis();
-            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_END, end);
             InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.SETUP_PAIR, start, end);
+                    InvocationMetricKey.TEST_SETUP_PAIR, startPreparer, end);
             long setupDuration = end - start;
             InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP, setupDuration);
-            CLog.d("Setup duration: %s'", TimeUtil.formatElapsedTime(setupDuration));
+            CLog.d("Total setup duration: %s'", TimeUtil.formatElapsedTime(setupDuration));
             // Upload the setup logcat after setup is complete.
             for (ITestDevice device : testInfo.getDevices()) {
                 reportLogs(device, listener, Stage.SETUP);
@@ -304,7 +311,7 @@ public class InvocationExecution implements IInvocationExecution {
         }
     }
 
-    private void runPreparersSetup(
+    private void runLabPreparersSetup(
             TestInformation testInfo, IConfiguration config, ITestLogger listener)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         int index = 0;
@@ -329,13 +336,6 @@ public class InvocationExecution implements IInvocationExecution {
                                     deviceIndex,
                                     getLabPreparersToRun(config, deviceName),
                                     mTrackLabPreparers.get(deviceName),
-                                    listener);
-                            runPreparationOnDevice(
-                                    replicated,
-                                    deviceName,
-                                    deviceIndex,
-                                    getTargetPreparersToRun(config, deviceName),
-                                    mTrackTargetPreparers.get(deviceName),
                                     listener);
                             return true;
                         };
@@ -370,6 +370,61 @@ public class InvocationExecution implements IInvocationExecution {
                         getLabPreparersToRun(config, deviceName),
                         mTrackLabPreparers.get(deviceName),
                         listener);
+                index++;
+            }
+        }
+    }
+
+    private void runPreparersSetup(
+            TestInformation testInfo, IConfiguration config, ITestLogger listener)
+            throws TargetSetupError, BuildError, DeviceNotAvailableException {
+        int index = 0;
+        if ((config.getCommandOptions().shouldUseParallelSetup()
+                        || config.getCommandOptions().shouldUseReplicateSetup())
+                && config.getDeviceConfig().size() > 1) {
+            CLog.d("Using parallel setup.");
+            ParallelDeviceExecutor<Boolean> executor =
+                    new ParallelDeviceExecutor<>(testInfo.getContext().getDevices().size());
+            List<Callable<Boolean>> callableTasks = new ArrayList<>();
+            for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
+                final int deviceIndex = index;
+                // Replicate TestInfo
+                TestInformation replicated =
+                        TestInformation.createModuleTestInfo(testInfo, testInfo.getContext());
+                Callable<Boolean> callableTask =
+                        () -> {
+                            runPreparationOnDevice(
+                                    replicated,
+                                    deviceName,
+                                    deviceIndex,
+                                    getTargetPreparersToRun(config, deviceName),
+                                    mTrackTargetPreparers.get(deviceName),
+                                    listener);
+                            return true;
+                        };
+                callableTasks.add(callableTask);
+                index++;
+            }
+            Duration timeout = config.getCommandOptions().getParallelSetupTimeout();
+            executor.invokeAll(callableTasks, timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (executor.hasErrors()) {
+                List<Throwable> errors = executor.getErrors();
+                // TODO: Handle throwing multi-exceptions, right now throw the first one.
+                for (Throwable error : errors) {
+                    if (error instanceof TargetSetupError) {
+                        throw (TargetSetupError) error;
+                    }
+                    if (error instanceof BuildError) {
+                        throw (BuildError) error;
+                    }
+                    if (error instanceof DeviceNotAvailableException) {
+                        throw (DeviceNotAvailableException) error;
+                    }
+                    throw new RuntimeException(error);
+                }
+            }
+        } else {
+            for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
                 runPreparationOnDevice(
                         testInfo,
                         deviceName,
