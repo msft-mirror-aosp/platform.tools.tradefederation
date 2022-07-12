@@ -57,7 +57,8 @@ public class ClusterCommandEvent implements IClusterEvent {
         InvocationEnded,
         InvocationCompleted,
         TestRunInProgress,
-        TestEnded
+        TestEnded,
+        Unleased
     }
 
     private long mTimestamp;
