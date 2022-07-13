@@ -32,6 +32,23 @@ service DeviceManagement {
   // Get the devices status
   rpc GetDevicesStatus(GetDevicesStatusRequest)
       returns (GetDevicesStatusResponse) {}
+  // Apply to stop leasing tests. The RPC returns immediately and doesn't wait
+  // for all leasing being stopped.
+  rpc StopLeasing(StopLeasingRequest) returns (StopLeasingResponse) {}
+}
+
+// The request of stopping leasing tests.
+message StopLeasingRequest {}
+
+// The response of stopping leasing tests.
+message StopLeasingResponse {
+  enum Result {
+    UNKNOWN = 0;
+    SUCCEED = 1;
+    FAIL = 2;
+  }
+  Result result = 1;
+  string message = 2;
 }
 
 // The request to reserve device.
