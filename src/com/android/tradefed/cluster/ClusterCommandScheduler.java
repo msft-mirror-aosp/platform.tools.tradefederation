@@ -530,7 +530,8 @@ public class ClusterCommandScheduler extends CommandScheduler {
             return;
         }
         if (isShuttingDown()) {
-            CLog.d("Tradefed shutting down, ignoring commands.");
+            CLog.d("Tradefed shutting down, unleasing commands.");
+            unleaseCommands(commands);
             return;
         }
         execCommands(commands);
@@ -675,9 +676,11 @@ public class ClusterCommandScheduler extends CommandScheduler {
      * @param commands a list of {@link ClusterCommand}s fetched from the cluster command queue.
      */
     void execCommands(final List<ClusterCommand> commands) {
+        int commandIdx = 0;
         for (final ClusterCommand commandTask : commands) {
             if (isShuttingDown()) {
-                CLog.d("Tradefed shutting down, ignoring remaining commands.");
+                CLog.d("Tradefed shutting down, unleasing remaining commands.");
+                unleaseCommands(commands.subList(commandIdx, commands.size()));
                 return;
             }
             try {
@@ -743,6 +746,7 @@ public class ClusterCommandScheduler extends CommandScheduler {
                 eventUploader.postEvent(eventBuilder.build());
                 eventUploader.flush();
             }
+            commandIdx++;
         }
     }
 
@@ -867,5 +871,23 @@ public class ClusterCommandScheduler extends CommandScheduler {
         } catch (RuntimeException e) {
             CLog.e("failed to upload host state %s to TFC: %s", state.toString(), e);
         }
+    }
+
+    /**
+     * Notifies TFC of commands that were not executed and need to be rescheduled.
+     *
+     * @param commands a list of {@link ClusterCommand} that need to be unleased to get rescheduled.
+     */
+    private synchronized void unleaseCommands(final List<ClusterCommand> commands) {
+        IClusterEventUploader<ClusterCommandEvent> eventUploader =
+                getClusterClient().getCommandEventUploader();
+        for (ClusterCommand command : commands) {
+            ClusterCommandEvent.Builder eventBuilder =
+                    ClusterCommandEvent.createEventBuilder(command)
+                            .setHostName(ClusterHostUtil.getHostName())
+                            .setType(ClusterCommandEvent.Type.Unleased);
+            eventUploader.postEvent(eventBuilder.build());
+        }
+        eventUploader.flush();
     }
 }
