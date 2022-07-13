@@ -25,6 +25,7 @@ import com.android.tradefed.build.IBuildInfo.BuildInfoProperties;
 import com.android.tradefed.build.IBuildProvider;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.build.IDeviceBuildProvider;
+import com.android.tradefed.command.ICommandOptions;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
@@ -191,6 +192,7 @@ public class InvocationExecution implements IInvocationExecution {
             throw re;
         }
         setBinariesVersion(testInfo.getContext());
+        copyRemoteFiles(config.getCommandOptions(), testInfo.getBuildInfo());
         return true;
     }
 
@@ -1240,6 +1242,15 @@ public class InvocationExecution implements IInvocationExecution {
         String javaClasspath = System.getProperty("java.class.path");
         if (javaClasspath != null && !javaClasspath.isEmpty()) {
             context.addInvocationAttribute(JAVA_CLASSPATH_KEY, javaClasspath);
+        }
+    }
+
+    private void copyRemoteFiles(ICommandOptions options, IBuildInfo info) {
+        for (String remoteFile : options.getRemoteFiles()) {
+            info.setFile(
+                    IBuildInfo.REMOTE_FILE_PREFIX,
+                    new File(remoteFile),
+                    IBuildInfo.REMOTE_FILE_VERSION);
         }
     }
 
