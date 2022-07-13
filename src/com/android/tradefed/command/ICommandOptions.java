@@ -155,6 +155,9 @@ public interface ICommandOptions {
     /** Returns the data passed to the invocation to describe it */
     public UniqueMultiMap<String, String> getInvocationData();
 
+    /** Returns the list of remote files configured. */
+    public Set<String> getRemoteFiles();
+
     /** Returns true if we should use Tf containers to run the invocation */
     public boolean shouldUseSandboxing();
 
