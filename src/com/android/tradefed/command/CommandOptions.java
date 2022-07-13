@@ -146,6 +146,11 @@ public class CommandOptions implements ICommandOptions {
     public static final String USE_REMOTE_SANDBOX = "use-remote-sandbox";
 
     @Option(
+            name = "remote-files",
+            description = "A list of files references to store in build info")
+    private Set<String> mRemoteFiles = new LinkedHashSet<>();
+
+    @Option(
         name = USE_SANDBOX,
         description = "Set if the invocation should use a sandbox to run or not."
     )
@@ -504,6 +509,12 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public UniqueMultiMap<String, String> getInvocationData() {
         return mInvocationData;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Set<String> getRemoteFiles() {
+        return mRemoteFiles;
     }
 
     /** {@inheritDoc} */
