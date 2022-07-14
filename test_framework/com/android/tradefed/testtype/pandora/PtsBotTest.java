@@ -28,7 +28,9 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.PythonVirtualenvHelper;
 import com.android.tradefed.util.RunUtil;
 
@@ -59,6 +61,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
     private static final int PANDORA_SERVER_PORT = 8999;
     private static final int HCI_ROOTCANAL_PORT = 6211;
     private static final int HCI_PROXY_PORT = 1234;
+
+    private IRunUtil mRunUtil = new RunUtil();
 
     @Option(name = "pts-bot-path", description = "pts-bot binary path.")
     private File ptsBotPath = new File("pts-bot");
@@ -134,6 +138,28 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         return physical ? HCI_PROXY_PORT : HCI_ROOTCANAL_PORT;
     }
 
+    private void displayPtsBotVersion() {
+        CommandResult c;
+        c = mRunUtil.runTimedCmd(5000, "which", ptsBotPath.getPath());
+        if (c.getStatus() != CommandStatus.SUCCESS) {
+            CLog.e("Failed to get pts-bot path");
+            CLog.e(
+                    "Status: %s\nStdout: %s\nStderr: %s",
+                    c.getStatus(), c.getStdout(), c.getStderr());
+            throw new RuntimeException("Failed to get pts-bot path. Error:\n" + c.getStderr());
+        }
+        String ptsBotAbsolutePath = c.getStdout().trim();
+        c = mRunUtil.runTimedCmd(5000, ptsBotAbsolutePath, "--version");
+        if (c.getStatus() != CommandStatus.SUCCESS) {
+            CLog.e("Failed to get pts-bot version");
+            CLog.e(
+                    "Status: %s\nStdout: %s\nStderr: %s",
+                    c.getStatus(), c.getStdout(), c.getStderr());
+            throw new RuntimeException("Failed to get pts-bot version. Error:\n" + c.getStderr());
+        }
+        CLog.d("pts-bot version: %s", c.getStdout().trim());
+    }
+
     @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
@@ -162,6 +188,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
                 throw new RuntimeException("mmi2grpc folder does not exist");
             }
         }
+
+        displayPtsBotVersion();
 
         CLog.i("Tests config file: %s", testsConfigFile.getPath());
         CLog.i("Profiles to be tested: %s", profiles);
@@ -354,7 +382,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
     }
 
     private ProcessBuilder ptsBot(TestInformation testInfo, String... args) {
-        List<String> command = new ArrayList();
+        List<String> command = new ArrayList<>();
 
         ptsBotPath.setExecutable(true);
 
@@ -381,7 +409,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         if (venvDir != null) {
             String packagePath =
                     PythonVirtualenvHelper.getPackageInstallLocation(
-                            new RunUtil(), venvDir.getAbsolutePath());
+                            mRunUtil, venvDir.getAbsolutePath());
             pythonPath += ":" + packagePath;
         }
 
