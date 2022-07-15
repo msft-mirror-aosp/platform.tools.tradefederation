@@ -64,6 +64,7 @@ public class DynamicSystemPreparerTest {
     private File mSystemImageDir;
     private File mSystemImageZip;
     private File mMultiSystemImageZip;
+    private boolean mShouldTimeOut;
     // The object under test.
     private DynamicSystemPreparer mPreparer;
 
@@ -85,7 +86,14 @@ public class DynamicSystemPreparerTest {
                         "DynamicSystem_multi");
         mBuildInfo = new BuildInfo();
 
-        mPreparer = new DynamicSystemPreparer();
+        mShouldTimeOut = false;
+        mPreparer =
+                new DynamicSystemPreparer() {
+                    @Override
+                    boolean hasTimedOut(long deadline) {
+                        return mShouldTimeOut;
+                    }
+                };
 
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockDevice);
@@ -107,7 +115,7 @@ public class DynamicSystemPreparerTest {
     private File createImageDir(String... fileNames) throws IOException {
         File tempDir = FileUtil.createTempDir("createImageDir");
         for (String fileName : fileNames) {
-            new File(tempDir, fileName).createNewFile();
+            FileUtil.writeToFile("test", new File(tempDir, fileName));
         }
         return tempDir;
     }
@@ -165,6 +173,18 @@ public class DynamicSystemPreparerTest {
         res.setStatus(CommandStatus.SUCCESS);
         Mockito.when(mMockDevice.executeShellV2Command("gsi_tool enable")).thenReturn(res);
         mPreparer.setUp(mTestInfo);
+    }
+
+    @Test
+    public void testSetUp_imageConversionTimeout() throws BuildError, DeviceNotAvailableException {
+        mBuildInfo.setFile(SYSTEM_IMAGE_ZIP_NAME, mSystemImageZip, "0");
+        mShouldTimeOut = true;
+        try {
+            mPreparer.setUp(mTestInfo);
+            Assert.fail("setUp() should have thrown.");
+        } catch (TargetSetupError e) {
+            Assert.assertEquals("Fail to create image archive.", e.getMessage());
+        }
     }
 
     @Test
