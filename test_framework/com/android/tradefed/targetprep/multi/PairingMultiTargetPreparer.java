@@ -22,6 +22,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.BuildError;
@@ -89,12 +90,14 @@ public class PairingMultiTargetPreparer extends BaseMultiTargetPreparer {
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         setDeviceInfos(testInformation.getContext().getDeviceBuildMap());
         try {
+            CLog.d("Enabling bluetooth on %s", mPrimaryDevice.getDeviceDescriptor());
             if (!mUtil.enable(mPrimaryDevice)) {
                 throw new TargetSetupError(
                         "Failed to enable Bluetooth",
                         mPrimaryDevice.getDeviceDescriptor(),
                         DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
+            CLog.d("Enabling bluetooth on %s", mCompanionDevice.getDeviceDescriptor());
             if (!mUtil.enable(mCompanionDevice)) {
                 throw new TargetSetupError(
                         "Failed to enable Bluetooth",
@@ -102,6 +105,7 @@ public class PairingMultiTargetPreparer extends BaseMultiTargetPreparer {
                         DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
             mUtil.setBtPairTimeout(mPairingTimeout);
+            CLog.d("Starting pairing bluetooth on %s", mPrimaryDevice.getDeviceDescriptor());
             if (!mUtil.pair(mPrimaryDevice, mCompanionDevice)) {
                 throw new TargetSetupError(
                         "Bluetooth pairing failed.",
@@ -111,6 +115,7 @@ public class PairingMultiTargetPreparer extends BaseMultiTargetPreparer {
             // Always enable PBAP between primary and companion devices in case it's not enabled
             // For now, assume PBAP client profile is always on primary device, and enable PBAP on
             // companion device.
+            CLog.d("Enabling PBAP on %s", mCompanionDevice.getDeviceDescriptor());
             if (!mUtil.changeProfileAccessPermission(
                     mCompanionDevice,
                     mPrimaryDevice,
@@ -121,6 +126,7 @@ public class PairingMultiTargetPreparer extends BaseMultiTargetPreparer {
                         mCompanionDevice.getDeviceDescriptor(),
                         DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
+            CLog.d("Enabling PBAP_CLIENT on %s", mPrimaryDevice.getDeviceDescriptor());
             if (!mUtil.setProfilePriority(
                     mPrimaryDevice,
                     mCompanionDevice,
@@ -131,6 +137,7 @@ public class PairingMultiTargetPreparer extends BaseMultiTargetPreparer {
                         mPrimaryDevice.getDeviceDescriptor(),
                         DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
+            CLog.d("Connecting to profiles");
             if (mConnectDevices && mProfiles.size() > 0) {
                 if (!mUtil.connect(mPrimaryDevice, mCompanionDevice, mProfiles)) {
                     throw new TargetSetupError(
