@@ -51,6 +51,7 @@ public class InvocationMetricLogger {
         INSTRUMENTATION_RERUN_FROM_FILE("instrumentation_rerun_from_file", true),
         INSTRUMENTATION_RERUN_SERIAL("instrumentation_rerun_serial", true),
         DOWNLOAD_RETRY_COUNT("download_retry_count", true),
+        METADATA_RETRY_COUNT("metadata_retry_count", true),
         XTS_STAGE_TESTS_TIME("xts_stage_tests_time_ms", true),
         XTS_STAGE_TESTS_BYTES("xts_stage_tests_bytes", true),
         XTS_PARTIAL_DOWNLOAD_FALLBACK_COUNT("xts_partial_download_fallback_count", true),
