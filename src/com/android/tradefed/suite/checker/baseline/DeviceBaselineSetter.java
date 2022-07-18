@@ -19,11 +19,24 @@ package com.android.tradefed.suite.checker.baseline;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /** Abstract class used to create a device baseline setting. */
 public abstract class DeviceBaselineSetter {
 
+    private final String mName;
+    private final boolean mExperimental;
+
+    public DeviceBaselineSetter(JSONObject object, String name) throws JSONException {
+        mName = name;
+        mExperimental = object.has("experimental") && object.getBoolean("experimental");
+    }
+
     /** Gets the unique name of the setter. */
-    public abstract String getName();
+    public String getName() {
+        return mName;
+    }
 
     /** Sets the baseline setting for the device. */
     public abstract boolean setBaseline(ITestDevice mDevice) throws DeviceNotAvailableException;
@@ -35,6 +48,6 @@ public abstract class DeviceBaselineSetter {
      * applied unless the option enable-device-baseline-settings is set to false.
      */
     public boolean isExperimental() {
-        return false;
+        return mExperimental;
     }
 }

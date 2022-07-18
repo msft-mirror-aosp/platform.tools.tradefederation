@@ -43,6 +43,7 @@ import org.mockito.stubbing.Answer;
 import java.io.File;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** Unit tests for {@link TestDiscoveryInvoker}. */
@@ -87,9 +88,9 @@ public class TestDiscoveryInvokerTest {
 
     /** Test the invocation when all necessary information are in the command line. */
     @Test
-    public void testSuccessTestDiscoveryInvocation() throws Exception {
+    public void testSuccessTestDependencyDiscovery() throws Exception {
         String successStdout =
-                "{\"TestDependencies\":[" + TEST_MODULE_1_NAME + "," + TEST_MODULE_2_NAME + "]}";
+                "{\"TestModules\":[" + TEST_MODULE_1_NAME + "," + TEST_MODULE_2_NAME + "]}";
         String commandLine =
                 String.format(
                         "random/test/name --cts-package-name android-cts.zip --cts-params"
@@ -141,10 +142,17 @@ public class TestDiscoveryInvokerTest {
                         })
                 .when(mRunUtil)
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
-        List<String> testModules = mTestDiscoveryInvoker.discoverTestModuleNames();
-        assertEquals(testModules.size(), 2);
-        assertTrue(testModules.contains(TEST_MODULE_1_NAME));
-        assertTrue(testModules.contains(TEST_MODULE_2_NAME));
+        Map<String, List<String>> testDependencies =
+                mTestDiscoveryInvoker.discoverTestDependencies();
+        assertEquals(testDependencies.size(), 1);
+        assertTrue(
+                testDependencies
+                        .get(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY)
+                        .contains(TEST_MODULE_1_NAME));
+        assertTrue(
+                testDependencies
+                        .get(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY)
+                        .contains(TEST_MODULE_2_NAME));
     }
 
     /**
@@ -152,7 +160,7 @@ public class TestDiscoveryInvokerTest {
      * subprocess.
      */
     @Test
-    public void testFailTestDiscoveryInvocation() throws Exception {
+    public void testFailTestDependencyDiscovery() throws Exception {
         // --config-name is missing from the cmd
         String commandLine =
                 String.format(
@@ -169,7 +177,7 @@ public class TestDiscoveryInvokerTest {
                         TEST_MODULE_1_NAME, TEST_MODULE_2_NAME);
         when(mConfiguration.getCommandLine()).thenReturn(commandLine);
         try {
-            mTestDiscoveryInvoker.discoverTestModuleNames();
+            mTestDiscoveryInvoker.discoverTestDependencies();
             fail("Should throw a ConfigurationException");
         } catch (ConfigurationException expected) {
             // Expected

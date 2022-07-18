@@ -28,7 +28,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.ZipUtil;
-
+import com.google.common.base.Strings;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -189,8 +189,7 @@ public class CommonLogRemoteFileUtil {
             CLog.e("GceAvdInfo was null, cannot collect remote files.");
             return;
         }
-        // Capture known extra files
-        List<KnownLogFileEntry> toFetch = KNOWN_FILES_TO_FETCH.get(options.getInstanceType());
+        List<KnownLogFileEntry> toFetch = null;
         if (options.useOxygen()) {
             // Override the list of logs to collect when the device is hosted by Oxygen service.
             toFetch = new ArrayList<>(OXYGEN_LOG_FILES);
@@ -198,10 +197,28 @@ public class CommonLogRemoteFileUtil {
                     gceAvd, options, runUtil, 60000, OXYGEN_CUTTLEFISH_LOG_DIR)) {
                 toFetch.addAll(OXYGEN_LOG_FILES_FALLBACK);
             }
+        } else {
+            boolean reported = false;
+            for (GceAvdInfo.LogFileEntry entry : gceAvd.getLogs()) {
+                if (logRemoteFile(
+                        testLogger,
+                        gceAvd,
+                        options,
+                        runUtil,
+                        entry.path,
+                        entry.type,
+                        Strings.isNullOrEmpty(entry.name) ? null : entry.name)) {
+                    reported = true;
+                }
+            }
+            if (!reported) {
+                CLog.i("GceAvdInfo does not contain logs. Fall back to known log files.");
+                toFetch = KNOWN_FILES_TO_FETCH.get(options.getInstanceType());
+            }
         }
         if (toFetch != null) {
             for (KnownLogFileEntry entry : toFetch) {
-                LogRemoteFile(
+                logRemoteFile(
                         testLogger,
                         gceAvd,
                         options,
@@ -218,7 +235,7 @@ public class CommonLogRemoteFileUtil {
         }
         for (String file : options.getRemoteFetchFilePattern()) {
             // TODO: Improve type of files.
-            LogRemoteFile(
+            logRemoteFile(
                     testLogger, gceAvd, options, runUtil, file, LogDataType.CUTTLEFISH_LOG, null);
         }
     }
@@ -354,8 +371,9 @@ public class CommonLogRemoteFileUtil {
      * @param logType The expected type of the pulled log.
      * @param baseName The base name that will be used to log the file, if null the actually file
      *     name will be used.
+     * @return whether the file is logged successfully.
      */
-    private static void LogRemoteFile(
+    private static boolean logRemoteFile(
             ITestLogger testLogger,
             GceAvdInfo gceAvd,
             TestDeviceOptions options,
@@ -363,7 +381,11 @@ public class CommonLogRemoteFileUtil {
             String fileToRetrieve,
             LogDataType logType,
             String baseName) {
-        GceManager.logNestedRemoteFile(
+        if (baseName != null && baseName.startsWith(TOMBSTONES_ZIP_NAME)) {
+            // TODO(b/154175542): Refactor fetchTombstones.
+            return false;
+        }
+        return GceManager.logNestedRemoteFile(
                 testLogger, gceAvd, options, runUtil, fileToRetrieve, logType, baseName);
     }
 }

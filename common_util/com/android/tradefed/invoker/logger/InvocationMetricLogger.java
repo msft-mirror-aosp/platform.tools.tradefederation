@@ -51,8 +51,11 @@ public class InvocationMetricLogger {
         INSTRUMENTATION_RERUN_FROM_FILE("instrumentation_rerun_from_file", true),
         INSTRUMENTATION_RERUN_SERIAL("instrumentation_rerun_serial", true),
         DOWNLOAD_RETRY_COUNT("download_retry_count", true),
+        METADATA_RETRY_COUNT("metadata_retry_count", true),
         XTS_STAGE_TESTS_TIME("xts_stage_tests_time_ms", true),
         XTS_STAGE_TESTS_BYTES("xts_stage_tests_bytes", true),
+        XTS_PARTIAL_DOWNLOAD_FALLBACK_COUNT("xts_partial_download_fallback_count", true),
+        XTS_PARTIAL_DOWNLOAD_TOTAL_COUNT("xts_partial_download_total_count", true),
         // -- Disk memory usage --
         // Approximate peak disk space usage of the invocation
         // Represent files that would usually live for the full invocation (min usage)
@@ -134,6 +137,9 @@ public class InvocationMetricLogger {
         CLOUD_DEVICE_STABLE_HOST_IMAGE("stable_host_image_name", false),
         CLOUD_DEVICE_STABLE_HOST_IMAGE_PROJECT("stable_host_image_project", false),
 
+        SHUTDOWN_BEFORE_TEST("shutdown_before_test", false),
+        SHUTDOWN_AFTER_TEST("shutdown_after_test", false),
+        SHUTDOWN_LATENCY("shutdown_latency_ms", false),
         SHUTDOWN_HARD_LATENCY("shutdown_hard_latency_ms", false),
         DEVICE_COUNT("device_count", false),
         DEVICE_DONE_TIMESTAMP("device_done_timestamp", false),
@@ -179,6 +185,7 @@ public class InvocationMetricLogger {
         SETUP_START("tf_setup_start_timestamp", false),
         SETUP_END("tf_setup_end_timestamp", false),
         SETUP_PAIR("tf_setup_pair_timestamp", true),
+        TEST_SETUP_PAIR("tf_test_setup_pair_timestamp", true),
         FLASHING_FROM_FASTBOOTD("flashing_from_fastbootd", true),
         FLASHING_TIME("flashing_time_ms", true),
         FLASHING_PERMIT_LATENCY("flashing_permit_latency_ms", true),

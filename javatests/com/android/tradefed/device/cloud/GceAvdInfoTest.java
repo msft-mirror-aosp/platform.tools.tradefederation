@@ -57,7 +57,8 @@ public class GceAvdInfoTest {
                         + "          \"logs\": [\n"
                         + "            {\n"
                         + "              \"path\": \"/text/log\",\n"
-                        + "              \"type\": \"TEXT\"\n"
+                        + "              \"type\": \"TEXT\",\n"
+                        + "              \"name\": \"log.txt\"\n"
                         + "            },\n"
                         + "            {\n"
                         + "              \"path\": \"/unknown/log\",\n"
@@ -75,10 +76,14 @@ public class GceAvdInfoTest {
         assertNotNull(avd);
         assertEquals(avd.hostAndPort().getHost(), "104.154.62.236");
         assertEquals(avd.instanceName(), "gce-x86-phone-userdebug-2299773-22cf");
-        Map<String, LogDataType> logs = avd.getLogs();
+        List<GceAvdInfo.LogFileEntry> logs = avd.getLogs();
         assertEquals(logs.size(), 2);
-        assertEquals(logs.get("/text/log"), LogDataType.TEXT);
-        assertEquals(logs.get("/unknown/log"), LogDataType.UNKNOWN);
+        assertEquals(logs.get(0).path, "/text/log");
+        assertEquals(logs.get(0).type, LogDataType.TEXT);
+        assertEquals(logs.get(0).name, "log.txt");
+        assertEquals(logs.get(1).path, "/unknown/log");
+        assertEquals(logs.get(1).type, LogDataType.UNKNOWN);
+        assertEquals(logs.get(1).name, "");
         assertTrue(avd.getBuildVars().isEmpty());
     }
 

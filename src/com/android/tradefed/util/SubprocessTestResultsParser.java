@@ -556,10 +556,6 @@ public class SubprocessTestResultsParser implements Closeable {
                 }
                 try (InputStreamSource source = new FileInputStreamSource(path)) {
                     LogDataType type = file.getType();
-                    // File might have already been compressed
-                    if (file.getPath().endsWith(LogDataType.ZIP.getFileExt())) {
-                        type = LogDataType.ZIP;
-                    }
                     CLog.d("Logging %s from subprocess: %s ", assosInfo.mDataName, file.getPath());
                     mListener.testLog(name, type, source);
                 }
