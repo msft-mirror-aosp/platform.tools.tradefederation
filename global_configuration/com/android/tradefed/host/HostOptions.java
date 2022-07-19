@@ -128,6 +128,7 @@ public class HostOptions implements IHostOptions {
     private List<String> mPreconfiguredVirtualDevicePool = new ArrayList<>();
 
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
+    private Map<PermitLimitType, Integer> mInternalConcurrentLimits = new HashMap<>();
 
     /** {@inheritDoc} */
     @Override
@@ -262,15 +263,18 @@ public class HostOptions implements IHostOptions {
         if (!mConcurrentLocks.isEmpty()) {
             return;
         }
+        mInternalConcurrentLimits.putAll(mConcurrentLimit);
         // Backfill flasher & download limit from their dedicated option
-        if (!mConcurrentLimit.containsKey(PermitLimitType.CONCURRENT_FLASHER)) {
-            mConcurrentLimit.put(PermitLimitType.CONCURRENT_FLASHER, mConcurrentFlasherLimit);
+        if (!mInternalConcurrentLimits.containsKey(PermitLimitType.CONCURRENT_FLASHER)) {
+            mInternalConcurrentLimits.put(
+                    PermitLimitType.CONCURRENT_FLASHER, mConcurrentFlasherLimit);
         }
-        if (!mConcurrentLimit.containsKey(PermitLimitType.CONCURRENT_DOWNLOAD)) {
-            mConcurrentLimit.put(PermitLimitType.CONCURRENT_DOWNLOAD, mConcurrentDownloadLimit);
+        if (!mInternalConcurrentLimits.containsKey(PermitLimitType.CONCURRENT_DOWNLOAD)) {
+            mInternalConcurrentLimits.put(
+                    PermitLimitType.CONCURRENT_DOWNLOAD, mConcurrentDownloadLimit);
         }
 
-        for (Entry<PermitLimitType, Integer> limits : mConcurrentLimit.entrySet()) {
+        for (Entry<PermitLimitType, Integer> limits : mInternalConcurrentLimits.entrySet()) {
             if (limits.getValue() == null) {
                 continue;
             }
@@ -287,7 +291,9 @@ public class HostOptions implements IHostOptions {
         CLog.i(
                 "Requesting a '%s' permit out of the max limit of %s. Current queue "
                         + "length: %s",
-                type, mConcurrentLimit.get(type), mConcurrentLocks.get(type).getQueueLength());
+                type,
+                mInternalConcurrentLimits.get(type),
+                mConcurrentLocks.get(type).getQueueLength());
         try {
             mConcurrentLocks.get(type).acquire();
         } catch (InterruptedException e) {
@@ -316,6 +322,6 @@ public class HostOptions implements IHostOptions {
         if (!mConcurrentLocks.containsKey(type)) {
             return 0;
         }
-        return mConcurrentLimit.get(type) - mConcurrentLocks.get(type).availablePermits();
+        return mInternalConcurrentLimits.get(type) - mConcurrentLocks.get(type).availablePermits();
     }
 }
