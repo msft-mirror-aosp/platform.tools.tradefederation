@@ -189,6 +189,9 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             }
         }
 
+        // Test ressources files are not executable
+        ptsBotPath.setExecutable(true);
+
         displayPtsBotVersion();
 
         CLog.i("Tests config file: %s", testsConfigFile.getPath());
@@ -383,8 +386,6 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
     private ProcessBuilder ptsBot(TestInformation testInfo, String... args) {
         List<String> command = new ArrayList<>();
-
-        ptsBotPath.setExecutable(true);
 
         command.add(ptsBotPath.getPath());
         command.add("-c");
