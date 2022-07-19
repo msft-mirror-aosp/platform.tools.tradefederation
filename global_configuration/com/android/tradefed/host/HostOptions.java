@@ -213,8 +213,8 @@ public class HostOptions implements IHostOptions {
 
     /** {@inheritDoc} */
     @Override
-    public Set<String> getKnownPreconfigureVirtualDevicePool() {
-        return new HashSet<>(mPreconfiguredVirtualDevicePool);
+    public List<String> getKnownPreconfigureVirtualDevicePool() {
+        return new ArrayList<>(mPreconfiguredVirtualDevicePool);
     }
 
     /** {@inheritDoc} */

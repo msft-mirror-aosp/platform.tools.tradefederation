@@ -83,7 +83,7 @@ public interface IHostOptions {
     Set<String> getKnownRemoteDeviceIpPool();
 
     /** Known preconfigured virtual device pool. */
-    Set<String> getKnownPreconfigureVirtualDevicePool();
+    List<String> getKnownPreconfigureVirtualDevicePool();
 
     /** Check if it should use the zip64 format in partial download or not. */
     boolean getUseZip64InPartialDownload();
