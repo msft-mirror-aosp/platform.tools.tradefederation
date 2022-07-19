@@ -548,20 +548,17 @@ public class DeviceManager implements IDeviceManager {
             //  hostname.google.com:vsoc-1
             String[] parts = preconfigureDevice.split(":", 2);
             preconfigureHostUsers.putIfAbsent(parts[0], new ArrayList<>());
-            preconfigureHostUsers.get(parts[0]).add(parts[1]);
+            preconfigureHostUsers.get(parts[0]).add(parts.length > 1 ? parts[1] : null);
         }
         for (Map.Entry<String, List<String>> hostUsers : preconfigureHostUsers.entrySet()) {
             for (int i = 0; i < hostUsers.getValue().size(); i++) {
-                addAvailableDevice(
-                        new RemoteAvdIDevice(
-                                String.format(
-                                        "%s-%s-%s",
-                                        GCE_DEVICE_SERIAL_PREFIX,
-                                        hostUsers.getKey(),
-                                        hostUsers.getValue().get(i)),
-                                hostUsers.getKey(),
-                                hostUsers.getValue().get(i),
-                                i));
+                String user = hostUsers.getValue().get(i);
+                String serial =
+                        String.format("%s-%s-%d", GCE_DEVICE_SERIAL_PREFIX, hostUsers.getKey(), i);
+                if (user != null) {
+                    serial += "-" + user;
+                }
+                addAvailableDevice(new RemoteAvdIDevice(serial, hostUsers.getKey(), user, i));
             }
         }
 
