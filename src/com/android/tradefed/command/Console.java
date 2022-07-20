@@ -1390,7 +1390,8 @@ public class Console extends Thread {
                     deviceManagementServer =
                             new DeviceManagementGrpcServer(
                                     deviceManagementPort,
-                                    GlobalConfiguration.getDeviceManagerInstance());
+                                    GlobalConfiguration.getDeviceManagerInstance(),
+                                    GlobalConfiguration.getInstance().getCommandScheduler());
                     GlobalConfiguration.getInstance()
                             .setDeviceManagementServer(deviceManagementServer);
                     deviceManagementServer.start();
