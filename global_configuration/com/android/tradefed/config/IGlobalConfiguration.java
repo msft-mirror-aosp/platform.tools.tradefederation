@@ -393,6 +393,7 @@ public interface IGlobalConfiguration {
     public File cloneConfigWithFilter(
             Set<String> exclusionPatterns,
             IConfigOptionValueTransformer transformer,
+            boolean deepCopy,
             String... allowlistConfigs)
             throws IOException;
 
