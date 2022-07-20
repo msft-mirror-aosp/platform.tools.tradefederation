@@ -873,7 +873,7 @@ public class GlobalConfiguration implements IGlobalConfiguration {
     public File cloneConfigWithFilter(Set<String> exclusionPatterns, String... allowlistConfigs)
             throws IOException {
         return cloneConfigWithFilter(
-                exclusionPatterns, new NoOpConfigOptionValueTransformer(), allowlistConfigs);
+                exclusionPatterns, new NoOpConfigOptionValueTransformer(), true, allowlistConfigs);
     }
 
     /** {@inheritDoc} */
@@ -881,17 +881,22 @@ public class GlobalConfiguration implements IGlobalConfiguration {
     public File cloneConfigWithFilter(
             Set<String> exclusionPatterns,
             IConfigOptionValueTransformer transformer,
+            boolean deepCopy,
             String... allowlistConfigs)
             throws IOException {
         IConfigurationFactory configFactory = getConfigurationFactory();
         IGlobalConfiguration copy = null;
-        try {
-            // Use a copy with default original options
-            copy =
-                    configFactory.createGlobalConfigurationFromArgs(
-                            mOriginalArgs, new ArrayList<>());
-        } catch (ConfigurationException e) {
-            throw new IOException(e);
+        if (deepCopy) {
+            try {
+                // Use a copy with default original options
+                copy =
+                        configFactory.createGlobalConfigurationFromArgs(
+                                mOriginalArgs, new ArrayList<>());
+            } catch (ConfigurationException e) {
+                throw new IOException(e);
+            }
+        } else {
+            copy = this;
         }
 
         File filteredGlobalConfig = FileUtil.createTempFile("filtered_global_config", ".config");
