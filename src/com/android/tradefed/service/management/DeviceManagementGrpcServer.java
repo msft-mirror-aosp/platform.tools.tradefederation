@@ -1,6 +1,7 @@
 package com.android.tradefed.service.management;
 
 import com.android.annotations.VisibleForTesting;
+import com.android.tradefed.command.ICommandScheduler;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.DeviceSelectionOptions;
@@ -20,6 +21,8 @@ import com.proto.tradefed.device.ReleaseReservationResponse;
 import com.proto.tradefed.device.ReserveDeviceRequest;
 import com.proto.tradefed.device.ReserveDeviceResponse;
 import com.proto.tradefed.device.ReserveDeviceResponse.Result;
+import com.proto.tradefed.device.StopLeasingRequest;
+import com.proto.tradefed.device.StopLeasingResponse;
 
 import java.io.IOException;
 import java.util.Map;
@@ -37,6 +40,7 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
 
     private final Server mServer;
     private final IDeviceManager mDeviceManager;
+    private final ICommandScheduler mCommandScheduler;
     private final Map<String, ReservationInformation> mSerialToReservation =
             new ConcurrentHashMap<>();
 
@@ -47,21 +51,27 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
                 : null;
     }
 
-    public DeviceManagementGrpcServer(int port, IDeviceManager deviceManager) {
-        this(ServerBuilder.forPort(port), deviceManager);
+    public DeviceManagementGrpcServer(
+            int port, IDeviceManager deviceManager, ICommandScheduler scheduler) {
+        this(ServerBuilder.forPort(port), deviceManager, scheduler);
     }
 
     @VisibleForTesting
     public DeviceManagementGrpcServer(
-            ServerBuilder<?> serverBuilder, IDeviceManager deviceManager) {
+            ServerBuilder<?> serverBuilder,
+            IDeviceManager deviceManager,
+            ICommandScheduler scheduler) {
         mServer = serverBuilder.addService(this).build();
         mDeviceManager = deviceManager;
+        mCommandScheduler = scheduler;
     }
 
     @VisibleForTesting
-    public DeviceManagementGrpcServer(Server server, IDeviceManager deviceManager) {
+    public DeviceManagementGrpcServer(
+            Server server, IDeviceManager deviceManager, ICommandScheduler scheduler) {
         mServer = server;
         mDeviceManager = deviceManager;
+        mCommandScheduler = scheduler;
     }
 
     /** Start the grpc server. */
@@ -165,6 +175,25 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
                 mSerialToReservation.put(serial, new ReservationInformation(device, reservationId));
             }
         }
+        responseObserver.onNext(responseBuilder.build());
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void stopLeasing(
+            StopLeasingRequest request, StreamObserver<StopLeasingResponse> responseObserver) {
+        StopLeasingResponse.Builder responseBuilder = StopLeasingResponse.newBuilder();
+
+        // Notify to stop leasing
+        try {
+            mCommandScheduler.shutdown();
+            responseBuilder.setResult(StopLeasingResponse.Result.SUCCEED);
+        } catch (RuntimeException e) {
+            // This might happen in case scheduler isn't started or in bad state.
+            responseBuilder.setResult(StopLeasingResponse.Result.FAIL);
+            responseBuilder.setMessage(e.getMessage());
+        }
+
         responseObserver.onNext(responseBuilder.build());
         responseObserver.onCompleted();
     }
