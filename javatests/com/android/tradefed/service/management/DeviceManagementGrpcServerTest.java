@@ -22,6 +22,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.command.ICommandScheduler;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.FreeDeviceState;
@@ -62,6 +63,7 @@ public class DeviceManagementGrpcServerTest {
 
     private DeviceManagementGrpcServer mServer;
     @Mock private IDeviceManager mMockDeviceManager;
+    @Mock private ICommandScheduler mMockCommandScheduler;
     @Mock private StreamObserver<GetDevicesStatusResponse> mGetDevicesStatusObserver;
     @Mock private StreamObserver<ReserveDeviceResponse> mReserveDeviceResponseObserver;
     @Mock private StreamObserver<ReleaseReservationResponse> mReleaseReservationResponseObserver;
@@ -72,7 +74,7 @@ public class DeviceManagementGrpcServerTest {
     @Before
     public void setUp() {
         Server server = null;
-        mServer = new DeviceManagementGrpcServer(server, mMockDeviceManager);
+        mServer = new DeviceManagementGrpcServer(server, mMockDeviceManager, mMockCommandScheduler);
     }
 
     @Test
