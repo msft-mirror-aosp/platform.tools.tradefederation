@@ -258,7 +258,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
                 globalConfig =
                         GlobalConfiguration.getInstance()
                                 .cloneConfigWithFilter(
-                                        new HashSet<>(), fileTransformer, allowListConfigs);
+                                        new HashSet<>(), fileTransformer, true, allowListConfigs);
             } catch (IOException e) {
                 listener.invocationFailed(createInvocationFailure(e, FailureStatus.INFRA_FAILURE));
                 return;
