@@ -33,7 +33,6 @@ import com.android.tradefed.device.NoDeviceException;
 import com.android.tradefed.device.battery.BatteryController;
 import com.android.tradefed.device.battery.IBatteryInfo;
 import com.android.tradefed.device.battery.IBatteryInfo.BatteryState;
-import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -59,7 +58,6 @@ import org.json.JSONException;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -292,14 +290,7 @@ public class ClusterCommandScheduler extends CommandScheduler {
             mFailureDescription = failure;
             mError = failure.getErrorMessage();
             if (failure.getCause() != null) {
-                Throwable cause = failure.getCause();
-                mError = StreamUtil.getStackTrace(cause);
-                if (cause instanceof HarnessRuntimeException
-                        && InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN.equals(
-                                ((HarnessRuntimeException) cause).getErrorId())) {
-                    // Tests were not run, so un-lease the command so that it can be rescheduled.
-                    unleaseCommands(Arrays.asList(mCommandTask));
-                }
+                mError = StreamUtil.getStackTrace(failure.getCause());
             }
         }
 
