@@ -41,7 +41,6 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     LAB_HOST_FILESYSTEM_ERROR(500_013, FailureStatus.INFRA_FAILURE),
     TRADEFED_SHUTTING_DOWN(500_014, FailureStatus.INFRA_FAILURE),
     LAB_HOST_FILESYSTEM_FULL(500_015, FailureStatus.INFRA_FAILURE),
-    TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN(500_016, FailureStatus.CANCELLED),
 
     // 500_501 - 501_000: Build, Artifacts download related errors
     ARTIFACT_REMOTE_PATH_NULL(500_501, FailureStatus.INFRA_FAILURE),
