@@ -24,6 +24,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -363,7 +364,7 @@ public class TestInvocationTest {
     }
 
     private void verifyMockSuccessListeners() throws IOException {
-        verifyMockListeners(InvocationStatus.SUCCESS, null, false, true, false);
+        verifyMockListeners(InvocationStatus.SUCCESS, null, false, true, false, false);
     }
 
     private void stubMockFailureListeners(Throwable throwable) throws IOException {
@@ -371,7 +372,7 @@ public class TestInvocationTest {
     }
 
     private void verifyMockFailureListeners(Throwable throwable) throws IOException {
-        verifyMockListeners(InvocationStatus.FAILED, throwable, false, true, false);
+        verifyMockListeners(InvocationStatus.FAILED, throwable, false, true, false, false);
     }
 
     private void stubMockFailureListenersAny(Throwable throwable, boolean stubFailures)
@@ -381,7 +382,7 @@ public class TestInvocationTest {
 
     private void verifyMockFailureListenersAny(Throwable throwable, boolean stubFailures)
             throws IOException {
-        verifyMockListeners(InvocationStatus.FAILED, throwable, stubFailures, true, false);
+        verifyMockListeners(InvocationStatus.FAILED, throwable, stubFailures, true, false, false);
     }
 
     private void stubMockFailureListeners(
@@ -391,15 +392,16 @@ public class TestInvocationTest {
 
     private void verifyMockFailureListeners(
             Throwable throwable, boolean stubFailures, boolean reportHostLog) throws IOException {
-        verifyMockListeners(InvocationStatus.FAILED, throwable, stubFailures, reportHostLog, false);
+        verifyMockListeners(
+                InvocationStatus.FAILED, throwable, stubFailures, reportHostLog, false, false);
     }
 
     private void stubMockStoppedListeners() throws IOException {
         stubMockListeners(InvocationStatus.SUCCESS, null, false, true, true);
     }
 
-    private void verifyMockStoppedListeners() throws IOException {
-        verifyMockListeners(InvocationStatus.SUCCESS, null, false, true, true);
+    private void verifyMockStoppedListeners(boolean testSkipped) throws IOException {
+        verifyMockListeners(InvocationStatus.SUCCESS, null, false, true, true, testSkipped);
     }
 
     private void verifySummaryListener() {
@@ -606,7 +608,8 @@ public class TestInvocationTest {
             Throwable throwable,
             boolean stubFailures,
             boolean reportHostLog,
-            boolean stopped)
+            boolean stopped,
+            boolean testSkipped)
             throws IOException {
         // invocationStarted
         mInOrderTestListener
@@ -714,7 +717,9 @@ public class TestInvocationTest {
         } else {
             // Handle build error bugreport listeners
             if (throwable instanceof BuildError) {
-            } else if (!(throwable instanceof TargetSetupError) && !mShardingEarlyFailure) {
+            } else if (!(throwable instanceof TargetSetupError)
+                    && !mShardingEarlyFailure
+                    && !testSkipped) {
                 // Handle test logcat listeners
                 mInOrderTestListener
                         .verify(mMockTestListener)
@@ -1149,7 +1154,8 @@ public class TestInvocationTest {
     }
 
     /**
-     * Test metrics SHUTDOWN_HARD_LATENCY is collected when the invocation is stopped/interrupted.
+     * Test that tests were skipped and metrics SHUTDOWN_HARD_LATENCY is collected when the
+     * invocation is stopped/interrupted before test phase started.
      */
     @Test
     public void testInvoke_metricsCollectedWhenStopped() throws Throwable {
@@ -1163,11 +1169,11 @@ public class TestInvocationTest {
                 "Stopped", InfraErrorIdentifier.INVOCATION_TIMEOUT);
         mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
 
-        verify(test).run(Mockito.any(), Mockito.any());
+        verify(test, never()).run(Mockito.any(), Mockito.any());
         verify(mMockPreparer).tearDown(Mockito.any(), Mockito.any());
 
         verifyNormalInvoke(test);
-        verifyMockStoppedListeners();
+        verifyMockStoppedListeners(true);
 
         assertTrue(
                 mStubInvocationMetadata
