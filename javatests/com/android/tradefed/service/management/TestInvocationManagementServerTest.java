@@ -34,6 +34,8 @@ import com.proto.tradefed.invocation.InvocationDetailResponse;
 import com.proto.tradefed.invocation.InvocationStatus;
 import com.proto.tradefed.invocation.NewTestCommandRequest;
 import com.proto.tradefed.invocation.NewTestCommandResponse;
+import com.proto.tradefed.invocation.StopInvocationRequest;
+import com.proto.tradefed.invocation.StopInvocationResponse;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -63,8 +65,10 @@ public class TestInvocationManagementServerTest {
     @Mock private DeviceManagementGrpcServer mMockDeviceManagement;
     @Mock private StreamObserver<NewTestCommandResponse> mRequestObserver;
     @Mock private StreamObserver<InvocationDetailResponse> mDetailObserver;
+    @Mock private StreamObserver<StopInvocationResponse> mStopInvocationObserver;
     @Captor ArgumentCaptor<NewTestCommandResponse> mResponseCaptor;
     @Captor ArgumentCaptor<InvocationDetailResponse> mResponseDetailCaptor;
+    @Captor ArgumentCaptor<StopInvocationResponse> mStopInvocationCaptor;
 
     @Before
     public void setUp() {
@@ -150,6 +154,49 @@ public class TestInvocationManagementServerTest {
         NewTestCommandResponse response = mResponseCaptor.getValue();
         assertThat(response.getInvocationId()).isNotEmpty();
 
+        InvocationDetailRequest.Builder detailBuilder =
+                InvocationDetailRequest.newBuilder().setInvocationId(response.getInvocationId());
+        mServer.getInvocationDetail(detailBuilder.build(), mDetailObserver);
+        verify(mDetailObserver).onNext(mResponseDetailCaptor.capture());
+        InvocationDetailResponse responseDetails = mResponseDetailCaptor.getValue();
+        assertThat(responseDetails.getInvocationStatus().getStatus())
+                .isEqualTo(InvocationStatus.Status.DONE);
+        File record = new File(responseDetails.getTestRecordPath());
+        assertThat(record.exists()).isTrue();
+        FileUtil.deleteFile(record);
+    }
+
+    @Test
+    public void testSubmitTestCommand_andStop() throws Exception {
+        doAnswer(
+                        invocation -> {
+                            Object listeners = invocation.getArgument(0);
+                            ((IScheduledInvocationListener) listeners)
+                                    .invocationComplete(null, null);
+                            return 1L;
+                        })
+                .when(mMockScheduler)
+                .execCommand(Mockito.any(), Mockito.any());
+        when(mMockScheduler.stopInvocation(Mockito.anyInt(), Mockito.any())).thenReturn(true);
+        NewTestCommandRequest.Builder requestBuilder =
+                NewTestCommandRequest.newBuilder().addArgs("empty");
+        mServer.submitTestCommand(requestBuilder.build(), mRequestObserver);
+
+        verify(mRequestObserver).onNext(mResponseCaptor.capture());
+        NewTestCommandResponse response = mResponseCaptor.getValue();
+        String invocationId = response.getInvocationId();
+        assertThat(invocationId).isNotEmpty();
+
+        StopInvocationRequest.Builder stopRequest =
+                StopInvocationRequest.newBuilder()
+                        .setInvocationId(invocationId)
+                        .setReason("stopping you");
+        mServer.stopInvocation(stopRequest.build(), mStopInvocationObserver);
+        verify(mStopInvocationObserver).onNext(mStopInvocationCaptor.capture());
+        StopInvocationResponse stopResponse = mStopInvocationCaptor.getValue();
+        assertThat(stopResponse.getStatus()).isEqualTo(StopInvocationResponse.Status.SUCCESS);
+
+        // Query the file to delete it
         InvocationDetailRequest.Builder detailBuilder =
                 InvocationDetailRequest.newBuilder().setInvocationId(response.getInvocationId());
         mServer.getInvocationDetail(detailBuilder.build(), mDetailObserver);
