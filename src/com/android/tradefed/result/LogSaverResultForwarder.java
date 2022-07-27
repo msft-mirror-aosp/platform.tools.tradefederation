@@ -16,6 +16,7 @@
 
 package com.android.tradefed.result;
 
+import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -74,11 +75,38 @@ public class LogSaverResultForwarder extends ResultForwarder implements ILogSave
             CLog.e("Caught runtime exception from log saver: %s", mLogSaver.getClass().getName());
             CLog.e(e);
         }
-        reportEndHostLog(mLogSaver, TestInvocation.TRADEFED_END_HOST_LOG);
+        reportEndHostLog(getListeners(), mLogSaver, TestInvocation.TRADEFED_END_HOST_LOG);
+    }
+
+    /** Log a final file before completion */
+    public static void logFile(
+            List<ITestInvocationListener> listeners,
+            ILogSaver saver,
+            InputStreamSource source,
+            String name,
+            LogDataType type) {
+        try (InputStream stream = source.createInputStream()) {
+            LogFile logFile = saver.saveLogData(name, type, stream);
+
+            for (ITestInvocationListener listener : listeners) {
+                try {
+                    if (listener instanceof ILogSaverListener) {
+                        ((ILogSaverListener) listener).testLogSaved(name, type, source, logFile);
+                        ((ILogSaverListener) listener).logAssociation(name, logFile);
+                    }
+                } catch (Exception e) {
+                    CLog.logAndDisplay(LogLevel.ERROR, e.getMessage());
+                    CLog.e(e);
+                }
+            }
+        } catch (IOException e) {
+            CLog.e(e);
+        }
     }
 
     /** Reports host_log from session in progress. */
-    public static void reportEndHostLog(ILogSaver saver, String name) {
+    public static void reportEndHostLog(
+            List<ITestInvocationListener> listeners, ILogSaver saver, String name) {
         LogRegistry registry = (LogRegistry) LogRegistry.getLogRegistry();
         try (InputStreamSource source = registry.getLogger().getLog()) {
             if (source == null) {
@@ -87,9 +115,7 @@ public class LogSaverResultForwarder extends ResultForwarder implements ILogSave
                 }
                 return;
             }
-            try (InputStream stream = source.createInputStream()) {
-                saver.saveLogData(name, LogDataType.HOST_LOG, stream);
-            }
+            logFile(listeners, saver, source, name, LogDataType.HOST_LOG);
             if (SystemUtil.isRemoteEnvironment()) {
                 try (InputStream stream = source.createInputStream()) {
                     // In remote environment, dump to the stdout so we can get the logs in the

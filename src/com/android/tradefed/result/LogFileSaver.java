@@ -343,6 +343,9 @@ public class LogFileSaver {
      */
     public File createCompressedLogFile(String dataName, LogDataType origDataType)
             throws IOException {
+        if (mInvLogDir != null && !mInvLogDir.exists()) {
+            mInvLogDir.mkdirs();
+        }
         // add underscore to end of data name to make generated name more readable
         return FileUtil.createTempFile(dataName + "_",
                 String.format(".%s.%s", origDataType.getFileExt(), LogDataType.GZIP.getFileExt()),

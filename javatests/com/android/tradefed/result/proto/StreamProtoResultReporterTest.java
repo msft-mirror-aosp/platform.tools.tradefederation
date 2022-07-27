@@ -118,6 +118,7 @@ public class StreamProtoResultReporterTest {
         } finally {
             receiver.joinReceiver(5000);
             receiver.close();
+            mReporter.closeSocket();
         }
         InOrder inOrder = Mockito.inOrder(mMockListener);
         inOrder.verify(mMockListener).invocationStarted(Mockito.any());
@@ -178,6 +179,7 @@ public class StreamProtoResultReporterTest {
             mReporter.invocationEnded(500L);
         } finally {
             receiver.close();
+            mReporter.closeSocket();
         }
 
         assertNull(receiver.getError());
@@ -227,6 +229,7 @@ public class StreamProtoResultReporterTest {
         } finally {
             receiver.joinReceiver(5000);
             receiver.close();
+            mReporter.closeSocket();
         }
 
         verify(mMockListener).testModuleStarted(Mockito.any());
