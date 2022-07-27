@@ -1624,7 +1624,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     /** {@inheritDoc} */
     @Override
-    public void execCommand(
+    public long execCommand(
             IInvocationContext context, IScheduledInvocationListener listener, String[] args)
             throws ConfigurationException, NoDeviceException {
         assertStarted();
@@ -1637,7 +1637,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             // createConfiguration can be long for things like sandbox, so ensure we did not
             // start a shutdown in the meantime.
             CLog.w("Tradefed is shutting down, ignoring command.");
-            return;
+            return -1;
         }
 
         ExecutableCommand execCmd = createExecutableCommand(cmdTracker, config, false);
@@ -1651,6 +1651,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             CLog.d("Executing '%s' on '%s'", cmdTracker.getArgs()[0], devices);
             startInvocation(context, execCmd, listener, new FreeDeviceHandler(manager));
+            return execCmd.getCommandTracker().getId();
         } else {
             // Log adb output just to help debug
             String adbOutput =
@@ -1667,7 +1668,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     /** {@inheritDoc} */
     @Override
-    public void execCommand(
+    public long execCommand(
             IScheduledInvocationListener listener, ITestDevice device, String[] args)
             throws ConfigurationException {
         // TODO: add support for execCommand multi-device allocation
@@ -1695,13 +1696,14 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         context.setConfigurationDescriptor(config.getConfigurationDescription());
         context.addAllocatedDevice(config.getDeviceConfig().get(0).getDeviceName(), device);
         startInvocation(context, execCmd, listener);
+        return execCmd.getCommandTracker().getId();
     }
 
     /** {@inheritDoc} */
     @Override
-    public void execCommand(IScheduledInvocationListener listener, String[] args)
+    public long execCommand(IScheduledInvocationListener listener, String[] args)
             throws ConfigurationException, NoDeviceException {
-        execCommand(createInvocationContext(), listener, args);
+        return execCommand(createInvocationContext(), listener, args);
     }
 
     /**
