@@ -106,11 +106,11 @@ public interface ICommandScheduler {
      *
      * @param listener the {@link ICommandScheduler.IScheduledInvocationListener} to be informed
      * @param args the command arguments
-     *
+     * @return The invocation id of the scheduled command.
      * @throws ConfigurationException if command was invalid
      * @throws NoDeviceException if there is no device to use
      */
-    public void execCommand(IScheduledInvocationListener listener, String[] args)
+    public long execCommand(IScheduledInvocationListener listener, String[] args)
             throws ConfigurationException, NoDeviceException;
 
     /**
@@ -119,11 +119,12 @@ public interface ICommandScheduler {
      * @param listener the {@link ICommandScheduler.IScheduledInvocationListener} to be informed
      * @param device the {@link ITestDevice} to use
      * @param args the command arguments
-     *
+     * @return The invocation id of the scheduled command.
      * @throws ConfigurationException if command was invalid
      */
-    public void execCommand(IScheduledInvocationListener listener, ITestDevice device,
-            String[] args) throws ConfigurationException;
+    public long execCommand(
+            IScheduledInvocationListener listener, ITestDevice device, String[] args)
+            throws ConfigurationException;
 
     /**
      * Directly allocates a device and executes a command without adding it to the command queue
@@ -135,7 +136,7 @@ public interface ICommandScheduler {
      * @throws ConfigurationException if command was invalid
      * @throws NoDeviceException if there is no device to use
      */
-    public void execCommand(
+    public long execCommand(
             IInvocationContext context, IScheduledInvocationListener listener, String[] args)
             throws ConfigurationException, NoDeviceException;
 

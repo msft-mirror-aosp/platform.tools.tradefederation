@@ -253,13 +253,14 @@ public class ClusterCommandSchedulerTest {
                     }
 
                     @Override
-                    public void execCommand(IScheduledInvocationListener listener, String[] args)
+                    public long execCommand(IScheduledInvocationListener listener, String[] args)
                             throws ConfigurationException, NoDeviceException {
                         ArrayList<String> execCmdArgs = new ArrayList<>();
                         for (String arg : args) {
                             execCmdArgs.add(arg);
                         }
                         mExecCmdArgs.push(execCmdArgs);
+                        return 1;
                     }
 
                     @Override
@@ -896,13 +897,14 @@ public class ClusterCommandSchedulerTest {
                     }
 
                     @Override
-                    public void execCommand(IScheduledInvocationListener listener, String[] args)
+                    public long execCommand(IScheduledInvocationListener listener, String[] args)
                             throws ConfigurationException, NoDeviceException {
                         ArrayList<String> execCmdArgs = new ArrayList<>();
                         for (String arg : args) {
                             execCmdArgs.add(arg);
                         }
                         mExecCmdArgs.push(execCmdArgs);
+                        return 1;
                     }
 
                     @Override
