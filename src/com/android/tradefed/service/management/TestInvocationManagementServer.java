@@ -34,6 +34,8 @@ import com.proto.tradefed.invocation.InvocationStatus;
 import com.proto.tradefed.invocation.InvocationStatus.Status;
 import com.proto.tradefed.invocation.NewTestCommandRequest;
 import com.proto.tradefed.invocation.NewTestCommandResponse;
+import com.proto.tradefed.invocation.StopInvocationRequest;
+import com.proto.tradefed.invocation.StopInvocationResponse;
 import com.proto.tradefed.invocation.TestInvocationManagementGrpc.TestInvocationManagementImplBase;
 
 import java.io.File;
@@ -57,7 +59,18 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
     private final Server mServer;
     private final ICommandScheduler mCommandScheduler;
     private final DeviceManagementGrpcServer mDeviceReservationManager;
-    private Map<String, ScheduledInvocationForwarder> mTracker = new HashMap<>();
+    private Map<String, InvocationInformation> mTracker = new HashMap<>();
+
+    public class InvocationInformation {
+        public final long invocationId;
+        public final ScheduledInvocationForwarder scheduledInvocationForwarder;
+
+        InvocationInformation(
+                long invocationId, ScheduledInvocationForwarder scheduledInvocationForwarder) {
+            this.invocationId = invocationId;
+            this.scheduledInvocationForwarder = scheduledInvocationForwarder;
+        }
+    }
 
     /** Returns the port used by the server. */
     public static Integer getPort() {
@@ -132,15 +145,22 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
             if (!request.getReservationIdList().isEmpty()) {
                 device = getReservedDevices(request.getReservationIdList());
             }
+            long invocationId = -1;
             if (device == null) {
-                mCommandScheduler.execCommand(forwarder, command);
+                invocationId = mCommandScheduler.execCommand(forwarder, command);
             } else {
-                mCommandScheduler.execCommand(forwarder, device, command);
+                invocationId = mCommandScheduler.execCommand(forwarder, device, command);
             }
-            // TODO: Align trackerId with true invocation id
-            String trackerId = UUID.randomUUID().toString();
-            mTracker.put(trackerId, forwarder);
-            responseBuilder.setInvocationId(trackerId);
+            if (invocationId == -1) {
+                responseBuilder.setCommandErrorInfo(
+                        CommandErrorInfo.newBuilder()
+                                .setErrorMessage("Something went wrong to execute the command."));
+            } else {
+                // TODO: Align trackerId with true invocation id
+                String trackerId = UUID.randomUUID().toString();
+                mTracker.put(trackerId, new InvocationInformation(invocationId, forwarder));
+                responseBuilder.setInvocationId(trackerId);
+            }
         } catch (ConfigurationException | IOException | RuntimeException e) {
             // TODO: Expand proto to convey those errors
             // return a response without invocation id
@@ -165,10 +185,16 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
         String invocationId = request.getInvocationId();
         if (mTracker.containsKey(invocationId)) {
             responseBuilder.setInvocationStatus(
-                    createStatus(mTracker.get(invocationId).getListeners()));
+                    createStatus(
+                            mTracker.get(invocationId)
+                                    .scheduledInvocationForwarder
+                                    .getListeners()));
             if (responseBuilder.getInvocationStatus().getStatus().equals(Status.DONE)) {
                 responseBuilder.setTestRecordPath(
-                        getProtoPath(mTracker.get(invocationId).getListeners()));
+                        getProtoPath(
+                                mTracker.get(invocationId)
+                                        .scheduledInvocationForwarder
+                                        .getListeners()));
                 // Finish the tracking after returning the first status done.
                 mTracker.remove(invocationId);
             }
@@ -177,6 +203,37 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
                     InvocationStatus.newBuilder()
                             .setStatus(Status.UNKNOWN)
                             .setStatusReason("invocation id is not tracked."));
+        }
+        responseObserver.onNext(responseBuilder.build());
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void stopInvocation(
+            StopInvocationRequest request,
+            StreamObserver<StopInvocationResponse> responseObserver) {
+        StopInvocationResponse.Builder responseBuilder = StopInvocationResponse.newBuilder();
+        String invocationId = request.getInvocationId();
+        if (mTracker.containsKey(invocationId)) {
+            long realInvocationId = mTracker.get(invocationId).invocationId;
+            boolean found =
+                    mCommandScheduler.stopInvocation((int) realInvocationId, request.getReason());
+            if (found) {
+                responseBuilder.setStatus(StopInvocationResponse.Status.SUCCESS);
+            } else {
+                responseBuilder
+                        .setStatus(StopInvocationResponse.Status.ERROR)
+                        .setCommandErrorInfo(
+                                CommandErrorInfo.newBuilder()
+                                        .setErrorMessage(
+                                                "No running matching invocation to stop."));
+            }
+        } else {
+            responseBuilder
+                    .setStatus(StopInvocationResponse.Status.ERROR)
+                    .setCommandErrorInfo(
+                            CommandErrorInfo.newBuilder()
+                                    .setErrorMessage("invocation id is not tracked."));
         }
         responseObserver.onNext(responseBuilder.build());
         responseObserver.onCompleted();
