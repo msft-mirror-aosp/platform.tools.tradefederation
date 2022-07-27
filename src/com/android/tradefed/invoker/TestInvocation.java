@@ -335,6 +335,7 @@ public class TestInvocation implements ITestInvocation {
             }
         } finally {
             mTestDone = true;
+            long bugreportStartTime = System.currentTimeMillis();
             // Only capture logcat for TEST if we started the test phase.
             if (mTestStarted) {
                 for (ITestDevice device : context.getDevices()) {
@@ -396,6 +397,11 @@ public class TestInvocation implements ITestInvocation {
             } else {
                 CLog.d("Skip online check as an exception was already reported: %s", exception);
             }
+            // Report bugreport and various check as part of teardown
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.TEARDOWN_PAIR,
+                    bugreportStartTime,
+                    System.currentTimeMillis());
             mStatus = "tearing down";
             try {
                 invocationPath.doTeardown(testInfo, config, listener, exception);
