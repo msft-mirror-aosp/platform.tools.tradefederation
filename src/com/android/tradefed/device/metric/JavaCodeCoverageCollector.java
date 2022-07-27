@@ -21,7 +21,6 @@ import static com.google.common.io.Files.getNameWithoutExtension;
 
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
-import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -42,6 +41,8 @@ import com.android.tradefed.util.TarUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
+
+import org.jacoco.core.tools.ExecFileLoader;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -71,13 +72,7 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
     // Timeout for pulling coverage files from the device, in minutes.
     private static final long TIMEOUT_MINUTES = 20;
 
-    @Deprecated
-    @Option(
-            name = "merge-coverage-measurements",
-            description =
-                    "Merge coverage measurements after all tests are complete rather than logging"
-                            + " individual measurements.")
-    private boolean mMergeCoverageMeasurements = false;
+    private ExecFileLoader mExecFileLoader;
 
     private JavaCodeCoverageFlusher mFlusher;
     private IConfiguration mConfiguration;
@@ -117,13 +112,8 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     @VisibleForTesting
-    public void setCoverageFlusher(JavaCodeCoverageFlusher flusher) {
+    void setCoverageFlusher(JavaCodeCoverageFlusher flusher) {
         mFlusher = flusher;
-    }
-
-    @VisibleForTesting
-    public void setMergeMeasurements(boolean merge) {
-        mMergeCoverageMeasurements = merge;
     }
 
     @Override
@@ -166,7 +156,7 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                                 "Failed to pull test coverage file %s from the device.",
                                 testCoveragePath);
                     } else {
-                        logCoverageMeasurement(testCoverage);
+                        saveCoverageMeasurement(testCoverage);
                     }
                 }
 
@@ -192,7 +182,7 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                 // Decompress the files and log the measurements.
                 untarDir = TarUtil.extractTarGzipToTemp(coverageTarGz, "java_coverage");
                 for (String coveragePath : FileUtil.findFiles(untarDir, ".*\\.ec")) {
-                    logCoverageMeasurement(new File(coveragePath));
+                    saveCoverageMeasurement(new File(coveragePath));
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -206,9 +196,36 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                 cleanUpDeviceCoverageFiles(device);
             }
         }
+
+        // Log the merged coverage data file if the flag is set.
+        if (shouldMergeCoverage() && (mExecFileLoader != null)) {
+            File mergedCoverage = null;
+            try {
+                mergedCoverage = FileUtil.createTempFile("merged_java_coverage", ".ec");
+                mExecFileLoader.save(mergedCoverage, false);
+                logCoverageMeasurement(mergedCoverage);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } finally {
+                mExecFileLoader = null;
+                FileUtil.deleteFile(mergedCoverage);
+            }
+        }
     }
 
-    /** Saves files as Java coverage measurements. */
+    /** Saves Java coverage file data. */
+    private void saveCoverageMeasurement(File coverageFile) throws IOException {
+        if (shouldMergeCoverage()) {
+            if (mExecFileLoader == null) {
+                mExecFileLoader = new ExecFileLoader();
+            }
+            mExecFileLoader.load(coverageFile);
+        } else {
+            logCoverageMeasurement(coverageFile);
+        }
+    }
+
+    /** Logs files as Java coverage measurements. */
     private void logCoverageMeasurement(File coverageFile) {
         try (FileInputStreamSource source = new FileInputStreamSource(coverageFile, true)) {
             testLog(
@@ -263,5 +280,9 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                         .getCoverageOptions()
                         .getCoverageToolchains()
                         .contains(CoverageOptions.Toolchain.JACOCO);
+    }
+
+    private boolean shouldMergeCoverage() {
+        return mConfiguration != null && mConfiguration.getCoverageOptions().shouldMergeCoverage();
     }
 }
