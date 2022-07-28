@@ -588,14 +588,10 @@ public class InvocationExecution implements IInvocationExecution {
             CLog.i("--disable-invocation-setup-and-teardown, skipping post-invocation teardown.");
             return;
         }
-        long start = System.currentTimeMillis();
         for (String deviceName : context.getDeviceConfigNames()) {
             ITestDevice device = context.getDevice(deviceName);
             device.postInvocationTearDown(exception);
         }
-        // Also report device post invocation into teardown
-        InvocationMetricLogger.addInvocationPairMetrics(
-                InvocationMetricKey.TEARDOWN_PAIR, start, System.currentTimeMillis());
     }
 
     /** Runs the {@link IMultiTargetPreparer} specified. */
