@@ -25,14 +25,15 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
+import org.apache.commons.compress.archivers.zip.ZipFile;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
-import org.apache.commons.compress.archivers.zip.ZipFile;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.ListIterator;
 
 /** Create chroot directory for ART tests. */
 @OptionClass(alias = "art-chroot-preparer")
@@ -53,11 +54,15 @@ public class ArtChrootPreparer extends BaseTargetPreparer {
         "/apex/com.android.os.statsd",
         "/apex/com.android.runtime",
         "/dev",
+        "/dev/cpuctl",
+        "/etc",
         "/linkerconfig",
         "/proc",
         "/sys",
         "/system",
     };
+
+    private List<String> mMountPoints = new ArrayList<>();
 
     @Override
     public void setUp(TestInformation testInfo)
@@ -76,6 +81,7 @@ public class ArtChrootPreparer extends BaseTargetPreparer {
         for (String dir : MOUNTS) {
             adbShell(device, "mkdir -p %s%s", CHROOT_PATH, dir);
             adbShell(device, "mount --bind %s %s%s", dir, CHROOT_PATH, dir);
+            mMountPoints.add(CHROOT_PATH + dir);
         }
 
         // Activate APEXes in the chroot.
@@ -119,6 +125,7 @@ public class ArtChrootPreparer extends BaseTargetPreparer {
         String loopbackDevice = adbShell(device, "losetup -f -s %s", deviceApexImg);
         adbShell(device, "mkdir -p %s", deviceApexDir);
         adbShell(device, "mount -o loop,ro %s %s", loopbackDevice, deviceApexDir);
+        mMountPoints.add(deviceApexDir);
     }
 
     @Override
@@ -142,17 +149,10 @@ public class ArtChrootPreparer extends BaseTargetPreparer {
     }
 
     private void cleanup(ITestDevice device) throws TargetSetupError, DeviceNotAvailableException {
-        String mounts = adbShell(device, "mount");
-        Pattern pattern = Pattern.compile("^([^ ]+) on ([^ ]+) type ([^ ]+) .*$");
-        for (String mount : mounts.split("\n")) {
-            Matcher matcher = pattern.matcher(mount);
-            if (!matcher.matches()) {
-                throw new TargetSetupError(
-                        String.format("Failed to parse mount command output: %s", mount));
-            }
-            if (matcher.group(2).startsWith(CHROOT_PATH)) {
-                adbShell(device, "umount %s", matcher.group(2));
-            }
+        // Unmount in the reverse order because there are nested mount points.
+        ListIterator listIterator = mMountPoints.listIterator(mMountPoints.size());
+        while (listIterator.hasPrevious()) {
+            adbShell(device, "umount %s", listIterator.previous());
         }
         adbShell(device, "rm -rf %s", CHROOT_PATH);
     }
