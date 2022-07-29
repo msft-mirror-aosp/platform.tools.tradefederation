@@ -131,13 +131,13 @@ public class HostTest
 
     public static final String SET_OPTION_NAME = "set-option";
     public static final String SET_OPTION_DESC =
-            "Options to be passed down to the class under test, key and value should be "
-                    + "separated by colon \":\"; for example, if class under test supports "
-                    + "\"--iteration 1\" from a command line, it should be passed in as"
-                    + " \"--set-option iteration:1\" or \"--set-option iteration:key=value\" for "
-                    + "passing options to map; escaping of \"=\" is currently not supported."
-                    + "A particular class can be targetted by specifying it. "
-                    + "\" --set-option <fully qualified class>:<option name>:<option value>\"";
+            "Options to be passed down to the class under test, key and value should be separated"
+                + " by colon \":\"; for example, if class under test supports \"--iteration 1\""
+                + " from a command line, it should be passed in as \"--set-option iteration:1\" or"
+                + " \"--set-option iteration:key=value\" for passing options to map. Values that"
+                + " contain \":\" or \"=\" can be escaped with a backslash. A particular class can"
+                + " be targeted by specifying it. \" --set-option <fully qualified class>:<option"
+                + " name>:<option value>\"";
 
     @Option(name = SET_OPTION_NAME, description = SET_OPTION_DESC)
     private List<String> mKeyValueOptions = new ArrayList<>();
@@ -1154,18 +1154,24 @@ public class HostTest
 
     private static void injectOption(OptionSetter setter, String origItem, String key, String value)
             throws ConfigurationException {
-        if (value.contains("=")) {
-            String[] values = value.split("=");
-            if (values.length != 2) {
-                throw new RuntimeException(
-                        String.format(
-                                "set-option provided '%s' format is invalid. Only one "
-                                        + "'=' is allowed",
-                                origItem));
-            }
-            setter.setOptionValue(key, values[0], values[1]);
+        String esc = "\\";
+        String delim = "=";
+        String regex = "(?<!" + Pattern.quote(esc) + ")" + Pattern.quote(delim);
+        String escDelim = Pattern.quote(esc) + Pattern.quote(delim);
+        String[] values = value.split(regex);
+        if (values.length == 1) {
+            setter.setOptionValue(key, values[0].replaceAll(escDelim, delim));
+        } else if (values.length == 2) {
+            setter.setOptionValue(
+                    key,
+                    values[0].replaceAll(escDelim, delim),
+                    values[1].replaceAll(escDelim, delim));
         } else {
-            setter.setOptionValue(key, value);
+            throw new RuntimeException(
+                    String.format(
+                            "set-option provided '%s' format is invalid. Only one "
+                                    + "'=' is allowed",
+                            origItem));
         }
     }
 
