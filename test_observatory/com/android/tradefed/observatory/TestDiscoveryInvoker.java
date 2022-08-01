@@ -57,6 +57,7 @@ import java.util.Map;
 public class TestDiscoveryInvoker {
 
     private final IConfiguration mConfiguration;
+    private final String mDefaultConfigName;
     private final File mRootDir;
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
@@ -68,8 +69,20 @@ public class TestDiscoveryInvoker {
         return RunUtil.getDefault();
     }
 
+    /** Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration} and root directory. */
     public TestDiscoveryInvoker(IConfiguration config, File rootDir) {
         mConfiguration = config;
+        mDefaultConfigName = null;
+        mRootDir = rootDir;
+    }
+
+    /**
+     * Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration}, test launcher's
+     * default config name and root directory.
+     */
+    public TestDiscoveryInvoker(IConfiguration config, String defaultConfigName, File rootDir) {
+        mConfiguration = config;
+        mDefaultConfigName = defaultConfigName;
         mRootDir = rootDir;
     }
 
@@ -141,12 +154,21 @@ public class TestDiscoveryInvoker {
         String configName = ctsParserSettings.mConfigName;
 
         if (configName == null) {
-            throw new ConfigurationException(
-                    String.format(
-                            "Failed to extract config-name from parent test command options,"
-                                    + " unable to build args to invoke tradefed observatory. Parent"
-                                    + " test command options is: %s",
-                            fullCommandLineArgs));
+            if (mDefaultConfigName == null) {
+                throw new ConfigurationException(
+                        String.format(
+                                "Failed to extract config-name from parent test command options,"
+                                        + " unable to build args to invoke tradefed observatory."
+                                        + " Parent test command options is: %s",
+                                fullCommandLineArgs));
+            } else {
+                CLog.i(
+                        String.format(
+                                "No config name provided in the command args, use default config"
+                                        + " name %s",
+                                mDefaultConfigName));
+                configName = mDefaultConfigName;
+            }
         }
         List<String> args = new ArrayList<>();
         args.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
