@@ -195,7 +195,7 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
                         "instrumentation-arg", SKIP_TESTS_REASON_KEY, reason.replace(" ", "\\ "));
             } catch (ConfigurationException e) {
                 throw new TargetSetupError(
-                        "Error setting skip-tests-reason", device.getDeviceDescriptor());
+                        "Error setting skip-tests-reason", e, device.getDeviceDescriptor());
             }
         }
 
