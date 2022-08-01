@@ -56,7 +56,8 @@ public class TestDiscoveryInvokerTest {
     private IConfiguration mConfiguration;
     private ICommandOptions mCommandOptions;
     private TestDiscoveryInvoker mTestDiscoveryInvoker;
-    private static final String CONFIG_NAME = "test_config_name";
+    private static final String DEFAULT_TEST_CONFIG_NAME = "default_config_name";
+    private static final String TEST_CONFIG_NAME = "test_config_name";
     private static final String TEST_MODULE_1_NAME = "test_module_1";
     private static final String TEST_MODULE_2_NAME = "test_module_2";
 
@@ -69,13 +70,6 @@ public class TestDiscoveryInvokerTest {
         when(mCommandOptions.getInvocationData()).thenReturn(new UniqueMultiMap<String, String>());
         mRootDir = FileUtil.createTempDir("test_suite_root");
         File mainDir = FileUtil.createNamedTempDir(mRootDir, "android-xts");
-        mTestDiscoveryInvoker =
-                new TestDiscoveryInvoker(mConfiguration, mRootDir) {
-                    @Override
-                    IRunUtil getRunUtil() {
-                        return mRunUtil;
-                    }
-                };
         File toolsDir = FileUtil.createNamedTempDir(mainDir, "tools");
         mTradefedJar = FileUtil.createNamedTempDir(toolsDir, "tradefed.jar");
         mCompatibilityJar = FileUtil.createNamedTempDir(toolsDir, "compatibility_mock.jar");
@@ -89,6 +83,13 @@ public class TestDiscoveryInvokerTest {
     /** Test the invocation when all necessary information are in the command line. */
     @Test
     public void testSuccessTestDependencyDiscovery() throws Exception {
+        mTestDiscoveryInvoker =
+                new TestDiscoveryInvoker(mConfiguration, mRootDir) {
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mRunUtil;
+                    }
+                };
         String successStdout =
                 "{\"TestModules\":[" + TEST_MODULE_1_NAME + "," + TEST_MODULE_2_NAME + "]}";
         String commandLine =
@@ -103,7 +104,7 @@ public class TestDiscoveryInvokerTest {
                             + " --cts-params --compatibility:include-filter --cts-params %s"
                             + " --test-tag --cts-params camera-presubmit --test-tag"
                             + " camera-presubmit --post-method=TEST_ARTIFACT",
-                        CONFIG_NAME, TEST_MODULE_1_NAME, TEST_MODULE_2_NAME);
+                        TEST_CONFIG_NAME, TEST_MODULE_1_NAME, TEST_MODULE_2_NAME);
         when(mConfiguration.getCommandLine()).thenReturn(commandLine);
         Mockito.doAnswer(
                         new Answer<Object>() {
@@ -124,7 +125,7 @@ public class TestDiscoveryInvokerTest {
                                         args.contains(
                                                 TestDiscoveryInvoker
                                                         .TRADEFED_OBSERVATORY_ENTRY_PATH));
-                                assertTrue(args.contains(CONFIG_NAME));
+                                assertTrue(args.contains(TEST_CONFIG_NAME));
                                 assertTrue(args.contains("--compatibility:include-filter"));
                                 assertTrue(args.contains(TEST_MODULE_1_NAME));
                                 assertTrue(args.contains(TEST_MODULE_2_NAME));
@@ -161,7 +162,14 @@ public class TestDiscoveryInvokerTest {
      */
     @Test
     public void testFailTestDependencyDiscovery() throws Exception {
-        // --config-name is missing from the cmd
+        mTestDiscoveryInvoker =
+                new TestDiscoveryInvoker(mConfiguration, mRootDir) {
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mRunUtil;
+                    }
+                };
+        // --config-name is missing from the cmd, and no default is provided
         String commandLine =
                 String.format(
                         "random/test/name --cts-package-name android-cts.zip --cts-params"
@@ -182,5 +190,84 @@ public class TestDiscoveryInvokerTest {
         } catch (ConfigurationException expected) {
             // Expected
         }
+    }
+
+    /**
+     * Test the invocation when command line args does not contain a config name but default config
+     * name is provided.
+     */
+    @Test
+    public void testTestDependencyDiscovery_NoConfigNameInArgs() throws Exception {
+        mTestDiscoveryInvoker =
+                new TestDiscoveryInvoker(mConfiguration, DEFAULT_TEST_CONFIG_NAME, mRootDir) {
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mRunUtil;
+                    }
+                };
+        String successStdout =
+                "{\"TestModules\":[" + TEST_MODULE_1_NAME + "," + TEST_MODULE_2_NAME + "]}";
+        String commandLine =
+                String.format(
+                        "random/test/name --cts-package-name android-cts.zip --cts-params"
+                            + " --include-test-log-tags --cts-params --log-level --cts-params"
+                            + " VERBOSE --cts-params --logcat-on-failure --cts-params"
+                            + " --test-tag-suffix --cts-params x86 --cts-params"
+                            + " --compatibility:test-arg --cts-params"
+                            + " com.android.tradefed.testtype.HostTest:include-annotation:android.platform.test.annotations.Presubmit"
+                            + " --cts-params --compatibility:include-filter --cts-params %s"
+                            + " --cts-params --compatibility:include-filter --cts-params %s"
+                            + " --test-tag --cts-params camera-presubmit --test-tag"
+                            + " camera-presubmit --post-method=TEST_ARTIFACT",
+                        TEST_MODULE_1_NAME, TEST_MODULE_2_NAME);
+        when(mConfiguration.getCommandLine()).thenReturn(commandLine);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                Set<String> args = new HashSet<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    args.add(mock.getArgument(i));
+                                }
+
+                                // Those are the necessary args that we care about
+                                assertTrue(
+                                        args.contains(
+                                                mCompatibilityJar.getAbsolutePath()
+                                                        + ":"
+                                                        + mTradefedJar.getAbsolutePath()));
+                                assertTrue(
+                                        args.contains(
+                                                TestDiscoveryInvoker
+                                                        .TRADEFED_OBSERVATORY_ENTRY_PATH));
+                                assertTrue(args.contains(DEFAULT_TEST_CONFIG_NAME));
+                                assertTrue(args.contains("--compatibility:include-filter"));
+                                assertTrue(args.contains(TEST_MODULE_1_NAME));
+                                assertTrue(args.contains(TEST_MODULE_2_NAME));
+
+                                // Both cts params and config name should already been filtered out
+                                // and applied
+                                assertFalse(args.contains("--cts-params"));
+                                assertFalse(args.contains("--config-name"));
+                                CommandResult res = new CommandResult();
+                                res.setExitCode(0);
+                                res.setStatus(CommandStatus.SUCCESS);
+                                res.setStdout(successStdout);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        Map<String, List<String>> testDependencies =
+                mTestDiscoveryInvoker.discoverTestDependencies();
+        assertEquals(testDependencies.size(), 1);
+        assertTrue(
+                testDependencies
+                        .get(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY)
+                        .contains(TEST_MODULE_1_NAME));
+        assertTrue(
+                testDependencies
+                        .get(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY)
+                        .contains(TEST_MODULE_2_NAME));
     }
 }
