@@ -54,7 +54,7 @@ public class ArtChrootPreparer extends BaseTargetPreparer {
         "/apex/com.android.os.statsd",
         "/apex/com.android.runtime",
         "/dev",
-        "/dev/cpuctl",
+        "/dev/cpuset",
         "/etc",
         "/linkerconfig",
         "/proc",
