@@ -278,6 +278,9 @@ public class CommandOptions implements ICommandOptions {
                                   + "under developing, not for other uses.")
     private Integer mMultiDeviceCount;
 
+    @Option(name = "enable-tracing", description = "Enable test invocation tracing.")
+    private boolean mTracingEnabled = false;
+
     /**
      * Set the help mode for the config.
      * <p/>
@@ -713,5 +716,11 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public void setMultiDeviceCount(int count) {
         mMultiDeviceCount = count;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isTracingEnabled() {
+        return mTracingEnabled;
     }
 }
