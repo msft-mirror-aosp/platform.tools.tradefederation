@@ -259,4 +259,7 @@ public interface ICommandOptions {
 
     /** Sets the number of expected devices for multi-device tests. */
     public void setMultiDeviceCount(int count);
+
+    /** Returns whether or not invocation tracing is enabled. */
+    public boolean isTracingEnabled();
 }

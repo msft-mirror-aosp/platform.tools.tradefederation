@@ -61,6 +61,7 @@ tradefed_java_library_host {
         "libprotobuf-java-full",
         "truth-prebuilt",
         "loganalysis",
+        "perfetto_trace-full",
     ],
 
     manifest: "MANIFEST.mf",
