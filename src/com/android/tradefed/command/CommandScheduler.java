@@ -61,12 +61,17 @@ import com.android.tradefed.invoker.ITestInvocation;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.invoker.shard.ParentShardReplicate;
+import com.android.tradefed.invoker.tracing.ActiveTrace;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.ILogRegistry.EventType;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ConsoleResultReporter;
+import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.error.ErrorIdentifier;
@@ -587,22 +592,29 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             if (mClient != null) {
                 mClient.notifyTradefedInvocationStartEvent();
             }
+            IConfiguration config = mCmd.getConfiguration();
+            if (config.getCommandOptions().isTracingEnabled()) {
+                long pid = ProcessHandle.current().pid();
+                long tid = Thread.currentThread().getId();
+                ActiveTrace trace = TracingLogger.createActiveTrace(pid, tid);
+                trace.startTracing();
+            }
             mStartTime = System.currentTimeMillis();
             ITestInvocation instance = getInvocation();
-            IConfiguration config = mCmd.getConfiguration();
-
-            for (final IScheduledInvocationListener listener : mListeners) {
-                try {
-                    listener.invocationInitiated(mInvocationContext);
-                } catch (Throwable anyException) {
-                    CLog.e("Exception caught while calling invocationInitiated:");
-                    CLog.e(anyException);
+            try (CloseableTraceScope ignore = new CloseableTraceScope("invocation", "init")) {
+                for (final IScheduledInvocationListener listener : mListeners) {
+                    try {
+                        listener.invocationInitiated(mInvocationContext);
+                    } catch (Throwable anyException) {
+                        CLog.e("Exception caught while calling invocationInitiated:");
+                        CLog.e(anyException);
+                    }
                 }
             }
-
             Exception trackDeviceException = null;
             boolean lastInvocationSet = false;
-            try {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope("invocation", "test-invocation")) {
                 // Copy the command options invocation attributes to the invocation if it has not
                 // been already done.
                 if (!config.getConfigurationDescription().shouldUseSandbox()
@@ -649,25 +661,27 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         "Updating command %d with elapsed time %d ms",
                         mCmd.getCommandTracker().getId(),
                         elapsedTime);
-                // remove invocation thread first so another invocation can be started on device
-                // when freed
-                removeInvocationThread(this);
+                try (CloseableTraceScope ignore =
+                        new CloseableTraceScope("invocation", "complete")) {
+                    // remove invocation thread first so another invocation can be started on device
+                    // when freed
+                    removeInvocationThread(this);
 
-                checkStrayThreads();
+                    checkStrayThreads();
 
-                Map<ITestDevice, FreeDeviceState> deviceStates =
-                        createReleaseMap(mInvocationContext, trackDeviceException);
-                for (final IScheduledInvocationListener listener : mListeners) {
-                    try {
-                        listener.invocationComplete(mInvocationContext, deviceStates);
-                    } catch (Throwable anyException) {
-                        CLog.e("Exception caught while calling invocationComplete:");
-                        CLog.e(anyException);
+                    Map<ITestDevice, FreeDeviceState> deviceStates =
+                            createReleaseMap(mInvocationContext, trackDeviceException);
+                    for (final IScheduledInvocationListener listener : mListeners) {
+                        try {
+                            listener.invocationComplete(mInvocationContext, deviceStates);
+                        } catch (Throwable anyException) {
+                            CLog.e("Exception caught while calling invocationComplete:");
+                            CLog.e(anyException);
+                        }
                     }
-                }
-                if (!lastInvocationSet && instance.getExitInfo() != null) {
-                    setLastInvocationExitCode(
-                            instance.getExitInfo().mExitCode, instance.getExitInfo().mStack);
+                    if (!lastInvocationSet && instance.getExitInfo() != null) {
+                        setLastInvocationExitCode(
+                                instance.getExitInfo().mExitCode, instance.getExitInfo().mStack);
                 }
                 if (getFeatureServer() != null) {
                     getFeatureServer().unregisterInvocation(config);
@@ -675,10 +689,28 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 mCmd.commandFinished(elapsedTime);
                 logInvocationEndedEvent(
                         mCmd.getCommandTracker().getId(), elapsedTime, mInvocationContext);
-                CLog.d("Finalizing the logger and invocation.");
+                }
+                CLog.logAndDisplay(LogLevel.INFO, "Finalizing the logger and invocation.");
+                ActiveTrace trace = TracingLogger.getActiveTrace();
+                if (trace != null) {
+                    File traceFile = trace.finalizeTracing();
+                    if (traceFile != null) {
+                        try (FileInputStreamSource source =
+                                new FileInputStreamSource(traceFile, true)) {
+                            LogSaverResultForwarder.logFile(
+                                    config.getTestInvocationListeners(),
+                                    config.getLogSaver(),
+                                    source,
+                                    "invocation-trace",
+                                    LogDataType.PERFETTO);
+                        }
+                    }
+                }
                 if (config.getCommandOptions().reportInvocationComplete()) {
                     LogSaverResultForwarder.reportEndHostLog(
-                            config.getLogSaver(), TestInvocation.TRADEFED_INVOC_COMPLETE_HOST_LOG);
+                            config.getTestInvocationListeners(),
+                            config.getLogSaver(),
+                            TestInvocation.TRADEFED_INVOC_COMPLETE_HOST_LOG);
                     config.getLogOutput().closeLog();
                     LogRegistry.getLogRegistry().unregisterLogger();
                 }

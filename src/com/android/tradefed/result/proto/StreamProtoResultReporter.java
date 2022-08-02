@@ -83,11 +83,18 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
     }
 
     @Override
+    public void processFinalInvocationLogs(TestRecord invocationLogs) {
+        writeRecordToSocket(invocationLogs);
+    }
+
+    @Override
     public void processFinalProto(TestRecord finalRecord) {
         try {
             writeRecordToSocket(finalRecord);
         } finally {
-            closeSocket();
+            // Upon invocation ended, trigger the end of the socket when the process finishes
+            SocketFinisher thread = new SocketFinisher();
+            Runtime.getRuntime().addShutdownHook(thread);
         }
     }
 
@@ -110,6 +117,20 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
             record.writeDelimitedTo(mReportSocket.getOutputStream());
         } catch (IOException e) {
             CLog.e(e);
+        }
+    }
+
+    /** Threads that help terminating the socket. */
+    private class SocketFinisher extends Thread {
+
+        public SocketFinisher() {
+            super();
+            setName("StreamProtoResultReporter-socket-finisher");
+        }
+
+        @Override
+        public void run() {
+            closeSocket();
         }
     }
 }
