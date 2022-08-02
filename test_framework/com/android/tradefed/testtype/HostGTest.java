@@ -24,12 +24,16 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.TestErrorIdentifier;
+import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -44,6 +48,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -262,11 +267,14 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         File gTestFile = null;
         try {
             gTestFile = FileUtil.findFile(moduleName, getAbi(), scanDirs.toArray(new File[] {}));
+            if (gTestFile != null && gTestFile.isDirectory()) {
+                // Search the exact file in subdir
+                gTestFile = FileUtil.findFile(moduleName, getAbi(), gTestFile);
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
-        if (gTestFile == null || gTestFile.isDirectory()) {
+        if (gTestFile == null) {
             // If we ended up here we most likely failed to find the proper file as is, so we
             // search for it with a potential suffix (which is allowed).
             try {
@@ -288,8 +296,12 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         }
 
         if (!gTestFile.canExecute()) {
-            throw new RuntimeException(
-                    String.format("%s is not executable!", gTestFile.getAbsolutePath()));
+            reportFailure(
+                    listener,
+                    gTestFile.getName(),
+                    new RuntimeException(
+                            String.format("%s is not executable!", gTestFile.getAbsolutePath())));
+            return;
         }
 
         listener = getGTestListener(listener);
@@ -298,5 +310,16 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         String flags = getAllGTestFlags(gTestFile.getName());
         CLog.i("Running gtest %s %s", gTestFile.getName(), flags);
         runTest(resultParser, gTestFile, flags, listener);
+    }
+
+    private void reportFailure(
+            ITestInvocationListener listener, String runName, RuntimeException exception) {
+        listener.testRunStarted(runName, 0);
+        listener.testRunFailed(createFailure(exception));
+        listener.testRunEnded(0L, new HashMap<String, Metric>());
+    }
+
+    private FailureDescription createFailure(Exception e) {
+        return TestInvocation.createFailureFromException(e, FailureStatus.TEST_FAILURE);
     }
 }
