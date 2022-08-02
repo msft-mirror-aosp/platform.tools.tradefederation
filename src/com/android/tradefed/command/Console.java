@@ -172,7 +172,7 @@ public class Console extends Thread {
                     exitMode = "commands";
                     mScheduler.shutdownOnEmpty();
                 } else {
-                    mScheduler.shutdown();
+                    mScheduler.shutdown(true);
                 }
                 printLine("Signalling command scheduler for shutdown.");
                 printLine(
