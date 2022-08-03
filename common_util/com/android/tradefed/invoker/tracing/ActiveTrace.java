@@ -35,7 +35,7 @@ import perfetto.protos.PerfettoTrace.TrackEvent;
 public class ActiveTrace {
 
     private final long pid;
-    private final long tid;
+    // private final long tid;
     private final long traceUuid;
     private final int uid = 5555; // TODO: collect a real uid
     // File where the final trace gets outputed
@@ -49,7 +49,7 @@ public class ActiveTrace {
      */
     public ActiveTrace(long pid, long tid) {
         this.pid = pid;
-        this.tid = tid;
+        // this.tid = tid;
         this.traceUuid = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
     }
 
@@ -67,9 +67,9 @@ public class ActiveTrace {
     /**
      * Very basic event reporting to do START / END of traces.
      *
-     * @param categories
-     * @param type
-     * @param name
+     * @param categories Category associated with event
+     * @param name Event name
+     * @param type Type of the event being reported
      */
     public void reportTraceEvent(String categories, String name, TrackEvent.Type type) {
         TracePacket.Builder tracePacket =
