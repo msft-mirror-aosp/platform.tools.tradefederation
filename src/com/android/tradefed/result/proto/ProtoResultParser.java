@@ -323,6 +323,11 @@ public class ProtoResultParser {
         // Still report the logs even if not reporting the invocation level.
         handleLogs(endInvocationProto);
 
+        if (mInvocationEnded) {
+            CLog.d("Re-entry in invocationEnded, most likely for subprocess final logs.");
+            return;
+        }
+
         // Get final context in case it changed.
         Any anyDescription = endInvocationProto.getDescription();
         if (!anyDescription.is(Context.class)) {

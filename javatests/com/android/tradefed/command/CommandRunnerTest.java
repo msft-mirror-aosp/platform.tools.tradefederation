@@ -175,6 +175,7 @@ public class CommandRunnerTest {
             "-n",
             "--no-return-null",
             "--no-throw-build-error",
+            "--no-enable-tracing",
             "--log-file-path",
             mLogDir.getAbsolutePath()
         };
@@ -193,6 +194,7 @@ public class CommandRunnerTest {
             mConfig.getAbsolutePath(),
             "-n",
             "--test-throw-unresponsive",
+            "--no-enable-tracing",
             "--log-file-path",
             mLogDir.getAbsolutePath()
         };
@@ -215,6 +217,7 @@ public class CommandRunnerTest {
             mConfig.getAbsolutePath(),
             "-n",
             "--test-throw-not-available",
+            "--no-enable-tracing",
             "--log-file-path",
             mLogDir.getAbsolutePath()
         };
@@ -237,6 +240,7 @@ public class CommandRunnerTest {
             mConfig.getAbsolutePath(),
             "-n",
             "--test-throw-runtime",
+            "--no-enable-tracing",
             "--log-file-path",
             mLogDir.getAbsolutePath()
         };
@@ -282,6 +286,7 @@ public class CommandRunnerTest {
             mConfig.getAbsolutePath(),
             "-s",
             "impossibleSerialThatWillNotBeFound",
+            "--no-enable-tracing",
             "--log-file-path",
             mLogDir.getAbsolutePath()
         };

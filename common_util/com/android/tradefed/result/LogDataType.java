@@ -73,6 +73,7 @@ public enum LogDataType {
     CPU_INFO("txt", "text/plain", false, true), // dumpsys cpuinfo
     JACOCO_CSV("csv", "text/csv", false, true), // JaCoCo coverage report in CSV format
     JACOCO_XML("xml", "text/xml", false, true), // JaCoCo coverage report in XML format
+    JACOCO_EXEC("exec", "application/octet-stream", false, false), //JaCoCo coverage execution file
     ATRACE("atr", "text/plain", true, false), // atrace -z format
     KERNEL_TRACE("dat", "text/plain", false, false), // raw kernel ftrace buffer
     DIR("", "text/plain", false, false),
