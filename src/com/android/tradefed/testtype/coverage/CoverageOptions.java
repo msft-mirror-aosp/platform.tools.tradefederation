@@ -61,6 +61,9 @@ public final class CoverageOptions {
     )
     private List<String> mCoverageProcesses = new ArrayList<>();
 
+    @Option(name = "merge-coverage", description = "Merge coverage measurements before logging.")
+    private boolean mMergeCoverage = false;
+
     @Option(
             name = "reset-coverage-before-test",
             description = "Reset coverage before running each test.")
@@ -111,6 +114,11 @@ public final class CoverageOptions {
      */
     public List<String> getCoverageProcesses() {
         return ImmutableList.copyOf(mCoverageProcesses);
+    }
+
+    /** Returns whether to merge coverage measurements together before logging. */
+    public boolean shouldMergeCoverage() {
+        return mMergeCoverage;
     }
 
     /**

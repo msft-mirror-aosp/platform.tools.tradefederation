@@ -29,6 +29,8 @@ service TestInvocationManagement {
   rpc SubmitTestCommand(NewTestCommandRequest) returns (NewTestCommandResponse) {}
   // Query the invocation detail info of a specific test command.
   rpc GetInvocationDetail(InvocationDetailRequest) returns (InvocationDetailResponse) {}
+  // Request an invocation to be stopped, non-blocking.
+  rpc StopInvocation(StopInvocationRequest) returns (StopInvocationResponse) {}
 }
 
 // A new TF test request.
@@ -44,6 +46,27 @@ message NewTestCommandResponse {
   // Invocation id of the requested test, unset if the test request command could not be
   // parsed or was not added successfully.
   string invocation_id = 1;
+  // If set, an error occurred and is described by ErrorInfo.
+  CommandErrorInfo command_error_info = 2;
+}
+
+// Request the invocation to stop
+message StopInvocationRequest {
+  // Invocation id of the test to request stop
+  string invocation_id = 1;
+  // Specify a reason to be associated with the stop request
+  string reason = 2;
+}
+
+message StopInvocationResponse {
+  // Type of invocation status
+  enum Status {
+    UNSPECIFIED = 0;
+    SUCCESS = 1;
+    ERROR = 2;
+  }
+  // The type of status.
+  Status status = 1;
   // If set, an error occurred and is described by ErrorInfo.
   CommandErrorInfo command_error_info = 2;
 }
