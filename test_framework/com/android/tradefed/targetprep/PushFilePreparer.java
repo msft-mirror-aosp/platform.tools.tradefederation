@@ -28,6 +28,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -59,7 +60,7 @@ import java.util.Set;
  */
 @OptionClass(alias = "push-file")
 public class PushFilePreparer extends BaseTargetPreparer
-        implements IAbiReceiver, IInvocationContextReceiver {
+        implements IAbiReceiver, IInvocationContextReceiver, IDiscoverDependencies {
     private static final String MEDIA_SCAN_INTENT =
             "am broadcast -a android.intent.action.MEDIA_MOUNTED -d file://%s "
                     + "--receiver-include-background";
@@ -464,5 +465,20 @@ public class PushFilePreparer extends BaseTargetPreparer
                 mFilesPushed.add(remotePath);
             }
         }
+    }
+
+    @Override
+    public Set<String> reportDependencies() {
+        Set<String> deps = new HashSet<>();
+        try {
+            for (File f : getPushSpecs(null).values()) {
+                if (!f.exists()) {
+                    deps.add(f.getName());
+                }
+            }
+        } catch (TargetSetupError e) {
+            CLog.e(e);
+        }
+        return deps;
     }
 }
