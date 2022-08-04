@@ -49,6 +49,7 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetr
 import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.invoker.shard.IShardHelper;
 import com.android.tradefed.invoker.shard.TestsPoolPoller;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
@@ -261,7 +262,7 @@ public class InvocationExecution implements IInvocationExecution {
         mTrackLabPreparers = new ConcurrentHashMap<>();
         mTrackTargetPreparers = new ConcurrentHashMap<>();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_START, start);
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("invocation", "lab-setup")) {
             for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
                 ITestDevice device = testInfo.getContext().getDevice(deviceName);
                 CLog.d("Starting setup for device: '%s'", device.getSerialNumber());
@@ -286,7 +287,7 @@ public class InvocationExecution implements IInvocationExecution {
                     InvocationMetricKey.SETUP_PAIR, start, end);
         }
         long startPreparer = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("invocation", "test-setup")) {
             runPreparersSetup(testInfo, config, listener);
 
             // After all the individual setup, make the multi-devices setup
@@ -684,81 +685,82 @@ public class InvocationExecution implements IInvocationExecution {
         Throwable deferredThrowable;
         long start = System.currentTimeMillis();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.TEARDOWN_START, start);
-
-        List<IMultiTargetPreparer> multiPreparers = config.getMultiTargetPreparers();
-        deferredThrowable =
-                runMultiTargetPreparersTearDown(
-                        multiPreparers,
-                        testInfo,
-                        logger,
-                        exception,
-                        "multi target preparer teardown");
-
-        int deviceIndex = 0;
-        for (String deviceName : context.getDeviceConfigNames()) {
-            ITestDevice device = context.getDevice(deviceName);
-            device.clearLastConnectedWifiNetwork();
-
-            List<ITargetPreparer> targetPreparersToRun =
-                    getTargetPreparersToRun(config, deviceName);
-            Throwable firstLocalThrowable =
-                    runPreparersTearDown(
+        try (CloseableTraceScope ignored = new CloseableTraceScope("invocation", "test-teardown")) {
+            List<IMultiTargetPreparer> multiPreparers = config.getMultiTargetPreparers();
+            deferredThrowable =
+                    runMultiTargetPreparersTearDown(
+                            multiPreparers,
                             testInfo,
-                            device,
-                            deviceName,
-                            deviceIndex,
                             logger,
                             exception,
-                            targetPreparersToRun,
-                            mTrackTargetPreparers);
-            if (deferredThrowable == null) {
-                deferredThrowable = firstLocalThrowable;
+                            "multi target preparer teardown");
+
+            int deviceIndex = 0;
+            for (String deviceName : context.getDeviceConfigNames()) {
+                ITestDevice device = context.getDevice(deviceName);
+                device.clearLastConnectedWifiNetwork();
+
+                List<ITargetPreparer> targetPreparersToRun =
+                        getTargetPreparersToRun(config, deviceName);
+                Throwable firstLocalThrowable =
+                        runPreparersTearDown(
+                                testInfo,
+                                device,
+                                deviceName,
+                                deviceIndex,
+                                logger,
+                                exception,
+                                targetPreparersToRun,
+                                mTrackTargetPreparers);
+                if (deferredThrowable == null) {
+                    deferredThrowable = firstLocalThrowable;
+                }
+
+                List<ITargetPreparer> labPreparersToRun = getLabPreparersToRun(config, deviceName);
+                Throwable secondLocalThrowable =
+                        runPreparersTearDown(
+                                testInfo,
+                                device,
+                                deviceName,
+                                deviceIndex,
+                                logger,
+                                exception,
+                                labPreparersToRun,
+                                mTrackLabPreparers);
+                if (deferredThrowable == null) {
+                    deferredThrowable = secondLocalThrowable;
+                }
+
+                deviceIndex++;
             }
 
-            List<ITargetPreparer> labPreparersToRun = getLabPreparersToRun(config, deviceName);
-            Throwable secondLocalThrowable =
-                    runPreparersTearDown(
+            // Extra tear down step for the device
+            if (exception == null) {
+                exception = deferredThrowable;
+            }
+            runDevicePostInvocationTearDown(context, config, exception);
+
+            // After all, run the multi_pre_target_preparer tearDown.
+            List<IMultiTargetPreparer> multiPrePreparers = config.getMultiPreTargetPreparers();
+            Throwable preTargetTearDownException =
+                    runMultiTargetPreparersTearDown(
+                            multiPrePreparers,
                             testInfo,
-                            device,
-                            deviceName,
-                            deviceIndex,
                             logger,
                             exception,
-                            labPreparersToRun,
-                            mTrackLabPreparers);
+                            "multi pre target preparer teardown");
             if (deferredThrowable == null) {
-                deferredThrowable = secondLocalThrowable;
+                deferredThrowable = preTargetTearDownException;
             }
 
-            deviceIndex++;
+            // Collect adb logs.
+            logHostAdb(config, logger);
+        } finally {
+            long end = System.currentTimeMillis();
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.TEARDOWN_END, end);
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.TEARDOWN_PAIR, start, end);
         }
-
-        // Extra tear down step for the device
-        if (exception == null) {
-            exception = deferredThrowable;
-        }
-        runDevicePostInvocationTearDown(context, config, exception);
-
-        // After all, run the multi_pre_target_preparer tearDown.
-        List<IMultiTargetPreparer> multiPrePreparers = config.getMultiPreTargetPreparers();
-        Throwable preTargetTearDownException =
-                runMultiTargetPreparersTearDown(
-                        multiPrePreparers,
-                        testInfo,
-                        logger,
-                        exception,
-                        "multi pre target preparer teardown");
-        if (deferredThrowable == null) {
-            deferredThrowable = preTargetTearDownException;
-        }
-
-        // Collect adb logs.
-        logHostAdb(config, logger);
-
-        long end = System.currentTimeMillis();
-        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.TEARDOWN_END, end);
-        InvocationMetricLogger.addInvocationPairMetrics(
-                InvocationMetricKey.TEARDOWN_PAIR, start, end);
 
         if (deferredThrowable != null) {
             throw deferredThrowable;
@@ -880,7 +882,8 @@ public class InvocationExecution implements IInvocationExecution {
         Runtime.getRuntime().addShutdownHook(reporterThread);
         TestInvocation.printStageDelimiter(Stage.TEST, false);
         long start = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("invocation", "test-execution")) {
             GetPreviousPassedHelper previousPassHelper = new GetPreviousPassedHelper();
             // Add new exclude filters to global filters
             Set<String> previousPassedFilters = previousPassHelper.getPreviousPassedFilters(config);
