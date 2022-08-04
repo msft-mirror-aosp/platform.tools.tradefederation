@@ -38,13 +38,9 @@ import java.util.Set;
  */
 public class OptionFetcher implements AutoCloseable {
 
-    /**
-     * Set of options that should align with the parent process.
-     */
-    private static final Set<String> OPTION_TO_FETCH = ImmutableSet.of(
-            "retry-isolation-grade",
-            "avd-in-parent"
-            );
+    /** Set of options that should align with the parent process. */
+    private static final Set<String> OPTION_TO_FETCH =
+            ImmutableSet.of("retry-isolation-grade", "avd-in-parent", "enable-tracing");
 
     private TradefedFeatureClient mClient;
 
