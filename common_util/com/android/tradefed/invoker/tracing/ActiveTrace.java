@@ -76,7 +76,7 @@ public class ActiveTrace {
                 TracePacket.newBuilder()
                         .setTrustedUid(uid)
                         .setTrustedPid((int) pid)
-                        .setTimestamp(System.currentTimeMillis())
+                        .setTimestamp(System.nanoTime())
                         .setTrustedPacketSequenceId(1)
                         .setSequenceFlags(1)
                         .setTrackEvent(
@@ -110,7 +110,7 @@ public class ActiveTrace {
         TracePacket.Builder traceTrackDescriptor =
                 TracePacket.newBuilder()
                         .setTrustedUid(uid)
-                        .setTimestamp(System.currentTimeMillis())
+                        .setTimestamp(System.nanoTime())
                         .setTrustedPacketSequenceId(1)
                         .setSequenceFlags(1)
                         .setTrustedPid(pid)
