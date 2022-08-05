@@ -60,6 +60,7 @@ import com.android.tradefed.invoker.sandbox.ParentSandboxInvocationExecution;
 import com.android.tradefed.invoker.sandbox.SandboxedInvocationExecution;
 import com.android.tradefed.invoker.shard.LastShardDetector;
 import com.android.tradefed.invoker.shard.ShardHelper;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.BaseLeveledLogOutput;
 import com.android.tradefed.log.ILeveledLogOutput;
 import com.android.tradefed.log.ILogRegistry;
@@ -1035,7 +1036,8 @@ public class TestInvocation implements ITestInvocation {
             mStatus = "resolving dynamic options";
             long startDynamic = System.currentTimeMillis();
             boolean resolverSuccess = false;
-            try {
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope("invocation", "dynamic-download")) {
                 resolverSuccess =
                         invokeRemoteDynamic(context, config, listener, invocationPath, mode);
             } finally {
@@ -1058,7 +1060,8 @@ public class TestInvocation implements ITestInvocation {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.FETCH_BUILD_START, start);
             boolean providerSuccess = false;
-            try {
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope("invocation", "fetch-artifact")) {
                 providerSuccess =
                         invokeFetchBuild(info, config, rescheduler, listener, invocationPath);
             } finally {
