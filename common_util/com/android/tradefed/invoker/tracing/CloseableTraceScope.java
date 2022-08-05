@@ -20,6 +20,7 @@ import perfetto.protos.PerfettoTrace.TrackEvent;
 /** A scoped class that allows to report tracing section via try-with-resources */
 public class CloseableTraceScope implements AutoCloseable {
 
+    private static final String DEFAULT_CATEGORY = "invocation";
     private final String category;
     private final String name;
 
@@ -32,6 +33,11 @@ public class CloseableTraceScope implements AutoCloseable {
             return;
         }
         trace.reportTraceEvent(category, name, TrackEvent.Type.TYPE_SLICE_BEGIN);
+    }
+
+    /** Constructor. */
+    public CloseableTraceScope(String name) {
+        this(DEFAULT_CATEGORY, name);
     }
 
     @Override
