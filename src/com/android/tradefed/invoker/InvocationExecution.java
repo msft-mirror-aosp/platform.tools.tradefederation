@@ -262,7 +262,7 @@ public class InvocationExecution implements IInvocationExecution {
         mTrackLabPreparers = new ConcurrentHashMap<>();
         mTrackTargetPreparers = new ConcurrentHashMap<>();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_START, start);
-        try (CloseableTraceScope ignored = new CloseableTraceScope("invocation", "lab-setup")) {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("lab-setup")) {
             for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
                 ITestDevice device = testInfo.getContext().getDevice(deviceName);
                 CLog.d("Starting setup for device: '%s'", device.getSerialNumber());
@@ -287,7 +287,7 @@ public class InvocationExecution implements IInvocationExecution {
                     InvocationMetricKey.SETUP_PAIR, start, end);
         }
         long startPreparer = System.currentTimeMillis();
-        try (CloseableTraceScope ignored = new CloseableTraceScope("invocation", "test-setup")) {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("test-setup")) {
             runPreparersSetup(testInfo, config, listener);
 
             // After all the individual setup, make the multi-devices setup
@@ -555,15 +555,18 @@ public class InvocationExecution implements IInvocationExecution {
             return;
         }
         long start = System.currentTimeMillis();
-        customizeDevicePreInvocation(config, context);
-        for (String deviceName : context.getDeviceConfigNames()) {
-            ITestDevice device = context.getDevice(deviceName);
+        try (CloseableTraceScope ignore = new CloseableTraceScope("device_pre_invocation_setup")) {
+            customizeDevicePreInvocation(config, context);
+            for (String deviceName : context.getDeviceConfigNames()) {
+                ITestDevice device = context.getDevice(deviceName);
 
-            CLog.d("Starting device pre invocation setup for : '%s'", device.getSerialNumber());
-            if (device instanceof ITestLoggerReceiver) {
-                ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+                CLog.d("Starting device pre invocation setup for : '%s'", device.getSerialNumber());
+                if (device instanceof ITestLoggerReceiver) {
+                    ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+                }
+                device.preInvocationSetup(
+                        context.getBuildInfo(deviceName), context.getAttributes());
             }
-            device.preInvocationSetup(context.getBuildInfo(deviceName), context.getAttributes());
         }
         // Also report device pre invocation into setup
         InvocationMetricLogger.addInvocationPairMetrics(
@@ -685,7 +688,7 @@ public class InvocationExecution implements IInvocationExecution {
         Throwable deferredThrowable;
         long start = System.currentTimeMillis();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.TEARDOWN_START, start);
-        try (CloseableTraceScope ignored = new CloseableTraceScope("invocation", "test-teardown")) {
+        try {
             List<IMultiTargetPreparer> multiPreparers = config.getMultiTargetPreparers();
             deferredThrowable =
                     runMultiTargetPreparersTearDown(
@@ -882,8 +885,7 @@ public class InvocationExecution implements IInvocationExecution {
         Runtime.getRuntime().addShutdownHook(reporterThread);
         TestInvocation.printStageDelimiter(Stage.TEST, false);
         long start = System.currentTimeMillis();
-        try (CloseableTraceScope ignored =
-                new CloseableTraceScope("invocation", "test-execution")) {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("test-execution")) {
             GetPreviousPassedHelper previousPassHelper = new GetPreviousPassedHelper();
             // Add new exclude filters to global filters
             Set<String> previousPassedFilters = previousPassHelper.getPreviousPassedFilters(config);
