@@ -23,6 +23,8 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGrou
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.invoker.proto.InvocationContext.Context;
+import com.android.tradefed.invoker.tracing.ActiveTrace;
+import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ActionInProgress;
@@ -581,6 +583,11 @@ public class ProtoResultParser {
                             type = LogDataType.ZIP;
                         }
                         log("Logging %s from subprocess: %s ", entry.getKey(), file.getPath());
+                        if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
+                                && LogDataType.PERFETTO.equals(type)) {
+                            CLog.d("Log the subprocess trace");
+                            TracingLogger.getActiveTrace().addSubprocessTrace(path);
+                        }
                         logger.testLog(mFilePrefix + entry.getKey(), type, source);
                     }
                 } else {
