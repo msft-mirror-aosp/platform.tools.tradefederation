@@ -603,7 +603,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             mStartTime = System.currentTimeMillis();
             ITestInvocation instance = getInvocation();
-            try (CloseableTraceScope ignore = new CloseableTraceScope("invocation", "init")) {
+            try (CloseableTraceScope ignore = new CloseableTraceScope("init")) {
                 for (final IScheduledInvocationListener listener : mListeners) {
                     try {
                         listener.invocationInitiated(mInvocationContext);
@@ -615,8 +615,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             Exception trackDeviceException = null;
             boolean lastInvocationSet = false;
-            try (CloseableTraceScope ignore =
-                    new CloseableTraceScope("invocation", "test-invocation")) {
+            try (CloseableTraceScope ignore = new CloseableTraceScope("test-invocation")) {
                 // Copy the command options invocation attributes to the invocation if it has not
                 // been already done.
                 if (!config.getConfigurationDescription().shouldUseSandbox()
@@ -663,8 +662,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         "Updating command %d with elapsed time %d ms",
                         mCmd.getCommandTracker().getId(),
                         elapsedTime);
-                try (CloseableTraceScope ignore =
-                        new CloseableTraceScope("invocation", "complete")) {
+                try (CloseableTraceScope ignore = new CloseableTraceScope("finalize_invocation")) {
                     // remove invocation thread first so another invocation can be started on device
                     // when freed
                     removeInvocationThread(this);
