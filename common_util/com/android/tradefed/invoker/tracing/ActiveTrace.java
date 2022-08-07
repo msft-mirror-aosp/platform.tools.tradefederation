@@ -20,6 +20,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.UUID;
@@ -34,6 +35,7 @@ import perfetto.protos.PerfettoTrace.TrackEvent;
 /** Main class helping to describe and manage an active trace. */
 public class ActiveTrace {
 
+    public static final String TRACE_KEY = "invocation-trace";
     private final long pid;
     // private final long tid;
     private final long traceUuid;
@@ -54,14 +56,30 @@ public class ActiveTrace {
     }
 
     /** Start the tracing and report the metadata of the trace. */
-    public void startTracing() {
+    public void startTracing(boolean isSubprocess) {
+        if (mTraceOutput != null) {
+            throw new IllegalStateException("Tracing was already started.");
+        }
         try {
-            mTraceOutput = FileUtil.createTempFile("invocation-trace", ".perfetto-trace");
+            mTraceOutput = FileUtil.createTempFile(TRACE_KEY, ".perfetto-trace");
         } catch (IOException e) {
             CLog.e(e);
         }
         // Initialize all the trace metadata
-        createMainInvocationTracker((int) pid, traceUuid);
+        createMainInvocationTracker((int) pid, traceUuid, isSubprocess);
+    }
+
+    /** Provide the trace file from a subprocess to be added to the parent. */
+    public void addSubprocessTrace(File trace) {
+        if (mTraceOutput == null) {
+            return;
+        }
+
+        try (FileInputStream stream = new FileInputStream(trace)) {
+            FileUtil.writeToFile(stream, mTraceOutput, true);
+        } catch (IOException e) {
+            CLog.e(e);
+        }
     }
 
     /**
@@ -98,14 +116,21 @@ public class ActiveTrace {
         return trace;
     }
 
-    private void createMainInvocationTracker(int pid, long traceUuid) {
+    private String createProcessName(boolean isSubprocess) {
+        if (isSubprocess) {
+            return "subprocess-test-invocation";
+        }
+        return "test-invocation";
+    }
+
+    private void createMainInvocationTracker(int pid, long traceUuid, boolean isSubprocess) {
         TrackDescriptor.Builder descriptor =
                 TrackDescriptor.newBuilder()
                         .setUuid(traceUuid)
                         .setProcess(
                                 ProcessDescriptor.newBuilder()
                                         .setPid(pid)
-                                        .setProcessName("test-invocation"));
+                                        .setProcessName(createProcessName(isSubprocess)));
 
         TracePacket.Builder traceTrackDescriptor =
                 TracePacket.newBuilder()
