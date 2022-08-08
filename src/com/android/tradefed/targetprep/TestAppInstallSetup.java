@@ -135,10 +135,9 @@ public class TestAppInstallSetup extends BaseTargetPreparer
                     + "including leading dash, e.g. \"-d\"")
     private Collection<String> mInstallArgs = new ArrayList<>();
 
-    @Option(
-            name = "force-queryable",
+    @Option(name = "force-queryable",
             description = "Whether apks should be installed as force queryable.")
-    private Boolean mForceQueryable = null;
+    private boolean mForceQueryable = true;
 
     @Option(
             name = "cleanup-apks",
@@ -385,15 +384,6 @@ public class TestAppInstallSetup extends BaseTargetPreparer
             }
         }
 
-        if (mForceQueryable == null) {
-            // Do not add --force-queryable if the device api level >= 34. Ideally,
-            // checkApiLevelAgainstNextRelease(34) should only return true for api 34 devices. But,
-            // it also returns true for branches like the tm-xx-plus-aosp. Adding another condition
-            // ro.build.id==TM to handle this special case.
-            mForceQueryable =
-                    !getDevice().checkApiLevelAgainstNextRelease(34)
-                            || "TM".equals(getDevice().getBuildAlias());
-        }
         if (mForceQueryable && getDevice().isAppEnumerationSupported()) {
             mInstallArgs.add("--force-queryable");
         }
