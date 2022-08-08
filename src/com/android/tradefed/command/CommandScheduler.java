@@ -650,7 +650,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         e);
                 setLastInvocationExitCode(ExitCode.FATAL_HOST_ERROR, e);
                 lastInvocationSet = true;
-                shutdown();
+                shutdown(true);
             } catch (Throwable e) {
                 setLastInvocationExitCode(ExitCode.THROWABLE_EXCEPTION, e);
                 lastInvocationSet = true;
@@ -1908,16 +1908,17 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return mCommandTimer.isShutdown() || mShutdownOnEmpty;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public synchronized void shutdown() {
+    public synchronized void shutdown(boolean notifyStop) {
         setHostState(HostState.QUITTING);
         doShutdown();
-        String reason = "Tradefed is notified to stop";
-        for (InvocationThread thread : mInvocationThreadMap.values()) {
-            thread.notifyInvocationStop(reason);
+
+        if (notifyStop) {
+            String reason = "Tradefed is notified to stop";
+            for (InvocationThread thread : mInvocationThreadMap.values()) {
+                thread.notifyInvocationStop(reason);
+            }
         }
     }
 
