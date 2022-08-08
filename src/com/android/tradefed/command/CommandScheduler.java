@@ -699,15 +699,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 if (trace != null) {
                     File traceFile = trace.finalizeTracing();
                     if (traceFile != null) {
-                        try (FileInputStreamSource source =
-                                new FileInputStreamSource(traceFile, true)) {
-                            LogSaverResultForwarder.logFile(
-                                    config.getTestInvocationListeners(),
-                                    config.getLogSaver(),
-                                    source,
-                                    ActiveTrace.TRACE_KEY,
-                                    LogDataType.PERFETTO);
-                        }
+                        logTrace(traceFile, config);
                     }
                 }
                 if (config.getCommandOptions().reportInvocationComplete()) {
@@ -720,6 +712,38 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 }
                 clearTerminating(this);
             }
+        }
+
+        /** Special handling to send the trace file from subprocess when needed. */
+        private void logTrace(File traceFile, IConfiguration config) {
+            // TODO: Enable this after next deploy
+            /*if (config.getCommandOptions()
+                    .getInvocationData()
+                    .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)) {
+                CLog.logAndDisplay(LogLevel.INFO, "Sending trace from subprocess");
+                LogFile perfettoTrace =
+                        new LogFile(traceFile.getAbsolutePath(), null, LogDataType.PERFETTO);
+                for (ITestInvocationListener listener : config.getTestInvocationListeners()) {
+                    try {
+                        if (listener instanceof ILogSaverListener) {
+                            ((ILogSaverListener) listener)
+                                    .logAssociation(ActiveTrace.TRACE_KEY, perfettoTrace);
+                        }
+                    } catch (Exception e) {
+                        CLog.logAndDisplay(LogLevel.ERROR, e.getMessage());
+                        CLog.e(e);
+                    }
+                }
+            } else {*/
+                try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
+                    LogSaverResultForwarder.logFile(
+                            config.getTestInvocationListeners(),
+                            config.getLogSaver(),
+                            source,
+                            ActiveTrace.TRACE_KEY,
+                            LogDataType.PERFETTO);
+                }
+            //}
         }
 
         /** Check the number of thread in the ThreadGroup, only one should exists (itself). */
@@ -1704,10 +1728,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             return execCmd.getCommandTracker().getId();
         } else {
             // Log adb output just to help debug
-            String adbOutput =
-                    ((DeviceManager) GlobalConfiguration.getDeviceManagerInstance())
-                            .executeGlobalAdbCommand("devices");
-            CLog.e("'adb devices' output:\n%s", adbOutput);
+            if (getDeviceManager() instanceof DeviceManager) {
+                String adbOutput =
+                        ((DeviceManager) getDeviceManager()).executeGlobalAdbCommand("devices");
+                CLog.e("'adb devices' output:\n%s", adbOutput);
+            }
             throw new NoDeviceException(
                     String.format(
                             "No device match for allocation. Reason: %s.\ncommand: %s",

@@ -21,6 +21,7 @@ import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.TimeoutException;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
@@ -82,27 +83,31 @@ public class BackgroundDeviceAction extends Thread {
         String separator = String.format(
                 "\n========== beginning of new [%s] output ==========\n", mDescriptor);
         while (!isCancelled()) {
-            if (mLogStartDelay > 0) {
-                CLog.d("Sleep for %d before starting %s for %s.", mLogStartDelay, mDescriptor,
-                        mTestDevice.getSerialNumber());
-                getRunUtil().sleep(mLogStartDelay);
-            }
-            blockUntilOnlineNoThrow();
-            // check again if the operation has been cancelled after the wait for online
-            if (isCancelled()) {
-                break;
-            }
-            CLog.d("Starting %s for %s.", mDescriptor, mTestDevice.getSerialNumber());
-            mReceiver.addOutput(separator.getBytes(), 0, separator.length());
-            try {
-                mTestDevice.getIDevice().executeShellCommand(mCommand, mReceiver,
-                        0, TimeUnit.MILLISECONDS);
-            } catch (AdbCommandRejectedException e) {
-                // For command rejected wait a bit to let the device reach a stable state again.
-                getRunUtil().sleep(ONLINE_POLL_INTERVAL_MS);
-                waitForDeviceRecovery(e.getClass().getName());
-            } catch (IOException | ShellCommandUnresponsiveException | TimeoutException e) {
-                waitForDeviceRecovery(e.getClass().getName());
+            try (CloseableTraceScope ignore = new CloseableTraceScope()) {
+                if (mLogStartDelay > 0) {
+                    CLog.d(
+                            "Sleep for %d before starting %s for %s.",
+                            mLogStartDelay, mDescriptor, mTestDevice.getSerialNumber());
+                    getRunUtil().sleep(mLogStartDelay);
+                }
+                blockUntilOnlineNoThrow();
+                // check again if the operation has been cancelled after the wait for online
+                if (isCancelled()) {
+                    break;
+                }
+                CLog.d("Starting %s for %s.", mDescriptor, mTestDevice.getSerialNumber());
+                mReceiver.addOutput(separator.getBytes(), 0, separator.length());
+                try {
+                    mTestDevice
+                            .getIDevice()
+                            .executeShellCommand(mCommand, mReceiver, 0, TimeUnit.MILLISECONDS);
+                } catch (AdbCommandRejectedException e) {
+                    // For command rejected wait a bit to let the device reach a stable state again.
+                    getRunUtil().sleep(ONLINE_POLL_INTERVAL_MS);
+                    waitForDeviceRecovery(e.getClass().getName());
+                } catch (IOException | ShellCommandUnresponsiveException | TimeoutException e) {
+                    waitForDeviceRecovery(e.getClass().getName());
+                }
             }
         }
     }
