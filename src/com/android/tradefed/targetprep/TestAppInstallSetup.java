@@ -33,6 +33,7 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
@@ -77,7 +78,8 @@ import java.util.concurrent.TimeUnit;
  * the first.
  */
 @OptionClass(alias = "tests-zip-app")
-public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiReceiver {
+public class TestAppInstallSetup extends BaseTargetPreparer
+        implements IAbiReceiver, IDiscoverDependencies {
 
     /** The mode the apk should be install in. */
     private enum InstallMode {
@@ -133,9 +135,10 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
                     + "including leading dash, e.g. \"-d\"")
     private Collection<String> mInstallArgs = new ArrayList<>();
 
-    @Option(name = "force-queryable",
+    @Option(
+            name = "force-queryable",
             description = "Whether apks should be installed as force queryable.")
-    private boolean mForceQueryable = true;
+    private Boolean mForceQueryable = null;
 
     @Option(
             name = "cleanup-apks",
@@ -382,6 +385,15 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
             }
         }
 
+        if (mForceQueryable == null) {
+            // Do not add --force-queryable if the device api level >= 34. Ideally,
+            // checkApiLevelAgainstNextRelease(34) should only return true for api 34 devices. But,
+            // it also returns true for branches like the tm-xx-plus-aosp. Adding another condition
+            // ro.build.id==TM to handle this special case.
+            mForceQueryable =
+                    !getDevice().checkApiLevelAgainstNextRelease(34)
+                            || "TM".equals(getDevice().getBuildAlias());
+        }
         if (mForceQueryable && getDevice().isAppEnumerationSupported()) {
             mInstallArgs.add("--force-queryable");
         }
@@ -823,5 +835,18 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
         }
 
         return incrementalInstallSessionBuilder;
+    }
+
+    @Override
+    public Set<String> reportDependencies() {
+        Set<String> deps = new HashSet<String>();
+        for (File f : getTestsFileName()) {
+            if (!f.exists()) deps.add(f.getName());
+        }
+        for (String testAppNames : mSplitApkFileNames) {
+            List<String> apkNames = Arrays.asList(testAppNames.split(","));
+            deps.addAll(apkNames);
+        }
+        return deps;
     }
 }

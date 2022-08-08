@@ -83,6 +83,7 @@ import com.android.tradefed.service.management.DeviceManagementGrpcServer;
 import com.android.tradefed.service.management.TestInvocationManagementServer;
 import com.android.tradefed.targetprep.DeviceFailedToBootError;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.SubprocessTfLauncher;
 import com.android.tradefed.testtype.suite.retry.RetryRescheduler;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
@@ -147,6 +148,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     /** map of device to active invocation threads */
     private Map<IInvocationContext, InvocationThread> mInvocationThreadMap;
+    /** Track invocation that are done and terminating */
+    private Map<IInvocationContext, InvocationThread> mInvocationThreadMapTerminating;
 
     /** timer for scheduling commands to be re-queued for execution */
     private ScheduledThreadPoolExecutor mCommandTimer;
@@ -597,11 +600,14 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 long pid = ProcessHandle.current().pid();
                 long tid = Thread.currentThread().getId();
                 ActiveTrace trace = TracingLogger.createActiveTrace(pid, tid);
-                trace.startTracing();
+                trace.startTracing(
+                        config.getCommandOptions()
+                                .getInvocationData()
+                                .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME));
             }
             mStartTime = System.currentTimeMillis();
             ITestInvocation instance = getInvocation();
-            try (CloseableTraceScope ignore = new CloseableTraceScope("invocation", "init")) {
+            try (CloseableTraceScope ignore = new CloseableTraceScope("init")) {
                 for (final IScheduledInvocationListener listener : mListeners) {
                     try {
                         listener.invocationInitiated(mInvocationContext);
@@ -613,8 +619,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             Exception trackDeviceException = null;
             boolean lastInvocationSet = false;
-            try (CloseableTraceScope ignore =
-                    new CloseableTraceScope("invocation", "test-invocation")) {
+            try (CloseableTraceScope ignore = new CloseableTraceScope("test-invocation")) {
                 // Copy the command options invocation attributes to the invocation if it has not
                 // been already done.
                 if (!config.getConfigurationDescription().shouldUseSandbox()
@@ -661,8 +666,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         "Updating command %d with elapsed time %d ms",
                         mCmd.getCommandTracker().getId(),
                         elapsedTime);
-                try (CloseableTraceScope ignore =
-                        new CloseableTraceScope("invocation", "complete")) {
+                try (CloseableTraceScope ignore = new CloseableTraceScope("finalize_invocation")) {
                     // remove invocation thread first so another invocation can be started on device
                     // when freed
                     removeInvocationThread(this);
@@ -701,7 +705,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                                     config.getTestInvocationListeners(),
                                     config.getLogSaver(),
                                     source,
-                                    "invocation-trace",
+                                    ActiveTrace.TRACE_KEY,
                                     LogDataType.PERFETTO);
                         }
                     }
@@ -714,6 +718,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     config.getLogOutput().closeLog();
                     LogRegistry.getLogRegistry().unregisterLogger();
                 }
+                clearTerminating(this);
             }
         }
 
@@ -975,6 +980,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         mSleepingCommands = new HashSet<>();
         mExecutingCommands = new HashSet<>();
         mInvocationThreadMap = new HashMap<IInvocationContext, InvocationThread>();
+        mInvocationThreadMapTerminating = new HashMap<IInvocationContext, InvocationThread>();
         // use a ScheduledThreadPoolExecutorTimer as a single-threaded timer. This class
         // is used instead of a java.util.Timer because it offers advanced shutdown options
         mCommandTimer = new ScheduledThreadPoolExecutor(1);
@@ -1141,6 +1147,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             CLog.i("Waiting for invocation threads to complete");
             waitForAllInvocationThreads();
+            waitForTerminatingInvocationThreads();
             exit(manager);
             cleanUp();
             CLog.logAndDisplay(LogLevel.INFO, "All done");
@@ -1257,11 +1264,22 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     /** Wait until all invocation threads complete. */
-    protected void waitForAllInvocationThreads() {
+    private void waitForAllInvocationThreads() {
         List<InvocationThread> threadListCopy;
         synchronized (this) {
-            threadListCopy = new ArrayList<InvocationThread>(mInvocationThreadMap.size());
+            threadListCopy = new ArrayList<>();
             threadListCopy.addAll(mInvocationThreadMap.values());
+        }
+        for (Thread thread : threadListCopy) {
+            waitForThread(thread);
+        }
+    }
+
+    private void waitForTerminatingInvocationThreads() {
+        List<InvocationThread> threadListCopy;
+        synchronized (this) {
+            threadListCopy = new ArrayList<>();
+            threadListCopy.addAll(mInvocationThreadMapTerminating.values());
         }
         for (Thread thread : threadListCopy) {
             waitForThread(thread);
@@ -1851,6 +1869,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     /** Removes a {@link InvocationThread} from the active list. */
     private synchronized void removeInvocationThread(InvocationThread invThread) {
         mInvocationThreadMap.remove(invThread.getInvocationContext());
+        mInvocationThreadMapTerminating.put(invThread.getInvocationContext(), invThread);
+    }
+
+    private synchronized void clearTerminating(InvocationThread invThread) {
+        mInvocationThreadMapTerminating.remove(invThread.getInvocationContext());
     }
 
     private synchronized void throwIfDeviceInInvocationThread(List<ITestDevice> devices) {
