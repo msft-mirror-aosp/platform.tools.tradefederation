@@ -147,14 +147,23 @@ public interface ICommandScheduler {
 
     /**
      * Attempt to gracefully shutdown the command scheduler.
-     * <p/>
-     * Clears commands waiting to be tested, and requests that all invocations in progress
-     * shut down gracefully.
-     * <p/>
-     * After shutdown is called, the scheduler main loop will wait for all invocations in progress
-     * to complete before exiting completely.
+     *
+     * <p>Clears commands waiting to be tested, and requests that all invocations in progress shut
+     * down gracefully.
+     *
+     * <p>After shutdown is called, the scheduler main loop will wait for all invocations in
+     * progress to complete before exiting completely.
      */
-    public void shutdown();
+    default void shutdown() {
+        shutdown(false);
+    }
+
+    /**
+     * Attempt to gracefully shutdown the command scheduler.
+     *
+     * @param notifyStop if true, notifies invocations of TF shutdown.
+     */
+    public void shutdown(boolean notifyStop);
 
     /**
      * Similar to {@link #shutdown()}, but will instead wait for all commands to be executed
