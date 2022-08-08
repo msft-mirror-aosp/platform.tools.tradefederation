@@ -19,6 +19,8 @@ package com.android.tradefed.config;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.targetprep.ILabPreparer;
+import com.android.tradefed.targetprep.ITargetPreparer;
 
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
@@ -346,6 +348,22 @@ public class ConfigurationDef {
         config.setConfigurationObjectList(Configuration.DEVICE_NAME, deviceObjectList);
         injectOptions(config, mOptionList);
 
+        List<ITargetPreparer> notILab = new ArrayList<>();
+        for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+            for (ITargetPreparer labPreparer : deviceConfig.getLabPreparers()) {
+                if (!(labPreparer instanceof ILabPreparer)) {
+                    notILab.add(labPreparer);
+                }
+            }
+        }
+        if (!notILab.isEmpty()) {
+            throw new ConfigurationException(
+                    String.format(
+                            "The following were specified as lab_preparer "
+                                    + "but aren't ILabPreparer: %s",
+                            notILab),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
         return config;
     }
 
