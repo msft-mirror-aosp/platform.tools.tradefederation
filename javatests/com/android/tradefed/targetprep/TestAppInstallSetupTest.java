@@ -316,6 +316,7 @@ public class TestAppInstallSetupTest {
 
     @Test
     public void testSetup_forceQueryable() throws Exception {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(Mockito.eq(34))).thenReturn(false);
         when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
         when(mMockTestDevice.installPackage(
                         Mockito.eq(fakeApk), Mockito.eq(true), Mockito.eq("--force-queryable")))
@@ -335,7 +336,22 @@ public class TestAppInstallSetupTest {
     }
 
     @Test
+    public void testSetup_deviceApi34_forceQueryableIsFalse() throws Exception {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(Mockito.eq(34))).thenReturn(true);
+        when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
+        when(mMockTestDevice.installPackage(Mockito.eq(fakeApk), Mockito.eq(true)))
+                .thenReturn(null);
+        when(mMockTestDevice.installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true)))
+                .thenReturn(null);
+
+        mPrep.setUp(mTestInfo);
+        verify(mMockTestDevice, atLeastOnce())
+                .installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true));
+    }
+
+    @Test
     public void testSetup_forceQueryableIsFalse() throws Exception {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(Mockito.eq(34))).thenReturn(false);
         when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
         when(mMockTestDevice.installPackage(Mockito.eq(fakeApk), Mockito.eq(true)))
                 .thenReturn(null);
