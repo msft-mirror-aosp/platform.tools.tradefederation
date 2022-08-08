@@ -592,8 +592,14 @@ public class ProtoResultParser {
                     }
                 } else {
                     log(
-                            "Logging %s from subprocess. url: %s, path: %s",
-                            entry.getKey(), file.getUrl(), file.getPath());
+                            "Logging %s from subprocess. url: %s, path: %s [exists: %s]",
+                            entry.getKey(), file.getUrl(), file.getPath(), path.exists());
+                    if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
+                            && LogDataType.PERFETTO.equals(file.getType())
+                            && path.exists()) {
+                        CLog.d("Log the subprocess trace");
+                        TracingLogger.getActiveTrace().addSubprocessTrace(path);
+                    }
                     logger.logAssociation(mFilePrefix + entry.getKey(), file);
                 }
             } catch (InvalidProtocolBufferException e) {
