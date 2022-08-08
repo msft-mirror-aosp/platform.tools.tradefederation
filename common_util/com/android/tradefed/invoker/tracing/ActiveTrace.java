@@ -24,6 +24,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.UUID;
+import java.util.zip.GZIPInputStream;
 
 import perfetto.protos.PerfettoTrace.DebugAnnotation;
 import perfetto.protos.PerfettoTrace.ProcessDescriptor;
@@ -76,6 +77,12 @@ public class ActiveTrace {
         }
 
         try (FileInputStream stream = new FileInputStream(trace)) {
+            try (GZIPInputStream gzip = new GZIPInputStream(stream)) {
+                FileUtil.writeToFile(gzip, mTraceOutput, true);
+                return;
+            } catch (IOException e) {
+                CLog.d("%s isn't gzip.", trace);
+            }
             FileUtil.writeToFile(stream, mTraceOutput, true);
         } catch (IOException e) {
             CLog.e(e);
