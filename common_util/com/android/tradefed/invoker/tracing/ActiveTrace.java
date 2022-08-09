@@ -23,11 +23,14 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 
 import perfetto.protos.PerfettoTrace.DebugAnnotation;
 import perfetto.protos.PerfettoTrace.ProcessDescriptor;
+import perfetto.protos.PerfettoTrace.ThreadDescriptor;
 import perfetto.protos.PerfettoTrace.Trace;
 import perfetto.protos.PerfettoTrace.TracePacket;
 import perfetto.protos.PerfettoTrace.TrackDescriptor;
@@ -38,9 +41,10 @@ public class ActiveTrace {
 
     public static final String TRACE_KEY = "invocation-trace";
     private final long pid;
-    // private final long tid;
+    private final long tid;
     private final long traceUuid;
     private final int uid = 5555; // TODO: collect a real uid
+    private final Map<Long, Long> mThreadToTracker;
     // File where the final trace gets outputed
     private File mTraceOutput;
 
@@ -52,8 +56,9 @@ public class ActiveTrace {
      */
     public ActiveTrace(long pid, long tid) {
         this.pid = pid;
-        // this.tid = tid;
+        this.tid = tid;
         this.traceUuid = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
+        mThreadToTracker = new HashMap<>();
     }
 
     /** Start the tracing and report the metadata of the trace. */
@@ -67,26 +72,36 @@ public class ActiveTrace {
             CLog.e(e);
         }
         // Initialize all the trace metadata
-        createMainInvocationTracker((int) pid, traceUuid, isSubprocess);
+        createMainInvocationTracker((int) pid, (int) tid, traceUuid, isSubprocess);
     }
 
     /** Provide the trace file from a subprocess to be added to the parent. */
-    public void addSubprocessTrace(File trace) {
+    public void addSubprocessTrace(File subTrace) {
         if (mTraceOutput == null) {
             return;
         }
 
-        try (FileInputStream stream = new FileInputStream(trace)) {
+        try (FileInputStream stream = new FileInputStream(subTrace)) {
             try (GZIPInputStream gzip = new GZIPInputStream(stream)) {
+                CLog.logAndDisplay(LogLevel.DEBUG, "merging with gzipped %s", subTrace);
                 FileUtil.writeToFile(gzip, mTraceOutput, true);
                 return;
             } catch (IOException e) {
-                CLog.d("%s isn't gzip.", trace);
+                CLog.logAndDisplay(LogLevel.DEBUG, "%s isn't gzip.", subTrace);
             }
+        } catch (IOException e) {
+            CLog.e(e);
+        }
+
+        try (FileInputStream stream = new FileInputStream(subTrace)) {
             FileUtil.writeToFile(stream, mTraceOutput, true);
         } catch (IOException e) {
             CLog.e(e);
         }
+    }
+
+    public void reportTraceEvent(String categories, String name, TrackEvent.Type type) {
+        reportTraceEvent(categories, name, (int) tid, null, type);
     }
 
     /**
@@ -96,7 +111,18 @@ public class ActiveTrace {
      * @param name Event name
      * @param type Type of the event being reported
      */
-    public void reportTraceEvent(String categories, String name, TrackEvent.Type type) {
+    public void reportTraceEvent(
+            String categories, String name, int threadId, String threadName, TrackEvent.Type type) {
+        long traceIdentifier = traceUuid;
+        if (threadId != this.tid) {
+            if (mThreadToTracker.containsKey(Long.valueOf(threadId))) {
+                traceIdentifier = mThreadToTracker.get(Long.valueOf(threadId));
+            } else {
+                traceIdentifier = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
+                createThreadTracker((int) pid, threadId, threadName, traceIdentifier);
+                mThreadToTracker.put(Long.valueOf(threadId), Long.valueOf(traceIdentifier));
+            }
+        }
         TracePacket.Builder tracePacket =
                 TracePacket.newBuilder()
                         .setTrustedUid(uid)
@@ -104,9 +130,11 @@ public class ActiveTrace {
                         .setTimestamp(System.nanoTime())
                         .setTrustedPacketSequenceId(1)
                         .setSequenceFlags(1)
+                        .setProcessDescriptor(ProcessDescriptor.newBuilder().setPid((int) pid))
+                        .setThreadDescriptor(ThreadDescriptor.newBuilder().setTid(threadId))
                         .setTrackEvent(
                                 TrackEvent.newBuilder()
-                                        .setTrackUuid(traceUuid)
+                                        .setTrackUuid(traceIdentifier)
                                         .setName(name)
                                         .setType(type)
                                         .addCategories(categories)
@@ -130,14 +158,43 @@ public class ActiveTrace {
         return "test-invocation";
     }
 
-    private void createMainInvocationTracker(int pid, long traceUuid, boolean isSubprocess) {
+    private void createMainInvocationTracker(
+            int pid, int tid, long traceUuid, boolean isSubprocess) {
         TrackDescriptor.Builder descriptor =
                 TrackDescriptor.newBuilder()
                         .setUuid(traceUuid)
+                        .setName(createProcessName(isSubprocess))
+                        .setThread(
+                                ThreadDescriptor.newBuilder()
+                                        .setTid(tid)
+                                        .setThreadName("invocation-thread")
+                                        .setPid(pid))
                         .setProcess(
                                 ProcessDescriptor.newBuilder()
                                         .setPid(pid)
                                         .setProcessName(createProcessName(isSubprocess)));
+
+        TracePacket.Builder traceTrackDescriptor =
+                TracePacket.newBuilder()
+                        .setTrustedUid(uid)
+                        .setTimestamp(System.nanoTime())
+                        .setTrustedPacketSequenceId(1)
+                        .setSequenceFlags(1)
+                        .setTrustedPid(pid)
+                        .setTrackDescriptor(descriptor.build());
+
+        writeToTrace(traceTrackDescriptor.build());
+    }
+
+    private void createThreadTracker(int pid, int tid, String threadName, long traceUuid) {
+        TrackDescriptor.Builder descriptor =
+                TrackDescriptor.newBuilder()
+                        .setUuid(traceUuid)
+                        .setThread(
+                                ThreadDescriptor.newBuilder()
+                                        .setTid(tid)
+                                        .setThreadName(threadName)
+                                        .setPid(pid));
 
         TracePacket.Builder traceTrackDescriptor =
                 TracePacket.newBuilder()

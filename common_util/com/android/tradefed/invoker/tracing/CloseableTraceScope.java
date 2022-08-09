@@ -24,7 +24,12 @@ public class CloseableTraceScope implements AutoCloseable {
     private final String category;
     private final String name;
 
-    /** Constructor. */
+    /**
+     * Report a scoped trace.
+     *
+     * @param category The category of the operation
+     * @param name The name for reporting the section
+     */
     public CloseableTraceScope(String category, String name) {
         this.category = category;
         this.name = name;
@@ -32,12 +37,20 @@ public class CloseableTraceScope implements AutoCloseable {
         if (trace == null) {
             return;
         }
-        trace.reportTraceEvent(category, name, TrackEvent.Type.TYPE_SLICE_BEGIN);
+        int threadId = (int) Thread.currentThread().getId();
+        String threadName = Thread.currentThread().getName();
+        trace.reportTraceEvent(
+                category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_BEGIN);
     }
 
     /** Constructor. */
     public CloseableTraceScope(String name) {
         this(DEFAULT_CATEGORY, name);
+    }
+
+    /** Constructor for reporting scope from threads. */
+    public CloseableTraceScope() {
+        this(DEFAULT_CATEGORY, Thread.currentThread().getName());
     }
 
     @Override
@@ -46,6 +59,9 @@ public class CloseableTraceScope implements AutoCloseable {
         if (trace == null) {
             return;
         }
-        trace.reportTraceEvent(category, name, TrackEvent.Type.TYPE_SLICE_END);
+        int threadId = (int) Thread.currentThread().getId();
+        String threadName = Thread.currentThread().getName();
+        trace.reportTraceEvent(
+                category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_END);
     }
 }
