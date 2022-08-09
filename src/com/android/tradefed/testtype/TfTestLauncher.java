@@ -96,6 +96,9 @@ public class TfTestLauncher extends SubprocessTfLauncher {
             + "Can be repeated.")
     private List<String> mSubApkPath = new ArrayList<String>();
 
+    @Option(name = "skip-temp-dir-check", description = "Whether or not to skip temp dir check.")
+    private boolean mSkipTmpDirCheck = false;
+
     // The regex pattern of temp files to be found in the temporary dir of the subprocess.
     // Any file not matching the patterns, or multiple files in the temporary dir match the same
     // pattern, is considered as test failure.
@@ -228,6 +231,9 @@ public class TfTestLauncher extends SubprocessTfLauncher {
      */
     @VisibleForTesting
     protected void testTmpDirClean(File tmpDir, ITestInvocationListener listener) {
+        if (mSkipTmpDirCheck) {
+            return;
+        }
         listener.testRunStarted("temporaryFiles", 1);
         TestDescription tid = new TestDescription("temporary-files", "testIfClean");
         listener.testStarted(tid);
