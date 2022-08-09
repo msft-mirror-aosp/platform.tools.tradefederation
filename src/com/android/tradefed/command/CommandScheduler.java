@@ -83,6 +83,7 @@ import com.android.tradefed.service.management.DeviceManagementGrpcServer;
 import com.android.tradefed.service.management.TestInvocationManagementServer;
 import com.android.tradefed.targetprep.DeviceFailedToBootError;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.SubprocessTfLauncher;
 import com.android.tradefed.testtype.suite.retry.RetryRescheduler;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
@@ -599,7 +600,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 long pid = ProcessHandle.current().pid();
                 long tid = Thread.currentThread().getId();
                 ActiveTrace trace = TracingLogger.createActiveTrace(pid, tid);
-                trace.startTracing();
+                trace.startTracing(
+                        config.getCommandOptions()
+                                .getInvocationData()
+                                .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME));
             }
             mStartTime = System.currentTimeMillis();
             ITestInvocation instance = getInvocation();
@@ -646,7 +650,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         e);
                 setLastInvocationExitCode(ExitCode.FATAL_HOST_ERROR, e);
                 lastInvocationSet = true;
-                shutdown();
+                shutdown(true);
             } catch (Throwable e) {
                 setLastInvocationExitCode(ExitCode.THROWABLE_EXCEPTION, e);
                 lastInvocationSet = true;
@@ -701,7 +705,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                                     config.getTestInvocationListeners(),
                                     config.getLogSaver(),
                                     source,
-                                    "invocation-trace",
+                                    ActiveTrace.TRACE_KEY,
                                     LogDataType.PERFETTO);
                         }
                     }
@@ -1904,16 +1908,17 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return mCommandTimer.isShutdown() || mShutdownOnEmpty;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public synchronized void shutdown() {
+    public synchronized void shutdown(boolean notifyStop) {
         setHostState(HostState.QUITTING);
         doShutdown();
-        String reason = "Tradefed is notified to stop";
-        for (InvocationThread thread : mInvocationThreadMap.values()) {
-            thread.notifyInvocationStop(reason);
+
+        if (notifyStop) {
+            String reason = "Tradefed is notified to stop";
+            for (InvocationThread thread : mInvocationThreadMap.values()) {
+                thread.notifyInvocationStop(reason);
+            }
         }
     }
 
