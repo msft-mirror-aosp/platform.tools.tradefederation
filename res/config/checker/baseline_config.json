@@ -22,12 +22,10 @@
     "class_name": "com.android.tradefed.suite.checker.baseline.SettingsBaselineSetter",
     "namespace": "secure",
     "key": "verifier_verify_adb_installs",
-    "value": "0",
-    "experimental": true
+    "value": "0"
   },
   "clear_lock_screen": {
     "class_name": "com.android.tradefed.suite.checker.baseline.LockSettingsBaselineSetter",
-    "clear_pwds": ["0000", "1234", "12345", "private"],
-    "experimental": true
+    "clear_pwds": ["0000", "1234", "12345", "private"]
   }
 }
