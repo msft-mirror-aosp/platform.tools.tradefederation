@@ -20,6 +20,8 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -557,9 +559,15 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
      * @return An optional error message, empty if the Checker invocation was successful
      */
     protected Optional<String> runChecker(String[] checkerCommandLine) {
-        CLog.d("About to run Checker command: %s", String.join(" ", checkerCommandLine));
+        String checkerCommandLineString = String.join(" ", checkerCommandLine);
+        CLog.d("About to run Checker command: %s", checkerCommandLineString);
+        long startTime = System.currentTimeMillis();
         CommandResult result =
                 RunUtil.getDefault().runTimedCmd(CHECKER_TIMEOUT_MS, checkerCommandLine);
+        long duration = System.currentTimeMillis() - startTime;
+        CLog.i("Checker command `%s` executed in %s ms", checkerCommandLineString, duration);
+        InvocationMetricLogger.addInvocationMetrics(
+            InvocationMetricKey.ART_RUN_TEST_CHECKER_COMMAND_TIME_MS, duration);
         if (result.getStatus() != CommandStatus.SUCCESS) {
             String errorMessage;
             if (result.getStatus() == CommandStatus.TIMED_OUT) {
