@@ -145,9 +145,18 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
                     .setMessage("serial requested was null or empty.");
             responseObserver.onNext(responseBuilder.build());
             responseObserver.onCompleted();
+            return;
         }
 
         DeviceDescriptor descriptor = mDeviceManager.getDeviceDescriptor(serial);
+        if (descriptor == null) {
+            responseBuilder
+                    .setResult(Result.UNKNOWN)
+                    .setMessage("No descriptor found for serial " + serial);
+            responseObserver.onNext(responseBuilder.build());
+            responseObserver.onCompleted();
+            return;
+        }
         if (DeviceAllocationState.Allocated.equals(descriptor.getState())) {
             Result result = Result.ALREADY_ALLOCATED;
             if (mSerialToReservation.containsKey(serial)) {
