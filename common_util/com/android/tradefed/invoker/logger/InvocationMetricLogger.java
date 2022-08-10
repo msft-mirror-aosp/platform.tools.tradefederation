@@ -208,6 +208,8 @@ public class InvocationMetricLogger {
 
         LAB_PREPARER_NOT_ILAB("lab_preparer_not_ilab", true),
         TARGET_PREPARER_IS_ILAB("target_preparer_is_ilab", true),
+
+        ART_RUN_TEST_CHECKER_COMMAND_TIME_MS("art_run_test_checker_command_time_ms", true)
         ;
 
         private final String mKeyName;
