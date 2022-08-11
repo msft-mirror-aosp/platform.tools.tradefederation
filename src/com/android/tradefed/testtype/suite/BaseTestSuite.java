@@ -229,6 +229,10 @@ public class BaseTestSuite extends ITestSuite {
     private Set<IAbi> mAbis = new LinkedHashSet<>();
     private Set<DeviceFoldableState> mFoldableStates = new LinkedHashSet<>();
 
+    public void setSkipjarLoading(boolean skipJarLoading) {
+        mSkipJarLoading = skipJarLoading;
+    }
+
     /** {@inheritDoc} */
     @Override
     public LinkedHashMap<String, IConfiguration> loadTests() {
