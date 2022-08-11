@@ -262,7 +262,8 @@ public class InvocationExecution implements IInvocationExecution {
         mTrackLabPreparers = new ConcurrentHashMap<>();
         mTrackTargetPreparers = new ConcurrentHashMap<>();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_START, start);
-        try (CloseableTraceScope ignored = new CloseableTraceScope("lab-setup")) {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(InvocationMetricKey.lab_setup.name())) {
             for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
                 ITestDevice device = testInfo.getContext().getDevice(deviceName);
                 CLog.d("Starting setup for device: '%s'", device.getSerialNumber());
@@ -287,7 +288,8 @@ public class InvocationExecution implements IInvocationExecution {
                     InvocationMetricKey.SETUP_PAIR, start, end);
         }
         long startPreparer = System.currentTimeMillis();
-        try (CloseableTraceScope ignored = new CloseableTraceScope("test-setup")) {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(InvocationMetricKey.test_setup.name())) {
             runPreparersSetup(testInfo, config, listener);
 
             // After all the individual setup, make the multi-devices setup
@@ -887,7 +889,8 @@ public class InvocationExecution implements IInvocationExecution {
         Runtime.getRuntime().addShutdownHook(reporterThread);
         TestInvocation.printStageDelimiter(Stage.TEST, false);
         long start = System.currentTimeMillis();
-        try (CloseableTraceScope ignored = new CloseableTraceScope("test-execution")) {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(InvocationMetricKey.test_execution.name())) {
             GetPreviousPassedHelper previousPassHelper = new GetPreviousPassedHelper();
             // Add new exclude filters to global filters
             Set<String> previousPassedFilters = previousPassHelper.getPreviousPassedFilters(config);
