@@ -356,7 +356,8 @@ public class TestInvocation implements ITestInvocation {
                     }
                 }
                 if (bugreportName != null) {
-                    try (CloseableTraceScope ignore = new CloseableTraceScope("bugreport")) {
+                    try (CloseableTraceScope ignore =
+                            new CloseableTraceScope(InvocationMetricKey.bugreport.name())) {
                         if (context.getDevices().size() == 1 || badDevice != null) {
                             ITestDevice collectBugreport = badDevice;
                             if (collectBugreport == null) {
@@ -388,7 +389,7 @@ public class TestInvocation implements ITestInvocation {
                 }
             }
             try (CloseableTraceScope ignore =
-                    new CloseableTraceScope("check_device_availability")) {
+                    new CloseableTraceScope(InvocationMetricKey.check_device_availability.name())) {
                 // Save the device executeShellCommand logs
                 logExecuteShellCommand(context.getDevices(), listener);
                 if (exception == null) {
@@ -411,7 +412,8 @@ public class TestInvocation implements ITestInvocation {
                         System.currentTimeMillis());
                 mStatus = "tearing down";
             }
-            try (CloseableTraceScope ignore = new CloseableTraceScope("test_teardown")) {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(InvocationMetricKey.test_teardown.name())) {
                 invocationPath.doTeardown(testInfo, config, listener, exception);
             } catch (Throwable e) {
                 tearDownException = e;
@@ -425,7 +427,8 @@ public class TestInvocation implements ITestInvocation {
                             listener);
                 }
             }
-            try (CloseableTraceScope ignore = new CloseableTraceScope("log_and_release_device")) {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(InvocationMetricKey.log_and_release_device.name())) {
                 // Capture last logcat before releasing the device.
                 for (ITestDevice device : context.getDevices()) {
                     invocationPath.reportLogs(device, listener, Stage.TEARDOWN);
@@ -458,7 +461,8 @@ public class TestInvocation implements ITestInvocation {
                 addInvocationMetric(
                         InvocationMetricKey.DEVICE_DONE_TIMESTAMP, System.currentTimeMillis());
             }
-            try (CloseableTraceScope ignore = new CloseableTraceScope("cleanup")) {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(InvocationMetricKey.test_cleanup.name())) {
                 // Clean up host.
                 invocationPath.doCleanUp(context, config, exception);
                 if (mSoftStopRequestTime != null) { // soft stop occurred
@@ -932,7 +936,8 @@ public class TestInvocation implements ITestInvocation {
         TestInformation info = null;
         ResultAggregator aggregator = null;
         CleanUpInvocationFiles cleanUpThread = null;
-        try (CloseableTraceScope ignore = new CloseableTraceScope("invocation_warm_up")) {
+        try (CloseableTraceScope ignore =
+                new CloseableTraceScope(InvocationMetricKey.invocation_warm_up.name())) {
             if (!config.getInopOptions().isEmpty()) {
                 context.addInvocationAttribute(
                         "inop-options", Joiner.on(",").join(config.getInopOptions()));
@@ -1091,7 +1096,8 @@ public class TestInvocation implements ITestInvocation {
             mStatus = "resolving dynamic options";
             long startDynamic = System.currentTimeMillis();
             boolean resolverSuccess = false;
-            try (CloseableTraceScope ignored = new CloseableTraceScope("dynamic-download")) {
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(InvocationMetricKey.dynamic_download.name())) {
                 resolverSuccess =
                         invokeRemoteDynamic(context, config, listener, invocationPath, mode);
             } finally {
@@ -1114,7 +1120,8 @@ public class TestInvocation implements ITestInvocation {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.FETCH_BUILD_START, start);
             boolean providerSuccess = false;
-            try (CloseableTraceScope ignored = new CloseableTraceScope("fetch-artifact")) {
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(InvocationMetricKey.fetch_artifact.name())) {
                 providerSuccess =
                         invokeFetchBuild(info, config, rescheduler, listener, invocationPath);
             } finally {
@@ -1131,7 +1138,8 @@ public class TestInvocation implements ITestInvocation {
             if (!providerSuccess) {
                 return;
             }
-            try (CloseableTraceScope ignore = new CloseableTraceScope("start_logcat")) {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(InvocationMetricKey.start_logcat.name())) {
                 for (String deviceName : context.getDeviceConfigNames()) {
                     context.getDevice(deviceName).clearLastConnectedWifiNetwork();
                     // TODO: Report invocation error if setOptions() fails
@@ -1174,7 +1182,8 @@ public class TestInvocation implements ITestInvocation {
                 boolean startInvocationCalled = false;
                 if (shardCount != null && shardIndex != null) {
                     try (CloseableTraceScope ignored =
-                            new CloseableTraceScope("pre_sharding_required_setup")) {
+                            new CloseableTraceScope(
+                                    InvocationMetricKey.pre_sharding_required_setup.name())) {
                         deviceInit = true;
                         startInvocation(config, context, listener);
                         startInvocationCalled = true;
@@ -1208,7 +1217,8 @@ public class TestInvocation implements ITestInvocation {
                 // Apply global filters before sharding so they are taken into account.
                 config.getGlobalFilters().setUpFilters(config);
 
-                try (CloseableTraceScope ignored = new CloseableTraceScope("sharding")) {
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope(InvocationMetricKey.sharding.name())) {
                     sharding = invocationPath.shardConfig(config, info, rescheduler, listener);
                 } catch (RuntimeException unexpected) {
                     CLog.e("Exception during sharding.");

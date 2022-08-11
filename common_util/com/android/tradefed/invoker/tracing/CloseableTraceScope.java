@@ -15,6 +15,12 @@
  */
 package com.android.tradefed.invoker.tracing;
 
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+
+import com.google.common.base.Enums;
+import com.google.common.base.Optional;
+
 import perfetto.protos.PerfettoTrace.TrackEvent;
 
 /** A scoped class that allows to report tracing section via try-with-resources */
@@ -23,6 +29,7 @@ public class CloseableTraceScope implements AutoCloseable {
     private static final String DEFAULT_CATEGORY = "invocation";
     private final String category;
     private final String name;
+    private final long startTime;
 
     /**
      * Report a scoped trace.
@@ -33,6 +40,7 @@ public class CloseableTraceScope implements AutoCloseable {
     public CloseableTraceScope(String category, String name) {
         this.category = category;
         this.name = name;
+        this.startTime = System.currentTimeMillis();
         ActiveTrace trace = TracingLogger.getActiveTrace();
         if (trace == null) {
             return;
@@ -41,6 +49,7 @@ public class CloseableTraceScope implements AutoCloseable {
         String threadName = Thread.currentThread().getName();
         trace.reportTraceEvent(
                 category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_BEGIN);
+
     }
 
     /** Constructor. */
@@ -63,5 +72,11 @@ public class CloseableTraceScope implements AutoCloseable {
         String threadName = Thread.currentThread().getName();
         trace.reportTraceEvent(
                 category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_END);
+        Optional<InvocationMetricKey> optionalKey =
+                Enums.getIfPresent(InvocationMetricKey.class, name);
+        if (optionalKey.isPresent()) {
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    optionalKey.get(), startTime, System.currentTimeMillis());
+        }
     }
 }
