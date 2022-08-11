@@ -19,6 +19,7 @@ import com.android.ddmlib.IDevice;
 import com.android.ddmlib.IDevice.DeviceState;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.IDeviceMonitor;
@@ -29,6 +30,7 @@ import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
+import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.ITestLogger;
@@ -54,6 +56,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 
@@ -105,8 +108,30 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
             // Launch GCE helper script.
             long startTime = getCurrentTime();
-            launchGce(info, attributes);
-            long remainingTime = getOptions().getGceCmdTimeout() - (getCurrentTime() - startTime);
+            long remainingTime = 0;
+            try {
+                if (GlobalConfiguration.getInstance().getHostOptions().getConcurrentFlasherLimit()
+                        != null) {
+                    GlobalConfiguration.getInstance()
+                            .getHostOptions()
+                            .takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                    long queueTime = System.currentTimeMillis() - startTime;
+                    CLog.v(
+                            "Fetch and launch CVD permit obtained after %ds",
+                            TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                }
+                launchGce(info, attributes);
+                remainingTime =
+                        getOptions().getGceCmdTimeout()
+                                - (getCurrentTime() - startTime);
+            } finally {
+                if (GlobalConfiguration.getInstance().getHostOptions().getConcurrentFlasherLimit()
+                        != null) {
+                    GlobalConfiguration.getInstance()
+                            .getHostOptions()
+                            .returnPermit(PermitLimitType.CONCURRENT_FLASHER);
+                }
+            }
             if (remainingTime < 0) {
                 throw new DeviceNotAvailableException(
                         String.format(
