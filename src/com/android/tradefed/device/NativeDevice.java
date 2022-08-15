@@ -3556,6 +3556,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 doAdbReboot(mode, null);
             }
 
+            // We want to wait on a command that verifies we've rebooted.
+            // However, it is possible to issue this command too quickly and get
+            // a response before the device has begun the reboot process (see
+            // b/242200753).
+            // While not as clean as we'd like, we wait 1.5 seconds before
+            // issuing any waiting commands, as devices generally take much
+            // longer than 1.5 seconds to reboot anyway.
+            getRunUtil().sleep(1500);
+
             if (RebootMode.REBOOT_INTO_FASTBOOTD.equals(mode)
                     && getHostOptions().isFastbootdEnable()) {
                 if (!mStateMonitor.waitForDeviceFastbootd(
