@@ -138,6 +138,10 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
 
     private IBuildInfo mBuildInfo;
 
+    public TestMappingSuiteRunner() {
+        setSkipjarLoading(true);
+    }
+
     /**
      * Load the tests configuration that will be run. Each tests is defined by a {@link
      * IConfiguration} and a unique name under which it will report results. There are 2 ways to
