@@ -122,6 +122,7 @@ public class TestMappingSuiteRunnerTest {
         mRunner = new AbiTestMappingSuite();
         mRunner.setBuild(mBuildInfo);
         mRunner.setDevice(mMockDevice);
+        mRunner.setSkipjarLoading(false);
 
         mOptionSetter = new OptionSetter(mRunner);
         mOptionSetter.setOptionValue("suite-config-prefix", "suite");
@@ -129,6 +130,7 @@ public class TestMappingSuiteRunnerTest {
         mRunner2 = new FakeTestMappingSuiteRunner();
         mRunner2.setBuild(mBuildInfo);
         mRunner2.setDevice(mMockDevice);
+        mRunner2.setSkipjarLoading(false);
 
         mMainlineRunner = new FakeMainlineTMSR();
         mMainlineRunner.setBuild(mBuildInfo);
