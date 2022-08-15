@@ -70,8 +70,10 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ConsoleResultReporter;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ILogSaver;
+import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.error.ErrorIdentifier;
@@ -716,8 +718,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
         /** Special handling to send the trace file from subprocess when needed. */
         private void logTrace(File traceFile, IConfiguration config) {
-            // TODO: Enable this after next deploy
-            /*if (config.getCommandOptions()
+            if (config.getCommandOptions()
                     .getInvocationData()
                     .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)) {
                 CLog.logAndDisplay(LogLevel.INFO, "Sending trace from subprocess");
@@ -734,7 +735,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         CLog.e(e);
                     }
                 }
-            } else {*/
+            } else {
                 try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
                     LogSaverResultForwarder.logFile(
                             config.getTestInvocationListeners(),
@@ -743,7 +744,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                             ActiveTrace.TRACE_KEY,
                             LogDataType.PERFETTO);
                 }
-            //}
+            }
         }
 
         /** Check the number of thread in the ThreadGroup, only one should exists (itself). */
