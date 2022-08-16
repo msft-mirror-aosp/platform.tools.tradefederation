@@ -172,7 +172,7 @@ public class Console extends Thread {
                     exitMode = "commands";
                     mScheduler.shutdownOnEmpty();
                 } else {
-                    mScheduler.shutdown();
+                    mScheduler.shutdown(true);
                 }
                 printLine("Signalling command scheduler for shutdown.");
                 printLine(
@@ -1390,7 +1390,8 @@ public class Console extends Thread {
                     deviceManagementServer =
                             new DeviceManagementGrpcServer(
                                     deviceManagementPort,
-                                    GlobalConfiguration.getDeviceManagerInstance());
+                                    GlobalConfiguration.getDeviceManagerInstance(),
+                                    GlobalConfiguration.getInstance().getCommandScheduler());
                     GlobalConfiguration.getInstance()
                             .setDeviceManagementServer(deviceManagementServer);
                     deviceManagementServer.start();

@@ -212,7 +212,8 @@ public class TestMapping {
 
         if (errorMessage != null) {
             CLog.e(errorMessage);
-            throw new RuntimeException(errorMessage);
+            throw new HarnessRuntimeException(
+                    errorMessage, InfraErrorIdentifier.TEST_MAPPING_FILE_FORMAT_ISSUE);
         }
     }
 

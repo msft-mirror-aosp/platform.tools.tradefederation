@@ -18,6 +18,7 @@ package com.android.tradefed.sandbox;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.NoOpConfigOptionValueTransformer;
 import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
@@ -124,6 +125,9 @@ public class SandboxConfigUtil {
         if (result.getStderr().contains(InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR.name())) {
             error = InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR;
         }
+        if (result.getStderr().contains(InfraErrorIdentifier.GCS_ERROR.name())) {
+            error = InfraErrorIdentifier.GCS_ERROR;
+        }
         throw new SandboxConfigurationException(errorMessage, error);
     }
 
@@ -151,6 +155,8 @@ public class SandboxConfigUtil {
 
     /** Create a global config with only the keystore to make it available in subprocess. */
     public static File dumpFilteredGlobalConfig(Set<String> exclusionPatterns) throws IOException {
-        return GlobalConfiguration.getInstance().cloneConfigWithFilter(exclusionPatterns);
+        return GlobalConfiguration.getInstance()
+                .cloneConfigWithFilter(
+                        exclusionPatterns, new NoOpConfigOptionValueTransformer(), false);
     }
 }

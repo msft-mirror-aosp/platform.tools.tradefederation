@@ -307,7 +307,7 @@ public class LogFileSaver {
      */
     public File saveAndGZipLogFile(String dataName, LogDataType dataType, File fileToLog)
             throws IOException {
-        if (dataType.isCompressed()) {
+        if (dataType.isCompressed() || fileToLog.getName().endsWith(".gz")) {
             CLog.d("Log data for %s is already compressed, skipping compression", dataName);
             return saveLogFile(dataName, dataType, fileToLog);
         }
@@ -343,6 +343,9 @@ public class LogFileSaver {
      */
     public File createCompressedLogFile(String dataName, LogDataType origDataType)
             throws IOException {
+        if (mInvLogDir != null && !mInvLogDir.exists()) {
+            mInvLogDir.mkdirs();
+        }
         // add underscore to end of data name to make generated name more readable
         return FileUtil.createTempFile(dataName + "_",
                 String.format(".%s.%s", origDataType.getFileExt(), LogDataType.GZIP.getFileExt()),

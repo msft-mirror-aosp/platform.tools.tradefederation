@@ -15,8 +15,6 @@
  */
 package com.android.tradefed.targetprep;
 
-import static com.android.tradefed.util.SparseImageUtil.SparseInputStream;
-
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -30,8 +28,9 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.SparseImageUtil.SparseInputStream;
 import com.android.tradefed.util.StreamUtil;
-
+import com.google.common.annotations.VisibleForTesting;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -40,6 +39,7 @@ import java.io.FileOutputStream;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -54,7 +54,7 @@ import java.util.zip.ZipOutputStream;
  * System Update.
  */
 @OptionClass(alias = "dynamic-system-update")
-public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPreparer {
+public class DynamicSystemPreparer extends BaseTargetPreparer {
     static final int DSU_MAX_WAIT_SEC = 10 * 60;
 
     private static final int ANDROID_API_R = 30;
@@ -63,6 +63,7 @@ public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPre
     private static final String SYSTEM_EXT_IMAGE_NAME = "system_ext.img";
     private static final String PRODUCT_IMAGE_NAME = "product.img";
 
+    private static final long COPY_STREAM_SIZE = 16 << 20;
     private static final String DEST_PATH = "/sdcard/system.raw.gz";
     private static final String DEST_ZIP_PATH = "/sdcard/system.zip";
 
@@ -91,6 +92,12 @@ public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPre
             name = "user-data-size-in-gb",
             description = "Number of GB to be allocated for DSU user-data.")
     private long mUserDataSizeInGb = 16L; // 16GB
+
+    @Option(
+            name = "image-conversion-timeout",
+            description = "The timeout for decompressing, unsparsing, and compressing the images.",
+            isTimeVal = true)
+    private long mImageConversionTimeoutMs = 20 * 60 * 1000;
 
     private boolean isDSURunning(ITestDevice device) throws DeviceNotAvailableException {
         CollectingOutputReceiver receiver = new CollectingOutputReceiver();
@@ -144,11 +151,31 @@ public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPre
         }
     }
 
+    @VisibleForTesting
+    boolean hasTimedOut(long deadline) {
+        return System.currentTimeMillis() >= deadline;
+    }
+
+    private void copyStreamsWithDeadline(
+            InputStream inStream, OutputStream outStream, long size, long deadline)
+            throws IOException {
+        long totalCopiedSize = 0;
+        while (totalCopiedSize < size) {
+            if (hasTimedOut(deadline)) {
+                throw new IOException("Cannot copy streams within timeout.");
+            }
+            long copySize = Math.min(COPY_STREAM_SIZE, size - totalCopiedSize);
+            StreamUtil.copyStreams(inStream, outStream, 0, copySize);
+            totalCopiedSize += copySize;
+        }
+    }
+
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         ITestDevice device = testInfo.getDevice();
         IBuildInfo buildInfo = testInfo.getBuildInfo();
+        final long imageConversionDeadline = System.currentTimeMillis() + mImageConversionTimeoutMs;
         File systemImageZipFile = buildInfo.getFile(mSystemImageZipName);
         if (systemImageZipFile == null) {
             throw new BuildError(
@@ -180,7 +207,11 @@ public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPre
                     try (FileOutputStream foStream = new FileOutputStream(systemImageGZ);
                             BufferedOutputStream boStream = new BufferedOutputStream(foStream);
                             GZIPOutputStream out = new GZIPOutputStream(boStream)) {
-                        StreamUtil.copyStreams(systemImageStream, out);
+                        copyStreamsWithDeadline(
+                                systemImageStream,
+                                out,
+                                systemImageStream.size(),
+                                imageConversionDeadline);
                     }
 
                     dsuPushSrc = systemImageGZ;
@@ -201,7 +232,11 @@ public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPre
                             BufferedOutputStream boStream = new BufferedOutputStream(foStream);
                             ZipOutputStream out = new ZipOutputStream(boStream)) {
                         out.putNextEntry(new ZipEntry(SYSTEM_IMAGE_NAME));
-                        StreamUtil.copyStreams(systemImageStream, out);
+                        copyStreamsWithDeadline(
+                                systemImageStream,
+                                out,
+                                systemImageStream.size(),
+                                imageConversionDeadline);
                         out.closeEntry();
                         // Also look for any system-like partition images.
                         for (String imageName :
@@ -210,7 +245,8 @@ public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPre
                                     getUnsparsedImageStream(systemImageZipFile, imageName)) {
                                 if (sis != null) {
                                     out.putNextEntry(new ZipEntry(imageName));
-                                    StreamUtil.copyStreams(sis, out);
+                                    copyStreamsWithDeadline(
+                                            sis, out, sis.size(), imageConversionDeadline);
                                     out.closeEntry();
                                 }
                             }
@@ -266,7 +302,10 @@ public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPre
         } catch (IOException e) {
             CLog.e(e);
             throw new TargetSetupError(
-                    "fail to install the DynamicSystemUpdate", e, device.getDeviceDescriptor());
+                    "Fail to create image archive.",
+                    e,
+                    device.getDeviceDescriptor(),
+                    InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         } finally {
             for (File tempFile : tempFiles) {
                 FileUtil.deleteFile(tempFile);

@@ -57,6 +57,7 @@ import java.util.Map;
 public class TestDiscoveryInvoker {
 
     private final IConfiguration mConfiguration;
+    private final String mDefaultConfigName;
     private final File mRootDir;
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
@@ -68,40 +69,21 @@ public class TestDiscoveryInvoker {
         return RunUtil.getDefault();
     }
 
+    /** Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration} and root directory. */
     public TestDiscoveryInvoker(IConfiguration config, File rootDir) {
         mConfiguration = config;
+        mDefaultConfigName = null;
         mRootDir = rootDir;
     }
 
     /**
-     * Retrieve a list of test module names by using Tradefed Observatory.
-     *
-     * @return A list of test module names.
-     * @throws IOException
-     * @throws JSONException
-     * @throws ConfigurationException
+     * Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration}, test launcher's
+     * default config name and root directory.
      */
-    @Deprecated(forRemoval = true)
-    public List<String> discoverTestModuleNames()
-            throws IOException, JSONException, ConfigurationException {
-        List<String> testModuleNames = new ArrayList<>();
-        // Build the classpath base on test root directory which should contain all the jars
-        String classPath = buildClasspath(mRootDir);
-        // Build command line args to query the tradefed.jar in the root directory
-        List<String> args = buildJavaCmdForXtsDiscovery(classPath);
-        String[] subprocessArgs = args.toArray(new String[args.size()]);
-        CommandResult res = getRunUtil().runTimedCmd(20000, subprocessArgs);
-        if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
-            CLog.e(
-                    "Tradefed observatory error, unable to discover test module names. command"
-                            + " used: %s error: %s",
-                    Joiner.on(" ").join(subprocessArgs), res.getStderr());
-            return testModuleNames;
-        }
-        String stdout = res.getStdout();
-        CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
-        testModuleNames.addAll(parseTestModules(stdout));
-        return testModuleNames;
+    public TestDiscoveryInvoker(IConfiguration config, String defaultConfigName, File rootDir) {
+        mConfiguration = config;
+        mDefaultConfigName = defaultConfigName;
+        mRootDir = rootDir;
     }
 
     /**
@@ -172,12 +154,21 @@ public class TestDiscoveryInvoker {
         String configName = ctsParserSettings.mConfigName;
 
         if (configName == null) {
-            throw new ConfigurationException(
-                    String.format(
-                            "Failed to extract config-name from parent test command options,"
-                                    + " unable to build args to invoke tradefed observatory. Parent"
-                                    + " test command options is: %s",
-                            fullCommandLineArgs));
+            if (mDefaultConfigName == null) {
+                throw new ConfigurationException(
+                        String.format(
+                                "Failed to extract config-name from parent test command options,"
+                                        + " unable to build args to invoke tradefed observatory."
+                                        + " Parent test command options is: %s",
+                                fullCommandLineArgs));
+            } else {
+                CLog.i(
+                        String.format(
+                                "No config name provided in the command args, use default config"
+                                        + " name %s",
+                                mDefaultConfigName));
+                configName = mDefaultConfigName;
+            }
         }
         List<String> args = new ArrayList<>();
         args.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());

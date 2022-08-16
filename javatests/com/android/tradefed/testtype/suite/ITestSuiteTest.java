@@ -88,7 +88,9 @@ import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.MultiMap;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
@@ -111,6 +113,8 @@ import java.util.Set;
 /** Unit tests for {@link ITestSuite}. */
 @RunWith(JUnit4.class)
 public class ITestSuiteTest {
+
+    @Rule public TemporaryFolder mTempFolder = new TemporaryFolder();
 
     private static final MultiMap<String, String> METADATA_INCLUDES = new MultiMap<>();
     private static final MultiMap<String, String> METADATA_EXCLUDES = new MultiMap<>();
@@ -1816,6 +1820,7 @@ public class ITestSuiteTest {
     @Test
     public void testStageTestArtifacts() throws Exception {
         String remoteFilePath = "gs://module1/tests.zip";
+        File testsDir = mTempFolder.newFolder();
         DynamicRemoteFileResolver dynamicResolver =
                 new DynamicRemoteFileResolver() {
                     @Override
@@ -1825,7 +1830,7 @@ public class ITestSuiteTest {
                             List<String> includeFilters,
                             List<String> excludeFilters)
                             throws BuildRetrievalError {
-                        assertEquals(new File("tests_dir"), destDir);
+                        assertEquals(destDir, testsDir);
                         assertEquals(remoteFilePath, remoteFilePath);
                         assertArrayEquals(new String[] {"/test/"}, includeFilters.toArray());
                         assertArrayEquals(new String[] {"[.]config$"}, excludeFilters.toArray());
@@ -1835,7 +1840,7 @@ public class ITestSuiteTest {
         setter.setOptionValue("partial-download-via-feature", "false");
         mTestSuite.setDynamicResolver(dynamicResolver);
         IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
-        when(mockBuildInfo.getTestsDir()).thenReturn(new File("tests_dir"));
+        when(mockBuildInfo.getTestsDir()).thenReturn(testsDir);
         when(mockBuildInfo.getRemoteFiles())
                 .thenReturn(new HashSet<File>(Arrays.asList(new File(remoteFilePath))));
         mTestSuite.setBuild(mockBuildInfo);

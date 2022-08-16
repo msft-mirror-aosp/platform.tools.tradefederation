@@ -33,6 +33,7 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
@@ -77,7 +78,8 @@ import java.util.concurrent.TimeUnit;
  * the first.
  */
 @OptionClass(alias = "tests-zip-app")
-public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiReceiver {
+public class TestAppInstallSetup extends BaseTargetPreparer
+        implements IAbiReceiver, IDiscoverDependencies {
 
     /** The mode the apk should be install in. */
     private enum InstallMode {
@@ -823,5 +825,18 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
         }
 
         return incrementalInstallSessionBuilder;
+    }
+
+    @Override
+    public Set<String> reportDependencies() {
+        Set<String> deps = new HashSet<String>();
+        for (File f : getTestsFileName()) {
+            if (!f.exists()) deps.add(f.getName());
+        }
+        for (String testAppNames : mSplitApkFileNames) {
+            List<String> apkNames = Arrays.asList(testAppNames.split(","));
+            deps.addAll(apkNames);
+        }
+        return deps;
     }
 }

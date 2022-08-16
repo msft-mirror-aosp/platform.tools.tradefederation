@@ -48,6 +48,7 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetr
 import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.invoker.shard.token.ITokenRequest;
 import com.android.tradefed.invoker.shard.token.TokenProperty;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -394,8 +395,12 @@ public abstract class ITestSuite
 
     public File getTestsDir() throws FileNotFoundException {
         IBuildInfo build = getBuildInfo();
+        File testsDir = null;
         if (build instanceof IDeviceBuildInfo) {
-            return ((IDeviceBuildInfo) build).getTestsDir();
+            testsDir = ((IDeviceBuildInfo) build).getTestsDir();
+        }
+        if (testsDir != null && testsDir.exists()) {
+            return testsDir;
         }
         // TODO: handle multi build?
         throw new FileNotFoundException("Could not found a tests dir folder.");
@@ -546,46 +551,47 @@ public abstract class ITestSuite
             mDirectModule.setBuild(mBuildInfo);
             return runModules;
         }
+        try (CloseableTraceScope ignore = new CloseableTraceScope("suite:createExecutionList")) {
+            LinkedHashMap<String, IConfiguration> runConfig = loadAndFilter();
+            if (runConfig.isEmpty()) {
+                CLog.i("No config were loaded. Nothing to run.");
+                return runModules;
+            }
 
-        LinkedHashMap<String, IConfiguration> runConfig = loadAndFilter();
-        if (runConfig.isEmpty()) {
-            CLog.i("No config were loaded. Nothing to run.");
+            Map<String, List<ITargetPreparer>> suitePreparersPerDevice =
+                    getAllowedPreparerPerDevice(mMainConfiguration);
+
+            for (Entry<String, IConfiguration> config : runConfig.entrySet()) {
+                // Validate the configuration, it will throw if not valid.
+                ValidateSuiteConfigHelper.validateConfig(config.getValue());
+                Map<String, List<ITargetPreparer>> preparersPerDevice =
+                        getPreparerPerDevice(config.getValue());
+                ModuleDefinition module =
+                        new ModuleDefinition(
+                                config.getKey(),
+                                config.getValue().getTests(),
+                                preparersPerDevice,
+                                suitePreparersPerDevice,
+                                config.getValue().getMultiTargetPreparers(),
+                                config.getValue());
+                if (mDisableAutoRetryTimeReporting) {
+                    module.disableAutoRetryReportingTime();
+                }
+                module.setDevice(mDevice);
+                module.setBuild(mBuildInfo);
+                runModules.add(module);
+            }
+
+            /** Randomize all the modules to be ran if random-order is set and no sharding. */
+            if (mRandomOrder) {
+                randomizeTestModules(runModules, mRandomSeed);
+            }
+
+            CLog.logAndDisplay(LogLevel.DEBUG, "[Total Unique Modules = %s]", runModules.size());
+            // Free the map once we are done with it.
+            runConfig = null;
             return runModules;
         }
-
-        Map<String, List<ITargetPreparer>> suitePreparersPerDevice =
-                getAllowedPreparerPerDevice(mMainConfiguration);
-
-        for (Entry<String, IConfiguration> config : runConfig.entrySet()) {
-            // Validate the configuration, it will throw if not valid.
-            ValidateSuiteConfigHelper.validateConfig(config.getValue());
-            Map<String, List<ITargetPreparer>> preparersPerDevice =
-                    getPreparerPerDevice(config.getValue());
-            ModuleDefinition module =
-                    new ModuleDefinition(
-                            config.getKey(),
-                            config.getValue().getTests(),
-                            preparersPerDevice,
-                            suitePreparersPerDevice,
-                            config.getValue().getMultiTargetPreparers(),
-                            config.getValue());
-            if (mDisableAutoRetryTimeReporting) {
-                module.disableAutoRetryReportingTime();
-            }
-            module.setDevice(mDevice);
-            module.setBuild(mBuildInfo);
-            runModules.add(module);
-        }
-
-        /** Randomize all the modules to be ran if random-order is set and no sharding.*/
-        if (mRandomOrder) {
-            randomizeTestModules(runModules, mRandomSeed);
-        }
-
-        CLog.logAndDisplay(LogLevel.DEBUG, "[Total Unique Modules = %s]", runModules.size());
-        // Free the map once we are done with it.
-        runConfig = null;
-        return runModules;
     }
 
     /**
@@ -731,63 +737,66 @@ public abstract class ITestSuite
                     continue;
                 }
 
-                // Populate the module context with devices and builds
-                for (String deviceName : mContext.getDeviceConfigNames()) {
-                    module.getModuleInvocationContext()
-                            .addAllocatedDevice(deviceName, mContext.getDevice(deviceName));
-                    module.getModuleInvocationContext()
-                            .addDeviceBuildInfo(deviceName, mContext.getBuildInfo(deviceName));
-                }
-                // Add isolation status before module start for reporting
-                if (!IsolationGrade.NOT_ISOLATED.equals(
-                        CurrentInvocation.moduleCurrentIsolation())) {
-                    module.getModuleInvocationContext()
-                            .addInvocationAttribute(
-                                    ModuleDefinition.MODULE_ISOLATED,
-                                    CurrentInvocation.moduleCurrentIsolation().toString());
-                }
-                // Only the module callback will be called here.
-                ITestInvocationListener listenerWithCollectors = listener;
-                if (mMetricCollectors != null) {
-                    for (IMetricCollector collector :
-                         CollectorHelper.cloneCollectors(mMetricCollectors)) {
-                        if (collector.isDisabled()) {
-                            CLog.d("%s has been disabled. Skipping.", collector);
-                        } else {
-                            if (collector instanceof IConfigurationReceiver) {
-                                ((IConfigurationReceiver) collector)
-                                        .setConfiguration(module.getModuleConfiguration());
+                try (CloseableTraceScope ignore = new CloseableTraceScope(module.getId())) {
+                    // Populate the module context with devices and builds
+                    for (String deviceName : mContext.getDeviceConfigNames()) {
+                        module.getModuleInvocationContext()
+                                .addAllocatedDevice(deviceName, mContext.getDevice(deviceName));
+                        module.getModuleInvocationContext()
+                                .addDeviceBuildInfo(deviceName, mContext.getBuildInfo(deviceName));
+                    }
+                    // Add isolation status before module start for reporting
+                    if (!IsolationGrade.NOT_ISOLATED.equals(
+                            CurrentInvocation.moduleCurrentIsolation())) {
+                        module.getModuleInvocationContext()
+                                .addInvocationAttribute(
+                                        ModuleDefinition.MODULE_ISOLATED,
+                                        CurrentInvocation.moduleCurrentIsolation().toString());
+                    }
+                    // Only the module callback will be called here.
+                    ITestInvocationListener listenerWithCollectors = listener;
+                    if (mMetricCollectors != null) {
+                        for (IMetricCollector collector :
+                                CollectorHelper.cloneCollectors(mMetricCollectors)) {
+                            if (collector.isDisabled()) {
+                                CLog.d("%s has been disabled. Skipping.", collector);
+                            } else {
+                                if (collector instanceof IConfigurationReceiver) {
+                                    ((IConfigurationReceiver) collector)
+                                            .setConfiguration(module.getModuleConfiguration());
+                                }
+                                listenerWithCollectors =
+                                        collector.init(
+                                                module.getModuleInvocationContext(),
+                                                listenerWithCollectors);
+                                TfObjectTracker.countWithParents(collector.getClass());
                             }
-                            listenerWithCollectors =
-                                    collector.init(
-                                            module.getModuleInvocationContext(),
-                                            listenerWithCollectors);
-                            TfObjectTracker.countWithParents(collector.getClass());
                         }
                     }
+                    listenerWithCollectors.testModuleStarted(module.getModuleInvocationContext());
+                    mModuleInProgress = module;
+                    // Trigger module start on module level listener too
+                    new ResultForwarder(moduleListeners)
+                            .testModuleStarted(module.getModuleInvocationContext());
+                    TestInformation moduleInfo =
+                            TestInformation.createModuleTestInfo(
+                                    testInfo, module.getModuleInvocationContext());
+                    try {
+                        runSingleModule(
+                                module, moduleInfo, listener, moduleListeners, failureListener);
+                    } finally {
+                        // Trigger module end on module level listener too
+                        new ResultForwarder(moduleListeners).testModuleEnded();
+                        // clear out module invocation context since we are now done with module
+                        // execution
+                        listenerWithCollectors.testModuleEnded();
+                        mModuleInProgress = null;
+                        // Following modules will not be isolated if no action is taken
+                        CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                    }
+                    // Module isolation routine
+                    moduleIsolation(mContext, listener);
                 }
-                listenerWithCollectors.testModuleStarted(module.getModuleInvocationContext());
-                mModuleInProgress = module;
-                // Trigger module start on module level listener too
-                new ResultForwarder(moduleListeners)
-                        .testModuleStarted(module.getModuleInvocationContext());
-                TestInformation moduleInfo =
-                        TestInformation.createModuleTestInfo(
-                                testInfo, module.getModuleInvocationContext());
-                try {
-                    runSingleModule(module, moduleInfo, listener, moduleListeners, failureListener);
-                } finally {
-                    // Trigger module end on module level listener too
-                    new ResultForwarder(moduleListeners).testModuleEnded();
-                    // clear out module invocation context since we are now done with module
-                    // execution
-                    listenerWithCollectors.testModuleEnded();
-                    mModuleInProgress = null;
-                    // Following modules will not be isolated if no action is taken
-                    CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
-                }
-                // Module isolation routine
-                moduleIsolation(mContext, listener);
             }
         } catch (DeviceNotAvailableException e) {
             CLog.e(

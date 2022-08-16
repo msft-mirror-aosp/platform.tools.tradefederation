@@ -23,6 +23,8 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGrou
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.invoker.proto.InvocationContext.Context;
+import com.android.tradefed.invoker.tracing.ActiveTrace;
+import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ActionInProgress;
@@ -42,6 +44,7 @@ import com.android.tradefed.result.proto.TestRecordProto.DebugInfoContext;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.SerializationUtil;
 import com.android.tradefed.util.proto.TestRecordProtoUtil;
@@ -323,6 +326,11 @@ public class ProtoResultParser {
         // Still report the logs even if not reporting the invocation level.
         handleLogs(endInvocationProto);
 
+        if (mInvocationEnded) {
+            CLog.d("Re-entry in invocationEnded, most likely for subprocess final logs.");
+            return;
+        }
+
         // Get final context in case it changed.
         Any anyDescription = endInvocationProto.getDescription();
         if (!anyDescription.is(Context.class)) {
@@ -569,8 +577,8 @@ public class ProtoResultParser {
                 }
                 File path = new File(file.getPath());
                 if (Strings.isNullOrEmpty(file.getUrl()) && path.exists()) {
+                    LogDataType type = file.getType();
                     try (InputStreamSource source = new FileInputStreamSource(path)) {
-                        LogDataType type = file.getType();
                         // File might have already been compressed
                         if (file.getPath().endsWith(LogDataType.ZIP.getFileExt())) {
                             type = LogDataType.ZIP;
@@ -578,10 +586,22 @@ public class ProtoResultParser {
                         log("Logging %s from subprocess: %s ", entry.getKey(), file.getPath());
                         logger.testLog(mFilePrefix + entry.getKey(), type, source);
                     }
+                    if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
+                            && LogDataType.PERFETTO.equals(type)) {
+                        CLog.d("Log the subprocess trace");
+                        TracingLogger.getActiveTrace().addSubprocessTrace(path);
+                        FileUtil.deleteFile(path);
+                    }
                 } else {
                     log(
-                            "Logging %s from subprocess. url: %s, path: %s",
-                            entry.getKey(), file.getUrl(), file.getPath());
+                            "Logging %s from subprocess. url: %s, path: %s [exists: %s]",
+                            entry.getKey(), file.getUrl(), file.getPath(), path.exists());
+                    if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
+                            && LogDataType.PERFETTO.equals(file.getType())
+                            && path.exists()) {
+                        CLog.d("Log the subprocess trace");
+                        TracingLogger.getActiveTrace().addSubprocessTrace(path);
+                    }
                     logger.logAssociation(mFilePrefix + entry.getKey(), file);
                 }
             } catch (InvalidProtocolBufferException e) {

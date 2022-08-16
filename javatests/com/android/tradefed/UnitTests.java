@@ -86,6 +86,7 @@ import com.android.tradefed.device.TestDeviceTest;
 import com.android.tradefed.device.WaitDeviceRecoveryTest;
 import com.android.tradefed.device.WifiHelperTest;
 import com.android.tradefed.device.cloud.AcloudConfigParserTest;
+import com.android.tradefed.device.cloud.CommonLogRemoteFileUtilTest;
 import com.android.tradefed.device.cloud.GceAvdInfoTest;
 import com.android.tradefed.device.cloud.GceManagerTest;
 import com.android.tradefed.device.cloud.GceRemoteCmdFormatterTest;
@@ -231,6 +232,9 @@ import com.android.tradefed.suite.checker.SystemServerFileDescriptorCheckerTest;
 import com.android.tradefed.suite.checker.SystemServerStatusCheckerTest;
 import com.android.tradefed.suite.checker.TimeStatusCheckerTest;
 import com.android.tradefed.suite.checker.UserCheckerTest;
+import com.android.tradefed.suite.checker.baseline.DeviceBaselineSetterTest;
+import com.android.tradefed.suite.checker.baseline.LockSettingsBaselineSetterTest;
+import com.android.tradefed.suite.checker.baseline.SettingsBaselineSetterTest;
 import com.android.tradefed.targetprep.AllTestAppsInstallSetupTest;
 import com.android.tradefed.targetprep.AoaTargetPreparerTest;
 import com.android.tradefed.targetprep.AppSetupTest;
@@ -554,6 +558,7 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // device.cloud
     AcloudConfigParserTest.class,
+    CommonLogRemoteFileUtilTest.class,
     GceAvdInfoTest.class,
     GceManagerTest.class,
     GceRemoteCmdFormatterTest.class,
@@ -807,6 +812,11 @@ import org.junit.runners.Suite.SuiteClasses;
     SystemServerStatusCheckerTest.class,
     TimeStatusCheckerTest.class,
     UserCheckerTest.class,
+
+    // suite/checker/baseline
+    DeviceBaselineSetterTest.class,
+    LockSettingsBaselineSetterTest.class,
+    SettingsBaselineSetterTest.class,
 
     // testtype
     AndroidJUnitTestTest.class,
