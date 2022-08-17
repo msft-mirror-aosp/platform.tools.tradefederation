@@ -116,11 +116,11 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                 try {
                     if (GlobalConfiguration.getInstance()
                                     .getHostOptions()
-                                    .getConcurrentFlasherLimit()
+                                    .getConcurrentVirtualDeviceStartupLimit()
                             != null) {
                         GlobalConfiguration.getInstance()
                                 .getHostOptions()
-                                .takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                                .takePermit(PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP);
                         long queueTime = System.currentTimeMillis() - startTime;
                         CLog.v(
                                 "Fetch and launch CVD permit obtained after %ds",
@@ -132,11 +132,11 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                 } finally {
                     if (GlobalConfiguration.getInstance()
                                     .getHostOptions()
-                                    .getConcurrentFlasherLimit()
+                                    .getConcurrentVirtualDeviceStartupLimit()
                             != null) {
                         GlobalConfiguration.getInstance()
                                 .getHostOptions()
-                                .returnPermit(PermitLimitType.CONCURRENT_FLASHER);
+                                .returnPermit(PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP);
                     }
                 }
                 if (remainingTime < 0) {
