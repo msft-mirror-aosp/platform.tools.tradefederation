@@ -67,7 +67,7 @@ import javax.annotation.Nullable;
  */
 public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements ITestLoggerReceiver {
 
-    private GceAvdInfo mGceAvd;
+    private GceAvdInfo mGceAvd = null;
     private ITestLogger mTestLogger;
 
     private GceManager mGceHandler = null;
@@ -99,47 +99,56 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             throws TargetSetupError, DeviceNotAvailableException {
         super.preInvocationSetup(info, attributes);
         try {
-            mGceAvd = null;
             mGceSshMonitor = null;
             mTunnelInitFailed = null;
             // We create a brand new GceManager each time to ensure clean state.
             mGceHandler = new GceManager(getDeviceDescriptor(), getOptions(), info);
             setFastbootEnabled(false);
 
-            // Launch GCE helper script.
-            long startTime = getCurrentTime();
             long remainingTime = 0;
-            try {
-                if (GlobalConfiguration.getInstance().getHostOptions().getConcurrentFlasherLimit()
-                        != null) {
-                    GlobalConfiguration.getInstance()
-                            .getHostOptions()
-                            .takePermit(PermitLimitType.CONCURRENT_FLASHER);
-                    long queueTime = System.currentTimeMillis() - startTime;
-                    CLog.v(
-                            "Fetch and launch CVD permit obtained after %ds",
-                            TimeUnit.MILLISECONDS.toSeconds(queueTime));
+            // mGceAvd is null means the device hasn't been launched.
+            if (mGceAvd != null) {
+                CLog.d("skipped GCE launch because GceAvdInfo %s is already set", mGceAvd);
+            } else {
+                // Launch GCE helper script.
+                long startTime = getCurrentTime();
+
+                try {
+                    if (GlobalConfiguration.getInstance()
+                                    .getHostOptions()
+                                    .getConcurrentFlasherLimit()
+                            != null) {
+                        GlobalConfiguration.getInstance()
+                                .getHostOptions()
+                                .takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                        long queueTime = System.currentTimeMillis() - startTime;
+                        CLog.v(
+                                "Fetch and launch CVD permit obtained after %ds",
+                                TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                    }
+                    launchGce(info, attributes);
+                    remainingTime =
+                            getOptions().getGceCmdTimeout() - (getCurrentTime() - startTime);
+                } finally {
+                    if (GlobalConfiguration.getInstance()
+                                    .getHostOptions()
+                                    .getConcurrentFlasherLimit()
+                            != null) {
+                        GlobalConfiguration.getInstance()
+                                .getHostOptions()
+                                .returnPermit(PermitLimitType.CONCURRENT_FLASHER);
+                    }
                 }
-                launchGce(info, attributes);
-                remainingTime =
-                        getOptions().getGceCmdTimeout()
-                                - (getCurrentTime() - startTime);
-            } finally {
-                if (GlobalConfiguration.getInstance().getHostOptions().getConcurrentFlasherLimit()
-                        != null) {
-                    GlobalConfiguration.getInstance()
-                            .getHostOptions()
-                            .returnPermit(PermitLimitType.CONCURRENT_FLASHER);
+                if (remainingTime < 0) {
+                    throw new DeviceNotAvailableException(
+                            String.format(
+                                    "Failed to launch GCE after %sms",
+                                    getOptions().getGceCmdTimeout()),
+                            getSerialNumber(),
+                            DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE);
                 }
+                CLog.d("%sms left before timeout after GCE launch returned", remainingTime);
             }
-            if (remainingTime < 0) {
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to launch GCE after %sms", getOptions().getGceCmdTimeout()),
-                        getSerialNumber(),
-                        DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE);
-            }
-            CLog.d("%sms left before timeout after GCE launch returned", remainingTime);
             // Wait for device to be ready.
             RecoveryMode previousMode = getRecoveryMode();
             setRecoveryMode(RecoveryMode.NONE);
@@ -492,6 +501,19 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         }
         // If it's not Cuttlefish, use the standard call.
         return super.getTombstones();
+    }
+
+    /** Set the {@link GceAvdInfo} for launched device. */
+    public void setAvdInfo(GceAvdInfo gceAvdInfo) throws TargetSetupError {
+        if (mGceAvd == null) {
+            mGceAvd = gceAvdInfo;
+        } else {
+            throw new TargetSetupError(
+                    String.format(
+                            "The GceAvdInfo of the device %s is already set, override is not"
+                                    + " permitted. Current GceAvdInfo: %s",
+                            getSerialNumber(), mGceAvd));
+        }
     }
 
     /**

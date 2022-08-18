@@ -34,6 +34,9 @@ import com.android.tradefed.config.filter.GetPreviousPassedHelper;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.device.cloud.GceAvdInfo;
+import com.android.tradefed.device.cloud.GceManager;
+import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
@@ -559,22 +562,84 @@ public class InvocationExecution implements IInvocationExecution {
             return;
         }
         long start = System.currentTimeMillis();
-        try (CloseableTraceScope ignore = new CloseableTraceScope("device_pre_invocation_setup")) {
-            customizeDevicePreInvocation(config, context);
-            for (String deviceName : context.getDeviceConfigNames()) {
-                ITestDevice device = context.getDevice(deviceName);
+        customizeDevicePreInvocation(config, context);
 
-                CLog.d("Starting device pre invocation setup for : '%s'", device.getSerialNumber());
-                if (device instanceof ITestLoggerReceiver) {
-                    ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+        // Multi-device test scenario
+        Integer multiDeviceCount = config.getCommandOptions().getMultiDeviceCount();
+        if (multiDeviceCount != null && multiDeviceCount != 1) {
+            runMultiDevicePreInvocationSetup(context, config, logger);
+        } else {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope("device_pre_invocation_setup")) {
+                for (String deviceName : context.getDeviceConfigNames()) {
+                    ITestDevice device = context.getDevice(deviceName);
+                    CLog.d(
+                            "Starting device pre invocation setup for : '%s'",
+                            device.getSerialNumber());
+                    if (device instanceof ITestLoggerReceiver) {
+                        ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+                    }
+                    device.preInvocationSetup(
+                            context.getBuildInfo(deviceName), context.getAttributes());
                 }
-                device.preInvocationSetup(
-                        context.getBuildInfo(deviceName), context.getAttributes());
             }
         }
         // Also report device pre invocation into setup
         InvocationMetricLogger.addInvocationPairMetrics(
                 InvocationMetricKey.SETUP_PAIR, start, System.currentTimeMillis());
+    }
+
+    /**
+     * Launch multiple device together, then invoke the {@link
+     * ITestDevice#preInvocationSetup(IBuildInfo)} for each device part of the invocation with
+     * setting the GceAvdInfo of the device beforehand.
+     *
+     * @param context the {@link IInvocationContext} of the invocation.
+     * @param config the {@link IConfiguration} of this test run.
+     * @param logger the {@link ITestLogger} to report logs.
+     * @throws DeviceNotAvailableException
+     * @throws TargetSetupError
+     */
+    private void runMultiDevicePreInvocationSetup(
+            IInvocationContext context, IConfiguration config, ITestLogger logger)
+            throws TargetSetupError, DeviceNotAvailableException {
+        // One GceManager is needed to lease the whole device group
+        String firstDeviceName = context.getDeviceConfigNames().get(0);
+        ITestDevice firstDevice = context.getDevice(firstDeviceName);
+        GceManager multiDeviceRequester =
+                new GceManager(
+                        firstDevice.getDeviceDescriptor(),
+                        firstDevice.getOptions(),
+                        context.getBuildInfo(firstDeviceName));
+
+        List<ITestDevice> devices = context.getDevices();
+        List<IBuildInfo> buildInfos = context.getBuildInfos();
+
+        // Start multiple devices in a group
+        List<GceAvdInfo> gceAvdInfoList = multiDeviceRequester.startMultiDevicesGce(buildInfos);
+        for (int i = 0; i < devices.size(); i++) {
+            RemoteAndroidVirtualDevice device = (RemoteAndroidVirtualDevice) devices.get(i);
+            // For each device, do setup with its GceAvdInfo
+            CLog.d(
+                    "Starting device pre invocation launched device setup with GceAvdInfo %s"
+                            + " for : '%s'",
+                    gceAvdInfoList.get(i), device.getSerialNumber());
+            device.setAvdInfo(gceAvdInfoList.get(i));
+            device.preInvocationSetup(buildInfos.get(i), context.getAttributes());
+
+            // Last device in the group is responsible for releasing the whole device group
+            if (i != devices.size() - 1) {
+                CLog.d(
+                        "Set device %s to skip tear down because only the last device in the"
+                                + " device group will be responsible for tearing down the whole"
+                                + " device group",
+                        device.getSerialNumber());
+                device.getOptions().setSkipTearDown(true);
+            }
+
+            // Every RemoteAndroidVirtualDevice is a ITestLoggerReceiver
+            ((ITestLoggerReceiver) device).setTestLogger(logger);
+        }
     }
 
     /**
