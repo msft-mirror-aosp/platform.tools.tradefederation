@@ -24,7 +24,6 @@ import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.Log.LogLevel;
-import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.LogDataType;
@@ -179,11 +178,12 @@ public class LocalAndroidVirtualDeviceTest {
         mSystemImageZip = null;
         mOtaToolsZip = null;
 
-        when(mMockBuildInfo.getFile(eq(BuildInfoFileKey.DEVICE_IMAGE))).thenReturn(mImageZip);
         when(mMockBuildInfo.getFile((String) any()))
                 .thenAnswer(
                         invocation -> {
                             switch ((String) invocation.getArguments()[0]) {
+                                case "device":
+                                    return mImageZip;
                                 case "cvd-host_package.tar.gz":
                                     return mHostPackageTarGzip;
                                 case "boot-img.zip":
@@ -305,18 +305,18 @@ public class LocalAndroidVirtualDeviceTest {
                         eq(mAcloud.getAbsolutePath()),
                         eq("create"),
                         eq("--local-instance"),
-                        eq("--local-image"),
-                        imageDir.capture(),
                         eq("--local-instance-dir"),
                         instanceDir.capture(),
-                        eq("--local-tool"),
-                        hostPackageDir.capture(),
                         eq("--report_file"),
                         reportFile.capture(),
                         eq("--no-autoconnect"),
                         eq("--yes"),
                         eq("--skip-pre-run-check"),
                         eq("-vv"),
+                        eq("--local-image"),
+                        imageDir.capture(),
+                        eq("--local-tool"),
+                        hostPackageDir.capture(),
                         eq("-test")))
                 .thenAnswer(answer);
 
@@ -332,30 +332,33 @@ public class LocalAndroidVirtualDeviceTest {
             ArgumentCaptor<String> bootImageDir,
             ArgumentCaptor<String> systemImageDir,
             ArgumentCaptor<String> otaToolsDir) {
+        mLocalAvd.getOptions().getGceDriverFileParams().put("test-file", new File("/test/file"));
         IRunUtil runUtil = mock(IRunUtil.class);
         when(runUtil.runTimedCmd(
                         eq(ACLOUD_TIMEOUT),
                         eq(mAcloud.getAbsolutePath()),
                         eq("create"),
                         eq("--local-instance"),
-                        eq("--local-image"),
-                        imageDir.capture(),
                         eq("--local-instance-dir"),
                         instanceDir.capture(),
-                        eq("--local-tool"),
-                        hostPackageDir.capture(),
                         eq("--report_file"),
                         reportFile.capture(),
                         eq("--no-autoconnect"),
                         eq("--yes"),
                         eq("--skip-pre-run-check"),
+                        eq("-vv"),
+                        eq("--local-image"),
+                        imageDir.capture(),
+                        eq("--local-tool"),
+                        hostPackageDir.capture(),
                         eq("--local-boot-image"),
                         bootImageDir.capture(),
                         eq("--local-system-image"),
                         systemImageDir.capture(),
                         eq("--local-tool"),
                         otaToolsDir.capture(),
-                        eq("-vv"),
+                        eq("--test-file"),
+                        eq("/test/file"),
                         eq("-test")))
                 .thenAnswer(answer);
 
