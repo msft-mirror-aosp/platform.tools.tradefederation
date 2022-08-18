@@ -289,6 +289,53 @@ public class RemoteAndroidVirtualDeviceTest {
     }
 
     /**
+     * Test {@link RemoteAndroidVirtualDevice#preInvocationDeviceSetup(IBuildInfo, MultiMap)} when
+     * device is launched and mGceAvdInfo is set.
+     */
+    @Test
+    public void testPreInvocationLaunchedDeviceSetup() throws Exception {
+        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
+        mTestDevice =
+                new TestableRemoteAndroidVirtualDevice() {
+                    @Override
+                    protected void launchGce(
+                            IBuildInfo buildInfo, MultiMap<String, String> attributes)
+                            throws TargetSetupError {
+                        fail("Should not launch a Gce because the device should already launched");
+                        // ignore
+                    }
+
+                    @Override
+                    public IDevice getIDevice() {
+                        return mMockIDevice;
+                    }
+
+                    @Override
+                    public boolean enableAdbRoot() throws DeviceNotAvailableException {
+                        return true;
+                    }
+
+                    @Override
+                    public void startLogcat() {
+                        // ignore
+                    }
+
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+                };
+        when(mMockStateMonitor.waitForDeviceAvailable(Mockito.anyLong())).thenReturn(mMockIDevice);
+        when(mMockIDevice.getState()).thenReturn(DeviceState.ONLINE);
+        GceAvdInfo mockGceAvdInfo = Mockito.mock(GceAvdInfo.class);
+        when(mockGceAvdInfo.getStatus()).thenReturn(GceStatus.SUCCESS);
+
+        mTestDevice.setAvdInfo(mockGceAvdInfo);
+        mTestDevice.preInvocationSetup(mMockBuildInfo, null);
+        assertEquals(mockGceAvdInfo, mTestDevice.getAvdInfo());
+    }
+
+    /**
      * Test {@link RemoteAndroidVirtualDevice#preInvocationSetup(IBuildInfo)} when the device does
      * not come up online at the end should throw an exception.
      */
@@ -786,6 +833,26 @@ public class RemoteAndroidVirtualDeviceTest {
             fail("Should have thrown an exception");
         } catch (TargetSetupError expected) {
             assertEquals(expectedException, expected.getMessage());
+        }
+    }
+
+    /** Test setAvdInfo() */
+    @Test
+    public void testSetGceAvdInfo() throws Exception {
+        GceAvdInfo mockGceAvdInfo = Mockito.mock(GceAvdInfo.class);
+        when(mockGceAvdInfo.getStatus()).thenReturn(GceStatus.SUCCESS);
+
+        assertEquals(null, mTestDevice.getAvdInfo());
+
+        mTestDevice.setAvdInfo(mockGceAvdInfo);
+        assertEquals(mockGceAvdInfo, mTestDevice.getAvdInfo());
+
+        try {
+            // Attempt override, which is not permitted
+            mTestDevice.setAvdInfo(mockGceAvdInfo);
+            fail("Should have thrown an exception");
+        } catch (TargetSetupError e) {
+            // Expected
         }
     }
 
