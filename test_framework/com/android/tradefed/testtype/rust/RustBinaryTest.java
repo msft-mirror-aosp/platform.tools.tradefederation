@@ -99,9 +99,31 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
         return testPath.toString();
     }
 
-    // Returns true if given fullPath is not executable.
+    String getFileName(String fullPath) {
+        int pos = fullPath.lastIndexOf('/');
+        if (pos == -1) {
+            return fullPath;
+        }
+        String fileName = fullPath.substring(pos + 1);
+        if (fileName.isEmpty()) {
+            throw new IllegalArgumentException("input should not end with \"/\"");
+        }
+        return fileName;
+    }
+
+    /** Returns true if the given fullPath is not a test we should run. */
     private boolean shouldSkipFile(String fullPath) throws DeviceNotAvailableException {
-        return fullPath == null || fullPath.isEmpty() || !mDevice.isExecutable(fullPath);
+        if (fullPath == null || fullPath.isEmpty()) {
+            return true;
+        }
+
+        String moduleName = getTestModule();
+        String fileName = getFileName(fullPath);
+        if (moduleName != null && !fileName.startsWith(moduleName)) {
+            return true;
+        }
+
+        return !mDevice.isExecutable(fullPath);
     }
 
     /**
