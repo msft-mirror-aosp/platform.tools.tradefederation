@@ -263,18 +263,29 @@ public class RustBinaryTestTest {
     @Test
     public void testRun_moduleName() throws DeviceNotAvailableException {
         final String module = "test1";
+        final String notModule = "not_a_test";
         final String modulePath =
                 String.format(
                         "%s%s%s",
                         RustBinaryTest.DEFAULT_TEST_PATH,
                         FileListingService.FILE_SEPARATOR,
                         module);
-        MockitoFileUtil.setMockDirContents(mMockITestDevice, modulePath, new String[] {});
+        final String notModulePath =
+                String.format(
+                        "%s%s%s",
+                        RustBinaryTest.DEFAULT_TEST_PATH,
+                        FileListingService.FILE_SEPARATOR,
+                        notModule);
+        MockitoFileUtil.setMockDirContents(
+                mMockITestDevice, RustBinaryTest.DEFAULT_TEST_PATH, module, notModule);
 
         mRustBinaryTest.setModuleName(module);
         when(mMockITestDevice.doesFileExist(modulePath)).thenReturn(true);
         when(mMockITestDevice.isDirectory(modulePath)).thenReturn(false);
         when(mMockITestDevice.isExecutable(modulePath)).thenReturn(true);
+        when(mMockITestDevice.doesFileExist(notModulePath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(notModulePath)).thenReturn(false);
+        when(mMockITestDevice.isExecutable(notModulePath)).thenReturn(true);
 
         mockCountTests(modulePath, runListOutput(1));
         mockTestRunStarted("test1", 1);
