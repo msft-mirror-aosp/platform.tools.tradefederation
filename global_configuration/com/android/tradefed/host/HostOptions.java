@@ -57,6 +57,13 @@ public class HostOptions implements IHostOptions {
     )
     private Integer mConcurrentDownloadLimit = null;
 
+    @Option(
+            name = "concurrent-virtual-device-startup-limit",
+            description =
+                    "The maximum number of concurrent virtual device startup to avoid resource"
+                            + " contentions depending on factors such as network, CPU, I/O etc.")
+    private Integer mConcurrentVirtualDeviceStartupLimit = Integer.MAX_VALUE;
+
     @Option(name = "concurrent-limits", description =
             "The maximum number of concurrent actions of a given type.")
     private Map<PermitLimitType, Integer> mConcurrentLimit = new HashMap<>();
@@ -140,6 +147,11 @@ public class HostOptions implements IHostOptions {
     @Override
     public Integer getConcurrentDownloadLimit() {
         return mConcurrentDownloadLimit;
+    }
+
+    @Override
+    public Integer getConcurrentVirtualDeviceStartupLimit() {
+        return mConcurrentVirtualDeviceStartupLimit;
     }
 
     /** {@inheritDoc} */
@@ -272,6 +284,13 @@ public class HostOptions implements IHostOptions {
         if (!mInternalConcurrentLimits.containsKey(PermitLimitType.CONCURRENT_DOWNLOAD)) {
             mInternalConcurrentLimits.put(
                     PermitLimitType.CONCURRENT_DOWNLOAD, mConcurrentDownloadLimit);
+        }
+
+        if (!mInternalConcurrentLimits.containsKey(
+                PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP)) {
+            mInternalConcurrentLimits.put(
+                    PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP,
+                    mConcurrentVirtualDeviceStartupLimit);
         }
 
         for (Entry<PermitLimitType, Integer> limits : mInternalConcurrentLimits.entrySet()) {
