@@ -742,6 +742,11 @@ public class TestDeviceOptions {
     }
 
     /** Returns true if GCE tear down should be skipped. False otherwise. */
+    public void setSkipTearDown(boolean shouldSkipTearDown) {
+        mSkipTearDown = shouldSkipTearDown;
+    }
+
+    /** Returns true if GCE tear down should be skipped. False otherwise. */
     public boolean shouldSkipTearDown() {
         return mSkipTearDown;
     }
