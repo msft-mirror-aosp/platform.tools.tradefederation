@@ -120,6 +120,7 @@ public class BaseRetryDecision
             description = "Feature flag to use the updated filtering logic.")
     private boolean mUpdatedFiltering = true;
 
+    @Deprecated
     @Option(
             name = "module-preparation-retry",
             description = "Whether or not to retry any module-level target preparation errors." +
