@@ -128,7 +128,10 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
                                     "Reservation id released '%s' is untracked",
                                     request.getReservationId()));
         } else {
-            mDeviceManager.freeDevice(device, FreeDeviceState.AVAILABLE);
+            if (!mCommandScheduler.isDeviceInInvocationThread(device)) {
+                // Free the device if it is not used by any invocation
+                mDeviceManager.freeDevice(device, FreeDeviceState.AVAILABLE);
+            }
             responseBuilder.setResult(ReleaseReservationResponse.Result.SUCCEED);
         }
         responseObserver.onNext(responseBuilder.build());

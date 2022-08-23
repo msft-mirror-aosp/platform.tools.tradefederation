@@ -315,4 +315,7 @@ public interface ICommandScheduler {
 
     /** Set the client to report harness data */
     public void setClearcutClient(ClearcutClient client);
+
+    /** Returns true if the device is used by an active invocation thread. */
+    public boolean isDeviceInInvocationThread(ITestDevice device);
 }
