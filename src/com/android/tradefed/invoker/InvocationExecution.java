@@ -566,8 +566,15 @@ public class InvocationExecution implements IInvocationExecution {
 
         // Multi-device test scenario
         Integer multiDeviceCount = config.getCommandOptions().getMultiDeviceCount();
-        if (multiDeviceCount != null && multiDeviceCount != 1) {
-            runMultiDevicePreInvocationSetup(context, config, logger);
+        boolean allVirtualDevices = true;
+        for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+            if (!deviceConfig.getDeviceRequirements().gceDeviceRequested()) {
+                allVirtualDevices = false;
+                break;
+            }
+        }
+        if (multiDeviceCount != null && multiDeviceCount != 1 && allVirtualDevices) {
+            runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
         } else {
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope("device_pre_invocation_setup")) {
@@ -590,7 +597,7 @@ public class InvocationExecution implements IInvocationExecution {
     }
 
     /**
-     * Launch multiple device together, then invoke the {@link
+     * Launch multiple virtual devices together, then invoke the {@link
      * ITestDevice#preInvocationSetup(IBuildInfo)} for each device part of the invocation with
      * setting the GceAvdInfo of the device beforehand.
      *
@@ -600,7 +607,7 @@ public class InvocationExecution implements IInvocationExecution {
      * @throws DeviceNotAvailableException
      * @throws TargetSetupError
      */
-    private void runMultiDevicePreInvocationSetup(
+    private void runMultiVirtualDevicesPreInvocationSetup(
             IInvocationContext context, IConfiguration config, ITestLogger logger)
             throws TargetSetupError, DeviceNotAvailableException {
         // One GceManager is needed to lease the whole device group
