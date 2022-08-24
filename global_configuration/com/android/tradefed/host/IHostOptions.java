@@ -112,4 +112,7 @@ public interface IHostOptions {
 
     /** Returns the number of permits in use for a given type */
     public int getInUsePermits(PermitLimitType type);
+
+    /** Returns whether or not flashing should be done with fuse mounted device image zip file. */
+    public boolean shouldFlashWithFuseZip();
 }
