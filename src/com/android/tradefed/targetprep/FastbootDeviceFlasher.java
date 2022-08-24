@@ -18,11 +18,13 @@ package com.android.tradefed.targetprep;
 
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -88,8 +90,6 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     private CommandStatus mSystemFlashStatus;
 
     private boolean mShouldFlashRamdisk = false;
-
-    private boolean mFlashWithFuseZip = false;
 
     private String mRamdiskPartition = "root";
 
@@ -158,15 +158,6 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         // HACK: To workaround TF's command line parsing, options starting with a dash
         // needs to be prepended with a whitespace and trimmed before they are used.
         mFlashOptions = flashOptions.stream().map(String::trim).collect(Collectors.toList());
-    }
-
-    /**
-     * Sets a boolean to determine whether to use fuse-zip and fastboot flashall to do flashing.
-     *
-     * @param useFuseZip
-     */
-    public void setFlashWithFuseZip(boolean useFuseZip) {
-        mFlashWithFuseZip = useFuseZip;
     }
 
     /** {@inheritDoc} */
@@ -732,7 +723,8 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 device.getSerialNumber(), deviceBuild.getDeviceImageFile().getAbsolutePath());
         // give extra time to the update cmd
         try {
-            if (mFlashWithFuseZip && getFuseUtil().canMountZip()) {
+            if (getHostOptions().shouldFlashWithFuseZip()
+                && getFuseUtil().canMountZip()) {
                 flashWithFuseZip(device, deviceBuild);
             } else {
                 flashWithUpdateCommand(device, deviceBuild);
@@ -1086,5 +1078,11 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     protected void setSystemBuildInfo(String systemBuildId, String systemBuildFlavor) {
         mSystemBuildId = systemBuildId;
         mSystemBuildFlavor = systemBuildFlavor;
+    }
+
+    /** Gets the {@link IHostOptions} instance to use. */
+    @VisibleForTesting
+    IHostOptions getHostOptions() {
+        return GlobalConfiguration.getInstance().getHostOptions();
     }
 }
