@@ -134,6 +134,12 @@ public class HostOptions implements IHostOptions {
             description = "Preconfigured virtual device pool. (Value format: $hostname:$user.)")
     private List<String> mPreconfiguredVirtualDevicePool = new ArrayList<>();
 
+    @Option(
+            name = "flash-with-fuse-zip",
+            description = "Use `fastboot flashall` on a folder of fuse mounted device image zip "
+                    + "instead of `fastboot update` with zip")
+    private boolean mFlashWithFuseZip = false;
+
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
     private Map<PermitLimitType, Integer> mInternalConcurrentLimits = new HashMap<>();
 
@@ -342,5 +348,10 @@ public class HostOptions implements IHostOptions {
             return 0;
         }
         return mInternalConcurrentLimits.get(type) - mConcurrentLocks.get(type).availablePermits();
+    }
+
+    @Override
+    public boolean shouldFlashWithFuseZip() {
+        return mFlashWithFuseZip;
     }
 }
