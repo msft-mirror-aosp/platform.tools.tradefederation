@@ -36,6 +36,7 @@ import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceState;
+import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.IDeviceFlasher.UserDataFlashOption;
@@ -78,6 +79,7 @@ public class FastbootDeviceFlasherTest {
     @Mock IFlashingResourcesParser mMockParser;
     @Mock IRunUtil mMockRunUtil;
     @Mock FuseUtil mMockFuseUtil;
+    @Mock IHostOptions mMockHostOptions;
 
     @Before
     public void setUp() throws Exception {
@@ -108,6 +110,11 @@ public class FastbootDeviceFlasherTest {
                     @Override
                     protected FuseUtil getFuseUtil() {
                         return mMockFuseUtil;
+                    }
+
+                    @Override
+                    IHostOptions getHostOptions() {
+                        return mMockHostOptions;
                     }
                 };
         mFlasher.setFlashingResourcesRetriever(mMockRetriever);
@@ -623,7 +630,7 @@ public class FastbootDeviceFlasherTest {
         IDeviceBuildInfo mockBuild = mock(IDeviceBuildInfo.class);
         when(mockBuild.getDeviceBuildId()).thenReturn(buildId);
         File deviceImage = FileUtil.createTempFile("fakeDeviceImage", "");
-        mFlasher.setFlashWithFuseZip(true);
+        when(mMockHostOptions.shouldFlashWithFuseZip()).thenReturn(true);
         when(mMockFuseUtil.canMountZip()).thenReturn(true);
         try {
             when(mockBuild.getDeviceImageFile()).thenReturn(deviceImage);

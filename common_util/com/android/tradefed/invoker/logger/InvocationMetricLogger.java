@@ -208,6 +208,24 @@ public class InvocationMetricLogger {
 
         LAB_PREPARER_NOT_ILAB("lab_preparer_not_ilab", true),
         TARGET_PREPARER_IS_ILAB("target_preparer_is_ilab", true),
+
+        ART_RUN_TEST_CHECKER_COMMAND_TIME_MS("art_run_test_checker_command_time_ms", true),
+
+        // Following are trace events also reporting as metrics
+        invocation_warm_up("invocation_warm_up", true),
+        dynamic_download("dynamic_download", true),
+        fetch_artifact("fetch_artifact", true),
+        start_logcat("start_logcat", true),
+        pre_sharding_required_setup("pre_sharding_required_setup", true),
+        sharding("sharding", true),
+        lab_setup("lab_setup", true),
+        test_setup("test_setup", true),
+        test_execution("test_execution", true),
+        check_device_availability("check_device_availability", true),
+        bugreport("bugreport", true),
+        test_teardown("test_teardown", true),
+        test_cleanup("test_cleanup", true),
+        log_and_release_device("log_and_release_device", true),
         ;
 
         private final String mKeyName;

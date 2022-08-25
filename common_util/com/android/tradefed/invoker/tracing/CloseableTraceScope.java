@@ -15,6 +15,12 @@
  */
 package com.android.tradefed.invoker.tracing;
 
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+
+import com.google.common.base.Enums;
+import com.google.common.base.Optional;
+
 import perfetto.protos.PerfettoTrace.TrackEvent;
 
 /** A scoped class that allows to report tracing section via try-with-resources */
@@ -23,21 +29,37 @@ public class CloseableTraceScope implements AutoCloseable {
     private static final String DEFAULT_CATEGORY = "invocation";
     private final String category;
     private final String name;
+    private final long startTime;
 
-    /** Constructor. */
+    /**
+     * Report a scoped trace.
+     *
+     * @param category The category of the operation
+     * @param name The name for reporting the section
+     */
     public CloseableTraceScope(String category, String name) {
         this.category = category;
         this.name = name;
+        this.startTime = System.currentTimeMillis();
         ActiveTrace trace = TracingLogger.getActiveTrace();
         if (trace == null) {
             return;
         }
-        trace.reportTraceEvent(category, name, TrackEvent.Type.TYPE_SLICE_BEGIN);
+        int threadId = (int) Thread.currentThread().getId();
+        String threadName = Thread.currentThread().getName();
+        trace.reportTraceEvent(
+                category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_BEGIN);
+
     }
 
     /** Constructor. */
     public CloseableTraceScope(String name) {
         this(DEFAULT_CATEGORY, name);
+    }
+
+    /** Constructor for reporting scope from threads. */
+    public CloseableTraceScope() {
+        this(DEFAULT_CATEGORY, Thread.currentThread().getName());
     }
 
     @Override
@@ -46,6 +68,15 @@ public class CloseableTraceScope implements AutoCloseable {
         if (trace == null) {
             return;
         }
-        trace.reportTraceEvent(category, name, TrackEvent.Type.TYPE_SLICE_END);
+        int threadId = (int) Thread.currentThread().getId();
+        String threadName = Thread.currentThread().getName();
+        trace.reportTraceEvent(
+                category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_END);
+        Optional<InvocationMetricKey> optionalKey =
+                Enums.getIfPresent(InvocationMetricKey.class, name);
+        if (optionalKey.isPresent()) {
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    optionalKey.get(), startTime, System.currentTimeMillis());
+        }
     }
 }

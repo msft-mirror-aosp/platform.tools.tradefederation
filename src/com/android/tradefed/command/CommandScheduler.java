@@ -70,8 +70,10 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ConsoleResultReporter;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ILogSaver;
+import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.error.ErrorIdentifier;
@@ -650,7 +652,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         e);
                 setLastInvocationExitCode(ExitCode.FATAL_HOST_ERROR, e);
                 lastInvocationSet = true;
-                shutdown();
+                shutdown(true);
             } catch (Throwable e) {
                 setLastInvocationExitCode(ExitCode.THROWABLE_EXCEPTION, e);
                 lastInvocationSet = true;
@@ -699,15 +701,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 if (trace != null) {
                     File traceFile = trace.finalizeTracing();
                     if (traceFile != null) {
-                        try (FileInputStreamSource source =
-                                new FileInputStreamSource(traceFile, true)) {
-                            LogSaverResultForwarder.logFile(
-                                    config.getTestInvocationListeners(),
-                                    config.getLogSaver(),
-                                    source,
-                                    ActiveTrace.TRACE_KEY,
-                                    LogDataType.PERFETTO);
-                        }
+                        logTrace(traceFile, config);
                     }
                 }
                 if (config.getCommandOptions().reportInvocationComplete()) {
@@ -719,6 +713,37 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     LogRegistry.getLogRegistry().unregisterLogger();
                 }
                 clearTerminating(this);
+            }
+        }
+
+        /** Special handling to send the trace file from subprocess when needed. */
+        private void logTrace(File traceFile, IConfiguration config) {
+            if (config.getCommandOptions()
+                    .getInvocationData()
+                    .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)) {
+                CLog.logAndDisplay(LogLevel.INFO, "Sending trace from subprocess");
+                LogFile perfettoTrace =
+                        new LogFile(traceFile.getAbsolutePath(), null, LogDataType.PERFETTO);
+                for (ITestInvocationListener listener : config.getTestInvocationListeners()) {
+                    try {
+                        if (listener instanceof ILogSaverListener) {
+                            ((ILogSaverListener) listener)
+                                    .logAssociation(ActiveTrace.TRACE_KEY, perfettoTrace);
+                        }
+                    } catch (Exception e) {
+                        CLog.logAndDisplay(LogLevel.ERROR, e.getMessage());
+                        CLog.e(e);
+                    }
+                }
+            } else {
+                try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
+                    LogSaverResultForwarder.logFile(
+                            config.getTestInvocationListeners(),
+                            config.getLogSaver(),
+                            source,
+                            ActiveTrace.TRACE_KEY,
+                            LogDataType.PERFETTO);
+                }
             }
         }
 
@@ -1704,10 +1729,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             return execCmd.getCommandTracker().getId();
         } else {
             // Log adb output just to help debug
-            String adbOutput =
-                    ((DeviceManager) GlobalConfiguration.getDeviceManagerInstance())
-                            .executeGlobalAdbCommand("devices");
-            CLog.e("'adb devices' output:\n%s", adbOutput);
+            if (getDeviceManager() instanceof DeviceManager) {
+                String adbOutput =
+                        ((DeviceManager) getDeviceManager()).executeGlobalAdbCommand("devices");
+                CLog.e("'adb devices' output:\n%s", adbOutput);
+            }
             throw new NoDeviceException(
                     String.format(
                             "No device match for allocation. Reason: %s.\ncommand: %s",
@@ -1878,17 +1904,12 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     private synchronized void throwIfDeviceInInvocationThread(List<ITestDevice> devices) {
         for (ITestDevice device : devices) {
-            for (IInvocationContext context : mInvocationThreadMap.keySet()) {
-                if (context.getDevices().contains(device)) {
-                    if (context.wasReleasedEarly()) {
-                        return;
-                    }
-                    throw new IllegalStateException(
-                            String.format(
-                                    "Attempting invocation on device %s when one is already "
-                                            + "running",
-                                    device.getSerialNumber()));
-                }
+            if (isDeviceInInvocationThread(device)) {
+                throw new IllegalStateException(
+                        String.format(
+                                "Attempting invocation on device %s when one is already "
+                                        + "running",
+                                device.getSerialNumber()));
             }
         }
     }
@@ -1908,16 +1929,17 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return mCommandTimer.isShutdown() || mShutdownOnEmpty;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public synchronized void shutdown() {
+    public synchronized void shutdown(boolean notifyStop) {
         setHostState(HostState.QUITTING);
         doShutdown();
-        String reason = "Tradefed is notified to stop";
-        for (InvocationThread thread : mInvocationThreadMap.values()) {
-            thread.notifyInvocationStop(reason);
+
+        if (notifyStop) {
+            String reason = "Tradefed is notified to stop";
+            for (InvocationThread thread : mInvocationThreadMap.values()) {
+                thread.notifyInvocationStop(reason);
+            }
         }
     }
 
@@ -2419,5 +2441,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     @Override
     public void setClearcutClient(ClearcutClient client) {
         mClient = client;
+    }
+
+    @Override
+    public synchronized boolean isDeviceInInvocationThread(ITestDevice device) {
+        for (IInvocationContext context : mInvocationThreadMap.keySet()) {
+            if (context.getDevices().contains(device)) {
+                return !context.wasReleasedEarly();
+            }
+        }
+        return false;
     }
 }

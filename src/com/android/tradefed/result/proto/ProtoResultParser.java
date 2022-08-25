@@ -44,6 +44,7 @@ import com.android.tradefed.result.proto.TestRecordProto.DebugInfoContext;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.SerializationUtil;
 import com.android.tradefed.util.proto.TestRecordProtoUtil;
@@ -576,24 +577,31 @@ public class ProtoResultParser {
                 }
                 File path = new File(file.getPath());
                 if (Strings.isNullOrEmpty(file.getUrl()) && path.exists()) {
+                    LogDataType type = file.getType();
                     try (InputStreamSource source = new FileInputStreamSource(path)) {
-                        LogDataType type = file.getType();
                         // File might have already been compressed
                         if (file.getPath().endsWith(LogDataType.ZIP.getFileExt())) {
                             type = LogDataType.ZIP;
                         }
                         log("Logging %s from subprocess: %s ", entry.getKey(), file.getPath());
-                        if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
-                                && LogDataType.PERFETTO.equals(type)) {
-                            CLog.d("Log the subprocess trace");
-                            TracingLogger.getActiveTrace().addSubprocessTrace(path);
-                        }
                         logger.testLog(mFilePrefix + entry.getKey(), type, source);
+                    }
+                    if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
+                            && LogDataType.PERFETTO.equals(type)) {
+                        CLog.d("Log the subprocess trace");
+                        TracingLogger.getActiveTrace().addSubprocessTrace(path);
+                        FileUtil.deleteFile(path);
                     }
                 } else {
                     log(
-                            "Logging %s from subprocess. url: %s, path: %s",
-                            entry.getKey(), file.getUrl(), file.getPath());
+                            "Logging %s from subprocess. url: %s, path: %s [exists: %s]",
+                            entry.getKey(), file.getUrl(), file.getPath(), path.exists());
+                    if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
+                            && LogDataType.PERFETTO.equals(file.getType())
+                            && path.exists()) {
+                        CLog.d("Log the subprocess trace");
+                        TracingLogger.getActiveTrace().addSubprocessTrace(path);
+                    }
                     logger.logAssociation(mFilePrefix + entry.getKey(), file);
                 }
             } catch (InvalidProtocolBufferException e) {

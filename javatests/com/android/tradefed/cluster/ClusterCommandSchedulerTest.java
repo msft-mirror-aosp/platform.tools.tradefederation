@@ -452,6 +452,9 @@ public class ClusterCommandSchedulerTest {
                 .thenReturn(1);
         when(mMockHostOptions.getAvailablePermits(PermitLimitType.CONCURRENT_DOWNLOAD))
                 .thenReturn(5);
+        when(mMockHostOptions.getAvailablePermits(
+                        PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP))
+                .thenReturn(Integer.MAX_VALUE);
 
         // Actually fetch commands
         final List<ClusterCommand> commands = mScheduler.fetchHostCommands(deviceMap);

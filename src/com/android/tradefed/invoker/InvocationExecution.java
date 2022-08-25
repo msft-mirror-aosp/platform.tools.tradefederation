@@ -34,6 +34,9 @@ import com.android.tradefed.config.filter.GetPreviousPassedHelper;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.device.cloud.GceAvdInfo;
+import com.android.tradefed.device.cloud.GceManager;
+import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
@@ -262,7 +265,8 @@ public class InvocationExecution implements IInvocationExecution {
         mTrackLabPreparers = new ConcurrentHashMap<>();
         mTrackTargetPreparers = new ConcurrentHashMap<>();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_START, start);
-        try (CloseableTraceScope ignored = new CloseableTraceScope("lab-setup")) {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(InvocationMetricKey.lab_setup.name())) {
             for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
                 ITestDevice device = testInfo.getContext().getDevice(deviceName);
                 CLog.d("Starting setup for device: '%s'", device.getSerialNumber());
@@ -287,7 +291,8 @@ public class InvocationExecution implements IInvocationExecution {
                     InvocationMetricKey.SETUP_PAIR, start, end);
         }
         long startPreparer = System.currentTimeMillis();
-        try (CloseableTraceScope ignored = new CloseableTraceScope("test-setup")) {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(InvocationMetricKey.test_setup.name())) {
             runPreparersSetup(testInfo, config, listener);
 
             // After all the individual setup, make the multi-devices setup
@@ -472,7 +477,8 @@ public class InvocationExecution implements IInvocationExecution {
             CLog.d(
                     "starting lab preparer '%s' on device: '%s'",
                     preparer, device.getSerialNumber());
-            try {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(preparer.getClass().getSimpleName())) {
                 testInfo.setActiveDeviceIndex(index);
                 preparer.setUp(testInfo);
             } finally {
@@ -522,7 +528,8 @@ public class InvocationExecution implements IInvocationExecution {
 
             long startTime = System.currentTimeMillis();
             CLog.d("starting preparer '%s' on device: '%s'", preparer, device.getSerialNumber());
-            try {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(preparer.getClass().getSimpleName())) {
                 testInfo.setActiveDeviceIndex(index);
                 preparer.setUp(testInfo);
             } finally {
@@ -555,22 +562,91 @@ public class InvocationExecution implements IInvocationExecution {
             return;
         }
         long start = System.currentTimeMillis();
-        try (CloseableTraceScope ignore = new CloseableTraceScope("device_pre_invocation_setup")) {
-            customizeDevicePreInvocation(config, context);
-            for (String deviceName : context.getDeviceConfigNames()) {
-                ITestDevice device = context.getDevice(deviceName);
+        customizeDevicePreInvocation(config, context);
 
-                CLog.d("Starting device pre invocation setup for : '%s'", device.getSerialNumber());
-                if (device instanceof ITestLoggerReceiver) {
-                    ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+        // Multi-device test scenario
+        Integer multiDeviceCount = config.getCommandOptions().getMultiDeviceCount();
+        boolean allVirtualDevices = true;
+        for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+            if (!deviceConfig.getDeviceRequirements().gceDeviceRequested()) {
+                allVirtualDevices = false;
+                break;
+            }
+        }
+        if (multiDeviceCount != null && multiDeviceCount != 1 && allVirtualDevices) {
+            runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
+        } else {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope("device_pre_invocation_setup")) {
+                for (String deviceName : context.getDeviceConfigNames()) {
+                    ITestDevice device = context.getDevice(deviceName);
+                    CLog.d(
+                            "Starting device pre invocation setup for : '%s'",
+                            device.getSerialNumber());
+                    if (device instanceof ITestLoggerReceiver) {
+                        ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+                    }
+                    device.preInvocationSetup(
+                            context.getBuildInfo(deviceName), context.getAttributes());
                 }
-                device.preInvocationSetup(
-                        context.getBuildInfo(deviceName), context.getAttributes());
             }
         }
         // Also report device pre invocation into setup
         InvocationMetricLogger.addInvocationPairMetrics(
                 InvocationMetricKey.SETUP_PAIR, start, System.currentTimeMillis());
+    }
+
+    /**
+     * Launch multiple virtual devices together, then invoke the {@link
+     * ITestDevice#preInvocationSetup(IBuildInfo)} for each device part of the invocation with
+     * setting the GceAvdInfo of the device beforehand.
+     *
+     * @param context the {@link IInvocationContext} of the invocation.
+     * @param config the {@link IConfiguration} of this test run.
+     * @param logger the {@link ITestLogger} to report logs.
+     * @throws DeviceNotAvailableException
+     * @throws TargetSetupError
+     */
+    private void runMultiVirtualDevicesPreInvocationSetup(
+            IInvocationContext context, IConfiguration config, ITestLogger logger)
+            throws TargetSetupError, DeviceNotAvailableException {
+        // One GceManager is needed to lease the whole device group
+        String firstDeviceName = context.getDeviceConfigNames().get(0);
+        ITestDevice firstDevice = context.getDevice(firstDeviceName);
+        GceManager multiDeviceRequester =
+                new GceManager(
+                        firstDevice.getDeviceDescriptor(),
+                        firstDevice.getOptions(),
+                        context.getBuildInfo(firstDeviceName));
+
+        List<ITestDevice> devices = context.getDevices();
+        List<IBuildInfo> buildInfos = context.getBuildInfos();
+
+        // Start multiple devices in a group
+        List<GceAvdInfo> gceAvdInfoList = multiDeviceRequester.startMultiDevicesGce(buildInfos);
+        for (int i = 0; i < devices.size(); i++) {
+            RemoteAndroidVirtualDevice device = (RemoteAndroidVirtualDevice) devices.get(i);
+            // For each device, do setup with its GceAvdInfo
+            CLog.d(
+                    "Starting device pre invocation launched device setup with GceAvdInfo %s"
+                            + " for : '%s'",
+                    gceAvdInfoList.get(i), device.getSerialNumber());
+            device.setAvdInfo(gceAvdInfoList.get(i));
+            device.preInvocationSetup(buildInfos.get(i), context.getAttributes());
+
+            // Last device in the group is responsible for releasing the whole device group
+            if (i != devices.size() - 1) {
+                CLog.d(
+                        "Set device %s to skip tear down because only the last device in the"
+                                + " device group will be responsible for tearing down the whole"
+                                + " device group",
+                        device.getSerialNumber());
+                device.getOptions().setSkipTearDown(true);
+            }
+
+            // Every RemoteAndroidVirtualDevice is a ITestLoggerReceiver
+            ((ITestLoggerReceiver) device).setTestLogger(logger);
+        }
     }
 
     /**
@@ -885,118 +961,123 @@ public class InvocationExecution implements IInvocationExecution {
         Runtime.getRuntime().addShutdownHook(reporterThread);
         TestInvocation.printStageDelimiter(Stage.TEST, false);
         long start = System.currentTimeMillis();
-        try (CloseableTraceScope ignored = new CloseableTraceScope("test-execution")) {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(InvocationMetricKey.test_execution.name())) {
             GetPreviousPassedHelper previousPassHelper = new GetPreviousPassedHelper();
             // Add new exclude filters to global filters
             Set<String> previousPassedFilters = previousPassHelper.getPreviousPassedFilters(config);
             // TODO: Ensure global filters are cloned for local sharding
             config.getGlobalFilters().addPreviousPassedTests(previousPassedFilters);
             for (IRemoteTest test : config.getTests()) {
-                TfObjectTracker.countWithParents(test.getClass());
-                // For compatibility of those receivers, they are assumed to be single device alloc.
-                if (test instanceof IDeviceTest) {
-                    ((IDeviceTest) test).setDevice(info.getDevice());
-                }
-                if (test instanceof IBuildReceiver) {
-                    ((IBuildReceiver) test).setBuild(info.getBuildInfo());
-                }
-                if (test instanceof ISystemStatusCheckerReceiver) {
-                    ((ISystemStatusCheckerReceiver) test)
-                            .setSystemStatusChecker(config.getSystemStatusCheckers());
-                }
-                if (test instanceof IInvocationContextReceiver) {
-                    ((IInvocationContextReceiver) test).setInvocationContext(info.getContext());
-                }
+                try (CloseableTraceScope remoteTest =
+                        new CloseableTraceScope(test.getClass().getSimpleName())) {
+                    TfObjectTracker.countWithParents(test.getClass());
+                    // For compatibility of those receivers, they are assumed to be single device
+                    // alloc.
+                    if (test instanceof IDeviceTest) {
+                        ((IDeviceTest) test).setDevice(info.getDevice());
+                    }
+                    if (test instanceof IBuildReceiver) {
+                        ((IBuildReceiver) test).setBuild(info.getBuildInfo());
+                    }
+                    if (test instanceof ISystemStatusCheckerReceiver) {
+                        ((ISystemStatusCheckerReceiver) test)
+                                .setSystemStatusChecker(config.getSystemStatusCheckers());
+                    }
+                    if (test instanceof IInvocationContextReceiver) {
+                        ((IInvocationContextReceiver) test).setInvocationContext(info.getContext());
+                    }
 
-                updateAutoCollectors(config);
+                    updateAutoCollectors(config);
 
-                IRetryDecision decision = config.getRetryDecision();
-                // Apply the filters
-                if (test instanceof ITestFilterReceiver) {
-                    config.getGlobalFilters().applyFiltersToTest((ITestFilterReceiver) test);
-                } else if (test instanceof BaseTestSuite) {
-                    config.getGlobalFilters().applyFiltersToTest((BaseTestSuite) test);
-                }
-                // Handle the no-retry use case
-                if (!decision.isAutoRetryEnabled()
-                        || RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())
-                        || test instanceof ITestSuite
-                        // TODO: Handle auto-retry in local-sharding for non-suite
-                        || test instanceof TestsPoolPoller
-                        // If test doesn't support auto-retry
-                        || (!(test instanceof ITestFilterReceiver)
-                                && !(test instanceof IAutoRetriableTest))) {
+                    IRetryDecision decision = config.getRetryDecision();
+                    // Apply the filters
+                    if (test instanceof ITestFilterReceiver) {
+                        config.getGlobalFilters().applyFiltersToTest((ITestFilterReceiver) test);
+                    } else if (test instanceof BaseTestSuite) {
+                        config.getGlobalFilters().applyFiltersToTest((BaseTestSuite) test);
+                    }
+                    // Handle the no-retry use case
+                    if (!decision.isAutoRetryEnabled()
+                            || RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())
+                            || test instanceof ITestSuite
+                            // TODO: Handle auto-retry in local-sharding for non-suite
+                            || test instanceof TestsPoolPoller
+                            // If test doesn't support auto-retry
+                            || (!(test instanceof ITestFilterReceiver)
+                                    && !(test instanceof IAutoRetriableTest))) {
+                        try {
+                            runTest(config, info, listener, test);
+                        } finally {
+                            CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
+                            CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                        }
+                        remainingTests.remove(test);
+                        continue;
+                    }
+                    CLog.d("Using RetryLogSaverResultForwarder to forward results.");
+                    ModuleListener mainGranularRunListener = new ModuleListener(null);
+                    RetryLogSaverResultForwarder runListener =
+                            initializeListeners(config, listener, mainGranularRunListener);
+                    mainGranularRunListener.setAttemptIsolation(
+                            CurrentInvocation.runCurrentIsolation());
                     try {
-                        runTest(config, info, listener, test);
+                        runTest(config, info, runListener, test);
                     } finally {
                         CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                         CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
                     }
                     remainingTests.remove(test);
-                    continue;
-                }
-                CLog.d("Using RetryLogSaverResultForwarder to forward results.");
-                ModuleListener mainGranularRunListener = new ModuleListener(null);
-                RetryLogSaverResultForwarder runListener =
-                        initializeListeners(config, listener, mainGranularRunListener);
-                mainGranularRunListener.setAttemptIsolation(
-                        CurrentInvocation.runCurrentIsolation());
-                try {
-                    runTest(config, info, runListener, test);
-                } finally {
-                    CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
-                    CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
-                }
-                remainingTests.remove(test);
-                runListener.incrementAttempt();
+                    runListener.incrementAttempt();
 
-                // Avoid entering the loop if no retry to be done.
-                if (!decision.shouldRetry(
-                        test, 0, mainGranularRunListener.getTestRunForAttempts(0))) {
-                    continue;
-                }
-                // Avoid rechecking the shouldRetry below the first time as it could retrigger
-                // reboot.
-                boolean firstCheck = true;
-                long startTime = System.currentTimeMillis();
-                try {
-                    PrettyPrintDelimiter.printStageDelimiter("Starting auto-retry");
-                    for (int attemptNumber = 1;
-                            attemptNumber < decision.getMaxRetryCount();
-                            attemptNumber++) {
-                        if (!firstCheck) {
-                            boolean retry =
-                                    decision.shouldRetry(
-                                            test,
-                                            attemptNumber - 1,
-                                            mainGranularRunListener.getTestRunForAttempts(
-                                                    attemptNumber - 1));
-                            if (!retry) {
-                                continue;
-                            }
-                        }
-                        firstCheck = false;
-                        CLog.d("auto-retry attempt number '%s'", attemptNumber);
-                        mainGranularRunListener.setAttemptIsolation(
-                                CurrentInvocation.runCurrentIsolation());
-                        try {
-                            // Run the tests again
-                            runTest(config, info, runListener, test);
-                        } finally {
-                            CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
-                            CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
-                        }
-                        runListener.incrementAttempt();
+                    // Avoid entering the loop if no retry to be done.
+                    if (!decision.shouldRetry(
+                            test, 0, mainGranularRunListener.getTestRunForAttempts(0))) {
+                        continue;
                     }
-                    // Feed the last attempt if we reached here.
-                    decision.addLastAttempt(
-                            mainGranularRunListener.getTestRunForAttempts(
-                                    decision.getMaxRetryCount() - 1));
-                } finally {
-                    RetryStatistics retryStats = decision.getRetryStatistics();
-                    // Track how long we spend in retry
-                    retryStats.mRetryTime = System.currentTimeMillis() - startTime;
-                    addRetryTime(retryStats.mRetryTime);
+                    // Avoid rechecking the shouldRetry below the first time as it could retrigger
+                    // reboot.
+                    boolean firstCheck = true;
+                    long startTime = System.currentTimeMillis();
+                    try {
+                        PrettyPrintDelimiter.printStageDelimiter("Starting auto-retry");
+                        for (int attemptNumber = 1;
+                                attemptNumber < decision.getMaxRetryCount();
+                                attemptNumber++) {
+                            if (!firstCheck) {
+                                boolean retry =
+                                        decision.shouldRetry(
+                                                test,
+                                                attemptNumber - 1,
+                                                mainGranularRunListener.getTestRunForAttempts(
+                                                        attemptNumber - 1));
+                                if (!retry) {
+                                    continue;
+                                }
+                            }
+                            firstCheck = false;
+                            CLog.d("auto-retry attempt number '%s'", attemptNumber);
+                            mainGranularRunListener.setAttemptIsolation(
+                                    CurrentInvocation.runCurrentIsolation());
+                            try {
+                                // Run the tests again
+                                runTest(config, info, runListener, test);
+                            } finally {
+                                CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
+                                CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                            }
+                            runListener.incrementAttempt();
+                        }
+                        // Feed the last attempt if we reached here.
+                        decision.addLastAttempt(
+                                mainGranularRunListener.getTestRunForAttempts(
+                                        decision.getMaxRetryCount() - 1));
+                    } finally {
+                        RetryStatistics retryStats = decision.getRetryStatistics();
+                        // Track how long we spend in retry
+                        retryStats.mRetryTime = System.currentTimeMillis() - startTime;
+                        addRetryTime(retryStats.mRetryTime);
+                    }
                 }
             }
         } finally {
@@ -1333,6 +1414,14 @@ public class InvocationExecution implements IInvocationExecution {
                 && CommandStatus.SUCCESS.equals(kernelInfoResult.getStatus())) {
             info.getBuildInfo()
                     .addBuildAttribute("device_kernel_info", kernelInfoResult.getStdout().trim());
+        }
+        String system_img_info = device.getProperty("ro.system.build.fingerprint");
+        if (system_img_info != null) {
+            info.getBuildInfo().addBuildAttribute("system_img_info", system_img_info);
+        }
+        String vendor_img_info = device.getProperty("ro.vendor.build.fingerprint");
+        if (vendor_img_info != null) {
+            info.getBuildInfo().addBuildAttribute("vendor_img_info", vendor_img_info);
         }
     }
 }

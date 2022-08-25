@@ -20,6 +20,8 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.ActiveTrace;
+import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -554,9 +556,14 @@ public class SubprocessTestResultsParser implements Closeable {
                             assosInfo.mDataName);
                     return;
                 }
-                try (InputStreamSource source = new FileInputStreamSource(path)) {
+                try (InputStreamSource source = new FileInputStreamSource(path, true)) {
                     LogDataType type = file.getType();
                     CLog.d("Logging %s from subprocess: %s ", assosInfo.mDataName, file.getPath());
+                    if (ActiveTrace.TRACE_KEY.equals(assosInfo.mDataName)
+                            && LogDataType.PERFETTO.equals(type)) {
+                        CLog.d("Log the subprocess trace");
+                        TracingLogger.getActiveTrace().addSubprocessTrace(path);
+                    }
                     mListener.testLog(name, type, source);
                 }
             } else {

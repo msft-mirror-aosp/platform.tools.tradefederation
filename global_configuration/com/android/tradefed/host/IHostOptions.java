@@ -36,7 +36,8 @@ public interface IHostOptions {
      */
     public enum PermitLimitType {
         CONCURRENT_FLASHER,
-        CONCURRENT_DOWNLOAD;
+        CONCURRENT_DOWNLOAD,
+        CONCURRENT_VIRTUAL_DEVICE_STARTUP;
     }
 
     /**
@@ -51,6 +52,12 @@ public interface IHostOptions {
      * downloads remote builds.
      */
     Integer getConcurrentDownloadLimit();
+
+    /**
+     * Returns the max number of concurrent virtual device startup allowed. Used by {@link
+     * com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice} that startup virtual device.
+     */
+    Integer getConcurrentVirtualDeviceStartupLimit();
 
     /** Returns the path that fastboot should use as temporary folder. */
     File getFastbootTmpDir();
@@ -105,4 +112,7 @@ public interface IHostOptions {
 
     /** Returns the number of permits in use for a given type */
     public int getInUsePermits(PermitLimitType type);
+
+    /** Returns whether or not flashing should be done with fuse mounted device image zip file. */
+    public boolean shouldFlashWithFuseZip();
 }
