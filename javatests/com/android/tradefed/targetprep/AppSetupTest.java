@@ -20,6 +20,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -115,6 +116,36 @@ public class AppSetupTest {
                             "Failed to install %s on %s. Reason: Error null",
                             tmpFile.getName(), SERIAL),
                     expected.getMessage());
+        } finally {
+            FileUtil.deleteFile(tmpFile);
+        }
+    }
+
+    /**
+     * Test for {@link AppSetup#setUp(ITestDevice, IBuildInfo)} on the device that is api 34, no
+     * force-queryable option in the installation command.
+     */
+    @Test
+    public void testSetup_deviceApi34_forceQueryableIsFalse() throws Exception {
+        mAppSetup =
+                new AppSetup() {
+                    @Override
+                    AaptParser doAaptParse(File apkFile) {
+                        return mMockAaptParser;
+                    }
+                };
+        List<VersionedFile> files = new ArrayList<>();
+        File tmpFile = FileUtil.createTempFile("versioned", ".test");
+        try {
+            files.add(new VersionedFile(tmpFile, "1"));
+            when(mMockDevice.checkApiLevelAgainstNextRelease(Mockito.eq(34))).thenReturn(true);
+            when(mMockDevice.isAppEnumerationSupported()).thenReturn(true);
+            when(mMockBuildInfo.getAppPackageFiles()).thenReturn(files);
+            when(mMockDevice.installPackage(eq(tmpFile), eq(true))).thenReturn(null);
+            doReturn("com.fake.package").when(mMockAaptParser).getPackageName();
+
+            mAppSetup.setUp(mMockDevice, mMockBuildInfo);
+            verify(mMockDevice, atLeastOnce()).installPackage(eq(tmpFile), Mockito.eq(true));
         } finally {
             FileUtil.deleteFile(tmpFile);
         }
