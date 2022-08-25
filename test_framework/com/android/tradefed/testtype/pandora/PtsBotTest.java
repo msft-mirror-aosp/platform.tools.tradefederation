@@ -189,7 +189,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             }
         }
 
-        // Test ressources files are not executable
+        // Test resources files are not executable
         ptsBotPath.setExecutable(true);
 
         displayPtsBotVersion();
@@ -271,11 +271,12 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             stdInput.close();
 
             if (line != null) {
-                String[] tests =
-                        line.substring(line.indexOf("[") + 1, line.indexOf("]"))
-                                .replaceAll("\"", "")
-                                .split(", ");
-                return tests;
+                String testsStr = line.substring(line.indexOf("[") + 1, line.indexOf("]"));
+                if (!testsStr.equals("")) {
+                    return testsStr.replaceAll("\"", "").split(", ");
+                } else {
+                    return new String[0];
+                }
             }
 
         } catch (IOException e) {
@@ -311,6 +312,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             }
             long endTimestamp = System.currentTimeMillis();
             listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
+        } else {
+            CLog.w("No tests applicable for %s", profile);
         }
     }
 
@@ -425,7 +428,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
      *
      * <p>With Cuttlefish, RootCanal the HCI virtual emulator runs on the Host and Android on the
      * Guest. To connect to the RootCanal HCI we would need to create a tunnel to the Host machine,
-     * however we only have a conveninent access to the Guest.
+     * however we only have a convenient access to the Guest.
      *
      * <p>Fortunately the Host and the Guest are connected via a network, so from the Guest,
      * RootCanal is accessible with ip 192.168.97.1 and port 7300
