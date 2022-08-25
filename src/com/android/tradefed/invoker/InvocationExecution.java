@@ -1415,5 +1415,13 @@ public class InvocationExecution implements IInvocationExecution {
             info.getBuildInfo()
                     .addBuildAttribute("device_kernel_info", kernelInfoResult.getStdout().trim());
         }
+        String system_img_info = device.getProperty("ro.system.build.fingerprint");
+        if (system_img_info != null) {
+            info.getBuildInfo().addBuildAttribute("system_img_info", system_img_info);
+        }
+        String vendor_img_info = device.getProperty("ro.vendor.build.fingerprint");
+        if (vendor_img_info != null) {
+            info.getBuildInfo().addBuildAttribute("vendor_img_info", vendor_img_info);
+        }
     }
 }
