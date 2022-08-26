@@ -1904,17 +1904,12 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     private synchronized void throwIfDeviceInInvocationThread(List<ITestDevice> devices) {
         for (ITestDevice device : devices) {
-            for (IInvocationContext context : mInvocationThreadMap.keySet()) {
-                if (context.getDevices().contains(device)) {
-                    if (context.wasReleasedEarly()) {
-                        return;
-                    }
-                    throw new IllegalStateException(
-                            String.format(
-                                    "Attempting invocation on device %s when one is already "
-                                            + "running",
-                                    device.getSerialNumber()));
-                }
+            if (isDeviceInInvocationThread(device)) {
+                throw new IllegalStateException(
+                        String.format(
+                                "Attempting invocation on device %s when one is already "
+                                        + "running",
+                                device.getSerialNumber()));
             }
         }
     }
@@ -2446,5 +2441,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     @Override
     public void setClearcutClient(ClearcutClient client) {
         mClient = client;
+    }
+
+    @Override
+    public synchronized boolean isDeviceInInvocationThread(ITestDevice device) {
+        for (IInvocationContext context : mInvocationThreadMap.keySet()) {
+            if (context.getDevices().contains(device)) {
+                return !context.wasReleasedEarly();
+            }
+        }
+        return false;
     }
 }
