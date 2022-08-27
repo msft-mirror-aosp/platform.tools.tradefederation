@@ -216,9 +216,9 @@ public final class AtraceCollectorTest {
                 new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
         verify(mMockDevice, times(1))
                 .executeShellCommand(
-                        Mockito.eq("atrace --async_stop -o " + M_DEFAULT_LOG_PATH),
+                        Mockito.eq("atrace --async_stop -z -c -o " + M_DEFAULT_LOG_PATH),
                         Mockito.any(),
-                        Mockito.eq(60L),
+                        Mockito.eq(300L),
                         Mockito.any(),
                         Mockito.eq(1));
         verify(mMockDevice, times(1)).pullFile(Mockito.eq(M_DEFAULT_LOG_PATH));
@@ -243,9 +243,9 @@ public final class AtraceCollectorTest {
                 new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
         verify(mMockDevice, times(1))
                 .executeShellCommand(
-                        Mockito.eq("atrace --async_stop -o " + M_DEFAULT_LOG_PATH),
+                        Mockito.eq("atrace --async_stop -z -c -o " + M_DEFAULT_LOG_PATH),
                         Mockito.any(),
-                        Mockito.eq(60L),
+                        Mockito.eq(300L),
                         Mockito.any(),
                         Mockito.eq(1));
         verify(mMockDevice, times(1)).pullFile(Mockito.eq(M_DEFAULT_LOG_PATH));
@@ -694,4 +694,46 @@ public final class AtraceCollectorTest {
                         Mockito.any());
         verify(mMockRunUtil, times(1)).runTimedCmd(Mockito.anyLong(), Mockito.any());
     }
+
+    /**
+     * Test {@link AtraceCollector#onTestStart(DeviceMetricData)} to see if atrace collection
+     * is not started when skip-atrace-start option is enabled. Assumption is that the
+     * boot tracing is enabled via bootloader option.
+     * Test {@link AtraceCollector#onTestEnd(DeviceMetricData, Map)} to see if atrace collection
+     * stopped correctly.
+     *
+     * <p>
+     */
+    @Test
+    public void testSkipAtraceStartOption() throws Exception {
+        TestDescription test = new TestDescription("class", "test");
+        when(mMockDevice.pullFile(Mockito.eq(M_DEFAULT_LOG_PATH)))
+                .thenReturn(new File("/tmp/potato"));
+
+        mOptionSetter.setOptionValue("skip-atrace-start", "true");
+        mOptionSetter.setOptionValue("atrace-on-boot", "true");
+
+        mAtrace.onTestStart(new DeviceMetricData(mMockInvocationContext));
+        // Start trace should not be called because the assumption is that
+        // tracing is enabled via bootloader trace option.
+        verify(mMockDevice, times(0))
+                .executeShellCommand(
+                        Mockito.eq("atrace --async_start -z " + M_CATEGORIES),
+                        Mockito.any(),
+                        Mockito.eq(1L),
+                        Mockito.any(),
+                        Mockito.eq(1));
+
+        mAtrace.onTestEnd(
+                new DeviceMetricData(mMockInvocationContext), new HashMap<String, Metric>(), test);
+        verify(mMockDevice, times(1))
+                .executeShellCommand(
+                        Mockito.eq("atrace --async_stop -z -c -o " + M_DEFAULT_LOG_PATH),
+                        Mockito.any(),
+                        Mockito.eq(300L),
+                        Mockito.any(),
+                        Mockito.eq(1));
+        verify(mMockDevice, times(1)).pullFile(Mockito.eq(M_DEFAULT_LOG_PATH));
+    }
+
 }

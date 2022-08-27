@@ -80,6 +80,11 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
             description = "enable atrace collection for bootup")
     private boolean mTraceOnBoot = false;
 
+    @Option(name = "skip-atrace-start",
+            description = "Skip atrace start if the option is enabled. Needed when atrace is"
+                + "enabled through fastboot option.")
+    private boolean mSkipAtraceStart = false;
+
     /* These options will arrange a post processing executable binary to be ran on the collected
      * trace.
      * E.G.
@@ -169,6 +174,10 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
 
     @Override
     public void onTestStart(DeviceMetricData testData) throws DeviceNotAvailableException {
+        if(mSkipAtraceStart) {
+            CLog.d("Skip atrace start because tracing is enabled through fastboot option");
+            return;
+        }
         if (mCategories.isEmpty()) {
             CLog.d("no categories specified to trace, not running AtraceMetricCollector");
             return;
@@ -204,11 +213,12 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
     protected void stopTracing(ITestDevice device) throws DeviceNotAvailableException {
         CLog.i("collecting atrace log from device: %s", device.getSerialNumber());
         device.executeShellCommand(
-                "atrace --async_stop -o " + fullLogPath(),
+                "atrace --async_stop -z -c -o " + fullLogPath(),
                 new NullOutputReceiver(),
-                60,
+                300,
                 TimeUnit.SECONDS,
                 1);
+        CLog.d("Trace collected successfully.");
     }
 
     private void postProcess(File trace) {
@@ -272,10 +282,14 @@ public class AtraceCollector extends BaseDeviceMetricCollector {
             TestDescription test)
             throws DeviceNotAvailableException {
 
-        if (mCategories.isEmpty()) {
+
+        if (!mSkipAtraceStart && mCategories.isEmpty()) {
             return;
         }
 
+        // Stop and collect the atrace only if the atrace start is skipped which
+        // then uses the default categories or if the categories are explicitly
+        // passed.
         for (ITestDevice device : getDevices()) {
             try {
                 stopTracing(device);
