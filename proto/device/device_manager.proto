@@ -78,7 +78,7 @@ message ReserveDeviceResponse {
   string message = 3;
 }
 
-// The requeset to release reservation
+// The request to release reservation
 message ReleaseReservationRequest {
   // Unique identifier tracking the reservation
   string reservation_id = 1;
@@ -90,8 +90,10 @@ message ReleaseReservationResponse {
     UNKNOWN = 0;
     // Succeed to release reservation
     SUCCEED = 1;
-    // Fail to release reservation
-    FAIL = 2;
+    // Fail to release reservation because it does not exist
+    RESERVATION_NOT_EXIST = 2;
+    // Fail to release reservation because the device is still in use
+    DEVICE_IN_USE = 3;
   }
   Result result = 1;
   // In case of error, this can contain debugging reason
