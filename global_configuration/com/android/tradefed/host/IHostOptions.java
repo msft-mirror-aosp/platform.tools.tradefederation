@@ -115,4 +115,7 @@ public interface IHostOptions {
 
     /** Returns whether or not flashing should be done with fuse mounted device image zip file. */
     public boolean shouldFlashWithFuseZip();
+
+    /** Return maximum allowed size(bytes) of the local file cache. */
+    public Long getCacheSizeLimit();
 }
