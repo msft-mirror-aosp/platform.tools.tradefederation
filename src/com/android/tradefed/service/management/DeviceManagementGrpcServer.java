@@ -122,16 +122,21 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
         ITestDevice device = getDeviceFromReservationAndClear(request.getReservationId());
         if (device == null) {
             responseBuilder
-                    .setResult(ReleaseReservationResponse.Result.FAIL)
+                    .setResult(ReleaseReservationResponse.Result.RESERVATION_NOT_EXIST)
                     .setMessage(
                             String.format(
                                     "Reservation id released '%s' is untracked",
                                     request.getReservationId()));
+        } else if (mCommandScheduler.isDeviceInInvocationThread(device)) {
+            responseBuilder
+                    .setResult(ReleaseReservationResponse.Result.DEVICE_IN_USE)
+                    .setMessage(
+                            String.format(
+                                    "Reservation '%s' is still in use",
+                                    request.getReservationId()));
         } else {
-            if (!mCommandScheduler.isDeviceInInvocationThread(device)) {
-                // Free the device if it is not used by any invocation
-                mDeviceManager.freeDevice(device, FreeDeviceState.AVAILABLE);
-            }
+            // Free the device if it is not used by any invocation
+            mDeviceManager.freeDevice(device, FreeDeviceState.AVAILABLE);
             responseBuilder.setResult(ReleaseReservationResponse.Result.SUCCEED);
         }
         responseObserver.onNext(responseBuilder.build());
