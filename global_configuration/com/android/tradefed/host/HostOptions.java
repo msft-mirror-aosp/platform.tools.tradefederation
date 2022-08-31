@@ -140,8 +140,20 @@ public class HostOptions implements IHostOptions {
                     + "instead of `fastboot update` with zip")
     private boolean mFlashWithFuseZip = false;
 
+    @Option(
+            name = "cache-size-limit",
+            description =
+                    "The maximum allowed size(bytes) of the local file cache. (default: 20GB)")
+    private Long mCacheSizeLimit = 20L * 1024L * 1024L * 1024L;
+
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
     private Map<PermitLimitType, Integer> mInternalConcurrentLimits = new HashMap<>();
+
+    /** {@inheritDoc} */
+    @Override
+    public Long getCacheSizeLimit() {
+        return mCacheSizeLimit;
+    }
 
     /** {@inheritDoc} */
     @Override
