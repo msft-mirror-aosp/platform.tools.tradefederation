@@ -171,7 +171,8 @@ public class DeviceManagementGrpcServerTest {
         verify(mMockDeviceManager).freeDevice(mockedDevice, FreeDeviceState.AVAILABLE);
 
         ReleaseReservationResponse untracked = releases.get(1);
-        assertThat(untracked.getResult()).isEqualTo(ReleaseReservationResponse.Result.FAIL);
+        assertThat(untracked.getResult())
+                .isEqualTo(ReleaseReservationResponse.Result.RESERVATION_NOT_EXIST);
     }
 
     @Test
@@ -197,7 +198,7 @@ public class DeviceManagementGrpcServerTest {
         verify(mReleaseReservationResponseObserver)
                 .onNext(mReleaseReservationResponseCaptor.capture());
         ReleaseReservationResponse response = mReleaseReservationResponseCaptor.getValue();
-        assertThat(response.getResult()).isEqualTo(ReleaseReservationResponse.Result.SUCCEED);
+        assertThat(response.getResult()).isEqualTo(ReleaseReservationResponse.Result.DEVICE_IN_USE);
         verify(mMockDeviceManager, never()).freeDevice(mockedDevice, FreeDeviceState.AVAILABLE);
     }
 
