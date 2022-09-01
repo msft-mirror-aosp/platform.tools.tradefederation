@@ -72,7 +72,13 @@ public class DeviceBaselineCheckerTest {
         deviceBaselineSetters.add(mockSetterNotExp);
         mChecker.setDeviceBaselineSetters(deviceBaselineSetters);
 
-        assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
+        StatusCheckerResult result = mChecker.preExecutionCheck(mMockDevice);
+
+        assertEquals(CheckStatus.SUCCESS, result.getStatus());
+        assertEquals(
+                result.getModuleProperties()
+                        .getOrDefault("system_checker_enabled_device_baseline", ""),
+                "test1,test2");
         verify(mockSetterExp, times(1)).setBaseline(mMockDevice);
         verify(mockSetterNotExp, times(1)).setBaseline(mMockDevice);
     }
@@ -91,7 +97,13 @@ public class DeviceBaselineCheckerTest {
         deviceBaselineSetters.add(mockSetter);
         mChecker.setDeviceBaselineSetters(deviceBaselineSetters);
 
-        assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
+        StatusCheckerResult result = mChecker.preExecutionCheck(mMockDevice);
+
+        assertEquals(CheckStatus.SUCCESS, result.getStatus());
+        assertEquals(
+                result.getModuleProperties()
+                        .getOrDefault("system_checker_enabled_device_baseline", ""),
+                "");
         verify(mockSetter, times(0)).setBaseline(mMockDevice);
     }
 
@@ -109,9 +121,13 @@ public class DeviceBaselineCheckerTest {
         deviceBaselineSetters.add(mockSetter);
         mChecker.setDeviceBaselineSetters(deviceBaselineSetters);
 
-        assertEquals(CheckStatus.FAILED, mChecker.preExecutionCheck(mMockDevice).getStatus());
+        StatusCheckerResult result = mChecker.preExecutionCheck(mMockDevice);
+
+        assertEquals(CheckStatus.FAILED, result.getStatus());
+        assertEquals("Failed to set baseline test. ", result.getErrorMessage());
         assertEquals(
-                "Failed to set baseline test. ",
-                mChecker.preExecutionCheck(mMockDevice).getErrorMessage());
+                result.getModuleProperties()
+                        .getOrDefault("system_checker_enabled_device_baseline", ""),
+                "");
     }
 }
