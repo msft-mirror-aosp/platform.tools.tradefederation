@@ -18,7 +18,6 @@ package com.android.tradefed.device.metric;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -77,7 +76,7 @@ public class BaseDeviceMetricCollectorTest {
     }
 
     @Test
-    public void testInitAndForwarding() {
+    public void testInitAndForwarding() throws Exception {
         mBase.init(mContext, mMockListener);
         mBase.invocationStarted(mContext);
         mBase.testModuleStarted(mContext);
@@ -126,7 +125,7 @@ public class BaseDeviceMetricCollectorTest {
 
     /** Test that multiple call to init are rejected. */
     @Test
-    public void testMultiInit() {
+    public void testMultiInit() throws Exception {
         mBase.init(mContext, mMockListener);
         try {
             mBase.init(mContext, mMockListener);
@@ -141,7 +140,7 @@ public class BaseDeviceMetricCollectorTest {
      * collection.
      */
     @Test
-    public void testForwarding_withException() {
+    public void testForwarding_withException() throws Exception {
         mBase =
                 new BaseDeviceMetricCollector() {
                     @Override
@@ -328,7 +327,8 @@ public class BaseDeviceMetricCollectorTest {
      * of the test case.
      */
     private void verifyFiltering(
-            BaseDeviceMetricCollector base, TestAnnotation annot, boolean hasMetric) {
+            BaseDeviceMetricCollector base, TestAnnotation annot, boolean hasMetric)
+            throws Exception {
         base.init(mContext, mMockListener);
         base.invocationStarted(mContext);
         base.testRunStarted("testRun", 1);

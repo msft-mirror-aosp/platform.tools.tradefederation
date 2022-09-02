@@ -19,7 +19,9 @@ import com.android.ddmlib.IDevice;
 import com.android.ddmlib.IDevice.DeviceState;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.ITestDevice;
@@ -28,6 +30,7 @@ import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
+import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.ITestLogger;
@@ -53,6 +56,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 
@@ -63,7 +67,7 @@ import javax.annotation.Nullable;
  */
 public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements ITestLoggerReceiver {
 
-    private GceAvdInfo mGceAvd;
+    private GceAvdInfo mGceAvd = null;
     private ITestLogger mTestLogger;
 
     private GceManager mGceHandler = null;
@@ -72,7 +76,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
     private static final long CHECK_WAIT_DEVICE_AVAIL_MS = 30 * 1000;
     private static final long WAIT_FOR_TUNNEL_ONLINE = 2 * 60 * 1000;
-    private static final long WAIT_AFTER_REBOOT = 60 * 1000;
     private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
     private static final int WAIT_TIME_DIVISION = 4;
 
@@ -96,28 +99,60 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             throws TargetSetupError, DeviceNotAvailableException {
         super.preInvocationSetup(info, attributes);
         try {
-            mGceAvd = null;
             mGceSshMonitor = null;
             mTunnelInitFailed = null;
             // We create a brand new GceManager each time to ensure clean state.
             mGceHandler = new GceManager(getDeviceDescriptor(), getOptions(), info);
             setFastbootEnabled(false);
 
-            // Launch GCE helper script.
-            long startTime = getCurrentTime();
-            launchGce(info, attributes);
-            long remainingTime = getOptions().getGceCmdTimeout() - (getCurrentTime() - startTime);
-            if (remainingTime < 0) {
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to launch GCE after %sms", getOptions().getGceCmdTimeout()),
-                        getSerialNumber(),
-                        DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE);
+            long remainingTime = 0;
+            // mGceAvd is null means the device hasn't been launched.
+            if (mGceAvd != null) {
+                CLog.d("skipped GCE launch because GceAvdInfo %s is already set", mGceAvd);
+            } else {
+                // Launch GCE helper script.
+                long startTime = getCurrentTime();
+
+                try {
+                    if (GlobalConfiguration.getInstance()
+                                    .getHostOptions()
+                                    .getConcurrentVirtualDeviceStartupLimit()
+                            != null) {
+                        GlobalConfiguration.getInstance()
+                                .getHostOptions()
+                                .takePermit(PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP);
+                        long queueTime = System.currentTimeMillis() - startTime;
+                        CLog.v(
+                                "Fetch and launch CVD permit obtained after %ds",
+                                TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                    }
+                    launchGce(info, attributes);
+                    remainingTime =
+                            getOptions().getGceCmdTimeout() - (getCurrentTime() - startTime);
+                } finally {
+                    if (GlobalConfiguration.getInstance()
+                                    .getHostOptions()
+                                    .getConcurrentVirtualDeviceStartupLimit()
+                            != null) {
+                        GlobalConfiguration.getInstance()
+                                .getHostOptions()
+                                .returnPermit(PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP);
+                    }
+                }
+                if (remainingTime < 0) {
+                    throw new DeviceNotAvailableException(
+                            String.format(
+                                    "Failed to launch GCE after %sms",
+                                    getOptions().getGceCmdTimeout()),
+                            getSerialNumber(),
+                            DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE);
+                }
+                CLog.d("%sms left before timeout after GCE launch returned", remainingTime);
             }
-            CLog.d("%sms left before timeout after GCE launch returned", remainingTime);
             // Wait for device to be ready.
             RecoveryMode previousMode = getRecoveryMode();
             setRecoveryMode(RecoveryMode.NONE);
+            boolean unresponsive = true;
             try {
                 for (int i = 0; i < WAIT_TIME_DIVISION; i++) {
                     // We don't have a way to bail out of waitForDeviceAvailable if the Gce Avd
@@ -125,6 +160,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                     // thread is alive and we have an opportunity to abort and avoid wasting time.
                     if (getMonitor().waitForDeviceAvailable(remainingTime / WAIT_TIME_DIVISION)
                             != null) {
+                        unresponsive = false;
                         break;
                     }
                     waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
@@ -133,10 +169,16 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             } finally {
                 setRecoveryMode(previousMode);
             }
-            if (!DeviceState.ONLINE.equals(getIDevice().getState())) {
+            if (!DeviceState.ONLINE.equals(getIDevice().getState()) || unresponsive) {
                 if (mGceAvd != null && GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
                     // Update status to reflect that we were not able to connect to it.
                     mGceAvd.setStatus(GceStatus.DEVICE_OFFLINE);
+                }
+                if (unresponsive) {
+                    throw new DeviceUnresponsiveException(
+                            "AVD device booted to online but is unresponsive.",
+                            getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_UNRESPONSIVE);
                 }
                 throw new DeviceNotAvailableException(
                         String.format(
@@ -191,13 +233,24 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                     // Log the serial output of the instance.
                     getGceHandler().logSerialOutput(mGceAvd, mTestLogger);
 
-                    // Fetch remote files
-                    CommonLogRemoteFileUtil.fetchCommonFiles(
-                            mTestLogger, mGceAvd, getOptions(), getRunUtil());
+                    // Test if an SSH connection can be established. If can't, skip all collection.
+                    boolean isGceReachable =
+                            CommonLogRemoteFileUtil.isRemoteGceReachableBySsh(
+                                    mGceAvd, getOptions(), getRunUtil());
 
-                    // Fetch all tombstones if any.
-                    CommonLogRemoteFileUtil.fetchTombstones(
-                            mTestLogger, mGceAvd, getOptions(), getRunUtil());
+                    if (isGceReachable) {
+                        // Fetch remote files
+                        CommonLogRemoteFileUtil.fetchCommonFiles(
+                                mTestLogger, mGceAvd, getOptions(), getRunUtil());
+
+                        // Fetch all tombstones if any.
+                        CommonLogRemoteFileUtil.fetchTombstones(
+                                mTestLogger, mGceAvd, getOptions(), getRunUtil());
+                    } else {
+                        CLog.e(
+                                "Failed to establish ssh connect to remote file host, skipping"
+                                        + " remote common file and tombstones collection.");
+                    }
 
                     // Fetch host kernel log by running `dmesg` for Oxygen hosts
                     if (getOptions().useOxygen()) {
@@ -329,10 +382,10 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     /** {@inherit} */
     @Override
     public void postBootSetup() throws DeviceNotAvailableException {
-        // After reboot, restart the tunnel
         if (!getOptions().shouldDisableReboot()) {
             CLog.v("Performing post boot setup for GCE AVD %s", getSerialNumber());
-            getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
+            // Should already be connected at this point, but if something is
+            // missing, restart the tunnel
             if (!getGceSshMonitor().isTunnelAlive()) {
                 getGceSshMonitor().closeConnection();
                 getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
@@ -405,12 +458,15 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         // We catch that adb reboot is called to expect it from the tunnel.
         getGceSshMonitor().isAdbRebootCalled(true);
         super.doAdbReboot(rebootMode, reason);
-        // We allow a little time for instance to reboot and be reachable.
-        getRunUtil().sleep(WAIT_AFTER_REBOOT);
-        // after the reboot we wait for tunnel to be online and device to be reconnected
+        // After the reboot we wait for tunnel to be online and device to be reconnected
         getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
         waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
         waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
+    }
+
+    @Override
+    protected void postAdbReboot() throws DeviceNotAvailableException {
+        // Ignore super on purpose, since doAdbReboot already handle reconnect
     }
 
     /**
@@ -445,6 +501,19 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         }
         // If it's not Cuttlefish, use the standard call.
         return super.getTombstones();
+    }
+
+    /** Set the {@link GceAvdInfo} for launched device. */
+    public void setAvdInfo(GceAvdInfo gceAvdInfo) throws TargetSetupError {
+        if (mGceAvd == null) {
+            mGceAvd = gceAvdInfo;
+        } else {
+            throw new TargetSetupError(
+                    String.format(
+                            "The GceAvdInfo of the device %s is already set, override is not"
+                                    + " permitted. Current GceAvdInfo: %s",
+                            getSerialNumber(), mGceAvd));
+        }
     }
 
     /**

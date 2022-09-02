@@ -32,6 +32,8 @@ java_library_host {
     ],
     static_libs: [
         "commons-compress-prebuilt",
+        // Trace protos to do invocation tracing
+        "perfetto_trace-full",
     ],
     libs: [
         "ddmlib-prebuilt",

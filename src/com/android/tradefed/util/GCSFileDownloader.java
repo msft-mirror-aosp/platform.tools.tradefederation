@@ -36,6 +36,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -80,14 +81,23 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
     @VisibleForTesting
     StorageObject getRemoteFileMetaData(String bucketName, String remoteFilename)
             throws IOException {
-        try {
-            return getStorage().objects().get(bucketName, remoteFilename).execute();
-        } catch (GoogleJsonResponseException e) {
-            if (e.getStatusCode() == 404) {
-                return null;
+        int i = 0;
+        do {
+            i++;
+            try {
+                return getStorage().objects().get(bucketName, remoteFilename).execute();
+            } catch (GoogleJsonResponseException e) {
+                if (e.getStatusCode() == 404) {
+                    return null;
+                }
+                throw e;
+            } catch (SocketTimeoutException e) {
+                // Allow one retry in case of flaky connection.
+                if (i >= 2) {
+                    throw e;
+                }
             }
-            throw e;
-        }
+        } while (true);
     }
 
     /**
@@ -175,7 +185,7 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         }
     }
 
-    private boolean isFileFresh(File localFile, StorageObject remoteFile) throws IOException {
+    private boolean isFileFresh(File localFile, StorageObject remoteFile) {
         if (localFile == null && remoteFile == null) {
             return true;
         }
@@ -208,7 +218,7 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
             remoteFilename = sanitizeDirectoryName(remoteFilename);
             return recursiveCheckFolderFreshness(bucketName, remoteFilename, localFile);
         } catch (IOException e) {
-            throw new BuildRetrievalError(e.getMessage(), e);
+            throw new BuildRetrievalError(e.getMessage(), e, InfraErrorIdentifier.GCS_ERROR);
         }
     }
 
@@ -238,8 +248,10 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         for (String subRemoteFolder : subRemoteFolders) {
             String subFolderName = Paths.get(subRemoteFolder).getFileName().toString();
             File subFolder = new File(localFolder, subFolderName);
-            if (new File(localFolder, subFolderName).exists()
-                    && !new File(localFolder, subFolderName).isDirectory()) {
+            if (!subFolder.exists()) {
+                return false;
+            }
+            if (!subFolder.isDirectory()) {
                 CLog.w("%s exists as a non-directory.", subFolder);
                 subFolder = new File(localFolder, subFolderName + "_folder");
             }

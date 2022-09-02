@@ -31,9 +31,11 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.ResultAndLogForwarder;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.retry.IRetryDecision;
@@ -48,6 +50,7 @@ import com.google.common.annotations.VisibleForTesting;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -213,7 +216,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
      *     TestFailureListener}, and wrapped by RunMetricsCollector and Module MetricCollector (if
      *     not initialized).
      */
-    private ITestInvocationListener initializeListeners() {
+    private ITestInvocationListener initializeListeners() throws DeviceNotAvailableException {
         List<ITestInvocationListener> currentTestListener = new ArrayList<>();
         // Add all the module level listeners, including TestFailureListener
         if (mModuleLevelListeners != null) {
@@ -316,6 +319,8 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     private final void intraModuleRun(TestInformation testInfo, ITestInvocationListener runListener)
             throws DeviceNotAvailableException {
         mMainGranularRunListener.setAttemptIsolation(CurrentInvocation.runCurrentIsolation());
+        StartEndCollector startEndCollector = new StartEndCollector(runListener);
+        runListener = startEndCollector;
         try {
             List<IMetricCollector> clonedCollectors = cloneCollectors(mRunMetricCollectors);
             if (mTest instanceof IMetricCollectorReceiver) {
@@ -347,7 +352,15 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             CLog.e("Module '%s' - test '%s' threw exception:", mModuleId, mTest.getClass());
             CLog.e(re);
             CLog.e("Proceeding to the next test.");
+            if (!startEndCollector.mRunStartReported) {
+                CLog.e("Event mismatch ! the test runner didn't report any testRunStart.");
+                runListener.testRunStarted(mModule.getId(), 0);
+            }
             runListener.testRunFailed(createFromException(re));
+            if (!startEndCollector.mRunEndedReported) {
+                CLog.e("Event mismatch ! the test runner didn't report any testRunEnded.");
+                runListener.testRunEnded(0L, new HashMap<String, Metric>());
+            }
         } catch (DeviceUnresponsiveException due) {
             // being able to catch a DeviceUnresponsiveException here implies that recovery was
             // successful, and test execution should proceed to next module.
@@ -432,5 +445,47 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             failure.setOrigin(((IHarnessException) exception).getOrigin());
         }
         return failure;
+    }
+
+    /** Class helper to catch missing run start and end. */
+    public class StartEndCollector extends ResultAndLogForwarder {
+
+        public boolean mRunStartReported = false;
+        public boolean mRunEndedReported = false;
+
+        StartEndCollector(ITestInvocationListener listener) {
+            super(listener);
+        }
+
+        @Override
+        public void testRunStarted(String runName, int testCount) {
+            super.testRunStarted(runName, testCount);
+            mRunStartReported = true;
+        }
+
+        @Override
+        public void testRunStarted(String runName, int testCount, int attemptNumber) {
+            super.testRunStarted(runName, testCount, attemptNumber);
+            mRunStartReported = true;
+        }
+
+        @Override
+        public void testRunStarted(
+                String runName, int testCount, int attemptNumber, long startTime) {
+            super.testRunStarted(runName, testCount, attemptNumber, startTime);
+            mRunStartReported = true;
+        }
+
+        @Override
+        public void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
+            super.testRunEnded(elapsedTime, runMetrics);
+            mRunEndedReported = true;
+        }
+
+        @Override
+        public void testRunEnded(long elapsedTimeMillis, Map<String, String> runMetrics) {
+            super.testRunEnded(elapsedTimeMillis, runMetrics);
+            mRunEndedReported = true;
+        }
     }
 }

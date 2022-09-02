@@ -126,7 +126,7 @@ public class RemoteInvocationExecutionTest {
         verify(mMockListener)
                 .testLog(
                         Mockito.eq(RemoteInvocationExecution.REMOTE_CONFIG),
-                        Mockito.eq(LogDataType.XML),
+                        Mockito.eq(LogDataType.HARNESS_CONFIG),
                         Mockito.any());
     }
 
@@ -157,7 +157,7 @@ public class RemoteInvocationExecutionTest {
         verify(mMockListener)
                 .testLog(
                         Mockito.eq(RemoteInvocationExecution.REMOTE_CONFIG),
-                        Mockito.eq(LogDataType.XML),
+                        Mockito.eq(LogDataType.HARNESS_CONFIG),
                         Mockito.any());
     }
 
@@ -181,6 +181,7 @@ public class RemoteInvocationExecutionTest {
                     globalConfig.cloneConfigWithFilter(
                             new HashSet<>(),
                             new RemoteInvocationExecution.FileOptionValueTransformer("/foo/"),
+                            true,
                             new String[] {
                                 GlobalConfiguration.HOST_OPTIONS_TYPE_NAME,
                                 GlobalConfiguration.KEY_STORE_TYPE_NAME

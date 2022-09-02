@@ -127,7 +127,8 @@ public class TradefedSandbox implements ISandbox {
             mCmdArgs.add("--" + CommandOptions.USE_SANDBOX);
         }
 
-        long timeout = config.getCommandOptions().getInvocationTimeout();
+        // Remove a bit of timeout to account for parent overhead
+        long timeout = Math.max(config.getCommandOptions().getInvocationTimeout() - 120000L, 0);
         // Allow interruption, subprocess should handle signals itself
         mRunUtil.allowInterrupt(true);
         CommandResult result = null;

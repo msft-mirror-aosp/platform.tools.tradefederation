@@ -23,6 +23,8 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -35,13 +37,44 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Structure to hold relevant data for a given GCE AVD instance. */
 public class GceAvdInfo {
+
+    public static class LogFileEntry {
+        public final String path;
+        public final LogDataType type;
+        // The name is optional and defaults to an empty string.
+        public final String name;
+
+        @VisibleForTesting
+        LogFileEntry(String path, LogDataType type, String name) {
+            this.path = path;
+            this.type = type;
+            this.name = name;
+        }
+
+        LogFileEntry(JSONObject log) throws JSONException {
+            path = log.getString("path");
+            type = parseLogDataType(log.getString("type"));
+            name = log.optString("name", "");
+        }
+
+        private LogDataType parseLogDataType(String typeString) {
+            try {
+                return LogDataType.valueOf(typeString);
+            } catch (IllegalArgumentException e) {
+                CLog.w("Unknown log type in GCE AVD info: %s", typeString);
+                return LogDataType.UNKNOWN;
+            }
+        }
+    }
 
     public static final List<String> BUILD_VARS =
             Arrays.asList(
@@ -64,7 +97,7 @@ public class GceAvdInfo {
     private String mErrors;
     private GceStatus mStatus;
     private HashMap<String, String> mBuildVars;
-    private Map<String, LogDataType> mLogs;
+    private List<LogFileEntry> mLogs;
     private boolean mIsIpPreconfigured = false;
 
     public static enum GceStatus {
@@ -78,7 +111,7 @@ public class GceAvdInfo {
         mInstanceName = instanceName;
         mHostAndPort = hostAndPort;
         mBuildVars = new HashMap<String, String>();
-        mLogs = new HashMap<String, LogDataType>();
+        mLogs = new ArrayList<LogFileEntry>();
     }
 
     public GceAvdInfo(
@@ -132,7 +165,7 @@ public class GceAvdInfo {
     }
 
     /** Return the map from local or remote log paths to types. */
-    public Map<String, LogDataType> getLogs() {
+    public List<LogFileEntry> getLogs() {
         return mLogs;
     }
 
@@ -240,7 +273,7 @@ public class GceAvdInfo {
                                     errorId,
                                     errors,
                                     gceStatus);
-                    avdInfo.mLogs.putAll(parseLogField(d));
+                    avdInfo.mLogs.addAll(parseLogField(d));
                     for (String buildVar : BUILD_VARS) {
                         if (d.has(buildVar) && !d.getString(buildVar).trim().isEmpty()) {
                             avdInfo.addBuildVar(buildVar, d.getString(buildVar).trim());
@@ -269,6 +302,69 @@ public class GceAvdInfo {
     }
 
     /**
+     * Parse a given command line output from Oxygen client binary to obtain leased AVD info.
+     *
+     * @param oxygenRes the {@link CommandResult} from Oxygen client command execution.
+     * @param remoteAdbPort the remote port that should be used for adb connection
+     * @return {@link List} of the devices successfully leased. Will throw {@link TargetSetupError}
+     *     if failed to lease a device.
+     */
+    public static List<GceAvdInfo> parseGceInfoFromOxygenClientOutput(
+            CommandResult oxygenRes, int remoteAdbPort) throws TargetSetupError {
+        CommandStatus oxygenCliStatus = oxygenRes.getStatus();
+        if (CommandStatus.SUCCESS.equals(oxygenCliStatus)) {
+            return parseSucceedOxygenClientOutput(
+                    oxygenRes.getStdout() + oxygenRes.getStderr(), remoteAdbPort);
+        } else if (CommandStatus.TIMED_OUT.equals(oxygenCliStatus)) {
+            return Arrays.asList(
+                    new GceAvdInfo(
+                            null,
+                            null,
+                            InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_TIMEOUT,
+                            "Oxygen client binary CLI timed out",
+                            GceStatus.FAIL));
+        } else {
+            throw new TargetSetupError(
+                    String.format(
+                            "OxygenClient - CommandStatus: %s, output: %s",
+                            oxygenCliStatus, oxygenRes.getStdout() + " " + oxygenRes.getStderr()),
+                    refineOxygenErrorType(oxygenRes.getStderr()));
+        }
+    }
+
+    private static List<GceAvdInfo> parseSucceedOxygenClientOutput(String output, int remoteAdbPort)
+            throws TargetSetupError {
+        CLog.d("Parsing oxygen client output: %s", output);
+
+        Pattern pattern =
+                Pattern.compile("session_id:\"(.*?)\".*?server_url:\"(.*?)\"", Pattern.DOTALL);
+        Matcher matcher = pattern.matcher(output);
+
+        List<GceAvdInfo> gceAvdInfos = new ArrayList<>();
+        int deviceOffset = 0;
+        while (matcher.find()) {
+            String sessionId = matcher.group(1);
+            String serverUrl = matcher.group(2);
+            gceAvdInfos.add(
+                    new GceAvdInfo(
+                            sessionId,
+                            HostAndPort.fromString(serverUrl)
+                                    .withDefaultPort(remoteAdbPort + deviceOffset),
+                            null,
+                            null,
+                            GceStatus.SUCCESS));
+            deviceOffset++;
+        }
+        if (gceAvdInfos.isEmpty()) {
+            throw new TargetSetupError(
+                    String.format("Failed to parse the output: %s", output),
+                    InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_ERROR);
+        }
+
+        return gceAvdInfos;
+    }
+
+    /**
      * Search error message from Oxygen service for more accurate error code.
      *
      * @param errors error messages returned by Oxygen service.
@@ -287,6 +383,8 @@ public class GceAvdInfo {
             return InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED;
         } else if (errors.contains("502:Bad Gateway")) {
             return InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE;
+        } else if (errors.contains("OxygenClient")) {
+            return InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR;
         }
 
         return InfraErrorIdentifier.ACLOUD_OXYGEN_LEASE_ERROR;
@@ -306,29 +404,18 @@ public class GceAvdInfo {
      * Parse log paths from a device object.
      *
      * @param device the device object in JSON.
-     * @return a map from log paths to {@link LogDataType}.
+     * @return a list of {@link LogFileEntry}.
      * @throws JSONException if any required property is missing.
      */
-    private static Map<String, LogDataType> parseLogField(JSONObject device) throws JSONException {
-        Map<String, LogDataType> logs = new HashMap<String, LogDataType>();
+    private static List<LogFileEntry> parseLogField(JSONObject device) throws JSONException {
+        List<LogFileEntry> logs = new ArrayList<LogFileEntry>();
         JSONArray logArray = device.optJSONArray("logs");
         if (logArray == null) {
             return logs;
         }
         for (int i = 0; i < logArray.length(); i++) {
             JSONObject logObject = logArray.getJSONObject(i);
-            String path = logObject.getString("path");
-            String typeString = logObject.getString("type");
-            LogDataType type;
-            try {
-                type = LogDataType.valueOf(typeString);
-            } catch (IllegalArgumentException e) {
-                CLog.w("Unknown log type in GCE AVD info: %s", typeString);
-                type = LogDataType.UNKNOWN;
-            }
-            if (logs.put(path, type) != null) {
-                CLog.w("Repeated log path in GCE AVD info: %s", path);
-            }
+            logs.add(new LogFileEntry(logObject));
         }
         return logs;
     }

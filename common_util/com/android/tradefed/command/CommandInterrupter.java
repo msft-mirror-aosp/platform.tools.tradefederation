@@ -61,14 +61,14 @@ public class CommandInterrupter {
 
     /** Allow current thread to be interrupted. */
     public void allowInterrupt() {
-        CLog.d("Interrupt allowed");
+        CLog.i("Interrupt allowed");
         mInterruptible.put(Thread.currentThread(), true);
         checkInterrupted();
     }
 
     /** Prevent current thread from being interrupted. */
     public void blockInterrupt() {
-        CLog.d("Interrupt blocked");
+        CLog.i("Interrupt blocked");
         mInterruptible.put(Thread.currentThread(), false);
         checkInterrupted();
     }

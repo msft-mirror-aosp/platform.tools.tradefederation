@@ -51,7 +51,7 @@ public class MainlineTestModuleControllerTest {
     private Set<ApexInfo> mFakeApexes;
 
     @Before
-    public void setUp() throws ConfigurationException {
+    public void setUp() {
         MockitoAnnotations.initMocks(this);
 
         mController = new MainlineTestModuleController();
@@ -69,6 +69,20 @@ public class MainlineTestModuleControllerTest {
         setter.setOptionValue("enable", "true");
         setter.setOptionValue("mainline-module-package-name", "com.google.android.fakeapex");
         mFakeApexInfo = new ApexInfo("com.google.android.fakeapex", 1, "fakeDir");
+        mFakeApexes.add(mFakeApexInfo);
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.getActiveApexes()).thenReturn(mFakeApexes);
+
+        assertEquals(RunStrategy.RUN, mController.shouldRunModule(mContext));
+    }
+
+    /** Test go mainline module is installed and test should run. */
+    @Test
+    public void testGoModuleExistsRun() throws DeviceNotAvailableException, ConfigurationException {
+        OptionSetter setter = new OptionSetter(mController);
+        setter.setOptionValue("enable", "true");
+        setter.setOptionValue("mainline-module-package-name", "com.google.android.fakeapex");
+        mFakeApexInfo = new ApexInfo("com.google.android.go.fakeapex", 1, "fakeDir");
         mFakeApexes.add(mFakeApexInfo);
         when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
         when(mMockDevice.getActiveApexes()).thenReturn(mFakeApexes);

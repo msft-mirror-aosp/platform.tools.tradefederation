@@ -18,10 +18,13 @@ package com.android.tradefed.targetprep;
 
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceState;
+import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -31,6 +34,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.FuseUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
@@ -45,7 +49,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -86,6 +92,14 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     private boolean mShouldFlashRamdisk = false;
 
     private String mRamdiskPartition = "root";
+
+    private String mSystemBuildId = null;
+    private String mSystemBuildFlavor = null;
+
+    @VisibleForTesting
+    FuseUtil getFuseUtil() {
+        return new FuseUtil();
+    }
 
     /**
      * {@inheritDoc}
@@ -146,12 +160,10 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         mFlashOptions = flashOptions.stream().map(String::trim).collect(Collectors.toList());
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void flash(ITestDevice device, IDeviceBuildInfo deviceBuild) throws TargetSetupError,
-            DeviceNotAvailableException {
+    public void preFlashOperations(ITestDevice device, IDeviceBuildInfo deviceBuild)
+            throws TargetSetupError, DeviceNotAvailableException {
         boolean initialStateFastbootD =
                 supportsFlashingInFastbootD() &&
                 TestDeviceState.FASTBOOTD.equals(device.getDeviceState());
@@ -164,9 +176,8 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         CLog.i("Flashing device %s with build %s", device.getSerialNumber(),
                 deviceBuild.getDeviceBuildId());
 
-        // get system build id and build flavor before booting into fastboot
-        String systemBuildId = device.getBuildId();
-        String systemBuildFlavor = device.getBuildFlavor();
+        // Get system build id and build flavor before booting into fastboot
+        setSystemBuildInfo(device.getBuildId(), device.getBuildFlavor());
 
         if (!initialStateFastbootD) {
             device.rebootIntoBootloader();
@@ -180,16 +191,22 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 deviceBuild.addBuildAttribute(FASTBOOT_VERSION, fastbootVersion);
             }
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void flash(ITestDevice device, IDeviceBuildInfo deviceBuild)
+            throws TargetSetupError, DeviceNotAvailableException {
         handleUserDataFlashing(device, deviceBuild);
         checkAndFlashBootloader(device, deviceBuild);
         checkAndFlashBaseband(device, deviceBuild);
         flashExtraImages(device, deviceBuild);
-        checkAndFlashSystem(device, systemBuildId, systemBuildFlavor, deviceBuild);
+        checkAndFlashSystem(device, mSystemBuildId, mSystemBuildFlavor, deviceBuild);
     }
 
     private String[] buildFastbootCommand(String action, boolean skipReboot, String... args) {
         List<String> cmdArgs = new ArrayList<>();
-        if ("flash".equals(action) || "update".equals(action)) {
+        if ("flash".equals(action) || "update".equals(action) || "flashall".equals(action)) {
             if (skipReboot) {
                 // need to skip reboot if flashing root ramdisk, because this will be typically
                 // used together with flashing of user build, and
@@ -243,8 +260,8 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     protected void flashPartition(ITestDevice device, File imgFile, String partition)
             throws DeviceNotAvailableException, TargetSetupError {
         CLog.d(
-                "fastboot flash %s %s [md5=%s]",
-                partition, imgFile.getAbsolutePath(), FileUtil.calculateMd5(imgFile));
+                "fastboot flash %s %s [size=%d]",
+                partition, imgFile.getAbsolutePath(), imgFile.length());
         executeLongFastbootCmd(
                 device,
                 buildFastbootCommand(
@@ -701,24 +718,16 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
      */
     protected void flashSystem(ITestDevice device, IDeviceBuildInfo deviceBuild)
             throws DeviceNotAvailableException, TargetSetupError {
-        CLog.i("Flashing %s with update %s", device.getSerialNumber(),
-                deviceBuild.getDeviceImageFile().getAbsolutePath());
+        CLog.i(
+                "Flashing device %s with image %s",
+                device.getSerialNumber(), deviceBuild.getDeviceImageFile().getAbsolutePath());
         // give extra time to the update cmd
         try {
-            try {
-                executeLongFastbootCmd(
-                        device,
-                        buildFastbootCommand(
-                                "update",
-                                mShouldFlashRamdisk,
-                                deviceBuild.getDeviceImageFile().getAbsolutePath()));
-            } catch (DeviceNotAvailableException e) {
-                // We wrap the exception from recovery if it fails to provide a clear message
-                throw new DeviceNotAvailableException(
-                        "Device became unavailable during fastboot 'update'. Please verify that "
-                                + "the image you are flashing can boot properly.",
-                        e,
-                        device.getSerialNumber());
+            if (getHostOptions().shouldFlashWithFuseZip()
+                && getFuseUtil().canMountZip()) {
+                flashWithFuseZip(device, deviceBuild);
+            } else {
+                flashWithUpdateCommand(device, deviceBuild);
             }
             flashRamdiskIfNeeded(device, deviceBuild);
             // only transfer last fastboot command status over to system flash status after having
@@ -729,6 +738,81 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             if (mSystemFlashStatus == null) {
                 mSystemFlashStatus = CommandStatus.EXCEPTION;
             }
+        }
+    }
+
+    /**
+     * Flash the system image on device by using fuse-zip mounting with fastboot flashall command.
+     *
+     * @param device the {@link ITestDevice} to flash
+     * @param deviceBuild the {@link IDeviceBuildInfo} to flash
+     * @throws DeviceNotAvailableException if device is not available
+     * @throws TargetSetupError if fastboot command fails
+     */
+    private void flashWithFuseZip(ITestDevice device, IDeviceBuildInfo deviceBuild)
+            throws DeviceNotAvailableException, TargetSetupError {
+        FuseUtil fuseUtil = getFuseUtil();
+        File mountPoint = null;
+        try {
+            mountPoint = FileUtil.createTempDir("FlashAllMountPoint");
+            fuseUtil.mountZip(deviceBuild.getDeviceImageFile().getAbsoluteFile(), mountPoint);
+            Map<String, String> systemVarMap = new HashMap<>();
+            systemVarMap.put("ANDROID_PRODUCT_OUT", mountPoint.getAbsolutePath());
+            String[] fastbootArgs = buildFastbootCommand("flashall", mShouldFlashRamdisk);
+            executeLongFastbootCmd(device, systemVarMap, fastbootArgs);
+        } catch (DeviceNotAvailableException e) {
+            // We wrap the exception from recovery if it fails to provide a clear message
+            throw new DeviceNotAvailableException(
+                    "Device became unavailable during fastboot 'flashall'. Please verify that "
+                            + "the image you are flashing can boot properly.",
+                    e,
+                    device.getSerialNumber());
+        } catch (IOException e) {
+            throw new TargetSetupError(
+                    String.format(
+                            "Unable to create a temp dir for fuse zip to mount on, error: %s",
+                            e.getMessage()),
+                    InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+        } finally {
+            if (mountPoint != null) {
+                fuseUtil.unmountZip(mountPoint);
+                FileUtil.recursiveDelete(mountPoint);
+            }
+            // In case the unmount operation fails, deleting the mount point will fail as well.
+            if (mountPoint.exists()) {
+                throw new HarnessRuntimeException(
+                        String.format(
+                                "Failed to delete mount point %s, unmount operation might failed.",
+                                mountPoint),
+                        InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
+            }
+        }
+    }
+
+    /**
+     * Flash the system image on device by using fastboot update command.
+     *
+     * @param device the {@link ITestDevice} to flash
+     * @param deviceBuild the {@link IDeviceBuildInfo} to flash
+     * @throws DeviceNotAvailableException if device is not available
+     * @throws TargetSetupError if fastboot command fails
+     */
+    private void flashWithUpdateCommand(ITestDevice device, IDeviceBuildInfo deviceBuild)
+            throws DeviceNotAvailableException, TargetSetupError {
+        try {
+            executeLongFastbootCmd(
+                    device,
+                    buildFastbootCommand(
+                            "update",
+                            mShouldFlashRamdisk,
+                            deviceBuild.getDeviceImageFile().getAbsolutePath()));
+        } catch (DeviceNotAvailableException e) {
+            // We wrap the exception from recovery if it fails to provide a clear message
+            throw new DeviceNotAvailableException(
+                    "Device became unavailable during fastboot 'update'. Please verify that "
+                            + "the image you are flashing can boot properly.",
+                    e,
+                    device.getSerialNumber());
         }
     }
 
@@ -834,7 +918,29 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
      */
     protected String executeLongFastbootCmd(ITestDevice device, String... cmdArgs)
             throws DeviceNotAvailableException, TargetSetupError {
-        CommandResult result = device.executeLongFastbootCommand(cmdArgs);
+        return executeLongFastbootCmd(device, new HashMap<>(), cmdArgs);
+    }
+
+    /**
+     * Helper method to execute a long-running fastboot command with environment variables.
+     *
+     * <p>Note: Most fastboot commands normally execute within the timeout allowed by {@link
+     * ITestDevice#executeFastbootCommand(String...)}. However, when multiple devices are flashing
+     * devices at once, fastboot commands can take much longer than normal.
+     *
+     * @param device the {@link ITestDevice} to execute command on
+     * @param envVarMap the map which carries environment variables which need to be set before
+     *     running the fastboot command
+     * @param cmdArgs the arguments to provide to fastboot
+     * @return String the stderr output from command if non-empty. Otherwise returns the stdout Some
+     *     fastboot commands are weird in that they dump output to stderr on success case
+     * @throws DeviceNotAvailableException if device is not available
+     * @throws TargetSetupError if fastboot command fails
+     */
+    protected String executeLongFastbootCmd(
+            ITestDevice device, Map<String, String> envVarMap, String... cmdArgs)
+            throws DeviceNotAvailableException, TargetSetupError {
+        CommandResult result = device.executeLongFastbootCommand(envVarMap, cmdArgs);
         return handleFastbootResult(device, result, cmdArgs);
     }
 
@@ -967,5 +1073,16 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                     deviceBuild.getRamdiskFile().getAbsolutePath());
             device.reboot();
         }
+    }
+
+    protected void setSystemBuildInfo(String systemBuildId, String systemBuildFlavor) {
+        mSystemBuildId = systemBuildId;
+        mSystemBuildFlavor = systemBuildFlavor;
+    }
+
+    /** Gets the {@link IHostOptions} instance to use. */
+    @VisibleForTesting
+    IHostOptions getHostOptions() {
+        return GlobalConfiguration.getInstance().getHostOptions();
     }
 }

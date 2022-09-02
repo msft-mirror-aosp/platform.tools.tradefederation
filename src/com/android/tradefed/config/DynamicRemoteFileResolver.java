@@ -198,20 +198,22 @@ public class DynamicRemoteFileResolver {
                     } else if (value instanceof Collection) {
                         @SuppressWarnings("unchecked")  // Mostly-safe, see above comment.
                         Collection<Object> c = (Collection<Object>) value;
-                        Collection<Object> copy = new ArrayList<>(c);
-                        for (Object o : copy) {
-                            if (o instanceof File) {
-                                File consideredFile = (File) o;
-                                ResolvedFile resolvedFile =
-                                        resolveRemoteFiles(consideredFile, option);
-                                if (resolvedFile != null) {
-                                    File downloadedFile = resolvedFile.getResolvedFile();
-                                    if (resolvedFile.shouldCleanUp()) {
-                                        downloadedFiles.add(downloadedFile);
+                        synchronized (c) {
+                            Collection<Object> copy = new ArrayList<>(c);
+                            for (Object o : copy) {
+                                if (o instanceof File) {
+                                    File consideredFile = (File) o;
+                                    ResolvedFile resolvedFile =
+                                            resolveRemoteFiles(consideredFile, option);
+                                    if (resolvedFile != null) {
+                                        File downloadedFile = resolvedFile.getResolvedFile();
+                                        if (resolvedFile.shouldCleanUp()) {
+                                            downloadedFiles.add(downloadedFile);
+                                        }
+                                        // TODO: See if order could be preserved.
+                                        c.remove(consideredFile);
+                                        c.add(downloadedFile);
                                     }
-                                    // TODO: See if order could be preserved.
-                                    c.remove(consideredFile);
-                                    c.add(downloadedFile);
                                 }
                             }
                         }
@@ -389,7 +391,10 @@ public class DynamicRemoteFileResolver {
                 FileUtil.deleteFile(downloadedFile);
                 return extractedDir;
             } else {
-                CLog.w("%s was requested to be unzipped but is not a valid zip.", downloadedFile);
+                throw new IOException(
+                        String.format(
+                                "%s was requested to be unzipped but is not a valid zip.",
+                                downloadedFile));
             }
         }
         // Return the original file untouched
@@ -403,13 +408,14 @@ public class DynamicRemoteFileResolver {
         String protocol;
         Map<String, String> query;
         try {
-            URI uri = new URI(path);
+            URI uri = new URI(path.replace('\\','/'));
             protocol = uri.getScheme();
             query = parseQuery(uri.getQuery());
             fileToResolve = new File(protocol + ":" + uri.getPath());
         } catch (URISyntaxException e) {
             CLog.e(e);
-            throw new BuildRetrievalError(e.getMessage(), e);
+            throw new BuildRetrievalError(
+                    e.getMessage(), e, InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         try {

@@ -42,6 +42,7 @@ tradefed_java_library_host {
         ":OnePassOneFailParamTest",
         ":OnePassingOneFailingTest",
         ":SimplePassingTest",
+        ":PassIgnoreAssumeTest",
         ":MultipleClassesTest",
     ],
 
@@ -60,6 +61,7 @@ tradefed_java_library_host {
         "libprotobuf-java-full",
         "truth-prebuilt",
         "loganalysis",
+        "perfetto_trace-full",
     ],
 
     manifest: "MANIFEST.mf",

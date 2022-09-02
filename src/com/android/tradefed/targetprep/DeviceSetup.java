@@ -419,7 +419,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             name = "optimized-property-setting",
             description =
                     "If a property is already set to the desired value, don't reboot the device")
-    protected boolean mOptimizedPropertySetting = false;
+    protected boolean mOptimizedPropertySetting = true;
 
     // Deprecated options follow
     /**
@@ -452,6 +452,12 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             name = "skip-virtual-device-teardown",
             description = "Whether or not to skip the teardown if it's a virtual device.")
     private boolean mSkipVirtualDeviceTeardown = true;
+
+    @Option(
+            name = "disable-device-config-sync",
+            description = "Disable syncing device config with remote configuration server.")
+    private boolean mDisableDeviceConfigSync = false;
+    // device_config set_sync_disabled_for_tests persistent
 
     private static final String PERSIST_PREFIX = "persist.";
 
@@ -753,6 +759,10 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         if (mDisableDalvikVerifier) {
             mSetProps.put("dalvik.vm.dexopt-flags", "v=n");
         }
+
+        if (mDisableDeviceConfigSync) {
+            mRunCommandBeforeSettings.add("device_config set_sync_disabled_for_tests persistent");
+        }
     }
 
     /**
@@ -1011,19 +1021,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             return;
         }
 
-        String wifiPsk = Strings.emptyToNull(mWifiPsk);
-        if (mWifiSsid != null && device.connectToWifiNetwork(mWifiSsid, wifiPsk)) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.WIFI_AP_NAME, mWifiSsid);
-            return;
+        if (mWifiSsid != null) {
+            mWifiSsidToPsk.put(mWifiSsid, mWifiPsk);
         }
-        for (Map.Entry<String, String> ssidToPsk : mWifiSsidToPsk.entrySet()) {
-            String psk = Strings.emptyToNull(ssidToPsk.getValue());
-            if (device.connectToWifiNetwork(ssidToPsk.getKey(), psk)) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.WIFI_AP_NAME, ssidToPsk.getKey());
-                return;
-            }
+        if (device.connectToWifiNetwork(mWifiSsidToPsk)) {
+            return;
         }
 
         if (mWifiSsid != null || !mWifiSsidToPsk.isEmpty()) {

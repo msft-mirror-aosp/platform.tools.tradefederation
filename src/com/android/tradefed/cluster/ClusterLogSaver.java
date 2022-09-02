@@ -401,13 +401,6 @@ public class ClusterLogSaver implements ILogSaver {
     }
 
     @Override
-    public LogFile saveLogDataRaw(String dataName, LogDataType dataType, InputStream dataStream)
-            throws IOException {
-        File log = mLogFileSaver.saveLogDataRaw(dataName, dataType.getFileExt(), dataStream);
-        return new LogFile(log.getAbsolutePath(), null, dataType);
-    }
-
-    @Override
     public LogFile getLogReportDir() {
         return new LogFile(mLogDir.getAbsolutePath(), null, LogDataType.DIR);
     }

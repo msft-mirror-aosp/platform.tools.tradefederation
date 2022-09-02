@@ -24,6 +24,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,7 +32,9 @@ import static org.mockito.Mockito.when;
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.build.IBuildInfo.BuildInfoProperties;
 import com.android.tradefed.build.IBuildProvider;
+import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.build.IDeviceBuildProvider;
 import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.command.CommandRunner.ExitCode;
@@ -57,7 +60,7 @@ import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
-import com.android.tradefed.guice.InvocationScope;
+import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.shard.IShardHelper;
 import com.android.tradefed.invoker.shard.ShardHelper;
@@ -82,11 +85,13 @@ import com.android.tradefed.result.TestSummary;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.targetprep.BuildError;
+import com.android.tradefed.targetprep.ITargetCleaner;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IInvocationContextReceiver;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
 
 import org.junit.Before;
@@ -307,12 +312,6 @@ public class TestInvocationTest {
                     }
 
                     @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
-                    }
-
-                    @Override
                     public void registerExecutionFiles(ExecutionFiles executionFiles) {
                         // Empty on purpose
                     }
@@ -365,7 +364,7 @@ public class TestInvocationTest {
     }
 
     private void verifyMockSuccessListeners() throws IOException {
-        verifyMockListeners(InvocationStatus.SUCCESS, null, false, true, false);
+        verifyMockListeners(InvocationStatus.SUCCESS, null, false, true, false, false);
     }
 
     private void stubMockFailureListeners(Throwable throwable) throws IOException {
@@ -373,7 +372,7 @@ public class TestInvocationTest {
     }
 
     private void verifyMockFailureListeners(Throwable throwable) throws IOException {
-        verifyMockListeners(InvocationStatus.FAILED, throwable, false, true, false);
+        verifyMockListeners(InvocationStatus.FAILED, throwable, false, true, false, false);
     }
 
     private void stubMockFailureListenersAny(Throwable throwable, boolean stubFailures)
@@ -383,7 +382,7 @@ public class TestInvocationTest {
 
     private void verifyMockFailureListenersAny(Throwable throwable, boolean stubFailures)
             throws IOException {
-        verifyMockListeners(InvocationStatus.FAILED, throwable, stubFailures, true, false);
+        verifyMockListeners(InvocationStatus.FAILED, throwable, stubFailures, true, false, false);
     }
 
     private void stubMockFailureListeners(
@@ -393,15 +392,16 @@ public class TestInvocationTest {
 
     private void verifyMockFailureListeners(
             Throwable throwable, boolean stubFailures, boolean reportHostLog) throws IOException {
-        verifyMockListeners(InvocationStatus.FAILED, throwable, stubFailures, reportHostLog, false);
+        verifyMockListeners(
+                InvocationStatus.FAILED, throwable, stubFailures, reportHostLog, false, false);
     }
 
     private void stubMockStoppedListeners() throws IOException {
         stubMockListeners(InvocationStatus.SUCCESS, null, false, true, true);
     }
 
-    private void verifyMockStoppedListeners() throws IOException {
-        verifyMockListeners(InvocationStatus.SUCCESS, null, false, true, true);
+    private void verifyMockStoppedListeners(boolean testSkipped) throws IOException {
+        verifyMockListeners(InvocationStatus.SUCCESS, null, false, true, true, testSkipped);
     }
 
     private void verifySummaryListener() {
@@ -608,7 +608,8 @@ public class TestInvocationTest {
             Throwable throwable,
             boolean stubFailures,
             boolean reportHostLog,
-            boolean stopped)
+            boolean stopped,
+            boolean testSkipped)
             throws IOException {
         // invocationStarted
         mInOrderTestListener
@@ -716,7 +717,9 @@ public class TestInvocationTest {
         } else {
             // Handle build error bugreport listeners
             if (throwable instanceof BuildError) {
-            } else if (!(throwable instanceof TargetSetupError) && !mShardingEarlyFailure) {
+            } else if (!(throwable instanceof TargetSetupError)
+                    && !mShardingEarlyFailure
+                    && !testSkipped) {
                 // Handle test logcat listeners
                 mInOrderTestListener
                         .verify(mMockTestListener)
@@ -957,7 +960,12 @@ public class TestInvocationTest {
         mStubConfiguration.setCommandOptions(cmdOptions);
         mStubConfiguration.setTest(test);
 
-        mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+        try {
+            mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
 
         // Needed a full custom set of verifications because it is messy
         try {
@@ -997,7 +1005,12 @@ public class TestInvocationTest {
 
         mStubConfiguration.setCommandLine(new String[] {"empty", "--build-id", "5"});
 
-        mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+        try {
+            mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+            fail("Should have thrown an exception.");
+        } catch (RuntimeException expected) {
+            // Expected
+        }
 
         verify(mMockBuildProvider).cleanUp(captured.capture());
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
@@ -1026,7 +1039,12 @@ public class TestInvocationTest {
         when(mMockDevice.getLogcat()).thenReturn(mLogcatSetupSource).thenReturn(mLogcatTestSource);
         ArgumentCaptor<IBuildInfo> captured = ArgumentCaptor.forClass(IBuildInfo.class);
 
-        mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+        try {
+            mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
 
         verify(mMockBuildProvider).cleanUp(captured.capture());
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
@@ -1060,7 +1078,12 @@ public class TestInvocationTest {
         when(mMockDevice.getLogcat()).thenReturn(mLogcatSetupSource).thenReturn(mLogcatTestSource);
         ArgumentCaptor<IBuildInfo> captured = ArgumentCaptor.forClass(IBuildInfo.class);
 
-        mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+        try {
+            mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
 
         verify(mMockBuildProvider).cleanUp(captured.capture());
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
@@ -1131,7 +1154,8 @@ public class TestInvocationTest {
     }
 
     /**
-     * Test metrics SHUTDOWN_HARD_LATENCY is collected when the invocation is stopped/interrupted.
+     * Test that tests were skipped and metrics SHUTDOWN_HARD_LATENCY is collected when the
+     * invocation is stopped/interrupted before test phase started.
      */
     @Test
     public void testInvoke_metricsCollectedWhenStopped() throws Throwable {
@@ -1141,14 +1165,15 @@ public class TestInvocationTest {
         stubMockStoppedListeners();
         stubNormalInvoke(test);
 
-        mTestInvocation.notifyInvocationStopped("Stopped", InfraErrorIdentifier.INVOCATION_TIMEOUT);
+        mTestInvocation.notifyInvocationForceStopped(
+                "Stopped", InfraErrorIdentifier.INVOCATION_TIMEOUT);
         mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
 
-        verify(test).run(Mockito.any(), Mockito.any());
+        verify(test, never()).run(Mockito.any(), Mockito.any());
         verify(mMockPreparer).tearDown(Mockito.any(), Mockito.any());
 
         verifyNormalInvoke(test);
-        verifyMockStoppedListeners();
+        verifyMockStoppedListeners(true);
 
         assertTrue(
                 mStubInvocationMetadata
@@ -1970,12 +1995,6 @@ public class TestInvocationTest {
                     }
 
                     @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
-                    }
-
-                    @Override
                     protected void applyAutomatedReporters(IConfiguration config) {
                         // Empty on purpose
                     }
@@ -2072,12 +2091,6 @@ public class TestInvocationTest {
                         @Override
                         protected void setExitCode(ExitCode code, Throwable stack) {
                             // empty on purpose
-                        }
-
-                        @Override
-                        InvocationScope getInvocationScope() {
-                            // Avoid re-entry in the current TF invocation scope for unit tests.
-                            return new InvocationScope();
                         }
 
                         @Override
@@ -2190,12 +2203,6 @@ public class TestInvocationTest {
                         @Override
                         protected void applyAutomatedReporters(IConfiguration config) {
                             // Empty on purpose
-                        }
-
-                        @Override
-                        InvocationScope getInvocationScope() {
-                            // Avoid re-entry in the current TF invocation scope for unit tests.
-                            return new InvocationScope();
                         }
 
                         @Override
@@ -2477,12 +2484,6 @@ public class TestInvocationTest {
                     @Override
                     protected void setExitCode(ExitCode code, Throwable stack) {
                         // Empty on purpose
-                    }
-
-                    @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
                     }
 
                     @Override

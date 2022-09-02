@@ -44,6 +44,7 @@ import com.android.tradefed.util.KeyguardControllerState;
 import com.android.tradefed.util.ProcessInfo;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
+import android.platform.test.annotations.FlakyTest;
 
 import org.junit.Assume;
 import org.junit.Before;
@@ -664,6 +665,7 @@ public class TestDeviceFuncTest implements IDeviceTest {
     }
 
     /** Test device soft-restart detection API. */
+    @FlakyTest
     @Test
     public void testDeviceSoftRestart() throws DeviceNotAvailableException {
         CLog.i("testDeviceSoftRestartSince");
@@ -850,7 +852,9 @@ public class TestDeviceFuncTest implements IDeviceTest {
     public void testLogcatCmd() throws DeviceNotAvailableException {
         CLog.i("testLogcatCmd");
         // Adding -d flag to dump the log and exit, to make this a non-blocking call
-        CommandResult result = mTestDevice.executeShellV2Command(LogcatReceiver.LOGCAT_CMD + " -d");
+        CommandResult result =
+                mTestDevice.executeShellV2Command(
+                        LogcatReceiver.getDefaultLogcatCmd(mTestDevice) + " -d");
         assertThat(result.getStatus()).isEqualTo(CommandStatus.SUCCESS);
     }
 

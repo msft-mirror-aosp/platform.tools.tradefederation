@@ -709,7 +709,7 @@ public class BuildInfo implements IBuildInfo {
         }
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.STAGE_TESTS_INDIVIDUAL_DOWNLOADS, fileName);
-        List<String> includeFilters = Arrays.asList(String.format("/%s$", fileName));
+        List<String> includeFilters = Arrays.asList(String.format("/%s?($|/)", fileName));
 
         try (TradefedFeatureClient client = new TradefedFeatureClient()) {
             Map<String, String> args = new HashMap<>();

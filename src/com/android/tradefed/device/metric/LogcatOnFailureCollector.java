@@ -83,7 +83,8 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
     }
 
     @Override
-    public void onTestFail(DeviceMetricData testData, TestDescription test) {
+    public void onTestFail(DeviceMetricData testData, TestDescription test)
+            throws DeviceNotAvailableException {
         if (mCurrentCount > THROTTLE_LIMIT_PER_RUN) {
             if (mFirstThrottle) {
                 CLog.w("Throttle capture of logcat-on-failure due to too many failures.");
@@ -93,16 +94,17 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
         }
         // Delay slightly for the error to get in the logcat
         getRunUtil().sleep(100);
-        collectAndLog(test.toString());
+        collectAndLog(test.toString(), MAX_LOGAT_SIZE_BYTES);
         mCurrentCount++;
     }
 
     @Override
-    public void onTestRunFailed(DeviceMetricData testData, FailureDescription failure) {
+    public void onTestRunFailed(DeviceMetricData testData, FailureDescription failure)
+            throws DeviceNotAvailableException {
         // Delay slightly for the error to get in the logcat
         getRunUtil().sleep(100);
         // TODO: Improve the name
-        collectAndLog("run-failure");
+        collectAndLog("run-failure", MAX_LOGAT_SIZE_BYTES);
     }
 
     @Override
@@ -122,7 +124,7 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
         return RunUtil.getDefault();
     }
 
-    private void collectAndLog(String testName) {
+    protected void collectAndLog(String testName, int size) throws DeviceNotAvailableException {
         for (ITestDevice device : getRealDevices()) {
             boolean isDeviceOnline = isDeviceOnline(device);
             ILogcatReceiver receiver = mLogcatReceivers.get(device);
@@ -138,7 +140,7 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
             // If supported get the logcat buffer, even if device is offline to get the buffer
             saveLogcatSource(
                     testName,
-                    receiver.getLogcatData(MAX_LOGAT_SIZE_BYTES, mOffset.get(device)),
+                    receiver.getLogcatData(size, mOffset.get(device)),
                     device.getSerialNumber());
         }
     }
@@ -168,17 +170,14 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
         }
     }
 
-    private void legacyCollection(ITestDevice device, String testName) {
+    private void legacyCollection(ITestDevice device, String testName)
+            throws DeviceNotAvailableException {
         CollectingByteOutputReceiver outputReceiver = new CollectingByteOutputReceiver();
-        try {
-            device.executeShellCommand(LOGCAT_COLLECT_CMD_LEGACY, outputReceiver);
-            saveLogcatSource(
-                    testName,
-                    new ByteArrayInputStreamSource(outputReceiver.getOutput()),
-                    device.getSerialNumber());
-        } catch (DeviceNotAvailableException e) {
-            CLog.e(e);
-        }
+        device.executeShellCommand(LOGCAT_COLLECT_CMD_LEGACY, outputReceiver);
+        saveLogcatSource(
+                testName,
+                new ByteArrayInputStreamSource(outputReceiver.getOutput()),
+                device.getSerialNumber());
     }
 
     private void saveLogcatSource(String testName, InputStreamSource source, String serial) {

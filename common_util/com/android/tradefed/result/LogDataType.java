@@ -34,9 +34,13 @@ public enum LogDataType {
     TAR_GZ("tar.gz", "application/gzip", true, false),
     GZIP("gz", "application/gzip", true, false),
     HPROF("hprof", "application/octet-stream", true, false),
-    COVERAGE("ec", "text/plain", false, false), // Emma coverage file
+    COVERAGE("ec", "text/plain", true /* do not compress */, false), // Emma coverage file
     NATIVE_COVERAGE("zip", "application/zip", true, false), // gcov coverage archive
-    CLANG_COVERAGE("profdata", "text/plain", false, false), // LLVM indexed profile data
+    CLANG_COVERAGE(
+            "profdata",
+            "text/plain",
+            true /* do not compress */,
+            false), // LLVM indexed profile data
     PB("pb", "application/octet-stream", true, false), // Binary proto file
     TEXTPB("textproto", "text/plain", false, true), // Text proto file
     JSON("json", "application/json", false, true),
@@ -46,6 +50,7 @@ public enum LogDataType {
             false, // Not compressed by default, so we can gzip them
             false), // binary proto perfetto trace file
     /* Specific text file types */
+    ANRS("txt", "text/plain", true, true),
     BUGREPORT("txt", "text/plain", false, true),
     BUGREPORTZ("zip", "application/zip", true, false),
     HOST_LOG("txt", "text/plain", true, true),
@@ -53,6 +58,11 @@ public enum LogDataType {
     KERNEL_LOG("txt", "text/plain", true, true),
     MONKEY_LOG("txt", "text/plain", false, true),
     MUGSHOT_LOG("txt", "text/plain", false, true),
+    CB_METRICS_FILE(
+            "txt",
+            "text/plain",
+            true /* TODO(b/228497046): Allow compression when supported */,
+            true),
     PROCRANK("txt", "text/plain", false, true),
     MEM_INFO("txt", "text/plain", false, true),
     TOP("txt", "text/plain", false, true),
@@ -63,6 +73,7 @@ public enum LogDataType {
     CPU_INFO("txt", "text/plain", false, true), // dumpsys cpuinfo
     JACOCO_CSV("csv", "text/csv", false, true), // JaCoCo coverage report in CSV format
     JACOCO_XML("xml", "text/xml", false, true), // JaCoCo coverage report in XML format
+    JACOCO_EXEC("exec", "application/octet-stream", false, false), //JaCoCo coverage execution file
     ATRACE("atr", "text/plain", true, false), // atrace -z format
     KERNEL_TRACE("dat", "text/plain", false, false), // raw kernel ftrace buffer
     DIR("", "text/plain", false, false),
@@ -73,6 +84,12 @@ public enum LogDataType {
     ADB_HOST_LOG("txt", "text/plain", true, true),
     PASSED_TESTS("txt", "text/plain", true, true),
     RECOVERY_MODE_LOG("txt", "text/plain", false, true),
+    GOLDEN_RESULT_PROTO(
+            "textproto",
+            "text/plain",
+            true, // b/230070438: don't compress this file
+            true), // ScreenshotTest proto result
+    CUTTLEFISH_LOG("txt", "text/plain", true, true), // Log from cuttlefish instance
     /* Unknown file type */
     UNKNOWN("dat", "text/plain", false, false);
 

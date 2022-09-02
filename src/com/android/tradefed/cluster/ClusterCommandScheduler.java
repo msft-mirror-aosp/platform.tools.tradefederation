@@ -33,6 +33,7 @@ import com.android.tradefed.device.NoDeviceException;
 import com.android.tradefed.device.battery.BatteryController;
 import com.android.tradefed.device.battery.IBatteryInfo;
 import com.android.tradefed.device.battery.IBatteryInfo.BatteryState;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -58,6 +59,7 @@ import org.json.JSONException;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -290,7 +292,14 @@ public class ClusterCommandScheduler extends CommandScheduler {
             mFailureDescription = failure;
             mError = failure.getErrorMessage();
             if (failure.getCause() != null) {
-                mError = StreamUtil.getStackTrace(failure.getCause());
+                Throwable cause = failure.getCause();
+                mError = StreamUtil.getStackTrace(cause);
+                if (cause instanceof HarnessRuntimeException
+                        && InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN.equals(
+                                ((HarnessRuntimeException) cause).getErrorId())) {
+                    // Tests were not run, so un-lease the command so that it can be rescheduled.
+                    unleaseCommands(Arrays.asList(mCommandTask));
+                }
             }
         }
 
@@ -315,10 +324,11 @@ public class ClusterCommandScheduler extends CommandScheduler {
         @Override
         public void invocationComplete(
                 IInvocationContext metadata, Map<ITestDevice, FreeDeviceState> devicesStates) {
+            CLog.d("ClusterCommand invocationComplete start.");
             if (mWorkDir != null) {
                 FileUtil.recursiveDelete(mWorkDir);
             }
-            
+
             // TODO: handle multi-device where only one of the build could be missing.
             ErrorIdentifier errorId = null;
             if (getPrimaryBuildInfo() == null && mError == null) {
@@ -402,6 +412,7 @@ public class ClusterCommandScheduler extends CommandScheduler {
             final ClusterCommandEvent event = eventBuilder.build();
             getClusterClient().getCommandEventUploader().postEvent(event);
             getClusterClient().getCommandEventUploader().flush();
+            CLog.d("ClusterCommand invocationComplete done.");
         }
 
         /** {@inheritDoc} */
@@ -463,6 +474,10 @@ public class ClusterCommandScheduler extends CommandScheduler {
                                     .map(IInvocationContext::getInvocationId)
                                     .map(Ints::tryParse)
                                     .ifPresent(invocationId -> stopInvocation(invocationId, cause));
+                        } else if (ClusterCommand.State.COMPLETED.equals(
+                                commandStatus.getState())) {
+                            CLog.d("Invocation completed, skip reporting heartbeat.");
+                            return;
                         }
                     }
 
@@ -524,7 +539,8 @@ public class ClusterCommandScheduler extends CommandScheduler {
             return;
         }
         if (isShuttingDown()) {
-            CLog.d("Tradefed shutting down, ignoring commands.");
+            CLog.d("Tradefed shutting down, unleasing commands.");
+            unleaseCommands(commands);
             return;
         }
         execCommands(commands);
@@ -568,42 +584,29 @@ public class ClusterCommandScheduler extends CommandScheduler {
         return devices;
     }
 
-    /**
-     * Get available flashing permits.
-     *
-     * @return the number of available flashing permits.
-     */
-    private int getAvailableFlashingPermits() {
-        // By default there is no limit on available flashing permits.
-        int availableFlashingPermits = Integer.MAX_VALUE;
-        final IClusterOptions options = getClusterOptions();
-
-        boolean checkFlashingPermitsLease = options.checkFlashingPermitsOnLease();
-        if (checkFlashingPermitsLease) {
-            availableFlashingPermits = getHostOptions()
-                    .getAvailablePermits(PermitLimitType.CONCURRENT_FLASHER);
-            CLog.i("available flasher permits %d", availableFlashingPermits);
-        }
-        return availableFlashingPermits;
-    }
-
-    private boolean arePermitsAvailableToSchedule() {
+    private int permitsAvailableToSchedule() {
         if (!getClusterOptions().checkPermitsOnLease()) {
-            return true;
+            return Integer.MAX_VALUE;
         }
         for (PermitLimitType permit : PermitLimitType.values()) {
-            if (getClusterOptions().checkFlashingPermitsOnLease()
-                    && PermitLimitType.CONCURRENT_FLASHER.equals(permit)) {
-                // Already checked by dedicated flashing logic
-                continue;
-            }
             if (getHostOptions().getAvailablePermits(permit) <= 0) {
                 CLog.i("There is no available '%s' permits. Not leasing any additional commands.",
                         permit);
-                return false;
+                return 0;
             }
         }
-        return true;
+        // Assumption is that download permits eventually become flashing permits
+        // TODO: Improve to track after download until flashing
+        int heuriticPermitCalculation =
+                getHostOptions().getAvailablePermits(PermitLimitType.CONCURRENT_FLASHER)
+                        - getHostOptions().getInUsePermits(PermitLimitType.CONCURRENT_DOWNLOAD);
+        if (heuriticPermitCalculation < 0) {
+            CLog.i(
+                    "Download permits will exceed the flashing limit and might create permit"
+                            + " delays. Not Leasing.");
+            return 0;
+        }
+        return heuriticPermitCalculation;
     }
 
     private boolean checkDiskSpace() {
@@ -629,14 +632,8 @@ public class ClusterCommandScheduler extends CommandScheduler {
      */
     List<ClusterCommand> fetchHostCommands(final MultiMap<String, DeviceDescriptor> devices) {
         CLog.d("fetching cluster host commands from leasehosttasks...");
-        int availableFlashingPermits = getAvailableFlashingPermits();
-
-        // Don't try to lease if there are no flasher permits available
-        if (availableFlashingPermits == 0) {
-            CLog.i("There is no available flashing permits. Not lease any additional commands.");
-            return Collections.<ClusterCommand>emptyList();
-        }
-        if (!arePermitsAvailableToSchedule()) {
+        int permitsAvailable = permitsAvailableToSchedule();
+        if (permitsAvailable <= 0) {
             return Collections.<ClusterCommand>emptyList();
         }
         // Check disk space before scheduling
@@ -666,7 +663,7 @@ public class ClusterCommandScheduler extends CommandScheduler {
             }
         }
         try {
-            int count = Math.min(deviceInfos.size(), availableFlashingPermits);
+            int count = Math.min(deviceInfos.size(), permitsAvailable);
             List<ClusterCommand> commands =
                     getClusterClient()
                             .leaseHostCommands(
@@ -688,9 +685,11 @@ public class ClusterCommandScheduler extends CommandScheduler {
      * @param commands a list of {@link ClusterCommand}s fetched from the cluster command queue.
      */
     void execCommands(final List<ClusterCommand> commands) {
+        int commandIdx = 0;
         for (final ClusterCommand commandTask : commands) {
             if (isShuttingDown()) {
-                CLog.d("Tradefed shutting down, ignoring remaining commands.");
+                CLog.d("Tradefed shutting down, unleasing remaining commands.");
+                unleaseCommands(commands.subList(commandIdx, commands.size()));
                 return;
             }
             try {
@@ -756,6 +755,7 @@ public class ClusterCommandScheduler extends CommandScheduler {
                 eventUploader.postEvent(eventBuilder.build());
                 eventUploader.flush();
             }
+            commandIdx++;
         }
     }
 
@@ -880,5 +880,23 @@ public class ClusterCommandScheduler extends CommandScheduler {
         } catch (RuntimeException e) {
             CLog.e("failed to upload host state %s to TFC: %s", state.toString(), e);
         }
+    }
+
+    /**
+     * Notifies TFC of commands that were not executed and need to be rescheduled.
+     *
+     * @param commands a list of {@link ClusterCommand} that need to be unleased to get rescheduled.
+     */
+    private synchronized void unleaseCommands(final List<ClusterCommand> commands) {
+        IClusterEventUploader<ClusterCommandEvent> eventUploader =
+                getClusterClient().getCommandEventUploader();
+        for (ClusterCommand command : commands) {
+            ClusterCommandEvent.Builder eventBuilder =
+                    ClusterCommandEvent.createEventBuilder(command)
+                            .setHostName(ClusterHostUtil.getHostName())
+                            .setType(ClusterCommandEvent.Type.Unleased);
+            eventUploader.postEvent(eventBuilder.build());
+        }
+        eventUploader.flush();
     }
 }

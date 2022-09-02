@@ -30,6 +30,7 @@ import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.InvocationExecution;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.TestInvocation.Stage;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -70,7 +71,14 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
 
     /** {@inheritDoc} */
     @Override
-    protected List<ITargetPreparer> getPreparersToRun(IConfiguration config, String deviceName) {
+    protected List<ITargetPreparer> getTargetPreparersToRun(
+            IConfiguration config, String deviceName) {
+        return new ArrayList<>();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    protected List<ITargetPreparer> getLabPreparersToRun(IConfiguration config, String deviceName) {
         List<ITargetPreparer> preparersToRun = new ArrayList<>();
         preparersToRun.addAll(config.getDeviceConfigByName(deviceName).getLabPreparers());
         return preparersToRun;
@@ -152,7 +160,9 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
     public void runTests(
             TestInformation info, IConfiguration config, ITestInvocationListener listener)
             throws Throwable {
-        prepareAndRunSandbox(info, config, listener);
+        try (CloseableTraceScope ignore = new CloseableTraceScope("prepareAndRunSandbox")) {
+            prepareAndRunSandbox(info, config, listener);
+        }
     }
 
     @Override

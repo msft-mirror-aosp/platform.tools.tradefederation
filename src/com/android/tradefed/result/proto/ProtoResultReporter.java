@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.result.proto;
 
+import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.error.HarnessException;
@@ -70,6 +71,8 @@ public abstract class ProtoResultReporter
     private FailureDescription mInvocationFailureDescription = null;
     /** Whether or not a testModuleStart had currently been called. */
     private boolean mModuleInProgress = false;
+    /** Track whether or not invocation ended has been reported. */
+    private boolean mInvocationEnded = false;
 
     @Override
     public boolean supportGranularResults() {
@@ -144,6 +147,13 @@ public abstract class ProtoResultReporter
      * @param testCaseRecord The finalized proto representing a test case.
      */
     public void processTestCaseEnded(TestRecord testCaseRecord) {}
+
+    /**
+     * Use the invocation record to send one by one all the final logs of the invocation.
+     *
+     * @param invocationLogs The finalized proto representing the invocation.
+     */
+    public void processFinalInvocationLogs(TestRecord invocationLogs) {}
 
     // Invocation events
 
@@ -221,6 +231,7 @@ public abstract class ProtoResultReporter
             CLog.e("Failed to process invocation ended:");
             CLog.e(e);
         }
+        mInvocationEnded = true;
     }
 
     // Module events (optional when there is no suite)
@@ -252,6 +263,8 @@ public abstract class ProtoResultReporter
         TestRecord.Builder moduleBuilder = mLatestChild.pop();
         mModuleInProgress = false;
         moduleBuilder.setEndTime(createTimeStamp(System.currentTimeMillis()));
+        // Module do not have a fail status
+        moduleBuilder.setStatus(TestStatus.PASS);
         TestRecord.Builder parentBuilder = mLatestChild.peek();
 
         // Finalize the module and track it in the child
@@ -508,6 +521,11 @@ public abstract class ProtoResultReporter
             return;
         }
         TestRecord.Builder current = mLatestChild.peek();
+        if (mInvocationEnded) {
+            // For after invocation ended events, report artifacts one by one.
+            current.clearArtifacts();
+            current.clearChildren();
+        }
         Map<String, Any> fullmap = new HashMap<>();
         fullmap.putAll(current.getArtifactsMap());
         Any any = Any.pack(createFileProto(logFile));
@@ -520,6 +538,10 @@ public abstract class ProtoResultReporter
         } while (fullmap.containsKey(key));
         fullmap.put(key, any);
         current.putAllArtifacts(fullmap);
+        if (mInvocationEnded) {
+            CLog.logAndDisplay(LogLevel.DEBUG, "process final logs: %s", logFile.getPath());
+            processFinalInvocationLogs(current.build());
+        }
     }
 
     /**

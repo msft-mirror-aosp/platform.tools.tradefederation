@@ -146,6 +146,11 @@ public class CommandOptions implements ICommandOptions {
     public static final String USE_REMOTE_SANDBOX = "use-remote-sandbox";
 
     @Option(
+            name = "remote-files",
+            description = "A list of files references to store in build info")
+    private Set<String> mRemoteFiles = new LinkedHashSet<>();
+
+    @Option(
         name = USE_SANDBOX,
         description = "Set if the invocation should use a sandbox to run or not."
     )
@@ -233,7 +238,7 @@ public class CommandOptions implements ICommandOptions {
             name = "delegated-early-device-release",
             description =
                     "Feature flag to enable early device release when running in delegated mode.")
-    private boolean mEnableDelegatedEarlyDeviceRelease = false;
+    private boolean mEnableDelegatedEarlyDeviceRelease = true;
 
     @Option(
             name = "dynamic-download-args",
@@ -272,6 +277,9 @@ public class CommandOptions implements ICommandOptions {
             description = "The number of devices for multi-device tests. For a new feature "
                                   + "under developing, not for other uses.")
     private Integer mMultiDeviceCount;
+
+    @Option(name = "enable-tracing", description = "Enable test invocation tracing.")
+    private boolean mTracingEnabled = true;
 
     /**
      * Set the help mode for the config.
@@ -508,6 +516,12 @@ public class CommandOptions implements ICommandOptions {
 
     /** {@inheritDoc} */
     @Override
+    public Set<String> getRemoteFiles() {
+        return mRemoteFiles;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean shouldUseSandboxing() {
         return mUseSandbox;
     }
@@ -696,5 +710,17 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public Integer getMultiDeviceCount() {
         return mMultiDeviceCount;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setMultiDeviceCount(int count) {
+        mMultiDeviceCount = count;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isTracingEnabled() {
+        return mTracingEnabled;
     }
 }

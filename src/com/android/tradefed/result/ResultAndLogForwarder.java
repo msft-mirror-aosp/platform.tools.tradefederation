@@ -28,6 +28,10 @@ public class ResultAndLogForwarder extends ResultForwarder implements ILogSaverL
         super(listeners);
     }
 
+    public ResultAndLogForwarder(ITestInvocationListener... listeners) {
+        super(listeners);
+    }
+
     @Override
     public void invocationStarted(IInvocationContext context) {
         InvocationSummaryHelper.reportInvocationStarted(getListeners(), context);

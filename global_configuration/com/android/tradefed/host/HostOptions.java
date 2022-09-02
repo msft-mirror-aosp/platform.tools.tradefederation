@@ -19,7 +19,10 @@ package com.android.tradefed.host;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.util.RunInterruptedException;
 
 import java.io.File;
 import java.net.InetAddress;
@@ -53,6 +56,13 @@ public class HostOptions implements IHostOptions {
                         + "constraints)"
     )
     private Integer mConcurrentDownloadLimit = null;
+
+    @Option(
+            name = "concurrent-virtual-device-startup-limit",
+            description =
+                    "The maximum number of concurrent virtual device startup to avoid resource"
+                            + " contentions depending on factors such as network, CPU, I/O etc.")
+    private Integer mConcurrentVirtualDeviceStartupLimit = Integer.MAX_VALUE;
 
     @Option(name = "concurrent-limits", description =
             "The maximum number of concurrent actions of a given type.")
@@ -125,13 +135,25 @@ public class HostOptions implements IHostOptions {
     private List<String> mPreconfiguredVirtualDevicePool = new ArrayList<>();
 
     @Option(
-            name = "enable-bridge-rpc",
+            name = "flash-with-fuse-zip",
+            description = "Use `fastboot flashall` on a folder of fuse mounted device image zip "
+                    + "instead of `fastboot update` with zip")
+    private boolean mFlashWithFuseZip = false;
+
+    @Option(
+            name = "cache-size-limit",
             description =
-                    "Flag to enable the bridge RPC service. Bridge Rpc provides TF test lifecycle"
-                            + " management. ")
-    private Boolean mEnableBridgeRpc = false;
+                    "The maximum allowed size(bytes) of the local file cache. (default: 20GB)")
+    private Long mCacheSizeLimit = 20L * 1024L * 1024L * 1024L;
 
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
+    private Map<PermitLimitType, Integer> mInternalConcurrentLimits = new HashMap<>();
+
+    /** {@inheritDoc} */
+    @Override
+    public Long getCacheSizeLimit() {
+        return mCacheSizeLimit;
+    }
 
     /** {@inheritDoc} */
     @Override
@@ -145,22 +167,31 @@ public class HostOptions implements IHostOptions {
         return mConcurrentDownloadLimit;
     }
 
+    @Override
+    public Integer getConcurrentVirtualDeviceStartupLimit() {
+        return mConcurrentVirtualDeviceStartupLimit;
+    }
+
     /** {@inheritDoc} */
     @Override
     public File getFastbootTmpDir() {
-        return mFastbootTmpDir;
+        if (mFastbootTmpDir != null) {
+            if (!mFastbootTmpDir.exists() || !mFastbootTmpDir.isDirectory()) {
+                throw new HarnessRuntimeException(
+                        String.format(
+                                "Fastboot tmp dir '%s' is missing and was expected.",
+                                mFastbootTmpDir),
+                        InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
+            }
+            return mFastbootTmpDir;
+        }
+        return null;
     }
 
     /** {@inheritDoc} */
     @Override
     public boolean isFastbootdEnable() {
         return mEnableFastbootdMode;
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean isBridgeRpcEnable() {
-        return mEnableBridgeRpc;
     }
 
     /** {@inheritDoc} */
@@ -213,8 +244,8 @@ public class HostOptions implements IHostOptions {
 
     /** {@inheritDoc} */
     @Override
-    public Set<String> getKnownPreconfigureVirtualDevicePool() {
-        return new HashSet<>(mPreconfiguredVirtualDevicePool);
+    public List<String> getKnownPreconfigureVirtualDevicePool() {
+        return new ArrayList<>(mPreconfiguredVirtualDevicePool);
     }
 
     /** {@inheritDoc} */
@@ -262,15 +293,25 @@ public class HostOptions implements IHostOptions {
         if (!mConcurrentLocks.isEmpty()) {
             return;
         }
+        mInternalConcurrentLimits.putAll(mConcurrentLimit);
         // Backfill flasher & download limit from their dedicated option
-        if (!mConcurrentLimit.containsKey(PermitLimitType.CONCURRENT_FLASHER)) {
-            mConcurrentLimit.put(PermitLimitType.CONCURRENT_FLASHER, mConcurrentFlasherLimit);
+        if (!mInternalConcurrentLimits.containsKey(PermitLimitType.CONCURRENT_FLASHER)) {
+            mInternalConcurrentLimits.put(
+                    PermitLimitType.CONCURRENT_FLASHER, mConcurrentFlasherLimit);
         }
-        if (!mConcurrentLimit.containsKey(PermitLimitType.CONCURRENT_DOWNLOAD)) {
-            mConcurrentLimit.put(PermitLimitType.CONCURRENT_DOWNLOAD, mConcurrentDownloadLimit);
+        if (!mInternalConcurrentLimits.containsKey(PermitLimitType.CONCURRENT_DOWNLOAD)) {
+            mInternalConcurrentLimits.put(
+                    PermitLimitType.CONCURRENT_DOWNLOAD, mConcurrentDownloadLimit);
         }
 
-        for (Entry<PermitLimitType, Integer> limits : mConcurrentLimit.entrySet()) {
+        if (!mInternalConcurrentLimits.containsKey(
+                PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP)) {
+            mInternalConcurrentLimits.put(
+                    PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP,
+                    mConcurrentVirtualDeviceStartupLimit);
+        }
+
+        for (Entry<PermitLimitType, Integer> limits : mInternalConcurrentLimits.entrySet()) {
             if (limits.getValue() == null) {
                 continue;
             }
@@ -284,12 +325,16 @@ public class HostOptions implements IHostOptions {
         if (!mConcurrentLocks.containsKey(type)) {
             return;
         }
-        synchronized (mConcurrentLocks.get(type)) {
-            CLog.i(
-                    "Requesting a '%s' permit out of the max limit of %s. Current queue "
-                            + "length: %s",
-                    type, mConcurrentLimit.get(type), mConcurrentLocks.get(type).getQueueLength());
-            mConcurrentLocks.get(type).acquireUninterruptibly();
+        CLog.i(
+                "Requesting a '%s' permit out of the max limit of %s. Current queue "
+                        + "length: %s",
+                type,
+                mInternalConcurrentLimits.get(type),
+                mConcurrentLocks.get(type).getQueueLength());
+        try {
+            mConcurrentLocks.get(type).acquire();
+        } catch (InterruptedException e) {
+            throw new RunInterruptedException(e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
         }
     }
 
@@ -307,5 +352,18 @@ public class HostOptions implements IHostOptions {
             return Integer.MAX_VALUE;
         }
         return mConcurrentLocks.get(type).availablePermits();
+    }
+
+    @Override
+    public int getInUsePermits(PermitLimitType type) {
+        if (!mConcurrentLocks.containsKey(type)) {
+            return 0;
+        }
+        return mInternalConcurrentLimits.get(type) - mConcurrentLocks.get(type).availablePermits();
+    }
+
+    @Override
+    public boolean shouldFlashWithFuseZip() {
+        return mFlashWithFuseZip;
     }
 }

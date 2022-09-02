@@ -16,25 +16,25 @@
 
 package com.android.tradefed.testtype.mobly;
 
+import com.android.tradefed.log.LogUtil;
 import com.android.tradefed.result.FailureDescription;
+import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto;
 import com.android.tradefed.testtype.mobly.IMoblyYamlResultHandler.ITestResult;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultHandlerFactory.InvalidResultTypeException;
-import com.android.tradefed.log.LogUtil;
-import com.android.tradefed.result.ITestInvocationListener;
-import com.android.tradefed.result.TestDescription;
-
 import com.android.tradefed.testtype.mobly.MoblyYamlResultSummaryHandler.Summary;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 /** Mobly yaml test results parser. */
 public class MoblyYamlResultParser {
@@ -72,7 +72,7 @@ public class MoblyYamlResultParser {
                 new MoblyYamlResultHandlerFactory().getHandler(docType);
         ITestResult testResult = resultHandler.handle(docMap);
         if ("Summary".equals(docType)) {
-            mTestCount = ((Summary) testResult).getExecuted();
+            mTestCount = ((Summary) testResult).getExecuted() + ((Summary) testResult).getSkipped();
         }
         return testResult;
     }
@@ -84,55 +84,77 @@ public class MoblyYamlResultParser {
         for (ITestInvocationListener listener : listeners) {
             listener.testRunStarted(mRunName, mTestCount);
         }
-        for (IMoblyYamlResultHandler.ITestResult result : resultCache) {
-            switch (result.getType()) {
-                case RECORD:
-                    MoblyYamlResultRecordHandler.Record record =
-                            (MoblyYamlResultRecordHandler.Record) result;
-                    TestDescription testDescription =
-                            new TestDescription(record.getTestClass(), record.getTestName());
-                    FailureDescription failureDescription =
-                            FailureDescription.create(
-                                    record.getStackTrace(),
-                                    TestRecordProto.FailureStatus.TEST_FAILURE);
-                    mRunStartTime =
-                            mRunStartTime == 0L
-                                    ? record.getBeginTime()
-                                    : Math.min(mRunStartTime, record.getBeginTime());
-                    mRunEndTime = Math.max(mRunEndTime, record.getEndTime());
-                    for (ITestInvocationListener listener : listeners) {
-                        listener.testStarted(testDescription, record.getBeginTime());
-                        if (record.getResult() != MoblyYamlResultRecordHandler.RecordResult.PASS) {
-                            listener.testFailed(testDescription, failureDescription);
+        try {
+            boolean abort = false;
+            for (IMoblyYamlResultHandler.ITestResult result : resultCache) {
+                if (abort) {
+                    break;
+                }
+                switch (result.getType()) {
+                    case RECORD:
+                        MoblyYamlResultRecordHandler.Record record =
+                                (MoblyYamlResultRecordHandler.Record) result;
+                        TestDescription testDescription =
+                                new TestDescription(record.getTestClass(), record.getTestName());
+                        FailureDescription failureDescription =
+                                FailureDescription.create(
+                                        record.getStackTrace(),
+                                        TestRecordProto.FailureStatus.TEST_FAILURE);
+                        if (MoblyYamlResultRecordHandler.RecordResult.ERROR.equals(
+                                record.getResult())) {
+                            for (ITestInvocationListener listener : listeners) {
+                                listener.testRunFailed(failureDescription);
+                            }
+                            abort = true;
+                            break;
                         }
-                        listener.testEnded(
-                                testDescription,
-                                record.getEndTime(),
-                                new HashMap<String, String>());
-                    }
-                    break;
-                case USER_DATA:
-                    long timestamp =
-                            ((MoblyYamlResultUserDataHandler.UserData) result).getTimeStamp();
-                    mRunStartTime =
-                            mRunStartTime == 0L ? timestamp : Math.min(mRunStartTime, timestamp);
-                    break;
-                case CONTROLLER_INFO:
-                    mRunEndTime =
-                            Math.max(
-                                    mRunEndTime,
-                                    ((MoblyYamlResultControllerInfoHandler.ControllerInfo) result)
-                                            .getTimeStamp());
-                    break;
-                case TEST_NAME_LIST:
-                    // Do nothing
-                    break;
-                default:
-                    // Do nothing
+                        mRunStartTime =
+                                mRunStartTime == 0L
+                                        ? record.getBeginTime()
+                                        : Math.min(mRunStartTime, record.getBeginTime());
+                        mRunEndTime = Math.max(mRunEndTime, record.getEndTime());
+                        for (ITestInvocationListener listener : listeners) {
+                            listener.testStarted(testDescription, record.getBeginTime());
+                            if (MoblyYamlResultRecordHandler.RecordResult.SKIP.equals(
+                                    record.getResult())) {
+                                listener.testIgnored(testDescription);
+                            } else if (!MoblyYamlResultRecordHandler.RecordResult.PASS.equals(
+                                    record.getResult())) {
+                                listener.testFailed(testDescription, failureDescription);
+                            }
+                            listener.testEnded(
+                                    testDescription,
+                                    record.getEndTime(),
+                                    new HashMap<String, String>());
+                        }
+                        break;
+                    case USER_DATA:
+                        long timestamp =
+                                ((MoblyYamlResultUserDataHandler.UserData) result).getTimeStamp();
+                        mRunStartTime =
+                                mRunStartTime == 0L
+                                        ? timestamp
+                                        : Math.min(mRunStartTime, timestamp);
+                        break;
+                    case CONTROLLER_INFO:
+                        mRunEndTime =
+                                Math.max(
+                                        mRunEndTime,
+                                        ((MoblyYamlResultControllerInfoHandler.ControllerInfo)
+                                                        result)
+                                                .getTimeStamp());
+                        break;
+                    case TEST_NAME_LIST:
+                        // Do nothing
+                        break;
+                    default:
+                        // Do nothing
+                }
             }
-        }
-        for (ITestInvocationListener listener : listeners) {
-            listener.testRunEnded(mRunEndTime - mRunStartTime, new HashMap<String, String>());
+        } finally {
+            for (ITestInvocationListener listener : listeners) {
+                listener.testRunEnded(mRunEndTime - mRunStartTime, new HashMap<String, String>());
+            }
         }
     }
 }

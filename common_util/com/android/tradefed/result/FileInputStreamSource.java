@@ -87,5 +87,13 @@ public class FileInputStreamSource implements InputStreamSource {
     public void cleanFile() {
         FileUtil.deleteFile(mFile);
     }
+
+    /**
+     * Returns the underlying file. File is not guarantee to exists anymore once the stream is
+     * closed.
+     */
+    public File getFile() {
+        return mFile;
+    }
 }
 

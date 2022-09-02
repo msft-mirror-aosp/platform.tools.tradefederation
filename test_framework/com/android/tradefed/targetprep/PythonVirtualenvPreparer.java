@@ -177,7 +177,16 @@ public class PythonVirtualenvPreparer extends BaseTargetPreparer {
             throw new TargetSetupError(
                     "virtualenv is not installed.", device.getDeviceDescriptor());
         }
-        String version = stdout.split(" ")[1];
+        CLog.d("Output from virtualenv --version: %s", stdout);
+        String[] split = stdout.split(" ");
+        if (split.length < 2) {
+            throw new TargetSetupError(
+                    String.format(
+                            "Something is wrong with your installed virtualenv version: %s",
+                            stdout),
+                    device.getDeviceDescriptor());
+        }
+        String version = split[1];
         int majorVersion = Integer.parseInt(version.split("\\.")[0]);
         if (majorVersion < 20) {
             throw new TargetSetupError(

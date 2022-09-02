@@ -517,6 +517,22 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
+     * Helper method which executes a long running fastboot command as a system command with system
+     * environment variables.
+     *
+     * <p>Identical to {@link #executeFastbootCommand(String...)} except uses a longer timeout.
+     *
+     * @param envVarMap the system environment variables that the fastboot command run with
+     * @param commandArgs the fastboot command and arguments to run
+     * @return the CommandResult containing output of command
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public CommandResult executeLongFastbootCommand(
+            Map<String, String> envVarMap, String... commandArgs)
+            throws DeviceNotAvailableException;
+
+    /**
      * Get whether to use fastboot erase or fastboot format to wipe a partition on the device.
      *
      * @return {@code true} if fastboot erase will be used or {@code false} if fastboot format will
@@ -632,6 +648,20 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
+     * Retrieves a file off device.
+     *
+     * @param remoteFilePath the absolute path to file on device.
+     * @param localFile the local file to store contents in. If non-empty, contents will be
+     *     replaced.
+     * @param userId The user id to pull from
+     * @return <code>true</code> if file was retrieved successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pullFile(String remoteFilePath, File localFile, int userId)
+            throws DeviceNotAvailableException;
+
+    /**
      * Retrieves a file off device, stores it in a local temporary {@link File}, and returns that
      * {@code File}.
      *
@@ -642,6 +672,19 @@ public interface INativeDevice {
      *             recovered.
      */
     public File pullFile(String remoteFilePath) throws DeviceNotAvailableException;
+
+    /**
+     * Retrieves a file off device, stores it in a local temporary {@link File}, and returns that
+     * {@code File}.
+     *
+     * @param remoteFilePath the absolute path to file on device.
+     * @param userId The user id to pull from
+     * @return A {@link File} containing the contents of the device file, or {@code null} if the
+     *     copy failed for any reason (including problems with the host filesystem)
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public File pullFile(String remoteFilePath, int userId) throws DeviceNotAvailableException;
 
     /**
      * Retrieves a file off device, and returns the contents.
@@ -678,15 +721,32 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
-     * Push a file to device
+     * Push a file to device. By default using a content provider.
      *
      * @param localFile the local file to push
      * @param deviceFilePath the remote destination absolute file path
      * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
-     * recovered.
+     *     recovered.
      */
     public boolean pushFile(File localFile, String deviceFilePath)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Variant of {@link #pushFile(File, String)} which can optionally consider evaluating the need
+     * for the content provider.
+     *
+     * @param localFile the local file to push
+     * @param deviceFilePath the remote destination absolute file path
+     * @param evaluateContentProviderNeeded whether to check if we need the content provider
+     * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pushFile(
+            final File localFile,
+            final String deviceFilePath,
+            boolean evaluateContentProviderNeeded)
             throws DeviceNotAvailableException;
 
     /**
@@ -1175,6 +1235,14 @@ public interface INativeDevice {
     public boolean waitForDeviceNotAvailable(final long waitTime);
 
     /**
+     * Blocks until device is visible via fastboot. Use default timeout.
+     *
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public void waitForDeviceBootloader() throws DeviceNotAvailableException;
+
+    /**
      * Blocks for the device to be in the 'adb recovery' state (note this is distinct from
      * {@link IDeviceRecovery}).
      *
@@ -1390,6 +1458,14 @@ public interface INativeDevice {
      * File referenced in the Bugreport object need to be cleaned via {@link Bugreport#close()}.
      */
     public Bugreport takeBugreport();
+
+    /**
+     * Collects and log ANRs from the device.
+     *
+     * @param logger an {@link ITestLogger} to log the ANRs.
+     * @return True if the logging was successful, false otherwise.
+     */
+    public boolean logAnrs(ITestLogger logger) throws DeviceNotAvailableException;
 
     /**
      * Get the device class.

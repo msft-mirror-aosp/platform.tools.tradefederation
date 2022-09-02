@@ -22,7 +22,6 @@ import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
-import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NullDevice;
@@ -193,8 +192,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
         buildInfo.addBuildAttribute(
                 "original_build_fingerprint", device.getProperty("ro.product.build.fingerprint"));
 
-        // don't allow interruptions during flashing operations.
-        getRunUtil().allowInterrupt(false);
         long queueTime = -1;
         long flashingTime = -1;
         long start = -1;
@@ -205,15 +202,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             flasher.setWipeTimeout(mWipeTimeout);
             // only surround fastboot related operations with flashing permit restriction
             try {
-                start = System.currentTimeMillis();
-                getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
-                queueTime = System.currentTimeMillis() - start;
-                CLog.v(
-                        "Flashing permit obtained after %ds",
-                        TimeUnit.MILLISECONDS.toSeconds(queueTime));
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
-
                 flasher.overrideDeviceOptions(device);
                 flasher.setUserDataFlashOption(mUserDataFlashOption);
                 flasher.setForceSystemFlash(mForceSystemFlash);
@@ -226,15 +214,30 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                     ((FastbootDeviceFlasher) flasher).setFlashOptions(mFastbootFlashOptions);
                 }
                 start = System.currentTimeMillis();
+                flasher.preFlashOperations(device, deviceBuild);
+                // Only #flash is included in the critical section
+                getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                queueTime = System.currentTimeMillis() - start;
+                CLog.v(
+                        "Flashing permit obtained after %ds",
+                        TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
+                // Don't allow interruptions during flashing operations.
+                getRunUtil().allowInterrupt(false);
+                start = System.currentTimeMillis();
                 flasher.flash(device, deviceBuild);
             } finally {
                 flashingTime = System.currentTimeMillis() - start;
                 getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
+                flasher.postFlashOperations(device, deviceBuild);
                 // report flashing status
                 CommandStatus status = flasher.getSystemFlashingStatus();
                 if (status == null) {
                     CLog.i("Skipped reporting metrics because system partitions were not flashed.");
                 } else {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_TIME, flashingTime);
                     reportFlashMetrics(buildInfo.getBuildBranch(), buildInfo.getBuildFlavor(),
                             buildInfo.getBuildId(), device.getSerialNumber(), queueTime,
                             flashingTime, status);
@@ -261,13 +264,14 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             try {
                 device.setRecoveryMode(RecoveryMode.AVAILABLE);
                 device.waitForDeviceAvailable(mDeviceBootTime);
-            } catch (DeviceUnresponsiveException e) {
-                // assume this is a build problem
+            } catch (DeviceNotAvailableException e) {
+                // Assume this is a build problem
                 throw new DeviceFailedToBootError(
                         String.format(
                                 "Device %s did not become available after flashing %s",
                                 device.getSerialNumber(), deviceBuild.getDeviceBuildId()),
                         device.getDeviceDescriptor(),
+                        e,
                         DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
             }
             device.postBootSetup();

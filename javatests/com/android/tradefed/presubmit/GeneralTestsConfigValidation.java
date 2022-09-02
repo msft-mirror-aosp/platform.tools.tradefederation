@@ -84,6 +84,9 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             "com.android.tradefed.testtype.ArtRunTest",
                             "com.android.tradefed.testtype.ArtGTest",
                             "com.android.tradefed.testtype.mobly.MoblyBinaryHostTest",
+                            "com.android.tradefed.testtype.pandora.PtsBotTest",
+                            // VTS runners
+                            "com.android.tradefed.testtype.binary.KernelTargetTest",
                             // Others
                             "com.google.android.deviceconfig.RebootTest",
                             "com.android.scenario.AppSetup"));

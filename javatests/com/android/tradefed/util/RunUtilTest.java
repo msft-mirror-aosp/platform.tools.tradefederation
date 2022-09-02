@@ -174,6 +174,32 @@ public class RunUtilTest {
     }
 
     /**
+     * Test that {@link RunUtil#runTimedCmdWithInput(long, String, File, File, String...)} properly
+     * backfill errors.
+     */
+    @Test
+    public void testRunTimedCmdWithInput_failed() throws Exception {
+        RunUtil spyUtil = new SpyRunUtil(true);
+        File stdout = FileUtil.createTempFile("stdout-test", "txt");
+        File stderr = FileUtil.createTempFile("stderr-test", "txt");
+        try {
+            CommandResult result =
+                    spyUtil.runTimedCmdWithInput(
+                            VERY_LONG_TIMEOUT_MS, null, stdout, stderr, "blahggggwarggg");
+            assertEquals(CommandStatus.EXCEPTION, result.getStatus());
+            assertEquals("", result.getStdout());
+            assertTrue(result.getStderr().contains("Cannot run program \"blahggggwarggg\""));
+            // Error was backfilled in stderr file
+            assertTrue(
+                    FileUtil.readStringFromFile(stderr)
+                            .contains("Cannot run program \"blahggggwarggg\""));
+        } finally {
+            FileUtil.deleteFile(stdout);
+            FileUtil.deleteFile(stderr);
+        }
+    }
+
+    /**
      * Test that {@link RunUtil#runTimedCmd(long, String[])} is returning timed out state when the
      * command does not return in time.
      */

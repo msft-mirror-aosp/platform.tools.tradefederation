@@ -122,12 +122,25 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "only the tests on the triggering device build will be run.")
     private List<String> mAdditionalTestMappingZips = new ArrayList<>();
 
+    @Option(
+            name = "test-mapping-unmatched-file-pattern-paths",
+            description =
+                    "A list of modified paths that does not match with a certain file_pattern in "
+                            + "the TEST_MAPPING file. This is used only for Work Node, and handled "
+                            + "by provider service. If none is specified, all tests are needed "
+                            + "to run for the given change.")
+    private Set<String> mUnmatchedFilePatternPaths = new HashSet<>();
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
     private static final String TEST_MAPPING_EXCLUDE_FILTER = "exclude-filter";
 
     private IBuildInfo mBuildInfo;
+
+    public TestMappingSuiteRunner() {
+        setSkipjarLoading(true);
+    }
 
     /**
      * Load the tests configuration that will be run. Each tests is defined by a {@link
@@ -152,28 +165,33 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         Set<TestInfo> testInfosToRun = new HashSet<>();
         mBuildInfo = getBuildInfo();
         if (mTestGroup == null && includeFilter.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "At least one of the options, --test-mapping-test-group or --include-filter, "
-                            + "should be set.");
+                            + "should be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (mTestGroup == null && !mKeywords.isEmpty()) {
-            throw new RuntimeException(
-                    "Must specify --test-mapping-test-group when applying --test-mapping-keyword.");
+            throw new HarnessRuntimeException(
+                    "Must specify --test-mapping-test-group when applying --test-mapping-keyword.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (mTestGroup == null && !mTestModulesForced.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "Must specify --test-mapping-test-group when applying "
-                            + "--force-test-mapping-module.");
+                            + "--force-test-mapping-module.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (mTestGroup != null && !includeFilter.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "If options --test-mapping-test-group is set, option --include-filter should "
-                            + "not be set.");
+                            + "not be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         if (!includeFilter.isEmpty() && !mTestMappingPaths.isEmpty()) {
-            throw new RuntimeException(
+            throw new HarnessRuntimeException(
                     "If option --include-filter is set, option --test-mapping-path should "
-                            + "not be set.");
+                            + "not be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         if (mTestGroup != null) {
@@ -201,8 +219,9 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                 testInfosToRun = filterByAllowedTestLists(testInfosToRun);
             }
             if (testInfosToRun.isEmpty()) {
-                throw new RuntimeException(
-                        String.format("No test found for the given group: %s.", mTestGroup));
+                throw new HarnessRuntimeException(
+                        String.format("No test found for the given group: %s.", mTestGroup),
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             for (TestInfo testInfo : testInfosToRun) {
                 testNames.add(testInfo.getName());
@@ -263,24 +282,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     @VisibleForTesting
     boolean getUseTestMappingPath() {
         return mUseTestMappingPath;
-    }
-
-    /** Ensure there are no collisions of TEST_MAPPING paths between different test mapping zips. */
-    private void validateTestMappingSource(Set<TestInfo> base, Set<TestInfo> target, String name) {
-        Set<String> baseSorces = new HashSet<>();
-        for (TestInfo testInfo : base) {
-            baseSorces.addAll(testInfo.getSources());
-        }
-        for (TestInfo testInfo : target) {
-            for (String src : testInfo.getSources()) {
-                if (baseSorces.contains(src)) {
-                    throw new HarnessRuntimeException(
-                            String.format("Collision of Test Mapping file: %s/TEST_MAPPING in " +
-                                    "artifact: %s.", src, name),
-                            InfraErrorIdentifier.TEST_MAPPING_PATH_COLLISION);
-                }
-            }
-        }
     }
 
     /**

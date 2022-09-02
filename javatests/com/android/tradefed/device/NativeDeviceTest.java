@@ -43,6 +43,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.IWifiHelper.WifiConnectionResult;
 import com.android.tradefed.device.NativeDevice.RebootMode;
 import com.android.tradefed.host.HostOptions;
 import com.android.tradefed.host.IHostOptions;
@@ -86,6 +87,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+
 /** Unit tests for {@link NativeDevice}. */
 @RunWith(JUnit4.class)
 public class NativeDeviceTest {
@@ -125,6 +127,11 @@ public class NativeDeviceTest {
         @Override
         IHostOptions getHostOptions() {
             return mHostOptions;
+        }
+
+        @Override
+        public int getCurrentUser() throws DeviceNotAvailableException {
+            return 0;
         }
     }
 
@@ -370,6 +377,11 @@ public class NativeDeviceTest {
                             throws DeviceNotAvailableException {
                         return "drwxr-xr-x root     root    somedirectory";
                     }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
+                    }
                 };
         File dir = FileUtil.createTempDir("tf-test");
         Collection<IFileEntry> childrens = new ArrayList<>();
@@ -415,7 +427,7 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    protected boolean pullFileInternal(String remoteFilePath, File localFile)
                             throws DeviceNotAvailableException {
                         try {
                             // Just touch the file to make it appear.
@@ -424,6 +436,11 @@ public class NativeDeviceTest {
                             throw new RuntimeException(e);
                         }
                         return true;
+                    }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
                     }
                 };
         File dir = FileUtil.createTempDir("tf-test");
@@ -482,7 +499,7 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    protected boolean pullFileInternal(String remoteFilePath, File localFile)
                             throws DeviceNotAvailableException {
                         if (mFirstPull) {
                             mFirstPull = false;
@@ -496,6 +513,11 @@ public class NativeDeviceTest {
                         } else {
                             return false;
                         }
+                    }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
                     }
                 };
         File dir = FileUtil.createTempDir("tf-test");
@@ -548,6 +570,11 @@ public class NativeDeviceTest {
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "-rwxr-xr-x root     root    somefile";
+                    }
+
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return 0;
                     }
                 };
         File dir = FileUtil.createTempDir("tf-test");
@@ -765,12 +792,30 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         false))
-                .thenReturn(true);
+                .thenReturn(WifiConnectionResult.SUCCESS);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
         when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
 
         assertTrue(mTestDevice.connectToWifiNetwork(FAKE_NETWORK_SSID, FAKE_NETWORK_PASSWORD));
+    }
+
+    /** Unit test for {@link NativeDevice#connectToWifiNetwork(Map<String, String>)}. */
+    @Test
+    public void testConnectToWifiNetworkGivenMap_success() throws DeviceNotAvailableException {
+        when(mMockWifi.connectToNetwork(
+                        FAKE_NETWORK_SSID,
+                        FAKE_NETWORK_PASSWORD,
+                        mTestDevice.getOptions().getConnCheckUrl(),
+                        false))
+                .thenReturn(WifiConnectionResult.SUCCESS);
+        Map<String, String> fakeWifiInfo = new HashMap<>();
+        fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
+        when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
+
+        LinkedHashMap<String, String> ssidToPsk = new LinkedHashMap<>();
+        ssidToPsk.put(FAKE_NETWORK_SSID, FAKE_NETWORK_PASSWORD);
+        assertTrue(mTestDevice.connectToWifiNetwork(ssidToPsk));
     }
 
     /**
@@ -784,12 +829,42 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         false))
-                .thenReturn(false);
+                .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
         when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
 
         assertFalse(mTestDevice.connectToWifiNetwork(FAKE_NETWORK_SSID, FAKE_NETWORK_PASSWORD));
+        verify(mMockRunUtil, times(mTestDevice.getOptions().getWifiAttempts() - 1))
+                .sleep(Mockito.anyLong());
+        verify(mMockWifi, times(mTestDevice.getOptions().getWifiAttempts()))
+                .connectToNetwork(
+                        FAKE_NETWORK_SSID,
+                        FAKE_NETWORK_PASSWORD,
+                        mTestDevice.getOptions().getConnCheckUrl(),
+                        false);
+        verify(mMockWifi, times(mTestDevice.getOptions().getWifiAttempts())).getWifiInfo();
+    }
+
+    /**
+     * Unit test for {@link NativeDevice#connectToWifiNetwork(Map<String, String>)} for a failure to
+     * connect case.
+     */
+    @Test
+    public void testConnectToWifiNetworkGivenMap_failure() throws DeviceNotAvailableException {
+        when(mMockWifi.connectToNetwork(
+                        FAKE_NETWORK_SSID,
+                        FAKE_NETWORK_PASSWORD,
+                        mTestDevice.getOptions().getConnCheckUrl(),
+                        false))
+                .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
+        Map<String, String> fakeWifiInfo = new HashMap<>();
+        fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
+        when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
+
+        LinkedHashMap<String, String> ssidToPsk = new LinkedHashMap<>();
+        ssidToPsk.put(FAKE_NETWORK_SSID, FAKE_NETWORK_PASSWORD);
+        assertFalse(mTestDevice.connectToWifiNetwork(ssidToPsk));
         verify(mMockRunUtil, times(mTestDevice.getOptions().getWifiAttempts() - 1))
                 .sleep(Mockito.anyLong());
         verify(mMockWifi, times(mTestDevice.getOptions().getWifiAttempts()))
@@ -817,7 +892,7 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         false))
-                .thenReturn(false);
+                .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
         Mockito.when(mockClock.millis())
                 .thenReturn(Long.valueOf(0), Long.valueOf(6000), Long.valueOf(12000));
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
@@ -825,6 +900,42 @@ public class NativeDeviceTest {
         when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
 
         assertFalse(mTestDevice.connectToWifiNetwork(FAKE_NETWORK_SSID, FAKE_NETWORK_PASSWORD));
+        verify(mMockWifi, times(2))
+                .connectToNetwork(
+                        FAKE_NETWORK_SSID,
+                        FAKE_NETWORK_PASSWORD,
+                        mTestDevice.getOptions().getConnCheckUrl(),
+                        false);
+        verify(mMockWifi, times(2)).getWifiInfo();
+        Mockito.verify(mockClock, Mockito.times(4)).millis();
+    }
+
+    /**
+     * Unit test for {@link NativeDevice#connectToWifiNetwork(Map<String, String>)} for limiting the
+     * time trying to connect to wifi.
+     */
+    @Test
+    public void testConnectToWifiNetworkGivenMap_maxConnectTime()
+            throws DeviceNotAvailableException, ConfigurationException {
+        OptionSetter deviceOptionSetter = new OptionSetter(mTestDevice.getOptions());
+        deviceOptionSetter.setOptionValue("max-wifi-connect-time", "10000");
+        Clock mockClock = Mockito.mock(Clock.class);
+        mTestDevice.setClock(mockClock);
+        when(mMockWifi.connectToNetwork(
+                        FAKE_NETWORK_SSID,
+                        FAKE_NETWORK_PASSWORD,
+                        mTestDevice.getOptions().getConnCheckUrl(),
+                        false))
+                .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
+        Mockito.when(mockClock.millis())
+                .thenReturn(Long.valueOf(0), Long.valueOf(6000), Long.valueOf(12000));
+        Map<String, String> fakeWifiInfo = new HashMap<String, String>();
+        fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
+        when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
+
+        LinkedHashMap<String, String> ssidToPsk = new LinkedHashMap<>();
+        ssidToPsk.put(FAKE_NETWORK_SSID, FAKE_NETWORK_PASSWORD);
+        assertFalse(mTestDevice.connectToWifiNetwork(ssidToPsk));
         verify(mMockWifi, times(2))
                 .connectToNetwork(
                         FAKE_NETWORK_SSID,
@@ -843,13 +954,31 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
                         true))
-                .thenReturn(true);
+                .thenReturn(WifiConnectionResult.SUCCESS);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
         when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
 
         assertTrue(
                 mTestDevice.connectToWifiNetwork(FAKE_NETWORK_SSID, FAKE_NETWORK_PASSWORD, true));
+    }
+
+    /** Unit test for {@link NativeDevice#connectToWifiNetwork(Map<String, String>, boolean)}. */
+    @Test
+    public void testConnectToWifiNetworkGivenMap_scanSsid() throws DeviceNotAvailableException {
+        when(mMockWifi.connectToNetwork(
+                        FAKE_NETWORK_SSID,
+                        FAKE_NETWORK_PASSWORD,
+                        mTestDevice.getOptions().getConnCheckUrl(),
+                        true))
+                .thenReturn(WifiConnectionResult.SUCCESS);
+        Map<String, String> fakeWifiInfo = new HashMap<>();
+        fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
+        when(mMockWifi.getWifiInfo()).thenReturn(fakeWifiInfo);
+
+        LinkedHashMap<String, String> ssidToPsk = new LinkedHashMap<>();
+        ssidToPsk.put(FAKE_NETWORK_SSID, FAKE_NETWORK_PASSWORD);
+        assertTrue(mTestDevice.connectToWifiNetwork(ssidToPsk, true));
     }
 
     /** Unit test for {@link NativeDevice#checkWifiConnection(String)}. */
@@ -1721,10 +1850,15 @@ public class NativeDeviceTest {
                     public String getFastbootSerialNumber() {
                         return MOCK_DEVICE_SERIAL;
                     }
+
+                    @Override
+                    protected CommandResult simpleFastbootCommand(
+                            long timeout, Map<String, String> envVarMap, String[] fullCmd)
+                            throws UnsupportedOperationException {
+                        return new CommandResult(CommandStatus.SUCCESS);
+                    }
                 };
         String into = "bootloader";
-
-        when(mMockStateMonitor.waitForDeviceBootloader(Mockito.anyLong())).thenReturn(true);
 
         testDevice.rebootIntoBootloader();
         verify(mMockIDevice, times(1)).reboot(into);
@@ -1757,9 +1891,14 @@ public class NativeDeviceTest {
                     public String getFastbootSerialNumber() {
                         return MOCK_DEVICE_SERIAL;
                     }
-                };
 
-        when(mMockStateMonitor.waitForDeviceBootloader(Mockito.anyLong())).thenReturn(true);
+                    @Override
+                    protected CommandResult simpleFastbootCommand(
+                            long timeout, Map<String, String> envVarMap, String[] fullCmd)
+                            throws UnsupportedOperationException {
+                        return new CommandResult(CommandStatus.SUCCESS);
+                    }
+                };
 
         testDevice.rebootIntoBootloader();
         assertTrue(testDevice.wasCalled);
@@ -2247,7 +2386,7 @@ public class NativeDeviceTest {
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    public boolean pullFile(String remoteFilePath, File localFile, int userId)
                             throws DeviceNotAvailableException {
                         return true;
                     }
@@ -2269,7 +2408,7 @@ public class NativeDeviceTest {
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    public boolean pullFile(String remoteFilePath, File localFile, int userId)
                             throws DeviceNotAvailableException {
                         return false;
                     }
@@ -2292,7 +2431,7 @@ public class NativeDeviceTest {
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    public boolean pullFile(String remoteFilePath, File localFile, int userId)
                             throws DeviceNotAvailableException {
                         return true;
                     }
@@ -2311,7 +2450,7 @@ public class NativeDeviceTest {
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
-                    public boolean pullFile(String remoteFilePath, File localFile)
+                    public boolean pullFile(String remoteFilePath, File localFile, int userId)
                             throws DeviceNotAvailableException {
                         return false;
                     }
@@ -3035,12 +3174,33 @@ public class NativeDeviceTest {
 
     /**
      * Test that when a {@link NativeDevice#getLogcatSince(long)} is requested a matching logcat
-     * command is generated.
+     * command is generated on sdk version 23.
      */
     @Test
-    public void testGetLogcatSince() throws Exception {
+    public void testGetLogcatSinceOnSdk23() throws Exception {
         long date = 1512990942000L; // 2017-12-11 03:15:42.015
         setGetPropertyExpectation("ro.build.version.sdk", "23");
+
+        SimpleDateFormat format = new SimpleDateFormat("MM-dd HH:mm:ss.mmm");
+        String dateFormatted = format.format(new Date(date));
+
+        InputStreamSource res = mTestDevice.getLogcatSince(date);
+        StreamUtil.close(res);
+
+        verify(mMockIDevice)
+                .executeShellCommand(
+                        Mockito.eq(String.format("logcat -v threadtime -t '%s'", dateFormatted)),
+                        Mockito.any());
+    }
+
+    /**
+     * Test that when a {@link NativeDevice#getLogcatSince(long)} is requested a matching logcat
+     * command is generated on sdk version 24.
+     */
+    @Test
+    public void testGetLogcatSinceOnSdkOver24() throws Exception {
+        long date = 1512990942000L; // 2017-12-11 03:15:42.015
+        setGetPropertyExpectation("ro.build.version.sdk", "24");
 
         SimpleDateFormat format = new SimpleDateFormat("MM-dd HH:mm:ss.mmm");
         String dateFormatted = format.format(new Date(date));
@@ -3210,9 +3370,7 @@ public class NativeDeviceTest {
                 .thenReturn(res);
 
         try {
-            CommandResult result =
-                    mTestDevice.executeShellV2Command(
-                            "some command", 200L, TimeUnit.MILLISECONDS, 1);
+            mTestDevice.executeShellV2Command("some command", 200L, TimeUnit.MILLISECONDS, 1);
             fail("executeShellV2Command should have thrown a DeviceNotAvailableException");
         } catch (DeviceNotAvailableException dnae) {
             // expected

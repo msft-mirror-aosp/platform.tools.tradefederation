@@ -24,6 +24,8 @@ import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.TimeoutException;
 import com.android.tradefed.config.GlobalConfiguration;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -431,40 +433,49 @@ public class TestDevice extends NativeDevice {
     private String internalInstallPackages(
             final List<File> packageFiles, final boolean reinstall, final List<String> extraArgs)
             throws DeviceNotAvailableException {
-        // use array to store response, so it can be returned to caller
-        final String[] response = new String[1];
-        DeviceAction installAction =
-                new DeviceAction() {
-                    @Override
-                    public boolean run() throws InstallException {
-                        try {
-                            getIDevice()
-                                    .installPackages(
-                                            packageFiles,
-                                            reinstall,
-                                            extraArgs,
-                                            INSTALL_TIMEOUT_MINUTES,
-                                            TimeUnit.MINUTES);
-                            response[0] = null;
-                            return true;
-                        } catch (InstallException e) {
-                            response[0] = e.getMessage();
-                            if (response[0] == null) {
-                                response[0] =
-                                        String.format(
-                                                "InstallException: %s",
-                                                StreamUtil.getStackTrace(e));
+        long startTime = System.currentTimeMillis();
+        try {
+            // use array to store response, so it can be returned to caller
+            final String[] response = new String[1];
+            DeviceAction installAction =
+                    new DeviceAction() {
+                        @Override
+                        public boolean run() throws InstallException {
+                            try {
+                                getIDevice()
+                                        .installPackages(
+                                                packageFiles,
+                                                reinstall,
+                                                extraArgs,
+                                                INSTALL_TIMEOUT_MINUTES,
+                                                TimeUnit.MINUTES);
+                                response[0] = null;
+                                return true;
+                            } catch (InstallException e) {
+                                response[0] = e.getMessage();
+                                if (response[0] == null) {
+                                    response[0] =
+                                            String.format(
+                                                    "InstallException: %s",
+                                                    StreamUtil.getStackTrace(e));
+                                }
+                                return false;
                             }
-                            return false;
                         }
-                    }
-                };
-        performDeviceAction(
-                String.format("install %s", packageFiles.toString()),
-                installAction,
-                MAX_RETRY_ATTEMPTS);
-        allowLegacyStorageForApps(packageFiles);
-        return response[0];
+                    };
+            performDeviceAction(
+                    String.format("install %s", packageFiles.toString()),
+                    installAction,
+                    MAX_RETRY_ATTEMPTS);
+            allowLegacyStorageForApps(packageFiles);
+            return response[0];
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PACKAGE_INSTALL_COUNT, 1);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PACKAGE_INSTALL_TIME,
+                    System.currentTimeMillis() - startTime);
+        }
     }
 
     /**
@@ -478,7 +489,7 @@ public class TestDevice extends NativeDevice {
      */
     private void allowLegacyStorageForApps(List<File> appFiles) throws DeviceNotAvailableException {
         for (File appFile : appFiles) {
-            AaptParser aaptParser = AaptParser.parse(appFile);
+            AaptParser aaptParser = createParser(appFile);
             if (aaptParser != null
                     && aaptParser.getTargetSdkVersion() > 29
                     && aaptParser.isRequestingLegacyStorage()) {
@@ -518,6 +529,11 @@ public class TestDevice extends NativeDevice {
                     "Failed to persist MANAGE_EXTERNAL_STORAGE App Op over `adb reboot`: %s",
                     persistFileManagerAppOpResult.getStderr());
         }
+    }
+
+    @VisibleForTesting
+    protected AaptParser createParser(File appFile) {
+        return AaptParser.parse(appFile);
     }
 
     /** {@inheritDoc} */
@@ -989,8 +1005,8 @@ public class TestDevice extends NativeDevice {
             CLog.i("framework reboot is not supported; when enable root is disabled");
             return false;
         }
-        enableAdbRoot();
-        if (getApiLevel() >= 18 && isAdbRoot()) {
+        boolean isRoot = enableAdbRoot();
+        if (getApiLevel() >= 18 && isRoot) {
             try {
                 // check framework running
                 String output = executeShellCommand("pm path android");
@@ -1004,11 +1020,8 @@ public class TestDevice extends NativeDevice {
                 CLog.v("framework reboot: device unresponsive to shell command, using fallback");
                 return false;
             }
-            boolean notAvailable = waitForDeviceNotAvailable(30 * 1000);
-            if (notAvailable) {
-                postAdbReboot();
-            }
-            return notAvailable;
+            postAdbReboot();
+            return true;
         } else {
             CLog.v("framework reboot: not supported");
             return false;
@@ -1996,15 +2009,20 @@ public class TestDevice extends NativeDevice {
         CommandResult result = executeShellV2Command("cmd device_state print-states");
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             // Can't throw an exception since it would fail on non-supported version
-            CLog.w("Failed to enumerate foldable configurations. stderr: %s", result.getStderr());
             return new HashSet<>();
         }
         Set<DeviceFoldableState> foldableStates = new LinkedHashSet<>();
         Pattern deviceStatePattern =
-                Pattern.compile("DeviceState\\{identifier=(\\d+), name='(\\S+)'\\}\\S*");
+                Pattern.compile(
+                        "DeviceState\\{identifier=(\\d+), name='(\\S+)'"
+                                + "(?:, app_accessible=)?(\\S+)?\\}\\S*");
         for (String line : result.getStdout().split("\n")) {
             Matcher m = deviceStatePattern.matcher(line.trim());
             if (m.matches()) {
+                // Move onto the next state if the device state is not accessible by apps
+                if (m.groupCount() > 2 && m.group(3) != null && !Boolean.parseBoolean(m.group(3))) {
+                    continue;
+                }
                 foldableStates.add(
                         new DeviceFoldableState(Integer.parseInt(m.group(1)), m.group(2)));
             }
@@ -2020,7 +2038,8 @@ public class TestDevice extends NativeDevice {
         CommandResult result = executeShellV2Command("cmd device_state state");
         Pattern deviceStatePattern =
                 Pattern.compile(
-                        "Committed state: DeviceState\\{identifier=(\\d+), name='(\\S+)'\\}\\S*");
+                        "Committed state: DeviceState\\{identifier=(\\d+), name='(\\S+)'"
+                                + "(?:, app_accessible=)?(\\S+)?\\}\\S*");
         for (String line : result.getStdout().split("\n")) {
             Matcher m = deviceStatePattern.matcher(line.trim());
             if (m.matches()) {
@@ -2344,9 +2363,6 @@ public class TestDevice extends NativeDevice {
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
 
-        // See(b/192660485) for the reason of this wait.
-        getRunUtil().sleep(1000);
-
         // disconnect from microdroid
         getRunUtil()
                 .runTimedCmd(
@@ -2354,10 +2370,6 @@ public class TestDevice extends NativeDevice {
                         GlobalConfiguration.getDeviceManagerInstance().getAdbPath(),
                         "disconnect",
                         microdroidDevice.getSerialNumber());
-
-        // Make sure we're connected to the host adb; this connection seems to get dropped when a VM
-        // exits.(b/195765441)
-        waitForDeviceAvailable();
 
         GlobalConfiguration.getDeviceManagerInstance()
                 .freeDevice(microdroidDevice, FreeDeviceState.AVAILABLE);

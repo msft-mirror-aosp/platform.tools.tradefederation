@@ -217,6 +217,7 @@ public class TestRunToTestInvocationForwarder implements ITestRunListener {
         }
     }
 
+    @Deprecated
     @Override
     public void testRunStopped(long elapsedTime) {
         for (ITestLifeCycleReceiver listener : mListeners) {

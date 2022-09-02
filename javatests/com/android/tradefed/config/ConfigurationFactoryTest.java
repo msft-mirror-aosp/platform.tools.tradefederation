@@ -35,6 +35,7 @@ import com.android.tradefed.config.ConfigurationFactory.ConfigId;
 import com.android.tradefed.log.ILeveledLogOutput;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.DeviceWiper;
+import com.android.tradefed.targetprep.ILabPreparer;
 import com.android.tradefed.targetprep.StubTargetPreparer;
 import com.android.tradefed.targetprep.multi.StubMultiTargetPreparer;
 import com.android.tradefed.util.FileUtil;
@@ -120,18 +121,6 @@ public class ConfigurationFactoryTest {
             String jarName = configAndJar.get(configName);
             ConfigurationDef cDef = entry.getValue();
             if (JAR_TO_CHECK.contains(jarName)) {
-                if (cDef.getObjectClassMap().containsKey(Configuration.LAB_PREPARER_TYPE_NAME)) {
-                    // Work around the one exception we will clean.
-                    if (!configName.equals("google/template/preparers/cros-artifacts-lab")) {
-                        exceptionConfigJar.add(
-                                String.format(
-                                        "%s config contains a lab_preparer ('%s') which is"
-                                                + " reserved for core.",
-                                        configName,
-                                        cDef.getObjectClassMap()
-                                                .get(Configuration.LAB_PREPARER_TYPE_NAME)));
-                    }
-                }
                 continue;
             }
 
@@ -1813,12 +1802,15 @@ public class ConfigurationFactoryTest {
         }
     }
 
+    /** Class to test out lab preparer parsing */
+    public static final class TestLabPreparer extends StubTargetPreparer implements ILabPreparer {}
+
     @Test
     public void testParse_labPreparer() throws Exception {
         String normalConfig =
                 "<configuration description=\"desc\" >\n"
                         + "  <lab_preparer class=\""
-                        + StubTargetPreparer.class.getName()
+                        + TestLabPreparer.class.getName()
                         + "\">\n"
                         + "     <option name=\"test-boolean-option\" value=\"false\"/>"
                         + "  </lab_preparer>\n"

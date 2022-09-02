@@ -19,6 +19,8 @@ package com.android.tradefed.config;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.targetprep.ILabPreparer;
+import com.android.tradefed.targetprep.ITargetPreparer;
 
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
@@ -346,6 +348,22 @@ public class ConfigurationDef {
         config.setConfigurationObjectList(Configuration.DEVICE_NAME, deviceObjectList);
         injectOptions(config, mOptionList);
 
+        List<ITargetPreparer> notILab = new ArrayList<>();
+        for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+            for (ITargetPreparer labPreparer : deviceConfig.getLabPreparers()) {
+                if (!(labPreparer instanceof ILabPreparer)) {
+                    notILab.add(labPreparer);
+                }
+            }
+        }
+        if (!notILab.isEmpty()) {
+            throw new ConfigurationException(
+                    String.format(
+                            "The following were specified as lab_preparer "
+                                    + "but aren't ILabPreparer: %s",
+                            notILab),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
         return config;
     }
 
@@ -449,7 +467,7 @@ public class ConfigurationDef {
         try {
             Class<?> objectClass = getClassForObject(objectTypeName, className);
             Object configObject = objectClass.getDeclaredConstructor().newInstance();
-            checkObjectValid(objectTypeName, configObject);
+            checkObjectValid(objectTypeName, className, configObject);
             return configObject;
         } catch (InstantiationException | InvocationTargetException | NoSuchMethodException e) {
             throw new ConfigurationException(String.format(
@@ -496,11 +514,19 @@ public class ConfigurationDef {
      * in the invocation.
      *
      * @param objectTypeName The type of the object declared in the xml.
+     * @param className The string classname that was instantiated
      * @param configObject The instantiated object.
      * @throws ConfigurationException if we find an incoherence in the object.
      */
-    private void checkObjectValid(String objectTypeName, Object configObject)
+    private void checkObjectValid(String objectTypeName, String className, Object configObject)
             throws ConfigurationException {
+        if (configObject == null) {
+            throw new ConfigurationException(
+                    String.format(
+                            "Class %s for type %s didn't instantiate properly",
+                            className, objectTypeName),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
         if (Configuration.RESULT_REPORTER_TYPE_NAME.equals(objectTypeName)
                 && configObject instanceof IMetricCollector) {
             // we do not allow IMetricCollector as result_reporter.
@@ -508,7 +534,8 @@ public class ConfigurationDef {
                     String.format(
                             "Object of type %s was declared as %s.",
                             Configuration.DEVICE_METRICS_COLLECTOR_TYPE_NAME,
-                            Configuration.RESULT_REPORTER_TYPE_NAME));
+                            Configuration.RESULT_REPORTER_TYPE_NAME),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
     }
 }

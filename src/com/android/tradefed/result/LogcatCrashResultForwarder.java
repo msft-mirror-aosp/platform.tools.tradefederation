@@ -20,6 +20,7 @@ import com.android.loganalysis.item.LogcatItem;
 import com.android.loganalysis.item.NativeCrashItem;
 import com.android.loganalysis.parser.LogcatParser;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -56,6 +57,9 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
                     "TestTimedOutException: test timed out after");
 
     public static final int MAX_NUMBER_CRASH = 3;
+
+    private static final int MAX_CRASH_SIZE = 250000;
+    private static final String MAX_CRASH_SIZE_MESSAGE = "\n<Truncated>";
 
     private Long mStartTime = null;
     private Long mLastStartTime = null;
@@ -183,6 +187,12 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
      * @return A {@link LogcatItem} that contains the information inside the logcat.
      */
     private LogcatItem extractLogcat(ITestDevice device, long startTime) {
+        if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+            CLog.w(
+                    "Device is in state '%s' skip attempt to extract crash.",
+                    device.getDeviceState());
+            return null;
+        }
         try (InputStreamSource logSource = device.getLogcatSince(startTime)) {
             if (logSource == null) {
                 return null;
@@ -216,7 +226,8 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
             errorMsg =
                     String.format("%s\nJava Crash Messages sorted from most recent:\n", errorMsg);
             for (int i = 0; i < displayed; i++) {
-                errorMsg = String.format("%s%s\n", errorMsg, javaCrashes.get(i));
+                errorMsg =
+                        String.format("%s%s\n", errorMsg, truncateLargeCrash(javaCrashes.get(i)));
             }
         }
 
@@ -232,6 +243,15 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
             }
         }
         return errorMsg;
+    }
+
+    private String truncateLargeCrash(String stack) {
+        if (stack.length() > MAX_CRASH_SIZE) {
+            return new StringBuilder(stack.substring(0, MAX_CRASH_SIZE))
+                    .append(MAX_CRASH_SIZE_MESSAGE)
+                    .toString();
+        }
+        return stack;
     }
 
     /** Remove identical crash from the list of errors. */

@@ -36,7 +36,8 @@ public interface IHostOptions {
      */
     public enum PermitLimitType {
         CONCURRENT_FLASHER,
-        CONCURRENT_DOWNLOAD;
+        CONCURRENT_DOWNLOAD,
+        CONCURRENT_VIRTUAL_DEVICE_STARTUP;
     }
 
     /**
@@ -51,6 +52,12 @@ public interface IHostOptions {
      * downloads remote builds.
      */
     Integer getConcurrentDownloadLimit();
+
+    /**
+     * Returns the max number of concurrent virtual device startup allowed. Used by {@link
+     * com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice} that startup virtual device.
+     */
+    Integer getConcurrentVirtualDeviceStartupLimit();
 
     /** Returns the path that fastboot should use as temporary folder. */
     File getFastbootTmpDir();
@@ -83,7 +90,7 @@ public interface IHostOptions {
     Set<String> getKnownRemoteDeviceIpPool();
 
     /** Known preconfigured virtual device pool. */
-    Set<String> getKnownPreconfigureVirtualDevicePool();
+    List<String> getKnownPreconfigureVirtualDevicePool();
 
     /** Check if it should use the zip64 format in partial download or not. */
     boolean getUseZip64InPartialDownload();
@@ -103,6 +110,12 @@ public interface IHostOptions {
     /** Returns the number of available permit of a given type */
     public Integer getAvailablePermits(PermitLimitType type);
 
-    /** Returns whether the bridge rpc service is enabled. */
-    public boolean isBridgeRpcEnable();
+    /** Returns the number of permits in use for a given type */
+    public int getInUsePermits(PermitLimitType type);
+
+    /** Returns whether or not flashing should be done with fuse mounted device image zip file. */
+    public boolean shouldFlashWithFuseZip();
+
+    /** Return maximum allowed size(bytes) of the local file cache. */
+    public Long getCacheSizeLimit();
 }

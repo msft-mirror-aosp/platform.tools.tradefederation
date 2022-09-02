@@ -17,15 +17,13 @@ package com.android.tradefed.testtype.suite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
-import com.android.tradefed.build.DeviceBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.targetprep.ITargetPreparer;
@@ -40,7 +38,9 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -49,12 +49,15 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 /** Unit tests for {@link AtestRunner}. */
 @RunWith(JUnit4.class)
 public class AtestRunnerTest {
+
+    @Rule public TemporaryFolder mTempFolder = new TemporaryFolder();
 
     private static final String TEST_CONFIG =
         "<configuration description=\"Runs a stub tests part of some suite\">\n"
@@ -67,7 +70,7 @@ public class AtestRunnerTest {
     private static final String INSTRUMENTATION_TEST_NAME =
             String.format(TEST_NAME_FMT, "tf/instrumentation");
 
-    private AtestRunner mSpyRunner;
+    private AbiAtestRunner mRunner;
     private OptionSetter setter;
     private IDeviceBuildInfo mBuildInfo;
     private ITestDevice mMockDevice;
@@ -75,20 +78,28 @@ public class AtestRunnerTest {
     private String classB = "fully.qualified.classB";
     private String method1 = "method1";
 
+    /**
+     * Test AtestRunner that hardcodes the abis to avoid failures related to running the tests
+     * against a particular abi build of tradefed.
+     */
+    public static class AbiAtestRunner extends AtestRunner {
+        @Override
+        public Set<IAbi> getAbis(ITestDevice device) throws DeviceNotAvailableException {
+            Set<IAbi> abis = new LinkedHashSet<>();
+            abis.add(new Abi(ABI, AbiUtils.getBitness(ABI)));
+            return abis;
+        }
+    }
+
     @Before
     public void setUp() throws Exception {
-        mSpyRunner = spy(new AtestRunner());
-        mBuildInfo = spy(new DeviceBuildInfo());
+        mRunner = new AbiAtestRunner();
+        mBuildInfo = mock(IDeviceBuildInfo.class);
         mMockDevice = mock(ITestDevice.class);
-        mSpyRunner.setBuild(mBuildInfo);
-        mSpyRunner.setDevice(mMockDevice);
+        mRunner.setBuild(mBuildInfo);
+        mRunner.setDevice(mMockDevice);
 
-        // Hardcode the abis to avoid failures related to running the tests against a particular
-        // abi build of tradefed.
-        Set<IAbi> abis = new HashSet<>();
-        abis.add(new Abi(ABI, AbiUtils.getBitness(ABI)));
-        doReturn(abis).when(mSpyRunner).getAbis(mMockDevice);
-        doReturn(new File("some-dir")).when(mBuildInfo).getTestsDir();
+        when(mBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
         result.setStdout("Supported states: [\n" +
@@ -100,21 +111,21 @@ public class AtestRunnerTest {
 
     @Test
     public void testLoadTests_one() throws Exception {
-        setter = new OptionSetter(mSpyRunner);
+        setter = new OptionSetter(mRunner);
         setter.setOptionValue("suite-config-prefix", "tf");
         setter.setOptionValue("include-filter", "tf/fake");
-        LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+        LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
         assertEquals(1, configMap.size());
         assertTrue(configMap.containsKey(String.format(TEST_NAME_FMT, "tf/fake")));
     }
 
     @Test
     public void testLoadTests_two() throws Exception {
-        setter = new OptionSetter(mSpyRunner);
+        setter = new OptionSetter(mRunner);
         setter.setOptionValue("suite-config-prefix", "tf");
         setter.setOptionValue("include-filter", "tf/fake");
         setter.setOptionValue("include-filter", "tf/func");
-        LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+        LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
         assertEquals(2, configMap.size());
         assertTrue(configMap.containsKey(String.format(TEST_NAME_FMT, "tf/fake")));
         assertTrue(configMap.containsKey(String.format(TEST_NAME_FMT, "tf/func")));
@@ -122,12 +133,12 @@ public class AtestRunnerTest {
 
     @Test
     public void testLoadTests_filter() throws Exception {
-        setter = new OptionSetter(mSpyRunner);
+        setter = new OptionSetter(mRunner);
         setter.setOptionValue("suite-config-prefix", "tf");
         setter.setOptionValue("include-filter", "tf/uiautomator");
         setter.setOptionValue("atest-include-filter", "tf/uiautomator:" + classA);
         setter.setOptionValue("atest-include-filter", "tf/uiautomator:" + classB + "#" + method1);
-        LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+        LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
         assertEquals(1, configMap.size());
         String testName = String.format(TEST_NAME_FMT, "tf/uiautomator");
         assertTrue(configMap.containsKey(testName));
@@ -143,10 +154,10 @@ public class AtestRunnerTest {
 
     @Test
     public void testLoadTests_WithTFConfigSpecified() throws Exception {
-        setter = new OptionSetter(mSpyRunner);
+        setter = new OptionSetter(mRunner);
         setter.setOptionValue("suite-config-prefix", "suite");
         setter.setOptionValue("tf-config-path", "suite/base-suite1");
-        LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+        LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
         assertEquals(1, configMap.size());
         String testName = String.format(TEST_NAME_FMT, "suite/base-suite1");
         assertTrue(configMap.containsKey(testName));
@@ -157,12 +168,12 @@ public class AtestRunnerTest {
         File tmpDir = FileUtil.createTempDir("some-dir");
         String filePath = createModuleConfig(tmpDir, "TestModule");
         try {
-            mSpyRunner.setupFilters(tmpDir);
-            setter = new OptionSetter(mSpyRunner);
+            mRunner.setupFilters(tmpDir);
+            setter = new OptionSetter(mRunner);
             setter.setOptionValue("suite-config-prefix", "suite");
             setter.setOptionValue("tf-config-path", "suite/base-suite1");
             setter.setOptionValue("module-config-path", filePath);
-            LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
             assertEquals(2, configMap.size());
             String testName = String.format(TEST_NAME_FMT, "TestModule");
             assertTrue(configMap.containsKey(testName));
@@ -178,10 +189,10 @@ public class AtestRunnerTest {
         File tmpDir = FileUtil.createTempDir("some-dir");
         String filePath = createModuleConfig(tmpDir, "TestModule");
         try {
-            mSpyRunner.setupFilters(tmpDir);
-            setter = new OptionSetter(mSpyRunner);
+            mRunner.setupFilters(tmpDir);
+            setter = new OptionSetter(mRunner);
             setter.setOptionValue("module-config-path", filePath);
-            LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
             assertEquals(1, configMap.size());
             String testName = String.format(TEST_NAME_FMT, "TestModule");
             assertTrue(configMap.containsKey(testName));
@@ -192,11 +203,11 @@ public class AtestRunnerTest {
 
     @Test
     public void testLoadTests_ignoreFilter() throws Exception {
-        setter = new OptionSetter(mSpyRunner);
+        setter = new OptionSetter(mRunner);
         setter.setOptionValue("suite-config-prefix", "suite");
         setter.setOptionValue("include-filter", "suite/base-suite1");
         setter.setOptionValue("atest-include-filter", "suite/base-suite1:" + classA);
-        LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+        LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
         assertEquals(1, configMap.size());
         String testName = String.format(TEST_NAME_FMT, "suite/base-suite1");
         assertTrue(configMap.containsKey(testName));
@@ -209,11 +220,11 @@ public class AtestRunnerTest {
 
     @Test
     public void testWaitForDebugger() throws Exception {
-        OptionSetter setter = new OptionSetter(mSpyRunner);
+        OptionSetter setter = new OptionSetter(mRunner);
         setter.setOptionValue("suite-config-prefix", "tf");
         setter.setOptionValue("wait-for-debugger", "true");
         setter.setOptionValue("include-filter", "tf/instrumentation");
-        LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+        LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
         assertEquals(1, configMap.size());
         IConfiguration config = configMap.get(INSTRUMENTATION_TEST_NAME);
         IRemoteTest test = config.getTests().get(0);
@@ -222,11 +233,11 @@ public class AtestRunnerTest {
 
     @Test
     public void testdisableTargetPreparers() throws Exception {
-        OptionSetter setter = new OptionSetter(mSpyRunner);
+        OptionSetter setter = new OptionSetter(mRunner);
         setter.setOptionValue("suite-config-prefix", "tf");
         setter.setOptionValue("disable-target-preparers", "true");
         setter.setOptionValue("include-filter", "tf/instrumentation");
-        LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+        LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
         assertEquals(1, configMap.size());
         IConfiguration config = configMap.get(INSTRUMENTATION_TEST_NAME);
         for (ITargetPreparer targetPreparer : config.getTargetPreparers()) {
@@ -236,10 +247,10 @@ public class AtestRunnerTest {
 
     @Test
     public void testdisableTargetPreparersUnset() throws Exception {
-        OptionSetter setter = new OptionSetter(mSpyRunner);
+        OptionSetter setter = new OptionSetter(mRunner);
         setter.setOptionValue("suite-config-prefix", "tf");
         setter.setOptionValue("include-filter", "tf/instrumentation");
-        LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+        LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
         assertEquals(1, configMap.size());
         IConfiguration config = configMap.get(INSTRUMENTATION_TEST_NAME);
         for (ITargetPreparer targetPreparer : config.getTargetPreparers()) {
@@ -249,11 +260,11 @@ public class AtestRunnerTest {
 
     @Test
     public void testDisableTearDown() throws Exception {
-        OptionSetter setter = new OptionSetter(mSpyRunner);
+        OptionSetter setter = new OptionSetter(mRunner);
         setter.setOptionValue("suite-config-prefix", "tf");
         setter.setOptionValue("disable-teardown", "true");
         setter.setOptionValue("include-filter", "tf/instrumentation");
-        LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+        LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
         IConfiguration config = configMap.get(INSTRUMENTATION_TEST_NAME);
         for (ITargetPreparer targetPreparer : config.getTargetPreparers()) {
             assertTrue(targetPreparer.isTearDownDisabled());
@@ -262,10 +273,10 @@ public class AtestRunnerTest {
 
     @Test
     public void testDisableTearDownUnset() throws Exception {
-        OptionSetter setter = new OptionSetter(mSpyRunner);
+        OptionSetter setter = new OptionSetter(mRunner);
         setter.setOptionValue("suite-config-prefix", "tf");
         setter.setOptionValue("include-filter", "tf/instrumentation");
-        LinkedHashMap<String, IConfiguration> configMap = mSpyRunner.loadTests();
+        LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
         assertEquals(1, configMap.size());
         IConfiguration config = configMap.get(INSTRUMENTATION_TEST_NAME);
         for (ITargetPreparer targetPreparer : config.getTargetPreparers()) {
@@ -275,9 +286,9 @@ public class AtestRunnerTest {
 
     @Test
     public void testCreateModuleListener() throws Exception {
-        OptionSetter setter = new OptionSetter(mSpyRunner);
+        OptionSetter setter = new OptionSetter(mRunner);
         setter.setOptionValue("subprocess-report-port", "55555");
-        List<ITestInvocationListener> listeners = mSpyRunner.createModuleListeners();
+        List<ITestInvocationListener> listeners = mRunner.createModuleListeners();
         assertEquals(1, listeners.size());
     }
 

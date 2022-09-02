@@ -108,7 +108,7 @@ public class RunConfigDeviceRecovery implements IMultiDeviceRecovery {
                                 deviceToRecover,
                                 argList.toArray(new String[0]));
             } catch (ConfigurationException e) {
-                CLog.e("Device multi recovery is misconfigured");
+                CLog.e("Failed to execute the recovery config");
                 CLog.e(e);
                 // In this case, the device doesn't go through regular de-allocation so we
                 // explicitly deallocate.

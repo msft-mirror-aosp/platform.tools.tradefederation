@@ -16,6 +16,7 @@
 package com.android.tradefed.invoker;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -35,7 +36,6 @@ import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
-import com.android.tradefed.guice.InvocationScope;
 import com.android.tradefed.invoker.shard.IShardHelper;
 import com.android.tradefed.invoker.shard.ShardHelper;
 import com.android.tradefed.log.ILeveledLogOutput;
@@ -129,12 +129,6 @@ public class TestInvocationMultiTest {
                     protected void setExitCode(ExitCode code, Throwable stack) {
                         // empty on purpose
                     }
-
-                    @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
-                    }
                 };
     }
 
@@ -212,21 +206,27 @@ public class TestInvocationMultiTest {
 
         when(mMockTestListener.getSummary()).thenReturn(null);
 
-        mInvocation.invoke(
-                mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+        try {
+            mInvocation.invoke(
+                    mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
         verify(mMockLogger, times(3)).init();
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
         verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockConfig, times(2)).getTestInvocationListeners();
-        verify(mMockConfig, times(3)).getConfigurationDescription();
+        verify(mMockConfig, times(4)).getConfigurationDescription();
         verify(mMockConfig).resolveDynamicOptions(Mockito.any());
         verify(mMockConfig).cleanConfigurationData();
         verify(mProvider1).cleanUp(build1);
         verify(mProvider2).cleanUp(captured.capture());
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
-        verify(mMockConfig).dumpXml(Mockito.any());
+        verify(mMockConfig)
+                .dumpXml(Mockito.any(), Mockito.any(), Mockito.eq(true), Mockito.eq(false));
         verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.<FailureDescription>any());
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());
@@ -295,20 +295,26 @@ public class TestInvocationMultiTest {
 
         when(mMockTestListener.getSummary()).thenReturn(null);
 
-        mInvocation.invoke(
-                mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+        try {
+            mInvocation.invoke(
+                    mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+            fail("Should have thrown an exception.");
+        } catch (ConfigurationException expected) {
+            // Expected
+        }
         verify(mMockLogger, times(3)).init();
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
         verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockConfig, times(2)).getTestInvocationListeners();
-        verify(mMockConfig, times(3)).getConfigurationDescription();
+        verify(mMockConfig, times(4)).getConfigurationDescription();
         verify(mDevice1).clearLogcat();
         verify(mDevice2).clearLogcat();
         verify(mMockConfig).cleanConfigurationData();
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
-        verify(mMockConfig).dumpXml(Mockito.any());
+        verify(mMockConfig)
+                .dumpXml(Mockito.any(), Mockito.any(), Mockito.eq(true), Mockito.eq(false));
         verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.eq(failure));
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());
@@ -358,19 +364,25 @@ public class TestInvocationMultiTest {
 
         // A second build from the BuildRetrievalError is generated but still cleaned.
 
-        mInvocation.invoke(
-                mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+        try {
+            mInvocation.invoke(
+                    mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
         verify(mMockLogger, times(3)).init();
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
         verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockConfig, times(2)).getTestInvocationListeners();
-        verify(mMockConfig, times(3)).getConfigurationDescription();
+        verify(mMockConfig, times(4)).getConfigurationDescription();
         verify(mMockConfig).resolveDynamicOptions(Mockito.any());
         verify(mMockConfig).cleanConfigurationData();
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
-        verify(mMockConfig).dumpXml(Mockito.any());
+        verify(mMockConfig)
+                .dumpXml(Mockito.any(), Mockito.any(), Mockito.eq(true), Mockito.eq(false));
         verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.<FailureDescription>any());
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());
@@ -427,19 +439,25 @@ public class TestInvocationMultiTest {
         // A second build from the BuildRetrievalError is generated but still cleaned, even if the
         // first clean up failed.
 
-        mInvocation.invoke(
-                mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+        try {
+            mInvocation.invoke(
+                    mContext, mMockConfig, mMockRescheduler, new ITestInvocationListener[] {});
+            fail("Should have thrown an exception.");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+        }
         verify(mMockLogger, times(3)).init();
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
         verify(mMockLogRegistry, times(2)).unregisterLogger();
         verify(mMockConfig, times(2)).getTestInvocationListeners();
-        verify(mMockConfig, times(3)).getConfigurationDescription();
+        verify(mMockConfig, times(4)).getConfigurationDescription();
         verify(mMockConfig).resolveDynamicOptions(Mockito.any());
         verify(mMockConfig).cleanConfigurationData();
         verify(mMockTestListener).invocationStarted(mContext);
         verify(mMockLogSaver).invocationStarted(mContext);
-        verify(mMockConfig).dumpXml(Mockito.any());
+        verify(mMockConfig)
+                .dumpXml(Mockito.any(), Mockito.any(), Mockito.eq(true), Mockito.eq(false));
         verify(mMockTestListener, times(3)).testLog(Mockito.any(), Mockito.any(), Mockito.any());
         verify(mMockTestListener).invocationFailed(Mockito.<FailureDescription>any());
         verify(mMockTestListener).invocationEnded(Mockito.anyLong());

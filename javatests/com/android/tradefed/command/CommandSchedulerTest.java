@@ -68,6 +68,8 @@ import com.android.tradefed.log.ILogRegistry.EventType;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.service.management.DeviceManagementGrpcServer;
+import com.android.tradefed.service.management.TestInvocationManagementServer;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.RunUtil;
@@ -136,6 +138,16 @@ public class CommandSchedulerTest {
 
         @Override
         protected TradefedFeatureServer getFeatureServer() {
+            return null;
+        }
+
+        @Override
+        protected TestInvocationManagementServer getTestInvocationManagementServer() {
+            return null;
+        }
+
+        @Override
+        protected DeviceManagementGrpcServer getDeviceManagementServer() {
             return null;
         }
 
@@ -1148,7 +1160,7 @@ public class CommandSchedulerTest {
             IConfiguration configReplicat = new Configuration("test", "test");
             configReplicat.setDeviceConfig(new DeviceConfigurationHolder("serial"));
             when(mMockConfiguration.partialDeepClone(
-                            Arrays.asList(Configuration.DEVICE_NAME), mMockKeyStoreClient))
+                            Mockito.any(), Mockito.eq(mMockKeyStoreClient)))
                     .thenReturn(configReplicat);
         }
         mMockConfiguration.setDeviceConfigList(any());

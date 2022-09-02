@@ -549,43 +549,6 @@ public class SubprocessTestResultsParserTest {
     }
 
     @Test
-    public void testParse_logAssociation_zipped() throws Exception {
-        ILogSaverListener mockRunListener = mock(ILogSaverListener.class);
-
-        File logDir = FileUtil.createTempDir("log-assos-dir");
-        File log = FileUtil.createTempFile("dataname-log-assos", ".txt", logDir);
-        File zipLog = ZipUtil.createZip(logDir);
-        LogFile logFile = new LogFile(zipLog.getAbsolutePath(), null, LogDataType.TEXT);
-        File serializedLogFile = null;
-        File tmp = FileUtil.createTempFile("sub", "unit");
-        SubprocessTestResultsParser resultParser = null;
-        try {
-            serializedLogFile = SerializationUtil.serialize(logFile);
-            resultParser =
-                    new SubprocessTestResultsParser(mockRunListener, new InvocationContext());
-            String logAssociation =
-                    String.format(
-                            "LOG_ASSOCIATION {\"loggedFile\":\"%s\",\"dataName\":\"dataname\"}\n",
-                            serializedLogFile.getAbsolutePath());
-            FileUtil.writeToFile(logAssociation, tmp, true);
-            resultParser.parseFile(tmp);
-
-            verify(mockRunListener)
-                    .testLog(
-                            Mockito.eq("subprocess-dataname"),
-                            Mockito.eq(LogDataType.TEXT),
-                            Mockito.any());
-        } finally {
-            StreamUtil.close(resultParser);
-            FileUtil.deleteFile(serializedLogFile);
-            FileUtil.deleteFile(tmp);
-            FileUtil.deleteFile(log);
-            FileUtil.recursiveDelete(logDir);
-            FileUtil.deleteFile(zipLog);
-        }
-    }
-
-    @Test
     public void testParse_avoidDoubleLog() throws Exception {
         ILogSaverListener mockRunListener = mock(ILogSaverListener.class);
 

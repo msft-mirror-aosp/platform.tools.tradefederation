@@ -17,9 +17,9 @@
 package com.android.tradefed.util;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
@@ -33,10 +33,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-import org.mockito.Mock;
-import org.mockito.Captor;
 
 import java.util.concurrent.TimeUnit;
 
@@ -159,35 +159,29 @@ public class LogcatEventParserTest {
 
     /** Test end to end that waitForEvent returns. */
     @Test
-    public void testEndToEnd() throws InterruptedException {
+    public void testEndToEnd() throws Exception {
         mParser.registerEventTrigger(
                 "update_engine", "Update successfully applied", LogcatEventType.UPDATE_COMPLETE);
-
         when(mTestDevice.getDeviceState()).thenReturn(TestDeviceState.ONLINE);
-
         Mockito.lenient().when(mTestDevice.getIDevice()).thenReturn(mNativeDevice);
-
+        doAnswer(
+                        invocation -> {
+                            IShellOutputReceiver receiver =
+                                    (IShellOutputReceiver) invocation.getArgument(1);
+                            String output = String.join("\n", LOGS_UPDATE_COMPLETE) + "\n";
+                            receiver.addOutput(output.getBytes(), 0, output.getBytes().length);
+                            receiver.flush();
+                            return null;
+                        })
+                .when(mNativeDevice)
+                .executeShellCommand(
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.isA(TimeUnit.class));
         mParser.start();
-        // Allow the BackgroundDeviceAction to start
-        new RunUtil().sleep(1000);
-
-        try {
-            verify(mNativeDevice, Mockito.atLeastOnce())
-                    .executeShellCommand(
-                            Mockito.isA(String.class),
-                            mShellOutputReceiverCapture.capture(),
-                            Mockito.anyLong(),
-                            Mockito.isA(TimeUnit.class));
-        } catch (Exception e) {
-            fail(e.toString());
-        }
-
-        IShellOutputReceiver receiver = mShellOutputReceiverCapture.getValue();
-        String output = String.join("\n", LOGS_UPDATE_COMPLETE) + "\n";
-        receiver.addOutput(output.getBytes(), 0, output.getBytes().length);
-        receiver.flush();
-
         LogcatEventParser.LogcatEvent result = mParser.waitForEvent(EVENT_TIMEOUT_MS);
+        assertNotNull(result);
         assertEquals(LogcatEventType.UPDATE_COMPLETE, result.getEventType());
 
     }

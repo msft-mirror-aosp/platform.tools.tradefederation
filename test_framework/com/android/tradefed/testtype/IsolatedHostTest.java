@@ -179,6 +179,8 @@ public class IsolatedHostTest
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         mReportedFailure = false;
+        Process isolationRunner = null;
+
         try {
             mServer = new ServerSocket(0);
             mServer.setSoTimeout(mSocketTimeout);
@@ -204,8 +206,7 @@ public class IsolatedHostTest
             mSubprocessLog = FileUtil.createTempFile("subprocess-logs", "");
             runner.setRedirectStderrToStdout(true);
 
-            Process isolationRunner =
-                    runner.runCmdInBackground(Redirect.to(mSubprocessLog), cmdArgs);
+            isolationRunner = runner.runCmdInBackground(Redirect.to(mSubprocessLog), cmdArgs);
             CLog.v("Started subprocess.");
 
             Socket socket = mServer.accept();
@@ -238,9 +239,7 @@ public class IsolatedHostTest
                     .setCommand(RunnerOp.RUNNER_OP_STOP)
                     .build()
                     .writeDelimitedTo(socket.getOutputStream());
-            // Ensure the subprocess finishes
-            isolationRunner.waitFor(1, TimeUnit.MINUTES);
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             if (!mReportedFailure) {
                 // Avoid overriding the failure
                 FailureDescription failure =
@@ -250,6 +249,40 @@ public class IsolatedHostTest
                 listener.testRunEnded(0L, new HashMap<String, Metric>());
             }
         } finally {
+            try {
+                // Ensure the subprocess finishes
+                if (isolationRunner != null) {
+                    if (isolationRunner.isAlive()) {
+                        CLog.v(
+                                "Subprocess is still alive after test phase - waiting for it to"
+                                        + " terminate.");
+                        isolationRunner.waitFor(10, TimeUnit.SECONDS);
+                        if (isolationRunner.isAlive()) {
+                            CLog.v(
+                                    "Subprocess is still alive after test phase - requesting"
+                                            + " termination.");
+                            // Isolation runner still alive for some reason, try to kill it
+                            isolationRunner.destroy();
+                            isolationRunner.waitFor(10, TimeUnit.SECONDS);
+
+                            // If the process is still alive after trying to kill it nicely
+                            // then end it forcibly.
+                            if (isolationRunner.isAlive()) {
+                                CLog.v(
+                                        "Subprocess is still alive after test phase - forcibly"
+                                                + " terminating it.");
+                                isolationRunner.destroyForcibly();
+                            }
+                        }
+                    }
+                }
+            } catch (InterruptedException e) {
+                throw new HarnessRuntimeException(
+                        "Interrupted while stopping subprocess",
+                        e,
+                        InfraErrorIdentifier.INTERRUPTED_DURING_SUBPROCESS_SHUTDOWN);
+            }
+
             FileUtil.deleteFile(mIsolationJar);
         }
     }
@@ -574,7 +607,14 @@ public class IsolatedHostTest
                                                 new TestDescription(
                                                         event.getClassName(),
                                                         event.getMethodName());
+                                        // Use endTime for both events since
+                                        // ignored test do not really run.
+                                        listener.testStarted(desc, event.getEndTime());
                                         listener.testIgnored(desc);
+                                        listener.testEnded(
+                                                desc,
+                                                event.getEndTime(),
+                                                new HashMap<String, Metric>());
                                         break;
                                     case TOPIC_RUN_STARTED:
                                         runStarted = true;

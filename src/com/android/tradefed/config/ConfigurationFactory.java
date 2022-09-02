@@ -558,8 +558,11 @@ public class ConfigurationFactory implements IConfigurationFactory {
             // (unconsumedArgs == null) is taken as a signal that the caller
             // expects all args to
             // be processed.
-            throw new ConfigurationException(String.format(
-                    "Invalid arguments provided. Unprocessed arguments: %s", tmpUnconsumedArgs));
+            throw new ConfigurationException(
+                    String.format(
+                            "Invalid arguments provided. Unprocessed arguments: %s",
+                            tmpUnconsumedArgs),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         } else if (unconsumedArgs != null) {
             // Return the unprocessed args
             unconsumedArgs.addAll(tmpUnconsumedArgs);
@@ -577,7 +580,9 @@ public class ConfigurationFactory implements IConfigurationFactory {
             TradefedDelegator delegator)
             throws ConfigurationException {
         if (arrayArgs.length == 0) {
-            throw new ConfigurationException("Configuration to run was not specified");
+            throw new ConfigurationException(
+                    "Configuration to run was not specified",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         List<String> listArgs = new ArrayList<String>(arrayArgs.length);
@@ -655,7 +660,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                 }
             }
             throw new ConfigurationException(
-                    String.format("Unused template:map parameters: %s", uniqueMap.toString()));
+                    String.format("Unused template:map parameters: %s", uniqueMap.toString()),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         return configDef.createConfiguration(allowedObjects);
     }
@@ -682,8 +688,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                 for (String key : parserSettings.templateMap.keySet()) {
                     if (parserSettings.templateMap.get(key).size() > 1) {
                         throw new ConfigurationException(
-                                String.format(
-                                        "More than one template specified for key '%s'", key));
+                                String.format("More than one template specified for key '%s'", key),
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                     }
                 }
                 return parserSettings.templateMap.getUniqueMap();
@@ -768,7 +774,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                     default:
                         throw new ConfigurationException(
                                 String.format(
-                                        "The config format for %s is not supported.", configName));
+                                        "The config format for %s is not supported.", configName),
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 }
 
                 FileUtil.deleteFile(configFile);
@@ -837,7 +844,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                 Set<String> templateSeen)
                 throws ConfigurationException {
             throw new ConfigurationException(
-                    "Templates are not allowed in direct configuration contexts");
+                    "Templates are not allowed in direct configuration contexts",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         @Override
@@ -849,7 +857,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
                 Set<String> templateSeen)
                 throws ConfigurationException {
             throw new ConfigurationException(
-                    "Templates are not allowed in direct configuration contexts");
+                    "Templates are not allowed in direct configuration contexts",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         @Override

@@ -23,6 +23,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.ApexInfo;
 import com.android.tradefed.device.PackageInfo;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -194,7 +195,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * Check if all apexes are activated.
      *
      * @param device under test.
-     * @throws Exception if activation failed.
+     * @throws TargetSetupError if activation failed.
      */
     protected void checkApexActivation(ITestDevice device)
             throws DeviceNotAvailableException, TargetSetupError {
@@ -295,7 +296,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     Set<String> getApexInData(Set<ApexInfo> activatedApexes) {
         Set<String> apexInData = new HashSet<>();
         for (ApexInfo apex : activatedApexes) {
-            if (apex.sourceDir.startsWith(ACTIVATED_APEX_SOURCEDIR_PREFIX, 1)) {
+            if (apex.sourceDir.startsWith(APEX_DATA_DIR, 0) ||
+                apex.sourceDir.startsWith(STAGING_DATA_DIR, 0) ||
+                apex.sourceDir.startsWith(SESSION_DATA_DIR, 0)) {
                 apexInData.add(apex.name);
             }
         }
@@ -346,22 +349,6 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         return apkModuleInData;
     }
 
-    /**
-     * Check if the files to be installed contain .apk or .apks.
-     *
-     * @param testAppFiles List<File> of the modules that will be installed on the device.
-     * @return true if the files contain .apk or .apks, otherwise false.
-     */
-    private boolean hasApkFilesToInstall(List<File> testAppFiles) {
-        List<String> checkLists = Arrays.asList(".apk", ".apks");
-        for (File testAppFile : testAppFiles) {
-            if (checkLists.stream().anyMatch(entry -> testAppFile.getName().endsWith(entry))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     @Override
     public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
         if (mOptimizeMainlineTest) {
@@ -395,10 +382,10 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                         if (output.contains("Success")) {
                             break;
                         } else {
-                            throw new RuntimeException(
+                            throw new HarnessRuntimeException(
                                     String.format(
-                                            "Failed to rollback %s, Output: %s",
-                                            apex.name, output));
+                                            "Failed to rollback %s, Output: %s", apex.name, output),
+                                    DeviceErrorIdentifier.APEX_ROLLBACK_FAILED);
                         }
                     }
                     CLog.i("Wait for rollback fully done.");
@@ -545,7 +532,8 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                                     "Mainline module %s is not preloaded on the device "
                                             + "but is in the input lists.",
                                     modulePackageName),
-                            device.getDeviceDescriptor());
+                            device.getDeviceDescriptor(),
+                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
                 }
                 CLog.i(
                         "The module package %s is not preloaded on the device but is included in "
@@ -689,6 +677,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             appFilesAndPackages.put(
                     splits.get(0), parsePackageName(splits.get(0), device.getDeviceDescriptor()));
             super.installer(testInfo, appFilesAndPackages);
+            mTestApexInfoList = collectApexInfoFromApexModules(appFilesAndPackages, testInfo);
         } else {
             // Install .apks that contain apk module.
             getBundletoolUtil().installApks(apks, device);

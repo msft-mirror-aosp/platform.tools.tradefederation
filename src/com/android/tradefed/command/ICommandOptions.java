@@ -155,6 +155,9 @@ public interface ICommandOptions {
     /** Returns the data passed to the invocation to describe it */
     public UniqueMultiMap<String, String> getInvocationData();
 
+    /** Returns the list of remote files configured. */
+    public Set<String> getRemoteFiles();
+
     /** Returns true if we should use Tf containers to run the invocation */
     public boolean shouldUseSandboxing();
 
@@ -253,4 +256,10 @@ public interface ICommandOptions {
 
     /** Return the number of devices for multi-device tests. */
     public Integer getMultiDeviceCount();
+
+    /** Sets the number of expected devices for multi-device tests. */
+    public void setMultiDeviceCount(int count);
+
+    /** Returns whether or not invocation tracing is enabled. */
+    public boolean isTracingEnabled();
 }

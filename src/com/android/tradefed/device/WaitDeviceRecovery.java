@@ -163,7 +163,7 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
         }
 
         if (!recoverUntilOnline) {
-            if (monitor.waitForDeviceAvailable(mWaitTime) == null) {
+            if (monitor.waitForDeviceAvailableInRecoverPath(mWaitTime) == null) {
                 // device is online but not responsive
                 handleDeviceUnresponsive(device, monitor);
             }
@@ -444,15 +444,27 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
      * @param device the {@link IDevice} to reboot.
      * @param mode The mode into which to reboot the device. null being regular reboot.
      */
-    private void rebootDevice(IDevice device, String mode) {
+    private void rebootDevice(IDevice device, String mode) throws DeviceNotAvailableException {
         try {
             device.reboot(mode);
         } catch (IOException e) {
-            CLog.w("failed to reboot %s: %s", device.getSerialNumber(), e.getMessage());
+            CLog.w(
+                    "%s: failed to reboot %s: %s",
+                    e.getClass().getSimpleName(), device.getSerialNumber(), e.getMessage());
         } catch (TimeoutException e) {
             CLog.w("failed to reboot %s: timeout", device.getSerialNumber());
         } catch (AdbCommandRejectedException e) {
-            CLog.w("failed to reboot %s: %s", device.getSerialNumber(), e.getMessage());
+            CLog.w(
+                    "%s: failed to reboot %s: %s",
+                    e.getClass().getSimpleName(), device.getSerialNumber(), e.getMessage());
+            if (e.isDeviceOffline() || e.wasErrorDuringDeviceSelection()) {
+                // If reboot is not attempted, then fail right away
+                throw new DeviceNotAvailableException(
+                        e.getMessage(),
+                        e,
+                        device.getSerialNumber(),
+                        DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+            }
         }
     }
 
@@ -482,7 +494,8 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
 
     /** Recovery routine for device unavailable errors. */
     private boolean attemptDeviceUnavailableRecovery(
-            IDeviceStateMonitor monitor, boolean recoverTillOnline) {
+            IDeviceStateMonitor monitor, boolean recoverTillOnline)
+            throws DeviceNotAvailableException {
         TestDeviceState state = monitor.getDeviceState();
         if (TestDeviceState.FASTBOOT.equals(state)
                 || TestDeviceState.FASTBOOTD.equals(state)

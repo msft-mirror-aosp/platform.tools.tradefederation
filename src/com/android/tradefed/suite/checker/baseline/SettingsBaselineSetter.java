@@ -19,35 +19,27 @@ package com.android.tradefed.suite.checker.baseline;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /** A common setter to handle device baseline settings via ITestDevice.setSetting. */
 public class SettingsBaselineSetter extends DeviceBaselineSetter {
 
-    private final String mName;
     private final String mNamespace;
     private final String mKey;
     private final String mValue;
 
-    public SettingsBaselineSetter(String name, String namespace, String key, String value) {
-        mName = name;
-        mNamespace = namespace;
-        mKey = key;
-        mValue = value;
+    public SettingsBaselineSetter(JSONObject object, String name) throws JSONException {
+        super(object, name);
+        mNamespace = object.getString("namespace");
+        mKey = object.getString("key");
+        mValue = object.getString("value");
     }
 
     @Override
-    public Boolean setBaseline(ITestDevice mDevice) throws DeviceNotAvailableException {
+    public boolean setBaseline(ITestDevice mDevice) throws DeviceNotAvailableException {
         mDevice.setSetting(mNamespace, mKey, mValue);
         String settingValue = mDevice.getSetting(mNamespace, mKey);
         return settingValue != null && settingValue.equals(mValue);
-    }
-
-    @Override
-    public String getName() {
-        return mName;
-    }
-
-    @Override
-    public boolean isExperimental() {
-        return true;
     }
 }

@@ -40,9 +40,9 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.IRunUtil.EnvPriority;
-import com.android.tradefed.util.RunInterruptedException;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.SubprocessExceptionParser;
 import com.android.tradefed.util.SystemUtil;
 
 import java.io.File;
@@ -132,6 +132,14 @@ public class DelegatedInvocationExecution extends InvocationExecution {
         TradefedDelegator delegator =
                 (TradefedDelegator)
                         config.getConfigurationObject(TradefedDelegator.DELEGATE_OBJECT);
+        if (!delegator.getTfRootDir().exists() || !delegator.getTfRootDir().isDirectory()) {
+            throw new ConfigurationException(
+                    String.format(
+                            "delegated-tf was misconfigured and doesn't point to a valid"
+                                    + " location: %s",
+                            delegator.getTfRootDir()),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
         List<String> commandLine = new ArrayList<>();
         commandLine.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
         mTmpDelegatedDir =
@@ -164,27 +172,44 @@ public class DelegatedInvocationExecution extends InvocationExecution {
                                 mStderr,
                                 commandLine.toArray(new String[0]));
             } catch (RuntimeException e) {
+                CLog.e("Delegated runtimedCmd threw an exception");
+                CLog.e(e);
                 runtimeException = e;
+                result = new CommandResult(CommandStatus.EXCEPTION);
+                result.setStdout(StreamUtil.getStackTrace(e));
             }
-            if (!receiver.joinReceiver(EVENT_THREAD_JOIN_TIMEOUT_MS)) {
-                throw new RuntimeException(
-                        String.format(
-                                "Event receiver thread did not complete:\n%s",
-                                FileUtil.readStringFromFile(mStderrFile)));
+            boolean failedStatus = false;
+            String stderrText;
+            try {
+                stderrText = FileUtil.readStringFromFile(mStderrFile);
+            } catch (IOException e) {
+                stderrText = "Could not read the stderr output from process.";
+            }
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                failedStatus = true;
+                result.setStderr(stderrText);
+            }
+            boolean joinResult = receiver.joinReceiver(EVENT_THREAD_JOIN_TIMEOUT_MS);
+            if (runtimeException != null) {
+                throw runtimeException;
+            }
+            if (!joinResult) {
+                if (!failedStatus) {
+                    result.setStatus(CommandStatus.EXCEPTION);
+                }
+                result.setStderr(
+                        String.format("Event receiver thread did not complete.:\n%s", stderrText));
             }
             receiver.completeModuleEvents();
-            if (runtimeException != null) {
-                if (runtimeException instanceof RunInterruptedException) {
-                    throw runtimeException;
-                }
-                throw new HarnessRuntimeException(
-                        runtimeException.getMessage(),
-                        runtimeException,
-                        InfraErrorIdentifier.UNDETERMINED);
-            }
             if (result.getStatus().equals(CommandStatus.TIMED_OUT)) {
                 throw new HarnessRuntimeException(
                         "Delegated invocation timed out.", InfraErrorIdentifier.INVOCATION_TIMEOUT);
+            }
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                CLog.e(
+                        "Sandbox finished with status: %s and exit code: %s",
+                        result.getStatus(), result.getExitCode());
+                SubprocessExceptionParser.handleStderrException(result);
             }
         } finally {
             StreamUtil.close(mStderr);

@@ -136,7 +136,7 @@ public final class TestsPoolPoller
                             // If the poller already rejected the tests once, do not re-evaluate.
                             continue;
                         }
-                        Set<TokenProperty> tokens = test.getRequiredTokens();
+                        Set<TokenProperty> tokens = test.getRequiredTokens(mTestInfo);
                         if (tokens == null || tokens.isEmpty() || isSupported(tokens)) {
                             // No Token can run anywhere, or supported can run
                             mTokenPool.remove(test);
@@ -324,7 +324,7 @@ public final class TestsPoolPoller
                 String message =
                         String.format(
                                 "Test did not run. No token '%s' matching it on any device.",
-                                tokenTest.getRequiredTokens());
+                                tokenTest.getRequiredTokens(mTestInfo));
                 ((IReportNotExecuted) tokenTest).reportNotExecuted(listener, message);
             } else {
                 CLog.e(

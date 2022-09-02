@@ -26,6 +26,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.util.statsd.ConfigUtil;
 import com.android.tradefed.util.statsd.MetricUtil;
+
 import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
@@ -59,16 +60,16 @@ public class HostStatsdMetricCollector extends BaseDeviceMetricCollector {
     private boolean mTestFailed = false;
 
     @Override
-    public void onTestRunStart(DeviceMetricData runData) {
-        if (mPerRun) {
+    public void onTestRunStart(DeviceMetricData runData) throws DeviceNotAvailableException {
+        if (mPerRun && mBinaryConfig != null) {
             mDeviceConfigIds.clear();
             startCollection();
         }
     }
 
     @Override
-    public void onTestStart(DeviceMetricData testData) {
-        if (!mPerRun) {
+    public void onTestStart(DeviceMetricData testData) throws DeviceNotAvailableException {
+        if (!mPerRun && mBinaryConfig != null) {
             mDeviceConfigIds.clear();
             startCollection();
         }
@@ -81,8 +82,9 @@ public class HostStatsdMetricCollector extends BaseDeviceMetricCollector {
 
     @Override
     public void onTestEnd(
-            DeviceMetricData testData, final Map<String, Metric> currentTestCaseMetrics) {
-        if (!mPerRun) {
+            DeviceMetricData testData, final Map<String, Metric> currentTestCaseMetrics)
+            throws DeviceNotAvailableException {
+        if (!mPerRun && mBinaryConfig != null) {
             stopCollection(testData, !mTestFailed);
         }
         mTestCount++;
@@ -90,9 +92,9 @@ public class HostStatsdMetricCollector extends BaseDeviceMetricCollector {
     }
 
     @Override
-    public void onTestRunEnd(
-            DeviceMetricData runData, final Map<String, Metric> currentRunMetrics) {
-        if (mPerRun) {
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> currentRunMetrics)
+            throws DeviceNotAvailableException {
+        if (mPerRun && mBinaryConfig != null) {
             stopCollection(runData, true);
         }
     }
@@ -127,7 +129,7 @@ public class HostStatsdMetricCollector extends BaseDeviceMetricCollector {
         // Empty method by default
     }
 
-    private void startCollection() {
+    private void startCollection() throws DeviceNotAvailableException {
         for (ITestDevice device : getDevices()) {
             String serialNumber = device.getSerialNumber();
             try {
@@ -136,13 +138,14 @@ public class HostStatsdMetricCollector extends BaseDeviceMetricCollector {
                         "Pushed binary stats config to device %s with config id: %d",
                         serialNumber, configId);
                 mDeviceConfigIds.put(serialNumber, configId);
-            } catch (IOException | DeviceNotAvailableException e) {
+            } catch (IOException e) {
                 CLog.e("Failed to push stats config to device %s, error: %s", serialNumber, e);
             }
         }
     }
 
-    private void stopCollection(DeviceMetricData metricData, boolean reportResult) {
+    private void stopCollection(DeviceMetricData metricData, boolean reportResult)
+            throws DeviceNotAvailableException {
         for (ITestDevice device : getDevices()) {
             String serialNumber = device.getSerialNumber();
             if (mDeviceConfigIds.containsKey(serialNumber)) {
@@ -162,8 +165,6 @@ public class HostStatsdMetricCollector extends BaseDeviceMetricCollector {
                         testLog(reportName, LogDataType.PB, dataStream);
                         processStatsReport(device, dataStream, metricData);
                     }
-                } catch (DeviceNotAvailableException e) {
-                    CLog.e("Device %s not available: %s", serialNumber, e);
                 }
             }
         }

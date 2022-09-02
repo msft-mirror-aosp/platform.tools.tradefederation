@@ -35,6 +35,7 @@ import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.device.IWifiHelper.WifiConnectionResult;
 import com.android.tradefed.device.contentprovider.ContentProviderHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
@@ -69,6 +70,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.SizeLimitedOutputStream;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.StringEscapeUtils;
+import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
 
@@ -91,6 +93,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -128,6 +131,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private static final String BUGREPORT_CMD = "bugreport";
     private static final String BUGREPORTZ_CMD = "bugreportz";
     private static final String BUGREPORTZ_TMP_PATH = "/bugreports/";
+
+    /** On-device path where we expect ANRs to be generated. */
+    private static final String ANRS_PATH = "/data/anr";
 
     /**
      * Allow up to 2 minutes to receives the full logcat dump.
@@ -192,8 +198,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** Path of the device containing the tombstones */
     private static final String TOMBSTONE_PATH = "/data/tombstones/";
 
-    /** The time in ms to wait for a command to complete. */
-    private long mCmdTimeout = 2 * 60 * 1000L;
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
@@ -243,6 +247,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private final Object mCacheLock = new Object();
 
     private String mFastbootSerialNumber = null;
+    private File mUnpackedFastbootDir = null;
 
     /**
      * Interface for a generic device communication attempt.
@@ -418,7 +423,32 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throwIfNull(options);
         mOptions = options;
         if (mOptions.getFastbootBinary() != null) {
-            setFastbootPath(mOptions.getFastbootBinary().getAbsolutePath());
+            // Setup fastboot- if it's zipped, unzip it
+            // TODO: Dedup the logic with DeviceManager
+            if (".zip".equals(FileUtil.getExtension(mOptions.getFastbootBinary().getName()))) {
+                // Unzip the fastboot files
+                try {
+                    mUnpackedFastbootDir =
+                            ZipUtil2.extractZipToTemp(
+                                    mOptions.getFastbootBinary(), "unpacked-fastboot");
+                    File unpackedFastboot = FileUtil.findFile(mUnpackedFastbootDir, "fastboot");
+                    if (unpackedFastboot == null) {
+                        throw new HarnessRuntimeException(
+                                String.format(
+                                        "device-fastboot-binary was set, but didn't contain a"
+                                                + " fastboot binary."),
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                    }
+                    setFastbootPath(unpackedFastboot.getAbsolutePath());
+                } catch (IOException e) {
+                    CLog.e("Failed to unpacked zipped fastboot.");
+                    CLog.e(e);
+                    FileUtil.recursiveDelete(mUnpackedFastbootDir);
+                    mUnpackedFastbootDir = null;
+                }
+            } else {
+                setFastbootPath(mOptions.getFastbootBinary().getAbsolutePath());
+            }
         }
         mStateMonitor.setDefaultOnlineTimeout(options.getOnlineTimeout());
         mStateMonitor.setDefaultAvailableTimeout(options.getAvailableTimeout());
@@ -493,13 +523,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     protected String internalGetProperty(String propName, String fastbootVar, String description)
             throws DeviceNotAvailableException, UnsupportedOperationException {
+        if (isStateBootloaderOrFastbootd() && fastbootVar != null) {
+            CLog.i("Device %s is in fastboot mode, re-querying with '%s' for %s", getSerialNumber(),
+                   fastbootVar, description);
+            return getFastbootVariable(fastbootVar);
+        }
         String propValue = getProperty(propName);
         if (propValue != null) {
             return propValue;
-        } else if (isStateBootloaderOrFastbootd() && fastbootVar != null) {
-            CLog.i("%s for device %s is null, re-querying in fastboot", description,
-                    getSerialNumber());
-            return getFastbootVariable(fastbootVar);
         } else {
             CLog.d(
                     "property collection '%s' for device %s is null.",
@@ -534,6 +565,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                             "Waited for device %s to be online but it is in state '%s', cannot "
                                     + "get property %s.",
                             getSerialNumber(), getDeviceState(), name);
+                    CLog.w(new RuntimeException("This is not an actual exception but to help"
+                                                + " debugging. If this happens deterministically, "
+                                                + " it means the caller has wrong assumption of "
+                                                + " device state and is wasting time in waiting."));
                     return null;
                 }
             }
@@ -797,7 +832,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             public boolean run() throws TimeoutException, IOException,
                     AdbCommandRejectedException, ShellCommandUnresponsiveException {
                 getIDevice().executeShellCommand(command, receiver,
-                        mCmdTimeout, TimeUnit.MILLISECONDS);
+                        getCommandTimeout(), TimeUnit.MILLISECONDS);
                 return true;
             }
         };
@@ -1044,11 +1079,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         boolean result = performDeviceAction(String.format("run %s instrumentation tests",
                 runner.getPackageName()), runTestsAction, 0);
         if (failureListener.isRunFailure()) {
-            // run failed, might be system crash. Ensure device is up
-            if (mStateMonitor.waitForDeviceAvailable(5 * 1000) == null) {
-                // device isn't up, recover
-                recoverDevice();
-            }
+            waitForDeviceAvailable();
         }
         return result;
     }
@@ -1227,58 +1258,21 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for Package Manager's features");
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public boolean pullFile(final String remoteFilePath, final File localFile)
+    public boolean pullFile(final String remoteFilePath, final File localFile, int userId)
             throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PULL_FILE_COUNT, 1);
 
         try {
-            if (isSdcardOrEmulated(remoteFilePath)) {
+            if (isSdcardOrEmulated(remoteFilePath) && userId != 0) {
                 ContentProviderHandler handler = getContentProvider();
                 if (handler != null) {
                     return handler.pullFile(remoteFilePath, localFile);
                 }
             }
-
-            DeviceAction pullAction =
-                    new DeviceAction() {
-                        @Override
-                        public boolean run()
-                                throws TimeoutException, IOException, AdbCommandRejectedException,
-                                        SyncException {
-                            SyncService syncService = null;
-                            boolean status = false;
-                            try {
-                                syncService = getIDevice().getSyncService();
-                                syncService.pullFile(
-                                        interpolatePathVariables(remoteFilePath),
-                                        localFile.getAbsolutePath(),
-                                        SyncService.getNullProgressMonitor());
-                                status = true;
-                            } catch (SyncException e) {
-                                CLog.w(
-                                        "Failed to pull %s from %s to %s. Message %s",
-                                        remoteFilePath,
-                                        getSerialNumber(),
-                                        localFile.getAbsolutePath(),
-                                        e.getMessage());
-                                throw e;
-                            } finally {
-                                if (syncService != null) {
-                                    syncService.close();
-                                }
-                            }
-                            return status;
-                        }
-                    };
-            return performDeviceAction(
-                    String.format("pull %s to %s", remoteFilePath, localFile.getAbsolutePath()),
-                    pullAction,
-                    MAX_RETRY_ATTEMPTS);
+            return pullFileInternal(remoteFilePath, localFile);
         } finally {
             long totalTime = System.currentTimeMillis() - startTime;
             InvocationMetricLogger.addInvocationMetrics(
@@ -1286,16 +1280,21 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public File pullFile(String remoteFilePath) throws DeviceNotAvailableException {
+    public boolean pullFile(final String remoteFilePath, final File localFile)
+            throws DeviceNotAvailableException {
+        return pullFile(remoteFilePath, localFile, getCurrentUserCompatible());
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public File pullFile(String remoteFilePath, int userId) throws DeviceNotAvailableException {
         File localFile = null;
         boolean success = false;
         try {
             localFile = FileUtil.createTempFileForRemote(remoteFilePath, null);
-            if (pullFile(remoteFilePath, localFile)) {
+            if (pullFile(remoteFilePath, localFile, userId)) {
                 success = true;
                 return localFile;
             }
@@ -1308,6 +1307,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
         }
         return null;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public File pullFile(String remoteFilePath) throws DeviceNotAvailableException {
+        return pullFile(remoteFilePath, getCurrentUserCompatible());
     }
 
     /**
@@ -1340,6 +1345,45 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return pullFile(fullPath);
     }
 
+    protected boolean pullFileInternal(String remoteFilePath, File localFile)
+            throws DeviceNotAvailableException {
+        DeviceAction pullAction =
+                new DeviceAction() {
+                    @Override
+                    public boolean run()
+                            throws TimeoutException, IOException, AdbCommandRejectedException,
+                                    SyncException {
+                        SyncService syncService = null;
+                        boolean status = false;
+                        try {
+                            syncService = getIDevice().getSyncService();
+                            syncService.pullFile(
+                                    interpolatePathVariables(remoteFilePath),
+                                    localFile.getAbsolutePath(),
+                                    SyncService.getNullProgressMonitor());
+                            status = true;
+                        } catch (SyncException e) {
+                            CLog.w(
+                                    "Failed to pull %s from %s to %s. Message %s",
+                                    remoteFilePath,
+                                    getSerialNumber(),
+                                    localFile.getAbsolutePath(),
+                                    e.getMessage());
+                            throw e;
+                        } finally {
+                            if (syncService != null) {
+                                syncService.close();
+                            }
+                        }
+                        return status;
+                    }
+                };
+        return performDeviceAction(
+                String.format("pull %s to %s", remoteFilePath, localFile.getAbsolutePath()),
+                pullAction,
+                MAX_RETRY_ATTEMPTS);
+    }
+
     /**
      * Helper function that watches for the string "${EXTERNAL_STORAGE}" and replaces it with the
      * pathname of the EXTERNAL_STORAGE mountpoint.  Specifically intended to be used for pathnames
@@ -1363,16 +1407,31 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return pushFileInternal(localFile, remoteFilePath, false);
     }
 
+    @Override
+    public boolean pushFile(
+            final File localFile,
+            final String remoteFilePath,
+            boolean evaluateContentProviderNeeded)
+            throws DeviceNotAvailableException {
+        boolean skipContentProvider = false;
+        if (evaluateContentProviderNeeded) {
+            skipContentProvider = getCurrentUserCompatible() == 0;
+        }
+        return pushFileInternal(localFile, remoteFilePath, skipContentProvider);
+    }
+
     @VisibleForTesting
     boolean pushFileInternal(final File localFile, final String remoteFilePath,
             boolean skipContentProvider) throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PUSH_FILE_COUNT, 1);
         try {
-            if (!skipContentProvider && isSdcardOrEmulated(remoteFilePath)) {
-                ContentProviderHandler handler = getContentProvider();
-                if (handler != null) {
-                    return handler.pushFile(localFile, remoteFilePath);
+            if (!skipContentProvider) {
+                if (isSdcardOrEmulated(remoteFilePath)) {
+                    ContentProviderHandler handler = getContentProvider();
+                    if (handler != null) {
+                        return handler.pushFile(localFile, remoteFilePath);
+                    }
                 }
             }
 
@@ -1451,7 +1510,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public boolean doesFileExist(String deviceFilePath) throws DeviceNotAvailableException {
-        return doesFileExist(deviceFilePath, 0);
+        return doesFileExist(deviceFilePath, getCurrentUserCompatible());
     }
 
     @Override
@@ -1485,10 +1544,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         long startTime = System.currentTimeMillis();
         try {
             if (isSdcardOrEmulated(deviceFilePath)) {
-                ContentProviderHandler handler = getContentProvider();
-                if (handler != null) {
-                    if (handler.deleteFile(deviceFilePath)) {
-                        return;
+                int currentUser = getCurrentUserCompatible();
+                if (currentUser != 0) {
+                    ContentProviderHandler handler = getContentProvider();
+                    if (handler != null) {
+                        if (handler.deleteFile(deviceFilePath)) {
+                            return;
+                        }
                     }
                 }
             }
@@ -1653,7 +1715,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public String getMountPoint(String mountName) {
-        return mStateMonitor.getMountPoint(mountName);
+        try {
+            return mStateMonitor.getMountPoint(mountName);
+        } catch (DeviceNotAvailableException e) {
+            CLog.e(e);
+            return null;
+        }
     }
 
     /**
@@ -1791,7 +1858,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         long startTime = System.currentTimeMillis();
         try {
             if (isSdcardOrEmulated(deviceFilePath)) {
-                Integer currentUser = getCurrentUser();
+                Integer currentUser = getCurrentUserCompatible();
                 if (currentUser != 0) {
                     ContentProviderHandler handler = getContentProvider();
                     if (handler != null) {
@@ -1853,65 +1920,72 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         try {
+            int currentUser = getCurrentUserCompatible();
             if (isSdcardOrEmulated(deviceFilePath)) {
-                ContentProviderHandler handler = getContentProvider();
-                if (handler != null) {
-                    return handler.pullDir(deviceFilePath, localDir);
+                if (currentUser != 0) {
+                    ContentProviderHandler handler = getContentProvider();
+                    if (handler != null) {
+                        return handler.pullDir(deviceFilePath, localDir);
+                    }
                 }
             }
 
-            if (!localDir.isDirectory()) {
-                CLog.e("Local path %s is not a directory", localDir.getAbsolutePath());
-                return false;
-            }
-            if (!doesFileExist(deviceFilePath)) {
-                CLog.e("Device path %s does not exist to be pulled.", deviceFilePath);
-            }
-            if (!isDirectory(deviceFilePath)) {
-                CLog.e("Device path %s is not a directory", deviceFilePath);
-                return false;
-            }
-            FileEntry entryRoot =
-                    new FileEntry(null, deviceFilePath, FileListingService.TYPE_DIRECTORY, false);
-            IFileEntry entry = getFileEntry(entryRoot);
-            Collection<IFileEntry> children = entry.getChildren(false);
-            if (children.isEmpty()) {
-                CLog.i("Device path is empty, nothing to do.");
-                return true;
-            }
-            for (IFileEntry item : children) {
-                if (item.isDirectory()) {
-                    // handle sub dir
-                    File subDir = new File(localDir, item.getName());
-                    if (!subDir.mkdir()) {
-                        CLog.w(
-                                "Failed to create sub directory %s, aborting.",
-                                subDir.getAbsolutePath());
-                        return false;
-                    }
-                    String deviceSubDir = item.getFullPath();
-                    if (!pullDir(deviceSubDir, subDir)) {
-                        CLog.w(
-                                "Failed to pull sub directory %s from device, aborting",
-                                deviceSubDir);
-                        return false;
-                    }
-                } else {
-                    // handle regular file
-                    File localFile = new File(localDir, item.getName());
-                    String fullPath = item.getFullPath();
-                    if (!pullFile(fullPath, localFile)) {
-                        CLog.w("Failed to pull file %s from device, aborting", fullPath);
-                        return false;
-                    }
-                }
-            }
-            return true;
+            return pullDirInternal(deviceFilePath, localDir, currentUser);
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.PULL_DIR_TIME, System.currentTimeMillis() - startTime);
             InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PULL_DIR_COUNT, 1);
         }
+    }
+
+    private boolean pullDirInternal(String deviceFilePath, File localDir, int userId)
+            throws DeviceNotAvailableException {
+        if (!localDir.isDirectory()) {
+            CLog.e("Local path %s is not a directory", localDir.getAbsolutePath());
+            return false;
+        }
+        if (!doesFileExist(deviceFilePath, userId)) {
+            CLog.e("Device path %s does not exist to be pulled.", deviceFilePath);
+            return false;
+        }
+        if (!isDirectory(deviceFilePath)) {
+            CLog.e("Device path %s is not a directory", deviceFilePath);
+            return false;
+        }
+        FileEntry entryRoot =
+                new FileEntry(null, deviceFilePath, FileListingService.TYPE_DIRECTORY, false);
+        IFileEntry entry = getFileEntry(entryRoot);
+        Collection<IFileEntry> children = entry.getChildren(false);
+        if (children.isEmpty()) {
+            CLog.i("Device path is empty, nothing to do.");
+            return true;
+        }
+        for (IFileEntry item : children) {
+            if (item.isDirectory()) {
+                // handle sub dir
+                File subDir = new File(localDir, item.getName());
+                if (!subDir.mkdir()) {
+                    CLog.w(
+                            "Failed to create sub directory %s, aborting.",
+                            subDir.getAbsolutePath());
+                    return false;
+                }
+                String deviceSubDir = item.getFullPath();
+                if (!pullDirInternal(deviceSubDir, subDir, userId)) {
+                    CLog.w("Failed to pull sub directory %s from device, aborting", deviceSubDir);
+                    return false;
+                }
+            } else {
+                // handle regular file
+                File localFile = new File(localDir, item.getName());
+                String fullPath = item.getFullPath();
+                if (!pullFileInternal(fullPath, localFile)) {
+                    CLog.w("Failed to pull file %s from device, aborting", fullPath);
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /** Checks whether path is external storage path. */
@@ -2137,6 +2211,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public CommandResult executeFastbootCommand(String... cmdArgs)
             throws DeviceNotAvailableException, UnsupportedOperationException {
+        // TODO: fix mixed use of fastboot timeout and command timeout
         return doFastbootCommand(getCommandTimeout(), cmdArgs);
     }
 
@@ -2155,39 +2230,47 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public CommandResult executeLongFastbootCommand(String... cmdArgs)
             throws DeviceNotAvailableException, UnsupportedOperationException {
-        return doFastbootCommand(getLongCommandTimeout(), cmdArgs);
+        return executeLongFastbootCommand(new HashMap<>(), cmdArgs);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CommandResult executeLongFastbootCommand(
+            Map<String, String> envVarMap, String... cmdArgs)
+            throws DeviceNotAvailableException, UnsupportedOperationException {
+        // TODO: fix mixed use of fastboot timeout and command timeout
+        return doFastbootCommand(getLongCommandTimeout(), envVarMap, cmdArgs);
     }
 
     /**
+     * Do a fastboot command with environment variables set
+     *
+     * @param timeout timeout for the fastboot command
+     * @param envVarMap environment variables that needs to be set before execute the fastboot
+     *     command
      * @param cmdArgs
+     * @return {@link CommandResult} of the fastboot command
      * @throws DeviceNotAvailableException
+     * @throws UnsupportedOperationException
      */
-    private CommandResult doFastbootCommand(final long timeout, String... cmdArgs)
+    private CommandResult doFastbootCommand(
+            final long timeout, Map<String, String> envVarMap, String... cmdArgs)
             throws DeviceNotAvailableException, UnsupportedOperationException {
         if (!mFastbootEnabled) {
             throw new UnsupportedOperationException(String.format(
                     "Attempted to fastboot on device %s , but fastboot is not available. Aborting.",
                     getSerialNumber()));
         }
+
+        File fastbootTmpDir = getHostOptions().getFastbootTmpDir();
+        if (fastbootTmpDir != null) {
+            envVarMap.put("TMPDIR", fastbootTmpDir.getAbsolutePath());
+        }
+
         final String[] fullCmd = buildFastbootCommand(cmdArgs);
+
         for (int i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
-            File fastbootTmpDir = getHostOptions().getFastbootTmpDir();
-            IRunUtil runUtil = null;
-            if (fastbootTmpDir != null) {
-                runUtil = new RunUtil();
-                runUtil.setEnvVariable("TMPDIR", fastbootTmpDir.getAbsolutePath());
-            } else {
-                runUtil = getRunUtil();
-            }
-            CommandResult result = new CommandResult(CommandStatus.EXCEPTION);
-            // block state changes while executing a fastboot command, since
-            // device will disappear from fastboot devices while command is being executed
-            mFastbootLock.lock();
-            try {
-                result = runUtil.runTimedCmd(timeout, fullCmd);
-            } finally {
-                mFastbootLock.unlock();
-            }
+            CommandResult result = simpleFastbootCommand(timeout, envVarMap, fullCmd);
             if (!isRecoveryNeeded(result)) {
                 return result;
             }
@@ -2198,9 +2281,26 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
             recoverDeviceFromBootloader();
         }
-        throw new DeviceUnresponsiveException(String.format("Attempted fastboot %s multiple "
-                + "times on device %s without communication success. Aborting.", cmdArgs[0],
-                getSerialNumber()), getSerialNumber());
+        throw new DeviceUnresponsiveException(
+                String.format(
+                        "Attempted fastboot %s multiple "
+                                + "times on device %s without communication success. Aborting.",
+                        cmdArgs[0], getSerialNumber()),
+                getSerialNumber());
+    }
+
+    /**
+     * Do a fastboot command
+     *
+     * @param timeout timeout for the fastboot command
+     * @param cmdArgs
+     * @return {@link CommandResult} of the fastboot command
+     * @throws DeviceNotAvailableException
+     * @throws UnsupportedOperationException
+     */
+    private CommandResult doFastbootCommand(final long timeout, String... cmdArgs)
+            throws DeviceNotAvailableException, UnsupportedOperationException {
+        return doFastbootCommand(timeout, new HashMap<>(), cmdArgs);
     }
 
     /**
@@ -2258,7 +2358,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** Get the max time allowed in ms for commands. */
     long getCommandTimeout() {
-        return mCmdTimeout;
+        return mOptions.getAdbCommandTimeout();
     }
 
     /**
@@ -2277,7 +2377,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** Set the max time allowed in ms for commands. */
     void setCommandTimeout(long timeout) {
-        mCmdTimeout = timeout;
+        mOptions.setAdbCommandTimeout(timeout);
     }
 
     /**
@@ -2332,18 +2432,23 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     protected boolean performDeviceAction(String actionDescription, final DeviceAction action,
             int retryAttempts) throws DeviceNotAvailableException {
+        Exception lastException = null;
         for (int i = 0; i < retryAttempts + 1; i++) {
             boolean shouldRecover = true;
             try {
                 return action.run();
             } catch (TimeoutException e) {
                 logDeviceActionException(actionDescription, e, false);
+                lastException = e;
             } catch (IOException e) {
                 logDeviceActionException(actionDescription, e, true);
+                lastException = e;
             } catch (InstallException e) {
                 logDeviceActionException(actionDescription, e, true);
+                lastException = e;
             } catch (SyncException e) {
                 logDeviceActionException(actionDescription, e, true);
+                lastException = e;
                 // a SyncException is not necessarily a device communication problem
                 // do additional diagnosis
                 if (!e.getErrorCode().equals(SyncError.BUFFER_OVERRUN) &&
@@ -2361,11 +2466,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                                     + " fastboot.");
                     return true;
                 }
+                lastException = e;
                 logDeviceActionException(actionDescription, e, false);
             } catch (ShellCommandUnresponsiveException e) {
                 // ShellCommandUnresponsiveException is thrown when no output occurs within the
                 // timeout. It doesn't necessarily mean the device is offline.
                 shouldRecover = false;
+                lastException = e;
                 CLog.w(
                         "Command: '%s' on '%s' went over its timeout for outputing a response.",
                         actionDescription, getSerialNumber());
@@ -2380,6 +2487,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                             "Attempted %s multiple times "
                                     + "on device %s without communication success. Aborting.",
                             actionDescription, getSerialNumber()),
+                    lastException,
                     getSerialNumber(),
                     DeviceErrorIdentifier.DEVICE_UNRESPONSIVE);
         }
@@ -2456,6 +2564,20 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     // Ignore exception thrown here to rethrow original exception.
                     CLog.e("Exception occurred during recovery adb root:");
                     CLog.e(e);
+                    Throwable cause = e.getCause();
+                    if (cause != null && cause instanceof AdbCommandRejectedException) {
+                        AdbCommandRejectedException adbException =
+                                (AdbCommandRejectedException) cause;
+                        if (adbException.isDeviceOffline()
+                                || adbException.wasErrorDuringDeviceSelection()) {
+                            // Upgrade exception to DNAE to reflect gravity
+                            throw new DeviceNotAvailableException(
+                                    cause.getMessage(),
+                                    adbException,
+                                    getSerialNumber(),
+                                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                        }
+                    }
                 }
                 mRecoveryMode = previousRecoveryMode;
                 throw due;
@@ -2592,7 +2714,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                             "getLogcatSince",
                             getSerialNumber(),
                             getOptions().getMaxLogcatDataSize());
-            String command = String.format("%s -t '%s'", LogcatReceiver.LOGCAT_CMD, dateFormatted);
+            String command =
+                    String.format(
+                            "%s -t '%s'", LogcatReceiver.getDefaultLogcatCmd(this), dateFormatted);
             getIDevice().executeShellCommand(command, largeReceiver);
             return largeReceiver.getData();
         } catch (IOException|AdbCommandRejectedException|
@@ -2613,6 +2737,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public InputStreamSource getLogcatDump() {
+        long startTime = System.currentTimeMillis();
         LargeOutputReceiver largeReceiver = null;
         try {
             // use IDevice directly because we don't want callers to handle
@@ -2625,7 +2750,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             // add -d parameter to make this a non blocking call
             getIDevice()
                     .executeShellCommand(
-                            LogcatReceiver.LOGCAT_CMD + " -d",
+                            LogcatReceiver.getDefaultLogcatCmd(this) + " -d",
                             largeReceiver,
                             LOGCAT_DUMP_TIMEOUT,
                             TimeUnit.MILLISECONDS);
@@ -2643,6 +2768,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 largeReceiver.cancel();
                 largeReceiver.delete();
             }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.LOGCAT_DUMP_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.LOGCAT_DUMP_COUNT, 1);
         }
         return new ByteArrayInputStreamSource(new byte[0]);
     }
@@ -2667,9 +2795,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (logcatOptions == null) {
             return new LogcatReceiver(this, mOptions.getMaxLogcatDataSize(), mLogStartDelay);
         } else {
-            return new LogcatReceiver(this,
-                    String.format("%s %s", LogcatReceiver.LOGCAT_CMD, logcatOptions),
-                    mOptions.getMaxLogcatDataSize(), mLogStartDelay);
+            return new LogcatReceiver(
+                    this,
+                    String.format("%s %s", LogcatReceiver.getDefaultLogcatCmd(this), logcatOptions),
+                    mOptions.getMaxLogcatDataSize(),
+                    mLogStartDelay);
         }
     }
 
@@ -2841,6 +2971,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (getApiLevelSafe() < 24) {
             return null;
         }
+        CLog.d("Start getBugreportz()");
         long startTime = System.currentTimeMillis();
         try {
             File bugreportZip = getBugreportzInternal();
@@ -2852,6 +2983,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
             return null;
         } finally {
+            CLog.d("Done with getBugreportz()");
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
             InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
@@ -2925,6 +3057,42 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return new ByteArrayInputStreamSource(receiver.getOutput());
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public boolean logAnrs(ITestLogger logger) throws DeviceNotAvailableException {
+        if (!doesFileExist(ANRS_PATH)) {
+            CLog.d("No ANRs at %s", ANRS_PATH);
+            return true;
+        }
+        File localDir = null;
+        long startTime = System.currentTimeMillis();
+        try {
+            localDir = FileUtil.createTempDir("pulled-anrs");
+            boolean success = pullDir(ANRS_PATH, localDir);
+            if (!success) {
+                CLog.w("Failed to pull %s", ANRS_PATH);
+                return false;
+            }
+            if (localDir.listFiles().length == 0) {
+                return true;
+            }
+            for (File f : localDir.listFiles()) {
+                try (FileInputStreamSource source = new FileInputStreamSource(f)) {
+                    logger.testLog(f.getName(), LogDataType.ANRS, source);
+                }
+            }
+        } catch (IOException e) {
+            CLog.e(e);
+            return false;
+        } finally {
+            FileUtil.recursiveDelete(localDir);
+        }
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.ANR_TIME, System.currentTimeMillis() - startTime);
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.ANR_COUNT, 1);
+        return true;
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -2976,6 +3144,22 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public boolean connectToWifiNetwork(String wifiSsid, String wifiPsk, boolean scanSsid)
             throws DeviceNotAvailableException {
+        LinkedHashMap<String, String> ssidToPsk = new LinkedHashMap<>();
+        ssidToPsk.put(wifiSsid, wifiPsk);
+        return connectToWifiNetwork(ssidToPsk, scanSsid);
+    }
+
+    /** {@inheritDoc}f */
+    @Override
+    public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk)
+            throws DeviceNotAvailableException {
+        return connectToWifiNetwork(wifiSsidToPsk, false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk, boolean scanSsid)
+            throws DeviceNotAvailableException {
         // Clears the last connected wifi network.
         mLastConnectedWifiSsid = null;
         mLastConnectedWifiPsk = null;
@@ -2990,30 +3174,42 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         long startTime = mClock.millis();
         try {
             for (int i = 1; i <= mOptions.getWifiAttempts(); i++) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.WIFI_CONNECT_RETRY_COUNT, 1);
-                CLog.i("Connecting to wifi network %s on %s", wifiSsid, getSerialNumber());
-                boolean success =
-                        wifi.connectToNetwork(
-                                wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
-                final Map<String, String> wifiInfo = wifi.getWifiInfo();
-                if (success) {
-                    CLog.i(
-                            "Successfully connected to wifi network %s(%s) on %s",
-                            wifiSsid, wifiInfo.get("bssid"), getSerialNumber());
+                boolean failedToEnableWifi = false;
+                for (Map.Entry<String, String> ssidToPsk : wifiSsidToPsk.entrySet()) {
+                    String wifiSsid = ssidToPsk.getKey();
+                    String wifiPsk = Strings.emptyToNull(ssidToPsk.getValue());
 
-                    mLastConnectedWifiSsid = wifiSsid;
-                    mLastConnectedWifiPsk = wifiPsk;
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.WIFI_CONNECT_RETRY_COUNT, i);
+                    CLog.i("Connecting to wifi network %s on %s", wifiSsid, getSerialNumber());
+                    WifiConnectionResult result =
+                            wifi.connectToNetwork(
+                                    wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
+                    final Map<String, String> wifiInfo = wifi.getWifiInfo();
+                    if (WifiConnectionResult.SUCCESS.equals(result)) {
+                        CLog.i(
+                                "Successfully connected to wifi network %s(%s) on %s",
+                                wifiSsid, wifiInfo.get("bssid"), getSerialNumber());
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.WIFI_AP_NAME, wifiSsid);
+                        mLastConnectedWifiSsid = wifiSsid;
+                        mLastConnectedWifiPsk = wifiPsk;
 
-                    return true;
-                } else {
-                    CLog.w(
-                            "Failed to connect to wifi network %s(%s) on %s on attempt %d of %d",
-                            wifiSsid,
-                            wifiInfo.get("bssid"),
-                            getSerialNumber(),
-                            i,
-                            mOptions.getWifiAttempts());
+                        return true;
+                    } else if (WifiConnectionResult.FAILED_TO_ENABLE.equals(result)) {
+                        CLog.w("Failed to enable wifi");
+                        failedToEnableWifi = true;
+                    } else {
+                        failedToEnableWifi = false;
+                        CLog.w(
+                                "Failed to connect to wifi network %s(%s) on %s on attempt %d of"
+                                        + " %d",
+                                wifiSsid,
+                                wifiInfo.get("bssid"),
+                                getSerialNumber(),
+                                i,
+                                mOptions.getWifiAttempts());
+                    }
                 }
                 if (mClock.millis() - startTime >= mOptions.getMaxWifiConnectTime()) {
                     CLog.e(
@@ -3021,13 +3217,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                             mOptions.getMaxWifiConnectTime());
                     break;
                 }
-                if (i < mOptions.getWifiAttempts()) {
+                // Do not sleep for the last iteration and when failed to enable wifi.
+                if (i < mOptions.getWifiAttempts() && !failedToEnableWifi) {
                     if (mOptions.isWifiExpoRetryEnabled()) {
                         // use binary exponential back-offs when retrying.
                         waitTime = rnd.nextInt(backoffSlotCount) * slotTime;
                         backoffSlotCount *= 2;
                     }
-                    CLog.e("Waiting for %d ms before reconnecting to %s...", waitTime, wifiSsid);
+                    CLog.e(
+                            "Waiting for %d ms before reconnecting to %s...",
+                            waitTime, wifiSsidToPsk.keySet().toString());
                     getRunUtil().sleep(waitTime);
                 }
             }
@@ -3219,21 +3418,31 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return mStateMonitor;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void postBootSetup() throws DeviceNotAvailableException  {
-        enableAdbRoot();
-        prePostBootSetup();
-        for (String command : mOptions.getPostBootCommands()) {
-            executeShellCommand(command);
+    public void postBootSetup() throws DeviceNotAvailableException {
+        CLog.d("postBootSetup started");
+        long startTime = System.currentTimeMillis();
+        try {
+            enableAdbRoot();
+            prePostBootSetup();
+            for (String command : mOptions.getPostBootCommands()) {
+                executeShellCommand(command);
+            }
+        } finally {
+            long elapsed = System.currentTimeMillis() - startTime;
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POSTBOOT_SETUP_TIME, elapsed);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POSTBOOT_SETUP_COUNT, 1);
+            CLog.d("postBootSetup done: %s", TimeUtil.formatElapsedTime(elapsed));
         }
     }
 
     /**
      * Allows each device type (AndroidNativeDevice, TestDevice) to override this method for
      * specific post boot setup.
+     *
      * @throws DeviceNotAvailableException
      */
     protected void prePostBootSetup() throws DeviceNotAvailableException {
@@ -3247,13 +3456,26 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * @throws DeviceNotAvailableException
      */
     void postBootWifiSetup() throws DeviceNotAvailableException {
-        if (mLastConnectedWifiSsid != null) {
-            reconnectToWifiNetwork();
-        }
-        if (mNetworkMonitorEnabled) {
-            if (!enableNetworkMonitor()) {
-                CLog.w("Failed to enable network monitor on %s after reboot", getSerialNumber());
+        CLog.d("postBootWifiSetup started");
+        long startTime = System.currentTimeMillis();
+        try {
+            if (mLastConnectedWifiSsid != null) {
+                reconnectToWifiNetwork();
             }
+            if (mNetworkMonitorEnabled) {
+                if (!enableNetworkMonitor()) {
+                    CLog.w(
+                            "Failed to enable network monitor on %s after reboot",
+                            getSerialNumber());
+                }
+            }
+        } finally {
+            long elapsed = System.currentTimeMillis() - startTime;
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POSTBOOT_WIFI_SETUP_TIME, elapsed);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POSTBOOT_WIFI_SETUP_COUNT, 1);
+            CLog.d("postBootWifiSetup done: %s", TimeUtil.formatElapsedTime(elapsed));
         }
     }
 
@@ -3311,33 +3533,59 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             throw new UnsupportedOperationException(
                     String.format("Fastboot is not available and cannot reboot into %s", mode));
         }
+        long startTime = System.currentTimeMillis();
 
-        // Update fastboot serial number before entering fastboot mode
-        mStateMonitor.setFastbootSerialNumber(getFastbootSerialNumber());
+        try {
+            // Update fastboot serial number before entering fastboot mode
+            mStateMonitor.setFastbootSerialNumber(getFastbootSerialNumber());
 
-        // If we go to bootloader, it's probably for flashing so ensure we re-check the provider
-        mShouldSkipContentProviderSetup = false;
-        CLog.i(
-                "Rebooting device %s in state %s into %s",
-                getSerialNumber(), getDeviceState(), mode);
-        if (isStateBootloaderOrFastbootd()) {
+            // If we go to bootloader, it's probably for flashing so ensure we re-check the provider
+            mShouldSkipContentProviderSetup = false;
             CLog.i(
-                    "device %s already in %s. Rebooting anyway",
-                    getSerialNumber(), getDeviceState());
-            executeFastbootCommand(String.format("reboot-%s", mode));
-        } else {
-            CLog.i("Booting device %s into %s", getSerialNumber(), mode);
-            doAdbReboot(mode, null);
-        }
-
-        if (RebootMode.REBOOT_INTO_FASTBOOTD.equals(mode) && getHostOptions().isFastbootdEnable()) {
-            if (!mStateMonitor.waitForDeviceFastbootd(
-                    getFastbootPath(), mOptions.getFastbootTimeout())) {
-                recoverDeviceFromFastbootd();
+                    "Rebooting device %s in state %s into %s",
+                    getSerialNumber(), getDeviceState(), mode);
+            if (isStateBootloaderOrFastbootd()) {
+                CLog.i(
+                        "device %s already in %s. Rebooting anyway",
+                        getSerialNumber(), getDeviceState());
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.BOOTLOADER_SAME_STATE_REBOOT, 1);
+                executeFastbootCommand(String.format("reboot-%s", mode));
+            } else {
+                CLog.i("Booting device %s into %s", getSerialNumber(), mode);
+                doAdbReboot(mode, null);
             }
-        } else {
-            if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
-                recoverDeviceFromBootloader();
+
+            // We want to wait on a command that verifies we've rebooted.
+            // However, it is possible to issue this command too quickly and get
+            // a response before the device has begun the reboot process (see
+            // b/242200753).
+            // While not as clean as we'd like, we wait 1.5 seconds before
+            // issuing any waiting commands, as devices generally take much
+            // longer than 1.5 seconds to reboot anyway.
+            getRunUtil().sleep(1500);
+
+            if (RebootMode.REBOOT_INTO_FASTBOOTD.equals(mode)
+                    && getHostOptions().isFastbootdEnable()) {
+                if (!mStateMonitor.waitForDeviceFastbootd(
+                        getFastbootPath(), mOptions.getFastbootTimeout())) {
+                    recoverDeviceFromFastbootd();
+                }
+            } else {
+                waitForDeviceBootloader();
+            }
+        } finally {
+            long elapsedTime = System.currentTimeMillis() - startTime;
+            if (RebootMode.REBOOT_INTO_FASTBOOTD.equals(mode)) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FASTBOOTD_REBOOT_TIME, elapsedTime);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FASTBOOTD_REBOOT_COUNT, 1);
+            } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.BOOTLOADER_REBOOT_TIME, elapsedTime);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.BOOTLOADER_REBOOT_COUNT, 1);
             }
         }
     }
@@ -3371,13 +3619,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         setRecoveryMode(cachedRecoveryMode);
 
-        if (mStateMonitor.waitForDeviceAvailable(mOptions.getRebootTimeout()) != null) {
-            postBootSetup();
-            postBootWifiSetup();
-            return;
-        } else {
-            recoverDevice();
-        }
+        waitForDeviceAvailable(mOptions.getRebootTimeout());
+        postBootSetup();
+        postBootWifiSetup();
     }
 
     @Override
@@ -3396,12 +3640,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         setRecoveryMode(cachedRecoveryMode);
 
-        if (mStateMonitor.waitForDeviceAvailable(mOptions.getRebootTimeout()) != null) {
-            postBootSetup();
-            postBootWifiSetup();
-        } else {
-            recoverDevice();
-        }
+        waitForDeviceAvailable(mOptions.getRebootTimeout());
+        postBootSetup();
+        postBootWifiSetup();
     }
 
     @Override
@@ -3557,15 +3798,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                         getSerialNumber(), rebootMode.name(), reason);
             }
             doAdbReboot(rebootMode, reason);
-            // Check if device shows as unavailable (as expected after reboot).
-            boolean notAvailable = waitForDeviceNotAvailable(DEFAULT_UNAVAILABLE_TIMEOUT);
-            if (notAvailable) {
-                postAdbReboot();
-            } else {
-                CLog.w(
-                        "Did not detect device %s becoming unavailable after reboot",
-                        getSerialNumber());
-            }
+            postAdbReboot();
         }
     }
 
@@ -3575,7 +3808,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * @throws DeviceNotAvailableException
      */
     protected void postAdbReboot() throws DeviceNotAvailableException {
-        // Default implementation empty on purpose.
+        // Check if device shows as unavailable (as expected after reboot).
+        boolean notAvailable = waitForDeviceNotAvailable(DEFAULT_UNAVAILABLE_TIMEOUT);
+        if (!notAvailable) {
+            CLog.w("Did not detect device %s becoming unavailable after reboot", getSerialNumber());
+        }
     }
 
     /**
@@ -3909,6 +4146,31 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** {@inheritDoc} */
     @Override
+    public void waitForDeviceBootloader() throws DeviceNotAvailableException {
+        if (mOptions.useUpdatedBootloaderStatus()) {
+            CommandResult commandResult =
+                    simpleFastbootCommand(
+                            mOptions.getFastbootTimeout(),
+                            buildFastbootCommand("getvar", "product"));
+            if (!CommandStatus.SUCCESS.equals(commandResult.getStatus())) {
+                CLog.e(
+                        "Waiting for device in bootloader. Status: %s.\nstdout:%s\nstderr:%s",
+                        commandResult.getStatus(),
+                        commandResult.getStdout(),
+                        commandResult.getStderr());
+                recoverDeviceFromBootloader();
+            } else {
+                setDeviceState(TestDeviceState.FASTBOOT);
+            }
+        } else {
+            if (!mStateMonitor.waitForDeviceBootloader(mOptions.getFastbootTimeout())) {
+                recoverDeviceFromBootloader();
+            }
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean waitForDeviceInSideload(long waitTime) {
         return mStateMonitor.waitForDeviceInSideload(waitTime);
     }
@@ -4088,7 +4350,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                 return;
             }
             mState = deviceState;
-            CLog.d("Device %s state is now %s", getSerialNumber(), deviceState);
+            if (!(getIDevice() instanceof StubDevice)) {
+                CLog.logAndDisplay(
+                        LogLevel.DEBUG,
+                        "Device %s state is now %s",
+                        getSerialNumber(),
+                        deviceState);
+            }
             mStateMonitor.setState(deviceState);
         }
     }
@@ -4578,6 +4846,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
+    /** Used internally to fallback to non-user logic */
+    private int getCurrentUserCompatible() throws DeviceNotAvailableException {
+        try {
+            return getCurrentUser();
+        } catch (RuntimeException e) {
+            return 0;
+        }
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -4781,6 +5058,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         mIsEncryptionSupported = null;
         FileUtil.deleteFile(mExecuteShellCommandLogs);
         mExecuteShellCommandLogs = null;
+        FileUtil.recursiveDelete(mUnpackedFastbootDir);
         // Default implementation
         if (getIDevice() instanceof StubDevice) {
             return;
@@ -4866,6 +5144,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
             // All the operations to create the descriptor need to be safe (should not trigger any
             // device side effects like recovery)
+            String sdkVersion = null;
+            String buildAlias = null;
+            String hardwareRev = null;
+            if (TestDeviceState.ONLINE.equals(getDeviceState())) {
+                sdkVersion = getPropertyWithRecovery(DeviceProperties.SDK_VERSION, false);
+                buildAlias = getPropertyWithRecovery(DeviceProperties.BUILD_ALIAS, false);
+                hardwareRev = getPropertyWithRecovery(DeviceProperties.HARDWARE_REVISION, false);
+            }
             return new DeviceDescriptor(
                     idevice.getSerialNumber(),
                     null,
@@ -4875,9 +5161,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     getDeviceState(),
                     getDisplayString(selector.getDeviceProductType(idevice)),
                     getDisplayString(selector.getDeviceProductVariant(idevice)),
-                    getDisplayString(idevice.getProperty(DeviceProperties.SDK_VERSION)),
-                    getDisplayString(idevice.getProperty(DeviceProperties.BUILD_ALIAS)),
-                    getDisplayString(idevice.getProperty(DeviceProperties.HARDWARE_REVISION)),
+                    getDisplayString(sdkVersion),
+                    getDisplayString(buildAlias),
+                    getDisplayString(hardwareRev),
                     getDisplayString(getBattery()),
                     getDeviceClass(),
                     getDisplayString(getMacAddress()),
@@ -4885,7 +5171,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     getDisplayString(getSimOperator()),
                     isTemporary,
                     idevice);
-        } catch (RuntimeException e) {
+        } catch (RuntimeException|DeviceNotAvailableException e) {
             CLog.e("Exception while building device '%s' description:", getSerialNumber());
             CLog.e(e);
         }
@@ -5234,15 +5520,39 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public String getSimState() {
-        // Use ddmlib getProperty directly to avoid possible recovery path
-        return getIDevice().getProperty(SIM_STATE_PROP);
+        if (getIDevice() instanceof StubDevice) {
+            // Do not query SIM state from stub devices.
+            return null;
+        }
+        if (!TestDeviceState.ONLINE.equals(mState)) {
+            // Only query SIM state from online devices.
+            return null;
+        }
+        try {
+            return getPropertyWithRecovery(SIM_STATE_PROP, false);
+        } catch (DeviceNotAvailableException dnae) {
+            CLog.w("DeviceNotAvailableException while fetching SIM state");
+            return null;
+        }
     }
 
     /** {@inheritDoc} */
     @Override
     public String getSimOperator() {
-        // Use ddmlib getProperty directly to avoid possible recovery path
-        return getIDevice().getProperty(SIM_OPERATOR_PROP);
+        if (getIDevice() instanceof StubDevice) {
+            // Do not query SIM operator from stub devices.
+            return null;
+        }
+        if (!TestDeviceState.ONLINE.equals(mState)) {
+            // Only query SIM operator from online devices.
+            return null;
+        }
+        try {
+            return getPropertyWithRecovery(SIM_OPERATOR_PROP, false);
+        } catch (DeviceNotAvailableException dnae) {
+            CLog.w("DeviceNotAvailableException while fetching SIM operator");
+            return null;
+        }
     }
 
     /** {@inheritDoc} */
@@ -5441,5 +5751,51 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** The log that contains all the {@link #executeShellCommand(String)} logs. */
     public final File getExecuteShellCommandLog() {
         return mExecuteShellCommandLogs;
+    }
+
+    /** Executes a simple fastboot command and report the status of the command. */
+    @VisibleForTesting
+    protected CommandResult simpleFastbootCommand(final long timeout, String[] fullCmd)
+            throws UnsupportedOperationException {
+        return simpleFastbootCommand(timeout, new HashMap<>(), fullCmd);
+    }
+
+    /**
+     * Executes a simple fastboot command with environment variables and report the status of the
+     * command.
+     */
+    @VisibleForTesting
+    protected CommandResult simpleFastbootCommand(
+            final long timeout, Map<String, String> envVarMap, String[] fullCmd)
+            throws UnsupportedOperationException {
+        if (!mFastbootEnabled) {
+            throw new UnsupportedOperationException(
+                    String.format(
+                            "Attempted to fastboot on device %s , but fastboot "
+                                    + "is disabled. Aborting.",
+                            getSerialNumber()));
+        }
+        IRunUtil runUtil;
+        if (!envVarMap.isEmpty()) {
+            runUtil = new RunUtil();
+        } else {
+            runUtil = getRunUtil();
+        }
+        for (Map.Entry<String, String> entry : envVarMap.entrySet()) {
+            CLog.v(
+                    String.format(
+                            "Set environment variable %s to %s", entry.getKey(), entry.getValue()));
+            runUtil.setEnvVariable(entry.getKey(), entry.getValue());
+        }
+        CommandResult result = new CommandResult(CommandStatus.EXCEPTION);
+        // block state changes while executing a fastboot command, since
+        // device will disappear from fastboot devices while command is being executed
+        mFastbootLock.lock();
+        try {
+            result = runUtil.runTimedCmd(timeout, fullCmd);
+        } finally {
+            mFastbootLock.unlock();
+        }
+        return result;
     }
 }

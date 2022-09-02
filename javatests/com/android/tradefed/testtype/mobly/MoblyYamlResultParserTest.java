@@ -24,16 +24,19 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto;
-
 import com.android.tradefed.testtype.mobly.MoblyYamlResultControllerInfoHandler.ControllerInfo;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultRecordHandler.Record;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultSummaryHandler.Summary;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultUserDataHandler.UserData;
+import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ResourceUtil;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -42,9 +45,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -58,21 +64,24 @@ public class MoblyYamlResultParserTest {
     private static final String DEFAULT_END_TIME = "1571681520407";
     private static final String DEFAULT_TEST_CLASS = "DefaultTestClass";
     private static final String DEFAULT_TEST_NAME = "default_test_name";
+    private static final String TEST_ERROR_YAML = "/testtype/test_summary_error.yaml";
     private static final String SAMPLE_STACK_TRACE =
-            "\"Traceback (most recent call last):\\n  "
-                    + "File \\\"/usr/local/google/home/yourldap/temp/sanity_suite_host"
-                    + ".par/google3/third_party/py/mobly/base_test.py\\\"\\\n"
-                    + "    , line 354, in _teardown_class\\n    self.teardown_class()\\n  File "
-                    + "\\\"/usr/local/google/home/yourldap/temp/sanity_suite_host"
-                    + ".par/google3/javatests/com/google/android/apps/camera/functional/syshealth/sanity"
-                    + ".py\\\"\\\n"
-                    + "    , line 51, in teardown_class\\n    self._helper.dut.uia.press.home()\\n  File "
-                    + "\\\"\\\n"
-                    + "    /usr/local/google/home/yourldap/temp/sanity_suite_host"
-                    + ".par/google3/third_party/py/mobly/controllers/android_device.py\\\"\\\n"
-                    + "    , line 1091, in __getattr__\\n    return self.__getattribute__(name)"
-                    + "\\nAttributeError:\\\n"
-                    + "    \\ 'AndroidDevice' object has no attribute 'uia'\\n\"";
+            "\"Traceback (most recent call last):\\n"
+                + "  File"
+                + " \\\"/usr/local/google/home/yourldap/temp/sanity_suite_host.par/google3/third_party/py/mobly/base_test.py\\\"\\\n"
+                + "    , line 354, in _teardown_class\\n"
+                + "    self.teardown_class()\\n"
+                + "  File"
+                + " \\\"/usr/local/google/home/yourldap/temp/sanity_suite_host.par/google3/javatests/com/google/android/apps/camera/functional/syshealth/sanity.py\\\"\\\n"
+                + "    , line 51, in teardown_class\\n"
+                + "    self._helper.dut.uia.press.home()\\n"
+                + "  File \\\"\\\n"
+                + "    /usr/local/google/home/yourldap/temp/sanity_suite_host.par/google3/third_party/py/mobly/controllers/android_device.py\\\"\\\n"
+                + "    , line 1091, in __getattr__\\n"
+                + "    return self.__getattribute__(name)\\n"
+                + "AttributeError:\\\n"
+                + "    \\ 'AndroidDevice' object has no attribute 'uia'\\n"
+                + "\"";
     private static final Map<String, Object> mRecordMap;
 
     static {
@@ -94,9 +103,10 @@ public class MoblyYamlResultParserTest {
             "Test Name: test_imageintent_take_photo\n"
                     + "Type: UserData\n"
                     + "sponge_properties:\n"
-                    + "    dut_build_info: {build_characteristics: nosdcard, build_id: MASTER, "
-                    + "build_product: blueline,\n"
-                    + "        build_type: userdebug, build_version_codename: R, build_version_sdk: '29',\n"
+                    + "    dut_build_info: {build_characteristics: nosdcard, build_id: MASTER,"
+                    + " build_product: blueline,\n"
+                    + "        build_type: userdebug, build_version_codename: R, build_version_sdk:"
+                    + " '29',\n"
                     + "        debuggable: '1', hardware: blueline, product_name: blueline}\n"
                     + "    dut_model: blueline\n"
                     + "    dut_serial: 827X003PY\n"
@@ -104,9 +114,10 @@ public class MoblyYamlResultParserTest {
                     + "timestamp: 1571681312605";
     private static final String CONTROLLER_INFO =
             "Controller Info:\n"
-                    + "-   build_info: {build_characteristics: nosdcard, build_id: MASTER, build_product:"
-                    + " blueline,\n"
-                    + "        build_type: userdebug, build_version_codename: R, build_version_sdk: '29',\n"
+                    + "-   build_info: {build_characteristics: nosdcard, build_id: MASTER,"
+                    + " build_product: blueline,\n"
+                    + "        build_type: userdebug, build_version_codename: R, build_version_sdk:"
+                    + " '29',\n"
                     + "        debuggable: '1', hardware: blueline, product_name: blueline}\n"
                     + "    model: blueline\n"
                     + "    serial: 827X003PY\n"
@@ -116,7 +127,8 @@ public class MoblyYamlResultParserTest {
                     + "Timestamp: 1571681322.791003\n"
                     + "Type: ControllerInfo";
     private static final String SUMMARY =
-            "{Error: 2, Executed: 3, Failed: 1, Passed: 1, Requested: 4, Skipped: 0, Type: Summary}";
+            "{Error: 2, Executed: 3, Failed: 1, Passed: 1, Requested: 4, Skipped: 0, Type:"
+                    + " Summary}";
     private static final String TESTNAME_LIST =
             "Requested Tests: [test_imageintent_cold_launch, "
                     + "test_imageintent_take_photo]\n"
@@ -318,9 +330,11 @@ public class MoblyYamlResultParserTest {
         Map<String, Object> docMap = new HashMap<>();
         docMap.put("Type", "Summary");
         docMap.put("Executed", "10");
+        docMap.put("Skipped", "0");
         IMoblyYamlResultHandler.ITestResult result = mParser.parseDocumentMap(docMap);
         assertTrue(result instanceof Summary);
         assertEquals(10, ((Summary) result).getExecuted());
+        assertEquals(0, ((Summary) result).getSkipped());
     }
 
     @Test
@@ -388,6 +402,26 @@ public class MoblyYamlResultParserTest {
         spyParser.parse(inputStream);
         verify(spyParser, times(6)).parseDocumentMap(any(Map.class));
         verify(spyParser, times(1)).reportToListeners(any(), any());
+    }
+
+    @Test
+    public void testParseError() throws Exception {
+        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
+        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        File testErrorYaml = FileUtil.createTempFile("test_summary", "yaml");
+        ResourceUtil.extractResourceAsFile(TEST_ERROR_YAML, testErrorYaml);
+        try (FileInputStream inputStream = new FileInputStream(testErrorYaml)) {
+            mParser.parse(inputStream);
+        } finally {
+            FileUtil.deleteFile(testErrorYaml);
+        }
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).testRunStarted(mRunName, 1);
+        inOrder.verify(mMockListener).testRunFailed((FailureDescription) any());
+        inOrder.verify(mMockListener).testRunEnded(anyLong(), any(Map.class));
+
+        inOrder.verifyNoMoreInteractions();
+        verifyNoMoreInteractions(mMockListener);
     }
 
     private ImmutableMap<String, Object> buildTestRecordDocMap(Map<String, Object> propertyMap) {
