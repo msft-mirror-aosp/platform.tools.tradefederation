@@ -25,6 +25,7 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceSelectionOptions;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.InvocationExecution;
@@ -190,6 +191,15 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
     protected boolean prepareAndRunSandbox(
             TestInformation info, IConfiguration config, ITestInvocationListener listener)
             throws Throwable {
+        // Stop background logcat in parent process during the sandbox
+        for (String deviceName : info.getContext().getDeviceConfigNames()) {
+            if (!(info.getContext().getDevice(deviceName).getIDevice() instanceof StubDevice)) {
+                info.getContext().getDevice(deviceName).stopLogcat();
+                CLog.i(
+                        "Done stopping logcat for %s",
+                        info.getContext().getDevice(deviceName).getSerialNumber());
+            }
+        }
         return SandboxInvocationRunner.prepareAndRun(info, config, listener);
     }
 
