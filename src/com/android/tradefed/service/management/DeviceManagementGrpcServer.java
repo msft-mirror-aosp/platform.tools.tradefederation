@@ -119,7 +119,7 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
             StreamObserver<ReleaseReservationResponse> responseObserver) {
         ReleaseReservationResponse.Builder responseBuilder =
                 ReleaseReservationResponse.newBuilder();
-        ITestDevice device = getDeviceFromReservationAndClear(request.getReservationId());
+        ITestDevice device = getDeviceFromReservation(request.getReservationId());
         if (device == null) {
             responseBuilder
                     .setResult(ReleaseReservationResponse.Result.RESERVATION_NOT_EXIST)
@@ -135,8 +135,7 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
                                     "Reservation '%s' is still in use",
                                     request.getReservationId()));
         } else {
-            // Free the device if it is not used by any invocation
-            mDeviceManager.freeDevice(device, FreeDeviceState.AVAILABLE);
+            releaseReservationInternal(request.getReservationId());
             responseBuilder.setResult(ReleaseReservationResponse.Result.SUCCEED);
         }
         responseObserver.onNext(responseBuilder.build());
@@ -230,13 +229,10 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
         responseObserver.onCompleted();
     }
 
-    private boolean releaseReservationInternal(String reservationId) {
+    private void releaseReservationInternal(String reservationId) {
         ITestDevice device = getDeviceFromReservationAndClear(reservationId);
-        if (device == null) {
-            return false;
-        } else {
+        if (device != null) {
             mDeviceManager.freeDevice(device, FreeDeviceState.AVAILABLE);
-            return true;
         }
     }
 
