@@ -43,6 +43,7 @@ public final class SandboxOptions {
     private static final String ENABLE_DEFAULT_TESTS_ZIPS_OPTIONS = "sandbox-default-zips";
     private static final String DUMP_TEST_TEMPLATE = "dump-test-template";
     private static final String START_AVD_IN_PARENT = "avd-in-parent";
+    private static final String PARALLEL_SANDBOX_SETUP = "parallel-sandbox-setup";
 
     @Option(
         name = TF_LOCATION,
@@ -126,6 +127,11 @@ public final class SandboxOptions {
                     "Whether or not to start the avd device in the parent sandbox")
     private boolean mStartAvdInParent = true;
 
+    @Option(
+            name = PARALLEL_SANDBOX_SETUP,
+            description = "Execute the sandbox setup step in parallel")
+    private boolean mParallelSandboxSetup = false;
+
     /**
      * Returns the provided directories containing the Trade Federation version to use for
      * sandboxing the run.
@@ -199,5 +205,10 @@ public final class SandboxOptions {
      */
     public boolean startAvdInParent() {
         return mStartAvdInParent;
+    }
+
+    /** Returns whether or not to execute the sandbox setup in parallel. */
+    public boolean shouldParallelSetup() {
+        return mParallelSandboxSetup;
     }
 }
