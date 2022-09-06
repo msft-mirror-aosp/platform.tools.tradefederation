@@ -199,6 +199,7 @@ public class DeviceManagementGrpcServerTest {
                 .onNext(mReleaseReservationResponseCaptor.capture());
         ReleaseReservationResponse response = mReleaseReservationResponseCaptor.getValue();
         assertThat(response.getResult()).isEqualTo(ReleaseReservationResponse.Result.DEVICE_IN_USE);
+        assertThat(mServer.getDeviceFromReservation(reservationId)).isNotNull();
         verify(mMockDeviceManager, never()).freeDevice(mockedDevice, FreeDeviceState.AVAILABLE);
     }
 
