@@ -1750,10 +1750,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         // TODO: add support for execCommand multi-device allocation
         assertStarted();
         CommandTracker cmdTracker = createCommandTracker(args, null);
-        IConfiguration config =
-                getConfigFactory()
-                        .createConfigurationFromArgs(
-                                cmdTracker.getArgs(), null, getKeyStoreClient());
+        IConfiguration config = createConfiguration(cmdTracker.getArgs());
         config.validateOptions();
         CLog.i("Executing '%s' on '%s'", cmdTracker.getArgs()[0], device.getSerialNumber());
         ExecutableCommand execCmd = createExecutableCommand(cmdTracker, config, false);
