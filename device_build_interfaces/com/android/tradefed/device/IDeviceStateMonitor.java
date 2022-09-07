@@ -19,6 +19,13 @@ import com.android.ddmlib.IDevice;
 
 /**
  * Provides facilities for monitoring the state of a {@link IDevice}.
+ *
+ * <p>A device is currently considered "available" if and only if four events are true:
+ *     1. Device is online aka visible via DDMS/adb ({@link #waitForDeviceOnline()}
+ *     2. Device has dev.bootcomplete flag set (@link #waitForBootComplete(long)}
+ *     3. Device's package manager is responsive (may be inop)
+ *     4. Device's external storage is mounted
+ * 3. & 4. being part of {@link #waitForDeviceAvailable()}.
  */
 public interface IDeviceStateMonitor {
 
