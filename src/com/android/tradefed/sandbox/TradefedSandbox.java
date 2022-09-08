@@ -227,64 +227,76 @@ public class TradefedSandbox implements ISandbox {
     @Override
     public Exception prepareEnvironment(
             IInvocationContext context, IConfiguration config, ITestInvocationListener listener) {
-        // Create our temp directories.
+        long startTime = System.currentTimeMillis();
         try {
-            mStdoutFile = FileUtil.createTempFile("stdout_subprocess_", ".log", getWorkFolder());
-            mStderrFile = FileUtil.createTempFile("stderr_subprocess_", ".log", getWorkFolder());
-            mSandboxTmpFolder = FileUtil.createTempDir("tf-container", getWorkFolder());
-        } catch (IOException e) {
-            return e;
-        }
-        // Unset the current global environment
-        mRunUtil = createRunUtil();
-        mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
-        mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
-        mRunUtil.unsetEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT);
-        mRunUtil.unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
+            // Create our temp directories.
+            try {
+                mStdoutFile =
+                        FileUtil.createTempFile("stdout_subprocess_", ".log", getWorkFolder());
+                mStderrFile =
+                        FileUtil.createTempFile("stderr_subprocess_", ".log", getWorkFolder());
+                mSandboxTmpFolder = FileUtil.createTempDir("tf-container", getWorkFolder());
+            } catch (IOException e) {
+                return e;
+            }
+            // Unset the current global environment
+            mRunUtil = createRunUtil();
+            mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
+            mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
+            mRunUtil.unsetEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT);
+            mRunUtil.unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
 
-        if (getSandboxOptions(config).shouldEnableDebugThread()) {
-            mRunUtil.setEnvVariable(TradefedSandboxRunner.DEBUG_THREAD_KEY, "true");
-        }
-        for (Entry<String, String> envEntry :
-                getSandboxOptions(config).getEnvVariables().entrySet()) {
-            mRunUtil.setEnvVariable(envEntry.getKey(), envEntry.getValue());
-        }
-        if (config.getConfigurationDescription().getMetaData(TradefedFeatureServer.SERVER_REFERENCE)
-                != null) {
-            mRunUtil.setEnvVariable(
-                    TradefedFeatureServer.SERVER_REFERENCE,
-                    config.getConfigurationDescription()
-                            .getAllMetaData()
-                            .getUniqueMap()
-                            .get(TradefedFeatureServer.SERVER_REFERENCE));
-        }
+            if (getSandboxOptions(config).shouldEnableDebugThread()) {
+                mRunUtil.setEnvVariable(TradefedSandboxRunner.DEBUG_THREAD_KEY, "true");
+            }
+            for (Entry<String, String> envEntry :
+                    getSandboxOptions(config).getEnvVariables().entrySet()) {
+                mRunUtil.setEnvVariable(envEntry.getKey(), envEntry.getValue());
+            }
+            if (config.getConfigurationDescription()
+                            .getMetaData(TradefedFeatureServer.SERVER_REFERENCE)
+                    != null) {
+                mRunUtil.setEnvVariable(
+                        TradefedFeatureServer.SERVER_REFERENCE,
+                        config.getConfigurationDescription()
+                                .getAllMetaData()
+                                .getUniqueMap()
+                                .get(TradefedFeatureServer.SERVER_REFERENCE));
+            }
 
-        try {
-            mRootFolder =
-                    getTradefedSandboxEnvironment(
-                            context,
-                            config,
-                            QuotationAwareTokenizer.tokenizeLine(
-                                    config.getCommandLine(),
-                                    /** no logging */
-                                    false));
-        } catch (Exception e) {
-            return e;
-        }
+            try {
+                mRootFolder =
+                        getTradefedSandboxEnvironment(
+                                context,
+                                config,
+                                QuotationAwareTokenizer.tokenizeLine(
+                                        config.getCommandLine(),
+                                        /** no logging */
+                                        false));
+            } catch (Exception e) {
+                return e;
+            }
 
-        PrettyPrintDelimiter.printStageDelimiter("Sandbox Configuration Preparation");
-        // Prepare the configuration
-        Exception res = prepareConfiguration(context, config, listener);
-        if (res != null) {
-            return res;
+            PrettyPrintDelimiter.printStageDelimiter("Sandbox Configuration Preparation");
+            // Prepare the configuration
+            Exception res = prepareConfiguration(context, config, listener);
+            if (res != null) {
+                return res;
+            }
+            // Prepare the context
+            try {
+                mSerializedContext = prepareContext(context, config);
+            } catch (IOException e) {
+                return e;
+            }
+        } finally {
+            if (!getSandboxOptions(config).shouldParallelSetup()) {
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
+                        startTime,
+                        System.currentTimeMillis());
+            }
         }
-        // Prepare the context
-        try {
-            mSerializedContext = prepareContext(context, config);
-        } catch (IOException e) {
-            return e;
-        }
-
         return null;
     }
 
