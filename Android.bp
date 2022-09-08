@@ -172,7 +172,7 @@ java_library_host {
         "auto_value_annotations",
         "google-api-services-compute",
         "google-api-services-storage",
-        "gson-prebuilt-jar",
+        "gson",
         "jacoco-cli",
         "jline",
         "junit-params",
