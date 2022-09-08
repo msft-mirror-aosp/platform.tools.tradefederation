@@ -290,10 +290,12 @@ public class TradefedSandbox implements ISandbox {
                 return e;
             }
         } finally {
-            InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
-                    startTime,
-                    System.currentTimeMillis());
+            if (!getSandboxOptions(config).shouldParallelSetup()) {
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
+                        startTime,
+                        System.currentTimeMillis());
+            }
         }
         return null;
     }
