@@ -236,6 +236,7 @@ public class GTestResultParser extends MultiLineReceiver {
     public GTestResultParser(String testRunName, Collection<ITestInvocationListener> listeners) {
         mTestRunName = testRunName;
         mTestListeners = new ArrayList<>(listeners);
+        setTrimLine(false);
     }
 
     /**
@@ -246,9 +247,7 @@ public class GTestResultParser extends MultiLineReceiver {
      * @param listener informed of test results as the tests are executing
      */
     public GTestResultParser(String testRunName, ITestInvocationListener listener) {
-        mTestRunName = testRunName;
-        mTestListeners = new ArrayList<>(1);
-        mTestListeners.add(listener);
+        this(testRunName, Arrays.asList(listener));
     }
 
     /**
