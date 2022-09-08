@@ -110,6 +110,12 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
     private Set<String> mPerfettoPrefixKeyFields = new HashSet<>();
 
     @Option(
+            name = "perfetto-prefix-inner-message-key-field",
+            description = "String value field need to be prefixed with the all the other"
+                    + "numeric value field keys outside of the current proto message.")
+    private Set<String> mPerfettoPrefixInnerMessagePrefixFields = new HashSet<>();
+
+    @Option(
             name = "perfetto-include-all-metrics",
             description =
                     "If this flag is turned on, all the metrics parsed from the perfetto file will"
@@ -170,6 +176,7 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
 
     private List<Pattern> mMetricPatterns = new ArrayList<>();
 
+    private String mPrefixFromInnerMessage = "";
 
     @Override
     public Map<String, Metric.Builder> processTestMetricsAndLogs(
@@ -440,6 +447,9 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
 
         // Key that will be used to prefix the other keys in the same proto message.
         String keyPrefixOtherFields = "";
+        // If the flag is set then the prefix is set from the current message. Used
+        // to clear the prefix text after all the metrics are prefixed.
+        boolean prefixSetInCurrentMessage = false;
 
         // TODO(b/15014555): Cleanup the parsing logic.
         for (Entry<FieldDescriptor, Object> entry : fields.entrySet()) {
@@ -455,6 +465,19 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                                 entry.getKey().getName().toString(), entry.getValue().toString()));
                         continue;
                     }
+
+                    if (mPerfettoPrefixInnerMessagePrefixFields.contains(
+                            entry.getKey().toString())) {
+                        if (!mPrefixFromInnerMessage.isEmpty()) {
+                            mPrefixFromInnerMessage = mPrefixFromInnerMessage.concat("-");
+                        }
+                        mPrefixFromInnerMessage = mPrefixFromInnerMessage.concat(String.format(
+                                "%s-%s", entry.getKey().getName().toString(),
+                                entry.getValue().toString()));
+                        prefixSetInCurrentMessage = true;
+                        continue;
+                    }
+
                     // Otherwise treat this numeric field as metric.
                     if (mNumberPattern.matcher(entry.getValue().toString()).matches()) {
                         convertedMetrics.put(
@@ -485,16 +508,33 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                         keyPrefixOtherFields =  keyPrefixOtherFields.concat(String.format("%s-%s",
                                 entry.getKey().getName().toString(), entry.getValue().toString()));
                     }
+
+                    if (mPerfettoPrefixInnerMessagePrefixFields.contains(
+                            entry.getKey().toString())) {
+                        if (!mPrefixFromInnerMessage.isEmpty()) {
+                            mPrefixFromInnerMessage = mPrefixFromInnerMessage.concat("-");
+                        }
+                        mPrefixFromInnerMessage = mPrefixFromInnerMessage.concat(String.format(
+                                "%s-%s", entry.getKey().getName().toString(),
+                                entry.getValue().toString()));
+                        prefixSetInCurrentMessage = true;
+                        continue;
+                    }
                 }
             }
         }
 
         // Recursively expand the proto messages and repeated fields(i.e list).
         // Recursion when there are no messages or list with in the current message.
+        // Used to cache the message prefix.
+        String innerMessagePrefix = "";
         for (Entry<FieldDescriptor, Object> entry : fields.entrySet()) {
             if (entry.getValue() instanceof Message) {
                 Map<String, Metric.Builder> messageMetrics =
                         convertPerfettoProtoMessage((Message) entry.getValue());
+                if (!mPrefixFromInnerMessage.isEmpty()) {
+                  innerMessagePrefix = mPrefixFromInnerMessage;
+                }
                 for (Entry<String, Metric.Builder> metricEntry : messageMetrics.entrySet()) {
                     // Add prefix to the metrics parsed from this message.
                     for (String prefix : keyPrefixes) {
@@ -531,6 +571,9 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                     if (listMetrics.get(i) instanceof Message) {
                         Map<String, Metric.Builder> messageMetrics =
                                 convertPerfettoProtoMessage((Message) listMetrics.get(i));
+                        if (!mPrefixFromInnerMessage.isEmpty()) {
+                            innerMessagePrefix = mPrefixFromInnerMessage;
+                        }
                         for (Entry<String, Metric.Builder> metricEntry :
                                 messageMetrics.entrySet()) {
                             for (String prefix : keyPrefixes) {
@@ -567,6 +610,20 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                 additionalConvertedMetrics.put(String.format("%s-%s", keyPrefixOtherFields,
                         currentMetric.getKey()), currentMetric.getValue());
             }
+        }
+
+        if (!mPrefixFromInnerMessage.isEmpty() || !innerMessagePrefix.isEmpty()) {
+          String prefixToUse = !mPrefixFromInnerMessage.isEmpty()
+                  ? mPrefixFromInnerMessage : innerMessagePrefix;
+          for (Map.Entry<String, Metric.Builder> currentMetric : convertedMetrics.entrySet()) {
+            additionalConvertedMetrics.put(
+                String.format("%s-%s", prefixToUse, currentMetric.getKey()),
+                currentMetric.getValue());
+          }
+        }
+
+        if (!prefixSetInCurrentMessage) {
+          mPrefixFromInnerMessage = "";
         }
 
         // Not cleaning up the other metrics without prefix fields.
