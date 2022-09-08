@@ -476,6 +476,35 @@ public class PerfettoGenericPostProcessorTest {
         }
     }
 
+    /**
+     * Test metrics are parsed correctly when there are files with and without corresponding proto
+     * definition
+     */
+    @Test
+    public void testMetricsWithPrefixInnerMessageField()
+            throws ConfigurationException, IOException {
+        setupPerfettoMetricFile(METRIC_FILE_FORMAT.text, true, true);
+        mOptionSetter.setOptionValue(PREFIX_OPTION, PREFIX_OPTION_VALUE);
+        mOptionSetter.setOptionValue(KEY_PREFIX_OPTION,
+                "perfetto.protos.AndroidJankCujMetric.Cuj.name");
+        mOptionSetter.setOptionValue("perfetto-prefix-inner-message-key-field",
+                "perfetto.protos.AndroidProcessMetadata.name");
+        mOptionSetter.setOptionValue(ALL_METRICS_OPTION, "true");
+        Map<String, LogFile> testLogs = new HashMap<>();
+        testLogs.put(
+                PREFIX_OPTION_VALUE,
+                new LogFile(
+                        perfettoMetricProtoFile.getAbsolutePath(), "some.url", LogDataType.TEXTPB));
+        Map<String, Metric.Builder> parsedMetrics = mProcessor
+                .processRunMetricsAndLogs(new HashMap<>(), testLogs);
+
+        assertMetricsContain(
+                parsedMetrics,
+                "android_jank_cuj-cuj-name-com.android.systemui-name-NOTIFICATION_ADD-timeline_"
+                + "metrics-frame_dur_avg",
+                5040562);
+    }
+
     /** Test that post processor runtime is reported if metrics are present. */
     @Test
     public void testReportsRuntime() throws ConfigurationException, IOException {
@@ -627,7 +656,45 @@ public class PerfettoGenericPostProcessorTest {
                         + "    all_mem_min: 15120269\n"
                         + "    all_mem_avg: 24468104.289592762\n"
                         + "  }\n"
-                        + "}"
+                        + "}\n"
+                        + "android_jank_cuj {\n"
+                        + "  cuj {\n"
+                        + "    id: 1\n"
+                        + "    name: \"NOTIFICATION_ADD\"\n"
+                        + "    process {\n"
+                        + "      name: \"com.android.systemui\"\n"
+                        + "      uid: 10240\n"
+                        + "    }\n"
+                        + "    ts: 70088466677776\n"
+                        + "    dur: 460793302\n"
+                        + "     counter_metrics {\n"
+                        + "      }\n"
+                        + "      trace_metrics {\n"
+                        + "        total_frames: 54\n"
+                        + "        missed_frames: 0\n"
+                        + "        missed_app_frames: 0\n"
+                        + "        missed_sf_frames: 0\n"
+                        + "        frame_dur_max: 9845520\n"
+                        + "        frame_dur_avg: 6003033\n"
+                        + "        frame_dur_p50: 5871663\n"
+                        + "        frame_dur_p90: 7130112\n"
+                        + "        frame_dur_p95: 7406218\n"
+                        + "        frame_dur_p99: 9188145\n"
+                        + "     }\n"
+                        + "      timeline_metrics {\n"
+                        + "        total_frames: 54\n"
+                        + "        missed_frames: 0\n"
+                        + "        missed_app_frames: 0\n"
+                        + "        missed_sf_frames: 0\n"
+                        + "        frame_dur_max: 9111735\n"
+                        + "        frame_dur_avg: 5040562\n"
+                        + "        frame_dur_p50: 4961384\n"
+                        + "        frame_dur_p90: 6045320\n"
+                        + "        frame_dur_p95: 6621224\n"
+                        + "        frame_dur_p99: 7827968\n"
+                        + "      }\n"
+                        + "    }\n"
+                        + " }\n"
                         + "android_cpu {\n"
                         + "  process_info {\n"
                         + "    name: \"com.google.android.apps.messaging\"\n"
