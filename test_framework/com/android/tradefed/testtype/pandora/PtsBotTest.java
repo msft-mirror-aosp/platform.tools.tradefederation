@@ -41,6 +41,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
+import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -58,6 +60,7 @@ import java.util.Set;
  */
 public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
+    private static final String TAG = "PtsBotTest";
     private static final int PANDORA_SERVER_PORT = 8999;
     private static final int HCI_PROXY_PORT = 1234;
 
@@ -351,6 +354,20 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         return false;
     }
 
+    private void androidLog(ITestDevice testDevice, String content) {
+        try {
+          String timeStamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
+          String msg = String.format("%s \\(%s host time\\)", content, timeStamp);
+          String command = String.format("adb shell log -t %s \"%s\"", TAG, msg);
+          String result = testDevice.executeAdbCommand(1000L, "shell", "log", "-t", TAG, msg);
+          if (result == null) {
+            CLog.w("Failed to execute: adb shell log -t " + msg);
+          }
+        } catch (DeviceNotAvailableException e) {
+          CLog.w("Failed to send android log, device not available: " + e);
+        }
+    }
+
     private boolean runPtsBotTest(
             String profile,
             String testName,
@@ -361,6 +378,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         listener.testStarted(testDescription);
         CLog.i(testName);
+        androidLog(testInfo.getDevice(), "Test Started: " + testName);
         try {
             ProcessBuilder processBuilder = ptsBot(testInfo, testName);
 
@@ -401,6 +419,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         }
 
         listener.testEnded(testDescription, Collections.emptyMap());
+        androidLog(testInfo.getDevice(), "Test Ended: " + testName);
 
         return success;
     }
