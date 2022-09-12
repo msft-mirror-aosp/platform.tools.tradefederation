@@ -22,6 +22,7 @@ import com.android.tradefed.build.CommandLineBuildInfoBuilder;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.CommandRunner.ExitCode;
 import com.android.tradefed.command.CommandScheduler;
+import com.android.tradefed.command.ICommandOptions;
 import com.android.tradefed.command.ICommandScheduler.IScheduledInvocationListener;
 import com.android.tradefed.config.ArgsOptionParser;
 import com.android.tradefed.config.ConfigurationException;
@@ -199,6 +200,7 @@ public class TestInvocation implements ITestInvocation {
     private boolean mDelegatedInvocation = false;
     private List<IScheduledInvocationListener> mSchedulerListeners = new ArrayList<>();
     private DeviceUnavailableMonitor mUnavailableMonitor = new DeviceUnavailableMonitor();
+    private ConditionFailureMonitor mConditionalFailureMonitor = new ConditionFailureMonitor();
     private ExitCode mExitCode = ExitCode.NO_ERROR;
     private Throwable mExitStack = null;
     private EventsLoggerListener mEventsLogger = null;
@@ -364,7 +366,11 @@ public class TestInvocation implements ITestInvocation {
                                 collectBugreport = context.getDevices().get(0);
                             }
                             // If we have identified a faulty device only take the bugreport on it.
-                            takeBugreport(collectBugreport, listener, bugreportName);
+                            takeBugreport(
+                                    collectBugreport,
+                                    listener,
+                                    config.getCommandOptions(),
+                                    bugreportName);
                         } else if (context.getDevices().size() > 1) {
                             ParallelDeviceExecutor<Boolean> executor =
                                     new ParallelDeviceExecutor<>(context.getDevices().size());
@@ -376,7 +382,11 @@ public class TestInvocation implements ITestInvocation {
                                             CLog.d(
                                                     "Start taking bugreport on '%s'",
                                                     device.getSerialNumber());
-                                            takeBugreport(device, listener, reportName);
+                                            takeBugreport(
+                                                    device,
+                                                    listener,
+                                                    config.getCommandOptions(),
+                                                    reportName);
                                             return true;
                                         };
                                 callableTasks.add(callableTask);
@@ -670,7 +680,10 @@ public class TestInvocation implements ITestInvocation {
     }
 
     private void takeBugreport(
-            ITestDevice device, ITestInvocationListener listener, String bugreportName) {
+            ITestDevice device,
+            ITestInvocationListener listener,
+            ICommandOptions options,
+            String bugreportName) {
         if (device == null) {
             return;
         }
@@ -685,13 +698,19 @@ public class TestInvocation implements ITestInvocation {
         RecoveryMode recovery = device.getRecoveryMode();
         try {
             device.setRecoveryMode(RecoveryMode.NONE);
-            device.logAnrs(listener);
-            boolean res =
-                    device.logBugreport(
-                            String.format("%s_%s", bugreportName, device.getSerialNumber()),
-                            listener);
-            if (!res) {
-                CLog.w("Error when collecting bugreport for device '%s'", device.getSerialNumber());
+            if (!options.isConditionalBugreportDisabled()
+                    && !mConditionalFailureMonitor.hasFailures()) {
+                device.logAnrs(listener);
+            } else {
+                boolean res =
+                        device.logBugreport(
+                                String.format("%s_%s", bugreportName, device.getSerialNumber()),
+                                listener);
+                if (!res) {
+                    CLog.w(
+                            "Error when collecting bugreport for device '%s'",
+                            device.getSerialNumber());
+                }
             }
         } catch (DeviceNotAvailableException | RuntimeException e) {
             CLog.e("Harness Exception while collecting bugreport");
@@ -1022,6 +1041,7 @@ public class TestInvocation implements ITestInvocation {
             allListeners.addAll(config.getTestInvocationListeners());
             allListeners.addAll(Arrays.asList(extraListeners));
             allListeners.add(mUnavailableMonitor);
+            allListeners.add(mConditionalFailureMonitor);
 
             // Auto retry feature
             IRetryDecision decision = config.getRetryDecision();
