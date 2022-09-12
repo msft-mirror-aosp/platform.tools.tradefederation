@@ -533,11 +533,11 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
     private void adbForwardPort(ITestDevice testDevice, int port)
             throws DeviceNotAvailableException {
         testDevice.executeAdbCommand(
-                1000L, "forward", String.format("tcp:%s", port), String.format("tcp:%s", port));
+                "forward", String.format("tcp:%s", port), String.format("tcp:%s", port));
     }
 
     private void adbForwardRemovePort(ITestDevice testDevice, int port)
             throws DeviceNotAvailableException {
-        testDevice.executeAdbCommand(1000L, "forward", "--remove", String.format("tcp:%s", port));
+        testDevice.executeAdbCommand("forward", "--remove", String.format("tcp:%s", port));
     }
 }
