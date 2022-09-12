@@ -168,6 +168,7 @@ public class InvocationMetricLogger {
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
         INVOCATION_START("tf_invocation_start_timestamp", false),
+        LOAD_TEST_CONFIGS_TIME("load_test_configs_time_ms", true),
         // Track the way of requesting Oxygen device lease/release.
         OXYGEN_DEVICE_LEASE_THROUGH_ACLOUD_COUNT("oxygen_device_lease_through_acloud_count", true),
         OXYGEN_DEVICE_RELEASE_THROUGH_ACLOUD_COUNT(

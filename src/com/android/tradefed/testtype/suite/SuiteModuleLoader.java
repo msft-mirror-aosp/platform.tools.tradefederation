@@ -67,6 +67,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Retrieves Compatibility test module definitions from the repository. TODO: Add the expansion of
@@ -88,6 +89,7 @@ public class SuiteModuleLoader {
     private boolean mOptimizeMainlineTest = false;
     private boolean mIgnoreNonPreloadedMainlineModule = false;
     private boolean mAllowOptionalParameterizedModules = false;
+    private boolean mLoadConfigsWithIncludeFilters = false;
     private ModuleParameters mForcedModuleParameter = null;
     private Set<ModuleParameters> mExcludedModuleParameters = new HashSet<>();
     private Set<DeviceFoldableState> mFoldableStates = new LinkedHashSet<>();
@@ -145,6 +147,11 @@ public class SuiteModuleLoader {
         mAllowOptionalParameterizedModules = allowed;
     }
 
+    /** Sets whether or not to load test config based on the given include-filter. */
+    public final void setLoadConfigsWithIncludeFilters(boolean allowed) {
+        mLoadConfigsWithIncludeFilters = allowed;
+    }
+
     /** Sets the only {@link ModuleParameters} type that should be run. */
     public final void setModuleParameter(ModuleParameters param) {
         mForcedModuleParameter = param;
@@ -185,6 +192,23 @@ public class SuiteModuleLoader {
         List<File> listConfigFiles = new ArrayList<>();
         listConfigFiles.addAll(
                 ConfigurationUtil.getConfigNamesFileFromDirs(suitePrefix, testsDirs, patterns));
+        if (mLoadConfigsWithIncludeFilters) {
+            CLog.i("Loading test configs based on the given include-filter.");
+            Set<String> filteredConfigNames = new HashSet<>();
+            for (LinkedHashSet<SuiteTestFilter> entry : mIncludeFilters.values()) {
+                for (SuiteTestFilter file : entry) {
+                    // Collect the test config name based on the given include filter.
+                    filteredConfigNames.add(String.format("%s.config", file.getBaseName()));
+                }
+            }
+            // Filter the test configs out based on the collected test config names.
+            List<File> filteredConfigs =
+                    listConfigFiles.stream()
+                            .filter(f -> filteredConfigNames.contains(f.getName()))
+                            .collect(Collectors.toList());
+            listConfigFiles.clear();
+            listConfigFiles.addAll(filteredConfigs);
+        }
         // Ensure stable initial order of configurations.
         Collections.sort(listConfigFiles);
         toRun.putAll(loadConfigsFromSpecifiedPaths(listConfigFiles, abis, suiteTag));
