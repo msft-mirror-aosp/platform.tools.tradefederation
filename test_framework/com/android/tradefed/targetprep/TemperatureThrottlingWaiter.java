@@ -21,6 +21,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.RunUtil;
 
 import java.util.regex.Matcher;
@@ -114,7 +115,8 @@ public class TemperatureThrottlingWaiter extends BaseTargetPreparer {
 
         if (result == null || result.contains("No such file or directory")) {
             throw new TargetSetupError(String.format("File %s doesn't exist", fileName),
-                    device.getDeviceDescriptor());
+                    device.getDeviceDescriptor(),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         // temperature raw format example output : Result:30 Raw:7f6f

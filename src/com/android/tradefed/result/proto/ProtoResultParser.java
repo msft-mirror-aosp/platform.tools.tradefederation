@@ -573,7 +573,7 @@ public class ProtoResultParser {
                                 info.getSize());
                 if (Strings.isNullOrEmpty(file.getPath())) {
                     CLog.e("Log '%s' was registered but without a path.", entry.getKey());
-                    return;
+                    continue;
                 }
                 File path = new File(file.getPath());
                 if (Strings.isNullOrEmpty(file.getUrl()) && path.exists()) {
@@ -583,8 +583,10 @@ public class ProtoResultParser {
                         if (file.getPath().endsWith(LogDataType.ZIP.getFileExt())) {
                             type = LogDataType.ZIP;
                         }
-                        log("Logging %s from subprocess: %s ", entry.getKey(), file.getPath());
-                        logger.testLog(mFilePrefix + entry.getKey(), type, source);
+                        if (mReportLogs) {
+                            log("Logging %s from subprocess: %s ", entry.getKey(), file.getPath());
+                            logger.testLog(mFilePrefix + entry.getKey(), type, source);
+                        }
                     }
                     if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
                             && LogDataType.PERFETTO.equals(type)) {
@@ -593,16 +595,18 @@ public class ProtoResultParser {
                         FileUtil.deleteFile(path);
                     }
                 } else {
-                    log(
-                            "Logging %s from subprocess. url: %s, path: %s [exists: %s]",
-                            entry.getKey(), file.getUrl(), file.getPath(), path.exists());
                     if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
                             && LogDataType.PERFETTO.equals(file.getType())
                             && path.exists()) {
                         CLog.d("Log the subprocess trace");
                         TracingLogger.getActiveTrace().addSubprocessTrace(path);
                     }
-                    logger.logAssociation(mFilePrefix + entry.getKey(), file);
+                    if (mReportLogs) {
+                        log(
+                                "Logging %s from subprocess. url: %s, path: %s [exists: %s]",
+                                entry.getKey(), file.getUrl(), file.getPath(), path.exists());
+                        logger.logAssociation(mFilePrefix + entry.getKey(), file);
+                    }
                 }
             } catch (InvalidProtocolBufferException e) {
                 CLog.e("Couldn't unpack %s as a LogFileInfo", entry.getKey());
