@@ -358,7 +358,6 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         try {
           String timeStamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
           String msg = String.format("%s \\(%s host time\\)", content, timeStamp);
-          String command = String.format("adb shell log -t %s \"%s\"", TAG, msg);
           String result = testDevice.executeAdbCommand(1000L, "shell", "log", "-t", TAG, msg);
           if (result == null) {
             CLog.w("Failed to execute: adb shell log -t " + msg);
