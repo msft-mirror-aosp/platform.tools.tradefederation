@@ -26,6 +26,8 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.LogDataType;
@@ -211,6 +213,13 @@ public class BaseTestSuite extends ITestSuite {
                             + "preloaded on device. Otherwise an exception will be thrown.")
     private boolean mIgnoreNonPreloadedMainlineModule = false;
 
+    @Option(
+            name = "load-configs-with-include-filters",
+            description =
+                    "An experimental flag to improve the performance of loading test configs with "
+                            + "given module defined in include-filter.")
+    private boolean mLoadConfigsWithIncludeFilters = false;
+
     private SuiteModuleLoader mModuleRepo;
     private Map<String, LinkedHashSet<SuiteTestFilter>> mIncludeFiltersParsed =
             new LinkedHashMap<>();
@@ -334,6 +343,7 @@ public class BaseTestSuite extends ITestSuite {
             mModuleRepo.setModuleParameter(mForceParameter);
             mModuleRepo.setExcludedModuleParameters(mExcludedModuleParameters);
             mModuleRepo.setFoldableStates(mFoldableStates);
+            mModuleRepo.setLoadConfigsWithIncludeFilters(mLoadConfigsWithIncludeFilters);
 
             List<File> testsDirectories = new ArrayList<>();
 
@@ -354,9 +364,12 @@ public class BaseTestSuite extends ITestSuite {
             // Finally add the full test cases directory in case there is no special sub-dir.
             testsDirectories.add(testsDir);
             // Actual loading of the configurations.
+            long start = System.currentTimeMillis();
             LinkedHashMap<String, IConfiguration> loadedTests =
                     loadingStrategy(mAbis, testsDirectories, mSuitePrefix, mSuiteTag);
-
+            long duration = System.currentTimeMillis() - start;
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.LOAD_TEST_CONFIGS_TIME, duration);
             if (mFailOnEverythingFiltered
                     && loadedTests.isEmpty()
                     && !mIncludeFiltersParsed.isEmpty()) {
