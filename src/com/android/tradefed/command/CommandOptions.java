@@ -98,6 +98,12 @@ public class CommandOptions implements ICommandOptions {
             + "instead of bugreport during the test invocation final bugreport.")
     private boolean mTakeBugreportzOnInvocationEnded = false;
 
+    @Option(
+            name = "disable-conditional-bugreport",
+            description =
+                    "Disable the optimization to capture ANR instead of bugreport if no failure.")
+    private boolean mDisableConditionalBugreport = false;
+
     @Option(name = "invocation-timeout", description =
             "the maximum time to wait for an invocation to terminate before attempting to force"
             + "stop it.", isTimeVal = true)
@@ -414,6 +420,12 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public void setBugreportzOnInvocationEnded(boolean takeBugreportz) {
         mTakeBugreportzOnInvocationEnded = takeBugreportz;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isConditionalBugreportDisabled() {
+        return mDisableConditionalBugreport;
     }
 
     /**

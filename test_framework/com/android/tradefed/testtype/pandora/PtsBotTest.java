@@ -39,11 +39,11 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
-import java.text.SimpleDateFormat;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -356,15 +356,18 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
     private void androidLog(ITestDevice testDevice, String content) {
         try {
-          String timeStamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
-          String msg = String.format("%s \\(%s host time\\)", content, timeStamp);
-          String command = String.format("adb shell log -t %s \"%s\"", TAG, msg);
-          String result = testDevice.executeAdbCommand(1000L, "shell", "log", "-t", TAG, msg);
-          if (result == null) {
-            CLog.w("Failed to execute: adb shell log -t " + msg);
-          }
+            String timeStamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
+            String command =
+                    String.format("log -t %s '%s (%s host time)'", TAG, content, timeStamp);
+            CommandResult result = testDevice.executeShellV2Command(command);
+            if (result.getStatus() != CommandStatus.SUCCESS) {
+                CLog.w(
+                        String.format(
+                                "Command '%s' exited with status %s (code %s)",
+                                command, result.getStatus(), result.getExitCode()));
+            }
         } catch (DeviceNotAvailableException e) {
-          CLog.w("Failed to send android log, device not available: " + e);
+            CLog.w("Failed to send android log, device not available: " + e);
         }
     }
 
@@ -530,11 +533,11 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
     private void adbForwardPort(ITestDevice testDevice, int port)
             throws DeviceNotAvailableException {
         testDevice.executeAdbCommand(
-                1000L, "forward", String.format("tcp:%s", port), String.format("tcp:%s", port));
+                "forward", String.format("tcp:%s", port), String.format("tcp:%s", port));
     }
 
     private void adbForwardRemovePort(ITestDevice testDevice, int port)
             throws DeviceNotAvailableException {
-        testDevice.executeAdbCommand(1000L, "forward", "--remove", String.format("tcp:%s", port));
+        testDevice.executeAdbCommand("forward", "--remove", String.format("tcp:%s", port));
     }
 }
