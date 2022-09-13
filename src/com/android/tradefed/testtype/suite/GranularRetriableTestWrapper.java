@@ -30,6 +30,7 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -264,7 +265,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
         mMainGranularRunListener.setCollectTestsOnly(mCollectTestsOnly);
         ITestInvocationListener allListeners = initializeListeners();
         // First do the regular run, not retried.
-        intraModuleRun(testInfo, allListeners);
+        intraModuleRun(testInfo, allListeners, 0);
 
         if (mMaxRunLimit <= 1) {
             return;
@@ -303,7 +304,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
                 firstCheck = false;
                 CLog.d("Intra-module retry attempt number %s", attemptNumber);
                 // Run the tests again
-                intraModuleRun(testInfo, allListeners);
+                intraModuleRun(testInfo, allListeners, attemptNumber);
             }
             // Feed the last attempt if we reached here.
             mRetryDecision.addLastAttempt(
@@ -316,12 +317,13 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     }
 
     /** The workflow for each individual {@link IRemoteTest} run. */
-    private final void intraModuleRun(TestInformation testInfo, ITestInvocationListener runListener)
+    private final void intraModuleRun(
+            TestInformation testInfo, ITestInvocationListener runListener, int attempt)
             throws DeviceNotAvailableException {
         mMainGranularRunListener.setAttemptIsolation(CurrentInvocation.runCurrentIsolation());
         StartEndCollector startEndCollector = new StartEndCollector(runListener);
         runListener = startEndCollector;
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("attempt " + attempt)) {
             List<IMetricCollector> clonedCollectors = cloneCollectors(mRunMetricCollectors);
             if (mTest instanceof IMetricCollectorReceiver) {
                 ((IMetricCollectorReceiver) mTest).setMetricCollectors(clonedCollectors);
