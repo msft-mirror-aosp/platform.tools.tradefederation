@@ -45,6 +45,7 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.invoker.shard.token.TokenProperty;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ILogRegistry.EventType;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogRegistry;
@@ -434,39 +435,44 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         // Exception generated during setUp or run of the tests
         Throwable preparationException;
         DeviceNotAvailableException runException = null;
-        // Resolve dynamic files except for the IRemoteTest ones
-        preparationException = invokeRemoteDynamic(moduleInfo.getDevice(), mModuleConfiguration);
-
         long start = System.currentTimeMillis();
-        if (preparationException == null) {
-            mInternalTargetPreparerConfiguration =
-                    new Configuration("tmp-download", "tmp-download");
-            mInternalTargetPreparerConfiguration
-                    .getCommandOptions()
-                    .getDynamicDownloadArgs()
-                    .putAll(mModuleConfiguration.getCommandOptions().getDynamicDownloadArgs());
-            for (String device : mPreparersPerDevice.keySet()) {
-                mInternalTargetPreparerConfiguration.setDeviceConfig(
-                        new DeviceConfigurationHolder(device));
-                for (ITargetPreparer preparer : mPreparersPerDevice.get(device)) {
-                    try {
-                        mInternalTargetPreparerConfiguration
-                                .getDeviceConfigByName(device)
-                                .addSpecificConfig(preparer);
-                    } catch (ConfigurationException e) {
-                        // Shouldn't happen;
-                        throw new RuntimeException(e);
+        // Resolve dynamic files except for the IRemoteTest ones
+        try (CloseableTraceScope ignored = new CloseableTraceScope("download_files")) {
+            preparationException =
+                    invokeRemoteDynamic(moduleInfo.getDevice(), mModuleConfiguration);
+
+            if (preparationException == null) {
+                mInternalTargetPreparerConfiguration =
+                        new Configuration("tmp-download", "tmp-download");
+                mInternalTargetPreparerConfiguration
+                        .getCommandOptions()
+                        .getDynamicDownloadArgs()
+                        .putAll(mModuleConfiguration.getCommandOptions().getDynamicDownloadArgs());
+                for (String device : mPreparersPerDevice.keySet()) {
+                    mInternalTargetPreparerConfiguration.setDeviceConfig(
+                            new DeviceConfigurationHolder(device));
+                    for (ITargetPreparer preparer : mPreparersPerDevice.get(device)) {
+                        try {
+                            mInternalTargetPreparerConfiguration
+                                    .getDeviceConfigByName(device)
+                                    .addSpecificConfig(preparer);
+                        } catch (ConfigurationException e) {
+                            // Shouldn't happen;
+                            throw new RuntimeException(e);
+                        }
                     }
                 }
+                mInternalTargetPreparerConfiguration.setMultiTargetPreparers(mMultiPreparers);
+                preparationException =
+                        invokeRemoteDynamic(
+                                moduleInfo.getDevice(), mInternalTargetPreparerConfiguration);
             }
-            mInternalTargetPreparerConfiguration.setMultiTargetPreparers(mMultiPreparers);
-            preparationException =
-                    invokeRemoteDynamic(
-                            moduleInfo.getDevice(), mInternalTargetPreparerConfiguration);
         }
         // Setup
         if (preparationException == null) {
-            preparationException = runPreparation(false);
+            try (CloseableTraceScope ignored = new CloseableTraceScope("module_preparation")) {
+                preparationException = runPreparation(false);
+            }
         }
 
         while (preparationException != null) {
@@ -503,7 +509,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         maxRunLimit = maxRunLimit - mTargetPreparerRetryCount;
         mMaxRetry = mMaxRetry - mTargetPreparerRetryCount;
         InvocationMetricLogger.addInvocationPairMetrics(
-              InvocationMetricKey.MODULE_SETUP_PAIR, start, System.currentTimeMillis());
+                InvocationMetricKey.MODULE_SETUP_PAIR, start, System.currentTimeMillis());
 
         // Run the tests
         try {
@@ -570,7 +576,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                             true);
                     return;
                 }
-                try {
+                try (CloseableTraceScope ignored = new CloseableTraceScope("module_test")) {
                     mCurrentTestWrapper.run(moduleInfo, listener);
                 } catch (DeviceNotAvailableException dnae) {
                     runException = dnae;
