@@ -433,9 +433,17 @@ public class BaseTestSuite extends ITestSuite {
         return new HashSet<String>(mIncludeFilters);
     }
 
+    public void clearIncludeFilter() {
+        mIncludeFilters.clear();
+    }
+
     /** Sets exclude-filters for the compatibility test */
     public void setExcludeFilter(Set<String> excludeFilters) {
         mExcludeFilters.addAll(excludeFilters);
+    }
+
+    public void clearExcludeFilter() {
+        mExcludeFilters.clear();
     }
 
     /** Gets a copy of exclude-filters for the compatibility test */
