@@ -94,11 +94,6 @@ public class TestDiscoveryExecutor {
 
         List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));
 
-        if (testModules == null || testModules.isEmpty()) {
-            throw new TestDiscoveryException(
-                    "Tradefed Observatory discovered no test modules from the test config, it"
-                            + " might be component-based.");
-        }
         List<String> testDependencies = new ArrayList<>(discoverDependencies(config));
         Collections.sort(testModules);
         Collections.sort(testDependencies);
