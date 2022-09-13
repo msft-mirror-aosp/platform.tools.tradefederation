@@ -130,7 +130,7 @@ public final class SandboxOptions {
     @Option(
             name = PARALLEL_SANDBOX_SETUP,
             description = "Execute the sandbox setup step in parallel")
-    private boolean mParallelSandboxSetup = false;
+    private boolean mParallelSandboxSetup = true;
 
     /**
      * Returns the provided directories containing the Trade Federation version to use for
