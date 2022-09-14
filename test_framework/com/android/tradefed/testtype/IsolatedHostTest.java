@@ -825,6 +825,10 @@ public class IsolatedHostTest
         mServer = server;
     }
 
+    public boolean useRobolectricResources() {
+        return mRobolectricResources;
+    }
+
     private ITestInvocationListener wrapListener(ITestInvocationListener listener) {
         if (mTestCaseTimeout.toMillis() > 0L) {
             listener =
