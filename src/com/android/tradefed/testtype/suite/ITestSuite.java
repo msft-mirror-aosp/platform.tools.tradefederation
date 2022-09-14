@@ -943,6 +943,7 @@ public abstract class ITestSuite
             try {
                 result = checker.preExecutionCheck(device);
             } catch (RuntimeException e) {
+                CLog.e(e);
                 // Catch RuntimeException to avoid leaking throws that go to the invocation.
                 result.setErrorMessage(e.getMessage());
                 result.setBugreportNeeded(true);
@@ -991,6 +992,7 @@ public abstract class ITestSuite
             try {
                 result = checker.postExecutionCheck(device);
             } catch (RuntimeException e) {
+                CLog.e(e);
                 // Catch RuntimeException to avoid leaking throws that go to the invocation.
                 result.setErrorMessage(e.getMessage());
                 result.setBugreportNeeded(true);
