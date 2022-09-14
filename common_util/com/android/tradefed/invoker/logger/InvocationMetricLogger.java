@@ -54,6 +54,9 @@ public class InvocationMetricLogger {
         METADATA_RETRY_COUNT("metadata_retry_count", true),
         XTS_STAGE_TESTS_TIME("xts_stage_tests_time_ms", true),
         XTS_STAGE_TESTS_BYTES("xts_stage_tests_bytes", true),
+        XTS_PARTIAL_DOWNLOAD_SUCCESS_COUNT("xts_partial_download_success_count", true),
+        XTS_PARTIAL_DOWNLOAD_UNSUPPORTED_FILTER_FALLBACK_COUNT(
+                "xts_partial_download_unsupported_filter_fallback_count", true),
         XTS_PARTIAL_DOWNLOAD_FALLBACK_COUNT("xts_partial_download_fallback_count", true),
         XTS_PARTIAL_DOWNLOAD_TOTAL_COUNT("xts_partial_download_total_count", true),
         // -- Disk memory usage --
@@ -165,6 +168,7 @@ public class InvocationMetricLogger {
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
         INVOCATION_START("tf_invocation_start_timestamp", false),
+        LOAD_TEST_CONFIGS_TIME("load_test_configs_time_ms", true),
         // Track the way of requesting Oxygen device lease/release.
         OXYGEN_DEVICE_LEASE_THROUGH_ACLOUD_COUNT("oxygen_device_lease_through_acloud_count", true),
         OXYGEN_DEVICE_RELEASE_THROUGH_ACLOUD_COUNT(

@@ -856,46 +856,49 @@ public abstract class ITestSuite
             List<ITestInvocationListener> moduleListeners,
             TestFailureListener failureListener)
             throws DeviceNotAvailableException {
-        if (mRebootPerModule) {
-            if ("user".equals(mDevice.getProperty(DeviceProperties.BUILD_TYPE))) {
-                CLog.e(
-                        "reboot-per-module should only be used during development, "
-                                + "this is a\" user\" build device");
-            } else {
-                CLog.d("Rebooting device before starting next module");
-                mDevice.reboot();
+        try (CloseableTraceScope ignored = new CloseableTraceScope("module_pre_check")) {
+            if (mRebootPerModule) {
+                if ("user".equals(mDevice.getProperty(DeviceProperties.BUILD_TYPE))) {
+                    CLog.e(
+                            "reboot-per-module should only be used during development, "
+                                    + "this is a\" user\" build device");
+                } else {
+                    CLog.d("Rebooting device before starting next module");
+                    mDevice.reboot();
+                }
             }
-        }
 
-        if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
-            runPreModuleCheck(module.getId(), mSystemStatusCheckers, mDevice, listener);
-        }
-        if (mCollectTestsOnly) {
-            module.setCollectTestsOnly(mCollectTestsOnly);
-        }
-        // Pass the run defined collectors to be used.
-        module.setMetricCollectors(CollectorHelper.cloneCollectors(mMetricCollectors));
-        // Pass the main invocation logSaver
-        module.setLogSaver(mMainConfiguration.getLogSaver());
+            if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
+                runPreModuleCheck(module.getId(), mSystemStatusCheckers, mDevice, listener);
+            }
 
-        IRetryDecision decision = mMainConfiguration.getRetryDecision();
-        // Pass whether we should merge the attempts of not
-        if (mMergeAttempts
-                && decision.getMaxRetryCount() > 1
-                && !RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())) {
-            CLog.d("Overriding '--merge-attempts' to false for auto-retry.");
-            mMergeAttempts = false;
-        }
-        module.setMergeAttemps(mMergeAttempts);
-        // Pass the retry decision to be used.
-        module.setRetryDecision(decision);
-        // Restore the config, as the setter might have override it with module config.
-        if (decision instanceof IConfigurationReceiver) {
-            ((IConfigurationReceiver) decision).setConfiguration(mMainConfiguration);
-        }
+            if (mCollectTestsOnly) {
+                module.setCollectTestsOnly(mCollectTestsOnly);
+            }
+            // Pass the run defined collectors to be used.
+            module.setMetricCollectors(CollectorHelper.cloneCollectors(mMetricCollectors));
+            // Pass the main invocation logSaver
+            module.setLogSaver(mMainConfiguration.getLogSaver());
 
-        module.setEnableDynamicDownload(mEnableDynamicDownload);
-        module.transferSuiteLevelOptions(mMainConfiguration);
+            IRetryDecision decision = mMainConfiguration.getRetryDecision();
+            // Pass whether we should merge the attempts of not
+            if (mMergeAttempts
+                    && decision.getMaxRetryCount() > 1
+                    && !RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())) {
+                CLog.d("Overriding '--merge-attempts' to false for auto-retry.");
+                mMergeAttempts = false;
+            }
+            module.setMergeAttemps(mMergeAttempts);
+            // Pass the retry decision to be used.
+            module.setRetryDecision(decision);
+            // Restore the config, as the setter might have override it with module config.
+            if (decision instanceof IConfigurationReceiver) {
+                ((IConfigurationReceiver) decision).setConfiguration(mMainConfiguration);
+            }
+
+            module.setEnableDynamicDownload(mEnableDynamicDownload);
+            module.transferSuiteLevelOptions(mMainConfiguration);
+        }
         // Actually run the module
         module.run(
                 moduleInfo,
@@ -905,7 +908,9 @@ public abstract class ITestSuite
                 getConfiguration().getRetryDecision().getMaxRetryCount());
 
         if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
-            runPostModuleCheck(module.getId(), mSystemStatusCheckers, mDevice, listener);
+            try (CloseableTraceScope ignored = new CloseableTraceScope("module_post_check")) {
+                runPostModuleCheck(module.getId(), mSystemStatusCheckers, mDevice, listener);
+            }
         }
     }
 
