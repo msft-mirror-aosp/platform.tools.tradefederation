@@ -247,7 +247,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             // Get the parameterized module name by striping the abi information out.
             String moduleName = entry.getKey().replace(String.format("%s ", abi.getName()), "");
             String configPath = moduleConfig.getName();
-            configDescriptor.setModuleName(moduleName);
             Set<TestInfo> testInfos = getTestInfos(testInfosToRun, moduleName);
             // Only keep the same matching abi runner
             allTests.addAll(createIndividualTests(testInfos, moduleConfig, abi));
