@@ -28,6 +28,7 @@ import com.android.tradefed.targetprep.TestAppInstallSetup;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.IsolatedHostTest;
 import com.android.tradefed.testtype.suite.ValidateSuiteConfigHelper;
 
 import com.google.common.base.Joiner;
@@ -158,6 +159,13 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                                 "testtype %s is not officially supported in %s. "
                                         + "The supported ones are: %s",
                                 test.getClass().getCanonicalName(), name, SUPPORTED_TEST_RUNNERS));
+            }
+            if (test instanceof IsolatedHostTest
+                    && ((IsolatedHostTest) test).useRobolectricResources()) {
+                throw new ConfigurationException(
+                        String.format(
+                                "Robolectric tests aren't supported in general-tests yet. They"
+                                        + " have their own setup."));
             }
         }
     }
