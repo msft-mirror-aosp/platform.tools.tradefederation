@@ -47,7 +47,8 @@ import java.util.concurrent.Future;
 /** Set device baseline settings before each module. */
 public class DeviceBaselineChecker implements ISystemStatusChecker {
 
-    private static final String DEVICE_BASELINE_CONFIG_FILE = "/config/checker/baseline_config.json";
+    private static final String DEVICE_BASELINE_CONFIG_FILE =
+            "/config/checker/baseline_config.json";
     // Thread pool size to set device baselines.
     private static final int N_THREAD = 8;
     private static final String SET_SUCCESS_MESSAGE = "SUCCESS";
@@ -139,11 +140,11 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
             }
         } catch (ExecutionException e) {
             result.setStatus(CheckStatus.FAILED);
-            errorMessage.append(e.getMessage());
+            errorMessage.append(StreamUtil.getStackTrace(e));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             result.setStatus(CheckStatus.FAILED);
-            errorMessage.append(e.getMessage());
+            errorMessage.append(StreamUtil.getStackTrace(e));
         } finally {
             pool.shutdown();
         }
