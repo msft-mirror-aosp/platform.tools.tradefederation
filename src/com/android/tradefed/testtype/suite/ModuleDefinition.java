@@ -949,7 +949,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         }
         TfObjectTracker.countWithParents(preparer.getClass());
         CLog.d("Running setup preparer: %s", preparer.getClass().getSimpleName());
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(preparer.getClass().getName())) {
             if (preparer instanceof IConfigurationReceiver) {
                 ((IConfigurationReceiver) preparer).setConfiguration(mModuleConfiguration);
             }
@@ -989,7 +990,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         }
         TfObjectTracker.countWithParents(preparer.getClass());
         CLog.d("Running setup multi preparer: %s", preparer.getClass().getSimpleName());
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(preparer.getClass().getName())) {
             if (preparer instanceof IConfigurationReceiver) {
                 ((IConfigurationReceiver) preparer).setConfiguration(mModuleConfiguration);
             }
