@@ -691,7 +691,7 @@ public class ModuleDefinitionTest {
         verify(mMockListener)
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
 
-        assertTrue(captured.getValue().getErrorMessage().contains(exceptionMessage));
+        assertThat(captured.getValue().getErrorMessage()).contains(exceptionMessage);
     }
 
     /**
