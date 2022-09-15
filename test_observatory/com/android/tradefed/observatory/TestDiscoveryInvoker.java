@@ -116,8 +116,12 @@ public class TestDiscoveryInvoker {
         }
         String stdout = res.getStdout();
         CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
+
         List<String> testModules = parseTestDiscoveryOutput(stdout, TEST_MODULES_LIST_KEY);
-        dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+        if (!testModules.isEmpty()) {
+            dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+        }
+
         List<String> testDependencies =
                 parseTestDiscoveryOutput(stdout, TEST_DEPENDENCIES_LIST_KEY);
         if (!testDependencies.isEmpty()) {

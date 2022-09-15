@@ -119,6 +119,7 @@ tradefed_java_library_host {
     java_resources: [
         ":TradefedContentProvider",
         ":TelephonyUtility",
+        ":WifiUtil"
     ],
     static_libs: [
         "tradefed-lib-core",
