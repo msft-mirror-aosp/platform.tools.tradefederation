@@ -22,6 +22,7 @@ public class ExtendedFile extends File {
 
     private String mBuildId;
     private String mBuildTarget;
+    private String mBranch;
 
     ExtendedFile(String path) {
         super(path);
@@ -33,6 +34,11 @@ public class ExtendedFile extends File {
         mBuildTarget = buildTarget;
     }
 
+    public ExtendedFile(File file, String buildId, String buildTarget, String branch) {
+        this(file, buildId, buildTarget);
+        mBranch = branch;
+    }
+
     /** Returns the buildid metadata. */
     public String getBuildId() {
         return mBuildId;
@@ -41,5 +47,10 @@ public class ExtendedFile extends File {
     /** Returns the target metadata. */
     public String getBuildTarget() {
         return mBuildTarget;
+    }
+
+    /** Returns the branch metadata. */
+    public String getBranch() {
+        return mBranch;
     }
 }
