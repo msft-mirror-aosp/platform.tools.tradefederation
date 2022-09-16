@@ -856,6 +856,7 @@ public abstract class ITestSuite
             List<ITestInvocationListener> moduleListeners,
             TestFailureListener failureListener)
             throws DeviceNotAvailableException {
+        Map<String, String> properties = new LinkedHashMap<>();
         try (CloseableTraceScope ignored = new CloseableTraceScope("module_pre_check")) {
             if (mRebootPerModule) {
                 if ("user".equals(mDevice.getProperty(DeviceProperties.BUILD_TYPE))) {
@@ -869,8 +870,17 @@ public abstract class ITestSuite
             }
 
             if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
-                runPreModuleCheck(module.getId(), mSystemStatusCheckers, mDevice, listener);
+                properties.putAll(
+                        runPreModuleCheck(
+                                module.getId(), mSystemStatusCheckers, mDevice, listener));
             }
+            if (mCollectTestsOnly) {
+                module.setCollectTestsOnly(mCollectTestsOnly);
+            }
+            // Pass the run defined collectors to be used.
+            module.setMetricCollectors(CollectorHelper.cloneCollectors(mMetricCollectors));
+            // Pass the main invocation logSaver
+            module.setLogSaver(mMainConfiguration.getLogSaver());
 
             if (mCollectTestsOnly) {
                 module.setCollectTestsOnly(mCollectTestsOnly);
@@ -909,8 +919,14 @@ public abstract class ITestSuite
 
         if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
             try (CloseableTraceScope ignored = new CloseableTraceScope("module_post_check")) {
-                runPostModuleCheck(module.getId(), mSystemStatusCheckers, mDevice, listener);
+                properties.putAll(
+                        runPostModuleCheck(
+                                module.getId(), mSystemStatusCheckers, mDevice, listener));
             }
+        }
+        for (Map.Entry<String, String> entry : properties.entrySet()) {
+            module.getModuleInvocationContext()
+                    .addInvocationAttribute(entry.getKey(), entry.getValue());
         }
     }
 
@@ -918,7 +934,7 @@ public abstract class ITestSuite
      * Helper to run the System Status checkers preExecutionChecks defined for the test and log
      * their failures.
      */
-    private void runPreModuleCheck(
+    private Map<String, String> runPreModuleCheck(
             String moduleName,
             List<ISystemStatusChecker> checkers,
             ITestDevice device,
@@ -927,6 +943,7 @@ public abstract class ITestSuite
         long startTime = System.currentTimeMillis();
         CLog.i("Running system status checker before module execution: %s", moduleName);
         Map<String, String> failures = new LinkedHashMap<>();
+        Map<String, String> properties = new LinkedHashMap<>();
         boolean bugreportNeeded = false;
         for (ISystemStatusChecker checker : checkers) {
             // Track usage of the checker
@@ -948,6 +965,7 @@ public abstract class ITestSuite
                 result.setErrorMessage(e.getMessage());
                 result.setBugreportNeeded(true);
             }
+            properties.putAll(result.getModuleProperties());
             if (!CheckStatus.SUCCESS.equals(result.getStatus())) {
                 String errorMessage =
                         (result.getErrorMessage() == null) ? "" : result.getErrorMessage();
@@ -966,13 +984,14 @@ public abstract class ITestSuite
 
         // We report System checkers like tests.
         reportModuleCheckerResult(MODULE_CHECKER_PRE, moduleName, failures, startTime, listener);
+        return properties;
     }
 
     /**
      * Helper to run the System Status checkers postExecutionCheck defined for the test and log
      * their failures.
      */
-    private void runPostModuleCheck(
+    private Map<String, String> runPostModuleCheck(
             String moduleName,
             List<ISystemStatusChecker> checkers,
             ITestDevice device,
@@ -981,6 +1000,7 @@ public abstract class ITestSuite
         long startTime = System.currentTimeMillis();
         CLog.i("Running system status checker after module execution: %s", moduleName);
         Map<String, String> failures = new LinkedHashMap<>();
+        Map<String, String> properties = new LinkedHashMap<>();
         boolean bugreportNeeded = false;
         for (ISystemStatusChecker checker : checkers) {
             // Check if the status checker should be skipped.
@@ -1006,6 +1026,7 @@ public abstract class ITestSuite
                         new DeviceNotAvailableException(message, dnae, dnae.getSerial());
                 throw wrapper;
             }
+            properties.putAll(result.getModuleProperties());
             if (!CheckStatus.SUCCESS.equals(result.getStatus())) {
                 String errorMessage =
                         (result.getErrorMessage() == null) ? "" : result.getErrorMessage();
@@ -1024,6 +1045,7 @@ public abstract class ITestSuite
 
         // We report System checkers like tests.
         reportModuleCheckerResult(MODULE_CHECKER_POST, moduleName, failures, startTime, listener);
+        return properties;
     }
 
     /** Helper to report status checker results as test results. */
