@@ -17,6 +17,7 @@ package com.android.tradefed.presubmit;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.ConfigurationUtil;
@@ -29,7 +30,9 @@ import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.IsolatedHostTest;
+import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.testtype.suite.ValidateSuiteConfigHelper;
+import com.android.tradefed.testtype.suite.params.ModuleParameters;
 
 import com.google.common.base.Joiner;
 
@@ -123,6 +126,9 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                 // Check that all the tests runners are well supported.
                 checkRunners(c.getTests(), "general-tests");
 
+                ConfigurationDescriptor cd = c.getConfigurationDescription();
+                checkModuleParameters(c.getName(), cd.getMetaData(ITestSuite.PARAMETER_KEY));
+
                 // Add more checks if necessary
             } catch (ConfigurationException e) {
                 errors.add(String.format("\t%s: %s", configName, e.getMessage()));
@@ -166,6 +172,23 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                         String.format(
                                 "Robolectric tests aren't supported in general-tests yet. They"
                                         + " have their own setup."));
+            }
+        }
+    }
+
+    public static void checkModuleParameters(String configName, List<String> parameters)
+            throws ConfigurationException {
+        if (parameters == null) {
+            return;
+        }
+        for (String param : parameters) {
+            try {
+                ModuleParameters.valueOf(param.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new ConfigurationException(
+                        String.format(
+                                "Config: %s includes an unknown parameter '%s'.",
+                                configName, param));
             }
         }
     }
