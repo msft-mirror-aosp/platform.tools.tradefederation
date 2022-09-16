@@ -15,6 +15,9 @@
  */
 package com.android.tradefed.suite.checker;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /** Contains the result of a {@link ISystemStatusChecker} execution. */
 public class StatusCheckerResult {
 
@@ -25,9 +28,11 @@ public class StatusCheckerResult {
         FAILED,
     }
 
+    public static final String SYSTEM_CHECKER = "system_checker";
     private CheckStatus mCheckStatus = CheckStatus.FAILED;
     private String mErrorMessage = null;
     private boolean mBugreportNeeded = false;
+    private Map<String, String> mModuleProperties = new LinkedHashMap<>();
 
     /** Create a {@link StatusCheckerResult} with the default {@link CheckStatus#FAILED} status. */
     public StatusCheckerResult() {}
@@ -71,5 +76,15 @@ public class StatusCheckerResult {
     /** Sets whether or not a bugreport is needed in case of checker failure. */
     public void setBugreportNeeded(boolean need) {
         mBugreportNeeded = need;
+    }
+
+    /** Adds a module property reported by the checker. */
+    public void addModuleProperty(String propertyName, String property) {
+        mModuleProperties.put(SYSTEM_CHECKER + '_' + propertyName, property);
+    }
+
+    /** Returns the module properties reported by the checker. */
+    public Map<String, String> getModuleProperties() {
+        return mModuleProperties;
     }
 }
