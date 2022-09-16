@@ -323,7 +323,9 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
         mMainGranularRunListener.setAttemptIsolation(CurrentInvocation.runCurrentIsolation());
         StartEndCollector startEndCollector = new StartEndCollector(runListener);
         runListener = startEndCollector;
-        try (CloseableTraceScope ignored = new CloseableTraceScope("attempt " + attempt)) {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(
+                        "attempt " + attempt + " " + mTest.getClass().getCanonicalName())) {
             List<IMetricCollector> clonedCollectors = cloneCollectors(mRunMetricCollectors);
             if (mTest instanceof IMetricCollectorReceiver) {
                 ((IMetricCollectorReceiver) mTest).setMetricCollectors(clonedCollectors);
