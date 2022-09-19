@@ -22,6 +22,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.suite.checker.StatusCheckerResult.CheckStatus;
 import com.android.tradefed.suite.checker.baseline.DeviceBaselineSetter;
 import com.android.tradefed.testtype.suite.ITestSuite;
+import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -47,10 +48,12 @@ import java.util.concurrent.Future;
 /** Set device baseline settings before each module. */
 public class DeviceBaselineChecker implements ISystemStatusChecker {
 
-    private static final String DEVICE_BASELINE_CONFIG_FILE = "/config/checker/baseline_config.json";
+    private static final String DEVICE_BASELINE_CONFIG_FILE =
+            "/config/checker/baseline_config.json";
     // Thread pool size to set device baselines.
     private static final int N_THREAD = 8;
     private static final String SET_SUCCESS_MESSAGE = "SUCCESS";
+    private static final String SET_FAIL_MESSAGE = "FAIL";
     private List<DeviceBaselineSetter> mDeviceBaselineSetters;
 
     @Option(
@@ -68,6 +71,10 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
 
     public static String getSetSuccessMessage() {
         return SET_SUCCESS_MESSAGE;
+    }
+
+    public static String getSetFailMessage() {
+        return SET_FAIL_MESSAGE;
     }
 
     @VisibleForTesting
@@ -120,6 +127,7 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
         StringBuilder errorMessage = new StringBuilder();
         ExecutorService pool = Executors.newFixedThreadPool(N_THREAD);
         List<SetterHelper> setterHelperList = new ArrayList<>();
+        List<String> enabledDeviceBaselines = new ArrayList<>();
         for (DeviceBaselineSetter setter : mDeviceBaselineSetters) {
             // Check if the device baseline setting should be skipped.
             if (setter.isExperimental()
@@ -130,20 +138,24 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
         }
         try {
             // Set device baseline settings in parallel.
-            List<Future<String>> setterResultList = pool.invokeAll(setterHelperList);
-            for (Future<String> setterResult : setterResultList) {
-                if (!SET_SUCCESS_MESSAGE.equals(setterResult.get())) {
+            List<Future<Pair<String, String>>> setterResultList = pool.invokeAll(setterHelperList);
+            for (Future<Pair<String, String>> setterResult : setterResultList) {
+                Pair<String, String> pairResult = setterResult.get();
+                if (SET_FAIL_MESSAGE.equals(pairResult.second)) {
                     result.setStatus(CheckStatus.FAILED);
-                    errorMessage.append(setterResult.get());
+                    errorMessage.append(
+                            String.format("Failed to set baseline %s. ", pairResult.first));
+                } else {
+                    enabledDeviceBaselines.add(pairResult.first);
                 }
             }
         } catch (ExecutionException e) {
             result.setStatus(CheckStatus.FAILED);
-            errorMessage.append(e.getMessage());
+            errorMessage.append(StreamUtil.getStackTrace(e));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             result.setStatus(CheckStatus.FAILED);
-            errorMessage.append(e.getMessage());
+            errorMessage.append(StreamUtil.getStackTrace(e));
         } finally {
             pool.shutdown();
         }
@@ -151,11 +163,13 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
             result.setErrorMessage(errorMessage.toString());
             result.setBugreportNeeded(true);
         }
+        result.addModuleProperty(
+                "enabled_device_baseline", String.join(",", enabledDeviceBaselines));
         return result;
     }
 }
 
-class SetterHelper implements Callable<String> {
+class SetterHelper implements Callable<Pair<String, String>> {
 
     private final DeviceBaselineSetter mSetter;
     private final ITestDevice mDevice;
@@ -166,11 +180,11 @@ class SetterHelper implements Callable<String> {
     }
 
     @Override
-    public String call() throws Exception {
+    public Pair<String, String> call() throws Exception {
         // Set device baseline settings.
         if (!mSetter.setBaseline(mDevice)) {
-            return String.format("Failed to set baseline %s. ", mSetter.getName());
+            return new Pair<>(mSetter.getName(), DeviceBaselineChecker.getSetFailMessage());
         }
-        return DeviceBaselineChecker.getSetSuccessMessage();
+        return new Pair<>(mSetter.getName(), DeviceBaselineChecker.getSetSuccessMessage());
     }
 }

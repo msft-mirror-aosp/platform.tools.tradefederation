@@ -64,7 +64,9 @@ public class GlobalFilterGetter implements IRemoteFeature, IConfigurationReceive
                             .setKey(GlobalTestFilter.STRICT_INCLUDE_FILTER_OPTION)
                             .setValue(
                                     Joiner.on(",")
-                                            .join(mConfig.getGlobalFilters().getExcludeFilters())));
+                                            .join(
+                                                    mConfig.getGlobalFilters()
+                                                            .getStrictIncludeFilters())));
             responseBuilder.setMultiPartResponse(multiPartBuilder);
         }
         return responseBuilder.build();
