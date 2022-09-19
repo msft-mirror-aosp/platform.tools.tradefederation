@@ -60,7 +60,7 @@ import java.util.Set;
  */
 public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
-    private static final String TAG = "PtsBotTest";
+    private static final String TAG = "PandoraPtsBot";
     private static final int PANDORA_SERVER_PORT = 8999;
     private static final int HCI_PROXY_PORT = 1234;
 
