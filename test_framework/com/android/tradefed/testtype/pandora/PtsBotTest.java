@@ -82,6 +82,9 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
     private static final int HCI_ROOTCANAL_PORT_CF = 7300;
     private static final int CONTROL_ROOTCANAL_PORT_CF = 7500;
 
+    private static final String A2DP_SNK_PROPERTY = "bluetooth.profile.a2dp.sink.enabled";
+    private static final String A2DP_SRC_PROPERTY = "bluetooth.profile.a2dp.source.enabled";
+
     private IRunUtil mRunUtil = new RunUtil();
 
     @Option(name = "pts-bot-path", description = "pts-bot binary path.")
@@ -308,10 +311,21 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         throw new RuntimeException(String.format("Cannot list tests for %s", profile));
     }
 
+    private void enableProfileIfNeeded(ITestDevice testDevice, String profile) {
+        CLog.i("enableProfileIfNeeded: " + profile);
+        if (profile.startsWith("A2DP/SNK")) {
+            setProperty(testDevice, A2DP_SNK_PROPERTY, true);
+            setProperty(testDevice, A2DP_SRC_PROPERTY, false);
+        } else if (!getProperty(testDevice, A2DP_SRC_PROPERTY).equals("true")) {
+            setProperty(testDevice, A2DP_SNK_PROPERTY, false);
+            setProperty(testDevice, A2DP_SRC_PROPERTY, true);
+        }
+    }
+
     private void runPtsBotTestsForProfile(
             String profile, TestInformation testInfo, ITestInvocationListener listener) {
         String[] tests = listPtsBotTestsForProfile(profile, testInfo);
-
+        enableProfileIfNeeded(testInfo.getDevice(), profile);
         CLog.i("Available tests for %s: [%s]", profile, String.join(", ", tests));
 
         List<String> filteredTests = new ArrayList();
@@ -369,6 +383,35 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         } catch (DeviceNotAvailableException e) {
             CLog.w("Failed to send android log, device not available: " + e);
         }
+    }
+
+    private void setProperty(ITestDevice testDevice, String property, boolean enable) {
+        CLog.i("setProperty: " + property);
+        try {
+            String cmd = String.format("setprop %s %s", property, enable);
+            CommandResult result = testDevice.executeShellV2Command(cmd);
+            if (result.getExitCode() != 0) {
+                CLog.e("Failed to set property: " + property + ": " + result.getStderr());
+            }
+        } catch (DeviceNotAvailableException e) {
+            CLog.e("setProperty error: " + e);
+        }
+    }
+
+    private String getProperty(ITestDevice testDevice, String property) {
+        CLog.i("getProperty: " + property);
+        try {
+            String cmd = String.format("getprop %s", property);
+            CommandResult result = testDevice.executeShellV2Command(cmd);
+            if (result.getExitCode() != 0) {
+                CLog.e("Failed to get property: " + property + ": " + result.getStderr());
+            } else {
+                return result.getStdout();
+            }
+        } catch (DeviceNotAvailableException e) {
+            CLog.e("getProperty error: " + e);
+        }
+        return "";
     }
 
     private boolean runPtsBotTest(
