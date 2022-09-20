@@ -119,7 +119,37 @@ public class TestDiscoveryExecutorTest {
         }
     }
 
-    /** Test the executor when there is no tests from the config. */
+    /** Test the executor to discover parameterized test modules. */
+    @Test
+    public void testDiscoverTestDependencies_parameterizedModules() throws Exception {
+        // Mock to return some include filters
+        BaseTestSuite test1 = new BaseTestSuite();
+        Set<String> includeFilters1 = new HashSet<>();
+        includeFilters1.add("TestModule1[Instant]");
+        includeFilters1.add("TestModule2");
+        test1.setIncludeFilter(includeFilters1);
+
+        List<IRemoteTest> testList = new ArrayList<>();
+        testList.add(test1);
+        when(mMockedConfiguration.getTests()).thenReturn(testList);
+        List<Object> preparers = new ArrayList<>();
+        preparers.add(new DiscoverablePreparer());
+        when(mMockedConfiguration.getAllConfigurationObjectsOfType(
+                        Configuration.TARGET_PREPARER_TYPE_NAME))
+                .thenReturn(preparers);
+
+        try {
+            String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
+            String expected =
+                    "{\"TestModules\":[\"TestModule1\",\"TestModule2\"],"
+                            + "\"TestDependencies\":[\"someapk.apk\"]}";
+            assertEquals(expected, output);
+        } catch (Exception e) {
+            fail(String.format("Should not throw exception %s", e.getMessage()));
+        }
+    }
+
+    /** Test the executor to handle where there is no tests from the config. */
     @Test
     public void testDiscoverDependencies_NoTestModules() throws Exception {
         // Mock to return no include filters
