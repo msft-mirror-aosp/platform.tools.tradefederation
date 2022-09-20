@@ -54,6 +54,7 @@ import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NoDeviceException;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceState;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.IRescheduler;
@@ -1902,11 +1903,12 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     private synchronized void throwIfDeviceInInvocationThread(List<ITestDevice> devices) {
         for (ITestDevice device : devices) {
             if (isDeviceInInvocationThread(device)) {
-                throw new IllegalStateException(
+                throw new HarnessRuntimeException(
                         String.format(
                                 "Attempting invocation on device %s when one is already "
                                         + "running",
-                                device.getSerialNumber()));
+                                device.getSerialNumber()),
+                        InfraErrorIdentifier.SCHEDULING_ERROR);
             }
         }
     }
