@@ -5112,35 +5112,65 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
     }
 
-    /** {@inheritDoc} */
     @Override
     public DeviceDescriptor getCachedDeviceDescriptor() {
+        return getCachedDeviceDescriptor(false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public DeviceDescriptor getCachedDeviceDescriptor(boolean shortDescriptor) {
         synchronized (mCacheLock) {
             if (DeviceAllocationState.Allocated.equals(getAllocationState())) {
                 if (mCachedDeviceDescriptor == null) {
                     // Create the cache the very first time when it's allocated.
-                    mCachedDeviceDescriptor = getDeviceDescriptor();
+                    mCachedDeviceDescriptor = getDeviceDescriptor(false);
                     return mCachedDeviceDescriptor;
                 }
                 return mCachedDeviceDescriptor;
             }
             // If device is not allocated, just return current information
             mCachedDeviceDescriptor = null;
-            return getDeviceDescriptor();
+            return getDeviceDescriptor(shortDescriptor);
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public DeviceDescriptor getDeviceDescriptor() {
+        return getDeviceDescriptor(false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public DeviceDescriptor getDeviceDescriptor(boolean shortDescriptor) {
         IDeviceSelection selector = new DeviceSelectionOptions();
         IDevice idevice = getIDevice();
         try {
             boolean isTemporary = false;
             if (idevice instanceof NullDevice) {
                 isTemporary = ((NullDevice) idevice).isTemporary();
+            }
+            if (shortDescriptor) {
+                // Return only info that do not require device inspection
+                return new DeviceDescriptor(
+                        idevice.getSerialNumber(),
+                        null,
+                        idevice instanceof StubDevice,
+                        idevice.getState(),
+                        getAllocationState(),
+                        getDeviceState(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        getDeviceClass(),
+                        null,
+                        null,
+                        null,
+                        isTemporary,
+                        idevice);
             }
             // All the operations to create the descriptor need to be safe (should not trigger any
             // device side effects like recovery)

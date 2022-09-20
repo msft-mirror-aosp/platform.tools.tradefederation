@@ -344,6 +344,12 @@ public class MockDeviceManager implements IDeviceManager {
 
     /** {@inheritDoc} */
     @Override
+    public List<DeviceDescriptor> listAllDevices(boolean shortDescriptor) {
+        return new ArrayList<DeviceDescriptor>();
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public DeviceDescriptor getDeviceDescriptor(String serial) {
         return new DeviceDescriptor(
                 serial,
