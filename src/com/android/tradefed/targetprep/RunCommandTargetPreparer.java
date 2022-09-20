@@ -61,6 +61,12 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
             isTimeVal = true)
     private long mRunCmdTimeout = 0;
 
+    @Option(
+            name = "teardown-command-timeout",
+            description = "Timeout for execute shell teardown command",
+            isTimeVal = true)
+    private long mTeardownCmdTimeout = 0;
+
     @Option(name = "throw-if-cmd-fail", description = "Whether or not to throw if a command fails")
     private boolean mThrowIfFailed = false;
 
@@ -128,7 +134,15 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
         }
         for (String cmd : mTeardownCommands) {
             try {
-                CommandResult result = getDevice(testInfo).executeShellV2Command(cmd);
+                CommandResult result;
+                if (mTeardownCmdTimeout > 0) {
+                    result =
+                            getDevice(testInfo)
+                                    .executeShellV2Command(
+                                            cmd, mTeardownCmdTimeout, TimeUnit.MILLISECONDS, 0);
+                } else {
+                    result = getDevice(testInfo).executeShellV2Command(cmd);
+                }
                 if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
                     CLog.d(
                             "tearDown cmd: '%s' failed, returned:\nstdout:%s\nstderr:%s",
