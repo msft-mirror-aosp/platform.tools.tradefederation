@@ -1309,6 +1309,10 @@ public abstract class ITestSuite
         }
     }
 
+    public MultiMap<String, String> getModuleMetadataIncludeFilters() {
+        return mModuleMetadataIncludeFilter;
+    }
+
     public void addModuleMetadataIncludeFilters(MultiMap<String, String> filters) {
         mModuleMetadataIncludeFilter.putAll(filters);
     }
