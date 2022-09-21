@@ -18,6 +18,7 @@ package com.android.tradefed.device.cloud;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -156,7 +157,7 @@ public class RemoteAndroidVirtualDeviceTest {
     public void testExceptionFromParser() {
         final String expectedException =
                 "acloud errors: Could not get a valid instance name, check the gce driver's "
-                        + "output.The instance may not have booted up at all. [ : ]";
+                        + "output.The instance may not have booted up at all.\nGCE driver stderr: ";
         mTestDevice =
                 new TestableRemoteAndroidVirtualDevice() {
                     @Override
@@ -198,7 +199,7 @@ public class RemoteAndroidVirtualDeviceTest {
             mTestDevice.launchGce(mMockBuildInfo, null);
             fail("A TargetSetupError should have been thrown");
         } catch (TargetSetupError expected) {
-            assertEquals(expectedException, expected.getMessage());
+            assertTrue(expected.getMessage().startsWith(expectedException));
         }
     }
 
