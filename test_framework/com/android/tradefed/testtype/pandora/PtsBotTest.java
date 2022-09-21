@@ -524,7 +524,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         }
         try {
             Runtime.getRuntime().removeShutdownHook(hook);
-            hook.run();
+            hook.start();
         } catch (IllegalStateException e) {
             // If we are already in the process of shutting down do nothing
         }

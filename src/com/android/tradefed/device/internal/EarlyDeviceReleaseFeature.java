@@ -73,7 +73,7 @@ public class EarlyDeviceReleaseFeature
                     mTestInformation.getContext().getDevice(entry.getKey()),
                     FreeDeviceState.valueOf(entry.getValue()));
         }
-
+        mTestInformation.getContext().markReleasedEarly();
         for (IScheduledInvocationListener listener : mScheduledInvocationListeners) {
             listener.releaseDevices(mTestInformation.getContext(), deviceStates);
         }
