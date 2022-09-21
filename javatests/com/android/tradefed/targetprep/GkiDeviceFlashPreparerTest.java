@@ -198,6 +198,7 @@ public class GkiDeviceFlashPreparerTest {
         CommandResult cmdResult = new CommandResult();
         cmdResult.setStatus(CommandStatus.FAILED);
         cmdResult.setStdout("output");
+        cmdResult.setStderr("error");
         when(mMockRunUtil.runTimedCmd(
                         anyLong(),
                         matches(".*mkbootimg.*"),
@@ -221,6 +222,48 @@ public class GkiDeviceFlashPreparerTest {
         } catch (TargetSetupError e) {
             // expected
         }
+    }
+
+    /* Test add hash footer to GKI boot.img*/
+    @Test
+    public void testAddHashFooter() throws Exception {
+        File bootImg = FileUtil.createTempFile("boot", ".img", mTmpDir);
+        bootImg.renameTo(new File(mTmpDir, "boot.img"));
+        FileUtil.writeToFile("ddd", bootImg);
+        mBuildInfo.setFile("gki_boot.img", bootImg, "0");
+
+        File otaDir = FileUtil.createTempDir("otatool_folder", mTmpDir);
+        File avbtoolFile = new File(otaDir, "avbtool");
+        FileUtil.writeToFile("ddd", avbtoolFile);
+        File otatoolsZip = FileUtil.createTempFile("otatools", ".zip", mTmpDir);
+        ZipUtil.createZip(List.of(avbtoolFile), otatoolsZip);
+        mBuildInfo.setFile("otatools.zip", otatoolsZip, "0");
+
+        when(mMockDevice.getProperty("ro.build.version.release")).thenReturn("13");
+        when(mMockDevice.getProperty("ro.build.version.security_patch")).thenReturn("2022-08-05");
+        CommandResult res = new CommandResult();
+        res.setStatus(CommandStatus.SUCCESS);
+        res.setStdout("53477376\n");
+        when(mMockRunUtil.runTimedCmd(anyLong(), eq("du"), eq("-b"), eq(bootImg.getAbsolutePath())))
+                .thenReturn(res);
+        when(mMockRunUtil.runTimedCmd(
+                        anyLong(),
+                        matches(".*avbtool"),
+                        eq("add_hash_footer"),
+                        eq("--image"),
+                        eq(bootImg.getAbsolutePath()),
+                        eq("--partition_size"),
+                        eq("53477376"),
+                        eq("--partition_name"),
+                        eq("boot"),
+                        eq("--prop"),
+                        eq("com.android.build.boot.os_version:13"),
+                        eq("--prop"),
+                        eq("com.android.build.boot.security_patch:2022-08-05")))
+                .thenReturn(mSuccessResult);
+
+        mPreparer.validateGkiBootImg(mMockDevice, mBuildInfo, mTmpDir);
+        mPreparer.addHashFooter(mMockDevice, mBuildInfo, mTmpDir);
     }
 
     /* Verifies that setUp will throw TargetSetupError if there is no gki boot.img */
