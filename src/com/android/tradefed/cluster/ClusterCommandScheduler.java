@@ -729,7 +729,7 @@ public class ClusterCommandScheduler extends CommandScheduler {
                 }
                 eventUploader.postEvent(eventBuilder.build());
                 eventUploader.flush();
-            } catch (ConfigurationException | IOException | JSONException e) {
+            } catch (ConfigurationException | IOException | RuntimeException e) {
                 CLog.w("failed to execute cluster command [%s]: %s", commandTask.getTaskId(), e);
                 CLog.w(e);
                 IClusterEventUploader<ClusterCommandEvent> eventUploader =
@@ -787,7 +787,7 @@ public class ClusterCommandScheduler extends CommandScheduler {
     }
 
     void execManagedClusterCommand(ClusterCommand commandTask, InvocationEventHandler handler)
-            throws IOException, JSONException, ConfigurationException, NoDeviceException {
+            throws IOException, ConfigurationException, NoDeviceException {
         File workDir = null;
         try {
             workDir = new File(System.getProperty("java.io.tmpdir"), commandTask.getAttemptId());
@@ -815,6 +815,8 @@ public class ClusterCommandScheduler extends CommandScheduler {
             execCommand(handler, new String[] {configFile.getAbsolutePath()});
             // Unset workDir to avoid being cleaned up
             workDir = null;
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
         } finally {
             if (workDir != null) {
                 FileUtil.recursiveDelete(workDir);
