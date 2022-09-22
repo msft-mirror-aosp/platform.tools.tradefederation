@@ -588,14 +588,14 @@ public class ProtoResultParser {
                             logger.testLog(mFilePrefix + entry.getKey(), type, source);
                         }
                     }
-                    if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
+                    if (entry.getKey().startsWith(ActiveTrace.TRACE_KEY)
                             && LogDataType.PERFETTO.equals(type)) {
                         CLog.d("Log the subprocess trace");
                         TracingLogger.getActiveTrace().addSubprocessTrace(path);
                         FileUtil.deleteFile(path);
                     }
                 } else {
-                    if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
+                    if (entry.getKey().startsWith(ActiveTrace.TRACE_KEY)
                             && LogDataType.PERFETTO.equals(file.getType())
                             && path.exists()) {
                         CLog.d("Log the subprocess trace");
