@@ -349,7 +349,9 @@ public class GceManager {
                                     + "The instance may not have booted up at all.";
                     CLog.e(errors);
                     throw new TargetSetupError(
-                            String.format("acloud errors: %s", errors),
+                            String.format(
+                                    "acloud errors: %s\nGCE driver stderr: %s",
+                                    errors, cmd.getStderr()),
                             mDeviceDescriptor,
                             InfraErrorIdentifier.NO_ACLOUD_REPORT);
                 }
