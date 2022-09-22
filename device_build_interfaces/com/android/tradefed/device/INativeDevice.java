@@ -1519,10 +1519,26 @@ public interface INativeDevice {
     public DeviceDescriptor getDeviceDescriptor();
 
     /**
+     * Return a {@link DeviceDescriptor} from the device information to get info on it without
+     * passing the actual device object.
+     *
+     * @param shortDescriptor Whether or not to limit descriptor to bare minimum info
+     */
+    public DeviceDescriptor getDeviceDescriptor(boolean shortDescriptor);
+
+    /**
      * Returns a cached {@link DeviceDescriptor} if the device is allocated, otherwise returns the
      * current {@link DeviceDescriptor}.
      */
     public DeviceDescriptor getCachedDeviceDescriptor();
+
+    /**
+     * Returns a cached {@link DeviceDescriptor} if the device is allocated, otherwise returns the
+     * current {@link DeviceDescriptor}.
+     *
+     * @param shortDescriptor Whether or not to limit descriptor to bare minimum info
+     */
+    public DeviceDescriptor getCachedDeviceDescriptor(boolean shortDescriptor);
 
     /**
      * Helper method runs the "pidof" and "stat" command and returns {@link ProcessInfo} object with

@@ -1177,9 +1177,9 @@ public class DeviceManagerTest {
                         false,
                         null);
         if (cached) {
-            when(mMockTestDevice.getCachedDeviceDescriptor()).thenReturn(descriptor);
+            when(mMockTestDevice.getCachedDeviceDescriptor(false)).thenReturn(descriptor);
         } else {
-            when(mMockTestDevice.getDeviceDescriptor()).thenReturn(descriptor);
+            when(mMockTestDevice.getDeviceDescriptor(false)).thenReturn(descriptor);
         }
     }
 
