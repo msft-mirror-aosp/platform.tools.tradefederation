@@ -24,6 +24,7 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
+import com.android.tradefed.util.MultiMap;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -83,6 +84,8 @@ public class TestDiscoveryExecutor {
     public String discoverDependencies(String[] args) throws Exception {
         // Create IConfiguration base on command line args.
         IConfiguration config = getConfiguration(args);
+
+        // Get tests from the configuration.
         List<IRemoteTest> tests = config.getTests();
 
         // Tests could be empty if input args are corrupted.
@@ -125,12 +128,21 @@ public class TestDiscoveryExecutor {
      * @return A set of test module names.
      */
     private Set<String> discoverTestModulesFromTests(List<IRemoteTest> testList)
-            throws IllegalStateException {
+            throws IllegalStateException, TestDiscoveryException {
         Set<String> includeFilters = new HashSet<>();
         // Collect include filters from every test.
         for (IRemoteTest test : testList) {
             if (test instanceof BaseTestSuite) {
-                includeFilters.addAll(((BaseTestSuite) test).getIncludeFilter());
+                MultiMap<String, String> moduleMetadataIncludeFilters =
+                        ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
+                if (moduleMetadataIncludeFilters == null
+                        || moduleMetadataIncludeFilters.isEmpty()) {
+                    includeFilters.addAll(((BaseTestSuite) test).getIncludeFilter());
+                } else {
+                    throw new TestDiscoveryException(
+                            "Tradefed Observatory can't do test discovery because the existence of"
+                                    + " metadata include filter option.");
+                }
             }
         }
         // Extract test module names from included filters.
