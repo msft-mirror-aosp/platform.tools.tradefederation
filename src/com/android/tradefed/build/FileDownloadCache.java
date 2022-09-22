@@ -365,6 +365,8 @@ public class FileDownloadCache {
                     }
                     downloadFile(downloader, remotePath, cachedFile);
                 } else {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.CACHE_HIT_COUNT, 1);
                     CLog.d(
                             "Retrieved remote file %s from cached file %s",
                             remotePath, cachedFile.getAbsolutePath());
