@@ -32,6 +32,7 @@ import com.android.tradefed.build.IDeviceBuildProvider;
 import com.android.tradefed.build.LocalDeviceBuildProvider;
 import com.android.tradefed.config.ConfigurationDef.ConfigObjectDef;
 import com.android.tradefed.config.ConfigurationFactory.ConfigId;
+import com.android.tradefed.config.remote.IRemoteFileResolver.ResolvedFile;
 import com.android.tradefed.log.ILeveledLogOutput;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.DeviceWiper;
@@ -1953,13 +1954,14 @@ public class ConfigurationFactoryTest {
         InputStream configStream =
                 getClass().getResourceAsStream(String.format("/testconfigs/%s.xml", TEST_CONFIG));
         File tmpFile = FileUtil.createTempFile(TEST_CONFIG, ".xml");
+        ResolvedFile resolvedFile = new ResolvedFile(tmpFile);
         String cfgPath = "gs://tradefed_test_resources/configs/test-config.xml";
         try {
             FileUtil.writeToFile(configStream, tmpFile);
 
             // Inject it into the direct config resolver, then try to load a direct config
             URI cfgUri = new URI(cfgPath);
-            Mockito.doReturn(tmpFile)
+            Mockito.doReturn(resolvedFile)
                     .when(spyFactory)
                     .resolveRemoteFile(Mockito.eq(cfgUri), Mockito.<URI>any());
 
