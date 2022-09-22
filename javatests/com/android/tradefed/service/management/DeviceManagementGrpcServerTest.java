@@ -85,7 +85,7 @@ public class DeviceManagementGrpcServerTest {
         descriptors.add(createDescriptor("serial2", DeviceAllocationState.Allocated));
         descriptors.add(createDescriptor("serial3", DeviceAllocationState.Unavailable));
         descriptors.add(createDescriptor("serial4", DeviceAllocationState.Unknown));
-        when(mMockDeviceManager.listAllDevices()).thenReturn(descriptors);
+        when(mMockDeviceManager.listAllDevices(true)).thenReturn(descriptors);
 
         GetDevicesStatusRequest.Builder requestBuilder = GetDevicesStatusRequest.newBuilder();
         mServer.getDevicesStatus(requestBuilder.build(), mGetDevicesStatusObserver);
