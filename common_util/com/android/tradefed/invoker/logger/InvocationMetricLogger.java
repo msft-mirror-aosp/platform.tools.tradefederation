@@ -225,6 +225,9 @@ public class InvocationMetricLogger {
         // Records the wait time caused by CAS downloader concurrency limitation.
         CAS_DOWNLOAD_WAIT_TIME("cas_download_wait_time_ms", true),
 
+        // Download Cache
+        CACHE_HIT_COUNT("cache_hit_count", true),
+
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
         dynamic_download("dynamic_download", true),
