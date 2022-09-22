@@ -725,8 +725,14 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         try {
             if (getHostOptions().shouldFlashWithFuseZip()
                 && getFuseUtil().canMountZip()) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FLASHING_METHOD,
+                        FlashingMethod.FASTBOOT_FLASH_ALL_FUSE_ZIP.toString());
                 flashWithFuseZip(device, deviceBuild);
             } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FLASHING_METHOD,
+                        FlashingMethod.FASTBOOT_UPDATE.toString());
                 flashWithUpdateCommand(device, deviceBuild);
             }
             flashRamdiskIfNeeded(device, deviceBuild);
