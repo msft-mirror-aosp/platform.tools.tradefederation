@@ -120,6 +120,11 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             importance = Importance.ALWAYS)
     private boolean physical = false;
 
+    @Option(
+            name = "inconclusive-max-retries",
+            description = "Maximum number of retries for inconclusive tests.")
+    private int inconclusiveMaxRetries = 0;
+
     private final Set<String> includeFilters = new LinkedHashSet<>();
     private final Set<String> excludeFilters = new LinkedHashSet<>();
 
@@ -397,6 +402,10 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         androidLog(testDevice, "i", content);
     }
 
+    private void androidLogWarning(ITestDevice testDevice, String content) {
+        androidLog(testDevice, "w", content);
+    }
+
     private void androidLogError(ITestDevice testDevice, String content) {
         androidLog(testDevice, "e", content);
     }
@@ -436,59 +445,74 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             TestInformation testInfo,
             ITestInvocationListener listener) {
         TestDescription testDescription = new TestDescription(profile, testName);
-        boolean success = false;
-        boolean inconclusive = false;
 
         listener.testStarted(testDescription);
         CLog.i(testName);
         androidLogInfo(testInfo.getDevice(), "Test Started: " + testName);
-        try {
-            ProcessBuilder processBuilder = ptsBot(testInfo, testName);
 
-            CLog.i("Running command: %s", String.join(" ", processBuilder.command()));
-            Process process = processBuilder.start();
-            // Note: there is no need to implement a timeout here since it is
-            // handled in PTS-bot.
+        boolean success = false;
+        boolean inconclusive = false;
+        int retryCount = 0;
 
-            BufferedReader stdInput =
-                    new BufferedReader(new InputStreamReader(process.getInputStream()));
+        while (retryCount <= inconclusiveMaxRetries) {
+            try {
+                ProcessBuilder processBuilder = ptsBot(testInfo, testName);
 
-            BufferedReader stdError =
-                    new BufferedReader(new InputStreamReader(process.getErrorStream()));
+                CLog.i("Running command: %s", String.join(" ", processBuilder.command()));
+                Process process = processBuilder.start();
+                // Note: there is no need to implement a timeout here since it
+                // is handled in PTS-bot.
 
-            Optional<String> lastLine =
-                    stdInput.lines().peek(line -> CLog.i(line)).reduce((last, value) -> value);
+                BufferedReader stdInput =
+                        new BufferedReader(new InputStreamReader(process.getInputStream()));
 
-            // Last line is providing success/inconclusive information.
-            if (lastLine.isPresent()) {
-                try {
-                    success = Integer.parseInt(lastLine.get().split(", ")[1].substring(0, 1)) == 1;
-                    inconclusive =
-                            Integer.parseInt(lastLine.get().split(", ")[3].substring(0, 1)) == 1;
-                } catch (Exception e) {
-                    CLog.e("Failed to parse status");
+                BufferedReader stdError =
+                        new BufferedReader(new InputStreamReader(process.getErrorStream()));
+
+                Optional<String> lastLine =
+                        stdInput.lines().peek(line -> CLog.i(line)).reduce((last, value) -> value);
+
+                // Last line is providing success/inconclusive information.
+                if (lastLine.isPresent()) {
+                    try {
+                        success =
+                                Integer.parseInt(lastLine.get().split(", ")[1].substring(0, 1))
+                                        == 1;
+                        inconclusive =
+                                Integer.parseInt(lastLine.get().split(", ")[3].substring(0, 1))
+                                        == 1;
+                    } catch (Exception e) {
+                        CLog.e("Failed to parse status");
+                    }
                 }
+
+                stdInput.close();
+
+                stdError.lines().forEach(line -> CLog.e(line));
+                stdError.close();
+
+            } catch (Exception e) {
+                CLog.e(e);
+                CLog.e("Cannot run pts-bot, make sure it is properly installed");
             }
 
-            stdInput.close();
-
-            stdError.lines().forEach(line -> CLog.e(line));
-            stdError.close();
-
-        } catch (Exception e) {
-            CLog.e(e);
-            CLog.e("Cannot run pts-bot, make sure it is properly installed");
+            if (inconclusive) {
+                retryCount++;
+                androidLogWarning(
+                        testInfo.getDevice(),
+                        String.format(
+                                "Test Inconclusive: %s, retrying [count=%s]",
+                                testName, retryCount));
+            } else {
+                // Do not retry on success or explicit failure.
+                break;
+            }
         }
 
         if (success) {
             androidLogInfo(testInfo.getDevice(), "Test Ended [Success]: " + testName);
         } else {
-            // Report error if test has failed or is inconclusive.
-            androidLogError(
-                    testInfo.getDevice(),
-                    String.format(
-                            "Test Ended [%s]: %s",
-                            inconclusive ? "Inconclusive" : "Failed", testName));
+            androidLogError(testInfo.getDevice(), "Test Ended [Failed]: " + testName);
             listener.testFailed(testDescription, "Unknown");
         }
 
