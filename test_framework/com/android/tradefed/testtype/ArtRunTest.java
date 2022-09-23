@@ -73,7 +73,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
 
     // Name of the Checker Python Archive (PAR) file.
     public static final String CHECKER_PAR_FILENAME = "art-run-test-checker";
-    private static final long CHECKER_TIMEOUT_MS = 30 * 1000;
+    private static final long CHECKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes.
 
     @Option(
             name = "test-timeout",
