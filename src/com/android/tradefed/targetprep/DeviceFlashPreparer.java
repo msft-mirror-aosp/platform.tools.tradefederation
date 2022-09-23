@@ -226,6 +226,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 // Don't allow interruptions during flashing operations.
                 getRunUtil().allowInterrupt(false);
                 start = System.currentTimeMillis();
+                // Set flashing method as unknown here as a fallback, in case it wasn't overwritten
+                // by subclass implementations
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FLASHING_METHOD,
+                        FlashingMethod.FASTBOOT_UNCATEGORIZED.toString());
                 flasher.flash(device, deviceBuild);
             } finally {
                 flashingTime = System.currentTimeMillis() - start;
