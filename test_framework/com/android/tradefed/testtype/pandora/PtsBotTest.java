@@ -85,6 +85,12 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
     private static final String A2DP_SNK_PROPERTY = "bluetooth.profile.a2dp.sink.enabled";
     private static final String A2DP_SRC_PROPERTY = "bluetooth.profile.a2dp.source.enabled";
 
+    // PTS inactivity timeout in seconds.
+    // Must be above 60s to avoid conflict with PTS timeout for triggering
+    // disconnections. This notably happens on Android which closes GATT but
+    // does not explicitly close the underlying BLE ACL link.
+    private static final int PTS_INACTIVITY_TIMEOUT = 90;
+
     private IRunUtil mRunUtil = new RunUtil();
 
     @Option(name = "pts-bot-path", description = "pts-bot binary path.")
@@ -204,7 +210,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         // If mmi2grpc cannot be found using full path, search in
         // dependencies.
-        // As mmi2grpc is a folder we cannot use getDependencyFile
+        // As mmi2grpc is a folder, we cannot use getDependencyFile.
         if (!mmi2grpc.exists()) {
             try {
                 File testsDir = testInfo.executionFiles().get(FilesKey.TESTS_DIRECTORY);
@@ -217,7 +223,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             }
         }
 
-        // Test resources files are not executable
+        // Test resources files are not executable.
         ptsBotPath.setExecutable(true);
 
         displayPtsBotVersion();
@@ -239,8 +245,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             boolean isCuttlefish = testDevice.getProductType().equals("cutf");
 
             if (isCuttlefish) {
-                // forward HCI + Control ("test") ports from host-side rootcanal
-                // to device
+                // forward HCI + Control ("test") ports from host-side
+                // Rootcanal to device.
                 killHciPassthrough =
                         createHostToDevicePassthrough(
                                 testDevice, HCI_ROOTCANAL_PORT_CF, HCI_ROOTCANAL_PORT);
@@ -259,7 +265,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             runPtsBotTestsForProfile(profile, testInfo, listener);
         }
 
-        // Kill passthroughs, if initialized
+        // Kill passthroughs, if initialized.
         if (killHciPassthrough != null) {
             completeShutdownHook(killHciPassthrough);
         }
@@ -368,11 +374,13 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         return false;
     }
 
-    private void androidLog(ITestDevice testDevice, String content) {
+    private void androidLog(ITestDevice testDevice, String priority, String content) {
         try {
             String timeStamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
             String command =
-                    String.format("log -t %s '%s (%s host time)'", TAG, content, timeStamp);
+                    String.format(
+                            "log -t %s -p %s '%s (%s host time)'",
+                            TAG, priority, content, timeStamp);
             CommandResult result = testDevice.executeShellV2Command(command);
             if (result.getStatus() != CommandStatus.SUCCESS) {
                 CLog.w(
@@ -383,6 +391,14 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         } catch (DeviceNotAvailableException e) {
             CLog.w("Failed to send android log, device not available: " + e);
         }
+    }
+
+    private void androidLogInfo(ITestDevice testDevice, String content) {
+        androidLog(testDevice, "i", content);
+    }
+
+    private void androidLogError(ITestDevice testDevice, String content) {
+        androidLog(testDevice, "e", content);
     }
 
     private void setProperty(ITestDevice testDevice, String property, boolean enable) {
@@ -421,16 +437,18 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             ITestInvocationListener listener) {
         TestDescription testDescription = new TestDescription(profile, testName);
         boolean success = false;
+        boolean inconclusive = false;
 
         listener.testStarted(testDescription);
         CLog.i(testName);
-        androidLog(testInfo.getDevice(), "Test Started: " + testName);
+        androidLogInfo(testInfo.getDevice(), "Test Started: " + testName);
         try {
             ProcessBuilder processBuilder = ptsBot(testInfo, testName);
 
             CLog.i("Running command: %s", String.join(" ", processBuilder.command()));
             Process process = processBuilder.start();
-            // Note: there is no need to implement a timeout here since it is handled in pts-bot.
+            // Note: there is no need to implement a timeout here since it is
+            // handled in PTS-bot.
 
             BufferedReader stdInput =
                     new BufferedReader(new InputStreamReader(process.getInputStream()));
@@ -441,12 +459,14 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             Optional<String> lastLine =
                     stdInput.lines().peek(line -> CLog.i(line)).reduce((last, value) -> value);
 
-            // Last line is providing success information.
+            // Last line is providing success/inconclusive information.
             if (lastLine.isPresent()) {
                 try {
                     success = Integer.parseInt(lastLine.get().split(", ")[1].substring(0, 1)) == 1;
+                    inconclusive =
+                            Integer.parseInt(lastLine.get().split(", ")[3].substring(0, 1)) == 1;
                 } catch (Exception e) {
-                    CLog.e("Failed to parse success");
+                    CLog.e("Failed to parse status");
                 }
             }
 
@@ -460,12 +480,19 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             CLog.e("Cannot run pts-bot, make sure it is properly installed");
         }
 
-        if (!success) {
+        if (success) {
+            androidLogInfo(testInfo.getDevice(), "Test Ended [Success]: " + testName);
+        } else {
+            // Report error if test has failed or is inconclusive.
+            androidLogError(
+                    testInfo.getDevice(),
+                    String.format(
+                            "Test Ended [%s]: %s",
+                            inconclusive ? "Inconclusive" : "Failed", testName));
             listener.testFailed(testDescription, "Unknown");
         }
 
         listener.testEnded(testDescription, Collections.emptyMap());
-        androidLog(testInfo.getDevice(), "Test Ended: " + testName);
 
         return success;
     }
@@ -474,10 +501,12 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         List<String> command = new ArrayList<>();
 
         command.add(ptsBotPath.getPath());
-        command.add("-c");
+        command.add("--config");
         command.add(testsConfigFile.getPath());
         command.add("--hci");
         command.add(String.valueOf(getHciPort()));
+        command.add("--inactivity-timeout");
+        command.add(String.valueOf(PTS_INACTIVITY_TIMEOUT));
 
         if (ptsSetupPath != null) {
             command.add("--pts-setup");
@@ -527,7 +556,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         CLog.i("Port passthrough pid: %s for RootCanal port: %s", pid, hostPort);
 
-        // Wait a bit and see if pid is still there
+        // Wait a bit and see if pid is still there.
         try {
             Thread.sleep(100);
         } catch (InterruptedException e) {
@@ -540,7 +569,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
         }
 
         // Since our test may be interrupted, we want to do our best to avoid
-        // polluting the test device, as it persists across tests
+        // polluting the test device, as it persists across tests.
         Thread hook =
                 new Thread(
                         () -> {
