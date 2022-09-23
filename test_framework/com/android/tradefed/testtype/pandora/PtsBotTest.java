@@ -324,7 +324,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
     private void enableProfileIfNeeded(ITestDevice testDevice, String profile) {
         CLog.i("enableProfileIfNeeded: " + profile);
-        if (profile.startsWith("A2DP/SNK")) {
+        if (profile.startsWith("A2DP/SNK") || profile.startsWith("AVDTP/SNK")) {
             setProperty(testDevice, A2DP_SNK_PROPERTY, true);
             setProperty(testDevice, A2DP_SRC_PROPERTY, false);
         } else if (!getProperty(testDevice, A2DP_SRC_PROPERTY).equals("true")) {
