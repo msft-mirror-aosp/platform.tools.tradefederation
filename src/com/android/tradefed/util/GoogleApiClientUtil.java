@@ -270,6 +270,26 @@ public class GoogleApiClientUtil {
      * @param initializer - an initializer which will setup a retry strategy.
      * @return an initializer that will retry failed requests automatically.
      */
+    public static HttpRequestInitializer configureRetryStrategyAndTimeout(
+            HttpRequestInitializer initializer, int connectTimeout, int readTimeout) {
+        return new HttpRequestInitializer() {
+            @Override
+            public void initialize(HttpRequest request) throws IOException {
+                initializer.initialize(request);
+                request.setConnectTimeout(connectTimeout);
+                request.setReadTimeout(readTimeout);
+                request.setUnsuccessfulResponseHandler(new RetryResponseHandler());
+            }
+        };
+    }
+
+    /**
+     * Setup a retry strategy for the provided HttpRequestInitializer. In case of server errors
+     * requests will be automatically retried with an exponential backoff.
+     *
+     * @param initializer - an initializer which will setup a retry strategy.
+     * @return an initializer that will retry failed requests automatically.
+     */
     public static HttpRequestInitializer configureRetryStrategy(
             HttpRequestInitializer initializer) {
         return new HttpRequestInitializer() {
@@ -277,6 +297,9 @@ public class GoogleApiClientUtil {
             public void initialize(HttpRequest request) throws IOException {
                 initializer.initialize(request);
                 request.setUnsuccessfulResponseHandler(new RetryResponseHandler());
+                CLog.d(
+                        "Setting retry strategy. current connect timeout: %s",
+                        request.getConnectTimeout());
             }
         };
     }
