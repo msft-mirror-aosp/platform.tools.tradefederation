@@ -228,6 +228,9 @@ public class InvocationMetricLogger {
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
 
+        // Ab downloader metrics
+        AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
+
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
         dynamic_download("dynamic_download", true),
