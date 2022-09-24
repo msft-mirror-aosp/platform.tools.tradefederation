@@ -828,7 +828,7 @@ public class TestInvocation implements ITestInvocation {
                             prefix = "";
                     }
                 }
-                String configOutputName = String.format("%s-%s", prefix, TRADEFED_CONFIG_NAME);
+                String configOutputName = String.format("%s%s", prefix, TRADEFED_CONFIG_NAME);
                 listener.testLog(configOutputName, LogDataType.HARNESS_CONFIG, source);
             }
         } catch (IOException e) {
