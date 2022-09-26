@@ -53,12 +53,14 @@ public class ModulePusher {
     // Constants for adb commands.
     private static final String DISABLE_VERITY = "disable-verity";
     private static final String ENABLE_TESTHARNESS = "cmd testharness enable";
+    private static final String RM_PACKAGE_CACHE = "rm -Rf /data/system/package_cache/";
     private static final String GET_APEX_PACKAGE_VERSIONS =
             "cmd package list packages --apex-only --show-versioncode| grep 'com.google'";
     private static final String GET_APK_PACKAGE_VERSIONS =
             "cmd package list packages --show-versioncode| grep 'com.google'";
     private static final String REMOUNT_COMMAND = "remount";
     private static final String GET_GOOGLE_MODULES = "pm get-moduleinfo | grep 'com.google'";
+    private static final String LS_SYSTEM_APEX = "ls /system/apex/";
 
     private static final String PACKAGE_HEAD = "package:";
     private static final Pattern VERSION_CODE_PATTERN =
@@ -68,6 +70,7 @@ public class ModulePusher {
     private final long mWaitTimeMs;
     private final long mDelayWaitingTimeMs;
     private final ITestDevice mDevice;
+    private ImmutableMap<String, Path> mApexPathsUnderSystem;
 
     /** Fatal error during Mainline module push. */
     public static class ModulePushError extends HarnessException {
@@ -144,15 +147,21 @@ public class ModulePusher {
      *
      * @param moduleFiles a multimap from package names to the package files. In split case, the
      *     base package should be the first in iteration order.
-     * @param factory_reset if reload via factory reset.
+     * @param factoryReset if reload via factory reset.
      */
-    public void installModules(ImmutableMultimap<String, File> moduleFiles, boolean factory_reset)
+    public void installModules(
+            ImmutableMultimap<String, File> moduleFiles,
+            boolean factoryReset,
+            boolean disablePackageCache)
             throws TargetSetupError, DeviceNotAvailableException, ModulePushError {
         ITestDevice device = mDevice;
         setupDevice(device);
         checkPreloadModules(device);
         List<ModuleInfo> pushedModules = pushModulesToDevice(device, moduleFiles);
-        reloadAllModules(device, factory_reset);
+        if (disablePackageCache) {
+            cleanPackageCache(device);
+        }
+        reloadAllModules(device, factoryReset);
         waitForDeviceToBeResponsive(mWaitTimeMs);
         checkApexActivated(device, pushedModules);
         LogUtil.CLog.i("Check pushed module version code after device reboot");
@@ -430,7 +439,7 @@ public class ModulePusher {
                         "The path of the system apex is not /system/apex. Actual source paths are:"
                                 + " %s. Expect to override them with packages in %s after reboot.",
                         Arrays.toString(paths), APEX_DIR);
-                return new Path[] {Paths.get(APEX_DIR, packageName + APEX_SUFFIX)};
+                return new Path[] {getApexPathUnderSystem(device, packageName)};
             }
             return new Path[] {Paths.get(paths[0])};
         }
@@ -477,6 +486,39 @@ public class ModulePusher {
         return paths.toArray(new String[0]);
     }
 
+    @VisibleForTesting
+    protected Path getApexPathUnderSystem(ITestDevice device, String packageName)
+            throws ModulePushError, DeviceNotAvailableException {
+        Map<String, Path> apexPaths = getApexPaths(device);
+        if (apexPaths.containsKey(packageName)) {
+            return apexPaths.get(packageName);
+        }
+        throw new ModulePushError(
+                String.format(
+                        "No apex under /system/apex available for %s. Print ls results %s",
+                        packageName, apexPaths),
+                DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    private ImmutableMap<String, Path> getApexPaths(ITestDevice device)
+            throws DeviceNotAvailableException {
+        if (mApexPathsUnderSystem == null) {
+            ImmutableMap.Builder<String, Path> builder = ImmutableMap.builder();
+            String outputs = device.executeShellV2Command(LS_SYSTEM_APEX).getStdout();
+            LogUtil.CLog.i("ls /system/apex/ output string is:\n%s", outputs);
+            for (String line : outputs.split(LINE_BREAK)) {
+                String fileName = line.trim();
+                int endIndex =
+                        fileName.contains("_")
+                                ? fileName.indexOf('_')
+                                : fileName.indexOf(APEX_SUFFIX);
+                builder.put(fileName.substring(0, endIndex), Paths.get(APEX_DIR, fileName));
+            }
+            mApexPathsUnderSystem = builder.build();
+        }
+        return mApexPathsUnderSystem;
+    }
+
     void pushPackageToDevice(
             ITestDevice device, File localFile, String filePathOnDevice, boolean isDir)
             throws DeviceNotAvailableException, ModulePushError {
@@ -502,6 +544,16 @@ public class ModulePusher {
     protected void waitForDeviceToBeResponsive(long waitTime) {
         // Wait for device to be responsive.
         RunUtil.getDefault().sleep(waitTime);
+    }
+
+    /**
+     * Clean up the package cache dir so that the package manager will update the package info.
+     *
+     * @param device under test.
+     * @throws DeviceNotAvailableException
+     */
+    void cleanPackageCache(ITestDevice device) throws DeviceNotAvailableException {
+        device.executeShellV2Command(RM_PACKAGE_CACHE);
     }
 
     /**
