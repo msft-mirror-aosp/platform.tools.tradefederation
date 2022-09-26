@@ -120,10 +120,10 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             importance = Importance.ALWAYS)
     private boolean physical = false;
 
-    @Option(
-            name = "inconclusive-max-retries",
-            description = "Maximum number of retries for inconclusive tests.")
-    private int inconclusiveMaxRetries = 0;
+    @Option(name = "max-retries", description = "Maximum number of retries for the overall run.")
+    private int maxRetries = 0;
+
+    private int retryCount = 0;
 
     private final Set<String> includeFilters = new LinkedHashSet<>();
     private final Set<String> excludeFilters = new LinkedHashSet<>();
@@ -452,9 +452,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         boolean success = false;
         boolean inconclusive = false;
-        int retryCount = 0;
 
-        while (retryCount <= inconclusiveMaxRetries) {
+        while (retryCount <= maxRetries) {
             try {
                 ProcessBuilder processBuilder = ptsBot(testInfo, testName);
 
@@ -496,17 +495,15 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
                 CLog.e("Cannot run pts-bot, make sure it is properly installed");
             }
 
-            if (inconclusive) {
-                retryCount++;
-                androidLogWarning(
-                        testInfo.getDevice(),
-                        String.format(
-                                "Test Inconclusive: %s, retrying [count=%s]",
-                                testName, retryCount));
-            } else {
-                // Do not retry on success or explicit failure.
-                break;
-            }
+            if (success) break;
+
+            // Retry in case of inconclusive or failure.
+            retryCount++;
+            androidLogWarning(
+                    testInfo.getDevice(),
+                    String.format(
+                            "Test %s: %s, retrying [count=%s]",
+                            inconclusive ? "Inconclusive" : "Failed", testName, retryCount));
         }
 
         if (success) {
