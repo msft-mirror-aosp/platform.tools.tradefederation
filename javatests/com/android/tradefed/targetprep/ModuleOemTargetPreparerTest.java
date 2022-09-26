@@ -181,7 +181,11 @@ public class ModuleOemTargetPreparerTest {
 
         mModuleOemTargetPreparer.setUp(mTestInfo);
 
-        verify(mMockPusher).installModules(modulesCaptor.capture(), /*factory_reset=*/ eq(false));
+        verify(mMockPusher)
+                .installModules(
+                        modulesCaptor.capture(),
+                        /*factoryReset=*/ eq(false),
+                        /*disablePackageCache=*/ eq(false));
         assertContainSameElements(expectedArg, modulesCaptor.getValue());
     }
 
@@ -196,7 +200,8 @@ public class ModuleOemTargetPreparerTest {
         verify(mMockPusher)
                 .installModules(
                         ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeApex),
-                        /*factory_reset=*/ false);
+                        /*factoryReset=*/ false,
+                        /*disablePackageCache=*/ false);
     }
 
     /** Test setup installs split apks. */
@@ -217,7 +222,11 @@ public class ModuleOemTargetPreparerTest {
 
         mModuleOemTargetPreparer.setUp(mTestInfo);
 
-        verify(mMockPusher).installModules(modulesCaptor.capture(), /*factory_reset=*/ eq(false));
+        verify(mMockPusher)
+                .installModules(
+                        modulesCaptor.capture(),
+                        /*factoryReset=*/ eq(false),
+                        /*disablePackageCache=*/ eq(false));
         assertContainSameElements(expecteds, modulesCaptor.getValue());
     }
 
@@ -240,7 +249,11 @@ public class ModuleOemTargetPreparerTest {
                         mFakeRecoverHdpiApk);
         mModuleOemTargetPreparer.setUp(mTestInfo);
 
-        verify(mMockPusher).installModules(modulesCaptor.capture(), /*factory_reset=*/ eq(false));
+        verify(mMockPusher)
+                .installModules(
+                        modulesCaptor.capture(),
+                        /*factoryReset=*/ eq(false),
+                        /*disablePackageCache=*/ eq(false));
         assertContainSameElements(expecteds, modulesCaptor.getValue());
     }
 
@@ -257,7 +270,8 @@ public class ModuleOemTargetPreparerTest {
         verify(mMockPusher)
                 .installModules(
                         ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeRecoverApex),
-                        /*factory_reset=*/ false);
+                        /*factoryReset=*/ false,
+                        /*disablePackageCache=*/ false);
     }
 
     /** Test setup recover and install packages. */
@@ -290,7 +304,10 @@ public class ModuleOemTargetPreparerTest {
         mModuleOemTargetPreparer.setUp(mTestInfo);
 
         verify(mMockPusher, times(2))
-                .installModules(modulesCaptor.capture(), /*factory_reset=*/ eq(false));
+                .installModules(
+                        modulesCaptor.capture(),
+                        /*factoryReset=*/ eq(false),
+                        /*disablePackageCache=*/ eq(false));
         List<ImmutableMultimap<String, File>> capturedValues = modulesCaptor.getAllValues();
         assertContainSameElements(expectedRecovers, capturedValues.get(0));
         assertContainSameElements(expectedTests, capturedValues.get(1));
@@ -305,7 +322,8 @@ public class ModuleOemTargetPreparerTest {
                         new ModulePusher.ModulePushError(
                                 "Mock exception", DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE))
                 .when(mMockPusher)
-                .installModules(any(), eq(false));
+                .installModules(
+                        any(), /*factoryReset=*/ eq(false), /*disablePackageCache=*/ eq(false));
 
         mModuleOemTargetPreparer.setUp(mTestInfo);
     }
@@ -321,7 +339,8 @@ public class ModuleOemTargetPreparerTest {
                         new ModulePusher.ModulePushError(
                                 "Mock exception", DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE))
                 .when(mMockPusher)
-                .installModules(any(), eq(false));
+                .installModules(
+                        any(), /*factoryReset=*/ eq(false), /*disablePackageCache=*/ eq(false));
 
         mModuleOemTargetPreparer.setUp(mTestInfo);
     }
@@ -334,7 +353,8 @@ public class ModuleOemTargetPreparerTest {
         addPreloadPackages(APEX_PACKAGE_NAME);
 
         mModuleOemTargetPreparer.setUp(mTestInfo);
-        verify(mMockPusher, never()).installModules(any(), anyBoolean());
+        verify(mMockPusher, never())
+                .installModules(any(), anyBoolean(), /*disablePackageCache=*/ anyBoolean());
     }
 
     /** Test that teardown without setup does not cause a NPE. */
