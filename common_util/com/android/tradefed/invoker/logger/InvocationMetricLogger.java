@@ -193,6 +193,7 @@ public class InvocationMetricLogger {
         FLASHING_FROM_FASTBOOTD("flashing_from_fastbootd", true),
         FLASHING_TIME("flashing_time_ms", true),
         FLASHING_PERMIT_LATENCY("flashing_permit_latency_ms", true),
+        FLASHING_METHOD("flashing_method", false),
         DOWNLOAD_PERMIT_LATENCY("download_permit_latency_ms", true),
         // Unzipping metrics
         UNZIP_TESTS_DIR_TIME("unzip_tests_dir_time_ms", true),
@@ -223,6 +224,12 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_TIME("cas_download_time_ms", true),
         // Records the wait time caused by CAS downloader concurrency limitation.
         CAS_DOWNLOAD_WAIT_TIME("cas_download_wait_time_ms", true),
+
+        // Download Cache
+        CACHE_HIT_COUNT("cache_hit_count", true),
+
+        // Ab downloader metrics
+        AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),

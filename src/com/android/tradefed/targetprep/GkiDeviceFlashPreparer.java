@@ -36,6 +36,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 
 import java.io.File;
 import java.io.IOException;
@@ -49,6 +50,7 @@ import java.util.concurrent.TimeUnit;
 @OptionClass(alias = "gki-device-flash-preparer")
 public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
 
+    private static final String AVBTOOL = "avbtool";
     private static final String MKBOOTIMG = "mkbootimg";
     private static final String OTATOOLS_ZIP = "otatools.zip";
     private static final String KERNEL_IMAGE = "Image.gz";
@@ -132,6 +134,13 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
             description = "The version of the boot.img header. Set to 3 by default.")
     private int mBootHeaderVersion = 3;
 
+    @Option(
+            name = "add-hash-footer",
+            description =
+                    "Add hash footer to GKI boot image. More info at "
+                        + "https://android.googlesource.com/platform/external/avb/+/master/README.md")
+    private boolean mAddHashFooter = false;
+
     private File mBootImg = null;
 
     /** {@inheritDoc} */
@@ -145,6 +154,9 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
         try {
             tmpDir = FileUtil.createTempDir("gki_preparer");
             validateGkiBootImg(device, buildInfo, tmpDir);
+            if (mAddHashFooter) {
+                addHashFooter(device, buildInfo, tmpDir);
+            }
             flashGki(device, buildInfo, tmpDir);
         } catch (IOException ioe) {
             throw new TargetSetupError(ioe.getMessage(), ioe, device.getDeviceDescriptor());
@@ -316,6 +328,7 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
         try {
             File mkbootimg =
                     getRequestedFile(device, MKBOOTIMG, buildInfo.getFile(OTATOOLS_ZIP), tmpDir);
+            mkbootimg.setExecutable(true, false);
             mBootImg = FileUtil.createTempFile("boot", ".img", tmpDir);
             String cmd =
                     String.format(
@@ -333,6 +346,7 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
                         "The mkbootimg tool didn't generate a valid boot.img.",
                         device.getDeviceDescriptor());
             }
+            buildInfo.setFile(mGkiBootImageName, mBootImg, "0");
         } catch (IOException e) {
             throw new TargetSetupError(
                     "Fail to generate GKI boot.img.", e, device.getDeviceDescriptor());
@@ -340,26 +354,83 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
     }
 
     /**
+     * Validate GKI boot image is expected. Throw exception if there is no valid boot.img.
+     *
+     * @param device the {@link ITestDevice}
+     * @param buildInfo the {@link IBuildInfo} the build info
+     * @param tmpDir the temporary directory {@link File}
+     * @throws TargetSetupError if there is no valid gki boot.img
+     */
+    @VisibleForTesting
+    protected void addHashFooter(ITestDevice device, IBuildInfo buildInfo, File tmpDir)
+            throws TargetSetupError, DeviceNotAvailableException {
+        if (mBootImg == null) {
+            throw new TargetSetupError(
+                    mGkiBootImageName + " is not provided. Can not add hash footer to it.",
+                    device.getDeviceDescriptor());
+        }
+        if (buildInfo.getFile(OTATOOLS_ZIP) == null) {
+            throw new TargetSetupError(
+                    OTATOOLS_ZIP + " is not provided. Can not add hash footer to GKI boot.img.",
+                    device.getDeviceDescriptor());
+        }
+        File avbtool = getRequestedFile(device, AVBTOOL, buildInfo.getFile(OTATOOLS_ZIP), tmpDir);
+        avbtool.setExecutable(true, false);
+
+        String android_version = device.getProperty("ro.build.version.release");
+        if (Strings.isNullOrEmpty(android_version)) {
+            throw new TargetSetupError(
+                    "Can not get android version from property ro.build.version.release.",
+                    device.getDeviceDescriptor());
+        }
+        String security_path_version = device.getProperty("ro.build.version.security_patch");
+        if (Strings.isNullOrEmpty(security_path_version)) {
+            throw new TargetSetupError(
+                    "Can not get security path version from property"
+                            + " ro.build.version.security_patch.",
+                    device.getDeviceDescriptor());
+        }
+
+        String command = String.format("du -b %s", mBootImg.getAbsolutePath());
+        CommandResult cmdResult = executeHostCommand(device, command);
+        String partition_size = cmdResult.getStdout().split("\\s+")[0];
+        CLog.i("Boot image partition size: %s", partition_size);
+        String cmd =
+                String.format(
+                        "%s add_hash_footer --image %s --partition_size %s "
+                                + "--partition_name boot "
+                                + "--prop com.android.build.boot.os_version:%s "
+                                + "--prop com.android.build.boot.security_patch:%s",
+                        avbtool.getAbsolutePath(),
+                        mBootImg.getAbsolutePath(),
+                        partition_size,
+                        android_version,
+                        security_path_version);
+        executeHostCommand(device, cmd);
+    }
+
+    /**
      * Helper method to execute host command.
      *
      * @param device the {@link ITestDevice}
      * @param command the command string
+     * @return the CommandResult
      * @throws TargetSetupError, DeviceNotAvailableException
      */
-    private void executeHostCommand(ITestDevice device, final String command)
+    private CommandResult executeHostCommand(ITestDevice device, final String command)
             throws TargetSetupError {
         final CommandResult result = getRunUtil().runTimedCmd(300000L, command.split("\\s+"));
         switch (result.getStatus()) {
             case SUCCESS:
                 CLog.i(
                         "Command %s finished successfully, stdout = [%s].",
-                        command, result.getStdout());
+                        command, result.getStdout().trim());
                 break;
             case FAILED:
                 throw new TargetSetupError(
                         String.format(
                                 "Command %s failed, stdout = [%s], stderr = [%s].",
-                                command, result.getStdout(), result.getStderr()),
+                                command, result.getStdout().trim(), result.getStderr().trim()),
                         device.getDeviceDescriptor());
             case TIMED_OUT:
                 throw new TargetSetupError(
@@ -370,6 +441,7 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
                         String.format("Exception occurred when running command %s.", command),
                         device.getDeviceDescriptor());
         }
+        return result;
     }
 
     /**

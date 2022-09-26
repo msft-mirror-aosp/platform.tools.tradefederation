@@ -600,17 +600,25 @@ public class TestInvocation implements ITestInvocation {
 
     /**
      * Starts the invocation.
-     * <p/>
-     * Starts logging, and informs listeners that invocation has been started.
+     *
+     * <p>Starts logging, and informs listeners that invocation has been started.
      *
      * @param config
      * @param context
      */
-    private void startInvocation(IConfiguration config, IInvocationContext context,
-            ITestInvocationListener listener) {
+    private void startInvocation(
+            IConfiguration config,
+            IInvocationContext context,
+            ITestInvocationListener listener,
+            RunMode mode) {
         logStartInvocation(context, config);
         listener.invocationStarted(context);
-        logExpandedConfiguration(config, listener);
+        logExpandedConfiguration(config, listener, mode);
+    }
+
+    private void startInvocation(
+            IConfiguration config, IInvocationContext context, ITestInvocationListener listener) {
+        startInvocation(config, context, listener, null);
     }
 
     /** Report the exception failure as an invocation failure. */
@@ -785,7 +793,8 @@ public class TestInvocation implements ITestInvocation {
      * @param config the {@link IConfiguration} of this test run
      * @param listener the {@link ITestLogger} with which to register the log
      */
-    private void logExpandedConfiguration(IConfiguration config, ITestLogger listener) {
+    private void logExpandedConfiguration(
+            IConfiguration config, ITestLogger listener, RunMode mode) {
         boolean isShard = config.getConfigurationDescription().getShardIndex() != null;
         if (isShard) {
             // Bail out of logging the config if this is a local shard since it is problematic
@@ -801,25 +810,25 @@ public class TestInvocation implements ITestInvocation {
             // something else in the future
             byte[] configXmlByteArray = configXmlWriter.toString().getBytes("UTF-8");
             try (InputStreamSource source = new ByteArrayInputStreamSource(configXmlByteArray)) {
-                String configOutputName;
-                boolean isSandboxParent = config.getCommandOptions().shouldUseSandboxing();
-                boolean isSandboxChild = config.getConfigurationDescription().shouldUseSandbox();
-                if (isSandboxParent || isSandboxChild) {
-                    // Either the parent or child of a sandbox so we need to tailor the config
-                    // logging names
-                    String prefix;
-                    if (isSandboxChild) {
-                        prefix = "child-sandbox";
-                    } else {
-                        prefix = "parent-sandbox";
+                String prefix = "";
+                if (mode != null) {
+                    switch (mode) {
+                        case PARENT_SANDBOX:
+                            prefix = "parent-sandbox-";
+                            break;
+                        case SANDBOX:
+                            prefix = "child-sandbox-";
+                            break;
+                        case DELEGATED_INVOCATION:
+                            prefix = "parent-delegate-";
+                            break;
+                        case REMOTE_INVOCATION:
+                            // Fallthrough
+                        default:
+                            prefix = "";
                     }
-
-                    configOutputName = String.format("%s-%s", prefix, TRADEFED_CONFIG_NAME);
-                } else {
-                    // No sandboxing involved (at least known), so use the default name
-                    configOutputName = TRADEFED_CONFIG_NAME;
                 }
-
+                String configOutputName = String.format("%s%s", prefix, TRADEFED_CONFIG_NAME);
                 listener.testLog(configOutputName, LogDataType.HARNESS_CONFIG, source);
             }
         } catch (IOException e) {
