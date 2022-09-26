@@ -162,7 +162,7 @@ public class TestDiscoveryExecutor {
         // Extract module name from each include filter.
         // TODO: Ensure if a module is fully excluded then it's excluded.
         for (String includeFilter : includeFilters) {
-            String testModuleName = SuiteTestFilter.createFrom(includeFilter).getName();
+            String testModuleName = SuiteTestFilter.createFrom(includeFilter).getBaseName();
             if (testModuleName == null) {
                 // If unable to parse an include filter, throw exception to exit.
                 throw new IllegalStateException(
