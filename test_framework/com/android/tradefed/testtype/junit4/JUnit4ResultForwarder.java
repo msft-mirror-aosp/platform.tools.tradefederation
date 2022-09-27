@@ -16,6 +16,7 @@
 package com.android.tradefed.testtype.junit4;
 
 import com.android.tradefed.error.IHarnessException;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -50,6 +51,7 @@ public class JUnit4ResultForwarder extends RunListener {
     private List<Throwable> mTestCaseFailures;
     private Description mRunDescription;
     private boolean mBeforeClass = true;
+    private CloseableTraceScope mMethodTrace = null;
 
     private LogUploaderThread mLogUploaderThread;
 
@@ -130,6 +132,7 @@ public class JUnit4ResultForwarder extends RunListener {
 
     @Override
     public void testStarted(Description description) throws Exception {
+        mMethodTrace = new CloseableTraceScope(description.getMethodName());
         mBeforeClass = false;
         mTestCaseFailures.clear();
         TestDescription testid =
@@ -171,6 +174,10 @@ public class JUnit4ResultForwarder extends RunListener {
             }
             mListener.testEnded(testid, metrics);
             mTestCaseFailures.clear();
+            if (mMethodTrace != null) {
+                mMethodTrace.close();
+                mMethodTrace = null;
+            }
         }
     }
 
