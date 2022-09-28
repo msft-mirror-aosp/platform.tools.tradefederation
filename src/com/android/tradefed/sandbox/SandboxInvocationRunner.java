@@ -36,7 +36,7 @@ public class SandboxInvocationRunner {
             TestInformation info, IConfiguration config, ITestInvocationListener listener)
             throws Throwable {
         prepareSandbox(info, config, listener);
-        return runSandbox(config, listener);
+        return runSandbox(info, config, listener);
     }
 
     /** Preparation step of the sandbox */
@@ -59,7 +59,8 @@ public class SandboxInvocationRunner {
     }
 
     /** Execution step of the sandbox */
-    public static boolean runSandbox(IConfiguration config, ITestInvocationListener listener)
+    public static boolean runSandbox(
+            TestInformation info, IConfiguration config, ITestInvocationListener listener)
             throws Throwable {
         ISandbox sandbox =
                 (ISandbox) config.getConfigurationObject(Configuration.SANDBOX_TYPE_NAME);
@@ -67,7 +68,7 @@ public class SandboxInvocationRunner {
             throw new RuntimeException("Couldn't find the sandbox object.");
         }
         try {
-            CommandResult result = sandbox.run(config, listener);
+            CommandResult result = sandbox.run(info, config, listener);
             return CommandStatus.SUCCESS.equals(result.getStatus());
         } finally {
             sandbox.tearDown();
