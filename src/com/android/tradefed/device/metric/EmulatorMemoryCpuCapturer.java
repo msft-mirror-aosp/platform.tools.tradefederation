@@ -78,7 +78,7 @@ public class EmulatorMemoryCpuCapturer {
     public float getCpuUsage() {
         CommandResult result =
                 RunUtil.getDefault()
-                        .runTimedCmd(2000, "ps", "-o", "%cpu", "-p", Long.toString(mPid));
+                        .runTimedCmd(20000L, "ps", "-o", "%cpu", "-p", Long.toString(mPid));
         if (result.getStatus() == CommandStatus.SUCCESS) {
             return parseCpuUsage(result.getStdout());
         } else {
