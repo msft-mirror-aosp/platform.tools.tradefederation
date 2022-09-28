@@ -57,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** A Test for running Compatibility Test Suite with new suite system. */
 @OptionClass(alias = "base-suite")
@@ -79,7 +80,7 @@ public class BaseTestSuite extends ITestSuite {
             description =
                     "the include module filters to apply. Format: '[abi] <module-name> [test]'."
                         + " See documentation:"
-                        + "https://source.android.com/devices/tech/test_infra/tradefed/testing/through-suite/option-passing",
+                        + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
     private Set<String> mIncludeFilters = new HashSet<>();
 
@@ -88,7 +89,7 @@ public class BaseTestSuite extends ITestSuite {
             description =
                     "the exclude module filters to apply. Format: '[abi] <module-name> [test]'."
                         + " See documentation:"
-                        + "https://source.android.com/devices/tech/test_infra/tradefed/testing/through-suite/option-passing",
+                        + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
     private Set<String> mExcludeFilters = new HashSet<>();
 
@@ -373,11 +374,19 @@ public class BaseTestSuite extends ITestSuite {
             if (mFailOnEverythingFiltered
                     && loadedTests.isEmpty()
                     && !mIncludeFiltersParsed.isEmpty()) {
+                // remove modules with empty filters from the message
+                Map<String, LinkedHashSet<SuiteTestFilter>> includeFiltersCleaned =
+                        mIncludeFiltersParsed.entrySet().stream()
+                                .filter(
+                                        entry ->
+                                                entry.getValue() != null
+                                                        && !entry.getValue().isEmpty())
+                                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
                 throw new HarnessRuntimeException(
                         String.format(
                                 "Include filter '%s' was specified"
                                         + " but resulted in an empty test set.",
-                                mIncludeFiltersParsed.toString()),
+                                includeFiltersCleaned.toString()),
                         InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             return loadedTests;
