@@ -120,10 +120,13 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
             importance = Importance.ALWAYS)
     private boolean physical = false;
 
-    @Option(
-            name = "inconclusive-max-retries",
-            description = "Maximum number of retries for inconclusive tests.")
-    private int inconclusiveMaxRetries = 0;
+    @Option(name = "max-flaky-tests", description = "Maximum number of flaky tests for the entire run.")
+    private int maxFlakyTests = 0;
+
+    private int flakyCount = 0;
+
+    @Option(name = "max-retries-per-test", description = "Maximum number of retries for a flaky test.")
+    private int maxRetriesPerTest = 0;
 
     private final Set<String> includeFilters = new LinkedHashSet<>();
     private final Set<String> excludeFilters = new LinkedHashSet<>();
@@ -452,9 +455,9 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
 
         boolean success = false;
         boolean inconclusive = false;
-        int retryCount = 0;
 
-        while (retryCount <= inconclusiveMaxRetries) {
+        int retryCount = 0;
+        while (true) {
             try {
                 ProcessBuilder processBuilder = ptsBot(testInfo, testName);
 
@@ -496,15 +499,19 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver {
                 CLog.e("Cannot run pts-bot, make sure it is properly installed");
             }
 
-            if (inconclusive) {
-                retryCount++;
+            if (success) break;
+
+           // Retry in case of inconclusive or failure.
+           retryCount++;
+            // At the first retry, increment flaky tests count.
+            if (retryCount == 1) flakyCount++;
+            if (flakyCount <= maxFlakyTests && retryCount <= maxRetriesPerTest) {
                 androidLogWarning(
                         testInfo.getDevice(),
                         String.format(
-                                "Test Inconclusive: %s, retrying [count=%s]",
-                                testName, retryCount));
+                                "Test %s: %s, retrying [count=%s]",
+                                inconclusive ? "Inconclusive" : "Failed", testName, retryCount));
             } else {
-                // Do not retry on success or explicit failure.
                 break;
             }
         }

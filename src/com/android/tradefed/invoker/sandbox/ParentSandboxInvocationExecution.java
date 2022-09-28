@@ -56,6 +56,7 @@ import java.util.List;
 public class ParentSandboxInvocationExecution extends InvocationExecution {
 
     private SandboxSetupThread setupThread;
+    private TestInformation mTestInfo;
 
     @Override
     public boolean fetchBuild(
@@ -64,6 +65,7 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             IRescheduler rescheduler,
             ITestInvocationListener listener)
             throws DeviceNotAvailableException, BuildRetrievalError {
+        mTestInfo = testInfo;
         if (!testInfo.getContext().getBuildInfos().isEmpty()) {
             CLog.d(
                     "Context already contains builds: %s. Skipping download as we are in "
@@ -92,13 +94,6 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
     @Override
     public void doSetup(TestInformation testInfo, IConfiguration config, ITestLogger listener)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
-        if (shouldRunDeviceSpecificSetup(config)
-                && getSandboxOptions(config).shouldParallelSetup()) {
-            setupThread =
-                    new SandboxSetupThread(testInfo, config, (ITestInvocationListener) listener);
-            setupThread.start();
-        }
-
         // TODO address the situation where multi-target preparers are configured
         // (they will be run by both the parent and sandbox if configured)
         super.doSetup(testInfo, config, listener);
@@ -127,6 +122,11 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             IInvocationContext context, IConfiguration config, ITestLogger logger)
             throws DeviceNotAvailableException, TargetSetupError {
         if (shouldRunDeviceSpecificSetup(config)) {
+            if (getSandboxOptions(config).shouldParallelSetup()) {
+                setupThread =
+                        new SandboxSetupThread(mTestInfo, config, (ITestInvocationListener) logger);
+                setupThread.start();
+            }
             super.runDevicePreInvocationSetup(context, config, logger);
             String commandLine = config.getCommandLine();
             for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {

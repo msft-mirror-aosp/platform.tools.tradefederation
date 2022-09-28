@@ -610,15 +610,16 @@ public class TestInvocation implements ITestInvocation {
             IConfiguration config,
             IInvocationContext context,
             ITestInvocationListener listener,
-            RunMode mode) {
+            RunMode mode,
+            boolean parentShard) {
         logStartInvocation(context, config);
         listener.invocationStarted(context);
-        logExpandedConfiguration(config, listener, mode);
+        logExpandedConfiguration(config, listener, mode, parentShard);
     }
 
     private void startInvocation(
             IConfiguration config, IInvocationContext context, ITestInvocationListener listener) {
-        startInvocation(config, context, listener, null);
+        startInvocation(config, context, listener, null, false);
     }
 
     /** Report the exception failure as an invocation failure. */
@@ -794,9 +795,9 @@ public class TestInvocation implements ITestInvocation {
      * @param listener the {@link ITestLogger} with which to register the log
      */
     private void logExpandedConfiguration(
-            IConfiguration config, ITestLogger listener, RunMode mode) {
+            IConfiguration config, ITestLogger listener, RunMode mode, boolean parentShard) {
         boolean isShard = config.getConfigurationDescription().getShardIndex() != null;
-        if (isShard) {
+        if (isShard && !parentShard) {
             // Bail out of logging the config if this is a local shard since it is problematic
             // and redundant anyway.
             CLog.d("Skipping expanded config log for shard.");
@@ -892,6 +893,7 @@ public class TestInvocation implements ITestInvocation {
         }
         reportHostLog(listener, config);
         reportInvocationEnded(config, testInfo.getContext(), listener, 0L);
+        CLog.e(buildException);
         // We rethrow so it's caught in CommandScheduler and properly release
         // the device
         throw buildException;
@@ -1274,6 +1276,7 @@ public class TestInvocation implements ITestInvocation {
                             context.getSerials());
                     // Log the chunk of parent host_log before sharding
                     reportHostLog(listener, config, TRADEFED_LOG_NAME + BEFORE_SHARDING_SUFFIX);
+                    logExpandedConfiguration(config, listener, mode, true);
                     config.getLogSaver().invocationEnded(0L);
                     if (aggregator != null) {
                         // The host_log is not available yet to reporters that don't support

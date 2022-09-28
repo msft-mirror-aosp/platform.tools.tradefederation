@@ -247,6 +247,16 @@ public class ShardListener extends CollectingTestListener implements ISupportGra
         }
     }
 
+    @Override
+    public void logAssociation(String dataName, LogFile logFile) {
+        if (dataName.equals("invocation-trace")) {
+            CLog.d("Received a trace for shard");
+            mShardMainForwarder.logAssociation(dataName, logFile);
+        } else {
+            super.logAssociation(dataName, logFile);
+        }
+    }
+
     private void forwardRunResults(TestRunResult runResult, int attempt) {
         mMainListener.testRunStarted(
                 runResult.getName(),
