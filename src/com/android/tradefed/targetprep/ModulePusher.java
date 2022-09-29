@@ -48,6 +48,7 @@ import java.util.regex.Pattern;
 public class ModulePusher {
     private static final String APEX_SUFFIX = ".apex";
     private static final String APK_SUFFIX = ".apk";
+    private static final String CAPEX_SUFFIX = ".capex";
     private static final String APEX_DIR = "/system/apex/";
 
     // Constants for adb commands.
@@ -508,11 +509,20 @@ public class ModulePusher {
             LogUtil.CLog.i("ls /system/apex/ output string is:\n%s", outputs);
             for (String line : outputs.split(LINE_BREAK)) {
                 String fileName = line.trim();
-                int endIndex =
-                        fileName.contains("_")
-                                ? fileName.indexOf('_')
-                                : fileName.indexOf(APEX_SUFFIX);
-                builder.put(fileName.substring(0, endIndex), Paths.get(APEX_DIR, fileName));
+                int endIndex = -1;
+                // The package name is contained as a prefix of the file name.
+                if (fileName.contains("_")) {
+                    endIndex = fileName.indexOf('_');
+                } else if (fileName.contains(APEX_SUFFIX)) {
+                    endIndex = fileName.indexOf(APEX_SUFFIX);
+                } else if (fileName.contains(CAPEX_SUFFIX)) {
+                    endIndex = fileName.indexOf(CAPEX_SUFFIX);
+                }
+                if (endIndex > 0) {
+                    builder.put(fileName.substring(0, endIndex), Paths.get(APEX_DIR, fileName));
+                } else {
+                    LogUtil.CLog.w("Got unexpected filename %s under /system/apex/", fileName);
+                }
             }
             mApexPathsUnderSystem = builder.build();
         }
