@@ -2099,7 +2099,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         // time this operation because its known to hang
         FileQueryAction action = new FileQueryAction(remoteFileEntry,
                 getIDevice().getFileListingService());
-        performDeviceAction("buildFileCache", action, MAX_RETRY_ATTEMPTS);
+        performDeviceAction("buildFileCache", action, 1 /* one retry */);
         return action.mFileContents;
     }
 
@@ -2900,8 +2900,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         try {
             bugreport = getBugreportz();
             type = LogDataType.BUGREPORTZ;
-
-            if (bugreport == null) {
+            // Limit fallback to older devices
+            if (bugreport == null && getApiLevelSafe() < 24) {
                 CLog.d("Bugreportz failed, attempting bugreport collection instead.");
                 bugreport = getBugreportInternal();
                 type = LogDataType.BUGREPORT;
