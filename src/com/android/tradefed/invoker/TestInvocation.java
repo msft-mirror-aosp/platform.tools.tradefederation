@@ -305,8 +305,11 @@ public class TestInvocation implements ITestInvocation {
             badDevice = context.getDeviceBySerial(e.getSerial());
             if ((e instanceof DeviceUnresponsiveException) && badDevice != null
                     && TestDeviceState.ONLINE.equals(badDevice.getDeviceState())) {
-                // under certain cases it might still be possible to grab a bugreport
-                bugreportName = DEVICE_UNRESPONSIVE_BUGREPORT_NAME;
+                // We let parent process capture the bugreport
+                if (!isSubprocess(config)) {
+                    // under certain cases it might still be possible to grab a bugreport
+                    bugreportName = DEVICE_UNRESPONSIVE_BUGREPORT_NAME;
+                }
             }
             reportFailure(createFailureFromException(e, FailureStatus.INFRA_FAILURE), listener);
             // Upon reaching here after an exception, it is safe to assume that recovery
