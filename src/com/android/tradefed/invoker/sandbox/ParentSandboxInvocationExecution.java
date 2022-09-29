@@ -128,34 +128,39 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             throws DeviceNotAvailableException, TargetSetupError {
         if (shouldRunDeviceSpecificSetup(config)) {
             super.runDevicePreInvocationSetup(context, config, logger);
-            String commandLine = config.getCommandLine();
-            for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
-                if (deviceConfig.getDeviceRequirements().gceDeviceRequested()) {
-                    // Turn off the gce-device option and force the serial instead to use the
-                    // started virtual device.
-                    String deviceName = (config.getDeviceConfig().size() > 1) ?
-                            String.format("{%s}", deviceConfig.getDeviceName()) : "";
-                    commandLine +=
-                            String.format(
-                                    " --%sno-gce-device --%sserial %s",
-                                    deviceName,
-                                    deviceName,
-                                    context.getDevice(deviceConfig.getDeviceName())
-                                            .getSerialNumber());
-                    // If we are using the device-type selector, override it
-                    if (DeviceSelectionOptions.DeviceRequestedType.GCE_DEVICE.equals(
-                            ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
-                                    .getDeviceTypeRequested())) {
+            if (!getSandboxOptions(config).shouldUseNewFlagOrder()) {
+                String commandLine = config.getCommandLine();
+                for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+                    if (deviceConfig.getDeviceRequirements().gceDeviceRequested()) {
+                        // Turn off the gce-device option and force the serial instead to use the
+                        // started virtual device.
+                        String deviceName =
+                                (config.getDeviceConfig().size() > 1)
+                                        ? String.format("{%s}", deviceConfig.getDeviceName())
+                                        : "";
                         commandLine +=
                                 String.format(
-                                        " --%sdevice-type %s",
+                                        " --%sno-gce-device --%sserial %s",
                                         deviceName,
-                                        DeviceSelectionOptions.DeviceRequestedType.EXISTING_DEVICE
-                                                .name());
+                                        deviceName,
+                                        context.getDevice(deviceConfig.getDeviceName())
+                                                .getSerialNumber());
+                        // If we are using the device-type selector, override it
+                        if (DeviceSelectionOptions.DeviceRequestedType.GCE_DEVICE.equals(
+                                ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
+                                        .getDeviceTypeRequested())) {
+                            commandLine +=
+                                    String.format(
+                                            " --%sdevice-type %s",
+                                            deviceName,
+                                            DeviceSelectionOptions.DeviceRequestedType
+                                                    .EXISTING_DEVICE
+                                                    .name());
+                        }
                     }
                 }
+                config.setCommandLine(QuotationAwareTokenizer.tokenizeLine(commandLine, false));
             }
-            config.setCommandLine(QuotationAwareTokenizer.tokenizeLine(commandLine, false));
         }
     }
 
@@ -228,7 +233,7 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                 CLog.e("An exception occurred during parallel setup.");
                 throw setupThread.error;
             }
-            return SandboxInvocationRunner.runSandbox(config, listener);
+            return SandboxInvocationRunner.runSandbox(info, config, listener);
         }
         return SandboxInvocationRunner.prepareAndRun(info, config, listener);
     }
