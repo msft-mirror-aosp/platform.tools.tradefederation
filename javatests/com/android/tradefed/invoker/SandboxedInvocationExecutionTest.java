@@ -219,7 +219,7 @@ public class SandboxedInvocationExecutionTest {
                 .saveLogData(any(), any(), any());
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         mInvocation.invoke(mContext, mConfig, mMockRescheduler, mMockListener);
     }
@@ -246,7 +246,7 @@ public class SandboxedInvocationExecutionTest {
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
         result.setExitCode(0);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         doReturn(new BuildInfo()).when(mMockProvider).getBuild();
 
@@ -298,7 +298,7 @@ public class SandboxedInvocationExecutionTest {
                 .saveLogData(any(), any(), any());
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         doReturn(new BuildInfo()).when(mMockProvider).getBuild();
 
@@ -355,7 +355,7 @@ public class SandboxedInvocationExecutionTest {
                 .saveLogData(any(), any(), any());
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         IBuildInfo info = new BuildInfo();
         doReturn(info).when(mMockProvider).getBuild();
