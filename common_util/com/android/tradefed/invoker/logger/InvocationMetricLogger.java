@@ -205,6 +205,7 @@ public class InvocationMetricLogger {
         TEARDOWN_START("tf_teardown_start_timestamp", false),
         TEARDOWN_END("tf_teardown_end_timestamp", false),
         TEARDOWN_PAIR("tf_teardown_pair_timestamp", true),
+        TEST_TEARDOWN_PAIR("tf_test_teardown_pair_timestamp", true),
 
         INVOCATION_END("tf_invocation_end_timestamp", false),
 

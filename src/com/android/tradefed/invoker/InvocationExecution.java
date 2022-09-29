@@ -765,80 +765,95 @@ public class InvocationExecution implements IInvocationExecution {
         long start = System.currentTimeMillis();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.TEARDOWN_START, start);
         try {
-            List<IMultiTargetPreparer> multiPreparers = config.getMultiTargetPreparers();
-            deferredThrowable =
-                    runMultiTargetPreparersTearDown(
-                            multiPreparers,
-                            testInfo,
-                            logger,
-                            exception,
-                            "multi target preparer teardown");
-
             int deviceIndex = 0;
-            for (String deviceName : context.getDeviceConfigNames()) {
-                ITestDevice device = context.getDevice(deviceName);
-                device.clearLastConnectedWifiNetwork();
-
-                List<ITargetPreparer> targetPreparersToRun =
-                        getTargetPreparersToRun(config, deviceName);
-                Throwable firstLocalThrowable =
-                        runPreparersTearDown(
+            try {
+                List<IMultiTargetPreparer> multiPreparers = config.getMultiTargetPreparers();
+                deferredThrowable =
+                        runMultiTargetPreparersTearDown(
+                                multiPreparers,
                                 testInfo,
-                                device,
-                                deviceName,
-                                deviceIndex,
                                 logger,
                                 exception,
-                                targetPreparersToRun,
-                                mTrackTargetPreparers);
-                if (deferredThrowable == null) {
-                    deferredThrowable = firstLocalThrowable;
+                                "multi target preparer teardown");
+
+                for (String deviceName : context.getDeviceConfigNames()) {
+                    ITestDevice device = context.getDevice(deviceName);
+                    device.clearLastConnectedWifiNetwork();
+
+                    List<ITargetPreparer> targetPreparersToRun =
+                            getTargetPreparersToRun(config, deviceName);
+                    Throwable firstLocalThrowable =
+                            runPreparersTearDown(
+                                    testInfo,
+                                    device,
+                                    deviceName,
+                                    deviceIndex,
+                                    logger,
+                                    exception,
+                                    targetPreparersToRun,
+                                    mTrackTargetPreparers);
+                    if (deferredThrowable == null) {
+                        deferredThrowable = firstLocalThrowable;
+                    }
+
+                    deviceIndex++;
+                }
+            } finally {
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.TEST_TEARDOWN_PAIR, start, System.currentTimeMillis());
+            }
+
+            start = System.currentTimeMillis();
+            try {
+                deviceIndex = 0;
+                for (String deviceName : context.getDeviceConfigNames()) {
+                    ITestDevice device = context.getDevice(deviceName);
+                    List<ITargetPreparer> labPreparersToRun =
+                            getLabPreparersToRun(config, deviceName);
+                    Throwable secondLocalThrowable =
+                            runPreparersTearDown(
+                                    testInfo,
+                                    device,
+                                    deviceName,
+                                    deviceIndex,
+                                    logger,
+                                    exception,
+                                    labPreparersToRun,
+                                    mTrackLabPreparers);
+                    if (deferredThrowable == null) {
+                        deferredThrowable = secondLocalThrowable;
+                    }
+
+                    deviceIndex++;
                 }
 
-                List<ITargetPreparer> labPreparersToRun = getLabPreparersToRun(config, deviceName);
-                Throwable secondLocalThrowable =
-                        runPreparersTearDown(
+                // Extra tear down step for the device
+                if (exception == null) {
+                    exception = deferredThrowable;
+                }
+                runDevicePostInvocationTearDown(context, config, exception);
+
+                // After all, run the multi_pre_target_preparer tearDown.
+                List<IMultiTargetPreparer> multiPrePreparers = config.getMultiPreTargetPreparers();
+                Throwable preTargetTearDownException =
+                        runMultiTargetPreparersTearDown(
+                                multiPrePreparers,
                                 testInfo,
-                                device,
-                                deviceName,
-                                deviceIndex,
                                 logger,
                                 exception,
-                                labPreparersToRun,
-                                mTrackLabPreparers);
+                                "multi pre target preparer teardown");
                 if (deferredThrowable == null) {
-                    deferredThrowable = secondLocalThrowable;
+                    deferredThrowable = preTargetTearDownException;
                 }
-
-                deviceIndex++;
+            } finally {
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.TEARDOWN_PAIR, start, System.currentTimeMillis());
             }
-
-            // Extra tear down step for the device
-            if (exception == null) {
-                exception = deferredThrowable;
-            }
-            runDevicePostInvocationTearDown(context, config, exception);
-
-            // After all, run the multi_pre_target_preparer tearDown.
-            List<IMultiTargetPreparer> multiPrePreparers = config.getMultiPreTargetPreparers();
-            Throwable preTargetTearDownException =
-                    runMultiTargetPreparersTearDown(
-                            multiPrePreparers,
-                            testInfo,
-                            logger,
-                            exception,
-                            "multi pre target preparer teardown");
-            if (deferredThrowable == null) {
-                deferredThrowable = preTargetTearDownException;
-            }
-
+        } finally {
             // Collect adb logs.
             logHostAdb(config, logger);
-        } finally {
-            long end = System.currentTimeMillis();
-            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.TEARDOWN_END, end);
-            InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.TEARDOWN_PAIR, start, end);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.TEARDOWN_END, System.currentTimeMillis());
         }
 
         if (deferredThrowable != null) {
