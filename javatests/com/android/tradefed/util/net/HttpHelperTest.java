@@ -315,7 +315,7 @@ public class HttpHelperTest {
             setOpTimeout(300);
             setInitialPollInterval(10);
             setMaxPollInterval(50);
-            setMaxTime(50);
+            setMaxTime(2000);
         }
 
         /**
