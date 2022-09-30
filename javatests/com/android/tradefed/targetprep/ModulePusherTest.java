@@ -180,6 +180,7 @@ public final class ModulePusherTest {
         CommandResult apexCr =
                 getCommandResult(
                         "com.android.apex.cts.shim.apex\n"
+                                + "com.android.wifi.capex\n"
                                 + "com.android.appsearch.apex\n"
                                 + "com.google.android.adbd_trimmed_compressed.apex\n"
                                 + "com.google.android.art_compressed.apex\n"
