@@ -551,7 +551,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         public void run() {
             if (mInvocationThread != null) {
                 mTriggered = true;
-                mInvocationThread.stopInvocation("Invocation Timeout Reached.");
+                mInvocationThread.stopInvocation(
+                        "Invocation Timeout Reached.", InfraErrorIdentifier.INVOCATION_TIMEOUT);
             }
         }
 
