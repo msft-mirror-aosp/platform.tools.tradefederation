@@ -486,6 +486,13 @@ public class ProtoResultParser {
         String[] info = testcaseProto.getTestRecordId().split("#");
         TestDescription description = new TestDescription(info[0], info[1]);
         if (testcaseProto.hasEndTime()) {
+            // Allow end event that also report start in one go. When using StreamProtoResultReporter
+            // we can save some socket communication by reporting test cases start and end at the
+            // same time in some instances.
+            if (mCurrentTestCase == null) {
+                log("Test case started proto: %s", description.toString());
+                mListener.testStarted(description, timeStampToMillis(testcaseProto.getStartTime()));
+            }
             handleTestCaseEnd(description, testcaseProto);
             mCurrentTestCase = null;
         } else {
