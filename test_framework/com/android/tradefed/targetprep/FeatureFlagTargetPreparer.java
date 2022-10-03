@@ -26,8 +26,6 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 
-import com.google.common.base.Strings;
-
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -35,8 +33,11 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,20 +47,27 @@ import java.util.regex.Pattern;
  * <p>This can be used to reproduce the state of a device (by dumping all flag values to a file
  * using `adb shell device_config list`) or to bulk enable/disable flags (all-on/all-off testing).
  *
+ * <p>The "flag-file" option can take one or more files with flag values to apply in
+ * namespace/name=[value] format. For all-on / all-off testing, pass 1 flag file with all-on or
+ * all-off flag values. For reversibility testing, pass all-on flag file then pass all-off flag
+ * file.
+ *
  * <p>Should be used in combination with {@link DeviceSetup} to disable DeviceConfig syncing during
  * the test which could overwrite the changes made by this preparer.
  */
 @OptionClass(alias = "feature-flags")
 public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
 
-    // Expected flag format (same as output by "device_config list"): namespace/name=[value].
+    // Expected flag format (same as output by "device_config list"):
+    // namespace/name=[value]
+    // Note value is optional.
     private static final Pattern FLAG_PATTERN =
             Pattern.compile("^(?<namespace>[^\\s/=]+)/(?<name>[^\\s/=]+)=(?<value>.*)$");
 
     @Option(
             name = "flag-file",
-            description = "File containing flag values to apply in namespace/name=[value] format.")
-    private File mFlagFile;
+            description = "File containing flag values to apply. Can be repeated.")
+    private List<File> mFlagFiles = new ArrayList<>();
 
     private final Map<String, Map<String, String>> mFlagsToRestore = new HashMap<>();
 
@@ -67,38 +75,44 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
     public void setUp(TestInformation testInformation)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         ITestDevice device = testInformation.getDevice();
-        if (mFlagFile == null || !mFlagFile.isFile()) {
-            throw new TargetSetupError(
-                    String.format("Flag file '%s' not found", mFlagFile),
-                    device.getDeviceDescriptor(),
-                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
-        }
+        validateFlagFiles(device);
 
-        // Determine initial and target flag values.
-        Map<String, Map<String, String>> initialFlags = listFlags(device);
-        Map<String, Map<String, String>> targetFlags = parseFlags(device, mFlagFile);
-        for (String namespace : targetFlags.keySet()) {
-            // Ignore unchanged flag values.
-            Map<String, String> initialValues = initialFlags.getOrDefault(namespace, Map.of());
-            targetFlags.get(namespace).entrySet().removeAll(initialValues.entrySet());
-            // Keep track of flag values to restore.
-            for (String name : targetFlags.get(namespace).keySet()) {
-                mFlagsToRestore
-                        .computeIfAbsent(namespace, ns -> new HashMap<>())
-                        .put(name, initialValues.get(name));
+        // Keep track of the initial flags to diff against input flag files.
+        Map<String, Map<String, String>> initialFlags = null;
+
+        for (File mFlagFile : mFlagFiles) {
+            // Determine current and target flag values.
+            Map<String, Map<String, String>> currentFlags = listFlags(device);
+            if (initialFlags == null) {
+                initialFlags = currentFlags;
             }
+            Map<String, Map<String, String>> targetFlags = parseFlags(device, mFlagFile);
+
+            for (String namespace : targetFlags.keySet()) {
+                // Ignore unchanged flag values.
+                Map<String, String> currentValues = currentFlags.getOrDefault(namespace, Map.of());
+                Map<String, String> targetValues = targetFlags.get(namespace);
+                // target flags - current flags = new flags to apply
+                targetValues.entrySet().removeAll(currentValues.entrySet());
+                // new flags to apply - initial flags = new flags to restore
+                updateFlagsToRestore(
+                        namespace, initialFlags.getOrDefault(namespace, Map.of()), targetValues);
+            }
+
+            if (targetFlags.values().stream().allMatch(Map::isEmpty)) {
+                continue; // No flags to update.
+            }
+            updateFlags(device, targetFlags);
+            device.reboot();
         }
-        if (targetFlags.values().stream().allMatch(Map::isEmpty)) {
-            return; // No flags to update.
-        }
-        updateFlags(device, targetFlags);
-        device.reboot();
     }
 
     @Override
     public void tearDown(TestInformation testInformation, Throwable e)
             throws DeviceNotAvailableException {
-        if (e instanceof DeviceNotAvailableException || mFlagsToRestore.isEmpty()) {
+        if (e instanceof DeviceNotAvailableException
+                || mFlagsToRestore.isEmpty()
+                || mFlagsToRestore.values().stream().allMatch(Map::isEmpty)) {
             return;
         }
         try {
@@ -107,6 +121,25 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
             device.reboot();
         } catch (TargetSetupError tse) {
             CLog.e("Failed to restore flags: %s", tse);
+        }
+    }
+
+    private void validateFlagFiles(ITestDevice device) throws TargetSetupError {
+        if (mFlagFiles.isEmpty()) {
+            throw new TargetSetupError(
+                    String.format(
+                            "Flag file is required but not found. Make sure flag file(s) are"
+                                    + " specified in the flag-file option."),
+                    device.getDeviceDescriptor(),
+                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+        }
+        for (File mFlagFile : mFlagFiles) {
+            if (mFlagFile == null || !mFlagFile.isFile()) {
+                throw new TargetSetupError(
+                        String.format("Flag file '%s' not found", mFlagFile),
+                        device.getDeviceDescriptor(),
+                        InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+            }
         }
     }
 
@@ -149,9 +182,32 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
                 String namespace = match.group("namespace");
                 String name = match.group("name");
                 String value = match.group("value");
+                // In teardown(), null values in mFlagsToRestore means to delete the flag.
+                // Set value to an empty String so that it can be persisted.
+                value = value == null ? "" : value;
                 flags.computeIfAbsent(namespace, ns -> new HashMap<>()).put(name, value);
             }
             return flags;
+        }
+    }
+
+    private void updateFlagsToRestore(
+            String namespace,
+            Map<String, String> initialValues,
+            Map<String, String> updatedValues) {
+        // Keep track of flag values to restore.
+        for (String name : updatedValues.keySet()) {
+            String initialValue = initialValues.get(name);
+            String updatedValue = updatedValues.get(name);
+            if (Objects.equals(updatedValue, initialValue)) {
+                // When the first file updates a default flag value and the second file sets the
+                // flag back to its default, there is no need to restore this flag.
+                mFlagsToRestore.getOrDefault(namespace, Map.of()).remove(name);
+            } else {
+                mFlagsToRestore
+                        .computeIfAbsent(namespace, ns -> new HashMap<>())
+                        .put(name, initialValue);
+            }
         }
     }
 
@@ -168,7 +224,7 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
 
     private void updateFlag(ITestDevice device, String namespace, String name, String value)
             throws DeviceNotAvailableException, TargetSetupError {
-        if (Strings.isNullOrEmpty(value)) {
+        if (value == null) {
             runCommand(device, String.format("device_config delete '%s' '%s'", namespace, name));
         } else {
             runCommand(
