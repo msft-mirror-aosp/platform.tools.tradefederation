@@ -494,6 +494,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         for (ApexInfo installedApex : installedApexes) {
             installedPackages.add(installedApex.name);
         }
+        Set<String> trainInstalledPackages = new HashSet<>();
         List<File> moduleFileNames = getTestsFileName();
         List<File> moduleNamesToInstall = new ArrayList<>();
         for (File moduleFileName : moduleFileNames) {
@@ -519,14 +520,19 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             if (installedPackages.contains(modulePackageName)) {
                 CLog.i("Found preloaded module for %s.", modulePackageName);
                 moduleNamesToInstall.add(moduleFile);
-                installedPackages.remove(modulePackageName);
+                if (trainInstalledPackages.contains(modulePackageName)) {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Mainline module %s is listed for install more than once.",
+                                    modulePackageName),
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                }
+                trainInstalledPackages.add(modulePackageName);
             } else {
                 if (!mIgnoreIfNotPreloaded) {
-                    if (!installedPackages.isEmpty()) {
-                        CLog.i(
-                                "The following modules are preloaded on the device %s",
-                                installedPackages);
-                    }
+                    CLog.i(
+                            "The following modules are preloaded on the device %s",
+                            installedPackages);
                     throw new TargetSetupError(
                             String.format(
                                     "Mainline module %s is not preloaded on the device "
@@ -542,11 +548,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             }
         }
         // Log the modules that are not included in the train.
-        if (!installedPackages.isEmpty()) {
+        Set<String> nonTrainPackages = new HashSet<>(installedPackages);
+        nonTrainPackages.removeAll(trainInstalledPackages);
+        if (!nonTrainPackages.isEmpty()) {
             CLog.i(
                     "The following modules are preloaded on the device, but not included in the "
                             + "train: %s",
-                    installedPackages);
+                    nonTrainPackages);
         }
         return moduleNamesToInstall;
     }
