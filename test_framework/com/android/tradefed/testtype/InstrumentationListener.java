@@ -176,7 +176,8 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
                                             + "including the same test class several "
                                             + "times.",
                                     mDuplicateTests));
-            error.setFailureStatus(FailureStatus.TEST_FAILURE);
+            error.setFailureStatus(FailureStatus.TEST_FAILURE)
+                    .setRetriable(false); // Don't retry duplicate tests.
             super.testRunFailed(error);
         } else if (mReportUnexecutedTests
                 && mExpectedTests != null
