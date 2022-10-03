@@ -399,6 +399,9 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     private SortedSet<String> getAllFilteredTests(TestInformation testInfo) {
         SortedSet<String> allFilteredTests = new TreeSet<>();
         for (String profile : profiles) {
+            // Check whether we should skip the entire profile.
+            if (shouldSkipTest(profile)) continue;
+
             allFilteredTests.addAll(
                     Arrays.stream(listPtsBotTestsForProfile(profile, testInfo))
                             .filter(testName -> !shouldSkipTest(testName))
