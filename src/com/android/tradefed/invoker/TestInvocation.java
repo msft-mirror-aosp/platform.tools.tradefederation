@@ -193,7 +193,6 @@ public class TestInvocation implements ITestInvocation {
     private boolean mShutdownBeforeTest = false;
     private boolean mTestStarted = false;
     private boolean mTestDone = false;
-    private boolean mTestsNotRan = false;
     private boolean mForcedStopRequestedAfterTest = false;
 
     private boolean mInvocationFailed = false;
@@ -485,7 +484,7 @@ public class TestInvocation implements ITestInvocation {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.SHUTDOWN_BEFORE_TEST,
                             Boolean.toString(mShutdownBeforeTest));
-                    if (mTestsNotRan) {
+                    if (mShutdownBeforeTest) {
                         String message =
                                 String.format("Notified of soft shut down. Did not run tests");
                         FailureDescription failure =
@@ -514,7 +513,7 @@ public class TestInvocation implements ITestInvocation {
                                 String.format(
                                         "Invocation was interrupted due to: %s%s",
                                         mStopCause,
-                                        mTestsNotRan
+                                        mShutdownBeforeTest
                                                 ? ". Tests were not run."
                                                 : ", results will be affected");
                         if (mStopErrorId == null) {
@@ -523,7 +522,7 @@ public class TestInvocation implements ITestInvocation {
                         // if invocation is stopped and tests were not run, report invocation
                         // failure with correct error identifier so that command can be
                         // un-leased
-                        if (mTestsNotRan) {
+                        if (mShutdownBeforeTest) {
                             mStopErrorId =
                                     InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN;
                         }
@@ -588,7 +587,6 @@ public class TestInvocation implements ITestInvocation {
         if (mSoftStopRequestTime != null || mStopRequestTime != null) {
             // Throw an exception so that it can be reported as an invocation failure
             // and command can be un-leased
-            mTestsNotRan = true;
             throw new RunInterruptedException(
                     "Notified of shut down. Will not run tests",
                     InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
@@ -1372,6 +1370,8 @@ public class TestInvocation implements ITestInvocation {
         if (mStopRequestTime == null) {
             mStopRequestTime = System.currentTimeMillis();
             mForcedStopRequestedAfterTest = mTestDone;
+            // If test isn't started yet, we know we can stop
+            mShutdownBeforeTest = !mTestStarted;
         }
     }
 
@@ -1379,7 +1379,7 @@ public class TestInvocation implements ITestInvocation {
     public void notifyInvocationStopped(String message) {
         if (mSoftStopRequestTime == null) {
             mSoftStopRequestTime = System.currentTimeMillis();
-            // If test isn't started yet, we know we could have stopped.
+            // If test isn't started yet, we know we can stop
             mShutdownBeforeTest = !mTestStarted;
         }
     }
