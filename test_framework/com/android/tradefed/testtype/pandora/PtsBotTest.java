@@ -400,30 +400,50 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         SortedSet<String> allFilteredTests = new TreeSet<>();
         for (String profile : profiles) {
             // Check whether we should skip the entire profile.
-            if (shouldSkipTest(profile)) continue;
+            if (shouldSkipProfileOrTest(profile)) continue;
 
             allFilteredTests.addAll(
                     Arrays.stream(listPtsBotTestsForProfile(profile, testInfo))
-                            .filter(testName -> !shouldSkipTest(testName))
+                            .filter(testName -> !shouldSkipProfileOrTest(testName))
                             .collect(Collectors.toList()));
         }
         return allFilteredTests;
     }
 
-    private boolean shouldSkipTest(String testName) {
-        // If the test or one of its parent test group is included in
-        // exclude filters, then skip it.
-        if (excludeFilters.stream().anyMatch(testName::contains)) return true;
+    private boolean shouldSkipProfileOrTest(String profileName) {
+        // Note that while the logic is described in terms of profiles, we can think of tests
+        // as "leaf" profiles, so the same reasoning applies
 
-        // If the test or one of its parent test group is included in
-        // include filters, then don't skip it.
-        if (includeFilters.stream().anyMatch(testName::contains)) return false;
+        for (var filter : excludeFilters) {
+            if (profileName.startsWith(filter)) {
+                // If we have an exclude filter X/Y and profile X/Y/Z, our
+                // profile can never be run, so skip
+                return true;
+            }
+            // If we have an exclude filter X/Y/Z and profile X/Y, our profile
+            // may still be run, so continue
+        }
 
-        // If include filters are provided, and if the test or one of its
-        // parent test group is not included, then skip it.
-        if (!includeFilters.isEmpty()) return true;
+        for (var filter : includeFilters) {
+            if (profileName.startsWith(filter)) {
+                // If we have an include filter X/Y and profile X/Y/Z, our
+                // profile will always be run (fully)
+                return false;
+            }
+            if (filter.startsWith(profileName)) {
+                // If we have an include filter X/Y/Z and profile X/Y, our
+                // profile may be partially run, so include
+                return false;
+            }
+        }
 
-        return false;
+        // No include filters imply running all tests / all profiles
+        if (includeFilters.isEmpty()) {
+            return false;
+        }
+
+        // If we aren't explicitly included in any include filter, then skip
+        return true;
     }
 
     private String[] listPtsBotTestsForProfile(String profile, TestInformation testInfo) {
