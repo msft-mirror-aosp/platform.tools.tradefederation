@@ -123,14 +123,17 @@ public class OxygenClient {
         List<String> gceDriverParams = deviceOptions.getGceDriverParams();
         oxygenClientArgs.add("-lease");
         // Add options from GceDriverParams
-        for (int i = 0; i < gceDriverParams.size(); i = i + 2) {
+        int i = 0;
+        while (i < gceDriverParams.size()) {
             String gceDriverOption = gceDriverParams.get(i);
             if (sGceDeviceParamsToOxygenMap.containsKey(gceDriverOption)) {
                 // add device build options in oxygen's way
                 oxygenClientArgs.add(sGceDeviceParamsToOxygenMap.get(gceDriverOption));
                 // add option's value
                 oxygenClientArgs.add(gceDriverParams.get(i + 1));
+                i++;
             }
+            i++;
         }
 
         // check if build info exists after added from GceDriverParams
