@@ -1331,6 +1331,21 @@ public class TestDevice extends NativeDevice {
      */
     @Override
     public boolean isMultiUserSupported() throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("get-max-running-users", 28);
+        final int apiLevel = getApiLevel();
+        if (apiLevel > 33) {
+            String command = "pm supports-multiple-users";
+            String commandOutput = executeShellCommand(command).trim();
+            try {
+                String parsedOutput =
+                        commandOutput.substring(commandOutput.lastIndexOf(" ")).trim();
+                Boolean retValue = Boolean.valueOf(parsedOutput);
+                return retValue;
+            } catch (NumberFormatException e) {
+                CLog.e("Failed to parse result: %s", commandOutput);
+                return false;
+            }
+        }
         return getMaxNumberOfUsersSupported() > 1;
     }
 
