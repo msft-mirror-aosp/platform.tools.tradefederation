@@ -141,23 +141,18 @@ public class TradefedSandbox implements ISandbox {
                                     ? String.format("{%s}", deviceConfig.getDeviceName())
                                     : "";
                     mCmdArgs.add(String.format("--%sno-gce-device", deviceName));
+                    mCmdArgs.add(String.format("--%sserial", deviceName));
                     mCmdArgs.add(
-                            String.format(
-                                    "--%sserial %s",
-                                    deviceName,
-                                    info.getContext()
-                                            .getDevice(deviceConfig.getDeviceName())
-                                            .getSerialNumber()));
+                            info.getContext()
+                                    .getDevice(deviceConfig.getDeviceName())
+                                    .getSerialNumber());
                     // If we are using the device-type selector, override it
                     if (DeviceSelectionOptions.DeviceRequestedType.GCE_DEVICE.equals(
                             ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
                                     .getDeviceTypeRequested())) {
+                        mCmdArgs.add(String.format("--%sdevice-type", deviceName));
                         mCmdArgs.add(
-                                String.format(
-                                        "--%sdevice-type %s",
-                                        deviceName,
-                                        DeviceSelectionOptions.DeviceRequestedType.EXISTING_DEVICE
-                                                .name()));
+                                DeviceSelectionOptions.DeviceRequestedType.EXISTING_DEVICE.name());
                     }
                 }
             }
