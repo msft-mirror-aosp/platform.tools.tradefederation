@@ -73,6 +73,8 @@ public abstract class ProtoResultReporter
     private boolean mModuleInProgress = false;
     /** Track whether or not invocation ended has been reported. */
     private boolean mInvocationEnded = false;
+    /** Whether or not to inline test record of child events */
+    private boolean mInlineRecordOfChildren = true;
 
     @Override
     public boolean supportGranularResults() {
@@ -81,6 +83,10 @@ public abstract class ProtoResultReporter
 
     public void setGranularResults(boolean granularResults) {
         mReportGranularResults = granularResults;
+    }
+
+    public void setInlineRecordOfChildren(boolean inline) {
+        mInlineRecordOfChildren = inline;
     }
 
     /**
@@ -554,7 +560,9 @@ public abstract class ProtoResultReporter
     private ChildReference createChildReference(TestRecord record) {
         ChildReference.Builder child = ChildReference.newBuilder();
         child.setTestRecordId(record.getTestRecordId());
-        child.setInlineTestRecord(record);
+        if (mInlineRecordOfChildren) {
+            child.setInlineTestRecord(record);
+        }
         return child.build();
     }
 
