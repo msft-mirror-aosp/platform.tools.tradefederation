@@ -62,6 +62,7 @@ public class OxygenClientTest {
 
     private static final String[] GCE_DEVICE_PARAMS =
             new String[] {
+                "random-arg",
                 "--branch",
                 "testBranch",
                 "--build-target",
