@@ -31,7 +31,6 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,17 +39,24 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
- * Updates the DeviceConfig (feature flags tuned by a remote service) using values from files.
+ * Updates the DeviceConfig (feature flags tuned by a remote service).
  *
  * <p>This can be used to reproduce the state of a device (by dumping all flag values to a file
  * using `adb shell device_config list`) or to bulk enable/disable flags (all-on/all-off testing).
  *
- * <p>The "flag-file" option can take one or more files with flag values to apply in
- * namespace/name=[value] format. For all-on / all-off testing, pass 1 flag file with all-on or
- * all-off flag values. For reversibility testing, pass all-on flag file then pass all-off flag
- * file.
+ * <p>Example usage:
+ *
+ * <ul>
+ *   <li>To use for all-on/all-off testing, specify the necessary flag file:
+ *       <pre>--flag-file=flag_file_path</pre>
+ *   <li>To override one or more flags, specify their values (can be combined with flag files):
+ *       <pre>--flag-file=flag_file_path --flag-value=namespace/name=value</pre>
+ *   <li>To use for reversibility testing, specify the all-on file followed by the all-off file:
+ *       <pre>--flag-file=all_on_file_path --flag-file=all_off_file_path</pre>
+ * </ul>
  *
  * <p>Should be used in combination with {@link DeviceSetup} to disable DeviceConfig syncing during
  * the test which could overwrite the changes made by this preparer.
@@ -69,24 +75,46 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
             description = "File containing flag values to apply. Can be repeated.")
     private List<File> mFlagFiles = new ArrayList<>();
 
+    @Option(name = "flag-value", description = "Additional flag values to apply. Can be repeated.")
+    private List<String> mFlagValues = new ArrayList<>();
+
     private final Map<String, Map<String, String>> mFlagsToRestore = new HashMap<>();
 
     @Override
     public void setUp(TestInformation testInformation)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         ITestDevice device = testInformation.getDevice();
-        validateFlagFiles(device);
+        if (mFlagFiles.isEmpty() && mFlagValues.isEmpty()) {
+            throw new TargetSetupError(
+                    "Flag files (--flag-file) or values (--flag-value) are required",
+                    device.getDeviceDescriptor(),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
 
-        // Keep track of the initial flags to diff against input flag files.
+        // Parse input flag files and values.
+        List<Map<String, Map<String, String>>> flagBundles = new ArrayList<>();
+        for (File flagFile : mFlagFiles) {
+            if (flagFile == null || !flagFile.isFile()) {
+                throw new TargetSetupError(
+                        String.format("Flag file '%s' not found", flagFile),
+                        device.getDeviceDescriptor(),
+                        InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+            }
+            flagBundles.add(parseFlags(device, flagFile));
+        }
+        if (!mFlagValues.isEmpty()) {
+            flagBundles.add(parseFlags(device, mFlagValues, /* throwIfInvalid */ true));
+        }
+
+        // Keep track of initial flags to be able to restore them during tearDown.
         Map<String, Map<String, String>> initialFlags = null;
 
-        for (File mFlagFile : mFlagFiles) {
-            // Determine current and target flag values.
+        for (Map<String, Map<String, String>> targetFlags : flagBundles) {
+            // Determine current flag values to diff against target flag values.
             Map<String, Map<String, String>> currentFlags = listFlags(device);
             if (initialFlags == null) {
                 initialFlags = currentFlags;
             }
-            Map<String, Map<String, String>> targetFlags = parseFlags(device, mFlagFile);
 
             for (String namespace : targetFlags.keySet()) {
                 // Ignore unchanged flag values.
@@ -124,30 +152,12 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
         }
     }
 
-    private void validateFlagFiles(ITestDevice device) throws TargetSetupError {
-        if (mFlagFiles.isEmpty()) {
-            throw new TargetSetupError(
-                    String.format(
-                            "Flag file is required but not found. Make sure flag file(s) are"
-                                    + " specified in the flag-file option."),
-                    device.getDeviceDescriptor(),
-                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
-        }
-        for (File mFlagFile : mFlagFiles) {
-            if (mFlagFile == null || !mFlagFile.isFile()) {
-                throw new TargetSetupError(
-                        String.format("Flag file '%s' not found", mFlagFile),
-                        device.getDeviceDescriptor(),
-                        InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
-            }
-        }
-    }
-
     private Map<String, Map<String, String>> listFlags(ITestDevice device)
             throws DeviceNotAvailableException, TargetSetupError {
         String values = runCommand(device, "device_config list");
-        try (ByteArrayInputStream stream = new ByteArrayInputStream(values.getBytes())) {
-            return parseFlags(stream);
+        try (ByteArrayInputStream stream = new ByteArrayInputStream(values.getBytes());
+                BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
+            return parseFlags(device, reader.lines().collect(Collectors.toList()), false);
         } catch (IOException ioe) {
             throw new TargetSetupError(
                     "Failed to parse device flags",
@@ -159,8 +169,9 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
 
     private Map<String, Map<String, String>> parseFlags(ITestDevice device, File flagFile)
             throws TargetSetupError {
-        try (FileInputStream stream = new FileInputStream(flagFile)) {
-            return parseFlags(stream);
+        try (FileInputStream stream = new FileInputStream(flagFile);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
+            return parseFlags(device, reader.lines().collect(Collectors.toList()), false);
         } catch (IOException ioe) {
             throw new TargetSetupError(
                     "Failed to parse flag file",
@@ -170,25 +181,31 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
         }
     }
 
-    private Map<String, Map<String, String>> parseFlags(InputStream stream) throws IOException {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
-            Map<String, Map<String, String>> flags = new HashMap<>();
-            for (String line = reader.readLine(); line != null; line = reader.readLine()) {
-                Matcher match = FLAG_PATTERN.matcher(line);
-                if (!match.matches()) {
-                    CLog.w("Skipping invalid flag data: %s", line);
-                    continue;
+    private Map<String, Map<String, String>> parseFlags(
+            ITestDevice device, List<String> lines, boolean throwIfInvalid)
+            throws TargetSetupError {
+        Map<String, Map<String, String>> flags = new HashMap<>();
+        for (String line : lines) {
+            Matcher match = FLAG_PATTERN.matcher(line);
+            if (!match.matches()) {
+                if (throwIfInvalid) {
+                    throw new TargetSetupError(
+                            String.format("Failed to parse flag data: %s", line),
+                            device.getDeviceDescriptor(),
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 }
-                String namespace = match.group("namespace");
-                String name = match.group("name");
-                String value = match.group("value");
-                // In teardown(), null values in mFlagsToRestore means to delete the flag.
-                // Set value to an empty String so that it can be persisted.
-                value = value == null ? "" : value;
-                flags.computeIfAbsent(namespace, ns -> new HashMap<>()).put(name, value);
+                CLog.w("Skipping invalid flag data: %s", line);
+                continue;
             }
-            return flags;
+            String namespace = match.group("namespace");
+            String name = match.group("name");
+            String value = match.group("value");
+            // In teardown(), null values in mFlagsToRestore means to delete the flag.
+            // Set value to an empty String so that it can be persisted.
+            value = value == null ? "" : value;
+            flags.computeIfAbsent(namespace, ns -> new HashMap<>()).put(name, value);
         }
+        return flags;
     }
 
     private void updateFlagsToRestore(
