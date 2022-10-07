@@ -135,7 +135,7 @@ public class DeviceManager implements IDeviceManager {
     private int mNumEmulatorSupported = 1;
     @Option(name = "max-null-devices",
             description = "the maximum number of no device runs that can be allocated at one time.")
-    private int mNumNullDevicesSupported = 5;
+    private int mNumNullDevicesSupported = 7;
     @Option(name = "max-tcp-devices",
             description = "the maximum number of tcp devices that can be allocated at one time")
     private int mNumTcpDevicesSupported = 1;
