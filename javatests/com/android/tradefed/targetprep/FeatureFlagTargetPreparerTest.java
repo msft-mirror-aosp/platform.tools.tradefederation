@@ -231,6 +231,29 @@ public class FeatureFlagTargetPreparerTest {
         verifyNoMoreInteractions(mDevice);
     }
 
+    @Test
+    public void testSetUpAndTearDown_additionalFlagValues() throws Exception {
+        mCommandResult.setStdout("namespace/f1=v1\n");
+        new OptionSetter(mPreparer).setOptionValue("flag-value", "namespace/f1=v2");
+        new OptionSetter(mPreparer).setOptionValue("flag-value", "namespace/f2=v3");
+
+        // Updates according to additional flag values during setUp and reboots.
+        mPreparer.setUp(mTestInfo);
+        verify(mDevice, times(1)).executeShellV2Command(eq("device_config list"));
+        verify(mDevice).executeShellV2Command(eq("device_config put 'namespace' 'f1' 'v2'"));
+        verify(mDevice).executeShellV2Command(eq("device_config put 'namespace' 'f2' 'v3'"));
+        verify(mDevice, times(1)).reboot();
+        verifyNoMoreInteractions(mDevice);
+
+        // Reverts to previous flags during tearDown and reboots.
+        clearInvocations(mDevice);
+        mPreparer.tearDown(mTestInfo, null);
+        verify(mDevice).executeShellV2Command(eq("device_config put 'namespace' 'f1' 'v1'"));
+        verify(mDevice).executeShellV2Command(eq("device_config delete 'namespace' 'f2'"));
+        verify(mDevice).reboot();
+        verifyNoMoreInteractions(mDevice);
+    }
+
     @Test(expected = TargetSetupError.class)
     public void testSetUp_fileNotFound() throws Exception {
         File file = addFlagFile("");
@@ -259,10 +282,17 @@ public class FeatureFlagTargetPreparerTest {
         verify(mDevice, never()).reboot();
     }
 
+    @Test(expected = TargetSetupError.class)
+    public void testSetUp_invalidAdditionalFlags() throws Exception {
+        new OptionSetter(mPreparer).setOptionValue("flag-value", "invalid=data");
+        mPreparer.setUp(mTestInfo);
+    }
+
     @Test
     public void testSetUp_ignoreUnchanged() throws Exception {
         mCommandResult.setStdout("namespace/flag=value\n");
         addFlagFile("namespace/flag=value\n");
+        new OptionSetter(mPreparer).setOptionValue("flag-value", "namespace/flag=value");
 
         // Unchanged flags are not updated/reverted, and reboot skipped (nothing to update/revert).
         mPreparer.setUp(mTestInfo);
