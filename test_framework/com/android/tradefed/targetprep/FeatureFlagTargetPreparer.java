@@ -26,6 +26,8 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 
+import com.google.common.base.Strings;
+
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -200,9 +202,6 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
             String namespace = match.group("namespace");
             String name = match.group("name");
             String value = match.group("value");
-            // In teardown(), null values in mFlagsToRestore means to delete the flag.
-            // Set value to an empty String so that it can be persisted.
-            value = value == null ? "" : value;
             flags.computeIfAbsent(namespace, ns -> new HashMap<>()).put(name, value);
         }
         return flags;
@@ -241,7 +240,7 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
 
     private void updateFlag(ITestDevice device, String namespace, String name, String value)
             throws DeviceNotAvailableException, TargetSetupError {
-        if (value == null) {
+        if (Strings.isNullOrEmpty(value)) { // `device_config put` does not support empty values.
             runCommand(device, String.format("device_config delete '%s' '%s'", namespace, name));
         } else {
             runCommand(
