@@ -103,7 +103,7 @@ public class FeatureFlagTargetPreparerTest {
         // Reverts to previous flags (revert f) during tearDown and reboots.
         clearInvocations(mDevice);
         mPreparer.tearDown(mTestInfo, null);
-        verify(mDevice).executeShellV2Command(eq("device_config put 'namespace' 'f' ''"));
+        verify(mDevice).executeShellV2Command(eq("device_config delete 'namespace' 'f'"));
         verify(mDevice).reboot();
         verifyNoMoreInteractions(mDevice);
     }
@@ -116,7 +116,7 @@ public class FeatureFlagTargetPreparerTest {
         // Updates to parsed flags (modify f) during setUp and reboots.
         mPreparer.setUp(mTestInfo);
         verify(mDevice).executeShellV2Command(eq("device_config list"));
-        verify(mDevice).executeShellV2Command(eq("device_config put 'namespace' 'f' ''"));
+        verify(mDevice).executeShellV2Command(eq("device_config delete 'namespace' 'f'"));
         verify(mDevice).reboot();
         verifyNoMoreInteractions(mDevice);
 
