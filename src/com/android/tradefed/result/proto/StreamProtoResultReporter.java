@@ -38,6 +38,10 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
     private Socket mReportSocket = null;
     private boolean mPrintedMessage = false;
 
+    public StreamProtoResultReporter() {
+        setInlineRecordOfChildren(false);
+    }
+
     public void setProtoReportPort(Integer portValue) {
         mReportPort = portValue;
     }
