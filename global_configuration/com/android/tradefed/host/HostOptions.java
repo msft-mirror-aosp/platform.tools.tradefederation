@@ -146,6 +146,14 @@ public class HostOptions implements IHostOptions {
                     "The maximum allowed size(bytes) of the local file cache. (default: 20GB)")
     private Long mCacheSizeLimit = 20L * 1024L * 1024L * 1024L;
 
+    @Option(
+            name = "test-phase-timeout",
+            description =
+                    "the maximum time to wait for test phase to finish before attempting to force"
+                            + "stop it. A value of zero will indicate no timeout.",
+            isTimeVal = true)
+    private long mTestPhaseTimeout = 0;
+
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
     private Map<PermitLimitType, Integer> mInternalConcurrentLimits = new HashMap<>();
 
@@ -285,6 +293,11 @@ public class HostOptions implements IHostOptions {
             CLog.w(e);
         }
         return null;
+    }
+
+    @Override
+    public long getTestPhaseTimeout() {
+        return mTestPhaseTimeout;
     }
 
     @Override
