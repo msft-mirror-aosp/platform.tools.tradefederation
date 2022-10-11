@@ -56,6 +56,7 @@ public class AoaDevice implements AutoCloseable {
     // AOA VID and PID
     static final int GOOGLE_VID = 0x18D1;
     private static final Range<Integer> AOA_PID = Range.closed(0x2D00, 0x2D05);
+    private static final Range<Integer> AUDIO_PID = Range.closed(0x2D02, 0x2D05);
     private static final ImmutableSet<Integer> ADB_PID = ImmutableSet.of(0x2D01, 0x2D03, 0x2D05);
 
     // Simulated accessory information
@@ -71,6 +72,7 @@ public class AoaDevice implements AutoCloseable {
     static final byte ACCESSORY_UNREGISTER_HID = 55;
     static final byte ACCESSORY_SET_HID_REPORT_DESC = 56;
     static final byte ACCESSORY_SEND_HID_EVENT = 57;
+    static final byte ACCESSORY_SET_AUDIO_MODE = 58;
 
     // Maximum attempts at restarting in accessory mode
     static final int ACCESSORY_START_MAX_RETRIES = 5;
@@ -128,6 +130,7 @@ public class AoaDevice implements AutoCloseable {
             transferOrThrow(ACCESSORY_SEND_STRING, 0, 0, MANUFACTURER);
             transferOrThrow(ACCESSORY_SEND_STRING, 0, 1, MODEL);
             transferOrThrow(ACCESSORY_SEND_STRING, 0, 3, VERSION);
+            transferOrThrow(ACCESSORY_SET_AUDIO_MODE, 1, 0, new byte[0]);
             transferOrThrow(ACCESSORY_START, 0, 0, new byte[0]);
             sleep(CONFIGURE_DELAY);
             mDelegate.close();
@@ -202,6 +205,12 @@ public class AoaDevice implements AutoCloseable {
     public boolean isAdbEnabled() {
         return GOOGLE_VID == mDelegate.getVendorId()
                 && ADB_PID.contains(mDelegate.getProductId());
+    }
+
+    /** @return true if device has USB audio enabled */
+    public boolean isAudioEnabled() {
+        return GOOGLE_VID == mDelegate.getVendorId()
+                && AUDIO_PID.contains(mDelegate.getProductId());
     }
 
     /** Get current time. */
