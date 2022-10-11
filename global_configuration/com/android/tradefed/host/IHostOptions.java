@@ -98,6 +98,9 @@ public interface IHostOptions {
     /** Returns the network interface used to connect to remote test devices. */
     String getNetworkInterface();
 
+    /** Returns the Test Phase level timeout specified. Default will be 0 for no timeouts. */
+    long getTestPhaseTimeout();
+
     /** Initializes the concurrent locks */
     public void initConcurrentLocks();
 
