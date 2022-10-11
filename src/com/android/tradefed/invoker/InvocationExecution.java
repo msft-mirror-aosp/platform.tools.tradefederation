@@ -60,6 +60,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryLogSaverResultForwarder;
 import com.android.tradefed.retry.RetryStatistics;
@@ -84,6 +85,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.PrettyPrintDelimiter;
+import com.android.tradefed.util.RunInterruptedException;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.SystemUtil.EnvVariable;
@@ -102,6 +104,8 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -120,6 +124,61 @@ public class InvocationExecution implements IInvocationExecution {
     private Set<IMultiTargetPreparer> mTrackMultiPreparers = null;
     private Map<String, Set<ITargetPreparer>> mTrackLabPreparers = null;
     private Map<String, Set<ITargetPreparer>> mTrackTargetPreparers = null;
+
+    /** Timer to make sure Test Phase does not run for too long. */
+    private class TestPhaseMonitor extends TimerTask {
+
+        private TestThread mTestThread;
+
+        public TestPhaseMonitor(TestThread toMonitor) {
+            mTestThread = toMonitor;
+        }
+
+        @Override
+        public void run() {
+            if (mTestThread != null) {
+                mTestThread.stopTestThread();
+            }
+        }
+    }
+
+    /** A Thread to execute {@link IRemoteTest} */
+    private class TestThread extends Thread {
+        private TestInformation mTestInfo;
+        private ITestInvocationListener mTestListener;
+        private IRemoteTest mTest;
+        private Throwable lastThrownException;
+
+        public TestThread(
+                TestInformation info, ITestInvocationListener listener, IRemoteTest test) {
+            mTestInfo = info;
+            mTestListener = listener;
+            mTest = test;
+        }
+
+        @Override
+        public void run() {
+            try {
+                mTest.run(mTestInfo, mTestListener);
+            } catch (Exception e) {
+                lastThrownException = e;
+            }
+        }
+
+        public Throwable getLastThrownException() {
+            return lastThrownException;
+        }
+
+        public void stopTestThread() {
+            this.interrupt();
+            mTestInfo.notifyTimeout();
+            // record this interrupt as an exception so that TestInvocation thread can throw this.
+            lastThrownException =
+                    new RunInterruptedException(
+                            "Test Phase Timeout Reached.",
+                            TestErrorIdentifier.TEST_PHASE_TIMED_OUT);
+        }
+    }
 
     @Override
     public boolean fetchBuild(
@@ -970,6 +1029,16 @@ public class InvocationExecution implements IInvocationExecution {
     public void runTests(
             TestInformation info, IConfiguration config, ITestInvocationListener listener)
             throws Throwable {
+        Timer testPhaseTimer = new Timer(true);
+        long remainingTestPhaseTime =
+                GlobalConfiguration.getInstance().getHostOptions().getTestPhaseTimeout();
+        boolean testPhaseTimeoutNeeded = remainingTestPhaseTime > 0;
+        // Make sure Test Phase timeout is less than or equal to invocation timeout
+        long invocationTimeout = config.getCommandOptions().getInvocationTimeout();
+        if (testPhaseTimeoutNeeded && invocationTimeout > 0) {
+            remainingTestPhaseTime = Math.min(remainingTestPhaseTime, invocationTimeout);
+        }
+
         List<IRemoteTest> remainingTests = new ArrayList<>(config.getTests());
         UnexecutedTestReporterThread reporterThread =
                 new UnexecutedTestReporterThread(listener, remainingTests);
@@ -1022,7 +1091,16 @@ public class InvocationExecution implements IInvocationExecution {
                             || (!(test instanceof ITestFilterReceiver)
                                     && !(test instanceof IAutoRetriableTest))) {
                         try {
-                            runTest(config, info, listener, test);
+                            long timeSpentOnTest =
+                                    runTest(
+                                            config,
+                                            info,
+                                            listener,
+                                            test,
+                                            testPhaseTimer,
+                                            remainingTestPhaseTime,
+                                            testPhaseTimeoutNeeded);
+                            remainingTestPhaseTime -= timeSpentOnTest;
                         } finally {
                             CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                             CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
@@ -1037,7 +1115,16 @@ public class InvocationExecution implements IInvocationExecution {
                     mainGranularRunListener.setAttemptIsolation(
                             CurrentInvocation.runCurrentIsolation());
                     try {
-                        runTest(config, info, runListener, test);
+                        long timeSpentOnTest =
+                                runTest(
+                                        config,
+                                        info,
+                                        runListener,
+                                        test,
+                                        testPhaseTimer,
+                                        remainingTestPhaseTime,
+                                        testPhaseTimeoutNeeded);
+                        remainingTestPhaseTime -= timeSpentOnTest;
                     } finally {
                         CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                         CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
@@ -1076,7 +1163,16 @@ public class InvocationExecution implements IInvocationExecution {
                                     CurrentInvocation.runCurrentIsolation());
                             try {
                                 // Run the tests again
-                                runTest(config, info, runListener, test);
+                                long timeSpent =
+                                        runTest(
+                                                config,
+                                                info,
+                                                runListener,
+                                                test,
+                                                testPhaseTimer,
+                                                remainingTestPhaseTime,
+                                                testPhaseTimeoutNeeded);
+                                remainingTestPhaseTime -= timeSpent;
                             } finally {
                                 CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                                 CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
@@ -1096,6 +1192,7 @@ public class InvocationExecution implements IInvocationExecution {
                 }
             }
         } finally {
+            testPhaseTimer.cancel();
             TestInvocation.printStageDelimiter(Stage.TEST, true);
             // TODO: Look if this can be improved to DeviceNotAvailableException too.
             try {
@@ -1185,12 +1282,21 @@ public class InvocationExecution implements IInvocationExecution {
         }
     }
 
-    private void runTest(
+    /**
+     * Runs a test and returns the time taken to finish the test.
+     *
+     * <p>Tests will be run on a separate thread with a timer when test phase level timeout is
+     * needed.
+     */
+    private long runTest(
             IConfiguration config,
             TestInformation info,
             ITestInvocationListener listener,
-            IRemoteTest test)
-            throws DeviceNotAvailableException {
+            IRemoteTest test,
+            Timer timer,
+            long testPhaseTimeout,
+            boolean testPhaseTimeoutNeeded)
+            throws DeviceNotAvailableException, Throwable {
         // We clone the collectors for each IRemoteTest to ensure no state conflicts.
         List<IMetricCollector> clonedCollectors = new ArrayList<>();
         // Add automated collectors
@@ -1202,7 +1308,13 @@ public class InvocationExecution implements IInvocationExecution {
         if (test instanceof IMetricCollectorReceiver) {
             ((IMetricCollectorReceiver) test).setMetricCollectors(clonedCollectors);
             // If test can receive collectors then let it handle the how to set them up
-            test.run(info, listener);
+            if (testPhaseTimeoutNeeded) {
+                return runTestThread(info, listener, test, timer, testPhaseTimeout);
+            } else {
+                long startTime = System.currentTimeMillis();
+                test.run(info, listener);
+                return System.currentTimeMillis() - startTime;
+            }
         } else {
             // Wrap collectors in each other and collection will be sequential, do this in the
             // loop to ensure they are always initialized against the right context.
@@ -1223,7 +1335,46 @@ public class InvocationExecution implements IInvocationExecution {
                     TfObjectTracker.countWithParents(collector.getClass());
                 }
             }
-            test.run(info, listenerWithCollectors);
+            if (testPhaseTimeoutNeeded) {
+                return runTestThread(info, listenerWithCollectors, test, timer, testPhaseTimeout);
+            } else {
+                long startTime = System.currentTimeMillis();
+                test.run(info, listenerWithCollectors);
+                return System.currentTimeMillis() - startTime;
+            }
+        }
+    }
+
+    /** Runs a test in a separate thread and returns the time spent on running the test. */
+    private long runTestThread(
+            TestInformation info,
+            ITestInvocationListener listener,
+            IRemoteTest test,
+            Timer timer,
+            long testPhaseTimeout)
+            throws Throwable {
+        if (testPhaseTimeout <= 0) {
+            // throw run interrupted exception so that it can be handled the same way as TestThreads
+            // when timeout is reached.
+            throw new RunInterruptedException(
+                    "Test Phase Timeout Reached.", TestErrorIdentifier.TEST_PHASE_TIMED_OUT);
+        }
+        TestThread testThread = new TestThread(info, listener, test);
+        TestPhaseMonitor testPhaseMonitor = new TestPhaseMonitor(testThread);
+        timer.schedule(testPhaseMonitor, testPhaseTimeout);
+        long startTime = System.currentTimeMillis();
+        testThread.start();
+        try {
+            testThread.join();
+        } catch (InterruptedException e) {
+            CLog.e(e);
+        } finally {
+            testPhaseMonitor.cancel();
+            long timeSpent = System.currentTimeMillis() - startTime;
+            if (testThread.getLastThrownException() != null) {
+                throw testThread.getLastThrownException();
+            }
+            return timeSpent;
         }
     }
 
