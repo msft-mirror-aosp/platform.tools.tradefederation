@@ -2541,11 +2541,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * @throws DeviceNotAvailableException if device is no longer available
      */
     @Override
-    public void recoverDevice() throws DeviceNotAvailableException {
+    public boolean recoverDevice() throws DeviceNotAvailableException {
         if (mRecoveryMode.equals(RecoveryMode.NONE)) {
             CLog.i("Skipping recovery on %s", getSerialNumber());
             getRunUtil().sleep(NONE_RECOVERY_MODE_DELAY);
-            return;
+            return false;
         }
         CLog.i("Attempting recovery on %s", getSerialNumber());
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.RECOVERY_ROUTINE_COUNT, 1);
@@ -2607,6 +2607,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     InvocationMetricKey.RECOVERY_TIME, System.currentTimeMillis() - startTime);
         }
         CLog.i("Recovery successful for %s", getSerialNumber());
+        return true;
     }
 
     /**
@@ -4118,24 +4119,22 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void waitForDeviceAvailable(long waitTime) throws DeviceNotAvailableException {
+    public boolean waitForDeviceAvailable(long waitTime) throws DeviceNotAvailableException {
         if (mStateMonitor.waitForDeviceAvailable(waitTime) == null) {
-            recoverDevice();
+            return recoverDevice();
         }
+        return true;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public void waitForDeviceAvailable() throws DeviceNotAvailableException {
+    public boolean waitForDeviceAvailable() throws DeviceNotAvailableException {
         if (mStateMonitor.waitForDeviceAvailable() == null) {
-            recoverDevice();
+            return recoverDevice();
         }
+        return true;
     }
 
     /**
