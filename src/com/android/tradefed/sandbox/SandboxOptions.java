@@ -134,7 +134,7 @@ public final class SandboxOptions {
     private boolean mParallelSandboxSetup = true;
 
     @Option(name = UPDATED_FLAG_ORDER, description = "Feature flag to test safely new flags order")
-    private boolean mNewFlagOrder = false;
+    private boolean mNewFlagOrder = true;
 
     /**
      * Returns the provided directories containing the Trade Federation version to use for
