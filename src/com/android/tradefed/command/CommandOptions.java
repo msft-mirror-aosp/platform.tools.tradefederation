@@ -102,7 +102,7 @@ public class CommandOptions implements ICommandOptions {
             name = "disable-conditional-bugreport",
             description =
                     "Disable the optimization to capture ANR instead of bugreport if no failure.")
-    private boolean mDisableConditionalBugreport = true;
+    private boolean mDisableConditionalBugreport = false;
 
     @Option(name = "invocation-timeout", description =
             "the maximum time to wait for an invocation to terminate before attempting to force"
