@@ -93,6 +93,7 @@ public class SandboxConfigDump {
         NON_TEST_ELEMENTS.add(Configuration.SANBOX_OPTIONS_TYPE_NAME);
         NON_TEST_ELEMENTS.add(Configuration.CMD_OPTIONS_TYPE_NAME);
         NON_TEST_ELEMENTS.add(Configuration.CONFIGURATION_DESCRIPTION_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.GLOBAL_FILTERS_TYPE_NAME);
     }
 
     /**
