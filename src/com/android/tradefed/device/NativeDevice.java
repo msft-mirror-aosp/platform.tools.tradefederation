@@ -41,6 +41,7 @@ import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -2739,7 +2740,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public InputStreamSource getLogcatDump() {
         long startTime = System.currentTimeMillis();
         LargeOutputReceiver largeReceiver = null;
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("getLogcatDump")) {
             // use IDevice directly because we don't want callers to handle
             // DeviceNotAvailableException for this method
             largeReceiver =
@@ -2752,6 +2753,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     .executeShellCommand(
                             LogcatReceiver.getDefaultLogcatCmd(this) + " -d",
                             largeReceiver,
+                            LOGCAT_DUMP_TIMEOUT,
                             LOGCAT_DUMP_TIMEOUT,
                             TimeUnit.MILLISECONDS);
             return largeReceiver.getData();
