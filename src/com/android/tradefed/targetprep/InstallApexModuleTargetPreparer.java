@@ -203,9 +203,12 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private void activateApex(ITestDevice device) throws DeviceNotAvailableException {
         RunUtil.getDefault().sleep(mApexStagingWaitTime);
         device.reboot();
+        // Some devices need extra waiting time after reboot to get fully ready.
         if (mExtraBootingWaitTime > 0) {
             RunUtil.getDefault().sleep(mExtraBootingWaitTime);
             device.waitForDeviceAvailable();
+            // Do a second post-boot setup (by default it is just adb root)
+            // in case its first execution inside reboot() was not at a right time.
             device.postBootSetup();
         }
     }
