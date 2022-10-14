@@ -17,6 +17,7 @@ package com.android.tradefed.postprocessor;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.DataType;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -211,7 +212,8 @@ public abstract class BasePostProcessor implements IPostProcessor {
     @Override
     public final void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
         mIsPostProcessing = true;
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("run_processor_" + this.getClass().getSimpleName())) {
             HashMap<String, Metric> rawValues = getRawMetricsOnly(runMetrics);
             // Add post-processed run metrics.
             Map<String, Metric.Builder> postprocessedResults =
