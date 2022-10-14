@@ -139,7 +139,7 @@ public class CommandRunner {
             Signal.handle(new Signal("TERM"), handler);
 
             mScheduler.addCommand(args);
-        } catch (ConfigurationException e) {
+        } catch (ConfigurationException | RuntimeException e) {
             printStackTrace(e);
             mErrorCode = ExitCode.CONFIG_EXCEPTION;
             return;
