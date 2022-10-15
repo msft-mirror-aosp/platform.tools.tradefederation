@@ -25,6 +25,7 @@ import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -256,7 +257,8 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testModuleStarted(IInvocationContext moduleContext) {
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("module_start_" + this.getClass().getSimpleName())) {
             onTestModuleStarted();
         } catch (DeviceNotAvailableException dnae) {
             mDeviceNoAvailable = true;
@@ -270,7 +272,8 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testModuleEnded() {
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("module_end_" + this.getClass().getSimpleName())) {
             onTestModuleEnded();
         } catch (DeviceNotAvailableException dnae) {
             CLog.e(dnae);
@@ -299,7 +302,8 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         mRunName = runName;
         mDeviceNoAvailable = false;
         long start = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("run_start_" + this.getClass().getSimpleName())) {
             onTestRunStart(mRunData);
         } catch (DeviceNotAvailableException e) {
             mDeviceNoAvailable = true;
@@ -363,7 +367,8 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     public final void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
         if (!mDeviceNoAvailable) {
             long start = System.currentTimeMillis();
-            try {
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope("run_end_" + this.getClass().getSimpleName())) {
                 onTestRunEnd(mRunData, runMetrics);
                 mRunData.addToMetrics(runMetrics);
             } catch (DeviceNotAvailableException e) {
