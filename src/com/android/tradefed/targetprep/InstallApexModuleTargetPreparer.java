@@ -95,6 +95,12 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private long mApexStagingWaitTime = 1 * 60 * 1000;
 
     @Option(
+            name="extra-booting-wait-time",
+            description = "The extra time in ms to wait for device ready.",
+            isTimeVal = true)
+    private long mExtraBootingWaitTime = 0;
+
+    @Option(
             name = "ignore-if-module-not-preloaded",
             description =
                     "Skip installing the module(s) when the module(s) that are not "
@@ -151,8 +157,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             testAppFiles = optimizeModuleInstallation(activatedApexes, testAppFiles, device);
             if (testAppFiles.isEmpty()) {
                 if (!mApexModulesToUninstall.isEmpty() || !mApkModulesToUninstall.isEmpty()) {
-                    RunUtil.getDefault().sleep(mApexStagingWaitTime);
-                    device.reboot();
+                    activateApex(device);
                 }
                 // If both the list of files to be installed and uninstalled are empty, that means
                 // the mainline modules are the same as the previous ones.
@@ -169,8 +174,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                 CLog.i("No Apex module in the train. Skipping reboot.");
                 return;
             } else {
-                RunUtil.getDefault().sleep(mApexStagingWaitTime);
-                device.reboot();
+                activateApex(device);
             }
         } else {
             Map<File, String> appFilesAndPackages = resolveApkFiles(testInfo, testAppFiles);
@@ -179,8 +183,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     || containsPersistentApk(appFilesAndPackages.keySet(), testInfo)
                     || !mApexModulesToUninstall.isEmpty()
                     || !mApkModulesToUninstall.isEmpty()) {
-                RunUtil.getDefault().sleep(mApexStagingWaitTime);
-                device.reboot();
+                activateApex(device);
             }
             if (mTestApexInfoList.isEmpty()) {
                 CLog.i("Train activation succeed.");
@@ -189,6 +192,22 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         }
 
         checkApexActivation(device);
+    }
+
+    /**
+     * Boot the device to activate the updated apex modules.
+     *
+     * @param device under test.
+     * @throws DeviceNotAvailableException if reboot fails.
+     */
+    private void activateApex(ITestDevice device) throws DeviceNotAvailableException {
+        RunUtil.getDefault().sleep(mApexStagingWaitTime);
+        device.reboot();
+        if (mExtraBootingWaitTime > 0) {
+            RunUtil.getDefault().sleep(mExtraBootingWaitTime);
+            device.waitForDeviceAvailable();
+            device.postBootSetup();
+        }
     }
 
     /**
