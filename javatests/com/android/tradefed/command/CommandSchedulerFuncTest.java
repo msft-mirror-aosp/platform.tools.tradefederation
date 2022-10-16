@@ -223,9 +223,11 @@ public class CommandSchedulerFuncTest {
     }
 
     private class MeasuredInvocation implements ITestInvocation {
-        Integer mSlowCount = 0;
-        Integer mFastCount = 0;
-        Integer mSlowCountLimit = 40;
+        private final Object mSlowCountLock = new Object();
+        int mSlowCount = 0;
+        private final Object mFastCountLock = new Object();
+        int mFastCount = 0;
+        int mSlowCountLimit = 40;
         public boolean runInterrupted = false;
         public boolean printedStop = false;
 
@@ -244,7 +246,7 @@ public class CommandSchedulerFuncTest {
                 if (config.equals(mSlowConfig)) {
                     // sleep for 2 * fast config time
                     RunUtil.getDefault().sleep(200);
-                    synchronized (mSlowCount) {
+                    synchronized (mSlowCountLock) {
                         mSlowCount++;
                     }
                     if (mSlowCount >= mSlowCountLimit) {
@@ -254,7 +256,7 @@ public class CommandSchedulerFuncTest {
                     }
                 } else if (config.equals(mFastConfig)) {
                     RunUtil.getDefault().sleep(100);
-                    synchronized (mFastCount) {
+                    synchronized (mFastCountLock) {
                         mFastCount++;
                     }
                 } else {

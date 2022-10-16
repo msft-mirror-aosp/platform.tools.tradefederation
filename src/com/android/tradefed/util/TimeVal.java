@@ -28,7 +28,9 @@ import java.util.regex.Pattern;
  *
  * <p>We recommend using {@link java.time.Duration} instead.
  */
-@SuppressWarnings("serial")
+@SuppressWarnings({"serial", "ComparableType"}) // TODO: Fix me: https://errorprone.info/bugpattern/ComparableType
+                                                // We should not use Comparable<Long>, because
+                                                // Long.compareTo(TimeVal) != -TimeVal.compareTo(Long)
 public class TimeVal extends Number implements Comparable<Long> {
     private static final Pattern TIME_PATTERN =
             Pattern.compile("(?i)" +  // case insensitive
