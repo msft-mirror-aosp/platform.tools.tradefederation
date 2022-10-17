@@ -81,6 +81,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.ReportPassedTests;
 import com.android.tradefed.result.ResultAndLogForwarder;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
@@ -1682,7 +1683,15 @@ public class TestInvocation implements ITestInvocation {
             RecoveryMode current = device.getRecoveryMode();
             device.setRecoveryMode(RecoveryMode.NONE);
             try {
-                device.waitForDeviceAvailable();
+                boolean available = device.waitForDeviceAvailable();
+                if (!available) {
+                    throw new DeviceNotAvailableException(
+                            String.format(
+                                    "Device %s failed availability check after running tests.",
+                                    device.getSerialNumber()),
+                            device.getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                }
             } catch (DeviceNotAvailableException e) {
                 String msg =
                         String.format("Device was left offline after tests: %s", e.getMessage());

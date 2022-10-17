@@ -472,13 +472,14 @@ public class TestInvocationTest {
                 .thenReturn(mLogcatSetupSource)
                 .thenReturn(mLogcatTestSource)
                 .thenReturn(mLogcatTeardownSource);
+        when(mMockDevice.waitForDeviceAvailable()).thenReturn(true);
 
         when(mMockLogger.getLog()).thenReturn(mHostLogSource);
         Mockito.lenient().when(mMockBuildInfo.getTestTag()).thenReturn("");
     }
 
     /** Set up expected calls that occur on every invoke that gets a valid build */
-    private void verifyInvokeWithBuild() throws DeviceNotAvailableException {
+    private void verifyInvokeWithBuild() {
         try {
             verify(mMockLogger).getLog();
             verify(mMockLogger, times(3)).init();
