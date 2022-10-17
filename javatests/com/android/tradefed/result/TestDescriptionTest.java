@@ -38,6 +38,16 @@ public class TestDescriptionTest {
         public Class<? extends Annotation> annotationType() {
             return TestAnnotation.class;
         }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof TestAnnotation;
+        }
+
+        @Override
+        public int hashCode() {
+            return 0;
+        }
     }
 
     /** Annotation used for testing. */
@@ -45,6 +55,16 @@ public class TestDescriptionTest {
         @Override
         public Class<? extends Annotation> annotationType() {
             return TestAnnotation2.class;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof TestAnnotation2;
+        }
+
+        @Override
+        public int hashCode() {
+            return 0;
         }
     }
 
