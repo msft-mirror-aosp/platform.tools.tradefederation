@@ -90,8 +90,9 @@ public class LocalAndroidVirtualDeviceTest {
         }
 
         @Override
-        public void waitForDeviceAvailable() {
+        public boolean waitForDeviceAvailable() {
             Assert.assertTrue("Unexpected method call to waitForDeviceAvailable.", expectToConnect);
+            return true;
         }
 
         @Override

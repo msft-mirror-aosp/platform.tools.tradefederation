@@ -121,7 +121,7 @@ public class RemoteAndroidDevice extends TestDevice {
 
     /** {@inheritDoc} */
     @Override
-    public void recoverDevice() throws DeviceNotAvailableException {
+    public boolean recoverDevice() throws DeviceNotAvailableException {
         // If device is not in use (TcpDevice) do not attempt reconnection, it will fail
         // device in use will not be of the TcpDevice type.
         if (!(getIDevice() instanceof TcpDevice)) {
@@ -131,7 +131,7 @@ public class RemoteAndroidDevice extends TestDevice {
             waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
         }
         // Standard recovery
-        super.recoverDevice();
+        return super.recoverDevice();
     }
 
     /**

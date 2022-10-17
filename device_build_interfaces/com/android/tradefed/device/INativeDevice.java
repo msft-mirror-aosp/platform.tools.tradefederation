@@ -1191,16 +1191,18 @@ public interface INativeDevice {
      *
      * @param waitTime the time in ms to wait
      * @throws DeviceNotAvailableException if device is still unresponsive after waitTime expires.
+     * @return True if device is available, False if recovery is disabled and unavailable.
      */
-    public void waitForDeviceAvailable(final long waitTime) throws DeviceNotAvailableException;
+    public boolean waitForDeviceAvailable(final long waitTime) throws DeviceNotAvailableException;
 
     /**
-     * Waits for the device to be responsive and available for testing.  Uses default timeout.
+     * Waits for the device to be responsive and available for testing. Uses default timeout.
      *
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
-     * recovered.
+     *     recovered.
+     * @return True if device is available, False if recovery is disabled and unavailable.
      */
-    public void waitForDeviceAvailable() throws DeviceNotAvailableException;
+    public boolean waitForDeviceAvailable() throws DeviceNotAvailableException;
 
     /**
      * Blocks until device is visible via adb.
