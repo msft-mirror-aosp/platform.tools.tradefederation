@@ -130,6 +130,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String PREPARATION_TIME = "PREP_TIME";
     public static final String TEAR_DOWN_TIME = "TEARDOWN_TIME";
     public static final String TEST_TIME = "TEST_TIME";
+    public static final String MODULE_TEST_COUNT = "MODULE_TEST_COUNT";
     public static final String RETRY_TIME = "MODULE_RETRY_TIME";
     public static final String RETRY_SUCCESS_COUNT = "MODULE_RETRY_SUCCESS";
     public static final String RETRY_FAIL_COUNT = "MODULE_RETRY_FAILED";
@@ -807,6 +808,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 TfMetricProtoUtil.createSingleValue(mElapsedTearDown, "milliseconds"));
         metricsProto.put(
                 TEST_TIME, TfMetricProtoUtil.createSingleValue(elapsedTime, "milliseconds"));
+        metricsProto.put(MODULE_TEST_COUNT, TfMetricProtoUtil.createSingleValue(numResults, "int"));
         // Report all the retry informations
         if (!mRetryStats.isEmpty()) {
             RetryStatistics agg = RetryStatistics.aggregateStatistics(mRetryStats);
