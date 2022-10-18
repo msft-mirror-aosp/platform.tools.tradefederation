@@ -2127,6 +2127,7 @@ public class TestDevice extends NativeDevice {
      * @param configPath the name of the VM config file that you embedded in the APK.
      * @param debugLevel debugging level.
      * @param memoryMib minimum memory size
+     * @param protectedVm whether the Vm is protected.
      * @param extraIdsigPaths Paths to extra idsig files.
      * @return returns a ITestDevice for the microdroid, can return null.
      */
@@ -2138,6 +2139,7 @@ public class TestDevice extends NativeDevice {
             int memoryMib,
             int numCpus,
             String cpuAffinity,
+            boolean protectedVm,
             List<String> extraIdsigPaths)
             throws DeviceNotAvailableException {
         if (!startedMicrodroids.isEmpty())
@@ -2212,6 +2214,9 @@ public class TestDevice extends NativeDevice {
                                 outApkIdsigPath,
                                 instanceImg,
                                 configPath));
+        if (protectedVm) {
+            args.add("--protected");
+        }
         for (String path : extraIdsigPaths) {
             args.add("--extra-idsig");
             args.add(path);
@@ -2417,6 +2422,7 @@ public class TestDevice extends NativeDevice {
         private int mNumCpus;
         private String mCpuAffinity;
         private List<String> mExtraIdsigPaths;
+        private boolean mProtectedVm;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -2428,6 +2434,7 @@ public class TestDevice extends NativeDevice {
             mNumCpus = 1;
             mCpuAffinity = null;
             mExtraIdsigPaths = new ArrayList<>();
+            mProtectedVm = false; // Vm is unprotected by default.
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -2476,6 +2483,12 @@ public class TestDevice extends NativeDevice {
             return this;
         }
 
+        /** Sets whether the VM will be protected or not. */
+        public MicrodroidBuilder protectedVm(boolean isProtectedVm) {
+            mProtectedVm = isProtectedVm;
+            return this;
+        }
+
         /** Adds extra idsig file to the list. */
         public MicrodroidBuilder addExtraIdsigPath(String extraIdsigPath) {
             if (!Strings.isNullOrEmpty(extraIdsigPath)) {
@@ -2505,6 +2518,7 @@ public class TestDevice extends NativeDevice {
                     mMemoryMib,
                     mNumCpus,
                     mCpuAffinity,
+                    mProtectedVm,
                     mExtraIdsigPaths);
         }
     }
