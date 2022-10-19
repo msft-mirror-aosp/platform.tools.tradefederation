@@ -133,12 +133,16 @@ public class TestDiscoveryExecutor {
         // Collect include filters from every test.
         for (IRemoteTest test : testList) {
             if (test instanceof BaseTestSuite) {
+                Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
                 MultiMap<String, String> moduleMetadataIncludeFilters =
                         ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
-                if (moduleMetadataIncludeFilters == null
-                        || moduleMetadataIncludeFilters.isEmpty()) {
-                    includeFilters.addAll(((BaseTestSuite) test).getIncludeFilter());
-                } else {
+                // Include/Exclude filters in suites are evaluated first,
+                // then metadata are applied on top, so having metadata filters
+                // and include-filters can actually be resolved to a super-set
+                // which is better than falling back.
+                if (!suiteIncludeFilters.isEmpty()) {
+                    includeFilters.addAll(suiteIncludeFilters);
+                } else if (!moduleMetadataIncludeFilters.isEmpty()) {
                     throw new TestDiscoveryException(
                             "Tradefed Observatory can't do test discovery because the existence of"
                                     + " metadata include filter option.");

@@ -35,7 +35,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /** Unit tests for {@link CreateUserPreparer}. */
@@ -75,25 +74,17 @@ public class CreateUserPreparerTest {
         OptionSetter setter = new OptionSetter(preparer);
         setter.setOptionValue("reuse-test-user", "true");
 
-        Map<Integer, UserInfo> existingUsers =
-                new HashMap<Integer, UserInfo>() {
-                    {
-                        put(
-                                0,
-                                new UserInfo(
-                                        /* id= */ 0,
-                                        /* userName= */ null,
-                                        /* flags= */ 0x00000013,
-                                        /* isRunning= */ true));
-                        put(
-                                13,
-                                new UserInfo(
-                                        /* id= */ 13,
-                                        "tf_created_user",
-                                        /* flags= */ 0,
-                                        /* isRunning= */ false));
-                    }
-                };
+        Map<Integer, UserInfo> existingUsers = Map.of(
+                0, new UserInfo(
+                    /* id= */ 0,
+                    /* userName= */ null,
+                    /* flags= */ 0x00000013,
+                    /* isRunning= */ true),
+                13, new UserInfo(
+                    /* id= */ 13,
+                    "tf_created_user",
+                    /* flags= */ 0,
+                    /* isRunning= */ false));
 
         doReturn(existingUsers).when(mMockDevice).getUserInfos();
         doReturn(0).when(mMockDevice).getCurrentUser();
@@ -119,18 +110,12 @@ public class CreateUserPreparerTest {
         OptionSetter setter = new OptionSetter(preparer);
         setter.setOptionValue("reuse-test-user", "true");
 
-        Map<Integer, UserInfo> existingUsers =
-                new HashMap<Integer, UserInfo>() {
-                    {
-                        put(
-                                0,
-                                new UserInfo(
-                                        /* id= */ 0,
-                                        /* userName= */ null,
-                                        /* flags= */ 0x00000013,
-                                        /* isRunning= */ true));
-                    }
-                };
+        Map<Integer, UserInfo> existingUsers = Map.of(
+                0, new UserInfo(
+                    /* id= */ 0,
+                    /* userName= */ null,
+                    /* flags= */ 0x00000013,
+                    /* isRunning= */ true));
 
         doReturn(existingUsers).when(mMockDevice).getUserInfos();
         doReturn(0).when(mMockDevice).getCurrentUser();
@@ -166,32 +151,22 @@ public class CreateUserPreparerTest {
 
     @Test
     public void testSetUp_maxUsersReached() throws Exception {
-        Map<Integer, UserInfo> existingUsers =
-                new HashMap<Integer, UserInfo>() {
-                    {
-                        put(
-                                0,
-                                new UserInfo(
-                                        /* id= */ 0,
-                                        /* userName= */ null,
-                                        /* flags= */ 0x00000013,
-                                        /* isRunning= */ true));
-                        put(
-                                11,
-                                new UserInfo(
-                                        /* id= */ 11,
-                                        "tf_created_user",
-                                        /* flags= */ 0,
-                                        /* isRunning= */ true));
-                        put(
-                                13,
-                                new UserInfo(
-                                        /* id= */ 13,
-                                        "tf_created_user",
-                                        /* flags= */ 0,
-                                        /* isRunning= */ false));
-                    }
-                };
+        Map<Integer, UserInfo> existingUsers = Map.of(
+                0, new UserInfo(
+                    /* id= */ 0,
+                    /* userName= */ null,
+                    /* flags= */ 0x00000013,
+                    /* isRunning= */ true),
+                11, new UserInfo(
+                    /* id= */ 11,
+                    "tf_created_user",
+                    /* flags= */ 0,
+                    /* isRunning= */ true),
+                13, new UserInfo(
+                    /* id= */ 13,
+                    "tf_created_user",
+                    /* flags= */ 0,
+                    /* isRunning= */ false));
 
         doReturn(3).when(mMockDevice).getMaxNumberOfUsersSupported();
         doReturn(existingUsers).when(mMockDevice).getUserInfos();

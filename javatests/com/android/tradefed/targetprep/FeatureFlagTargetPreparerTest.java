@@ -64,6 +64,8 @@ public class FeatureFlagTargetPreparerTest {
         // Default to successful command execution.
         mCommandResult = new CommandResult(CommandStatus.SUCCESS);
         when(mDevice.executeShellV2Command(anyString())).thenReturn(mCommandResult);
+        // Defaults to rebooting after each file (to test individual file updates).
+        new OptionSetter(mPreparer).setOptionValue("reboot-between-flag-files", "true");
     }
 
     @Test
@@ -252,6 +254,24 @@ public class FeatureFlagTargetPreparerTest {
         verify(mDevice).executeShellV2Command(eq("device_config delete 'namespace' 'f2'"));
         verify(mDevice).reboot();
         verifyNoMoreInteractions(mDevice);
+    }
+
+    @Test
+    public void testSetUp_withoutRebootBetweenFiles() throws Exception {
+        mCommandResult.setStdout("namespace/f1=v1\n");
+        new OptionSetter(mPreparer).setOptionValue("reboot-between-flag-files", "false");
+
+        // No reboot if no flags are updated.
+        addFlagFile("namespace/f1=v1\n");
+        mPreparer.setUp(mTestInfo);
+        verify(mDevice, never()).reboot();
+
+        // Single reboot even with multiple files/values updated.
+        addFlagFile("namespace/f2=v2\n");
+        addFlagFile("namespace/f3=v3\n");
+        new OptionSetter(mPreparer).setOptionValue("flag-value", "namespace/f4=v4");
+        mPreparer.setUp(mTestInfo);
+        verify(mDevice, times(1)).reboot();
     }
 
     @Test(expected = TargetSetupError.class)

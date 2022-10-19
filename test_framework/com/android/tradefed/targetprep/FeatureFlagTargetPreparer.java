@@ -56,8 +56,10 @@ import java.util.stream.Collectors;
  *       <pre>--flag-file=flag_file_path</pre>
  *   <li>To override one or more flags, specify their values (can be combined with flag files):
  *       <pre>--flag-file=flag_file_path --flag-value=namespace/name=value</pre>
- *   <li>To use for reversibility testing, specify the all-on file followed by the all-off file:
- *       <pre>--flag-file=all_on_file_path --flag-file=all_off_file_path</pre>
+ *   <li>To use for reversibility testing, specify the all-on file followed by the all-off file, and
+ *       enable rebooting between the two files:
+ *       <pre>--flag-file=all_on_file_path --flag-file=all_off_file_path --reboot-between-flag-files
+ *       </pre>
  * </ul>
  *
  * <p>Should be used in combination with {@link DeviceSetup} to disable DeviceConfig syncing during
@@ -79,6 +81,11 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
 
     @Option(name = "flag-value", description = "Additional flag values to apply. Can be repeated.")
     private List<String> mFlagValues = new ArrayList<>();
+
+    @Option(
+            name = "reboot-between-flag-files",
+            description = "Enables reboots after each input file. Used for reversibility testing.")
+    private boolean mRebootBetweenFlagFiles = false;
 
     private final Map<String, Map<String, String>> mFlagsToRestore = new HashMap<>();
 
@@ -110,6 +117,7 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
 
         // Keep track of initial flags to be able to restore them during tearDown.
         Map<String, Map<String, String>> initialFlags = null;
+        boolean flagsUpdated = false;
 
         for (Map<String, Map<String, String>> targetFlags : flagBundles) {
             // Determine current flag values to diff against target flag values.
@@ -133,6 +141,13 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
                 continue; // No flags to update.
             }
             updateFlags(device, targetFlags);
+            flagsUpdated = true;
+            if (mRebootBetweenFlagFiles) {
+                device.reboot();
+            }
+        }
+
+        if (!mRebootBetweenFlagFiles && flagsUpdated) {
             device.reboot();
         }
     }

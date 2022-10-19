@@ -172,8 +172,9 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public void recoverDevice() throws DeviceNotAvailableException {
+                    public boolean recoverDevice() throws DeviceNotAvailableException {
                         // ignore
+                        return true;
                     }
 
                     @Override
@@ -5025,8 +5026,9 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public void recoverDevice() throws DeviceNotAvailableException {
+                    public boolean recoverDevice() throws DeviceNotAvailableException {
                         // ignore
+                        return true;
                     }
 
                     @Override

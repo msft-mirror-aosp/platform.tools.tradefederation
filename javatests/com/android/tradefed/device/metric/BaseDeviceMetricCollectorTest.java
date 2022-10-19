@@ -55,6 +55,7 @@ import java.lang.annotation.Annotation;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /** Unit tests for {@link BaseDeviceMetricCollector}. */
 @RunWith(JUnit4.class)
@@ -383,6 +384,23 @@ public class BaseDeviceMetricCollectorTest {
         @Override
         public String group() {
             return mGroup;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (other == this) {
+                return true;
+            }
+            if (!(other instanceof TestAnnotation)) {
+                return false;
+            }
+            TestAnnotation o = (TestAnnotation) other;
+            return Objects.equals(mGroup, o.mGroup);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mGroup);
         }
     }
 
