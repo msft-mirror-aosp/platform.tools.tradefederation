@@ -882,14 +882,6 @@ public abstract class ITestSuite
             // Pass the main invocation logSaver
             module.setLogSaver(mMainConfiguration.getLogSaver());
 
-            if (mCollectTestsOnly) {
-                module.setCollectTestsOnly(mCollectTestsOnly);
-            }
-            // Pass the run defined collectors to be used.
-            module.setMetricCollectors(CollectorHelper.cloneCollectors(mMetricCollectors));
-            // Pass the main invocation logSaver
-            module.setLogSaver(mMainConfiguration.getLogSaver());
-
             IRetryDecision decision = mMainConfiguration.getRetryDecision();
             // Pass whether we should merge the attempts of not
             if (mMergeAttempts
