@@ -415,7 +415,7 @@ public class ShardHelperTest {
                                         assertTrue(test instanceof TestsPoolPoller);
                                         TestsPoolPoller poller = (TestsPoolPoller) test;
                                         // Token pool has the test
-                                        assertEquals(1, poller.getTokenPool().size());
+                                        assertEquals(1, poller.peekTokenPoolSize());
                                         return true;
                                     }
                                 }));
