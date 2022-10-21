@@ -172,7 +172,8 @@ public class ShardHelper implements IShardHelper {
                         throw new RuntimeException(e);
                     }
                     TestsPoolPoller poller =
-                            new TestsPoolPoller(shardableTests, tokenPool, tracker);
+                            new TestsPoolPoller(
+                                    createTestsPool(shardableTests, tokenPool), tracker);
                     shardConfig.setTest(poller);
                     rescheduleConfig(
                             shardConfig, config, testInfo, rescheduler, resultCollector, i);
@@ -194,7 +195,8 @@ public class ShardHelper implements IShardHelper {
                     }
                     if (config.getCommandOptions().shouldUseDynamicSharding()) {
                         TestsPoolPoller poller =
-                                new TestsPoolPoller(shardableTests, tokenPool, tracker);
+                                new TestsPoolPoller(
+                                        createTestsPool(shardableTests, tokenPool), tracker);
                         shardConfig.setTest(poller);
                     } else {
                         shardConfig.setTest(testShard);
@@ -215,6 +217,11 @@ public class ShardHelper implements IShardHelper {
             }
         }
         return true;
+    }
+
+    private ITestsPool createTestsPool(
+            Collection<IRemoteTest> tests, Collection<ITokenRequest> tokenTests) {
+        return new LocalPool(tests, tokenTests);
     }
 
     private void rescheduleConfig(
