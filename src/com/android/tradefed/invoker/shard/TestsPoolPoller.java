@@ -33,13 +33,9 @@ import com.android.tradefed.device.metric.IMetricCollectorReceiver;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
-import com.android.tradefed.invoker.shard.token.ITokenProvider;
 import com.android.tradefed.invoker.shard.token.ITokenRequest;
-import com.android.tradefed.invoker.shard.token.TokenProperty;
-import com.android.tradefed.invoker.shard.token.TokenProviderHelper;
 import com.android.tradefed.log.ILogRegistry;
 import com.android.tradefed.log.ILogRegistry.EventType;
-import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -55,15 +51,10 @@ import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
-import com.google.common.collect.Sets;
-
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -80,10 +71,8 @@ public final class TestsPoolPoller
 
     private static final long WAIT_RECOVERY_TIME = 15 * 60 * 1000;
 
-    private Collection<IRemoteTest> mGenericPool;
-    private Collection<ITokenRequest> mTokenPool;
+    private LocalPool mLocalPool;
     private CountDownLatch mTracker;
-    private Set<ITokenRequest> mRejectedToken;
 
     private TestInformation mTestInfo;
     private IConfiguration mConfig;
@@ -98,18 +87,12 @@ public final class TestsPoolPoller
      * @param tests {@link IRemoteTest}s pool of all tests.
      * @param tracker a {@link CountDownLatch} shared to get the number of running poller.
      */
-    public TestsPoolPoller(Collection<IRemoteTest> tests, CountDownLatch tracker) {
-        mGenericPool = tests;
-        mTracker = tracker;
-    }
-
     public TestsPoolPoller(
             Collection<IRemoteTest> tests,
             Collection<ITokenRequest> tokenTests,
             CountDownLatch tracker) {
-        this(tests, tracker);
-        mTokenPool = tokenTests;
-        mRejectedToken = Sets.newConcurrentHashSet();
+        mTracker = tracker;
+        mLocalPool = new LocalPool(tests, tokenTests);
     }
 
     /** Returns the first {@link IRemoteTest} from the pool or null if none remaining. */
@@ -119,60 +102,7 @@ public final class TestsPoolPoller
 
     /** Returns the first {@link IRemoteTest} from the pool or null if none remaining. */
     private IRemoteTest poll(boolean reportNotExecuted) {
-        if (mTokenPool != null) {
-            synchronized (mTokenPool) {
-                if (!mTokenPool.isEmpty()) {
-                    Iterator<ITokenRequest> itr = mTokenPool.iterator();
-                    while (itr.hasNext()) {
-                        ITokenRequest test = itr.next();
-                        if (reportNotExecuted) {
-                            // Return to report not executed tests, regardless of if they can
-                            // actually execute or not.
-                            mRejectedToken.remove(test);
-                            mTokenPool.remove(test);
-                            return test;
-                        }
-                        if (mRejectedToken.contains(test)) {
-                            // If the poller already rejected the tests once, do not re-evaluate.
-                            continue;
-                        }
-                        Set<TokenProperty> tokens = test.getRequiredTokens(mTestInfo);
-                        if (tokens == null || tokens.isEmpty() || isSupported(tokens)) {
-                            // No Token can run anywhere, or supported can run
-                            mTokenPool.remove(test);
-                            mRejectedToken.remove(test);
-                            return test;
-                        }
-
-                        // Track as rejected
-                        mRejectedToken.add(test);
-                    }
-                }
-            }
-        }
-        synchronized (mGenericPool) {
-            if (mGenericPool.isEmpty()) {
-                return null;
-            }
-            IRemoteTest test = mGenericPool.iterator().next();
-            mGenericPool.remove(test);
-            return test;
-        }
-    }
-
-    private ITokenRequest pollRejectedTokenModule() {
-        if (mTokenPool == null) {
-            return null;
-        }
-        synchronized (mTokenPool) {
-            if (mRejectedToken.isEmpty()) {
-                return null;
-            }
-            ITokenRequest test = mRejectedToken.iterator().next();
-            mRejectedToken.remove(test);
-            mTokenPool.remove(test);
-            return test;
-        }
+        return mLocalPool.poll(mTestInfo, reportNotExecuted);
     }
 
     /** {@inheritDoc} */
@@ -255,7 +185,7 @@ public final class TestsPoolPoller
                     CLog.w(due);
                     CLog.w("Proceeding to the next test.");
                 } catch (DeviceNotAvailableException dnae) {
-                    HandleDeviceNotAvailable(listener, dnae, test);
+                    HandleDeviceNotAvailable(dnae, test);
                 } catch (ConfigurationException | BuildRetrievalError e) {
                     CLog.w(
                             "Failed to validate the @options of test: %s. Proceeding to next test.",
@@ -281,8 +211,7 @@ public final class TestsPoolPoller
      * Helper to wait for the device to maybe come back online, in that case we reboot it to refresh
      * the state and proceed with execution.
      */
-    void HandleDeviceNotAvailable(
-            ITestLogger logger, DeviceNotAvailableException originalException, IRemoteTest test)
+    void HandleDeviceNotAvailable(DeviceNotAvailableException originalException, IRemoteTest test)
             throws DeviceNotAvailableException {
         ITestDevice device = mTestInfo.getDevice();
         try {
@@ -318,7 +247,7 @@ public final class TestsPoolPoller
     /** Go through the remaining IRemoteTest and report them as not executed. */
     private void reportNotExecuted(ITestInvocationListener listener) {
         // Report non-executed token test first
-        ITokenRequest tokenTest = pollRejectedTokenModule();
+        ITokenRequest tokenTest = mLocalPool.pollRejectedTokenModule();
         while (tokenTest != null) {
             if (tokenTest instanceof IReportNotExecuted) {
                 String message =
@@ -331,7 +260,7 @@ public final class TestsPoolPoller
                         "Could not report not executed tests from %s.",
                         tokenTest.getClass().getCanonicalName());
             }
-            tokenTest = pollRejectedTokenModule();
+            tokenTest = mLocalPool.pollRejectedTokenModule();
         }
         // Report all remaining test
         IRemoteTest test = poll(true);
@@ -362,20 +291,6 @@ public final class TestsPoolPoller
         return LogRegistry.getLogRegistry();
     }
 
-    private boolean isSupported(Set<TokenProperty> requiredTokens) {
-        for (TokenProperty prop : requiredTokens) {
-            ITokenProvider provider = TokenProviderHelper.getTokenProvider(prop);
-            if (provider == null) {
-                CLog.e("No provider for token %s", prop);
-                return false;
-            }
-            if (!provider.hasToken(mTestInfo.getDevice(), prop)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     @VisibleForTesting
     public void setLogRegistry(ILogRegistry registry) {
         mRegistry = registry;
@@ -396,14 +311,9 @@ public final class TestsPoolPoller
         mCollectors = collectors;
     }
 
-    /** Get a copy of the pool of token tests. For testing only. */
+    /** Get a peek of token tests. For testing only. */
     @VisibleForTesting
-    List<ITokenRequest> getTokenPool() {
-        if (mTokenPool == null) {
-            return null;
-        }
-        synchronized (mTokenPool) {
-            return new ArrayList<>(mTokenPool);
-        }
+    int peekTokenPoolSize() {
+        return mLocalPool.peekTokenSize();
     }
 }
