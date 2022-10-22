@@ -96,8 +96,8 @@ public class TestsPoolPollerTest {
             testsList.add(new StubTest());
         }
         CountDownLatch tracker = new CountDownLatch(2);
-        TestsPoolPoller poller1 = new TestsPoolPoller(testsList, tracker);
-        TestsPoolPoller poller2 = new TestsPoolPoller(testsList, tracker);
+        TestsPoolPoller poller1 = new TestsPoolPoller(testsList, null, tracker);
+        TestsPoolPoller poller2 = new TestsPoolPoller(testsList, null, tracker);
         // initial size
         assertEquals(numTests, testsList.size());
         assertNotNull(poller1.poll());
@@ -132,7 +132,7 @@ public class TestsPoolPollerTest {
             testsList.add(test);
         }
         CountDownLatch tracker = new CountDownLatch(1);
-        TestsPoolPoller poller = new TestsPoolPoller(testsList, tracker);
+        TestsPoolPoller poller = new TestsPoolPoller(testsList, null, tracker);
         poller.setConfiguration(mConfiguration);
         poller.setMetricCollectors(mMetricCollectors);
         poller.run(mTestInfo, mListener);
@@ -168,7 +168,7 @@ public class TestsPoolPollerTest {
             testsList.add(test);
         }
         CountDownLatch tracker = new CountDownLatch(1);
-        TestsPoolPoller poller = new TestsPoolPoller(testsList, tracker);
+        TestsPoolPoller poller = new TestsPoolPoller(testsList, null, tracker);
         poller.setMetricCollectors(mMetricCollectors);
         poller.run(mTestInfo, mListener);
         Mockito.verify(mListener, Mockito.times(numTests))
@@ -199,7 +199,7 @@ public class TestsPoolPollerTest {
             testsList.add(test);
         }
         CountDownLatch tracker = new CountDownLatch(1);
-        TestsPoolPoller poller = new TestsPoolPoller(testsList, tracker);
+        TestsPoolPoller poller = new TestsPoolPoller(testsList, null, tracker);
         poller.setMetricCollectors(mMetricCollectors);
         poller.run(mTestInfo, mListener);
         Mockito.verify(mListener, Mockito.times(numTests))
@@ -230,7 +230,7 @@ public class TestsPoolPollerTest {
             testsList.add(test);
         }
         CountDownLatch tracker = new CountDownLatch(1);
-        TestsPoolPoller poller = new TestsPoolPoller(testsList, tracker);
+        TestsPoolPoller poller = new TestsPoolPoller(testsList, null, tracker);
         poller.setMetricCollectors(mMetricCollectors);
         poller.setLogRegistry(mMockRegistry);
         try {
@@ -269,7 +269,7 @@ public class TestsPoolPollerTest {
         ITestSuite suite = new TestSuiteImpl(numTests);
         testsList.addAll(suite.split(3, mTestInfo));
         CountDownLatch tracker = new CountDownLatch(1);
-        TestsPoolPoller poller = new TestsPoolPoller(testsList, tracker);
+        TestsPoolPoller poller = new TestsPoolPoller(testsList, null, tracker);
         poller.setMetricCollectors(mMetricCollectors);
         poller.setLogRegistry(mMockRegistry);
         try {
@@ -331,7 +331,7 @@ public class TestsPoolPollerTest {
             testsList.add(test);
         }
         CountDownLatch tracker = new CountDownLatch(3);
-        TestsPoolPoller poller = new TestsPoolPoller(testsList, tracker);
+        TestsPoolPoller poller = new TestsPoolPoller(testsList, null, tracker);
         poller.setMetricCollectors(mMetricCollectors);
 
         poller.run(mTestInfo, mListener);
@@ -370,7 +370,7 @@ public class TestsPoolPollerTest {
             testsList.add(test);
         }
         CountDownLatch tracker = new CountDownLatch(3);
-        TestsPoolPoller poller = new TestsPoolPoller(testsList, tracker);
+        TestsPoolPoller poller = new TestsPoolPoller(testsList, null, tracker);
         poller.setMetricCollectors(mMetricCollectors);
         poller.setLogRegistry(mMockRegistry);
 
