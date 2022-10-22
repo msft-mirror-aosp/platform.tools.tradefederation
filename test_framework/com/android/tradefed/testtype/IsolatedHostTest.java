@@ -471,6 +471,11 @@ public class IsolatedHostTest
         options.add("-Drobolectric.offline=true");
         options.add("-Drobolectric.logging=stdout");
         options.add("-Drobolectric.resourcesMode=binary");
+        // TODO(rexhoffman) We should turn this on when only using one version of robolectric
+        options.add("-Drobolectric.usePreinstrumentedJars=false");
+        // TODO(rexhoffman) figure out how to get the local conscrypt working - shared objects and
+        // such.
+        options.add("-Drobolectric.conscryptMode=OFF");
 
         // TODO(murj) hide these options behind a debug option
         // options.add("-Drobolectric.logging.enabled=true");
