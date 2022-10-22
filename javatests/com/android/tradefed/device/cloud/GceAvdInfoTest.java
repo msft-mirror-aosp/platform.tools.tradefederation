@@ -717,15 +717,7 @@ public class GceAvdInfoTest {
             GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
             fail("Should have thrown an exception");
         } catch (TargetSetupError expected) {
-            assertEquals(
-                    "OxygenClient - CommandStatus: FAILED, output:  "
-                            + "[Oxygen error: OXYGEN_CLIENT_BINARY_ERROR, CommandStatus: FAILED, "
-                            + "output:  Error received while trying to lease device: rpc error: "
-                            + "code = Internal desc = Internal error encountered. details = "
-                            + "[type_url:\"this.random.com/try.rpc.DebugInfo\" "
-                            + "value:\"\\x12\\x34\\x56[ORIGINAL ERROR] generic::internal: (length"
-                            + " 6684)\"]",
-                    expected.getMessage());
+            assertEquals("Oxygen client failed to lease a device", expected.getMessage());
         }
     }
 }
