@@ -183,6 +183,12 @@ public class TestDeviceOptions {
                     "Feature flag to test out an updated approach to bootloader state status.")
     private boolean mUpdatedBootloaderStatus = true;
 
+    @Option(
+            name = "bugreportz-timeout",
+            description = "Timeout applied to bugreportz capture.",
+            isTimeVal = true)
+    private long mBugreportzTimeout = 5 * 60 * 1000;
+
     // ====================== Options Related to Virtual Devices ======================
     @Option(
             name = INSTANCE_TYPE_OPTION,
@@ -886,6 +892,11 @@ public class TestDeviceOptions {
     /** Returns whether or not to use the newer bootloader state status. */
     public boolean useUpdatedBootloaderStatus() {
         return mUpdatedBootloaderStatus;
+    }
+
+    /** Returns the timeout value to be applied to bugreportz capture. */
+    public long getBugreportzTimeout() {
+        return mBugreportzTimeout;
     }
 }
 
