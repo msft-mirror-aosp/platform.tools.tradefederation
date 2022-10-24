@@ -364,7 +364,9 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                 HandleLoggedFiles(serializer, individualResult);
 
                 for (Entry<String, String> metric :
-                        individualResult.getValue().getMetrics().entrySet()) {
+                        TfMetricProtoUtil.compatibleConvert(
+                                        individualResult.getValue().getProtoMetrics())
+                                .entrySet()) {
                     serializer.startTag(NS, METRIC_TAG);
                     serializer.attribute(NS, METRIC_KEY, metric.getKey());
                     serializer.text(sanitizeXmlContent(metric.getValue()));
