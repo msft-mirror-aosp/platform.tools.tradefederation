@@ -125,10 +125,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * It still should bail after that minute, if it will ever terminate on its own.
      */
     private static final int BUGREPORT_TIMEOUT = 2 * 60 * 1000;
-    /**
-     * Allow a little more time for bugreportz because there are extra steps.
-     */
-    private static final int BUGREPORTZ_TIMEOUT = 5 * 60 * 1000;
     private static final String BUGREPORT_CMD = "bugreport";
     private static final String BUGREPORTZ_CMD = "bugreportz";
     private static final String BUGREPORTZ_TMP_PATH = "/bugreports/";
@@ -3000,8 +2996,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         // Does not rely on {@link ITestDevice#executeAdbCommand(String...)} because it does not
         // provide a timeout.
         try {
-            executeShellCommand(BUGREPORTZ_CMD, receiver,
-                    BUGREPORTZ_TIMEOUT, TimeUnit.MILLISECONDS, 0 /* don't retry */);
+            executeShellCommand(
+                    BUGREPORTZ_CMD,
+                    receiver,
+                    getOptions().getBugreportzTimeout(),
+                    TimeUnit.MILLISECONDS,
+                    0 /* don't retry */);
             String output = receiver.getOutput().trim();
             Matcher match = BUGREPORTZ_RESPONSE_PATTERN.matcher(output);
             if (!match.find()) {
