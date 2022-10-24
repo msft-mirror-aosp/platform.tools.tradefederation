@@ -16,9 +16,9 @@
 package com.android.tradefed.targetprep;
 
 import com.android.ddmlib.FileListingService;
+import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
-import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
@@ -26,6 +26,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
@@ -46,7 +47,7 @@ import java.util.stream.Collectors;
  * the first.
  */
 @OptionClass(alias = "tests-zip-file")
-public class TestFilePushSetup extends BaseTargetPreparer {
+public class TestFilePushSetup extends BaseTargetPreparer implements IDiscoverDependencies {
 
     @Option(
             name = "test-file-name",
@@ -175,6 +176,17 @@ public class TestFilePushSetup extends BaseTargetPreparer {
      */
     protected Set<String> getFailedToPushFiles() {
         return mFailedToPush;
+    }
+
+    @Override
+    public Set<String> reportDependencies() {
+        Set<String> deps = new HashSet<>();
+        for (File f : mTestPaths) {
+            if (!f.exists()) {
+                deps.add(f.getName());
+            }
+        }
+        return deps;
     }
 
     static String getDevicePathFromUserData(String path) {
