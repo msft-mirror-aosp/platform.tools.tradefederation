@@ -15,8 +15,7 @@
     "class_name": "com.android.tradefed.suite.checker.baseline.SettingsBaselineSetter",
     "namespace": "global",
     "key": "device_config_sync_disabled",
-    "value": "1",
-    "experimental": true
+    "value": "1"
   },
   "disable_usb_app_verification": {
     "class_name": "com.android.tradefed.suite.checker.baseline.SettingsBaselineSetter",
