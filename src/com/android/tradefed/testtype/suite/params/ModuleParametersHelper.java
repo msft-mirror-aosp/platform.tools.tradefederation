@@ -64,6 +64,8 @@ public class ModuleParametersHelper {
     static {
         sOptionalHandlerMap.put(ModuleParameters.SECONDARY_USER, new SecondaryUserHandler());
         sOptionalHandlerMap.put(ModuleParameters.NOT_SECONDARY_USER, new NegativeHandler());
+        sOptionalHandlerMap.put(ModuleParameters.RUN_ON_SDK_SANDBOX, new RunOnSdkSandboxHandler());
+        sOptionalHandlerMap.put(ModuleParameters.NOT_RUN_ON_SDK_SANDBOX, new NegativeHandler());
     }
 
     private static Map<ModuleParameters, Set<ModuleParameters>> sOptionalGroupMap = new HashMap<>();

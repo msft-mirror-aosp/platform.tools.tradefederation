@@ -34,7 +34,11 @@ public enum ModuleParameters {
 
     // Foldable mode
     ALL_FOLDABLE_STATES("all_foldable_states", "foldable_family"),
-    NO_FOLDABLE_STATES("no_foldable_states", "foldable_family");
+    NO_FOLDABLE_STATES("no_foldable_states", "foldable_family"),
+
+    // SDK sandbox mode
+    RUN_ON_SDK_SANDBOX("run_on_sdk_sandbox", "run_on_sdk_sandbox_family"),
+    NOT_RUN_ON_SDK_SANDBOX("not_run_on_sdk_sandbox", "run_on_sdk_sandbox_family");
 
     public static final String INSTANT_APP_FAMILY = "instant_app_family";
     public static final String MULTI_ABI_FAMILY = "multi_abi_family";
