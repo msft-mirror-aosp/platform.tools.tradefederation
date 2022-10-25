@@ -114,6 +114,11 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                             + "Currently, this option is only used for Test Mapping use case.")
     private boolean mSkipApexTearDown = false;
 
+    @Option(
+            name = "enable-rollback",
+            description = "Add the '--enable-rollback' flag when installing modules.")
+    private boolean mEnableRollback = true;
+
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
@@ -588,10 +593,12 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         if (containsApex(testAppFileNames.keySet())) {
             mTestApexInfoList = collectApexInfoFromApexModules(testAppFileNames, testInfo);
         }
-        installTrain(
-                testInfo,
-                new ArrayList<>(testAppFileNames.keySet()),
-                new String[] {ENABLE_ROLLBACK_INSTALL_OPTION, STAGED_INSTALL_OPTION});
+        List<String> extraArgs = new ArrayList<>();
+        if (mEnableRollback) {
+            extraArgs.add(ENABLE_ROLLBACK_INSTALL_OPTION);
+        }
+        extraArgs.add(STAGED_INSTALL_OPTION);
+        installTrain(testInfo, new ArrayList<>(testAppFileNames.keySet()), extraArgs);
     }
 
     /**
@@ -602,13 +609,16 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      *     installed.
      */
     protected void installTrain(
-            TestInformation testInfo, List<File> moduleFilenames, final String[] extraArgs)
+            TestInformation testInfo, List<File> moduleFilenames, List<String> extraArgs)
             throws TargetSetupError, DeviceNotAvailableException {
+        if (extraArgs == null) {
+            extraArgs = List.of();
+        }
         // TODO(b/137883918):remove after new adb is released, which supports installing
         // single apk/apex using 'install-multi-package'
         ITestDevice device = testInfo.getDevice();
         if (moduleFilenames.size() == 1) {
-            device.installPackage(moduleFilenames.get(0), true, extraArgs);
+            device.installPackage(moduleFilenames.get(0), true, extraArgs.toArray(new String[0]));
             if (moduleFilenames.get(0).getName().endsWith(APK_SUFFIX)) {
                 String packageName =
                         parsePackageName(moduleFilenames.get(0), device.getDeviceDescriptor());
@@ -621,13 +631,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         List<String> trainInstallCmd = new ArrayList<>();
 
         trainInstallCmd.add(TRAIN_WITH_APEX_INSTALL_OPTION);
-        trainInstallCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
-        trainInstallCmd.add(STAGED_INSTALL_OPTION);
-        if (extraArgs != null) {
-            for (String arg : extraArgs) {
-                if (!trainInstallCmd.contains(arg)) {
+        for (String arg : extraArgs) {
+            if (!trainInstallCmd.contains(arg)) {
                 trainInstallCmd.add(arg);
-                }
             }
         }
 
@@ -753,7 +759,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         List<String> installCmd = new ArrayList<>();
 
         installCmd.add(TRAIN_WITH_APEX_INSTALL_OPTION);
-        installCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
+        if (mEnableRollback) {
+            installCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
+        }
         for (String arg : mSplitsInstallArgs) {
             installCmd.add(arg);
         }
