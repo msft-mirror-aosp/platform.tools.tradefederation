@@ -2120,6 +2120,115 @@ public class InstallApexModuleTargetPreparerTest {
         }
     }
 
+    @Test
+    public void testInstallUsingBundletool_NoEnableRollback() throws Exception {
+        mSetter.setOptionValue("enable-rollback", "false");
+        mSetter.setOptionValue("skip-apex-teardown", "true");
+
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
+        mInstallApexModuleTargetPreparer.addTestFileName(APK_NAME);
+
+        Set<ApexInfo> activatedApex = new HashSet<ApexInfo>();
+        activatedApex.add(
+                new ApexInfo(
+                        "com.android.FAKE_APEX_PACKAGE_NAME",
+                        1,
+                        "/system/apex/com.android.FAKE_APEX_PACKAGE_NAME.apex"));
+        when(mMockDevice.getActiveApexes()).thenReturn(activatedApex);
+        Set<String> installableModules = new HashSet<>();
+        installableModules.add(APK_PACKAGE_NAME);
+        when(mMockDevice.getInstalledPackageNames()).thenReturn(installableModules);
+        when(mMockBundletoolUtil.generateDeviceSpecFile(Mockito.any(ITestDevice.class)))
+                .thenReturn("serial.json");
+
+        when(mMockDevice.installPackage(
+                        (File) Mockito.any(), Mockito.eq(true), Mockito.eq("--staged")))
+                .thenReturn(null);
+        when(mMockDevice.uninstallPackage(APK_PACKAGE_NAME)).thenReturn(null);
+        when(mMockDevice.getActiveApexes()).thenReturn(activatedApex);
+
+        mInstallApexModuleTargetPreparer.setUp(mTestInfo);
+        verify(mMockDevice, times(2)).getActiveApexes();
+        verify(mMockDevice, times(1)).getInstalledPackageNames();
+        verify(mMockDevice, times(1))
+                .installPackage((File) Mockito.any(), Mockito.eq(true), Mockito.eq("--staged"));
+    }
+
+    @Test
+    public void testSetupAndTearDown_SingleInstall_NoEnableRollback() throws Exception {
+        mSetter.setOptionValue("enable-rollback", "false");
+        mSetter.setOptionValue("skip-apex-teardown", "true");
+        mInstallApexModuleTargetPreparer.addTestFileName(APEX_NAME);
+
+        ApexInfo fakeApexData =
+                new ApexInfo(
+                        APEX_PACKAGE_NAME,
+                        1,
+                        "/data/apex/active/com.android.FAKE_APEX_PACKAGE_NAME@1.apex");
+        doReturn(new HashSet<>())
+                .doReturn(new HashSet<>())
+                .doReturn(new HashSet<>(Arrays.asList(fakeApexData)))
+                .when(mMockDevice)
+                .getActiveApexes();
+        when(mMockDevice.getMainlineModuleInfo()).thenReturn(new HashSet<>());
+        Set<String> installableModules = new HashSet<>();
+        installableModules.add(APEX_PACKAGE_NAME);
+        when(mMockDevice.getInstalledPackageNames()).thenReturn(installableModules);
+        when(mMockDevice.installPackage(
+                        (File) Mockito.any(), Mockito.eq(true), Mockito.eq("--staged")))
+                .thenReturn(null);
+
+        mInstallApexModuleTargetPreparer.setUp(mTestInfo);
+        verify(mMockDevice, times(3)).getActiveApexes();
+        verify(mMockDevice, atLeastOnce()).getActiveApexes();
+        verify(mMockDevice, times(1)).getMainlineModuleInfo();
+        verify(mMockDevice, times(1))
+                .installPackage((File) Mockito.any(), Mockito.eq(true), Mockito.eq("--staged"));
+    }
+
+    @Test
+    public void testSetupAndTearDown_MultiInstall_NoEnableRollback() throws Exception {
+        mSetter.setOptionValue("enable-rollback", "false");
+        mSetter.setOptionValue("skip-apex-teardown", "true");
+        mInstallApexModuleTargetPreparer.addTestFileName(APEX_NAME);
+        mInstallApexModuleTargetPreparer.addTestFileName(APEX2_NAME);
+
+        ApexInfo fakeApexData =
+                new ApexInfo(
+                        APEX_PACKAGE_NAME,
+                        1,
+                        "/data/apex/active/com.android.FAKE_APEX_PACKAGE_NAME@1.apex");
+        ApexInfo fakeApex2Data =
+                new ApexInfo(
+                        APEX2_PACKAGE_NAME,
+                        1,
+                        "/data/apex/active/com.android.FAKE_APEX2_PACKAGE_NAME@1.apex");
+        doReturn(new HashSet<>())
+                .doReturn(new HashSet<>())
+                .doReturn(new HashSet<>(Arrays.asList(fakeApexData, fakeApex2Data)))
+                .when(mMockDevice)
+                .getActiveApexes();
+        when(mMockDevice.getMainlineModuleInfo()).thenReturn(new HashSet<>());
+
+        Set<String> installableModules = new HashSet<>();
+        installableModules.add(APEX_PACKAGE_NAME);
+        installableModules.add(APEX2_PACKAGE_NAME);
+        when(mMockDevice.getInstalledPackageNames()).thenReturn(installableModules);
+
+        when(mMockDevice.executeAdbCommand((String[]) Mockito.any())).thenReturn("Success");
+
+        mInstallApexModuleTargetPreparer.setUp(mTestInfo);
+        verify(mMockDevice, times(3)).getActiveApexes();
+        verify(mMockDevice, atLeastOnce()).getActiveApexes();
+        verify(mMockDevice, times(1)).getMainlineModuleInfo();
+        verify(mMockDevice, times(1))
+                .executeAdbCommand(
+                        Mockito.eq("install-multi-package"),
+                        Mockito.eq("--staged"),
+                        (String) Mockito.any(),
+                        (String) Mockito.any());
+    }
+
     /** Test that teardown without setup does not cause a NPE. */
     @Test
     public void testTearDown() throws Exception {
