@@ -3081,7 +3081,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
             for (File f : localDir.listFiles()) {
                 try (FileInputStreamSource source = new FileInputStreamSource(f)) {
-                    logger.testLog(f.getName(), LogDataType.ANRS, source);
+                    String name = f.getName();
+                    LogDataType type = LogDataType.ANRS;
+                    if (name.startsWith("dumptrace")) {
+                        type = LogDataType.DUMPTRACE;
+                    }
+                    logger.testLog(name, type, source);
                 }
             }
         } catch (IOException e) {
