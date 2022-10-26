@@ -673,6 +673,9 @@ public class ProtoResultParser {
             Set<String> attKeys = new HashSet<>(attributes.keySet());
             for (String attKey : attKeys) {
                 if (attKey.startsWith(groupKey.toString() + ":")) {
+                    if (attributes.get(attKey) == null) {
+                        continue;
+                    }
                     List<String> values = attributes.get(attKey);
                     attributes.remove(attKey);
                     if (mSkipParsingAccounting) {
@@ -705,6 +708,9 @@ public class ProtoResultParser {
             attributes.remove(key.toString());
 
             if (mSkipParsingAccounting) {
+                continue;
+            }
+            if (values == null) {
                 continue;
             }
             for (String val : values) {
