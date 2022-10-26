@@ -30,8 +30,8 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Set;
 
-/** */
-public class LocalPool {
+/** Implementation of a pool of local tests */
+public class LocalPool implements ITestsPool {
 
     private final Collection<IRemoteTest> mGenericPool;
     private final Collection<ITokenRequest> mTokenPool;
@@ -43,6 +43,7 @@ public class LocalPool {
         mRejectedToken = Sets.newConcurrentHashSet();
     }
 
+    @Override
     public IRemoteTest poll(TestInformation info, boolean reportNotExecuted) {
         if (mTokenPool != null) {
             synchronized (mTokenPool) {
@@ -85,6 +86,7 @@ public class LocalPool {
         }
     }
 
+    @Override
     public ITokenRequest pollRejectedTokenModule() {
         if (mTokenPool == null) {
             return null;
