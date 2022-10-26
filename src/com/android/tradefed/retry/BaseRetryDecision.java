@@ -31,6 +31,7 @@ import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
@@ -544,7 +545,7 @@ public class BaseRetryDecision
             throws DeviceNotAvailableException {
         if (IsolationGrade.REBOOT_ISOLATED.equals(mRetryIsolationGrade)) {
             long start = System.currentTimeMillis();
-            try {
+            try (CloseableTraceScope ignored = new CloseableTraceScope("reboot_isolation")) {
                 for (ITestDevice device : devices) {
                     device.reboot();
                 }
@@ -572,7 +573,7 @@ public class BaseRetryDecision
     private void resetIsolation(ModuleDefinition module, List<ITestDevice> devices)
             throws DeviceNotAvailableException {
         long start = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("reset_isolation")) {
             isolateRetry(devices);
             CLog.d(
                     "Current host properties being erased by reset: %s",
