@@ -53,7 +53,7 @@ public class OxygenUtilTest {
         File tmpDir = null;
         try {
             tmpDir = FileUtil.createTempDir("oxygen");
-            File file1 = FileUtil.createTempFile("file1", ".txt", tmpDir);
+            File file1 = FileUtil.createTempFile("kernel", ".log", tmpDir);
             File tmpDir2 = FileUtil.createTempDir("dir", tmpDir);
             File file2 = FileUtil.createTempFile("file2", ".txt", tmpDir2);
             when(downloader.downloadFile(expectedUrl)).thenReturn(tmpDir);
@@ -61,8 +61,9 @@ public class OxygenUtilTest {
             OxygenUtil util = new OxygenUtil(downloader);
             util.downloadLaunchFailureLogs(error, logger);
 
-            verify(logger, times(2)).testLog(Mockito.any(), eq(LogDataType.TEXT), Mockito.any());
-
+            verify(logger, times(1)).testLog(Mockito.any(), eq(LogDataType.KERNEL_LOG), Mockito.any());
+            verify(logger, times(1))
+                .testLog(Mockito.any(), eq(LogDataType.CUTTLEFISH_LOG), Mockito.any());
         } finally {
             FileUtil.recursiveDelete(tmpDir);
         }
