@@ -51,7 +51,6 @@ import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +70,7 @@ public final class TestsPoolPoller
 
     private static final long WAIT_RECOVERY_TIME = 15 * 60 * 1000;
 
-    private LocalPool mLocalPool;
+    private ITestsPool mTestsPool;
     private CountDownLatch mTracker;
 
     private TestInformation mTestInfo;
@@ -84,15 +83,12 @@ public final class TestsPoolPoller
     /**
      * Ctor where the pool of {@link IRemoteTest} is provided.
      *
-     * @param tests {@link IRemoteTest}s pool of all tests.
+     * @param testsPool {@link ITestsPool}s pool of all tests.
      * @param tracker a {@link CountDownLatch} shared to get the number of running poller.
      */
-    public TestsPoolPoller(
-            Collection<IRemoteTest> tests,
-            Collection<ITokenRequest> tokenTests,
-            CountDownLatch tracker) {
+    public TestsPoolPoller(ITestsPool testsPool, CountDownLatch tracker) {
         mTracker = tracker;
-        mLocalPool = new LocalPool(tests, tokenTests);
+        mTestsPool = testsPool;
     }
 
     /** Returns the first {@link IRemoteTest} from the pool or null if none remaining. */
@@ -102,7 +98,7 @@ public final class TestsPoolPoller
 
     /** Returns the first {@link IRemoteTest} from the pool or null if none remaining. */
     private IRemoteTest poll(boolean reportNotExecuted) {
-        return mLocalPool.poll(mTestInfo, reportNotExecuted);
+        return mTestsPool.poll(mTestInfo, reportNotExecuted);
     }
 
     /** {@inheritDoc} */
@@ -247,7 +243,7 @@ public final class TestsPoolPoller
     /** Go through the remaining IRemoteTest and report them as not executed. */
     private void reportNotExecuted(ITestInvocationListener listener) {
         // Report non-executed token test first
-        ITokenRequest tokenTest = mLocalPool.pollRejectedTokenModule();
+        ITokenRequest tokenTest = mTestsPool.pollRejectedTokenModule();
         while (tokenTest != null) {
             if (tokenTest instanceof IReportNotExecuted) {
                 String message =
@@ -260,7 +256,7 @@ public final class TestsPoolPoller
                         "Could not report not executed tests from %s.",
                         tokenTest.getClass().getCanonicalName());
             }
-            tokenTest = mLocalPool.pollRejectedTokenModule();
+            tokenTest = mTestsPool.pollRejectedTokenModule();
         }
         // Report all remaining test
         IRemoteTest test = poll(true);
@@ -314,6 +310,6 @@ public final class TestsPoolPoller
     /** Get a peek of token tests. For testing only. */
     @VisibleForTesting
     int peekTokenPoolSize() {
-        return mLocalPool.peekTokenSize();
+        return ((LocalPool) mTestsPool).peekTokenSize();
     }
 }
