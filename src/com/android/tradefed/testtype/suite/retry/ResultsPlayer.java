@@ -25,6 +25,8 @@ import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Measurements;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogFile;
@@ -36,6 +38,7 @@ import com.android.tradefed.util.TimeUtil;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -192,10 +195,14 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
                             .logAssociation(logFile.getKey(), logFile.getValue());
                 }
             }
-            listener.testEnded(
-                    testEntry.getKey(),
-                    testEntry.getValue().getEndTime(),
-                    testEntry.getValue().getProtoMetrics());
+            HashMap<String, Metric> metrics = testEntry.getValue().getProtoMetrics();
+            // Mark result as cached
+            metrics.put(
+                    "cached",
+                    Metric.newBuilder()
+                            .setMeasurements(Measurements.newBuilder().setSingleString("true"))
+                            .build());
+            listener.testEnded(testEntry.getKey(), testEntry.getValue().getEndTime(), metrics);
         }
         if (module.isRunFailure()) {
             listener.testRunFailed(module.getRunFailureMessage());
