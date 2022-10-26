@@ -547,9 +547,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
     /**
      * Returns the {@link com.android.tradefed.device.cloud.GceSshTunnelMonitor} of the device.
-     * Exposed for testing.
      */
-    protected GceSshTunnelMonitor getGceSshMonitor() {
+    public GceSshTunnelMonitor getGceSshMonitor() {
         return mGceSshMonitor;
     }
 
