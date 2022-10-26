@@ -765,11 +765,15 @@ public abstract class ITestSuite
                                     ((IConfigurationReceiver) collector)
                                             .setConfiguration(module.getModuleConfiguration());
                                 }
-                                listenerWithCollectors =
-                                        collector.init(
-                                                module.getModuleInvocationContext(),
-                                                listenerWithCollectors);
-                                TfObjectTracker.countWithParents(collector.getClass());
+                                try (CloseableTraceScope ignored =
+                                        new CloseableTraceScope(
+                                                "init_" + collector.getClass().getSimpleName())) {
+                                    listenerWithCollectors =
+                                            collector.init(
+                                                    module.getModuleInvocationContext(),
+                                                    listenerWithCollectors);
+                                    TfObjectTracker.countWithParents(collector.getClass());
+                                }
                             }
                         }
                     }
