@@ -100,7 +100,7 @@ public class RemoteAndroidVirtualDeviceTest {
         }
 
         @Override
-        protected GceSshTunnelMonitor getGceSshMonitor() {
+        public GceSshTunnelMonitor getGceSshMonitor() {
             if (mUseRealTunnel) {
                 return super.getGceSshMonitor();
             }

@@ -2122,25 +2122,10 @@ public class TestDevice extends NativeDevice {
     /**
      * Starts a Microdroid TestDevice.
      *
-     * @param apkFile APK file of the Microdroid app to install.
-     * @param apkPath path to the apk file.
-     * @param configPath the name of the VM config file that you embedded in the APK.
-     * @param debugLevel debugging level.
-     * @param memoryMib minimum memory size
-     * @param protectedVm whether the Vm is protected.
-     * @param extraIdsigPaths Paths to extra idsig files.
+     * @param builder A {@link MicrodroidBuilder} with required properties to start a microdroid.
      * @return returns a ITestDevice for the microdroid, can return null.
      */
-    private ITestDevice startMicrodroid(
-            File apkFile,
-            String apkPath,
-            String configPath,
-            String debugLevel,
-            int memoryMib,
-            int numCpus,
-            String cpuAffinity,
-            boolean protectedVm,
-            List<String> extraIdsigPaths)
+    private ITestDevice startMicrodroid(MicrodroidBuilder builder)
             throws DeviceNotAvailableException {
         if (!startedMicrodroids.isEmpty())
             throw new IllegalStateException(
@@ -2181,10 +2166,10 @@ public class TestDevice extends NativeDevice {
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
         // Push the apk file to the test directory
-        if (apkFile != null) {
-            pushFile(apkFile, TEST_ROOT + apkFile.getName());
-            apkPath = TEST_ROOT + apkFile.getName();
-        } else if (apkPath == null) {
+        if (builder.mApkFile != null) {
+            pushFile(builder.mApkFile, TEST_ROOT + builder.mApkFile.getName());
+            builder.mApkPath = TEST_ROOT + builder.mApkFile.getName();
+        } else if (builder.mApkPath == null) {
             // if both apkFile and apkPath is null, we can not start a microdroid device
             throw new IllegalArgumentException(
                     "apkFile and apkPath is both null. Can not start microdroid.");
@@ -2192,12 +2177,17 @@ public class TestDevice extends NativeDevice {
 
         // This file is not what we provide. It will be created by the vm tool.
         final String outApkIdsigPath =
-                TEST_ROOT + (apkFile != null ? apkFile.getName() : "NULL") + ".idsig";
+                TEST_ROOT
+                        + (builder.mApkFile != null ? builder.mApkFile.getName() : "NULL")
+                        + ".idsig";
         final String instanceImg = TEST_ROOT + INSTANCE_IMG;
         final String logPath = TEST_ROOT + "log.txt";
-        final String debugFlag = Strings.isNullOrEmpty(debugLevel) ? "" : "--debug " + debugLevel;
+        final String debugFlag =
+                Strings.isNullOrEmpty(builder.mDebugLevel) ? "" : "--debug " + builder.mDebugLevel;
         final String cpuAffinityFlag =
-                Strings.isNullOrEmpty(cpuAffinity) ? "" : "--cpu-affinity " + cpuAffinity;
+                Strings.isNullOrEmpty(builder.mCpuAffinity)
+                        ? ""
+                        : "--cpu-affinity " + builder.mCpuAffinity;
 
         List<String> args =
                 new ArrayList<>(
@@ -2206,18 +2196,18 @@ public class TestDevice extends NativeDevice {
                                 "run-app",
                                 "--daemonize",
                                 "--log " + logPath,
-                                "--mem " + memoryMib,
+                                "--mem " + builder.mMemoryMib,
                                 debugFlag,
-                                "--cpus " + numCpus,
+                                "--cpus " + builder.mNumCpus,
                                 cpuAffinityFlag,
-                                apkPath,
+                                builder.mApkPath,
                                 outApkIdsigPath,
                                 instanceImg,
-                                configPath));
-        if (protectedVm) {
+                                builder.mConfigPath));
+        if (builder.mProtectedVm) {
             args.add("--protected");
         }
-        for (String path : extraIdsigPaths) {
+        for (String path : builder.mExtraIdsigPaths) {
             args.add("--extra-idsig");
             args.add(path);
         }
@@ -2510,16 +2500,7 @@ public class TestDevice extends NativeDevice {
                         "CPU affinity [" + mCpuAffinity + "]" + " is invalid");
             }
 
-            return device.startMicrodroid(
-                    mApkFile,
-                    mApkPath,
-                    mConfigPath,
-                    mDebugLevel,
-                    mMemoryMib,
-                    mNumCpus,
-                    mCpuAffinity,
-                    mProtectedVm,
-                    mExtraIdsigPaths);
+            return device.startMicrodroid(this);
         }
     }
 }
