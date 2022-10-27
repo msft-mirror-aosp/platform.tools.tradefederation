@@ -67,6 +67,7 @@ public enum LogDataType {
     MEM_INFO("txt", "text/plain", false, true),
     TOP("txt", "text/plain", false, true),
     DUMPSYS("txt", "text/plain", false, true),
+    DUMPTRACE("txt", "text/plain", true, true),
     COMPACT_MEMINFO("txt", "text/plain", false, true), // dumpsys meminfo -c
     SERVICES("txt", "text/plain", false, true), // dumpsys activity services
     GFX_INFO("txt", "text/plain", false, true), // dumpsys gfxinfo
