@@ -243,10 +243,14 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             if (collector.isDisabled()) {
                 CLog.d("%s has been disabled. Skipping.", collector);
             } else {
-                if (collector instanceof IConfigurationReceiver) {
-                    ((IConfigurationReceiver) collector).setConfiguration(mModuleConfiguration);
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope(
+                                "init_attempt_" + collector.getClass().getSimpleName())) {
+                    if (collector instanceof IConfigurationReceiver) {
+                        ((IConfigurationReceiver) collector).setConfiguration(mModuleConfiguration);
+                    }
+                    runListener = collector.init(mModuleInvocationContext, runListener);
                 }
-                runListener = collector.init(mModuleInvocationContext, runListener);
             }
         }
 
@@ -343,11 +347,15 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
                     if (collector.isDisabled()) {
                         CLog.d("%s has been disabled. Skipping.", collector);
                     } else {
-                        if (collector instanceof IConfigurationReceiver) {
-                            ((IConfigurationReceiver) collector)
-                                    .setConfiguration(mModuleConfiguration);
+                        try (CloseableTraceScope ignoreCollector =
+                                new CloseableTraceScope(
+                                        "init_run_" + collector.getClass().getSimpleName())) {
+                            if (collector instanceof IConfigurationReceiver) {
+                                ((IConfigurationReceiver) collector)
+                                        .setConfiguration(mModuleConfiguration);
+                            }
+                            runListener = collector.init(mModuleInvocationContext, runListener);
                         }
-                        runListener = collector.init(mModuleInvocationContext, runListener);
                     }
                 }
                 mTest.run(testInfo, runListener);

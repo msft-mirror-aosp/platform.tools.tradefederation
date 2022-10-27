@@ -767,7 +767,8 @@ public abstract class ITestSuite
                                 }
                                 try (CloseableTraceScope ignored =
                                         new CloseableTraceScope(
-                                                "init_" + collector.getClass().getSimpleName())) {
+                                                "init_for_module_"
+                                                        + collector.getClass().getSimpleName())) {
                                     listenerWithCollectors =
                                             collector.init(
                                                     module.getModuleInvocationContext(),
