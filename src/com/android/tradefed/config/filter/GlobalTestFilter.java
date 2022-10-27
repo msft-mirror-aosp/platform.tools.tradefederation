@@ -24,6 +24,7 @@ import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
+import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -139,6 +140,9 @@ public final class GlobalTestFilter {
                     ((BaseTestSuite) test).clearExcludeFilter();
                     ((BaseTestSuite) test).clearIncludeFilter();
                     ((BaseTestSuite) test).setIncludeFilter(mStrictIncludeFilters);
+                    if (test instanceof TestMappingSuiteRunner) {
+                        ((TestMappingSuiteRunner) test).clearTestGroup();
+                    }
                 } else if (test instanceof ITestFilterReceiver) {
                     ITestFilterReceiver filterableTest = (ITestFilterReceiver) test;
                     applyFiltersToTest(filterableTest);
@@ -177,6 +181,9 @@ public final class GlobalTestFilter {
             suite.clearExcludeFilter();
             suite.clearIncludeFilter();
             suite.setIncludeFilter(mStrictIncludeFilters);
+            if (suite instanceof TestMappingSuiteRunner) {
+                ((TestMappingSuiteRunner) suite).clearTestGroup();
+            }
         }
         suite.reevaluateFilters();
     }
