@@ -37,6 +37,7 @@ import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.proto.InvocationContext.Context;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -195,10 +196,14 @@ public class TradefedSandbox implements ISandbox {
         try {
             boolean joinResult = false;
             long waitTime = getSandboxOptions(config).getWaitForEventsTimeout();
-            if (mProtoReceiver != null) {
-                joinResult = mProtoReceiver.joinReceiver(waitTime);
-            } else {
-                joinResult = mEventParser.joinReceiver(waitTime);
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(
+                            InvocationMetricKey.invocation_events_processing.toString())) {
+                if (mProtoReceiver != null) {
+                    joinResult = mProtoReceiver.joinReceiver(waitTime);
+                } else {
+                    joinResult = mEventParser.joinReceiver(waitTime);
+                }
             }
             if (interruptedException != null) {
                 throw interruptedException;
