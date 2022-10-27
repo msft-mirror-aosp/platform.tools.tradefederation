@@ -85,6 +85,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     private static final String CASE_TAG = "TestCase";
     private static final String COMMAND_LINE_ARGS = "command_line_args";
     private static final String DEVICES_ATTR = "devices";
+    private static final String DEVICE_KERNEL_INFO = "device_kernel_info";
     private static final String DONE_ATTR = "done";
     private static final String END_DISPLAY_TIME_ATTR = "end_display";
     private static final String END_TIME_ATTR = "end";
@@ -254,6 +255,17 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                     NS,
                     sanitizeAttributesKey(key),
                     String.join(",", holder.context.getAttributes().get(key)));
+        }
+        if (!holder.context.getBuildInfos().isEmpty()) {
+            String deviceKernelInfo =
+                    holder.context
+                            .getBuildInfos()
+                            .get(0)
+                            .getBuildAttributes()
+                            .get(DEVICE_KERNEL_INFO);
+            if (deviceKernelInfo != null) {
+                serializer.attribute(NS, DEVICE_KERNEL_INFO, deviceKernelInfo);
+            }
         }
         addBuildInfoAttributes(serializer, holder);
         serializer.endTag(NS, BUILD_TAG);
