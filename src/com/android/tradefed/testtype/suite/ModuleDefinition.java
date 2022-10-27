@@ -636,7 +636,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             }
             long cleanStartTime = getCurrentTime();
             RuntimeException tearDownException = null;
-            try {
+            try (CloseableTraceScope ignored = new CloseableTraceScope("module_teardown")) {
                 Throwable exception = (runException != null) ? runException : preparationException;
                 // Tear down
                 runTearDown(moduleInfo, exception);
@@ -1066,7 +1066,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 }
 
                 RecoveryMode origMode = null;
-                try {
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope(preparer.getClass().getName())) {
                     // If an exception was generated in setup with a DNAE do not attempt any
                     // recovery again in case we hit the device not available again.
                     if (exception != null && exception instanceof DeviceNotAvailableException) {
