@@ -21,6 +21,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
+import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -662,6 +663,39 @@ public class XmlSuiteResultFormatterTest {
         assertEquals("armeabi-v7a module2", sortedResult.get(3).getName());
         assertEquals("arm64-v8a module3", sortedResult.get(4).getName());
         assertEquals("armeabi-v7a module4", sortedResult.get(5).getName());
+    }
+
+    /** Check that the build info contains all information. */
+    @Test
+    public void testBasicFormat_buildInfo() throws Exception {
+        mResultHolder.context = mContext;
+        mContext.addInvocationAttribute("invocation-attr", "attr");
+        BuildInfo buildInfo = new BuildInfo();
+        buildInfo.addBuildAttribute("device_kernel_info", "kernel info");
+        mContext.addDeviceBuildInfo("device", buildInfo);
+
+        Collection<TestRunResult> runResults = new ArrayList<>();
+        runResults.add(createFakeResult("module1", 2, 0, 0, 0));
+        runResults.add(createFakeResult("module2", 1, 0, 0, 0));
+        mResultHolder.runResults = runResults;
+
+        Map<String, IAbi> modulesAbi = new HashMap<>();
+        modulesAbi.put("module1", new Abi("armeabi-v7a", "32"));
+        modulesAbi.put("module2", new Abi("armeabi-v7a", "32"));
+        mResultHolder.modulesAbi = modulesAbi;
+
+        mResultHolder.completeModules = 2;
+        mResultHolder.totalModules = 2;
+        mResultHolder.passedTests = 2;
+        mResultHolder.failedTests = 0;
+        mResultHolder.startTime = 0L;
+        mResultHolder.endTime = 10L;
+        File res = mFormatter.writeResults(mResultHolder, mResultDir);
+        String content = FileUtil.readStringFromFile(res);
+
+        assertXmlContainsNode(content, "Result/Build");
+        assertXmlContainsAttribute(content, "Result/Build", "invocation-attr", "attr");
+        assertXmlContainsAttribute(content, "Result/Build", "device_kernel_info", "kernel info");
     }
 
     private TestRunResult createResultWithLog(String runName, int count, LogDataType type) {
