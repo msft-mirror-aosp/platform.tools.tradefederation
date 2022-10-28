@@ -38,6 +38,7 @@ import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
@@ -865,13 +866,17 @@ public class InstrumentationTest
                 if (collector.isDisabled()) {
                     CLog.d("%s has been disabled. Skipping.", collector);
                 } else {
-                    CLog.d(
-                            "Initializing %s for instrumentation.",
-                            collector.getClass().getCanonicalName());
-                    if (collector instanceof IConfigurationReceiver) {
-                        ((IConfigurationReceiver) collector).setConfiguration(mConfiguration);
+                    try (CloseableTraceScope ignored =
+                            new CloseableTraceScope(
+                                    "init_for_inst_" + collector.getClass().getSimpleName())) {
+                        CLog.d(
+                                "Initializing %s for instrumentation.",
+                                collector.getClass().getCanonicalName());
+                        if (collector instanceof IConfigurationReceiver) {
+                            ((IConfigurationReceiver) collector).setConfiguration(mConfiguration);
+                        }
+                        listener = collector.init(testInfo.getContext(), listener);
                     }
-                    listener = collector.init(testInfo.getContext(), listener);
                 }
             }
         }
@@ -1047,11 +1052,14 @@ public class InstrumentationTest
             runner.setDebug(false);
             // try to collect tests multiple times, in case device is temporarily not available
             // on first attempt
-            Collection<TestDescription> tests = collectTestsAndRetry(testInfo, runner, listener);
-            // done with "logOnly" mode, restore proper test timeout before real test execution
-            addTimeoutsToRunner(runner);
-            runner.setTestCollection(false);
-            return tests;
+            try (CloseableTraceScope ignored = new CloseableTraceScope("collect_tests")) {
+                Collection<TestDescription> tests =
+                        collectTestsAndRetry(testInfo, runner, listener);
+                // done with "logOnly" mode, restore proper test timeout before real test execution
+                addTimeoutsToRunner(runner);
+                runner.setTestCollection(false);
+                return tests;
+            }
         }
         return null;
     }
