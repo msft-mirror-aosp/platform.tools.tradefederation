@@ -97,7 +97,12 @@ public class OxygenUtil {
                                             .relativize(file.toPath())
                                             .toString()
                                             .replace(File.separatorChar, '_');
-                    logger.testLog(logFileName, LogDataType.TEXT, data);
+                    LogDataType logDataType = getDefaultLogType(logFileName);
+                    if (logDataType == LogDataType.UNKNOWN) {
+                        // Default log type to be CUTTLEFISH_LOG to avoid compression.
+                        logDataType = LogDataType.CUTTLEFISH_LOG;
+                    }
+                    logger.testLog(logFileName, logDataType, data);
                 }
             }
         } catch (Exception e) {

@@ -274,6 +274,10 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         return mTestGroup;
     }
 
+    public void clearTestGroup() {
+        mTestGroup = null;
+    }
+
     @VisibleForTesting
     List<String> getTestMappingPaths() {
         return mTestMappingPaths;
