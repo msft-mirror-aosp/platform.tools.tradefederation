@@ -22,6 +22,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -222,7 +223,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         // Path to temporary remote directory used to store files used in test.
         String tmpTestRemoteDirPath = null;
 
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope(testId.toString())) {
             if (mCollectTestsOnly) {
                 return;
             }
