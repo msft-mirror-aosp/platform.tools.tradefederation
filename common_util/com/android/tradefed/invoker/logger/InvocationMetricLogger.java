@@ -249,6 +249,7 @@ public class InvocationMetricLogger {
         test_teardown("test_teardown", true),
         test_cleanup("test_cleanup", true),
         log_and_release_device("log_and_release_device", true),
+        invocation_events_processing("invocation_events_processing", true),
         ;
 
         private final String mKeyName;
