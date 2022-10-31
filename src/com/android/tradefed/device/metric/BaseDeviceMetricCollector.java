@@ -304,7 +304,7 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         long start = System.currentTimeMillis();
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("run_start_" + this.getClass().getSimpleName())) {
-            onTestRunStart(mRunData);
+            onTestRunStart(mRunData, testCount);
         } catch (DeviceNotAvailableException e) {
             mDeviceNoAvailable = true;
             CLog.e(e);
@@ -583,6 +583,12 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
      */
     public String getRunName() {
         return mRunName;
+    }
+
+    public String getModuleName() {
+        return mContext.getAttributes().get(ModuleDefinition.MODULE_NAME) != null
+                ? mContext.getAttributes().get(ModuleDefinition.MODULE_NAME).get(0)
+                : null;
     }
 
     /**

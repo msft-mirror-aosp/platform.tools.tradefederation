@@ -116,6 +116,7 @@ import com.android.tradefed.device.metric.EmulatorMemoryCpuCapturerTest;
 import com.android.tradefed.device.metric.FilePullerDeviceMetricCollectorTest;
 import com.android.tradefed.device.metric.FilePullerLogCollectorTest;
 import com.android.tradefed.device.metric.GcovCodeCoverageCollectorTest;
+import com.android.tradefed.device.metric.GcovKernelCodeCoverageCollectorTest;
 import com.android.tradefed.device.metric.HostStatsdMetricCollectorTest;
 import com.android.tradefed.device.metric.JavaCodeCoverageCollectorTest;
 import com.android.tradefed.device.metric.LogcatOnFailureCollectorTest;
@@ -599,6 +600,7 @@ import org.junit.runners.Suite.SuiteClasses;
     FilePullerDeviceMetricCollectorTest.class,
     FilePullerLogCollectorTest.class,
     GcovCodeCoverageCollectorTest.class,
+    GcovKernelCodeCoverageCollectorTest.class,
     HostStatsdMetricCollectorTest.class,
     JavaCodeCoverageCollectorTest.class,
     LogcatOnFailureCollectorTest.class,
