@@ -16,10 +16,21 @@
 package com.android.tradefed.targetprep;
 
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.invoker.TestInformation;
 
 /**
  * An {@link ITargetPreparer} to marks that tests should run in the sdk sandbox. See
  * https://developer.android.com/design-for-safety/privacy-sandbox/sdk-runtime
  */
 @OptionClass(alias = "run-on-sdk-sandbox")
-public class RunOnSdkSandboxTargetPreparer extends BaseTargetPreparer {}
+public class RunOnSdkSandboxTargetPreparer extends BaseTargetPreparer {
+
+    public static final String RUN_TESTS_ON_SDK_SANDBOX = "RUN_TESTS_ON_SDK_SANDBOX";
+
+    @Override
+    public void setUp(TestInformation testInformation)
+            throws TargetSetupError, BuildError, DeviceNotAvailableException {
+        testInformation.properties().put(RUN_TESTS_ON_SDK_SANDBOX, Boolean.TRUE.toString());
+    }
+}

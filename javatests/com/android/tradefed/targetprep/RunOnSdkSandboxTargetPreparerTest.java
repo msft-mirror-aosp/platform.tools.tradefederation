@@ -15,15 +15,29 @@
  */
 package com.android.tradefed.targetprep;
 
-import static com.google.common.truth.Truth.assertThat;
+import static com.android.tradefed.targetprep.RunOnSdkSandboxTargetPreparer.RUN_TESTS_ON_SDK_SANDBOX;
+
+import static org.mockito.Mockito.verify;
+
+import com.android.tradefed.invoker.TestInformation;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Answers;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 @RunWith(JUnit4.class)
 public class RunOnSdkSandboxTargetPreparerTest {
+
+    @Rule public final MockitoRule mockito = MockitoJUnit.rule();
+
+    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    private TestInformation mTestInfo;
 
     private RunOnSdkSandboxTargetPreparer mPreparer;
 
@@ -33,7 +47,9 @@ public class RunOnSdkSandboxTargetPreparerTest {
     }
 
     @Test
-    public void createsSdkSandbox() {
-        assertThat(mPreparer.isDisabled()).isFalse();
+    public void testInstrumentToRunSdkSandbox() throws Exception {
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.properties()).put(RUN_TESTS_ON_SDK_SANDBOX, Boolean.TRUE.toString());
     }
 }
