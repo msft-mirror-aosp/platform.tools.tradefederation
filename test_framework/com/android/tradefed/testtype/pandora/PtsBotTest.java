@@ -125,7 +125,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
             name = "create-bin-temp-dir",
             description =
                     "Create a temporary directory to store pts-bot binaries and avoid conflicts"
-                        + " when multiple runners are on the same machine")
+                            + " when multiple runners are on the same machine")
     private boolean createBinTempDir = false;
 
     private File binTempDir = null;
@@ -516,7 +516,11 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
 
     private void toggleA2dpSinkIfNeeded(ITestDevice testDevice, String profile) {
         CLog.i("toggleA2dpSinkIfNeeded: " + profile);
-        if (profile.startsWith("A2DP/SNK") || profile.startsWith("AVDTP/SNK")) {
+        if (profile.startsWith("A2DP/SNK")
+                || profile.startsWith("AVCTP/CT")
+                || profile.startsWith("AVDTP/SNK")
+                || (profile.startsWith("AVRCP/CT") && !profile.startsWith("AVRCP/CT/VLH"))
+                || profile.startsWith("AVRCP/TG/VLH")) {
             setProperty(testDevice, A2DP_SNK_PROPERTY, true);
             setProperty(testDevice, A2DP_SRC_PROPERTY, false);
         } else if (!getProperty(testDevice, A2DP_SRC_PROPERTY).equals("true")) {
