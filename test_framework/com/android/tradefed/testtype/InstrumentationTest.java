@@ -68,6 +68,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -93,6 +94,7 @@ public class InstrumentationTest
     static final long TEST_COLLECTION_TIMEOUT_MS = 2 * 60 * 1000;
 
     public static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
+    public static final String RUN_TESTS_ON_SDK_SANDBOX = "RUN_TESTS_ON_SDK_SANDBOX";
 
     @Option(
         name = "package",
@@ -624,8 +626,9 @@ public class InstrumentationTest
      * @return the {@link IRemoteAndroidTestRunner} to use.
      * @throws DeviceNotAvailableException
      */
-    IRemoteAndroidTestRunner createRemoteAndroidTestRunner(String packageName, String runnerName,
-            IDevice device) throws DeviceNotAvailableException {
+    IRemoteAndroidTestRunner createRemoteAndroidTestRunner(
+            String packageName, String runnerName, IDevice device, TestInformation testInformation)
+            throws DeviceNotAvailableException {
         RemoteAndroidTestRunner runner =
                 new DefaultRemoteAndroidTestRunner(packageName, runnerName, device);
         String abiName = resolveAbiName();
@@ -654,6 +657,14 @@ public class InstrumentationTest
         }
         if (!mRestart && getDevice().checkApiLevelAgainstNextRelease(31)) {
             runOptions += "--no-restart ";
+        }
+        if (getDevice().checkApiLevelAgainstNextRelease(33)
+                && Optional.ofNullable(testInformation)
+                        .map(TestInformation::properties)
+                        .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
+                        .map(value -> Boolean.TRUE.toString().equals(value))
+                        .orElse(false)) {
+            runOptions += "--instrument-sdk-sandbox ";
         }
 
         if (abiName != null && getDevice().getApiLevel() > 20) {
@@ -759,7 +770,9 @@ public class InstrumentationTest
                     "Runner name has not been set and no matching instrumentations were found.");
             CLog.i("No runner name specified. Using: %s.", mRunnerName);
         }
-        mRunner = createRemoteAndroidTestRunner(mPackageName, mRunnerName, mDevice.getIDevice());
+        mRunner =
+                createRemoteAndroidTestRunner(
+                        mPackageName, mRunnerName, mDevice.getIDevice(), testInfo);
         setRunnerArgs(mRunner);
 
         doTestRun(testInfo, listener);

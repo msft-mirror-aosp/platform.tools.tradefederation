@@ -17,6 +17,7 @@
 package com.android.tradefed.testtype;
 
 import static com.android.tradefed.testtype.InstrumentationTest.RUN_TESTS_AS_USER_KEY;
+import static com.android.tradefed.testtype.InstrumentationTest.RUN_TESTS_ON_SDK_SANDBOX;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -248,7 +249,8 @@ public class InstrumentationTestTest {
         setter.setOptionValue("hidden-api-checks", "false");
         RemoteAndroidTestRunner runner =
                 (RemoteAndroidTestRunner)
-                        mInstrumentationTest.createRemoteAndroidTestRunner("", "", mMockIDevice);
+                        mInstrumentationTest.createRemoteAndroidTestRunner(
+                                "", "", mMockIDevice, mTestInfo);
         assertThat(runner.getRunOptions()).contains("--no-hidden-api-checks");
     }
 
@@ -261,7 +263,8 @@ public class InstrumentationTestTest {
         setter.setOptionValue("test-api-access", "false");
         RemoteAndroidTestRunner runner =
                 (RemoteAndroidTestRunner)
-                        mInstrumentationTest.createRemoteAndroidTestRunner("", "", mMockIDevice);
+                        mInstrumentationTest.createRemoteAndroidTestRunner(
+                                "", "", mMockIDevice, mTestInfo);
         assertThat(runner.getRunOptions()).contains("--no-test-api-access");
     }
 
@@ -273,7 +276,8 @@ public class InstrumentationTestTest {
         setter.setOptionValue("isolated-storage", "false");
         RemoteAndroidTestRunner runner =
                 (RemoteAndroidTestRunner)
-                        mInstrumentationTest.createRemoteAndroidTestRunner("", "", mMockIDevice);
+                        mInstrumentationTest.createRemoteAndroidTestRunner(
+                                "", "", mMockIDevice, mTestInfo);
         assertThat(runner.getRunOptions()).contains("--no-isolated-storage");
     }
 
@@ -285,7 +289,8 @@ public class InstrumentationTestTest {
         setter.setOptionValue("window-animation", "false");
         RemoteAndroidTestRunner runner =
                 (RemoteAndroidTestRunner)
-                        mInstrumentationTest.createRemoteAndroidTestRunner("", "", mMockIDevice);
+                        mInstrumentationTest.createRemoteAndroidTestRunner(
+                                "", "", mMockIDevice, mTestInfo);
         assertThat(runner.getRunOptions()).contains("--no-window-animation");
     }
 
@@ -297,8 +302,21 @@ public class InstrumentationTestTest {
         setter.setOptionValue("restart", "false");
         RemoteAndroidTestRunner runner =
                 (RemoteAndroidTestRunner)
-                        mInstrumentationTest.createRemoteAndroidTestRunner("", "", mMockIDevice);
+                        mInstrumentationTest.createRemoteAndroidTestRunner(
+                                "", "", mMockIDevice, mTestInfo);
         assertThat(runner.getRunOptions()).contains("--no-restart");
+    }
+
+    /** Test normal run scenario with --instrument-sdk-sandbox specified */
+    @Test
+    public void testRun_runOnSdkSandbox() throws Exception {
+        doReturn(true).when(mMockTestDevice).checkApiLevelAgainstNextRelease(33);
+        mTestInfo.properties().put(RUN_TESTS_ON_SDK_SANDBOX, Boolean.TRUE.toString());
+        RemoteAndroidTestRunner runner =
+                (RemoteAndroidTestRunner)
+                        mInstrumentationTest.createRemoteAndroidTestRunner(
+                                "", "", mMockIDevice, mTestInfo);
+        assertThat(runner.getRunOptions()).contains("--instrument-sdk-sandbox");
     }
 
     /** Test normal run scenario with a test class specified. */
