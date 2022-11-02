@@ -24,6 +24,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.isolation.FilterSpec;
 import com.android.tradefed.isolation.JUnitEvent;
 import com.android.tradefed.isolation.RunnerMessage;
@@ -506,7 +507,8 @@ public class IsolatedHostTest
 
         TestDescription currentTest = null;
         Instant start = Instant.now();
-
+        CloseableTraceScope methodScope = null;
+        CloseableTraceScope runScope = null;
         boolean runStarted = false;
         try {
             mainLoop:
@@ -595,6 +597,7 @@ public class IsolatedHostTest
                                                         event.getMethodName());
                                         listener.testStarted(desc, event.getStartTime());
                                         currentTest = desc;
+                                        methodScope = new CloseableTraceScope(desc.toString());
                                         break;
                                     case TOPIC_FINISHED:
                                         desc =
@@ -606,6 +609,10 @@ public class IsolatedHostTest
                                                 event.getEndTime(),
                                                 new HashMap<String, Metric>());
                                         currentTest = null;
+                                        if (methodScope != null) {
+                                            methodScope.close();
+                                            methodScope = null;
+                                        }
                                         break;
                                     case TOPIC_IGNORED:
                                         desc =
@@ -625,11 +632,16 @@ public class IsolatedHostTest
                                         runStarted = true;
                                         listener.testRunStarted(
                                                 event.getClassName(), event.getTestCount());
+                                        runScope = new CloseableTraceScope(event.getClassName());
                                         break;
                                     case TOPIC_RUN_FINISHED:
                                         listener.testRunEnded(
                                                 event.getElapsedTime(),
                                                 new HashMap<String, Metric>());
+                                        if (runScope != null) {
+                                            runScope.close();
+                                            runScope = null;
+                                        }
                                         break;
                                     default:
                                 }
