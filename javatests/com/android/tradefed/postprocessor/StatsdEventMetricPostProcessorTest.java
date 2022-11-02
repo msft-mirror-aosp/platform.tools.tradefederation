@@ -20,10 +20,10 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.MockitoAnnotations.initMocks;
 
 import com.android.os.AtomsProto.Atom;
-import com.android.os.AtomsProto.AttributionNode;
 import com.android.os.AtomsProto.AppCrashOccurred;
 import com.android.os.AtomsProto.AppStartOccurred;
 import com.android.os.AtomsProto.BleScanStateChanged;
+import com.android.os.AttributionNode;
 import com.android.os.StatsLog.AggregatedAtomInfo;
 import com.android.os.StatsLog.ConfigMetricsReport;
 import com.android.os.StatsLog.ConfigMetricsReportList;
