@@ -31,6 +31,8 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.suite.SuiteApkInstaller;
 import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.BundletoolUtil;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -60,6 +62,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private static final String APEX_DATA_DIR = "/data/apex/active/";
     private static final String STAGING_DATA_DIR = "/data/app-staging/";
     private static final String SESSION_DATA_DIR = "/data/apex/sessions/";
+    private static final String MODULE_PUSH_REMOTE_PATH = "/data/local/tmp/";
     private static final String TRAIN_WITH_APEX_INSTALL_OPTION = "install-multi-package";
     private static final String ENABLE_ROLLBACK_INSTALL_OPTION = "--enable-rollback";
     private static final String STAGED_INSTALL_OPTION = "--staged";
@@ -70,6 +73,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     protected static final String APEX_SUFFIX = ".apex";
     protected static final String APK_SUFFIX = ".apk";
     protected static final String SPLIT_APKS_SUFFIX = ".apks";
+    protected static final String PARENT_SESSION_CREATION_CMD = "pm install-create --multi-package";
+    protected static final String CHILD_SESSION_CREATION_CMD = "pm install-create";
+    protected static final String APEX_OPTION = "--apex";
 
     private List<ApexInfo> mTestApexInfoList = new ArrayList<>();
     private List<String> mApexModulesToUninstall = new ArrayList<>();
@@ -593,12 +599,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         if (containsApex(testAppFileNames.keySet())) {
             mTestApexInfoList = collectApexInfoFromApexModules(testAppFileNames, testInfo);
         }
-        List<String> extraArgs = new ArrayList<>();
-        if (mEnableRollback) {
-            extraArgs.add(ENABLE_ROLLBACK_INSTALL_OPTION);
-        }
-        extraArgs.add(STAGED_INSTALL_OPTION);
-        installTrain(testInfo, new ArrayList<>(testAppFileNames.keySet()), extraArgs);
+        installTrain(testInfo, new ArrayList<>(testAppFileNames.keySet()));
     }
 
     /**
@@ -609,56 +610,104 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      *     installed.
      */
     protected void installTrain(
-            TestInformation testInfo, List<File> moduleFilenames, List<String> extraArgs)
+            TestInformation testInfo, List<File> moduleFilenames)
             throws TargetSetupError, DeviceNotAvailableException {
-        if (extraArgs == null) {
-            extraArgs = List.of();
-        }
-        // TODO(b/137883918):remove after new adb is released, which supports installing
-        // single apk/apex using 'install-multi-package'
         ITestDevice device = testInfo.getDevice();
-        if (moduleFilenames.size() == 1) {
-            device.installPackage(moduleFilenames.get(0), true, extraArgs.toArray(new String[0]));
-            if (moduleFilenames.get(0).getName().endsWith(APK_SUFFIX)) {
-                String packageName =
-                        parsePackageName(moduleFilenames.get(0), device.getDeviceDescriptor());
-                mApkInstalled.add(packageName);
-            }
-            return;
-        }
 
         List<String> apkPackageNames = new ArrayList<>();
-        List<String> trainInstallCmd = new ArrayList<>();
-
-        trainInstallCmd.add(TRAIN_WITH_APEX_INSTALL_OPTION);
-        for (String arg : extraArgs) {
-            if (!trainInstallCmd.contains(arg)) {
-                trainInstallCmd.add(arg);
-            }
-        }
 
         for (File moduleFile : moduleFilenames) {
-            trainInstallCmd.add(moduleFile.getAbsolutePath());
+            if (!device.pushFile(moduleFile, MODULE_PUSH_REMOTE_PATH + moduleFile.getName())) {
+                throw new TargetSetupError(
+                        String.format(
+                                "Failed to push local '%s' to remote '%s'",
+                                moduleFile.getAbsolutePath(), MODULE_PUSH_REMOTE_PATH + moduleFile.getName()),
+                        device.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.FAIL_PUSH_FILE);
+            } else {
+              CLog.d("%s pushed successfully to %s.", moduleFile.getName(), MODULE_PUSH_REMOTE_PATH + moduleFile.getName());
+            }
             if (moduleFile.getName().endsWith(APK_SUFFIX)) {
                 String packageName = parsePackageName(moduleFile, device.getDeviceDescriptor());
                 apkPackageNames.add(packageName);
             }
         }
-        String log = device.executeAdbCommand(trainInstallCmd.toArray(new String[0]));
+
+        String cmd = PARENT_SESSION_CREATION_CMD + " " + STAGED_INSTALL_OPTION;
+        if (mEnableRollback) {
+            cmd += " " + ENABLE_ROLLBACK_INSTALL_OPTION;
+        }
+        CommandResult res = device.executeShellV2Command(cmd + " | egrep -o -e '[0-9]+'");
+        String parentSessionId;
+        if (res.getStatus() == CommandStatus.SUCCESS) {
+            parentSessionId = res.getStdout();
+            CLog.d("Parent session %s created successfully. ", parentSessionId);
+        } else {
+            throw new TargetSetupError(
+                    String.format("Failed to create parent session. Error: %s", res.getStderr()),
+                    device.getDeviceDescriptor());
+        }
+
+        for (File moduleFile : moduleFilenames) {
+            String childSessionId = null;
+            if (moduleFile.getName().endsWith(APEX_SUFFIX)) {
+                if (mEnableRollback) {
+                    res = device.executeShellV2Command(String.format("%s %s %s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, APEX_OPTION, STAGED_INSTALL_OPTION, ENABLE_ROLLBACK_INSTALL_OPTION));
+                } else {
+                    res = device.executeShellV2Command(String.format("%s %s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, APEX_OPTION, STAGED_INSTALL_OPTION));
+                }
+            } else {
+                if (mEnableRollback) {
+                    res = device.executeShellV2Command(String.format("%s %s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, STAGED_INSTALL_OPTION, ENABLE_ROLLBACK_INSTALL_OPTION));
+                } else {
+                    res = device.executeShellV2Command(String.format("%s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, STAGED_INSTALL_OPTION));
+                }
+            }
+            if (res.getStatus() == CommandStatus.SUCCESS) {
+                childSessionId = res.getStdout();
+                CLog.d("Child session %s created successfully for %s. ", childSessionId, moduleFile.getName());
+            } else {
+                throw new TargetSetupError(
+                        String.format(
+                                "Failed to create child session for %s. Error: %s", moduleFile.getName(), res.getStderr()),
+                        device.getDeviceDescriptor());
+            }
+            res = device.executeShellV2Command(
+                            String.format(
+                                    "pm install-write -S %d %s %s %s",
+                                    moduleFile.length(),
+                                    childSessionId,
+                                    parsePackageName(moduleFile, device.getDeviceDescriptor()),
+                                    MODULE_PUSH_REMOTE_PATH + moduleFile.getName()));
+            if (res.getStatus() == CommandStatus.SUCCESS) {
+                CLog.d("Successfully wrote %s to session %s. ", moduleFile.getName(), childSessionId);
+            } else {
+                throw new TargetSetupError(
+                        String.format("Failed to write %s to session %s. Error: %s", moduleFile.getName(), childSessionId, res.getStderr()),
+                        device.getDeviceDescriptor());
+            }
+            res = device.executeShellV2Command(
+                            String.format(
+                                    "pm install-add-session " + parentSessionId + " " + childSessionId));
+            if (res.getStatus() != CommandStatus.SUCCESS) {
+                throw new TargetSetupError(
+                        String.format("Failed to add child session %s to parent session %s. Error: %s", childSessionId, parentSessionId, res.getStderr()),
+                        device.getDeviceDescriptor());
+            }
+        }
+        res = device.executeShellV2Command("pm install-commit " + parentSessionId);
 
         // Wait until all apexes are fully staged and ready.
         // TODO: should have adb level solution b/130039562
         RunUtil.getDefault().sleep(mApexStagingWaitTime);
 
-        if (log.contains("Success")) {
-            CLog.d(
-                    "Train is staged successfully. Cmd: %s, Output: %s.",
-                    trainInstallCmd.toString(), log);
+        if (res.getStatus() == CommandStatus.SUCCESS) {
+            CLog.d("Train is staged successfully. Stdout: %s.", res.getStdout());
         } else {
             throw new TargetSetupError(
                     String.format(
-                            "Failed to install %s on %s. Error log: '%s'",
-                            moduleFilenames.toString(), device.getSerialNumber(), log),
+                            "Failed to commit %s on %s. Error: %s",
+                            parentSessionId, device.getSerialNumber(), res.getStderr()),
                     device.getDeviceDescriptor(),
                     DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
         }
