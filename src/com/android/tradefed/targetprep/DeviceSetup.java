@@ -61,6 +61,10 @@ import java.util.TimeZone;
  * <p>Requires a device where 'adb root' is possible, typically a userdebug build type.
  *
  * <p>Should be performed <strong>after</strong> a new build is flashed.
+ *
+ * <p><strong>Note:</strong> this preparer is meant for continuous testing labs and assumes that the
+ * device under test will be flashed and wiped before the next run. As such, it does minimal clean
+ * up during teardown and should not be used in a test module.
  */
 @OptionClass(alias = "device-setup")
 public class DeviceSetup extends BaseTargetPreparer implements IExternalDependency {
