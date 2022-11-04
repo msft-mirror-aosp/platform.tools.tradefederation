@@ -342,7 +342,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
                 if (getOptions().useOxygen()) {
                     OxygenUtil util = new OxygenUtil();
-                    util.downloadLaunchFailureLogs(tse.getMessage(), mTestLogger);
+                    util.downloadLaunchFailureLogs(tse, mTestLogger);
                 }
             }
         }

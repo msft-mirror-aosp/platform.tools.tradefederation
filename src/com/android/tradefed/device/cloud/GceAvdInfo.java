@@ -50,27 +50,35 @@ import java.util.regex.Pattern;
 public class GceAvdInfo {
 
     // Patterns to match from Oxygen client's return message to identify error.
-    private static final ImmutableMap<InfraErrorIdentifier, String> OXYGEN_ERROR_PATTERN_MAP
-        = ImmutableMap.of(
-                InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE, "Lease aborted due to launcher failure",
-                InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN, "server_shutting_down",
-                InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR, "UNAVAILABLE: HTTP status code 502",
-                InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT, "DeadlineExceeded",
-                InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED, "RESOURCE_EXHAUSTED",
-                InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "502:Bad Gateway",
-                InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR, "OxygenClient");
+    private static final ImmutableMap<InfraErrorIdentifier, String> OXYGEN_ERROR_PATTERN_MAP =
+            ImmutableMap.of(
+                    InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
+                            "Lease aborted due to launcher failure",
+                    InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN, "server_shutting_down",
+                    InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR,
+                            "UNAVAILABLE: HTTP status code 502",
+                    InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT, "DeadlineExceeded",
+                    InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED, "RESOURCE_EXHAUSTED",
+                    InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "502:Bad Gateway",
+                    InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR, "OxygenClient");
 
     // Error message for specify Oxygen error.
-    private static final ImmutableMap<InfraErrorIdentifier, String> OXYGEN_ERROR_MESSAGE_MAP
-        = ImmutableMap.of(
-            InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE, "Oxygen failed to boot up the device properly",
-            InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN, "Unexpected error from Oxygen service",
-            InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR, "Unexpected error from Oxygen service",
-            InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT, "Unexpected error from Oxygen service. Request timed out.",
-            InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED, "Oxygen ran out of capacity to lease virtual device",
-            InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "Unexpected error from Oxygen service",
-            InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR, "Oxygen client failed to lease a device");
-
+    private static final ImmutableMap<InfraErrorIdentifier, String> OXYGEN_ERROR_MESSAGE_MAP =
+            ImmutableMap.of(
+                    InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
+                            "Oxygen failed to boot up the device properly",
+                    InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN,
+                            "Unexpected error from Oxygen service",
+                    InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR,
+                            "Unexpected error from Oxygen service",
+                    InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT,
+                            "Unexpected error from Oxygen service. Request timed out.",
+                    InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED,
+                            "Oxygen ran out of capacity to lease virtual device",
+                    InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE,
+                            "Unexpected error from Oxygen service",
+                    InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR,
+                            "Oxygen client failed to lease a device");
 
     public static class LogFileEntry {
         public final String path;
@@ -354,7 +362,10 @@ public class GceAvdInfo {
                     oxygenCliStatus, oxygenRes.getStdout() + " " + oxygenRes.getStderr());
             InfraErrorIdentifier identifier = refineOxygenErrorType(oxygenRes.getStderr());
             throw new TargetSetupError(
-                    OXYGEN_ERROR_MESSAGE_MAP.getOrDefault(identifier, "Oxygen client failed to lease a device"),
+                    OXYGEN_ERROR_MESSAGE_MAP.getOrDefault(
+                            identifier, "Oxygen client failed to lease a device"),
+                    new Exception(
+                            oxygenRes.getStderr()), // Include the original error message as cause.
                     identifier);
         }
     }
