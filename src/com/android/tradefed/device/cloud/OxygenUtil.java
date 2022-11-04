@@ -20,6 +20,7 @@ import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GCSFileDownloader;
 
@@ -67,6 +68,23 @@ public class OxygenUtil {
 
     /**
      * Download error logs from GCS when Oxygen failed to launch a virtual device.
+     *
+     * @param error TargetSetupError raised when leasing device through Oxygen service.
+     * @param logger The {@link ITestLogger} where to log the file
+     */
+    public void downloadLaunchFailureLogs(TargetSetupError error, ITestLogger logger) {
+        String errorMessage = error.getMessage();
+        if (error.getCause() != null) {
+            // Also include the message from the internal cause.
+            errorMessage = String.format("%s %s", errorMessage, error.getCause().getMessage());
+        }
+        downloadLaunchFailureLogs(errorMessage, logger);
+    }
+
+    /**
+     * Download error logs from GCS when Oxygen failed to launch a virtual device.
+     *
+     * <p>TODO(dshi): Remove this method after GceBootTest is updated.
      *
      * @param error The error message returned from Oxygen service
      * @param logger The {@link ITestLogger} where to log the file
