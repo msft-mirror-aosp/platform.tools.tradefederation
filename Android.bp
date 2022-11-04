@@ -168,7 +168,7 @@ java_library_host {
         "tradefed-device-manager-grpc",
         "protobuf-java-util-prebuilt-jar",
         "aoa-helper",
-        "error_prone_annotations-2.0.18",
+        "error_prone_annotations",
         "google-api-java-client-assembly",
         "auto_value_annotations",
         "google-api-services-compute",

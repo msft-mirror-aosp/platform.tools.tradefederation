@@ -29,7 +29,7 @@ java_library_host {
     ],
     libs: [
         "ddmlib-prebuilt",
-        "error_prone_annotations-2.0.18",
+        "error_prone_annotations",
         "guava",
         "tradefed-protos",
         "devtools-annotations-prebuilt",
