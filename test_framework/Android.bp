@@ -30,7 +30,7 @@ tradefed_java_library_host {
         "longevity-host-lib",
         "perfetto_metrics-full",
         "test-composers",
-        "truth-prebuilt",
+        "truth",
         "platformprotos",
     ],
     libs: [
