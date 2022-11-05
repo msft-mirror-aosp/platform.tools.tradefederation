@@ -23,6 +23,8 @@ import static org.mockito.Mockito.when;
 
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GCSFileDownloader;
 
@@ -49,6 +51,11 @@ public class OxygenUtilTest {
                     + "\tat leaseDevice\n"
                     + "\tat ";
         final String expectedUrl = "gs://bucket_name/instance_name";
+        TargetSetupError setupError =
+                new TargetSetupError(
+                        "some error",
+                        new Exception(error),
+                        DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE);
 
         File tmpDir = null;
         try {
@@ -59,7 +66,7 @@ public class OxygenUtilTest {
             when(downloader.downloadFile(expectedUrl)).thenReturn(tmpDir);
 
             OxygenUtil util = new OxygenUtil(downloader);
-            util.downloadLaunchFailureLogs(error, logger);
+            util.downloadLaunchFailureLogs(setupError, logger);
 
             verify(logger, times(1)).testLog(Mockito.any(), eq(LogDataType.KERNEL_LOG), Mockito.any());
             verify(logger, times(1))
