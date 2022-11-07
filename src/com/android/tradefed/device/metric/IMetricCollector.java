@@ -136,17 +136,22 @@ public interface IMetricCollector extends ILogSaverListener, IDisableable {
             TestDescription test)
             throws DeviceNotAvailableException;
 
+    /** Whether or not the collector is applicable to module level capture and should be init. */
+    public default boolean captureModuleLevel() {
+        return false;
+    }
+
     /**
      * Allows capturing the module started event.
      *
      * @throws DeviceNotAvailableException
      */
-    public default void onTestModuleStarted() throws DeviceNotAvailableException {};
+    public default void onTestModuleStarted() throws DeviceNotAvailableException {}
 
     /**
      * Allows capturing the module ended event.
      *
      * @throws DeviceNotAvailableException
      */
-    public default void onTestModuleEnded() throws DeviceNotAvailableException {};
+    public default void onTestModuleEnded() throws DeviceNotAvailableException {}
 }
