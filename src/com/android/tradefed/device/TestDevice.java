@@ -152,6 +152,8 @@ public class TestDevice extends NativeDevice {
 
     private static final long MICRODROID_ADB_CONNECT_TIMEOUT_MINUTES = 5;
 
+    private static final String EARLY_REBOOT = "Too early to call shutdown() or reboot()";
+
     /**
      * @param device
      * @param stateMonitor
@@ -1015,7 +1017,14 @@ public class TestDevice extends NativeDevice {
                     return false;
                 }
                 String command = "svc power reboot " + rebootMode.formatRebootCommand(reason);
-                executeShellCommand(command);
+                CommandResult result = executeShellV2Command(command);
+                if (result.getStdout().contains(EARLY_REBOOT)
+                        || result.getStderr().contains(EARLY_REBOOT)) {
+                    CLog.e(
+                            "Reboot was called too early: stdout: %s.\nstderr: %s.",
+                            result.getStdout(), result.getStderr());
+                    return false;
+                }
             } catch (DeviceUnresponsiveException due) {
                 CLog.v("framework reboot: device unresponsive to shell command, using fallback");
                 return false;
