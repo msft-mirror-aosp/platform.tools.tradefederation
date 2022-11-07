@@ -452,15 +452,4 @@ public class GTest extends GTestBase implements IDeviceTest {
     public boolean isRebootBeforeTestEnabled() {
         return mRebootBeforeTest;
     }
-
-    @Override
-    protected String getGTestCmdLineWrapper(String fullPath, String flags) {
-        File f = new File(fullPath);
-        String dir = f.getParent();
-        if (dir != null) {
-            String file = f.getName();
-            return String.format("cd %s; ./%s %s", dir, file, flags);
-        }
-        return String.format("%s %s", fullPath, flags);
-    }
 }
