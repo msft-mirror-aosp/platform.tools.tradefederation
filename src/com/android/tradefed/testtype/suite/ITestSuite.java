@@ -760,6 +760,8 @@ public abstract class ITestSuite
                                 CollectorHelper.cloneCollectors(mMetricCollectors)) {
                             if (collector.isDisabled()) {
                                 CLog.d("%s has been disabled. Skipping.", collector);
+                            } else if (!collector.captureModuleLevel()) {
+                                CLog.d("%s isn't applicable at module level. Skipping.", collector);
                             } else {
                                 if (collector instanceof IConfigurationReceiver) {
                                     ((IConfigurationReceiver) collector)
