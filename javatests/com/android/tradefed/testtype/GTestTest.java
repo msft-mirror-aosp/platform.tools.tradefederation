@@ -195,7 +195,7 @@ public class GTestTest {
 
         verify(mMockITestDevice)
                 .executeShellCommand(
-                        Mockito.argThat(s -> s.contains("arm64") && s.contains("test2")),
+                        Mockito.contains(test2),
                         Mockito.same(mMockReceiver),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
@@ -228,7 +228,7 @@ public class GTestTest {
 
         verify(mMockITestDevice)
                 .executeShellCommand(
-                        Mockito.argThat(s -> s.contains(nativeTestPath) && s.contains(module)),
+                        Mockito.contains(modulePath),
                         Mockito.same(mMockReceiver),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
@@ -265,11 +265,7 @@ public class GTestTest {
 
         verify(mMockITestDevice)
                 .executeShellCommand(
-                        Mockito.argThat(
-                                s ->
-                                        s.contains(nativeTestPath)
-                                                && s.contains(subFolderName)
-                                                && s.contains(test1)),
+                        Mockito.contains(test1Path),
                         Mockito.same(mMockReceiver),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
