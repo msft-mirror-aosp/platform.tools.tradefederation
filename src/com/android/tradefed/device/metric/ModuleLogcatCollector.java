@@ -28,6 +28,11 @@ public class ModuleLogcatCollector extends LogcatOnFailureCollector {
     private static final int MAX_LOGAT_SIZE_BYTES = 40 * 1024 * 1024;
 
     @Override
+    public boolean captureModuleLevel() {
+        return true;
+    }
+
+    @Override
     public void onTestModuleStarted() throws DeviceNotAvailableException {
         super.onTestRunStart(null);
     }
