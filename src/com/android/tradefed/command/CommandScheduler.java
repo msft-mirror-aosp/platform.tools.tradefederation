@@ -1165,13 +1165,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             // potentially create more invocations.
             manager.terminateDeviceRecovery();
             manager.terminateDeviceMonitor();
-            if (getTestInvocationManagementServer() != null) {
-                try {
-                    getTestInvocationManagementServer().shutdown();
-                } catch (InterruptedException e) {
-                    CLog.e(e);
-                }
-            }
             CLog.i("Waiting for invocation threads to complete");
             waitForAllInvocationThreads();
             waitForTerminatingInvocationThreads();
@@ -1190,6 +1183,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             if (getDeviceManagementServer() != null) {
                 try {
                     getDeviceManagementServer().shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
+            // Stop TestInvocationManagementServer after invocations are completed as the client
+            // need the server to get invocation details.
+            if (getTestInvocationManagementServer() != null) {
+                try {
+                    getTestInvocationManagementServer().shutdown();
                 } catch (InterruptedException e) {
                     CLog.e(e);
                 }
