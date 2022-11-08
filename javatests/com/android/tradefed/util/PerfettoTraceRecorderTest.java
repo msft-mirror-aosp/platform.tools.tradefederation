@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.tradefed.device.metric;
+package com.android.tradefed.util;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -22,7 +22,6 @@ import static org.junit.Assert.assertTrue;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IDeviceTest;
-import com.android.tradefed.util.RunUtil;
 
 import org.junit.After;
 import org.junit.Before;
