@@ -112,6 +112,8 @@ public class IsolatedHostTestTest {
     public void testRobolectricResourcesPositive() throws Exception {
         OptionSetter setter = new OptionSetter(mHostTest);
         setter.setOptionValue("use-robolectric-resources", "true");
+        File androidAll = new File(mMockTestDir, "android-all");
+        androidAll.mkdirs();
         doReturn(mMockTestDir).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
         doReturn(36000).when(mMockServer).getLocalPort();
         doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
@@ -120,7 +122,14 @@ public class IsolatedHostTestTest {
         assertTrue(commandArgs.contains("-Drobolectric.offline=true"));
         assertTrue(commandArgs.contains("-Drobolectric.logging=stdout"));
         assertTrue(commandArgs.contains("-Drobolectric.resourcesMode=binary"));
-        assertTrue(commandArgs.stream().anyMatch(s -> s.contains("-Drobolectric.dependency.dir=")));
+        assertTrue(
+                commandArgs.stream()
+                        .anyMatch(
+                                s ->
+                                        s.contains(
+                                                "-Drobolectric.dependency.dir="
+                                                        + androidAll.getAbsolutePath()
+                                                        + "/")));
     }
 
     @Test

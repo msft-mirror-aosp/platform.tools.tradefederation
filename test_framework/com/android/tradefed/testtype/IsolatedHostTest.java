@@ -465,8 +465,12 @@ public class IsolatedHostTest
     private List<String> compileRobolectricOptions() {
         List<String> options = new ArrayList<>();
         File testDir = findTestDirectory();
+        File androidAllDir = FileUtil.findFile(testDir, "android-all");
+        if (androidAllDir == null) {
+            throw new IllegalArgumentException("android-all directory not found, cannot proceed");
+        }
         String dependencyDir =
-                "-Drobolectric.dependency.dir=" + testDir.getAbsolutePath() + "/android-all/";
+                "-Drobolectric.dependency.dir=" + androidAllDir.getAbsolutePath() + "/";
 
         options.add(dependencyDir);
         options.add("-Drobolectric.offline=true");
