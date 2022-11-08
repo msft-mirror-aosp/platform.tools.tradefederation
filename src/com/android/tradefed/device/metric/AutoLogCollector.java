@@ -27,7 +27,8 @@ public enum AutoLogCollector {
     JAVA_COVERAGE(JavaCodeCoverageCollector.class),
     LOGCAT_ON_FAILURE(LogcatOnFailureCollector.class),
     SCREENSHOT_ON_FAILURE(ScreenshotOnFailureCollector.class),
-    MODULE_LOGCAT(ModuleLogcatCollector.class);
+    MODULE_LOGCAT(ModuleLogcatCollector.class),
+    DEVICE_TRACE(DeviceTraceCollector.class);
 
     private Class<?> mClass;
 

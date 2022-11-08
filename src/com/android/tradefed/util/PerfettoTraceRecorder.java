@@ -14,15 +14,11 @@
  * limitations under the License.
  */
 
-package com.android.tradefed.device.metric;
+package com.android.tradefed.util;
 
 import com.android.loganalysis.util.config.Option;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.util.CommandResult;
-import com.android.tradefed.util.CommandStatus;
-import com.android.tradefed.util.FileUtil;
-import com.android.tradefed.util.RunUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -35,6 +31,8 @@ import java.util.Map;
 
 /** A utility class for recording perfetto trace on a {@link ITestDevice}. */
 public class PerfettoTraceRecorder {
+
+    private static final String TRACE_NAME_FORMAT = "device-trace_%s_";
 
     @Option(
             name = "perfetto-executable",
@@ -88,7 +86,10 @@ public class PerfettoTraceRecorder {
         FileUtil.writeToFile(config, traceConfigFile);
         deviceTraceMetadata.setTraceConfig(traceConfigFile, true);
 
-        File traceOutput = FileUtil.createTempFile(device.getSerialNumber(), ".perfetto-trace");
+        File traceOutput =
+                FileUtil.createTempFile(
+                        String.format(TRACE_NAME_FORMAT, device.getSerialNumber()),
+                        ".perfetto-trace");
         deviceTraceMetadata.setTraceOutput(traceOutput, false);
 
         // start trace
