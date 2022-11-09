@@ -200,7 +200,8 @@ public class InstrumentationTestTest {
         inOrder.verify(mMockTestDevice, times(2))
                 .runInstrumentationTests(eq(runner.getValue()), any(ITestLifeCycleReceiver.class));
 
-        inOrder.verify(mMockListener).testRunStarted(TEST_PACKAGE_VALUE, 2);
+        inOrder.verify(mMockListener)
+                .testRunStarted(eq(TEST_PACKAGE_VALUE), eq(2), eq(0), anyLong());
         inOrder.verify(mMockListener).testStarted(eq(TEST1), anyLong());
         inOrder.verify(mMockListener).testEnded(eq(TEST1), anyLong(), eq(EMPTY_STRING_MAP));
         inOrder.verify(mMockListener).testStarted(eq(TEST2), anyLong());
@@ -404,7 +405,8 @@ public class InstrumentationTestTest {
 
         // Report an empty run since nothing had to be run.
         InOrder inOrder = Mockito.inOrder(mMockListener);
-        inOrder.verify(mMockListener).testRunStarted(TEST_PACKAGE_VALUE, 0);
+        inOrder.verify(mMockListener)
+                .testRunStarted(eq(TEST_PACKAGE_VALUE), eq(0), eq(0), anyLong());
         inOrder.verify(mMockListener).testRunEnded(0, new HashMap<String, Metric>());
         inOrder.verifyNoMoreInteractions();
         Mockito.verifyNoMoreInteractions(mMockListener);
@@ -447,7 +449,8 @@ public class InstrumentationTestTest {
         mInstrumentationTest.run(mTestInfo, mMockListener);
 
         InOrder inOrder = Mockito.inOrder(mMockListener);
-        inOrder.verify(mMockListener).testRunStarted(TEST_PACKAGE_VALUE, 2);
+        inOrder.verify(mMockListener)
+                .testRunStarted(eq(TEST_PACKAGE_VALUE), eq(2), eq(0), anyLong());
         inOrder.verify(mMockListener).testStarted(eq(TEST1), anyLong());
         inOrder.verify(mMockListener).testEnded(eq(TEST1), anyLong(), eq(EMPTY_STRING_MAP));
         FailureDescription error1 =
@@ -510,7 +513,8 @@ public class InstrumentationTestTest {
         mInstrumentationTest.run(mTestInfo, mMockListener);
 
         InOrder inOrder = Mockito.inOrder(mMockListener);
-        inOrder.verify(mMockListener).testRunStarted(TEST_PACKAGE_VALUE, 2);
+        inOrder.verify(mMockListener)
+                .testRunStarted(eq(TEST_PACKAGE_VALUE), eq(2), eq(0), anyLong());
         inOrder.verify(mMockListener).testStarted(eq(TEST1), anyLong());
         inOrder.verify(mMockListener).testEnded(eq(TEST1), anyLong(), eq(EMPTY_STRING_MAP));
         inOrder.verify(mMockListener)
@@ -523,7 +527,8 @@ public class InstrumentationTestTest {
         verify(mMockTestDevice).waitForDeviceAvailable();
         verify(mMockTestDevice).pushFile(Mockito.any(), Mockito.any());
 
-        inOrder.verify(mMockListener).testRunStarted(eq(TEST_PACKAGE_VALUE), eq(1));
+        inOrder.verify(mMockListener)
+                .testRunStarted(eq(TEST_PACKAGE_VALUE), eq(1), eq(0), anyLong());
         inOrder.verify(mMockListener).testStarted(eq(TEST2), anyLong());
         inOrder.verify(mMockListener).testEnded(eq(TEST2), anyLong(), eq(EMPTY_STRING_MAP));
         inOrder.verify(mMockListener).testRunEnded(1, EMPTY_STRING_MAP);
@@ -566,7 +571,8 @@ public class InstrumentationTestTest {
         mInstrumentationTest.run(mTestInfo, mMockListener);
 
         InOrder inOrder = Mockito.inOrder(mMockListener, mMockTestDevice);
-        inOrder.verify(mMockListener).testRunStarted(TEST_PACKAGE_VALUE, 2);
+        inOrder.verify(mMockListener)
+                .testRunStarted(eq(TEST_PACKAGE_VALUE), eq(2), eq(0), anyLong());
         inOrder.verify(mMockListener).testStarted(eq(TEST1), anyLong());
         inOrder.verify(mMockListener).testEnded(eq(TEST1), anyLong(), eq(EMPTY_STRING_MAP));
         inOrder.verify(mMockListener).testStarted(eq(TEST1), anyLong());
@@ -619,7 +625,8 @@ public class InstrumentationTestTest {
         mInstrumentationTest.run(mTestInfo, mMockListener);
 
         InOrder inOrder = Mockito.inOrder(mMockListener, mMockTestDevice);
-        inOrder.verify(mMockListener).testRunStarted(TEST_PACKAGE_VALUE, 2);
+        inOrder.verify(mMockListener)
+                .testRunStarted(eq(TEST_PACKAGE_VALUE), eq(2), eq(0), anyLong());
         inOrder.verify(mMockListener).testStarted(eq(TEST1), anyLong());
         inOrder.verify(mMockListener).testEnded(eq(TEST1), anyLong(), eq(EMPTY_STRING_MAP));
         inOrder.verify(mMockListener).testStarted(eq(TEST1), anyLong());
@@ -752,14 +759,16 @@ public class InstrumentationTestTest {
         mInstrumentationTest.run(mTestInfo, mMockListener);
 
         InOrder inOrder = Mockito.inOrder(mMockListener);
-        inOrder.verify(mMockListener).testRunStarted(TEST_PACKAGE_VALUE, 2);
+        inOrder.verify(mMockListener)
+                .testRunStarted(eq(TEST_PACKAGE_VALUE), eq(2), eq(0), anyLong());
         inOrder.verify(mMockListener).testStarted(eq(TEST1), anyLong());
         inOrder.verify(mMockListener).testEnded(eq(TEST1), anyLong(), eq(EMPTY_STRING_MAP));
         inOrder.verify(mMockListener)
                 .testRunFailed(
                         FailureDescription.create(RUN_ERROR_MSG, FailureStatus.TEST_FAILURE));
         inOrder.verify(mMockListener).testRunEnded(1, EMPTY_STRING_MAP);
-        inOrder.verify(mMockListener).testRunStarted(eq(TEST_PACKAGE_VALUE), Mockito.anyInt());
+        inOrder.verify(mMockListener)
+                .testRunStarted(eq(TEST_PACKAGE_VALUE), Mockito.anyInt(), eq(0), anyLong());
         inOrder.verify(mMockListener).testStarted(eq(TEST1), anyLong());
         inOrder.verify(mMockListener).testEnded(eq(TEST1), anyLong(), eq(EMPTY_STRING_MAP));
         inOrder.verify(mMockListener).testRunEnded(1, EMPTY_STRING_MAP);
@@ -821,14 +830,16 @@ public class InstrumentationTestTest {
         mInstrumentationTest.run(mTestInfo, mMockListener);
 
         InOrder inOrder = Mockito.inOrder(mMockListener);
-        inOrder.verify(mMockListener).testRunStarted(TEST_PACKAGE_VALUE, 2);
+        inOrder.verify(mMockListener)
+                .testRunStarted(eq(TEST_PACKAGE_VALUE), eq(2), eq(0), anyLong());
         inOrder.verify(mMockListener).testStarted(eq(TEST1), anyLong());
         inOrder.verify(mMockListener).testEnded(eq(TEST1), anyLong(), eq(EMPTY_STRING_MAP));
         inOrder.verify(mMockListener)
                 .testRunFailed(
                         FailureDescription.create(RUN_ERROR_MSG, FailureStatus.TEST_FAILURE));
         inOrder.verify(mMockListener).testRunEnded(1, EMPTY_STRING_MAP);
-        inOrder.verify(mMockListener).testRunStarted(TEST_PACKAGE_VALUE, 1);
+        inOrder.verify(mMockListener)
+                .testRunStarted(eq(TEST_PACKAGE_VALUE), eq(1), eq(0), anyLong());
         inOrder.verify(mMockListener).testStarted(eq(TEST2), anyLong());
         inOrder.verify(mMockListener).testEnded(eq(TEST2), anyLong(), eq(EMPTY_STRING_MAP));
         inOrder.verify(mMockListener).testRunEnded(1, EMPTY_STRING_MAP);
@@ -957,7 +968,7 @@ public class InstrumentationTestTest {
 
         // The reported number of tests is the one from the collected output
         InOrder inOrder = Mockito.inOrder(mMockListener);
-        inOrder.verify(mMockListener).testRunStarted("fakeName", 5);
+        inOrder.verify(mMockListener).testRunStarted(eq("fakeName"), eq(5), eq(0), anyLong());
         inOrder.verify(mMockListener)
                 .testRunFailed(
                         FailureDescription.create(
@@ -1015,7 +1026,7 @@ public class InstrumentationTestTest {
         verify(mInstrumentationTest, times(0)).getTestReRunner(any());
         // The reported number of tests is the one from the collected output
         InOrder inOrder = Mockito.inOrder(mMockListener);
-        inOrder.verify(mMockListener).testRunStarted("fakeName", 1);
+        inOrder.verify(mMockListener).testRunStarted(eq("fakeName"), eq(1), eq(0), anyLong());
         TestDescription tid = new TestDescription("fakeclass", "fakemethod0");
         inOrder.verify(mMockListener).testStarted(tid, 0L);
         FailureDescription failure =
