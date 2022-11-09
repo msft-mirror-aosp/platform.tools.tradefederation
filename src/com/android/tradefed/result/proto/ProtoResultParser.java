@@ -558,9 +558,6 @@ public class ProtoResultParser {
         if (!(mListener instanceof ILogSaverListener)) {
             return;
         }
-        if (!mReportLogs) {
-            return;
-        }
         ILogSaverListener logger = (ILogSaverListener) mListener;
         for (Entry<String, Any> entry : proto.getArtifactsMap().entrySet()) {
             try {
@@ -585,12 +582,12 @@ public class ProtoResultParser {
                 File path = new File(file.getPath());
                 if (Strings.isNullOrEmpty(file.getUrl()) && path.exists()) {
                     LogDataType type = file.getType();
-                    try (InputStreamSource source = new FileInputStreamSource(path)) {
-                        // File might have already been compressed
-                        if (file.getPath().endsWith(LogDataType.ZIP.getFileExt())) {
-                            type = LogDataType.ZIP;
-                        }
-                        if (mReportLogs) {
+                    if (mReportLogs) {
+                        try (InputStreamSource source = new FileInputStreamSource(path)) {
+                            // File might have already been compressed
+                            if (file.getPath().endsWith(LogDataType.ZIP.getFileExt())) {
+                                type = LogDataType.ZIP;
+                            }
                             log("Logging %s from subprocess: %s ", entry.getKey(), file.getPath());
                             logger.testLog(mFilePrefix + entry.getKey(), type, source);
                         }
