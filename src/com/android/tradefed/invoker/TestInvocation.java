@@ -554,7 +554,7 @@ public class TestInvocation implements ITestInvocation {
                             InvocationMetricKey.TEAR_DOWN_DISK_USAGE, size);
                 }
                 // Only log Invocation ended in parent
-                if (!isSubprocess(config)) {
+                if (invocationPath instanceof RemoteInvocationExecution || !isSubprocess(config)) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.INVOCATION_END, System.currentTimeMillis());
                 }
