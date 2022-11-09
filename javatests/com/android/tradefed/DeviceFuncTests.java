@@ -20,7 +20,7 @@ import com.android.tradefed.device.TestDeviceFileFuncTest;
 import com.android.tradefed.device.TestDeviceFuncTest;
 import com.android.tradefed.device.TestDevicePackageFuncTest;
 import com.android.tradefed.device.TestDeviceUserFuncTest;
-import com.android.tradefed.device.metric.PerfettoTraceRecorderTest;
+import com.android.tradefed.util.PerfettoTraceRecorderTest;
 import com.android.tradefed.suite.checker.ActivityStatusCheckerFuncTest;
 import com.android.tradefed.targetprep.AppSetupFuncTest;
 import com.android.tradefed.targetprep.DeviceSetupFuncTest;
