@@ -2345,8 +2345,6 @@ public class TestDevice extends NativeDevice {
                     String.format("Device '%s' was not booted.", microdroidSerial),
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
-        microdroidHelper.tryRunOnMicrodroid(
-                microdroidSerial, "watch -e \"getprop init.svc.logd-reinit | grep '^$'\"");
     }
 
     /**
