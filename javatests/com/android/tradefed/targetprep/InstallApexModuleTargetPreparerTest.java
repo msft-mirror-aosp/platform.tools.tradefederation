@@ -130,6 +130,7 @@ public class InstallApexModuleTargetPreparerTest {
         when(mMockDevice.getSerialNumber()).thenReturn(SERIAL);
         when(mMockDevice.getDeviceDescriptor()).thenReturn(null);
         when(mMockDevice.checkApiLevelAgainstNextRelease(30)).thenReturn(true);
+        when(mMockDevice.getApiLevel()).thenReturn(100);
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockDevice);
         context.addDeviceBuildInfo("device", mMockBuildInfo);
@@ -1327,6 +1328,35 @@ public class InstallApexModuleTargetPreparerTest {
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
         verify(mMockDevice, times(1)).getInstalledPackageNames();
         verify(mMockDevice).waitForDeviceAvailable();
+    }
+
+    @Test
+    public void testSetupAndTearDown_InstallApkAndApexOnQ() throws Exception {
+        when(mMockDevice.getApiLevel()).thenReturn(29);
+        mockCleanInstalledApexPackages();
+        Set<String> installableModules = setupInstallableModulesSingleApexSingleApk();
+        setActivatedApex();
+
+        when(mMockDevice.getInstalledPackageNames()).thenReturn(installableModules);
+        List<String> trainInstallCmd = new ArrayList<>();
+        trainInstallCmd.add("install-multi-package");
+        trainInstallCmd.add("--staged");
+        trainInstallCmd.add("--enable-rollback");
+        trainInstallCmd.add(mFakeApex.getAbsolutePath());
+        trainInstallCmd.add(mFakeApk.getAbsolutePath());
+        when(mMockDevice.executeAdbCommand(trainInstallCmd.toArray(new String[0])))
+            .thenReturn("Success");
+
+
+        mInstallApexModuleTargetPreparer.setUp(mTestInfo);
+        mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
+        verifyCleanInstalledApexPackages();
+        verify(mMockDevice, times(3)).reboot();
+        verify(mMockDevice, times(3)).getActiveApexes();
+        verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
+        verify(mMockDevice, times(1)).getInstalledPackageNames();
+        verify(mMockDevice).waitForDeviceAvailable();
+        verify(mMockDevice, times(1)).executeAdbCommand(trainInstallCmd.toArray(new String[0]));
     }
 
     @Test

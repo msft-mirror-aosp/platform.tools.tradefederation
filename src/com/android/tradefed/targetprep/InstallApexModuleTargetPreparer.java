@@ -613,8 +613,48 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             TestInformation testInfo, List<File> moduleFilenames)
             throws TargetSetupError, DeviceNotAvailableException {
         ITestDevice device = testInfo.getDevice();
-
         List<String> apkPackageNames = new ArrayList<>();
+
+        //This is a short term fix for atomic install issue on Q. We will either remove the fix
+        //after Q support is deprecated or a long term fix is provided(b/257675597).
+        if (device.getApiLevel() == 29) {
+            List<String> trainInstallCmd = new ArrayList<>();
+            trainInstallCmd.add(TRAIN_WITH_APEX_INSTALL_OPTION);
+            trainInstallCmd.add(STAGED_INSTALL_OPTION);
+            if (mEnableRollback) {
+                trainInstallCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
+            }
+            for (File moduleFile : moduleFilenames) {
+                trainInstallCmd.add(moduleFile.getAbsolutePath());
+                if (moduleFile.getName().endsWith(APK_SUFFIX)) {
+                    String packageName = parsePackageName(moduleFile, device.getDeviceDescriptor());
+                    apkPackageNames.add(packageName);
+                }
+            }
+            String log = device.executeAdbCommand(trainInstallCmd.toArray(new String[0]));
+            if (log == null) {
+                throw new TargetSetupError(
+                    trainInstallCmd.toString(),
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
+            }
+            RunUtil.getDefault().sleep(mApexStagingWaitTime);
+
+            if (log.contains("Success")) {
+                CLog.d(
+                    "Train is staged successfully. Cmd: %s, Output: %s.",
+                    trainInstallCmd.toString(), log);
+            } else {
+                throw new TargetSetupError(
+                    String.format(
+                        "Failed to install %s on %s. Error log: '%s'",
+                        moduleFilenames.toString(), device.getSerialNumber(), log),
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
+            }
+            mApkInstalled.addAll(apkPackageNames);
+            return;
+        }
 
         for (File moduleFile : moduleFilenames) {
             if (!device.pushFile(moduleFile, MODULE_PUSH_REMOTE_PATH + moduleFile.getName())) {
