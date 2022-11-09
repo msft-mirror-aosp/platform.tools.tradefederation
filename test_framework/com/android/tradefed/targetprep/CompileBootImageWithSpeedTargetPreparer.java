@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.targetprep;
 
+import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -27,10 +28,19 @@ import com.google.common.annotations.VisibleForTesting;
 @OptionClass(alias = "boot-image-speed-preparer")
 public final class CompileBootImageWithSpeedTargetPreparer extends BaseTargetPreparer {
 
+    @Option(
+            name = "compile-boot-image-speed",
+            description = "Compile the boot image in speed, not speed-profile")
+    private boolean mEnableBootImageSpeed = true;
+
     @VisibleForTesting
-    static final String BOOT_IMAGE_SPEED =
+    static final String COMPILE_BOOT_IMAGE_SPEED_CMD =
             "odrefresh --system-server-compiler-filter=speed "
-                    + "--boot-image-compiler-filter=speed --compile";
+                    + "--boot-image-compiler-filter=speed --force-compile";
+
+    // Since speed-profile is the default, simply re-compile the boot image.
+    @VisibleForTesting
+    static final String COMPILE_BOOT_IMAGE_SPEED_PROFILE_CMD = "odrefresh --force-compile";
 
     @Override
     public void setUp(TestInformation testInfo)
@@ -42,7 +52,11 @@ public final class CompileBootImageWithSpeedTargetPreparer extends BaseTargetPre
         }
         device.executeShellCommand("stop");
         device.executeShellCommand("setprop dev.bootcomplete 0");
-        device.executeShellCommand(BOOT_IMAGE_SPEED);
+        if (mEnableBootImageSpeed) {
+            device.executeShellCommand(COMPILE_BOOT_IMAGE_SPEED_CMD);
+        } else {
+            device.executeShellCommand(COMPILE_BOOT_IMAGE_SPEED_PROFILE_CMD);
+        }
         device.executeShellCommand("start");
         device.waitForDeviceAvailable();
     }
