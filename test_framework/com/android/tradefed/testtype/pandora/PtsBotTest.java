@@ -513,12 +513,12 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                             .toArray(String[]::new);
 
             if (profileTests.length > 0) {
-                toggleA2dpSinkIfNeeded(testInfo.getDevice(), profile);
                 Map<String, String> runMetrics = new HashMap<>();
 
                 listener.testRunStarted(profile, profileTests.length);
                 long startTimestamp = System.currentTimeMillis();
                 for (String testName : profileTests) {
+                    toggleA2dpSinkIfNeeded(testInfo.getDevice(), testName);
                     runPtsBotTest(profile, testName, testInfo, listener);
                 }
                 long endTimestamp = System.currentTimeMillis();
@@ -529,13 +529,13 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         }
     }
 
-    private void toggleA2dpSinkIfNeeded(ITestDevice testDevice, String profile) {
-        CLog.i("toggleA2dpSinkIfNeeded: " + profile);
-        if (profile.startsWith("A2DP/SNK")
-                || profile.startsWith("AVCTP/CT")
-                || profile.startsWith("AVDTP/SNK")
-                || (profile.startsWith("AVRCP/CT") && !profile.startsWith("AVRCP/CT/VLH"))
-                || profile.startsWith("AVRCP/TG/VLH")) {
+    private void toggleA2dpSinkIfNeeded(ITestDevice testDevice, String testName) {
+        CLog.i("toggleA2dpSinkIfNeeded: " + testName);
+        if (testName.startsWith("A2DP/SNK")
+                || testName.startsWith("AVCTP/CT")
+                || testName.startsWith("AVDTP/SNK")
+                || (testName.startsWith("AVRCP/CT") && !testName.startsWith("AVRCP/CT/VLH"))
+                || testName.startsWith("AVRCP/TG/VLH")) {
             setProperty(testDevice, A2DP_SNK_PROPERTY, true);
             setProperty(testDevice, A2DP_SRC_PROPERTY, false);
         } else if (!getProperty(testDevice, A2DP_SRC_PROPERTY).equals("true")) {
