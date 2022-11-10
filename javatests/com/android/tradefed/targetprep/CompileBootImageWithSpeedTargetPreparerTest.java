@@ -24,6 +24,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.config.OptionSetter;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -38,11 +39,12 @@ public class CompileBootImageWithSpeedTargetPreparerTest {
 
     private CompileBootImageWithSpeedTargetPreparer mBootImagePreparer;
     private TestInformation mTestInfo;
+    private OptionSetter mSetter;
     @Mock ITestDevice mMockDevice;
     @Mock IBuildInfo mMockBuildInfo;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
         IInvocationContext context = new InvocationContext();
@@ -50,14 +52,30 @@ public class CompileBootImageWithSpeedTargetPreparerTest {
         context.addDeviceBuildInfo("device", mMockBuildInfo);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
         mBootImagePreparer = new CompileBootImageWithSpeedTargetPreparer();
+        mSetter = new OptionSetter(mBootImagePreparer);
     }
 
+    /** Tests compile boot image with speed. */
     @Test
-    public void testSetUp() throws Exception {
+    public void testSpeed() throws Exception {
         mBootImagePreparer.setUp(mTestInfo);
         verify(mMockDevice, times(1)).executeShellCommand("stop");
         verify(mMockDevice, times(1)).executeShellCommand("setprop dev.bootcomplete 0");
-        verify(mMockDevice, times(1)).executeShellCommand(mBootImagePreparer.BOOT_IMAGE_SPEED);
+        verify(mMockDevice, times(1))
+                .executeShellCommand(mBootImagePreparer.COMPILE_BOOT_IMAGE_SPEED_CMD);
+        verify(mMockDevice, times(1)).executeShellCommand("start");
+        verify(mMockDevice, times(1)).waitForDeviceAvailable();
+    }
+
+    /** Tests compile boot image with speed-profile. */
+    @Test
+    public void testSpeedProfile() throws Exception {
+        mSetter.setOptionValue("compile-boot-image-speed", "false");
+        mBootImagePreparer.setUp(mTestInfo);
+        verify(mMockDevice, times(1)).executeShellCommand("stop");
+        verify(mMockDevice, times(1)).executeShellCommand("setprop dev.bootcomplete 0");
+        verify(mMockDevice, times(1))
+                .executeShellCommand(mBootImagePreparer.COMPILE_BOOT_IMAGE_SPEED_PROFILE_CMD);
         verify(mMockDevice, times(1)).executeShellCommand("start");
         verify(mMockDevice, times(1)).waitForDeviceAvailable();
     }

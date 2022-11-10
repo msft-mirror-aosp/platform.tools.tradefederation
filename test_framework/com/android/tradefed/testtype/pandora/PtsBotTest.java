@@ -36,7 +36,6 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.PythonVirtualenvHelper;
 import com.android.tradefed.util.RunUtil;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -95,14 +94,21 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     private static final int HCI_ROOTCANAL_PORT_CF = 7300;
     private static final int CONTROL_ROOTCANAL_PORT_CF = 7500;
 
+    // This is the vsock port where the modem simulator is exposed in the
+    // Cuttlefish guest. It is specified in
+    // cs/android/device/google/cuttlefish/host/commands/assemble_cvd/flags.cc;l=1224
+    private static final int MODEM_SIMULATOR_VSOCK_CID = 2;
+    private static final int MODEM_SIMULATOR_VSOCK_PORT = 9600;
+
     // These are the host (i.e. the machine running pts-bot) ports on which we
-    // forward Pandora Server, Rootcanal HCI and Control ports of the DUT.
-    // These ports are not fixed because when sharding, multiple hosts (or a
-    // single host) can share the same physical resources and are thus
-    // determined dynamically.
+    // forward Pandora Server, Rootcanal HCI and Control ports of the DUT, and
+    // the modem_simulator port. These ports are not fixed because when
+    // sharding, multiple hosts (or a single host) can share the same physical
+    // resources and are thus determined dynamically.
     private int hostPandoraServerPort;
     private int hostHciRootcanalPort;
     private int hostControlRootcanalPort;
+    private int hostModemSimulatorPort;
 
     // PTS inactivity timeout in seconds.
     // Must be above 60s to avoid conflict with PTS timeout for triggering
@@ -315,6 +321,14 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
             adbForwardPort(testDevice, hostHciRootcanalPort, HCI_ROOTCANAL_PORT);
             hostControlRootcanalPort = getUnusedPort();
             adbForwardPort(testDevice, hostControlRootcanalPort, CONTROL_ROOTCANAL_PORT);
+
+            // forward host port to DUT modem_simulator vsock
+            hostModemSimulatorPort = getUnusedPort();
+            adbForwardVsockPort(
+                    testDevice,
+                    hostModemSimulatorPort,
+                    MODEM_SIMULATOR_VSOCK_CID,
+                    MODEM_SIMULATOR_VSOCK_PORT);
         }
 
         // List all applicable tests in a sorted fashion.
@@ -346,6 +360,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         if (!physical) {
             adbForwardRemovePort(testDevice, hostHciRootcanalPort);
             adbForwardRemovePort(testDevice, hostControlRootcanalPort);
+            adbForwardRemovePort(testDevice, hostModemSimulatorPort);
         }
 
         // Clean up temp directory.
@@ -411,8 +426,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     }
 
     private boolean shouldSkipProfileOrTest(String profileName) {
-        // Note that while the logic is described in terms of profiles, we can think of tests
-        // as "leaf" profiles, so the same reasoning applies
+        // Note that while the logic is described in terms of profiles, we can think
+        // of tests as "leaf" profiles, so the same reasoning applies
 
         for (var filter : excludeFilters) {
             if (profileName.startsWith(filter)) {
@@ -575,14 +590,17 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         int retryCount = 0;
         while (true) {
             try {
-                // The last two arguments are the Pandora gRPC server port and
-                // Rootcanal control port which pts-bot provides to mmi2grpc.
+                // The last three arguments are the Pandora gRPC server port,
+                // the Rootcanal control port which pts-bot provides to
+                // mmi2grpc, and the modem simulator port that is forwarded from
+                // the guest
                 ProcessBuilder processBuilder =
                         ptsBot(
                                 testInfo,
                                 testName,
                                 String.valueOf(hostPandoraServerPort),
-                                String.valueOf(hostControlRootcanalPort));
+                                String.valueOf(hostControlRootcanalPort),
+                                String.valueOf(hostModemSimulatorPort));
 
                 CLog.i("Running command: %s", String.join(" ", processBuilder.command()));
                 Process process = processBuilder.start();
@@ -762,6 +780,14 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
             throws DeviceNotAvailableException {
         testDevice.executeAdbCommand(
                 "forward", String.format("tcp:%s", hostPort), String.format("tcp:%s", dutPort));
+    }
+
+    private void adbForwardVsockPort(ITestDevice testDevice, int hostPort, int dutCid, int dutPort)
+            throws DeviceNotAvailableException {
+        testDevice.executeAdbCommand(
+                "forward",
+                String.format("tcp:%s", hostPort),
+                String.format("vsock:%s:%s", dutCid, dutPort));
     }
 
     private void adbForwardRemovePort(ITestDevice testDevice, int hostPort)

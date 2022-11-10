@@ -120,6 +120,9 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
     public void shutdown() throws InterruptedException {
         if (mServer != null) {
             CLog.d("Stopping invocation server.");
+            if (mTracker.size() > 0) {
+                CLog.d("Remaining tracked test invocations: %s", mTracker.size());
+            }
             mServer.shutdown();
             mServer.awaitTermination();
         }
