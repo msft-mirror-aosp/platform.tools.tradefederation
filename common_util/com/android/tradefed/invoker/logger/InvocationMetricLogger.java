@@ -241,6 +241,7 @@ public class InvocationMetricLogger {
         start_logcat("start_logcat", true),
         pre_sharding_required_setup("pre_sharding_required_setup", true),
         sharding("sharding", true),
+        pre_multi_preparer("pre_multi_preparer", true),
         lab_setup("lab_setup", true),
         test_setup("test_setup", true),
         test_execution("test_execution", true),
