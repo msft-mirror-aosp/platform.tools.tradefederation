@@ -38,6 +38,17 @@ public class CloseableTraceScope implements AutoCloseable {
      * @param name The name for reporting the section
      */
     public CloseableTraceScope(String category, String name) {
+        this(category, name, System.nanoTime());
+    }
+
+    /**
+     * Report a scoped trace.
+     *
+     * @param category The category of the operation
+     * @param name The name for reporting the section
+     * @param startTimestampNano start timestamp in nano seconds
+     */
+    public CloseableTraceScope(String category, String name, long startTimestampNano) {
         this.category = category;
         this.name = name;
         this.startTime = System.currentTimeMillis();
@@ -48,8 +59,16 @@ public class CloseableTraceScope implements AutoCloseable {
         int threadId = (int) Thread.currentThread().getId();
         String threadName = Thread.currentThread().getName();
         trace.reportTraceEvent(
-                category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_BEGIN);
+                category,
+                name,
+                threadId,
+                threadName,
+                startTimestampNano,
+                TrackEvent.Type.TYPE_SLICE_BEGIN);
+    }
 
+    public CloseableTraceScope(String name, long startTimestampNano) {
+        this(DEFAULT_CATEGORY, name, startTimestampNano);
     }
 
     /** Constructor. */
@@ -62,8 +81,7 @@ public class CloseableTraceScope implements AutoCloseable {
         this(DEFAULT_CATEGORY, Thread.currentThread().getName());
     }
 
-    @Override
-    public void close() {
+    public void close(long endTimestampNano) {
         ActiveTrace trace = TracingLogger.getActiveTrace();
         if (trace == null) {
             return;
@@ -71,12 +89,22 @@ public class CloseableTraceScope implements AutoCloseable {
         int threadId = (int) Thread.currentThread().getId();
         String threadName = Thread.currentThread().getName();
         trace.reportTraceEvent(
-                category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_END);
+                category,
+                name,
+                threadId,
+                threadName,
+                endTimestampNano,
+                TrackEvent.Type.TYPE_SLICE_END);
         Optional<InvocationMetricKey> optionalKey =
                 Enums.getIfPresent(InvocationMetricKey.class, name);
         if (optionalKey.isPresent()) {
             InvocationMetricLogger.addInvocationPairMetrics(
                     optionalKey.get(), startTime, System.currentTimeMillis());
         }
+    }
+
+    @Override
+    public void close() {
+        close(System.nanoTime());
     }
 }
