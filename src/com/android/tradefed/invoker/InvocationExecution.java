@@ -324,24 +324,34 @@ public class InvocationExecution implements IInvocationExecution {
         mTrackLabPreparers = new ConcurrentHashMap<>();
         mTrackTargetPreparers = new ConcurrentHashMap<>();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_START, start);
-        try (CloseableTraceScope ignored =
-                new CloseableTraceScope(InvocationMetricKey.lab_setup.name())) {
-            for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
-                ITestDevice device = testInfo.getContext().getDevice(deviceName);
-                CLog.d("Starting setup for device: '%s'", device.getSerialNumber());
-                if (device instanceof ITestLoggerReceiver) {
-                    ((ITestLoggerReceiver) testInfo.getContext().getDevice(deviceName))
-                            .setTestLogger(listener);
-                }
-                mTrackLabPreparers.put(deviceName, new HashSet<>());
-                mTrackTargetPreparers.put(deviceName, new HashSet<>());
+
+        for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
+            ITestDevice device = testInfo.getContext().getDevice(deviceName);
+            CLog.d("Starting setup for device: '%s'", device.getSerialNumber());
+            if (device instanceof ITestLoggerReceiver) {
+                ((ITestLoggerReceiver) testInfo.getContext().getDevice(deviceName))
+                        .setTestLogger(listener);
             }
+            mTrackLabPreparers.put(deviceName, new HashSet<>());
+            mTrackTargetPreparers.put(deviceName, new HashSet<>());
+        }
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(InvocationMetricKey.pre_multi_preparer.name())) {
             // Before all the individual setup, make the multi-pre-target-preparer devices setup
             runMultiTargetPreparers(
                     config.getMultiPreTargetPreparers(),
                     listener,
                     testInfo,
                     "multi pre target preparer setup");
+        } finally {
+            long end = System.currentTimeMillis();
+            // Pre-multi-preparer are test specific and account toward test setup
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.TEST_SETUP_PAIR, start, end);
+        }
+        start = System.currentTimeMillis();
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(InvocationMetricKey.lab_setup.name())) {
             runLabPreparersSetup(testInfo, config, listener);
         } finally {
             long end = System.currentTimeMillis();
@@ -753,10 +763,17 @@ public class InvocationExecution implements IInvocationExecution {
             if (multiPreparer instanceof ITestLoggerReceiver) {
                 ((ITestLoggerReceiver) multiPreparer).setTestLogger(logger);
             }
-            CLog.d("Starting %s '%s'", description, multiPreparer);
-            multiPreparer.setUp(testInfo);
-            mTrackMultiPreparers.add(multiPreparer);
-            CLog.d("done with %s '%s'", description, multiPreparer);
+            long startTime = System.currentTimeMillis();
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(multiPreparer.getClass().getSimpleName())) {
+                CLog.d("Starting %s '%s'", description, multiPreparer);
+                multiPreparer.setUp(testInfo);
+                mTrackMultiPreparers.add(multiPreparer);
+                long elapsedTime = System.currentTimeMillis() - startTime;
+                CLog.d(
+                        "Done with %s '%s' in %s",
+                        description, multiPreparer, TimeUtil.formatElapsedTime(elapsedTime));
+            }
         }
     }
 
@@ -787,7 +804,8 @@ public class InvocationExecution implements IInvocationExecution {
             }
             long startTime = System.currentTimeMillis();
             CLog.d("Starting %s '%s'", description, multipreparer);
-            try {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(multipreparer.getClass().getSimpleName())) {
                 multipreparer.tearDown(testInfo, throwable);
             } catch (Throwable t) {
                 // We catch it and rethrow later to allow each multi_targetprep to be attempted.
