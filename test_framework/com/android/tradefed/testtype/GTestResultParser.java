@@ -17,6 +17,7 @@ package com.android.tradefed.testtype;
 
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.ddmlib.MultiLineReceiver;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -100,6 +101,7 @@ public class GTestResultParser extends MultiLineReceiver {
     private int mNumTestsExpected = 0;
     private long mTotalRunTime = 0;
     private boolean mTestInProgress = false;
+    private CloseableTraceScope mMethodScope = null;
     private boolean mTestRunInProgress = false;
     private final String mTestRunName;
     private final Collection<ITestInvocationListener> mTestListeners;
@@ -415,6 +417,7 @@ public class GTestResultParser extends MultiLineReceiver {
     /** Set state to indicate we've started running a test. */
     private void setTestStarted(TestDescription testId) {
         mTestInProgress = true;
+        mMethodScope = new CloseableTraceScope(testId.toString());
     }
 
     /**
@@ -423,6 +426,10 @@ public class GTestResultParser extends MultiLineReceiver {
      */
     private void setTestEnded() {
         mTestInProgress = false;
+        if (mMethodScope != null) {
+            mMethodScope.close();
+            mMethodScope = null;
+        }
     }
 
     /**
