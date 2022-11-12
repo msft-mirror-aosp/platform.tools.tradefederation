@@ -76,7 +76,7 @@ public class InstalledInstrumentationsTest
             description="Sets timeout (in milliseconds) that will be applied to each test. In the "
                     + "event of a test timeout it will log the results and proceed with executing "
                     + "the next test. For no timeout, set to 0.")
-    private int mTestTimeout = 5 * 60 * 1000;  // default to 5 minutes
+    private long mTestTimeout = 5 * 60 * 1000;  // default to 5 minutes
 
     @Option(name = "size",
             description = "Restrict tests to a specific test size. " +
@@ -438,7 +438,7 @@ public class InstalledInstrumentationsTest
         return mShellTimeout;
     }
 
-    int getTestTimeout() {
+    long getTestTimeout() {
         return mTestTimeout;
     }
 
