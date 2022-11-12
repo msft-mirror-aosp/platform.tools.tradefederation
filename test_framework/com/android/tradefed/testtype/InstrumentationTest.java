@@ -31,6 +31,7 @@ import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.metric.CountTestCasesCollector;
 import com.android.tradefed.device.metric.GcovCodeCoverageCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
@@ -874,21 +875,29 @@ public class InstrumentationTest
         // Reruns do not create new listeners.
         if (!mIsRerun) {
 
+            List<IMetricCollector> copyList = new ArrayList<IMetricCollector>(mCollectors);
+            if (mConfiguration.getCommandOptions().reportTestCaseCount()) {
+                CountTestCasesCollector counter = new CountTestCasesCollector(this);
+                copyList.add(counter);
+            }
             // TODO: Convert to device-side collectors when possible.
-            for (IMetricCollector collector : mCollectors) {
-                if (collector.isDisabled()) {
-                    CLog.d("%s has been disabled. Skipping.", collector);
-                } else {
-                    try (CloseableTraceScope ignored =
-                            new CloseableTraceScope(
-                                    "init_for_inst_" + collector.getClass().getSimpleName())) {
-                        CLog.d(
-                                "Initializing %s for instrumentation.",
-                                collector.getClass().getCanonicalName());
-                        if (collector instanceof IConfigurationReceiver) {
-                            ((IConfigurationReceiver) collector).setConfiguration(mConfiguration);
+            if (testInfo != null) {
+                for (IMetricCollector collector : copyList) {
+                    if (collector.isDisabled()) {
+                        CLog.d("%s has been disabled. Skipping.", collector);
+                    } else {
+                        try (CloseableTraceScope ignored =
+                                new CloseableTraceScope(
+                                        "init_for_inst_" + collector.getClass().getSimpleName())) {
+                            CLog.d(
+                                    "Initializing %s for instrumentation.",
+                                    collector.getClass().getCanonicalName());
+                            if (collector instanceof IConfigurationReceiver) {
+                                ((IConfigurationReceiver) collector)
+                                        .setConfiguration(mConfiguration);
+                            }
+                            listener = collector.init(testInfo.getContext(), listener);
                         }
-                        listener = collector.init(testInfo.getContext(), listener);
                     }
                 }
             }
