@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.testtype;
 
-import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -26,7 +25,6 @@ import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Internal listener to Trade Federation for {@link GTest}. Detect and report if duplicated tests
@@ -38,7 +36,6 @@ final class GTestListener extends ResultForwarder {
     private Set<TestDescription> mTests = new HashSet<>();
     private Set<TestDescription> mDuplicateTests = new HashSet<>();
     private boolean mPartialList = false;
-    private Long mStartTime = null;
 
     public GTestListener(ITestInvocationListener... listeners) {
         super(listeners);
@@ -46,7 +43,6 @@ final class GTestListener extends ResultForwarder {
 
     @Override
     public void testStarted(TestDescription test, long startTime) {
-        mStartTime = startTime;
         super.testStarted(test, startTime);
         if (mDuplicateTests.size() < MAX_PARTIAL_SET_SIZE) {
             if (!mTests.add(test)) {
@@ -56,17 +52,6 @@ final class GTestListener extends ResultForwarder {
             mPartialList = true;
             // Avoid storing too much data for too long.
             mTests.clear();
-        }
-    }
-
-    @Override
-    public void testEnded(TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
-        super.testEnded(test, endTime, testMetrics);
-        if (mStartTime != null) {
-            CloseableTraceScope event =
-                    new CloseableTraceScope(
-                            test.toString(), TimeUnit.MILLISECONDS.toNanos(mStartTime));
-            event.close(TimeUnit.MILLISECONDS.toNanos(endTime));
         }
     }
 

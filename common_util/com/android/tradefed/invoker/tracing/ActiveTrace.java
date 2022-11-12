@@ -104,11 +104,6 @@ public class ActiveTrace {
         reportTraceEvent(categories, name, (int) tid, null, type);
     }
 
-    public void reportTraceEvent(
-            String categories, String name, int threadId, String threadName, TrackEvent.Type type) {
-        reportTraceEvent(categories, name, threadId, threadName, System.nanoTime(), type);
-    }
-
     /**
      * Very basic event reporting to do START / END of traces.
      *
@@ -117,12 +112,7 @@ public class ActiveTrace {
      * @param type Type of the event being reported
      */
     public void reportTraceEvent(
-            String categories,
-            String name,
-            int threadId,
-            String threadName,
-            long timestampNano,
-            TrackEvent.Type type) {
+            String categories, String name, int threadId, String threadName, TrackEvent.Type type) {
         long traceIdentifier = traceUuid;
         if (threadId != this.tid) {
             if (mThreadToTracker.containsKey(Long.valueOf(threadId))) {
@@ -137,7 +127,7 @@ public class ActiveTrace {
                 TracePacket.newBuilder()
                         .setTrustedUid(uid)
                         .setTrustedPid((int) pid)
-                        .setTimestamp(timestampNano)
+                        .setTimestamp(System.nanoTime())
                         .setTrustedPacketSequenceId(1)
                         .setSequenceFlags(1)
                         .setProcessDescriptor(ProcessDescriptor.newBuilder().setPid((int) pid))
