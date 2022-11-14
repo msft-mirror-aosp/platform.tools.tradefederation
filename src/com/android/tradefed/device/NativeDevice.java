@@ -5605,7 +5605,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (checkValidPid(output)) {
             return output;
         }
-        CLog.e("Failed to find a valid pid for process.");
+        CLog.e("Failed to find a valid pid for process '%s'.", process);
         return null;
     }
 
