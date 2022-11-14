@@ -314,6 +314,10 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
                                         60000L,
                                         TimeUnit.MILLISECONDS);
                         String bootFlag = receiver.getOutput();
+                        if (bootFlag != null) {
+                            // Workaround for microdroid: `adb shell` prints permission warnings
+                            bootFlag = bootFlag.lines().reduce((a, b) -> b).orElse(null);
+                        }
                         if (bootFlag != null && "1".equals(bootFlag.trim())) {
                             return BUSY_WAIT_STATUS.SUCCESS;
                         }
