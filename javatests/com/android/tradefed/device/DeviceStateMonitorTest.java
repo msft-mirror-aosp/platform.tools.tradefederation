@@ -315,6 +315,35 @@ public class DeviceStateMonitorTest {
     }
 
     /**
+     * Test {@link DeviceStateMonitor#waitForBootComplete(long)} when the shell command returns
+     * warnings. This happens on some specialized devices such as Microdroid.
+     */
+    @Test
+    public void testWaitForBootComplete_warnings() throws Exception {
+        IDevice mFakeDevice =
+                new StubDevice("serial") {
+                    @Override
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputResponse,
+                            TimeUnit maxTimeUnits)
+                            throws TimeoutException, AdbCommandRejectedException,
+                                    ShellCommandUnresponsiveException, IOException {
+                        String res =
+                                "warning: Not a fatal error #1\n"
+                                        + "warning: Not a fatal error #2\n"
+                                        + "warning: Not a fatal error #3\n"
+                                        + "1\n";
+                        receiver.addOutput(res.getBytes(), 0, res.length());
+                    }
+                };
+        mMonitor = new DeviceStateMonitor(mMockMgr, mFakeDevice, true);
+        boolean res = mMonitor.waitForBootComplete(WAIT_TIMEOUT_NOT_REACHED_MS);
+        assertTrue(res);
+    }
+
+    /**
      * Test {@link DeviceStateMonitor#waitForBootComplete(long)} when boot complete status change.
      */
     @Test
