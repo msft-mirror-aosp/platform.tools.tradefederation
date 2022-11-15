@@ -110,11 +110,16 @@ public class InstallApexModuleTargetPreparerTest {
     private static final String SESSION_DATA_DIR = "/data/apex/sessions/";
     private static final String APEX_STAGING_WAIT_TIME = "10";
     private static final String MODULE_PUSH_REMOTE_PATH = "/data/local/tmp/";
-    protected static final String PARENT_SESSION_CREATION_CMD = "pm install-create --multi-package --staged --enable-rollback | egrep -o -e '[0-9]+'";
-    protected static final String CHILD_SESSION_CREATION_CMD_APEX = "pm install-create --apex --staged --enable-rollback | egrep -o -e '[0-9]+'";
-    protected static final String CHILD_SESSION_CREATION_CMD_APK = "pm install-create --staged --enable-rollback | egrep -o -e '[0-9]+'";
-    protected static final String PARENT_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD= "pm install-create --multi-package --staged | egrep -o -e '[0-9]+'";
-    protected static final String CHILD_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD_APEX = "pm install-create --apex --staged | egrep -o -e '[0-9]+'";
+    protected static final String PARENT_SESSION_CREATION_CMD =
+      "pm install-create --multi-package --staged --enable-rollback | egrep -o -e '[0-9]+'";
+    protected static final String CHILD_SESSION_CREATION_CMD_APEX =
+      "pm install-create --apex --staged --enable-rollback | egrep -o -e '[0-9]+'";
+    protected static final String CHILD_SESSION_CREATION_CMD_APK =
+      "pm install-create --staged --enable-rollback | egrep -o -e '[0-9]+'";
+    protected static final String PARENT_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD =
+      "pm install-create --multi-package --staged | egrep -o -e '[0-9]+'";
+    protected static final String CHILD_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD_APEX =
+      "pm install-create --apex --staged | egrep -o -e '[0-9]+'";
 
     @Before
     public void setUp() throws Exception {
@@ -1399,14 +1404,19 @@ public class InstallApexModuleTargetPreparerTest {
         CommandResult parent_session_creation_res = new CommandResult();
         parent_session_creation_res.setStatus(CommandStatus.FAILED);
         parent_session_creation_res.setStderr("I am an error!");
-        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD)).thenReturn(parent_session_creation_res);
+        parent_session_creation_res.setStdout("I am the output");
+        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD))
+          .thenReturn(parent_session_creation_res);
         try {
             mInstallApexModuleTargetPreparer.setUp(mTestInfo);
             fail("Should have thrown a TargetSetupError.");
         } catch (TargetSetupError expected) {
             assertTrue(
                     expected.getMessage()
-                            .equals(String.format("Failed to create parent session. Error: %s", parent_session_creation_res.getStderr())));
+                            .equals(
+                             String.format("Failed to create parent session. Error: %s, Stdout: %s",
+                                            parent_session_creation_res.getStderr(),
+                                            parent_session_creation_res.getStdout())));
         }
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
         verifyCleanInstalledApexPackages();
@@ -1429,11 +1439,14 @@ public class InstallApexModuleTargetPreparerTest {
         }
         CommandResult parent_session_creation_res = new CommandResult();
         parent_session_creation_res.setStatus(CommandStatus.SUCCESS);
-        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD)).thenReturn(parent_session_creation_res);
+        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD))
+          .thenReturn(parent_session_creation_res);
         CommandResult child_session_creation_res = new CommandResult();
         child_session_creation_res.setStatus(CommandStatus.FAILED);
-        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APEX)).thenReturn(child_session_creation_res);
-        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APK)).thenReturn(child_session_creation_res);
+        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APEX))
+          .thenReturn(child_session_creation_res);
+        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APK))
+          .thenReturn(child_session_creation_res);
         try {
             mInstallApexModuleTargetPreparer.setUp(mTestInfo);
             fail("Should have thrown a TargetSetupError.");
@@ -1464,26 +1477,35 @@ public class InstallApexModuleTargetPreparerTest {
         CommandResult session_creation_res = new CommandResult();
         session_creation_res.setStatus(CommandStatus.SUCCESS);
         session_creation_res.setStdout("1");
-        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD)).thenReturn(session_creation_res);;
-        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APEX)).thenReturn(session_creation_res);
-        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APK)).thenReturn(session_creation_res);
+        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD))
+          .thenReturn(session_creation_res);;
+        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APEX))
+          .thenReturn(session_creation_res);
+        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APK))
+          .thenReturn(session_creation_res);
         CommandResult write_to_session_res = new CommandResult();
         write_to_session_res.setStatus(CommandStatus.FAILED);
         write_to_session_res.setStderr("I am an error!");
+        write_to_session_res.setStdout("I am the output");
         when(mMockDevice.executeShellV2Command(
                 String.format(
                         "pm install-write -S %d %s %s %s",
                         mFakeApex.length(),
                         "1",
-                        mInstallApexModuleTargetPreparer.parsePackageName(mFakeApex, mMockDevice.getDeviceDescriptor()),
-                        MODULE_PUSH_REMOTE_PATH + mFakeApex.getName()))).thenReturn(write_to_session_res);
+                        mInstallApexModuleTargetPreparer.parsePackageName(mFakeApex,
+                                                                 mMockDevice.getDeviceDescriptor()),
+                        MODULE_PUSH_REMOTE_PATH + mFakeApex.getName())))
+          .thenReturn(write_to_session_res);
         try {
             mInstallApexModuleTargetPreparer.setUp(mTestInfo);
             fail("Should have thrown a TargetSetupError.");
         } catch (TargetSetupError expected) {
             assertTrue(
                     expected.getMessage()
-                            .equals(String.format("Failed to write %s to session 1. Error: %s", mFakeApex.getName(), write_to_session_res.getStderr())));
+                            .equals(
+                             String.format("Failed to write %s to session 1. Error: %s, Stdout: %s",
+                                            mFakeApex.getName(), write_to_session_res.getStderr(),
+                                            write_to_session_res.getStdout())));
         }
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
         verifyCleanInstalledApexPackages();
@@ -1510,25 +1532,32 @@ public class InstallApexModuleTargetPreparerTest {
         CommandResult child_session_creation_res = new CommandResult();
         child_session_creation_res.setStatus(CommandStatus.SUCCESS);
         child_session_creation_res.setStdout("1");
-        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD)).thenReturn(parent_session_creation_res);;
-        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APEX)).thenReturn(child_session_creation_res);
-        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APK)).thenReturn(child_session_creation_res);
+        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD))
+          .thenReturn(parent_session_creation_res);;
+        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APEX))
+          .thenReturn(child_session_creation_res);
+        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APK))
+          .thenReturn(child_session_creation_res);
         CommandResult write_to_session_res = new CommandResult();
         write_to_session_res.setStatus(CommandStatus.SUCCESS);
         CommandResult add_to_session_res = new CommandResult();
         add_to_session_res.setStatus(CommandStatus.FAILED);
         add_to_session_res.setStderr("I am an error!");
+        add_to_session_res.setStdout("I am the output");
         for (File f : Arrays.asList(mFakeApex, mFakeApk)) {
             when(mMockDevice.executeShellV2Command(
                     String.format(
                             "pm install-write -S %d %s %s %s",
                             f.length(),
                             "1",
-                            mInstallApexModuleTargetPreparer.parsePackageName(f, mMockDevice.getDeviceDescriptor()),
-                            MODULE_PUSH_REMOTE_PATH + f.getName()))).thenReturn(write_to_session_res);
+                            mInstallApexModuleTargetPreparer.parsePackageName(
+                              f, mMockDevice.getDeviceDescriptor()),
+                            MODULE_PUSH_REMOTE_PATH + f.getName())))
+              .thenReturn(write_to_session_res);
             when(mMockDevice.executeShellV2Command(
                     String.format(
-                            "pm install-add-session " + parent_session_creation_res.getStdout() + " 1"))).thenReturn(add_to_session_res);
+                            "pm install-add-session " + parent_session_creation_res.getStdout()
+                      + " 1"))).thenReturn(add_to_session_res);
         }
         try {
             mInstallApexModuleTargetPreparer.setUp(mTestInfo);
@@ -1536,7 +1565,10 @@ public class InstallApexModuleTargetPreparerTest {
         } catch (TargetSetupError expected) {
             assertTrue(
                     expected.getMessage()
-                            .equals(String.format("Failed to add child session 1 to parent session 123. Error: %s", add_to_session_res.getStderr())));
+                            .equals(
+                              String.format(
+                       "Failed to add child session 1 to parent session 123. Error: %s, Stdout: %s",
+                        add_to_session_res.getStderr(), add_to_session_res.getStdout())));
         }
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
         verifyCleanInstalledApexPackages();
@@ -1563,9 +1595,12 @@ public class InstallApexModuleTargetPreparerTest {
         CommandResult child_session_creation_res = new CommandResult();
         child_session_creation_res.setStatus(CommandStatus.SUCCESS);
         child_session_creation_res.setStdout("1");
-        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD)).thenReturn(parent_session_creation_res);;
-        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APEX)).thenReturn(child_session_creation_res);
-        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APK)).thenReturn(child_session_creation_res);
+        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD))
+          .thenReturn(parent_session_creation_res);;
+        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APEX))
+          .thenReturn(child_session_creation_res);
+        when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APK))
+          .thenReturn(child_session_creation_res);
         CommandResult cmd_res = new CommandResult();
         cmd_res.setStatus(CommandStatus.SUCCESS);
         for (File f : Arrays.asList(mFakeApex, mFakeApk)) {
@@ -1574,23 +1609,30 @@ public class InstallApexModuleTargetPreparerTest {
                             "pm install-write -S %d %s %s %s",
                             f.length(),
                             "1",
-                            mInstallApexModuleTargetPreparer.parsePackageName(f, mMockDevice.getDeviceDescriptor()),
+                            mInstallApexModuleTargetPreparer.parsePackageName(
+                              f, mMockDevice.getDeviceDescriptor()),
                             MODULE_PUSH_REMOTE_PATH + f.getName()))).thenReturn(cmd_res);
             when(mMockDevice.executeShellV2Command(
                     String.format(
-                            "pm install-add-session " + parent_session_creation_res.getStdout() + " 1"))).thenReturn(cmd_res);
+                            "pm install-add-session "
+                      + parent_session_creation_res.getStdout() + " 1"))).thenReturn(cmd_res);
         }
         CommandResult commit_session_res = new CommandResult();
         commit_session_res.setStatus(CommandStatus.FAILED);
         commit_session_res.setStderr("I am an error!");
-        when(mMockDevice.executeShellV2Command("pm install-commit " + parent_session_creation_res.getStdout())).thenReturn(commit_session_res);
+        commit_session_res.setStdout("I am the output");
+        when(mMockDevice.executeShellV2Command("pm install-commit "
+                         + parent_session_creation_res.getStdout())).thenReturn(commit_session_res);
         try {
             mInstallApexModuleTargetPreparer.setUp(mTestInfo);
             fail("Should have thrown a TargetSetupError.");
         } catch (TargetSetupError expected) {
             assertTrue(
                     expected.getMessage()
-                            .contains(String.format("Failed to commit")));
+                            .contains(
+                              String.format("Failed to commit 123 on %s. Error: %s, Output: %s",
+                                mMockDevice.getSerialNumber(), commit_session_res.getStderr(),
+                                                    commit_session_res.getStdout())));
         }
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
         verifyCleanInstalledApexPackages();
@@ -2465,35 +2507,45 @@ public class InstallApexModuleTargetPreparerTest {
         CommandResult parent_session_creation_res = new CommandResult();
         parent_session_creation_res.setStdout("123");
         parent_session_creation_res.setStatus(CommandStatus.SUCCESS);
-        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD)).thenReturn(parent_session_creation_res);
-        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD)).thenReturn(parent_session_creation_res);
+        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_CMD))
+          .thenReturn(parent_session_creation_res);
+        when(mMockDevice.executeShellV2Command(PARENT_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD))
+          .thenReturn(parent_session_creation_res);
 
         CommandResult successful_shell_cmd_res = new CommandResult();
         successful_shell_cmd_res.setStatus(CommandStatus.SUCCESS);
-        // Use same session id for child sessions in the test as the file iteration is non-deterministic
+        // Use same session id for child sessions in the test as the file iteration is
+        // non-deterministic
         int child_session_id = 1;
         for (File f : files) {
             CommandResult child_session_creation_res = new CommandResult();
             child_session_creation_res.setStdout(String.valueOf(child_session_id));
             child_session_creation_res.setStatus(CommandStatus.SUCCESS);
             if (f.getName().endsWith("apex")) {
-                when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APEX)).thenReturn(child_session_creation_res);
-                when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD_APEX)).thenReturn(child_session_creation_res);
+                when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APEX))
+                  .thenReturn(child_session_creation_res);
+                when(mMockDevice.executeShellV2Command(
+                  CHILD_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD_APEX))
+                  .thenReturn(child_session_creation_res);
             } else {
-                when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APK)).thenReturn(child_session_creation_res);
+                when(mMockDevice.executeShellV2Command(CHILD_SESSION_CREATION_CMD_APK))
+                  .thenReturn(child_session_creation_res);
             }
             when(mMockDevice.executeShellV2Command(
                     String.format(
                             "pm install-write -S %d %s %s %s",
                             f.length(),
                             String.valueOf(child_session_id),
-                            mInstallApexModuleTargetPreparer.parsePackageName(f, mMockDevice.getDeviceDescriptor()),
+                            mInstallApexModuleTargetPreparer.parsePackageName(
+                              f, mMockDevice.getDeviceDescriptor()),
                             MODULE_PUSH_REMOTE_PATH + f.getName()))).thenReturn(successful_shell_cmd_res);
             when(mMockDevice.executeShellV2Command(
                     String.format(
-                            "pm install-add-session " + parent_session_creation_res.getStdout() + " " + String.valueOf(child_session_id)))).thenReturn(successful_shell_cmd_res);
+                            "pm install-add-session " + parent_session_creation_res.getStdout()
+                   + " " + String.valueOf(child_session_id)))).thenReturn(successful_shell_cmd_res);
         }
-        when(mMockDevice.executeShellV2Command("pm install-commit " + parent_session_creation_res.getStdout())).thenReturn(successful_shell_cmd_res);
+        when(mMockDevice.executeShellV2Command("pm install-commit "
+                    + parent_session_creation_res.getStdout())).thenReturn(successful_shell_cmd_res);
     }
 
     private void verifySuccessfulInstallMultiPackages() throws Exception {
@@ -2501,12 +2553,14 @@ public class InstallApexModuleTargetPreparerTest {
     }
 
     private void verifySuccessfulInstallPackageNoEnableRollback() throws Exception {
-        verify(mMockDevice, times(1)).executeShellV2Command(CHILD_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD_APEX);
+        verify(mMockDevice, times(1)).executeShellV2Command(
+          CHILD_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD_APEX);
         verify(mMockDevice, times(1)).executeShellV2Command("pm install-commit " + "123");
     }
 
     private void verifySuccessfulInstallMultiPackagesNoEnableRollback() throws Exception {
-        verify(mMockDevice, times(2)).executeShellV2Command(CHILD_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD_APEX);
+        verify(mMockDevice, times(2)).executeShellV2Command(
+          CHILD_SESSION_CREATION_ROLLBACK_NO_ENABLE_CMD_APEX);
         verify(mMockDevice, times(1)).executeShellV2Command("pm install-commit " + "123");
     }
 
@@ -2534,7 +2588,8 @@ public class InstallApexModuleTargetPreparerTest {
         when(mMockDevice.getActiveApexes()).thenReturn(activatedApex);
     }
 
-    private Set<String> setupInstallableModulesSingleApexSingleApk() throws DeviceNotAvailableException{
+    private Set<String> setupInstallableModulesSingleApexSingleApk() throws
+      DeviceNotAvailableException{
         mInstallApexModuleTargetPreparer.addTestFileName(APEX_NAME);
         mInstallApexModuleTargetPreparer.addTestFileName(APK_NAME);
         mockCleanInstalledApexPackages();
