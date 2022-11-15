@@ -32,6 +32,7 @@ import java.util.Map;
  * Collector that will start perfetto trace when a test run starts and log trace file at the end.
  */
 public class DeviceTraceCollector extends BaseDeviceMetricCollector {
+    private static final String NAME_FORMAT = "device-trace_%s_";
     private PerfettoTraceRecorder mPerfettoTraceRecorder = new PerfettoTraceRecorder();
 
     @Override
@@ -66,8 +67,9 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
                 CLog.d("Failed to collect device trace from %s.", device.getSerialNumber());
                 continue;
             }
+            String name = String.format(NAME_FORMAT, device.getSerialNumber());
             try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
-                super.testLog(traceFile.getName(), LogDataType.PERFETTO, source);
+                super.testLog(name, LogDataType.PERFETTO, source);
             }
         }
     }
