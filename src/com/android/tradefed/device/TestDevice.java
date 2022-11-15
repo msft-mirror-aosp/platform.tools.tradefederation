@@ -2212,6 +2212,7 @@ public class TestDevice extends NativeDevice {
                                 builder.mApkPath,
                                 outApkIdsigPath,
                                 instanceImg,
+                                "--config-path",
                                 builder.mConfigPath));
         if (builder.mProtectedVm) {
             args.add("--protected");
