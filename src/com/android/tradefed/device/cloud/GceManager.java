@@ -241,6 +241,39 @@ public class GceManager {
                                     res, mDeviceOptions.getRemoteAdbPort())
                             .get(0);
             mGceAvdInfo = oxygenDeviceInfo;
+            if (oxygenClient.noWaitForBootSpecified(getTestDeviceOptions())) {
+                CLog.d(
+                        "Device leased without waiting for boot to finish. Poll emulator_stderr.txt"
+                                + " for flag `VIRTUAL_DEVICE_BOOT_COMPLETED`");
+                Boolean bootSuccess = false;
+                long endTime = startTime + getTestDeviceOptions().getGceCmdTimeout();
+                final String remoteFile =
+                        CommonLogRemoteFileUtil.OXYGEN_EMULATOR_LOG_DIR + "3/emulator_stderr.txt";
+                while (System.currentTimeMillis() < endTime) {
+                    res =
+                            remoteSshCommandExecution(
+                                    mGceAvdInfo,
+                                    getTestDeviceOptions(),
+                                    RunUtil.getDefault(),
+                                    10000L,
+                                    "grep",
+                                    "VIRTUAL_DEVICE_BOOT_COMPLETED",
+                                    remoteFile);
+                    if (CommandStatus.SUCCESS.equals(res.getStatus())) {
+                        bootSuccess = true;
+                        CLog.d(
+                                "Device boot completed after %sms, flag located: %s",
+                                System.currentTimeMillis() - startTime, res.getStdout().trim());
+                        break;
+                    }
+                    RunUtil.getDefault().sleep(10000);
+                }
+                if (!bootSuccess) {
+                    throw new TargetSetupError(
+                            "Timed out waiting for device to boot.",
+                            InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE);
+                }
+            }
             return oxygenDeviceInfo;
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
