@@ -24,6 +24,7 @@
     </system_checker>
     <system_checker class="com.android.tradefed.suite.checker.SystemServerStatusChecker" />
     <system_checker class="com.android.tradefed.suite.checker.SystemServerFileDescriptorChecker" />
+    <system_checker class="com.android.tradefed.suite.checker.ShellStatusChecker" />
 
     <target_preparer class="com.android.tradefed.targetprep.RootTargetPreparer">
         <option name="force-root" value="false" />
