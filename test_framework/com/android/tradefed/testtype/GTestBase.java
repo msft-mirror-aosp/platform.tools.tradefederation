@@ -200,6 +200,14 @@ public abstract class GTestBase
             description = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_DESCRIPTION)
     private Duration mTestCaseTimeout = Duration.ofSeconds(0L);
 
+    @Option(
+            name = "change-to-working-directory",
+            description =
+                    "Change to the working directory of the test binary before executing "
+                            + "the test to allow relative references to data files to be "
+                            + "resolved.")
+    private boolean mChangeToWorkingDirectory = false;
+
     // GTest flags...
     protected static final String GTEST_FLAG_PRINT_TIME = "--gtest_print_time";
     protected static final String GTEST_FLAG_FILTER = "--gtest_filter";
@@ -583,6 +591,14 @@ public abstract class GTestBase
      * strace, gdb, and similar).
      */
     protected String getGTestCmdLineWrapper(String fullPath, String flags) {
+        if (mChangeToWorkingDirectory) {
+            File f = new File(fullPath);
+            String dir = f.getParent();
+            if (dir != null) {
+                String file = f.getName();
+                return String.format("cd %s; ./%s %s", dir, file, flags);
+            }
+        }
         return String.format("%s %s", fullPath, flags);
     }
 
