@@ -17,6 +17,7 @@
 package com.android.tradefed.device.cloud;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.android.tradefed.build.BuildInfo;
@@ -245,5 +246,14 @@ public class OxygenClientTest {
         boolean isReleased = mOxygenClient.release(emptyGceAvdInfo, mTestDeviceOptions);
         // Should return true as there is nothing need to be released
         assertTrue(isReleased);
+    }
+
+    @Test
+    public void testNoWaitForBootSpecified() throws Exception {
+        assertFalse(mOxygenClient.noWaitForBootSpecified(mTestDeviceOptions));
+
+        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
+        setter.setOptionValue("extra-oxygen-args", "no_wait_for_boot", "");
+        assertTrue(mOxygenClient.noWaitForBootSpecified(mTestDeviceOptions));
     }
 }
