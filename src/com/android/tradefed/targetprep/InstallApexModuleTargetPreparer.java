@@ -684,7 +684,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             CLog.d("Parent session %s created successfully. ", parentSessionId);
         } else {
             throw new TargetSetupError(
-                    String.format("Failed to create parent session. Error: %s", res.getStderr()),
+                    String.format("Failed to create parent session. Error: %s, Stdout: %s", res.getStderr(), res.getStdout()),
                     device.getDeviceDescriptor());
         }
 
@@ -709,7 +709,8 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             } else {
                 throw new TargetSetupError(
                         String.format(
-                                "Failed to create child session for %s. Error: %s", moduleFile.getName(), res.getStderr()),
+                                "Failed to create child session for %s. Error: %s, Stdout: %s",
+                            moduleFile.getName(), res.getStderr(), res.getStdout()),
                         device.getDeviceDescriptor());
             }
             res = device.executeShellV2Command(
@@ -723,16 +724,18 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                 CLog.d("Successfully wrote %s to session %s. ", moduleFile.getName(), childSessionId);
             } else {
                 throw new TargetSetupError(
-                        String.format("Failed to write %s to session %s. Error: %s", moduleFile.getName(), childSessionId, res.getStderr()),
-                        device.getDeviceDescriptor());
+                        String.format("Failed to write %s to session %s. Error: %s, Stdout: %s",
+                            moduleFile.getName(), childSessionId, res.getStderr(), res.getStdout()),
+                    device.getDeviceDescriptor());
             }
             res = device.executeShellV2Command(
                             String.format(
                                     "pm install-add-session " + parentSessionId + " " + childSessionId));
             if (res.getStatus() != CommandStatus.SUCCESS) {
                 throw new TargetSetupError(
-                        String.format("Failed to add child session %s to parent session %s. Error: %s", childSessionId, parentSessionId, res.getStderr()),
-                        device.getDeviceDescriptor());
+                        String.format("Failed to add child session %s to parent session %s. Error: %s, Stdout: %s",
+                            childSessionId, parentSessionId, res.getStderr(), res.getStdout()),
+                    device.getDeviceDescriptor());
             }
         }
         res = device.executeShellV2Command("pm install-commit " + parentSessionId);
@@ -746,8 +749,8 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         } else {
             throw new TargetSetupError(
                     String.format(
-                            "Failed to commit %s on %s. Error: %s",
-                            parentSessionId, device.getSerialNumber(), res.getStderr()),
+                            "Failed to commit %s on %s. Error: %s, Output: %s",
+                            parentSessionId, device.getSerialNumber(), res.getStderr(), res.getStdout()),
                     device.getDeviceDescriptor(),
                     DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
         }
