@@ -2129,6 +2129,40 @@ public class TestDevice extends NativeDevice {
     }
 
     /**
+     * Forwards contents of a file to log. To be used when testing microdroid, to forward console
+     * and log outputs to the host device's log.
+     */
+    private void forwardFileToLog(String logPath, String tag) {
+        try {
+            // Keep redirecting as long as the expecting maximum test time. When an adb
+            // command times out, it may trigger the device recovery process, which
+            // disconnect adb, which terminates any live adb commands. See an example at
+            // b/194974010#comment25.
+            String logwrapperCmd =
+                    "logwrapper "
+                            + "sh "
+                            + "-c "
+                            + "\"$'tail -f -n +0 "
+                            + logPath
+                            + " | sed \\'s/^/"
+                            + tag
+                            + ": /g\\''\""; // add tags in front of lines
+            CommandResult logwrapperResult =
+                    executeShellV2Command(
+                            logwrapperCmd,
+                            MICRODROID_MAX_LIFETIME_MINUTES * 60 * 1000,
+                            java.util.concurrent.TimeUnit.MILLISECONDS);
+            if (logwrapperResult.getStatus() != CommandStatus.SUCCESS) {
+                throw new DeviceRuntimeException(
+                        logwrapperCmd + " has failed: " + logwrapperResult,
+                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+            }
+        } catch (Exception e) {
+            // Consume
+        }
+    }
+
+    /**
      * Starts a Microdroid TestDevice.
      *
      * @param builder A {@link MicrodroidBuilder} with required properties to start a microdroid.
@@ -2190,6 +2224,7 @@ public class TestDevice extends NativeDevice {
                         + (builder.mApkFile != null ? builder.mApkFile.getName() : "NULL")
                         + ".idsig";
         final String instanceImg = TEST_ROOT + INSTANCE_IMG;
+        final String consolePath = TEST_ROOT + "console.txt";
         final String logPath = TEST_ROOT + "log.txt";
         final String debugFlag =
                 Strings.isNullOrEmpty(builder.mDebugLevel) ? "" : "--debug " + builder.mDebugLevel;
@@ -2204,6 +2239,7 @@ public class TestDevice extends NativeDevice {
                                 VIRT_APEX + "bin/vm",
                                 "run-app",
                                 "--daemonize",
+                                "--console " + consolePath,
                                 "--log " + logPath,
                                 "--mem " + builder.mMemoryMib,
                                 debugFlag,
@@ -2232,32 +2268,14 @@ public class TestDevice extends NativeDevice {
         String ret = result.getStdout().trim();
 
         // Redirect log.txt to logd using logwrapper
-        ExecutorService executor = Executors.newFixedThreadPool(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
         executor.execute(
                 () -> {
-                    try {
-                        // Keep redirecting as long as the expecting maximum test time. When an adb
-                        // command times out, it may trigger the device recovery process, which
-                        // disconnect adb, which terminates any live adb commands. See an example at
-                        // b/194974010#comment25.
-                        String logwrapperCmd =
-                                String.join(
-                                        " ",
-                                        Arrays.asList(
-                                                "logwrapper", "tail", "-f", "-n +0", logPath));
-                        CommandResult logwrapperResult =
-                                executeShellV2Command(
-                                        logwrapperCmd,
-                                        MICRODROID_MAX_LIFETIME_MINUTES * 60 * 1000,
-                                        java.util.concurrent.TimeUnit.MILLISECONDS);
-                        if (logwrapperResult.getStatus() != CommandStatus.SUCCESS) {
-                            throw new DeviceRuntimeException(
-                                    logwrapperCmd + " has failed: " + logwrapperResult,
-                                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
-                        }
-                    } catch (Exception e) {
-                        // Consume
-                    }
+                    forwardFileToLog(consolePath, "MicrodroidConsole");
+                });
+        executor.execute(
+                () -> {
+                    forwardFileToLog(logPath, "MicrodroidLog");
                 });
 
         // Retrieve the CID from the vm tool output
