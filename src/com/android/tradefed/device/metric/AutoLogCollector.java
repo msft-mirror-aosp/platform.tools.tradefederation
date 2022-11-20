@@ -23,6 +23,7 @@ public enum AutoLogCollector {
     BUGREPORTZ_ON_TESTCASE_FAILURE(BugreportzOnTestCaseFailureCollector.class),
     CLANG_COVERAGE(ClangCodeCoverageCollector.class),
     GCOV_COVERAGE(GcovCodeCoverageCollector.class),
+    GCOV_KERNEL_COVERAGE(GcovKernelCodeCoverageCollector.class),
     HOSTLOG_ON_FAILURE(DebugHostLogOnFailureCollector.class),
     JAVA_COVERAGE(JavaCodeCoverageCollector.class),
     LOGCAT_ON_FAILURE(LogcatOnFailureCollector.class),
