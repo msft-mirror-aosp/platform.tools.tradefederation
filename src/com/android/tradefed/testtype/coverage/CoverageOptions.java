@@ -46,7 +46,8 @@ public final class CoverageOptions {
     public enum Toolchain {
         CLANG,
         GCOV,
-        JACOCO;
+        JACOCO,
+        GCOV_KERNEL;
     }
 
     @Option(
