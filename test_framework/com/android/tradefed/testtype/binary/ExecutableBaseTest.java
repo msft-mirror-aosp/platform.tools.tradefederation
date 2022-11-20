@@ -19,6 +19,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -31,6 +32,7 @@ import com.android.tradefed.testtype.IRuntimeHintProvider;
 import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.ITestCollector;
 import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.StreamUtil;
@@ -158,42 +160,62 @@ public abstract class ExecutableBaseTest
             throws DeviceNotAvailableException {
         mTestInfo = testInfo;
         Map<String, String> testCommands = getAllTestCommands();
-        for (String testName : testCommands.keySet()) {
-            String cmd = testCommands.get(testName);
-            String path = findBinary(cmd);
-            TestDescription description = new TestDescription(testName, testName);
-            if (shouldSkipCurrentTest(description)) {
-                continue;
-            }
-            if (path == null) {
-                listener.testRunStarted(testName, 0);
-                FailureDescription failure =
-                        FailureDescription.create(
-                                        String.format(NO_BINARY_ERROR, cmd),
-                                        FailureStatus.TEST_FAILURE)
-                                .setErrorIdentifier(
-                                        InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
-                listener.testRunFailed(failure);
-                listener.testRunEnded(0L, new HashMap<String, Metric>());
-            } else {
-                listener.testRunStarted(testName, 1);
-                long startTimeMs = System.currentTimeMillis();
-                listener.testStarted(description);
-                try {
-                    if (!mCollectTestsOnly) {
-                        // Do not actually run the test if we are dry running it.
-                        runBinary(path, listener, description);
-                    }
-                } catch (IOException e) {
+        IInvocationContext context = testInfo.getContext();
+        String moduleId =
+                context != null
+                        ? context.getAttributes().getUniqueMap().get(ModuleDefinition.MODULE_ID)
+                        : getClass().getName();
+
+        var nonSkippedTestDescriptions =
+                testCommands.keySet().stream()
+                        .map(testName -> new TestDescription(testName, testName))
+                        .filter(description -> !shouldSkipCurrentTest(description))
+                        .toArray(TestDescription[]::new);
+
+        if (nonSkippedTestDescriptions.length == 0) {
+            return;
+        }
+
+        String testRunName =
+                nonSkippedTestDescriptions.length == 1
+                        ? nonSkippedTestDescriptions[0].getTestName()
+                        : moduleId;
+        long startTimeMs = System.currentTimeMillis();
+
+        try {
+            listener.testRunStarted(testRunName, nonSkippedTestDescriptions.length);
+
+            for (var description : nonSkippedTestDescriptions) {
+                String testName = description.getTestName();
+                String cmd = testCommands.get(testName);
+                String path = findBinary(cmd);
+                if (path == null) {
                     listener.testFailed(
-                            description, FailureDescription.create(StreamUtil.getStackTrace(e)));
-                } finally {
-                    listener.testEnded(description, new HashMap<String, Metric>());
-                    listener.testRunEnded(
-                            System.currentTimeMillis() - startTimeMs,
-                            new HashMap<String, Metric>());
+                            description,
+                            FailureDescription.create(
+                                            String.format(NO_BINARY_ERROR, cmd),
+                                            FailureStatus.TEST_FAILURE)
+                                    .setErrorIdentifier(
+                                            InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND));
+                } else {
+                    try {
+                        listener.testStarted(description);
+                        if (!mCollectTestsOnly) {
+                            // Do not actually run the test if we are dry running it.
+                            runBinary(path, listener, description);
+                        }
+                    } catch (IOException e) {
+                        listener.testFailed(
+                                description,
+                                FailureDescription.create(StreamUtil.getStackTrace(e)));
+                    } finally {
+                        listener.testEnded(description, new HashMap<String, Metric>());
+                    }
                 }
             }
+        } finally {
+            listener.testRunEnded(
+                    System.currentTimeMillis() - startTimeMs, new HashMap<String, Metric>());
         }
     }
 
