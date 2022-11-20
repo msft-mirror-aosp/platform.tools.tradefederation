@@ -74,6 +74,17 @@ public interface IMetricCollector extends ILogSaverListener, IDisableable {
     public void onTestRunStart(DeviceMetricData runData) throws DeviceNotAvailableException;
 
     /**
+     * Callback when a test run is started.
+     *
+     * @param runData the {@link DeviceMetricData} holding the data for the run.
+     * @param testCount the number of test cases in this test run.
+     */
+    public default void onTestRunStart(DeviceMetricData runData, int testCount)
+            throws DeviceNotAvailableException {
+        onTestRunStart(runData);
+    }
+
+    /**
      * Callback when a test run is ended. This should be the time for clean up.
      *
      * @param runData the {@link DeviceMetricData} holding the data for the run. Will be the same
