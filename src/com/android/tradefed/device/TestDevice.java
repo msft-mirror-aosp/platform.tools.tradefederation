@@ -43,9 +43,13 @@ import com.google.common.base.Strings;
 
 import java.awt.Image;
 import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -137,10 +141,10 @@ public class TestDevice extends NativeDevice {
     private static final String APEX_SUFFIX = ".apex";
     private static final String APEX_ARG = "--apex";
 
-    /** If the device is a Microdroid, this will refer to the CID. Otherwise, it will be null. */
-    private String microdroidCID = null;
-    /** Contains a set of Microdroid CIDs which is running in this TestDevice. */
-    private Set<String> startedMicrodroids = new HashSet<>();
+    /** If the device is a Microdroid, this refers to the VM process. Otherwise, it is null. */
+    private Process mMicrodroidProcess = null;
+    /** Contains a set of Microdroid instances running in this TestDevice, and their CIDs. */
+    private Map<Process, String> mStartedMicrodroids = new HashMap<>();
 
     private static final String TEST_ROOT = "/data/local/tmp/virt/";
     private static final String VIRT_APEX = "/apex/com.android.virt/";
@@ -2170,12 +2174,14 @@ public class TestDevice extends NativeDevice {
      */
     private ITestDevice startMicrodroid(MicrodroidBuilder builder)
             throws DeviceNotAvailableException {
-        if (!startedMicrodroids.isEmpty())
+        IDeviceManager deviceManager = GlobalConfiguration.getDeviceManagerInstance();
+
+        if (!mStartedMicrodroids.isEmpty())
             throw new IllegalStateException(
                     String.format(
-                            "Microdroid with cid '%s' already exists in device. Can not create"
+                            "Microdroid with cid '%s' already exists in device. Cannot create"
                                     + " another one.",
-                            startedMicrodroids.iterator().next()));
+                            mStartedMicrodroids.values().iterator().next()));
 
         String microdroidSerial;
         int vmAdbPort = -1;
@@ -2192,12 +2198,7 @@ public class TestDevice extends NativeDevice {
         microdroidSerial = "localhost:" + vmAdbPort;
 
         // disconnect from microdroid
-        getRunUtil()
-                .runTimedCmd(
-                        10000,
-                        GlobalConfiguration.getDeviceManagerInstance().getAdbPath(),
-                        "disconnect",
-                        microdroidSerial);
+        getRunUtil().runTimedCmd(10000, deviceManager.getAdbPath(), "disconnect", microdroidSerial);
 
         // remove any leftover files under test root
         executeShellV2Command("rm -rf " + TEST_ROOT + "*");
@@ -2236,9 +2237,12 @@ public class TestDevice extends NativeDevice {
         List<String> args =
                 new ArrayList<>(
                         Arrays.asList(
+                                deviceManager.getAdbPath(),
+                                "-s",
+                                getSerialNumber(),
+                                "shell",
                                 VIRT_APEX + "bin/vm",
                                 "run-app",
-                                "--daemonize",
                                 "--console " + consolePath,
                                 "--log " + logPath,
                                 "--mem " + builder.mMemoryMib,
@@ -2259,13 +2263,31 @@ public class TestDevice extends NativeDevice {
         }
 
         // Run the VM
-        String vmRunCmd = String.join(" ", args);
-        result = executeShellV2Command(vmRunCmd);
-        if (result.getStatus() != CommandStatus.SUCCESS) {
+        String cid;
+        Process process;
+        try {
+            PipedInputStream pipe = new PipedInputStream();
+            process = getRunUtil().runCmdInBackground(args, new PipedOutputStream(pipe));
+            BufferedReader stdout = new BufferedReader(new InputStreamReader(pipe));
+
+            // Retrieve the CID from the vm tool output
+            Pattern pattern = Pattern.compile("with CID (\\d+)");
+            while ((cid = stdout.readLine()) != null) {
+                Matcher matcher = pattern.matcher(cid);
+                if (matcher.find()) {
+                    cid = matcher.group(1);
+                    break;
+                }
+            }
+            if (cid == null) {
+                throw new DeviceRuntimeException(
+                        "Failed to find the CID of the VM",
+                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+            }
+        } catch (IOException ex) {
             throw new DeviceRuntimeException(
-                    vmRunCmd + " has failed: " + result, DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+                    "IOException trying to start a VM", DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
-        String ret = result.getStdout().trim();
 
         // Redirect log.txt to logd using logwrapper
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -2278,22 +2300,11 @@ public class TestDevice extends NativeDevice {
                     forwardFileToLog(logPath, "MicrodroidLog");
                 });
 
-        // Retrieve the CID from the vm tool output
-        Pattern pattern = Pattern.compile("with CID (\\d+)");
-        Matcher matcher = pattern.matcher(ret);
-        if (matcher.find()) {
-            String cid = matcher.group(1);
-            adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort);
-
-            final ITestDevice microdroid =
-                    GlobalConfiguration.getDeviceManagerInstance()
-                            .forceAllocateDevice(microdroidSerial);
-            ((TestDevice) microdroid).setMicrodroidCID(cid);
-            startedMicrodroids.add(cid);
-            return microdroid;
-        } else {
-            return null;
-        }
+        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort);
+        TestDevice microdroid = (TestDevice) deviceManager.forceAllocateDevice(microdroidSerial);
+        microdroid.setMicrodroidProcess(process);
+        mStartedMicrodroids.put(process, cid);
+        return microdroid;
     }
 
     /**
@@ -2382,21 +2393,19 @@ public class TestDevice extends NativeDevice {
      */
     public void shutdownMicrodroid(@Nonnull ITestDevice microdroidDevice)
             throws DeviceNotAvailableException {
-        String cid = ((TestDevice) microdroidDevice).getMicrodroidCID();
-        if (cid == null) {
-            throw new IllegalArgumentException("CID is null. TestDevice is not a Microdroid. ");
+        Process process = ((TestDevice) microdroidDevice).getMicrodroidProcess();
+        if (process == null) {
+            throw new IllegalArgumentException("Process is null. TestDevice is not a Microdroid. ");
         }
-        if (!startedMicrodroids.contains(cid)) {
+        if (!mStartedMicrodroids.containsKey(process)) {
             throw new IllegalArgumentException(
                     "Microdroid device was not started in this TestDevice.");
         }
 
-        // Shutdown the VM
-        CommandResult result = executeShellV2Command(VIRT_APEX + "bin/vm stop " + cid);
-        if (result.getStatus() != CommandStatus.SUCCESS) {
-            throw new DeviceRuntimeException(
-                    VIRT_APEX + "bin/vm stop " + cid + " has failed: " + result,
-                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        process.destroy();
+        try {
+            process.waitFor();
+        } catch (InterruptedException ex) {
         }
 
         // disconnect from microdroid
@@ -2409,23 +2418,24 @@ public class TestDevice extends NativeDevice {
 
         GlobalConfiguration.getDeviceManagerInstance()
                 .freeDevice(microdroidDevice, FreeDeviceState.AVAILABLE);
-        startedMicrodroids.remove(cid);
+        mStartedMicrodroids.remove(process);
     }
 
     /**
      * Marks the TestDevice as microdroid and sets its CID.
      *
-     * @param cid CID of the microdroid vm.
+     * @param process Process of the Microdroid VM.
      */
-    private void setMicrodroidCID(String cid) {
-        microdroidCID = cid;
+    private void setMicrodroidProcess(Process process) {
+        mMicrodroidProcess = process;
     }
 
     /**
-     * @return Returns the CID of the microdroid vm. If TestDevice is not a microdroid, return null.
+     * @return Returns the Process of the Microdroid VM. If TestDevice is not a Microdroid, returns
+     *     null.
      */
-    public String getMicrodroidCID() {
-        return microdroidCID;
+    public Process getMicrodroidProcess() {
+        return mMicrodroidProcess;
     }
 
     /** A builder used to create a Microdroid TestDevice. */
