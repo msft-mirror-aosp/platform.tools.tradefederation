@@ -731,7 +731,9 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         AaptParser parser = AaptParser.parse(testAppFile, mAaptVersion);
         if (parser == null) {
             throw new TargetSetupError(
-                    "apk installed but AaptParser failed",
+                    String.format(
+                            "AaptParser failed for file %s. The APK won't be installed",
+                            testAppFile.getName()),
                     deviceDescriptor,
                     DeviceErrorIdentifier.AAPT_PARSER_FAILED);
         }
