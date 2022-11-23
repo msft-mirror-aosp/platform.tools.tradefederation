@@ -59,7 +59,7 @@ tradefed_java_library_host {
     libs: [
         "tradefed",
         "libprotobuf-java-full",
-        "truth-prebuilt",
+        "truth",
         "loganalysis",
         "perfetto_trace-full",
     ],
