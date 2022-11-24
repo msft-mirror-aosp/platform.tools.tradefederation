@@ -166,7 +166,6 @@ java_library_host {
         "lab-resource-grpc",
         "tradefed-invocation-grpc",
         "tradefed-device-manager-grpc",
-        "protobuf-java-util-prebuilt-jar",
         "aoa-helper",
         "error_prone_annotations",
         "google-api-java-client-assembly",
@@ -179,6 +178,7 @@ java_library_host {
         "junit-params",
         "kxml2-2.3.0",
         "libprotobuf-java-full",
+        "libprotobuf-java-util-full",
         // TODO(b/1859290570: Delete platform-test-annotations dep
         "platform-test-annotations",
         "snakeyaml",
