@@ -482,6 +482,23 @@ public class GceAvdInfo {
                     InvocationMetricKey.CF_LAUNCH_CVD_TIME,
                     Double.valueOf(Double.parseDouble(launch_cvd_time) * 1000).longValue());
         }
+        JSONObject fetch_cvd_wrapper_log = json.optJSONObject("fetch_cvd_wrapper_log");
+        if (fetch_cvd_wrapper_log != null) {
+            String cf_cache_wait_time_sec =
+                    fetch_cvd_wrapper_log.optString("cf_cache_wait_time_sec");
+            if (!Strings.isNullOrEmpty(cf_cache_wait_time_sec)) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_CACHE_WAIT_TIME,
+                        Integer.parseInt(cf_cache_wait_time_sec));
+            }
+            String cf_artifacts_fetch_source =
+                    fetch_cvd_wrapper_log.optString("cf_artifacts_fetch_source");
+            if (!Strings.isNullOrEmpty(cf_artifacts_fetch_source)) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_ARTIFACTS_FETCH_SOURCE, cf_artifacts_fetch_source);
+            }
+        }
+
         if (!InvocationMetricLogger.getInvocationMetrics()
                 .containsKey(InvocationMetricKey.CF_INSTANCE_COUNT.toString())) {
             InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.CF_INSTANCE_COUNT, 1);

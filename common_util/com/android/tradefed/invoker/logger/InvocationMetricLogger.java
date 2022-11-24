@@ -232,6 +232,10 @@ public class InvocationMetricLogger {
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
 
+        // CF Cache metrics
+        CF_CACHE_WAIT_TIME("cf_cache_wait_time_sec", false),
+        CF_ARTIFACTS_FETCH_SOURCE("cf_artifacts_fetch_source", false),
+
         // Ab downloader metrics
         AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
 
