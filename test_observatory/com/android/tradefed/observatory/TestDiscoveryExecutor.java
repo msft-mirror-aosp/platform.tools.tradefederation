@@ -24,6 +24,7 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
+import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 import com.android.tradefed.util.MultiMap;
 
 import com.google.gson.Gson;
@@ -133,6 +134,10 @@ public class TestDiscoveryExecutor {
         // Collect include filters from every test.
         for (IRemoteTest test : testList) {
             if (test instanceof BaseTestSuite) {
+                if (test instanceof TestMappingSuiteRunner) {
+                    ((TestMappingSuiteRunner) test).setTestDiscovery(true);
+                    ((TestMappingSuiteRunner) test).loadTests();
+                }
                 Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
                 MultiMap<String, String> moduleMetadataIncludeFilters =
                         ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
@@ -147,6 +152,10 @@ public class TestDiscoveryExecutor {
                             "Tradefed Observatory can't do test discovery because the existence of"
                                     + " metadata include filter option.");
                 }
+            } else {
+                throw new TestDiscoveryException(
+                        "Tradefed Observatory can't do test discovery on non suite-based test"
+                                + " runner.");
             }
         }
         // Extract test module names from included filters.
