@@ -186,12 +186,36 @@ public class GceManager {
     public GceAvdInfo startGce(
             String ipDevice, String user, Integer offset, MultiMap<String, String> attributes)
             throws TargetSetupError {
+        return startGce(ipDevice, user, offset, attributes, null);
+    }
+
+    /**
+     * Attempt to start a gce instance with either Acloud or Oxygen.
+     *
+     * @param ipDevice the initial IP of the GCE instance to run AVD in, <code>null</code> if not
+     *     applicable
+     * @param user the host running user of AVD, <code>null</code> if not applicable
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @param attributes attributes associated with current invocation, used for passing applicable
+     *     information down to the GCE instance to be added as VM metadata
+     * @param logger The {@link ITestLogger} where to log the device launch logs.
+     * @return a {@link GceAvdInfo} describing the GCE instance. Could be a BOOT_FAIL instance.
+     * @throws TargetSetupError
+     */
+    public GceAvdInfo startGce(
+            String ipDevice,
+            String user,
+            Integer offset,
+            MultiMap<String, String> attributes,
+            ITestLogger logger)
+            throws TargetSetupError {
         // If ipDevice is specified, skip collecting serial log as the host may not be GCE instance
         // If Oxygen cuttlefish is used, skip collecting serial log due to lack of access.
         mSkipSerialLogCollection =
                 (!Strings.isNullOrEmpty(ipDevice) || getTestDeviceOptions().useOxygen());
         if (getTestDeviceOptions().useOxygenProxy()) {
-            return startGceWithOxygenClient();
+            return startGceWithOxygenClient(logger);
         } else {
             return startGceWithAcloud(ipDevice, user, offset, attributes);
         }
@@ -228,9 +252,10 @@ public class GceManager {
     /**
      * Attempt to start a gce instance with Oxygen.
      *
+     * @param loggger The {@link ITestLogger} where to log the device launch logs.
      * @return a {@link GceAvdInfo} describing the GCE instance.
      */
-    private GceAvdInfo startGceWithOxygenClient() throws TargetSetupError {
+    private GceAvdInfo startGceWithOxygenClient(ITestLogger logger) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
         try {
             File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
@@ -269,6 +294,10 @@ public class GceManager {
                     RunUtil.getDefault().sleep(10000);
                 }
                 if (!bootSuccess) {
+                    if (logger != null) {
+                        CommonLogRemoteFileUtil.fetchCommonFiles(
+                                logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
+                    }
                     throw new TargetSetupError(
                             "Timed out waiting for device to boot.",
                             InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE);
