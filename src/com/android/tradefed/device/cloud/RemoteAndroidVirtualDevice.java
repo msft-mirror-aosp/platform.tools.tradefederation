@@ -330,7 +330,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                                         getInitialIp(),
                                         getInitialUser(),
                                         getInitialDeviceNumOffset(),
-                                        attributes);
+                                        attributes,
+                                        mTestLogger);
                 if (mGceAvd != null) {
                     break;
                 }
