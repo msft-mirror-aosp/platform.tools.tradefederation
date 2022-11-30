@@ -177,7 +177,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 deviceBuild.getDeviceBuildId());
 
         // Get system build id and build flavor before booting into fastboot
-        setSystemBuildInfo(device.getBuildId(), device.getBuildFlavor());
+        if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+            setSystemBuildInfo(device.getBuildId(), device.getBuildFlavor());
+        }
 
         if (!initialStateFastbootD) {
             device.rebootIntoBootloader();
