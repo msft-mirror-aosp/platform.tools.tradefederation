@@ -22,6 +22,7 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.retry.MergeStrategy;
+import com.android.tradefed.util.IDisableable;
 import com.android.tradefed.util.MultiMap;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -43,7 +44,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>Although the data structures used in this object are thread-safe, the {@link
  * ITestInvocationListener} callbacks must be called in the correct order.
  */
-public class CollectingTestListener implements ITestInvocationListener, ILogSaverListener {
+public class CollectingTestListener
+        implements ITestInvocationListener, ILogSaverListener, IDisableable {
 
     @Option(
             name = "aggregate-metrics",
