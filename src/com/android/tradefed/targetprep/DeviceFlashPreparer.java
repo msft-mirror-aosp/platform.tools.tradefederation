@@ -25,6 +25,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NullDevice;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
@@ -189,8 +190,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                     InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
         // For debugging: log the original build from the device
-        buildInfo.addBuildAttribute(
-                "original_build_fingerprint", device.getProperty("ro.product.build.fingerprint"));
+        if (TestDeviceState.ONLINE.equals(testInfo.getDevice().getDeviceState())) {
+            buildInfo.addBuildAttribute(
+                    "original_build_fingerprint",
+                    device.getProperty("ro.product.build.fingerprint"));
+        }
 
         long queueTime = -1;
         long flashingTime = -1;
