@@ -3180,7 +3180,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         int waitTime = 0;
         IWifiHelper wifi = createWifiHelper();
         long startTime = mClock.millis();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("connectToWifiNetwork")) {
             for (int i = 1; i <= mOptions.getWifiAttempts(); i++) {
                 boolean failedToEnableWifi = false;
                 for (Map.Entry<String, String> ssidToPsk : wifiSsidToPsk.entrySet()) {
@@ -3431,7 +3431,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public void postBootSetup() throws DeviceNotAvailableException {
         CLog.d("postBootSetup started");
         long startTime = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("postBootSetup")) {
             enableAdbRoot();
             prePostBootSetup();
             for (String command : mOptions.getPostBootCommands()) {
@@ -3466,7 +3466,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     void postBootWifiSetup() throws DeviceNotAvailableException {
         CLog.d("postBootWifiSetup started");
         long startTime = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("postBootWifiSetup")) {
             if (mLastConnectedWifiSsid != null) {
                 reconnectToWifiNetwork();
             }
@@ -3627,7 +3627,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         setRecoveryMode(cachedRecoveryMode);
 
-        waitForDeviceAvailable(mOptions.getRebootTimeout());
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("reboot_waitForDeviceAvailable")) {
+            waitForDeviceAvailable(mOptions.getRebootTimeout());
+        }
         postBootSetup();
         postBootWifiSetup();
     }
@@ -3662,7 +3665,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public void rebootUntilOnline(@Nullable String reason) throws DeviceNotAvailableException {
         long rebootStart = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("rebootUntilOnline")) {
             doReboot(RebootMode.REBOOT_FULL, reason);
             RecoveryMode cachedRecoveryMode = getRecoveryMode();
             setRecoveryMode(RecoveryMode.ONLINE);
