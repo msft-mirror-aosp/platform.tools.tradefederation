@@ -43,6 +43,7 @@ import com.android.tradefed.config.proxy.ProxyConfiguration;
 import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.DeviceManager;
+import com.android.tradefed.device.DeviceManager.FastbootDevice;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.FreeDeviceState;
@@ -914,7 +915,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
 
         for (ITestDevice device : context.getDevices()) {
-            if (device.getIDevice() instanceof StubDevice) {
+            if (device.getIDevice() instanceof StubDevice && !(device.getIDevice() instanceof FastbootDevice)) {
                 // Never release stub and Tcp devices, otherwise they will disappear
                 // during deallocation since they are only placeholder.
                 deviceStates.put(device, FreeDeviceState.AVAILABLE);
@@ -926,7 +927,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 if (!TestDeviceState.ONLINE.equals(deviceState)) {
                     // If the device is offline at the end of the test
                     deviceStates.put(device, FreeDeviceState.UNAVAILABLE);
-                } else if (!device.waitForDeviceShell(30000)) {
+                } else if (!device.waitForDeviceShell(30000L)) {
                     // If device cannot pass basic shell responsiveness test.
                     deviceStates.put(device, FreeDeviceState.UNAVAILABLE);
                 }
