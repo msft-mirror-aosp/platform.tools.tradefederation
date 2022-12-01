@@ -48,7 +48,10 @@ public class OxygenUtil {
                             new AbstractMap.SimpleEntry<>(
                                     Pattern.compile(".*bugreport.*zip"), LogDataType.BUGREPORTZ),
                             new AbstractMap.SimpleEntry<>(
-                                    Pattern.compile(".*bugreport.*txt"), LogDataType.BUGREPORT))
+                                    Pattern.compile(".*bugreport.*txt"), LogDataType.BUGREPORT),
+                            new AbstractMap.SimpleEntry<>(
+                                    Pattern.compile(".*tombstones-zip.*zip"),
+                                    LogDataType.TOMBSTONEZ))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /** Default constructor of OxygenUtil */
