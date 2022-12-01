@@ -321,6 +321,7 @@ public class TestInvocation implements ITestInvocation {
         } catch (RunInterruptedException e) {
             exception = e;
             CLog.w("Invocation interrupted");
+            CLog.e(e);
             // if a stop cause was set, the interruption is most likely due to the invocation being
             // cancelled
             if (mStopCause == null) {
