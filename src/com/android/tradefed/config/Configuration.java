@@ -772,6 +772,9 @@ public class Configuration implements IConfiguration {
                     clonedConfig.getDeviceConfig().get(i).removeObjectType(objType);
                     for (Object o : listOfType) {
                         clonedConfig.getDeviceConfig().get(i).addSpecificConfig(o, objType);
+                        if (o instanceof IConfigurationReceiver) {
+                            ((IConfigurationReceiver) o).setConfiguration(clonedConfig);
+                        }
                     }
                 }
             } else {
