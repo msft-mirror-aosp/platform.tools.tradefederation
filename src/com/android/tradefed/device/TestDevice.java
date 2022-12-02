@@ -31,6 +31,7 @@ import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -2302,6 +2303,11 @@ public class TestDevice extends NativeDevice {
 
         adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort);
         TestDevice microdroid = (TestDevice) deviceManager.forceAllocateDevice(microdroidSerial);
+        if (microdroid == null) {
+            throw new DeviceRuntimeException(
+                    "Unable to force allocate the microdroid device",
+                    InfraErrorIdentifier.RUNNER_ALLOCATION_ERROR);
+        }
         microdroid.setMicrodroidProcess(process);
         mStartedMicrodroids.put(process, cid);
         return microdroid;
