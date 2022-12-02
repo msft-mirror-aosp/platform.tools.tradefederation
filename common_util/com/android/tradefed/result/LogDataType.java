@@ -91,6 +91,7 @@ public enum LogDataType {
             true, // b/230070438: don't compress this file
             true), // ScreenshotTest proto result
     CUTTLEFISH_LOG("txt", "text/plain", true, true), // Log from cuttlefish instance
+    TOMBSTONEZ("zip", "application/zip", true, false),
     /* Unknown file type */
     UNKNOWN("dat", "text/plain", false, false);
 
