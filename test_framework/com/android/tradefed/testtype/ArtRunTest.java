@@ -22,6 +22,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -73,7 +74,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
 
     // Name of the Checker Python Archive (PAR) file.
     public static final String CHECKER_PAR_FILENAME = "art-run-test-checker";
-    private static final long CHECKER_TIMEOUT_MS = 30 * 1000;
+    private static final long CHECKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes.
 
     @Option(
             name = "test-timeout",
@@ -222,7 +223,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         // Path to temporary remote directory used to store files used in test.
         String tmpTestRemoteDirPath = null;
 
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope(testId.toString())) {
             if (mCollectTestsOnly) {
                 return;
             }

@@ -119,6 +119,7 @@ tradefed_java_library_host {
     java_resources: [
         ":TradefedContentProvider",
         ":TelephonyUtility",
+        ":WifiUtil"
     ],
     static_libs: [
         "tradefed-lib-core",
@@ -165,9 +166,8 @@ java_library_host {
         "lab-resource-grpc",
         "tradefed-invocation-grpc",
         "tradefed-device-manager-grpc",
-        "protobuf-java-util-prebuilt-jar",
         "aoa-helper",
-        "error_prone_annotations-2.0.18",
+        "error_prone_annotations",
         "google-api-java-client-assembly",
         "auto_value_annotations",
         "google-api-services-compute",
@@ -178,6 +178,7 @@ java_library_host {
         "junit-params",
         "kxml2-2.3.0",
         "libprotobuf-java-full",
+        "libprotobuf-java-util-full",
         // TODO(b/1859290570: Delete platform-test-annotations dep
         "platform-test-annotations",
         "snakeyaml",

@@ -155,7 +155,7 @@ public class WifiConnector {
         }
 
         if (disableMacRandomization && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            config.macRandomizationSetting = WifiConfiguration.RANDOMIZATION_NONE;
+            config.setMacRandomizationSetting(WifiConfiguration.RANDOMIZATION_NONE);
         }
 
         networkId = mWifiManager.addNetwork(config);

@@ -31,6 +31,7 @@ import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.metric.CountTestCasesCollector;
 import com.android.tradefed.device.metric.GcovCodeCoverageCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
@@ -38,6 +39,7 @@ import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
@@ -67,6 +69,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -92,6 +95,7 @@ public class InstrumentationTest
     static final long TEST_COLLECTION_TIMEOUT_MS = 2 * 60 * 1000;
 
     public static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
+    public static final String RUN_TESTS_ON_SDK_SANDBOX = "RUN_TESTS_ON_SDK_SANDBOX";
 
     @Option(
         name = "package",
@@ -623,8 +627,9 @@ public class InstrumentationTest
      * @return the {@link IRemoteAndroidTestRunner} to use.
      * @throws DeviceNotAvailableException
      */
-    IRemoteAndroidTestRunner createRemoteAndroidTestRunner(String packageName, String runnerName,
-            IDevice device) throws DeviceNotAvailableException {
+    IRemoteAndroidTestRunner createRemoteAndroidTestRunner(
+            String packageName, String runnerName, IDevice device, TestInformation testInformation)
+            throws DeviceNotAvailableException {
         RemoteAndroidTestRunner runner =
                 new DefaultRemoteAndroidTestRunner(packageName, runnerName, device);
         String abiName = resolveAbiName();
@@ -653,6 +658,14 @@ public class InstrumentationTest
         }
         if (!mRestart && getDevice().checkApiLevelAgainstNextRelease(31)) {
             runOptions += "--no-restart ";
+        }
+        if (getDevice().checkApiLevelAgainstNextRelease(33)
+                && Optional.ofNullable(testInformation)
+                        .map(TestInformation::properties)
+                        .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
+                        .map(value -> Boolean.TRUE.toString().equals(value))
+                        .orElse(false)) {
+            runOptions += "--instrument-sdk-sandbox ";
         }
 
         if (abiName != null && getDevice().getApiLevel() > 20) {
@@ -758,7 +771,9 @@ public class InstrumentationTest
                     "Runner name has not been set and no matching instrumentations were found.");
             CLog.i("No runner name specified. Using: %s.", mRunnerName);
         }
-        mRunner = createRemoteAndroidTestRunner(mPackageName, mRunnerName, mDevice.getIDevice());
+        mRunner =
+                createRemoteAndroidTestRunner(
+                        mPackageName, mRunnerName, mDevice.getIDevice(), testInfo);
         setRunnerArgs(mRunner);
 
         doTestRun(testInfo, listener);
@@ -860,18 +875,30 @@ public class InstrumentationTest
         // Reruns do not create new listeners.
         if (!mIsRerun) {
 
+            List<IMetricCollector> copyList = new ArrayList<IMetricCollector>(mCollectors);
+            if (mConfiguration.getCommandOptions().reportTestCaseCount()) {
+                CountTestCasesCollector counter = new CountTestCasesCollector(this);
+                copyList.add(counter);
+            }
             // TODO: Convert to device-side collectors when possible.
-            for (IMetricCollector collector : mCollectors) {
-                if (collector.isDisabled()) {
-                    CLog.d("%s has been disabled. Skipping.", collector);
-                } else {
-                    CLog.d(
-                            "Initializing %s for instrumentation.",
-                            collector.getClass().getCanonicalName());
-                    if (collector instanceof IConfigurationReceiver) {
-                        ((IConfigurationReceiver) collector).setConfiguration(mConfiguration);
+            if (testInfo != null) {
+                for (IMetricCollector collector : copyList) {
+                    if (collector.isDisabled()) {
+                        CLog.d("%s has been disabled. Skipping.", collector);
+                    } else {
+                        try (CloseableTraceScope ignored =
+                                new CloseableTraceScope(
+                                        "init_for_inst_" + collector.getClass().getSimpleName())) {
+                            CLog.d(
+                                    "Initializing %s for instrumentation.",
+                                    collector.getClass().getCanonicalName());
+                            if (collector instanceof IConfigurationReceiver) {
+                                ((IConfigurationReceiver) collector)
+                                        .setConfiguration(mConfiguration);
+                            }
+                            listener = collector.init(testInfo.getContext(), listener);
+                        }
                     }
-                    listener = collector.init(testInfo.getContext(), listener);
                 }
             }
         }
@@ -1047,11 +1074,14 @@ public class InstrumentationTest
             runner.setDebug(false);
             // try to collect tests multiple times, in case device is temporarily not available
             // on first attempt
-            Collection<TestDescription> tests = collectTestsAndRetry(testInfo, runner, listener);
-            // done with "logOnly" mode, restore proper test timeout before real test execution
-            addTimeoutsToRunner(runner);
-            runner.setTestCollection(false);
-            return tests;
+            try (CloseableTraceScope ignored = new CloseableTraceScope("collect_tests")) {
+                Collection<TestDescription> tests =
+                        collectTestsAndRetry(testInfo, runner, listener);
+                // done with "logOnly" mode, restore proper test timeout before real test execution
+                addTimeoutsToRunner(runner);
+                runner.setTestCollection(false);
+                return tests;
+            }
         }
         return null;
     }

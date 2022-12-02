@@ -25,6 +25,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NullDevice;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
@@ -118,6 +119,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                             + "should be flashed to")
     private String mRamdiskPartition = "boot";
 
+    @Option(
+            name = "disable-ramdump",
+            description = "Will set the flag to disable ramdump on the device.")
+    private boolean mDisableRamdump = false;
+
     /**
      * Sets the device boot time
      * <p/>
@@ -189,8 +195,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                     InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
         // For debugging: log the original build from the device
-        buildInfo.addBuildAttribute(
-                "original_build_fingerprint", device.getProperty("ro.product.build.fingerprint"));
+        if (TestDeviceState.ONLINE.equals(testInfo.getDevice().getDeviceState())) {
+            buildInfo.addBuildAttribute(
+                    "original_build_fingerprint",
+                    device.getProperty("ro.product.build.fingerprint"));
+        }
 
         long queueTime = -1;
         long flashingTime = -1;
@@ -212,6 +221,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 }
                 if (flasher instanceof FastbootDeviceFlasher) {
                     ((FastbootDeviceFlasher) flasher).setFlashOptions(mFastbootFlashOptions);
+                    ((FastbootDeviceFlasher) flasher).setDisableRamdump(mDisableRamdump);
                 }
                 start = System.currentTimeMillis();
                 flasher.preFlashOperations(device, deviceBuild);
@@ -226,6 +236,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 // Don't allow interruptions during flashing operations.
                 getRunUtil().allowInterrupt(false);
                 start = System.currentTimeMillis();
+                // Set flashing method as unknown here as a fallback, in case it wasn't overwritten
+                // by subclass implementations
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FLASHING_METHOD,
+                        FlashingMethod.FASTBOOT_UNCATEGORIZED.toString());
                 flasher.flash(device, deviceBuild);
             } finally {
                 flashingTime = System.currentTimeMillis() - start;

@@ -139,6 +139,29 @@ public class RunCommandTargetPreparerTest {
     }
 
     /**
+     * Test that {@link RunCommandTargetPreparer#tearDown(TestInformation, throwable)} is properly
+     * going through without exception when running a command with timeout.
+     */
+    @Test
+    public void testTeardown_withTimeout() throws Exception {
+        final String command = "mkdir test";
+        OptionSetter setter = new OptionSetter(mPreparer);
+        setter.setOptionValue("teardown-command", command);
+        setter.setOptionValue("teardown-command-timeout", "100");
+        CommandResult res = new CommandResult();
+        res.setStatus(CommandStatus.SUCCESS);
+        res.setStdout("");
+        when(mMockDevice.executeShellV2Command(
+                        Mockito.eq(command),
+                        Mockito.eq(100L),
+                        Mockito.eq(TimeUnit.MILLISECONDS),
+                        Mockito.eq(0)))
+                .thenReturn(res);
+
+        mPreparer.tearDown(mTestInfo, null);
+    }
+
+    /**
      * Test that {@link RunCommandTargetPreparer#setUp(TestInformation)} and {@link
      * RunCommandTargetPreparer#tearDown(TestInformation, Throwable)} is properly going through
      * without exception when running a background command.

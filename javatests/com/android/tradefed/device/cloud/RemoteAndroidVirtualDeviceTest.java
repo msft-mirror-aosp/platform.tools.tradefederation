@@ -18,6 +18,7 @@ package com.android.tradefed.device.cloud;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -99,7 +100,7 @@ public class RemoteAndroidVirtualDeviceTest {
         }
 
         @Override
-        protected GceSshTunnelMonitor getGceSshMonitor() {
+        public GceSshTunnelMonitor getGceSshMonitor() {
             if (mUseRealTunnel) {
                 return super.getGceSshMonitor();
             }
@@ -156,7 +157,7 @@ public class RemoteAndroidVirtualDeviceTest {
     public void testExceptionFromParser() {
         final String expectedException =
                 "acloud errors: Could not get a valid instance name, check the gce driver's "
-                        + "output.The instance may not have booted up at all. [ : ]";
+                        + "output.The instance may not have booted up at all.\nGCE driver stderr: ";
         mTestDevice =
                 new TestableRemoteAndroidVirtualDevice() {
                     @Override
@@ -198,7 +199,7 @@ public class RemoteAndroidVirtualDeviceTest {
             mTestDevice.launchGce(mMockBuildInfo, null);
             fail("A TargetSetupError should have been thrown");
         } catch (TargetSetupError expected) {
-            assertEquals(expectedException, expected.getMessage());
+            assertTrue(expected.getMessage().startsWith(expectedException));
         }
     }
 
@@ -445,9 +446,10 @@ public class RemoteAndroidVirtualDeviceTest {
                                 "acloud error",
                                 GceStatus.BOOT_FAIL))
                 .when(mGceHandler)
-                .startGce(null, null, null, null);
+                .startGce(null, null, null, null, mTestLogger);
 
         try {
+            mTestDevice.setTestLogger(mTestLogger);
             mTestDevice.launchGce(new BuildInfo(), null);
             fail("Should have thrown an exception");
         } catch (TargetSetupError expected) {
@@ -485,7 +487,7 @@ public class RemoteAndroidVirtualDeviceTest {
                 };
         doReturn(new GceAvdInfo("ins-name", null, null, "acloud error", GceStatus.BOOT_FAIL))
                 .when(mGceHandler)
-                .startGce(null, null, null, null);
+                .startGce(null, null, null, null, mTestLogger);
 
         when(mMockStateMonitor.waitForDeviceNotAvailable(Mockito.anyLong())).thenReturn(true);
 
@@ -577,7 +579,7 @@ public class RemoteAndroidVirtualDeviceTest {
                                     null,
                                     GceStatus.SUCCESS))
                     .when(mGceHandler)
-                    .startGce(null, null, null, null);
+                    .startGce(null, null, null, null, mTestLogger);
 
             // Run device a first time
             mTestDevice.preInvocationSetup(mMockBuildInfo, null);
@@ -678,7 +680,7 @@ public class RemoteAndroidVirtualDeviceTest {
                                     null,
                                     GceStatus.SUCCESS))
                     .when(mGceHandler)
-                    .startGce(null, null, null, null);
+                    .startGce(null, null, null, null, mTestLogger);
 
             // Run device a first time
             mTestDevice.preInvocationSetup(mMockBuildInfo, null);
@@ -756,7 +758,7 @@ public class RemoteAndroidVirtualDeviceTest {
                                     null,
                                     GceStatus.SUCCESS))
                     .when(mGceHandler)
-                    .startGce(null, null, null, null);
+                    .startGce(null, null, null, null, mTestLogger);
 
             CommandResult bugreportzResult = new CommandResult(CommandStatus.SUCCESS);
             bugreportzResult.setStdout("OK: bugreportz-file");
@@ -893,7 +895,7 @@ public class RemoteAndroidVirtualDeviceTest {
                         null,
                         null,
                         GceStatus.SUCCESS);
-        doReturn(gceAvd).when(mGceHandler).startGce(null, null, null, null);
+        doReturn(gceAvd).when(mGceHandler).startGce(null, null, null, null, mTestLogger);
         OutputStream stdout = null;
         OutputStream stderr = null;
         CommandResult powerwashCmdResult = new CommandResult(CommandStatus.SUCCESS);
@@ -918,6 +920,7 @@ public class RemoteAndroidVirtualDeviceTest {
         when(mMockStateMonitor.waitForDeviceAvailable(Mockito.anyLong())).thenReturn(mMockIDevice);
 
         // Launch GCE before powerwash.
+        mTestDevice.setTestLogger(mTestLogger);
         mTestDevice.launchGce(mMockBuildInfo, null);
         mTestDevice.powerwashGce();
     }
@@ -959,7 +962,7 @@ public class RemoteAndroidVirtualDeviceTest {
                         null,
                         null,
                         GceStatus.SUCCESS);
-        doReturn(gceAvd).when(mGceHandler).startGce(null, null, null, null);
+        doReturn(gceAvd).when(mGceHandler).startGce(null, null, null, null, mTestLogger);
         OutputStream stdout = null;
         OutputStream stderr = null;
         CommandResult locateCmdResult = new CommandResult(CommandStatus.SUCCESS);
@@ -1009,6 +1012,7 @@ public class RemoteAndroidVirtualDeviceTest {
         when(mMockStateMonitor.waitForDeviceAvailable(Mockito.anyLong())).thenReturn(mMockIDevice);
 
         // Launch GCE before powerwash.
+        mTestDevice.setTestLogger(mTestLogger);
         mTestDevice.launchGce(mMockBuildInfo, null);
         mTestDevice.powerwashGce();
     }

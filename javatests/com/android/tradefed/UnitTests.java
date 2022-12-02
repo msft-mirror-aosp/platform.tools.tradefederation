@@ -116,6 +116,7 @@ import com.android.tradefed.device.metric.EmulatorMemoryCpuCapturerTest;
 import com.android.tradefed.device.metric.FilePullerDeviceMetricCollectorTest;
 import com.android.tradefed.device.metric.FilePullerLogCollectorTest;
 import com.android.tradefed.device.metric.GcovCodeCoverageCollectorTest;
+import com.android.tradefed.device.metric.GcovKernelCodeCoverageCollectorTest;
 import com.android.tradefed.device.metric.HostStatsdMetricCollectorTest;
 import com.android.tradefed.device.metric.JavaCodeCoverageCollectorTest;
 import com.android.tradefed.device.metric.LogcatOnFailureCollectorTest;
@@ -269,6 +270,7 @@ import com.android.tradefed.targetprep.RootTargetPreparerTest;
 import com.android.tradefed.targetprep.RunCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostScriptTargetPreparerTest;
+import com.android.tradefed.targetprep.RunOnSdkSandboxTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSystemUserTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnWorkProfileTargetPreparerTest;
@@ -294,6 +296,7 @@ import com.android.tradefed.testtype.DeviceSuiteTest;
 import com.android.tradefed.testtype.DeviceTestCaseTest;
 import com.android.tradefed.testtype.DeviceTestSuiteTest;
 import com.android.tradefed.testtype.FakeTestTest;
+import com.android.tradefed.testtype.GTestBaseTest;
 import com.android.tradefed.testtype.GTestListTestParserTest;
 import com.android.tradefed.testtype.GTestListenerTest;
 import com.android.tradefed.testtype.GTestResultParserTest;
@@ -363,6 +366,7 @@ import com.android.tradefed.testtype.suite.module.ShippingApiLevelModuleControll
 import com.android.tradefed.testtype.suite.params.InstantAppHandlerTest;
 import com.android.tradefed.testtype.suite.params.MainlineModuleHandlerTest;
 import com.android.tradefed.testtype.suite.params.ModuleParametersHelperTest;
+import com.android.tradefed.testtype.suite.params.RunOnSdkSandboxHandlerTest;
 import com.android.tradefed.testtype.suite.params.SecondaryUserHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnSecondaryUserParameterHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnWorkProfileParameterHandlerTest;
@@ -596,6 +600,7 @@ import org.junit.runners.Suite.SuiteClasses;
     FilePullerDeviceMetricCollectorTest.class,
     FilePullerLogCollectorTest.class,
     GcovCodeCoverageCollectorTest.class,
+    GcovKernelCodeCoverageCollectorTest.class,
     HostStatsdMetricCollectorTest.class,
     JavaCodeCoverageCollectorTest.class,
     LogcatOnFailureCollectorTest.class,
@@ -763,6 +768,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RunCommandTargetPreparerTest.class,
     RunHostCommandTargetPreparerTest.class,
     RunHostScriptTargetPreparerTest.class,
+    RunOnSdkSandboxTargetPreparerTest.class,
     RunOnSecondaryUserTargetPreparerTest.class,
     RunOnSystemUserTargetPreparerTest.class,
     RunOnWorkProfileTargetPreparerTest.class,
@@ -831,6 +837,7 @@ import org.junit.runners.Suite.SuiteClasses;
     FakeTestTest.class,
     GoogleBenchmarkResultParserTest.class,
     GoogleBenchmarkTestTest.class,
+    GTestBaseTest.class,
     GTestListTestParserTest.class,
     GTestListenerTest.class,
     GTestResultParserTest.class,
@@ -913,6 +920,7 @@ import org.junit.runners.Suite.SuiteClasses;
     InstantAppHandlerTest.class,
     MainlineModuleHandlerTest.class,
     ModuleParametersHelperTest.class,
+    RunOnSdkSandboxHandlerTest.class,
     RunOnSecondaryUserParameterHandlerTest.class,
     RunOnWorkProfileParameterHandlerTest.class,
     SecondaryUserHandlerTest.class,

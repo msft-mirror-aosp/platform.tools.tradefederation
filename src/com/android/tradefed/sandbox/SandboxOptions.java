@@ -44,6 +44,7 @@ public final class SandboxOptions {
     private static final String DUMP_TEST_TEMPLATE = "dump-test-template";
     private static final String START_AVD_IN_PARENT = "avd-in-parent";
     private static final String PARALLEL_SANDBOX_SETUP = "parallel-sandbox-setup";
+    private static final String UPDATED_FLAG_ORDER = "update-flag-orders";
 
     @Option(
         name = TF_LOCATION,
@@ -130,7 +131,10 @@ public final class SandboxOptions {
     @Option(
             name = PARALLEL_SANDBOX_SETUP,
             description = "Execute the sandbox setup step in parallel")
-    private boolean mParallelSandboxSetup = false;
+    private boolean mParallelSandboxSetup = true;
+
+    @Option(name = UPDATED_FLAG_ORDER, description = "Feature flag to test safely new flags order")
+    private boolean mNewFlagOrder = true;
 
     /**
      * Returns the provided directories containing the Trade Federation version to use for
@@ -210,5 +214,10 @@ public final class SandboxOptions {
     /** Returns whether or not to execute the sandbox setup in parallel. */
     public boolean shouldParallelSetup() {
         return mParallelSandboxSetup;
+    }
+
+    /** Returns whether or not to use the new flag order */
+    public boolean shouldUseNewFlagOrder() {
+        return mNewFlagOrder;
     }
 }

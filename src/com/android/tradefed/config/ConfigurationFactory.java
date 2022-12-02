@@ -19,6 +19,7 @@ package com.android.tradefed.config;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.config.proxy.TradefedDelegator;
+import com.android.tradefed.config.remote.IRemoteFileResolver.ResolvedFile;
 import com.android.tradefed.config.yaml.ConfigurationYamlParser;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -742,7 +743,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
             // we'd prefer them here.
             File destDir = FileUtil.createTempDir("tf-configs");
 
-            File configFile = resolveRemoteFile(configURI, destDir.toURI());
+            ResolvedFile resolvedConfigFile = resolveRemoteFile(configURI, destDir.toURI());
+            File configFile = resolvedConfigFile.getResolvedFile();
 
             CLog.i("Attempting to read from file: %s", configFile.getPath());
             try (BufferedInputStream configInputStream =
@@ -778,7 +780,9 @@ public class ConfigurationFactory implements IConfigurationFactory {
                                 InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 }
 
-                FileUtil.deleteFile(configFile);
+                if (resolvedConfigFile.shouldCleanUp()) {
+                    FileUtil.deleteFile(configFile);
+                }
                 FileUtil.recursiveDelete(destDir);
 
                 final ConfigurationXmlParserSettings parserSettings =
@@ -804,7 +808,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
     }
 
     @VisibleForTesting
-    protected File resolveRemoteFile(URI configURI, URI destDir) throws BuildRetrievalError {
+    protected ResolvedFile resolveRemoteFile(URI configURI, URI destDir)
+            throws BuildRetrievalError {
         return RemoteFileResolver.resolveRemoteFile(configURI, destDir);
     }
 

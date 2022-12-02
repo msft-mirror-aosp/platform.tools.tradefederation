@@ -26,6 +26,8 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.LogDataType;
@@ -55,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** A Test for running Compatibility Test Suite with new suite system. */
 @OptionClass(alias = "base-suite")
@@ -77,7 +80,7 @@ public class BaseTestSuite extends ITestSuite {
             description =
                     "the include module filters to apply. Format: '[abi] <module-name> [test]'."
                         + " See documentation:"
-                        + "https://source.android.com/devices/tech/test_infra/tradefed/testing/through-suite/option-passing",
+                        + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
     private Set<String> mIncludeFilters = new HashSet<>();
 
@@ -86,7 +89,7 @@ public class BaseTestSuite extends ITestSuite {
             description =
                     "the exclude module filters to apply. Format: '[abi] <module-name> [test]'."
                         + " See documentation:"
-                        + "https://source.android.com/devices/tech/test_infra/tradefed/testing/through-suite/option-passing",
+                        + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
     private Set<String> mExcludeFilters = new HashSet<>();
 
@@ -211,6 +214,13 @@ public class BaseTestSuite extends ITestSuite {
                             + "preloaded on device. Otherwise an exception will be thrown.")
     private boolean mIgnoreNonPreloadedMainlineModule = false;
 
+    @Option(
+            name = "load-configs-with-include-filters",
+            description =
+                    "An experimental flag to improve the performance of loading test configs with "
+                            + "given module defined in include-filter.")
+    private boolean mLoadConfigsWithIncludeFilters = false;
+
     private SuiteModuleLoader mModuleRepo;
     private Map<String, LinkedHashSet<SuiteTestFilter>> mIncludeFiltersParsed =
             new LinkedHashMap<>();
@@ -334,6 +344,7 @@ public class BaseTestSuite extends ITestSuite {
             mModuleRepo.setModuleParameter(mForceParameter);
             mModuleRepo.setExcludedModuleParameters(mExcludedModuleParameters);
             mModuleRepo.setFoldableStates(mFoldableStates);
+            mModuleRepo.setLoadConfigsWithIncludeFilters(mLoadConfigsWithIncludeFilters);
 
             List<File> testsDirectories = new ArrayList<>();
 
@@ -354,17 +365,28 @@ public class BaseTestSuite extends ITestSuite {
             // Finally add the full test cases directory in case there is no special sub-dir.
             testsDirectories.add(testsDir);
             // Actual loading of the configurations.
+            long start = System.currentTimeMillis();
             LinkedHashMap<String, IConfiguration> loadedTests =
                     loadingStrategy(mAbis, testsDirectories, mSuitePrefix, mSuiteTag);
-
+            long duration = System.currentTimeMillis() - start;
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.LOAD_TEST_CONFIGS_TIME, duration);
             if (mFailOnEverythingFiltered
                     && loadedTests.isEmpty()
                     && !mIncludeFiltersParsed.isEmpty()) {
+                // remove modules with empty filters from the message
+                Map<String, LinkedHashSet<SuiteTestFilter>> includeFiltersCleaned =
+                        mIncludeFiltersParsed.entrySet().stream()
+                                .filter(
+                                        entry ->
+                                                entry.getValue() != null
+                                                        && !entry.getValue().isEmpty())
+                                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
                 throw new HarnessRuntimeException(
                         String.format(
                                 "Include filter '%s' was specified"
                                         + " but resulted in an empty test set.",
-                                mIncludeFiltersParsed.toString()),
+                                includeFiltersCleaned.toString()),
                         InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             return loadedTests;
@@ -433,9 +455,17 @@ public class BaseTestSuite extends ITestSuite {
         return new HashSet<String>(mIncludeFilters);
     }
 
+    public void clearIncludeFilter() {
+        mIncludeFilters.clear();
+    }
+
     /** Sets exclude-filters for the compatibility test */
     public void setExcludeFilter(Set<String> excludeFilters) {
         mExcludeFilters.addAll(excludeFilters);
+    }
+
+    public void clearExcludeFilter() {
+        mExcludeFilters.clear();
     }
 
     /** Gets a copy of exclude-filters for the compatibility test */

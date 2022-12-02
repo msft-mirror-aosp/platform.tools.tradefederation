@@ -100,7 +100,7 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
             StreamObserver<GetDevicesStatusResponse> responseObserver) {
         GetDevicesStatusResponse.Builder responseBuilder = GetDevicesStatusResponse.newBuilder();
         if (request.getDeviceIdList().isEmpty()) {
-            for (DeviceDescriptor descriptor : mDeviceManager.listAllDevices()) {
+            for (DeviceDescriptor descriptor : mDeviceManager.listAllDevices(true)) {
                 responseBuilder.addDeviceStatus(descriptorToStatus(descriptor));
             }
         } else {

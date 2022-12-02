@@ -172,8 +172,9 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public void recoverDevice() throws DeviceNotAvailableException {
+                    public boolean recoverDevice() throws DeviceNotAvailableException {
                         // ignore
+                        return true;
                     }
 
                     @Override
@@ -2823,28 +2824,74 @@ public class TestDeviceTest {
     }
 
     /**
-     * Test that single user output is handled by {@link TestDevice#getMaxNumberOfUsersSupported()}.
+     * API 34+ Test that single user output is handled by {@link TestDevice#isMultiUserSupported()}.
      */
     @Test
-    public void testIsMultiUserSupported_singleUser() throws Exception {
+    public void testIsMultiUserSupported_singleUser_api34() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "34");
+        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
+        final String getSupportsMultiUserCommand = "pm supports-multiple-users";
+        injectShellResponse(
+                getSupportsMultiUserCommand, "Is multiuser supported: " + Boolean.FALSE);
+
+        assertFalse(mTestDevice.isMultiUserSupported());
+    }
+
+    /**
+     * API 28 and below. Test that single user output is handled by {@link
+     * TestDevice#isMultiUserSupported()}.
+     */
+    @Test
+    public void testIsMultiUserSupported_singleUser_api28() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "28");
+        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
         final String getMaxUsersCommand = "pm get-max-users";
         injectShellResponse(getMaxUsersCommand, "Maximum supported users: 1");
 
         assertFalse(mTestDevice.isMultiUserSupported());
     }
 
-    /** Test that {@link TestDevice#isMultiUserSupported()} works. */
+    /** API 34+ Test that {@link TestDevice#isMultiUserSupported()} works. */
     @Test
-    public void testIsMultiUserSupported() throws Exception {
+    public void testIsMultiUserSupported_api34() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "34");
+        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
+        final String getSupportsMultiUserCommand = "pm supports-multiple-users";
+        injectShellResponse(getSupportsMultiUserCommand, "Is multiuser supported: " + Boolean.TRUE);
+
+        assertTrue(mTestDevice.isMultiUserSupported());
+    }
+
+    /** API 28 and below. Test that {@link TestDevice#isMultiUserSupported()} works. */
+    @Test
+    public void testIsMultiUserSupported_api28() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "28");
+        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
         final String getMaxUsersCommand = "pm get-max-users";
         injectShellResponse(getMaxUsersCommand, "Maximum supported users: 4");
 
         assertTrue(mTestDevice.isMultiUserSupported());
     }
 
-    /** Test that invalid output is handled by {@link TestDevice#isMultiUserSupported()}. */
+    /** API 34+ Test that invalid output is handled by {@link TestDevice#isMultiUserSupported()}. */
     @Test
-    public void testIsMultiUserSupported_invalidOutput() throws Exception {
+    public void testIsMultiUserSupported_invalidOutput_api34() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "34");
+        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
+        final String getSupportsMultiUserCommand = "pm supports-multiple-users";
+        injectShellResponse(getSupportsMultiUserCommand, "not the output we expect");
+
+        assertFalse(mTestDevice.isMultiUserSupported());
+    }
+
+    /**
+     * API 28 and below. Test that invalid output is handled by {@link
+     * TestDevice#isMultiUserSupported()}.
+     */
+    @Test
+    public void testIsMultiUserSupported_invalidOutput_api24() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "28");
+        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
         final String getMaxUsersCommand = "pm get-max-users";
         injectShellResponse(getMaxUsersCommand, "not the output we expect");
 
@@ -4979,8 +5026,9 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public void recoverDevice() throws DeviceNotAvailableException {
+                    public boolean recoverDevice() throws DeviceNotAvailableException {
                         // ignore
+                        return true;
                     }
 
                     @Override

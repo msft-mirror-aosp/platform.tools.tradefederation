@@ -93,9 +93,9 @@ public class ExecutableTargetTestTest {
         setter.setOptionValue("test-command-line", testName1, testCmd1);
         setter.setOptionValue("test-command-line", testName2, testCmd2);
         mExecutableTargetTest.run(mTestInfo, mListener);
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         // run cmd1 test
         TestDescription testDescription = new TestDescription(testName1, testName1);
-        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName1), eq(1));
         Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
@@ -103,13 +103,12 @@ public class ExecutableTargetTestTest {
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         // run cmd2 test
         TestDescription testDescription2 = new TestDescription(testName2, testName2);
-        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName2), eq(1));
         Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription2));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription2),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
-        Mockito.verify(mListener, Mockito.times(2))
+        Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
                         Mockito.anyLong(),
                         Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
@@ -137,23 +136,28 @@ public class ExecutableTargetTestTest {
         setter.setOptionValue("test-command-line", testName1, testCmd1);
         setter.setOptionValue("test-command-line", testName2, testCmd2);
         mExecutableTargetTest.run(mTestInfo, mListener);
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         // run cmd1 test
-        Mockito.verify(mListener, Mockito.times(0)).testRunStarted(eq(testName1), eq(1));
         FailureDescription failure1 =
                 FailureDescription.create(
                                 String.format(ExecutableBaseTest.NO_BINARY_ERROR, testCmd1),
                                 FailureStatus.TEST_FAILURE)
                         .setErrorIdentifier(InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
-        Mockito.verify(mListener, Mockito.times(1)).testRunFailed(failure1);
+        Mockito.verify(mListener, Mockito.times(1))
+                .testFailed(
+                        Mockito.eq(new TestDescription(testName1, testName1)),
+                        Mockito.eq(failure1));
         // run cmd2 test
-        Mockito.verify(mListener, Mockito.times(0)).testRunStarted(eq(testName2), eq(1));
         FailureDescription failure2 =
                 FailureDescription.create(
                                 String.format(ExecutableBaseTest.NO_BINARY_ERROR, testCmd2),
                                 FailureStatus.TEST_FAILURE)
                         .setErrorIdentifier(InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
-        Mockito.verify(mListener, Mockito.times(1)).testRunFailed(failure2);
-        Mockito.verify(mListener, Mockito.times(2))
+        Mockito.verify(mListener, Mockito.times(1))
+                .testFailed(
+                        Mockito.eq(new TestDescription(testName2, testName2)),
+                        Mockito.eq(failure2));
+        Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
                         Mockito.anyLong(),
                         Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
@@ -183,9 +187,9 @@ public class ExecutableTargetTestTest {
         setter.setOptionValue("test-command-line", testName1, testCmd1);
         setter.setOptionValue("test-command-line", testName2, testCmd2);
         mExecutableTargetTest.run(mTestInfo, mListener);
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         // run cmd1 test
         TestDescription testDescription = new TestDescription(testName1, testName1);
-        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName1), eq(1));
         Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
         Mockito.verify(mListener, Mockito.times(1)).testFailed(testDescription, ERROR_MESSAGE);
         Mockito.verify(mListener, Mockito.times(1))
@@ -194,14 +198,13 @@ public class ExecutableTargetTestTest {
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         // run cmd2 test
         TestDescription testDescription2 = new TestDescription(testName2, testName2);
-        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName2), eq(1));
         Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription2));
         Mockito.verify(mListener, Mockito.times(1)).testFailed(testDescription2, ERROR_MESSAGE);
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription2),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
-        Mockito.verify(mListener, Mockito.times(2))
+        Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
                         Mockito.anyLong(),
                         Mockito.<HashMap<String, MetricMeasurement.Metric>>any());

@@ -22,6 +22,7 @@ import com.android.tradefed.build.CommandLineBuildInfoBuilder;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.CommandRunner.ExitCode;
 import com.android.tradefed.command.CommandScheduler;
+import com.android.tradefed.command.ICommandOptions;
 import com.android.tradefed.command.ICommandScheduler.IScheduledInvocationListener;
 import com.android.tradefed.config.ArgsOptionParser;
 import com.android.tradefed.config.ConfigurationException;
@@ -80,6 +81,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.ReportPassedTests;
 import com.android.tradefed.result.ResultAndLogForwarder;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
@@ -192,13 +194,13 @@ public class TestInvocation implements ITestInvocation {
     private boolean mShutdownBeforeTest = false;
     private boolean mTestStarted = false;
     private boolean mTestDone = false;
-    private boolean mTestsNotRan = false;
     private boolean mForcedStopRequestedAfterTest = false;
 
     private boolean mInvocationFailed = false;
     private boolean mDelegatedInvocation = false;
     private List<IScheduledInvocationListener> mSchedulerListeners = new ArrayList<>();
     private DeviceUnavailableMonitor mUnavailableMonitor = new DeviceUnavailableMonitor();
+    private ConditionFailureMonitor mConditionalFailureMonitor = new ConditionFailureMonitor();
     private ExitCode mExitCode = ExitCode.NO_ERROR;
     private Throwable mExitStack = null;
     private EventsLoggerListener mEventsLogger = null;
@@ -303,8 +305,11 @@ public class TestInvocation implements ITestInvocation {
             badDevice = context.getDeviceBySerial(e.getSerial());
             if ((e instanceof DeviceUnresponsiveException) && badDevice != null
                     && TestDeviceState.ONLINE.equals(badDevice.getDeviceState())) {
-                // under certain cases it might still be possible to grab a bugreport
-                bugreportName = DEVICE_UNRESPONSIVE_BUGREPORT_NAME;
+                // We let parent process capture the bugreport
+                if (!isSubprocess(config)) {
+                    // under certain cases it might still be possible to grab a bugreport
+                    bugreportName = DEVICE_UNRESPONSIVE_BUGREPORT_NAME;
+                }
             }
             reportFailure(createFailureFromException(e, FailureStatus.INFRA_FAILURE), listener);
             // Upon reaching here after an exception, it is safe to assume that recovery
@@ -316,6 +321,7 @@ public class TestInvocation implements ITestInvocation {
         } catch (RunInterruptedException e) {
             exception = e;
             CLog.w("Invocation interrupted");
+            CLog.e(e);
             // if a stop cause was set, the interruption is most likely due to the invocation being
             // cancelled
             if (mStopCause == null) {
@@ -364,7 +370,11 @@ public class TestInvocation implements ITestInvocation {
                                 collectBugreport = context.getDevices().get(0);
                             }
                             // If we have identified a faulty device only take the bugreport on it.
-                            takeBugreport(collectBugreport, listener, bugreportName);
+                            takeBugreport(
+                                    collectBugreport,
+                                    listener,
+                                    config.getCommandOptions(),
+                                    bugreportName);
                         } else if (context.getDevices().size() > 1) {
                             ParallelDeviceExecutor<Boolean> executor =
                                     new ParallelDeviceExecutor<>(context.getDevices().size());
@@ -376,7 +386,11 @@ public class TestInvocation implements ITestInvocation {
                                             CLog.d(
                                                     "Start taking bugreport on '%s'",
                                                     device.getSerialNumber());
-                                            takeBugreport(device, listener, reportName);
+                                            takeBugreport(
+                                                    device,
+                                                    listener,
+                                                    config.getCommandOptions(),
+                                                    reportName);
                                             return true;
                                         };
                                 callableTasks.add(callableTask);
@@ -472,7 +486,7 @@ public class TestInvocation implements ITestInvocation {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.SHUTDOWN_BEFORE_TEST,
                             Boolean.toString(mShutdownBeforeTest));
-                    if (mTestsNotRan) {
+                    if (mShutdownBeforeTest) {
                         String message =
                                 String.format("Notified of soft shut down. Did not run tests");
                         FailureDescription failure =
@@ -501,7 +515,7 @@ public class TestInvocation implements ITestInvocation {
                                 String.format(
                                         "Invocation was interrupted due to: %s%s",
                                         mStopCause,
-                                        mTestsNotRan
+                                        mShutdownBeforeTest
                                                 ? ". Tests were not run."
                                                 : ", results will be affected");
                         if (mStopErrorId == null) {
@@ -510,7 +524,7 @@ public class TestInvocation implements ITestInvocation {
                         // if invocation is stopped and tests were not run, report invocation
                         // failure with correct error identifier so that command can be
                         // un-leased
-                        if (mTestsNotRan) {
+                        if (mShutdownBeforeTest) {
                             mStopErrorId =
                                     InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN;
                         }
@@ -541,7 +555,7 @@ public class TestInvocation implements ITestInvocation {
                             InvocationMetricKey.TEAR_DOWN_DISK_USAGE, size);
                 }
                 // Only log Invocation ended in parent
-                if (!isSubprocess(config)) {
+                if (invocationPath instanceof RemoteInvocationExecution || !isSubprocess(config)) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.INVOCATION_END, System.currentTimeMillis());
                 }
@@ -575,7 +589,6 @@ public class TestInvocation implements ITestInvocation {
         if (mSoftStopRequestTime != null || mStopRequestTime != null) {
             // Throw an exception so that it can be reported as an invocation failure
             // and command can be un-leased
-            mTestsNotRan = true;
             throw new RunInterruptedException(
                     "Notified of shut down. Will not run tests",
                     InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
@@ -590,17 +603,26 @@ public class TestInvocation implements ITestInvocation {
 
     /**
      * Starts the invocation.
-     * <p/>
-     * Starts logging, and informs listeners that invocation has been started.
+     *
+     * <p>Starts logging, and informs listeners that invocation has been started.
      *
      * @param config
      * @param context
      */
-    private void startInvocation(IConfiguration config, IInvocationContext context,
-            ITestInvocationListener listener) {
+    private void startInvocation(
+            IConfiguration config,
+            IInvocationContext context,
+            ITestInvocationListener listener,
+            RunMode mode,
+            boolean parentShard) {
         logStartInvocation(context, config);
         listener.invocationStarted(context);
-        logExpandedConfiguration(config, listener);
+        logExpandedConfiguration(config, listener, mode, parentShard);
+    }
+
+    private void startInvocation(
+            IConfiguration config, IInvocationContext context, ITestInvocationListener listener) {
+        startInvocation(config, context, listener, null, false);
     }
 
     /** Report the exception failure as an invocation failure. */
@@ -670,7 +692,10 @@ public class TestInvocation implements ITestInvocation {
     }
 
     private void takeBugreport(
-            ITestDevice device, ITestInvocationListener listener, String bugreportName) {
+            ITestDevice device,
+            ITestInvocationListener listener,
+            ICommandOptions options,
+            String bugreportName) {
         if (device == null) {
             return;
         }
@@ -685,13 +710,19 @@ public class TestInvocation implements ITestInvocation {
         RecoveryMode recovery = device.getRecoveryMode();
         try {
             device.setRecoveryMode(RecoveryMode.NONE);
-            device.logAnrs(listener);
-            boolean res =
-                    device.logBugreport(
-                            String.format("%s_%s", bugreportName, device.getSerialNumber()),
-                            listener);
-            if (!res) {
-                CLog.w("Error when collecting bugreport for device '%s'", device.getSerialNumber());
+            if (!options.isConditionalBugreportDisabled()
+                    && !mConditionalFailureMonitor.hasFailures()) {
+                device.logAnrs(listener);
+            } else {
+                boolean res =
+                        device.logBugreport(
+                                String.format("%s_%s", bugreportName, device.getSerialNumber()),
+                                listener);
+                if (!res) {
+                    CLog.w(
+                            "Error when collecting bugreport for device '%s'",
+                            device.getSerialNumber());
+                }
             }
         } catch (DeviceNotAvailableException | RuntimeException e) {
             CLog.e("Harness Exception while collecting bugreport");
@@ -766,9 +797,10 @@ public class TestInvocation implements ITestInvocation {
      * @param config the {@link IConfiguration} of this test run
      * @param listener the {@link ITestLogger} with which to register the log
      */
-    private void logExpandedConfiguration(IConfiguration config, ITestLogger listener) {
+    private void logExpandedConfiguration(
+            IConfiguration config, ITestLogger listener, RunMode mode, boolean parentShard) {
         boolean isShard = config.getConfigurationDescription().getShardIndex() != null;
-        if (isShard) {
+        if (isShard && !parentShard) {
             // Bail out of logging the config if this is a local shard since it is problematic
             // and redundant anyway.
             CLog.d("Skipping expanded config log for shard.");
@@ -782,25 +814,25 @@ public class TestInvocation implements ITestInvocation {
             // something else in the future
             byte[] configXmlByteArray = configXmlWriter.toString().getBytes("UTF-8");
             try (InputStreamSource source = new ByteArrayInputStreamSource(configXmlByteArray)) {
-                String configOutputName;
-                boolean isSandboxParent = config.getCommandOptions().shouldUseSandboxing();
-                boolean isSandboxChild = config.getConfigurationDescription().shouldUseSandbox();
-                if (isSandboxParent || isSandboxChild) {
-                    // Either the parent or child of a sandbox so we need to tailor the config
-                    // logging names
-                    String prefix;
-                    if (isSandboxChild) {
-                        prefix = "child-sandbox";
-                    } else {
-                        prefix = "parent-sandbox";
+                String prefix = "";
+                if (mode != null) {
+                    switch (mode) {
+                        case PARENT_SANDBOX:
+                            prefix = "parent-sandbox-";
+                            break;
+                        case SANDBOX:
+                            prefix = "child-sandbox-";
+                            break;
+                        case DELEGATED_INVOCATION:
+                            prefix = "parent-delegate-";
+                            break;
+                        case REMOTE_INVOCATION:
+                            // Fallthrough
+                        default:
+                            prefix = "";
                     }
-
-                    configOutputName = String.format("%s-%s", prefix, TRADEFED_CONFIG_NAME);
-                } else {
-                    // No sandboxing involved (at least known), so use the default name
-                    configOutputName = TRADEFED_CONFIG_NAME;
                 }
-
+                String configOutputName = String.format("%s%s", prefix, TRADEFED_CONFIG_NAME);
                 listener.testLog(configOutputName, LogDataType.HARNESS_CONFIG, source);
             }
         } catch (IOException e) {
@@ -864,6 +896,7 @@ public class TestInvocation implements ITestInvocation {
         }
         reportHostLog(listener, config);
         reportInvocationEnded(config, testInfo.getContext(), listener, 0L);
+        CLog.e(buildException);
         // We rethrow so it's caught in CommandScheduler and properly release
         // the device
         throw buildException;
@@ -1022,6 +1055,7 @@ public class TestInvocation implements ITestInvocation {
             allListeners.addAll(config.getTestInvocationListeners());
             allListeners.addAll(Arrays.asList(extraListeners));
             allListeners.add(mUnavailableMonitor);
+            allListeners.add(mConditionalFailureMonitor);
 
             // Auto retry feature
             IRetryDecision decision = config.getRetryDecision();
@@ -1245,6 +1279,7 @@ public class TestInvocation implements ITestInvocation {
                             context.getSerials());
                     // Log the chunk of parent host_log before sharding
                     reportHostLog(listener, config, TRADEFED_LOG_NAME + BEFORE_SHARDING_SUFFIX);
+                    logExpandedConfiguration(config, listener, mode, true);
                     config.getLogSaver().invocationEnded(0L);
                     if (aggregator != null) {
                         // The host_log is not available yet to reporters that don't support
@@ -1337,6 +1372,8 @@ public class TestInvocation implements ITestInvocation {
         if (mStopRequestTime == null) {
             mStopRequestTime = System.currentTimeMillis();
             mForcedStopRequestedAfterTest = mTestDone;
+            // If test isn't started yet, we know we can stop
+            mShutdownBeforeTest = !mTestStarted;
         }
     }
 
@@ -1344,7 +1381,7 @@ public class TestInvocation implements ITestInvocation {
     public void notifyInvocationStopped(String message) {
         if (mSoftStopRequestTime == null) {
             mSoftStopRequestTime = System.currentTimeMillis();
-            // If test isn't started yet, we know we could have stopped.
+            // If test isn't started yet, we know we can stop
             mShutdownBeforeTest = !mTestStarted;
         }
     }
@@ -1647,7 +1684,15 @@ public class TestInvocation implements ITestInvocation {
             RecoveryMode current = device.getRecoveryMode();
             device.setRecoveryMode(RecoveryMode.NONE);
             try {
-                device.waitForDeviceAvailable();
+                boolean available = device.waitForDeviceAvailable();
+                if (!available) {
+                    throw new DeviceNotAvailableException(
+                            String.format(
+                                    "Device %s failed availability check after running tests.",
+                                    device.getSerialNumber()),
+                            device.getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                }
             } catch (DeviceNotAvailableException e) {
                 String msg =
                         String.format("Device was left offline after tests: %s", e.getMessage());

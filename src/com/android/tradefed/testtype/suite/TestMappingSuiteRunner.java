@@ -131,6 +131,21 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "to run for the given change.")
     private Set<String> mUnmatchedFilePatternPaths = new HashSet<>();
 
+    @Option(
+            name = "test-mapping-matched-pattern-paths",
+            description =
+                    "A list of modified paths that matches with a certain file_pattern in "
+                            + "the TEST_MAPPING file. This is used only for Work Node, and handled "
+                            + "by provider service.")
+    private Set<String> mMatchedPatternPaths = new HashSet<>();
+
+    @Option(
+            name = "allow-empty-tests",
+            description =
+                    "Whether or not to raise an exception if no tests to be ran. This is to "
+                            + "provide a feasibility for test mapping sampling.")
+    private boolean mAllowEmptyTests = false;
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
@@ -218,7 +233,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                 CLog.i("Filtering tests from allowed test lists: %s", mAllowedTestLists);
                 testInfosToRun = filterByAllowedTestLists(testInfosToRun);
             }
-            if (testInfosToRun.isEmpty()) {
+            if (testInfosToRun.isEmpty() && !mAllowEmptyTests) {
                 throw new HarnessRuntimeException(
                         String.format("No test found for the given group: %s.", mTestGroup),
                         InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
@@ -272,6 +287,10 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     @VisibleForTesting
     String getTestGroup() {
         return mTestGroup;
+    }
+
+    public void clearTestGroup() {
+        mTestGroup = null;
     }
 
     @VisibleForTesting

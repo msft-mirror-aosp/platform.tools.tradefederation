@@ -54,6 +54,7 @@ import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NoDeviceException;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceState;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.IRescheduler;
@@ -550,7 +551,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         public void run() {
             if (mInvocationThread != null) {
                 mTriggered = true;
-                mInvocationThread.stopInvocation("Invocation Timeout Reached.");
+                mInvocationThread.stopInvocation(
+                        "Invocation Timeout Reached.", InfraErrorIdentifier.INVOCATION_TIMEOUT);
             }
         }
 
@@ -1163,13 +1165,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             // potentially create more invocations.
             manager.terminateDeviceRecovery();
             manager.terminateDeviceMonitor();
-            if (getTestInvocationManagementServer() != null) {
-                try {
-                    getTestInvocationManagementServer().shutdown();
-                } catch (InterruptedException e) {
-                    CLog.e(e);
-                }
-            }
             CLog.i("Waiting for invocation threads to complete");
             waitForAllInvocationThreads();
             waitForTerminatingInvocationThreads();
@@ -1188,6 +1183,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             if (getDeviceManagementServer() != null) {
                 try {
                     getDeviceManagementServer().shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
+            // Stop TestInvocationManagementServer after invocations are completed as the client
+            // need the server to get invocation details.
+            if (getTestInvocationManagementServer() != null) {
+                try {
+                    getTestInvocationManagementServer().shutdown();
                 } catch (InterruptedException e) {
                     CLog.e(e);
                 }
@@ -1902,11 +1906,12 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     private synchronized void throwIfDeviceInInvocationThread(List<ITestDevice> devices) {
         for (ITestDevice device : devices) {
             if (isDeviceInInvocationThread(device)) {
-                throw new IllegalStateException(
+                throw new HarnessRuntimeException(
                         String.format(
                                 "Attempting invocation on device %s when one is already "
                                         + "running",
-                                device.getSerialNumber()));
+                                device.getSerialNumber()),
+                        InfraErrorIdentifier.SCHEDULING_ERROR);
             }
         }
     }

@@ -18,6 +18,7 @@ package com.android.tradefed.testtype;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceState;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -59,6 +60,8 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
     private boolean mReportUnexecutedTests = false;
     private ProcessInfo mSystemServerProcess = null;
     private String runLevelError = null;
+
+    private CloseableTraceScope mMethodScope = null;
 
     /**
      * @param device
@@ -106,9 +109,19 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
 
     @Override
     public void testStarted(TestDescription test, long startTime) {
+        mMethodScope = new CloseableTraceScope(test.toString());
         super.testStarted(test, startTime);
         if (!mTests.add(test)) {
             mDuplicateTests.add(test);
+        }
+    }
+
+    @Override
+    public void testEnded(TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
+        super.testEnded(test, endTime, testMetrics);
+        if (mMethodScope != null) {
+            mMethodScope.close();
+            mMethodScope = null;
         }
     }
 
@@ -176,7 +189,8 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
                                             + "including the same test class several "
                                             + "times.",
                                     mDuplicateTests));
-            error.setFailureStatus(FailureStatus.TEST_FAILURE);
+            error.setFailureStatus(FailureStatus.TEST_FAILURE)
+                    .setRetriable(false); // Don't retry duplicate tests.
             super.testRunFailed(error);
         } else if (mReportUnexecutedTests
                 && mExpectedTests != null

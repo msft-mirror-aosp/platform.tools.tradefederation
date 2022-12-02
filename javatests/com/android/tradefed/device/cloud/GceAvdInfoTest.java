@@ -717,16 +717,40 @@ public class GceAvdInfoTest {
             GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
             fail("Should have thrown an exception");
         } catch (TargetSetupError expected) {
-            assertEquals(
-                    "OxygenClient - CommandStatus: FAILED, output:  "
-                            + "[Oxygen error: OXYGEN_CLIENT_BINARY_ERROR, CommandStatus: FAILED, "
-                            + "output:  Error received while trying to lease device: rpc error: "
-                            + "code = Internal desc = Internal error encountered. details = "
-                            + "[type_url:\"this.random.com/try.rpc.DebugInfo\" "
-                            + "value:\"\\x12\\x34\\x56[ORIGINAL ERROR] generic::internal: (length"
-                            + " 6684)\"]",
-                    expected.getMessage());
+            assertEquals("Oxygen client failed to lease a device", expected.getMessage());
         }
+    }
+
+    /** Test CF fetch CVD wrapper metrics. */
+    @Test
+    public void testCfFetchCvdWrapperMetrics() throws Exception {
+        String cuttlefish =
+                " {\n"
+                        + "    \"command\": \"create_cf\",\n"
+                        + "    \"data\": {\n"
+                        + "      \"devices\": [\n"
+                        + "        {\n"
+                        + "          \"ip\": \"34.71.83.182\",\n"
+                        + "          \"instance_name\": \"ins-cf-x86-phone-userdebug\",\n"
+                        + "          \"fetch_artifact_time\": 63.22,\n"
+                        + "          \"gce_create_time\": 23.5,\n"
+                        + "          \"launch_cvd_time\": 226.5,\n"
+                        + "          \"fetch_cvd_wrapper_log\": {\n"
+                        + "             \"cf_artifacts_fetch_source\": \"L1\",\n"
+                        + "             \"cf_cache_wait_time_sec\": 1\n"
+                        + "           }\n"
+                        + "        }\n"
+                        + "      ]\n"
+                        + "    },\n"
+                        + "    \"errors\": [],\n"
+                        + "    \"status\": \"SUCCESS\"\n"
+                        + "  }";
+        JSONObject res = new JSONObject(cuttlefish);
+        JSONArray devices = res.getJSONObject("data").getJSONArray("devices");
+        GceAvdInfo.addCfStartTimeMetrics((JSONObject) devices.get(0));
+        Map<String, String> metrics = InvocationMetricLogger.getInvocationMetrics();
+        assertEquals("1", metrics.get(InvocationMetricKey.CF_CACHE_WAIT_TIME.toString()));
+        assertEquals("L1", metrics.get(InvocationMetricKey.CF_ARTIFACTS_FETCH_SOURCE.toString()));
     }
 }
 

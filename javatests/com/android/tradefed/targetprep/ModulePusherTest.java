@@ -59,20 +59,20 @@ import java.util.Map;
 @RunWith(JUnit4.class)
 public final class ModulePusherTest {
     public static final String TESTHARNESS_ENABLE = "cmd testharness enable";
-    private static final String APEX_PACKAGE_NAME = "com.android.FAKE_APEX_PACKAGE_NAME";
-    private static final String APK_PACKAGE_NAME = "com.android.FAKE_APK_PACKAGE_NAME";
-    private static final String SPLIT_APK_PACKAGE_NAME = "com.android.SPLIT_FAKE_APK_PACKAGE_NAME";
+    private static final String APEX_PACKAGE_NAME = "com.android.FAKE.APEX.PACKAGE.NAME";
+    private static final String APK_PACKAGE_NAME = "com.android.FAKE.APK.PACKAGE.NAME";
+    private static final String SPLIT_APK_PACKAGE_NAME = "com.android.SPLIT.FAKE.APK.PACKAGE.NAME";
     private static final String APEX_PRELOAD_NAME = APEX_PACKAGE_NAME + ".apex";
     private static final String APK_PRELOAD_NAME = APK_PACKAGE_NAME + ".apk";
     private static final String SPLIT_APK_PRELOAD_NAME = SPLIT_APK_PACKAGE_NAME + ".apk";
     private static final String APEX_PATH_ON_DEVICE = "/system/apex/" + APEX_PRELOAD_NAME;
     private static final String APK_PATH_ON_DEVICE = "/system/apps/" + APK_PRELOAD_NAME;
     public static final String SPLIT_APK_PACKAGE_ON_DEVICE =
-            "/system/apps/com.android.SPLIT_FAKE_APK_PACKAGE_NAME";
+            "/system/apps/com.android.SPLIT.FAKE.APK.PACKAGE.NAME";
     private static final String SPLIT_APK_PATH_ON_DEVICE =
             SPLIT_APK_PACKAGE_ON_DEVICE + "/" + SPLIT_APK_PRELOAD_NAME;
     private static final String HDPI_PATH_ON_DEVICE =
-            SPLIT_APK_PACKAGE_ON_DEVICE + "/com.android.SPLIT_FAKE_APK_PACKAGE_NAME-hdpi.apk";
+            SPLIT_APK_PACKAGE_ON_DEVICE + "/com.android.SPLIT.FAKE.APK.PACKAGE.NAME-hdpi.apk";
     private static final String TEST_APEX_NAME = "fakeApex.apex";
     private static final String TEST_APK_NAME = "fakeApk.apk";
     private static final String TEST_SPLIT_APK_NAME = "FakeSplit/base-master.apk";
@@ -104,15 +104,17 @@ public final class ModulePusherTest {
         when(mMockDevice.getApiLevel()).thenReturn(API);
         when(mMockDevice.getSerialNumber()).thenReturn(SERIAL);
         when(mMockDevice.getDeviceDescriptor()).thenReturn(null);
+        CommandResult apexCr = getCommandResult(APEX_PRELOAD_NAME + "\n");
+        when(mMockDevice.executeShellV2Command("ls /system/apex/")).thenReturn(apexCr);
         CommandResult cr = getCommandResult("Good!");
         when(mMockDevice.executeShellV2Command("pm get-moduleinfo | grep 'com.google'"))
                 .thenReturn(cr);
         when(mMockDevice.executeShellV2Command("cmd testharness enable")).thenReturn(cr);
         CommandResult cr1 =
-                getCommandResult("package:/system/apex/com.android.FAKE_APEX_PACKAGE_NAME.apex\n");
+                getCommandResult("package:/system/apex/com.android.FAKE.APEX.PACKAGE.NAME.apex\n");
         when(mMockDevice.executeShellV2Command("pm path " + APEX_PACKAGE_NAME)).thenReturn(cr1);
         CommandResult cr2 =
-                getCommandResult("package:/system/apps/com.android.FAKE_APK_PACKAGE_NAME.apk\n");
+                getCommandResult("package:/system/apps/com.android.FAKE.APK.PACKAGE.NAME.apk\n");
         when(mMockDevice.executeShellV2Command("pm path " + APK_PACKAGE_NAME)).thenReturn(cr2);
         CommandResult cr3 =
                 getCommandResult(
@@ -123,10 +125,10 @@ public final class ModulePusherTest {
                 .thenReturn(cr3);
         CommandResult cr4 =
                 getCommandResult(
-                        "com.android.SPLIT_FAKE_APK_PACKAGE_NAME.apk\n"
-                                + "com.android.SPLIT_FAKE_APK_PACKAGE_NAME-hdpi.apk\n");
+                        "com.android.SPLIT.FAKE.APK.PACKAGE.NAME.apk\n"
+                                + "com.android.SPLIT.FAKE.APK.PACKAGE.NAME-hdpi.apk\n");
         when(mMockDevice.executeShellV2Command(
-                        "ls /system/apps/com.android.SPLIT_FAKE_APK_PACKAGE_NAME"))
+                        "ls /system/apps/com.android.SPLIT.FAKE.APK.PACKAGE.NAME"))
                 .thenReturn(cr4);
 
         mPusher =
@@ -171,6 +173,32 @@ public final class ModulePusherTest {
         String[] files = mPusher.getPathsOnDevice(mMockDevice, SPLIT_APK_PACKAGE_NAME);
 
         assertArrayEquals(new String[] {SPLIT_APK_PATH_ON_DEVICE, HDPI_PATH_ON_DEVICE}, files);
+    }
+
+    @Test
+    public void testGetApexPathUnderSystem() throws Exception {
+        CommandResult apexCr =
+                getCommandResult(
+                        "com.android.apex.cts.shim.apex\n"
+                                + "com.android.wifi.capex\n"
+                                + "com.android.appsearch.apex\n"
+                                + "com.google.android.adbd_trimmed_compressed.apex\n"
+                                + "com.google.android.art_compressed.apex\n"
+                                + "com.google.android.media.swcodec_compressed.apex\n"
+                                + "com.google.android.media_compressed.apex\n"
+                                + "com.google.android.mediaprovider_compressed.apex\n"
+                                + "com.google.mainline.primary.libs.apex");
+        when(mMockDevice.executeShellV2Command("ls /system/apex/")).thenReturn(apexCr);
+
+        assertEquals(
+                Paths.get("/system/apex/com.android.appsearch.apex"),
+                mPusher.getApexPathUnderSystem(mMockDevice, "com.android.appsearch"));
+        assertEquals(
+                Paths.get("/system/apex/com.google.android.media_compressed.apex"),
+                mPusher.getApexPathUnderSystem(mMockDevice, "com.google.android.media"));
+        assertEquals(
+                Paths.get("/system/apex/com.google.android.adbd_trimmed_compressed.apex"),
+                mPusher.getApexPathUnderSystem(mMockDevice, "com.google.android.adbd"));
     }
 
     /** Test getting preload paths for split apks. */
@@ -266,7 +294,8 @@ public final class ModulePusherTest {
 
         mPusher.installModules(
                 ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeApex, APK_PACKAGE_NAME, mFakeApk),
-                /*factory_reset=*/ true);
+                /*factoryReset=*/ true,
+                /*disablePackageCache=*/ false);
 
         verify(mMockDevice, atLeastOnce()).getActiveApexes();
         verify(mMockDevice, times(2)).reboot();
@@ -292,7 +321,8 @@ public final class ModulePusherTest {
 
         mPusher.installModules(
                 ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeApex, APK_PACKAGE_NAME, mFakeApk),
-                /*factory_reset=*/ false);
+                /*factoryReset=*/ false,
+                /*disablePackageCache=*/ false);
 
         verify(mMockDevice, atLeastOnce()).getActiveApexes();
         verify(mMockDevice, never()).executeShellV2Command("cmd testharness enable");
@@ -325,7 +355,8 @@ public final class ModulePusherTest {
                         mFakeSplitApk,
                         SPLIT_APK_PACKAGE_NAME,
                         mFakeHdpiApk),
-                /*factory_reset=*/ true);
+                /*factoryReset=*/ true,
+                /*disablePackageCache=*/ false);
 
         verify(mMockDevice, atLeastOnce()).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellV2Command("cmd testharness enable");
@@ -338,6 +369,34 @@ public final class ModulePusherTest {
         assertTrue(Files.isDirectory(renamedSplitApk.toPath()));
         assertTrue(Files.isRegularFile(renamedSplitApk.toPath().resolve("base-master.apk")));
         assertTrue(Files.isRegularFile(renamedSplitApk.toPath().resolve("base-hdpi.apk")));
+    }
+
+    /** Test install modules when disable package cache. */
+    @Test
+    public void testInstallModulesSuccessDisablePackageCache() throws Exception {
+        Path dir = mFakeApex.toPath().getParent();
+        File renamedApex = dir.resolve(APEX_PRELOAD_NAME).toFile();
+        File renamedApk = dir.resolve(APK_PRELOAD_NAME).toFile();
+        when(mMockDevice.pushFile(renamedApex, APEX_PATH_ON_DEVICE)).thenReturn(true);
+        when(mMockDevice.pushFile(renamedApk, APK_PATH_ON_DEVICE)).thenReturn(true);
+        setVersionCodesOnDevice(ImmutableMap.of(APEX_PACKAGE_NAME, "2", APK_PACKAGE_NAME, "2"));
+        activateVersion(2);
+
+        mPusher.installModules(
+                ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeApex, APK_PACKAGE_NAME, mFakeApk),
+                /*factoryReset=*/ false,
+                /*disablePackageCache=*/ true);
+
+        verify(mMockDevice, atLeastOnce()).getActiveApexes();
+        verify(mMockDevice, never()).executeShellV2Command("cmd testharness enable");
+        verify(mMockDevice, times(1)).executeShellV2Command("rm -Rf /data/system/package_cache/");
+        verify(mMockDevice, times(3)).reboot();
+        verify(mMockDevice, times(1)).pushFile(renamedApex, APEX_PATH_ON_DEVICE);
+        verify(mMockDevice, times(1)).pushFile(renamedApk, APK_PATH_ON_DEVICE);
+        assertFalse(Files.exists(mFakeApex.toPath()));
+        assertFalse(Files.exists(mFakeApk.toPath()));
+        assertTrue(Files.isRegularFile(renamedApex.toPath()));
+        assertTrue(Files.isRegularFile(renamedApk.toPath()));
     }
 
     /** Throws exception when missing one version code. */
@@ -357,7 +416,8 @@ public final class ModulePusherTest {
                         mPusher.installModules(
                                 ImmutableMultimap.of(
                                         APEX_PACKAGE_NAME, mFakeApex, APK_PACKAGE_NAME, mFakeApk),
-                                /*factory_reset=*/ false));
+                                /*factoryReset=*/ false,
+                                /*disablePackageCache=*/ false));
         verify(mMockDevice, atLeastOnce()).getActiveApexes();
         verify(mMockDevice, never()).executeShellV2Command("cmd testharness enable");
         verify(mMockDevice, times(2)).reboot();
@@ -377,7 +437,8 @@ public final class ModulePusherTest {
                 () ->
                         mPusher.installModules(
                                 ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeApex),
-                                /*factory_reset=*/ true));
+                                /*factoryReset=*/ true,
+                                /*disablePackageCache=*/ false));
         verify(mMockDevice, never()).executeShellV2Command(TESTHARNESS_ENABLE);
         verify(mMockDevice, times(1)).pushFile(renamedApex, APEX_PATH_ON_DEVICE);
     }
@@ -398,7 +459,8 @@ public final class ModulePusherTest {
                         mPusher.installModules(
                                 ImmutableMultimap.of(
                                         APEX_PACKAGE_NAME, mFakeApex, APK_PACKAGE_NAME, mFakeApk),
-                                /*factory_reset=*/ true));
+                                /*factoryReset=*/ true,
+                                /*disablePackageCache=*/ false));
 
         verify(mMockDevice, never()).executeShellV2Command(TESTHARNESS_ENABLE);
         verify(mMockDevice, times(1)).pushFile(renamedApex, APEX_PATH_ON_DEVICE);
@@ -421,7 +483,8 @@ public final class ModulePusherTest {
                 () ->
                         mPusher.installModules(
                                 ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeApex),
-                                /*factory_reset=*/ true));
+                                /*factoryReset=*/ true,
+                                /*disablePackageCache=*/ false));
         verify(mMockDevice, times(1)).pushFile(any(), any());
     }
 
@@ -437,7 +500,8 @@ public final class ModulePusherTest {
                 () ->
                         mPusher.installModules(
                                 ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeApex),
-                                /*factory_reset=*/ true));
+                                /*factoryReset=*/ true,
+                                /*disablePackageCache=*/ false));
         verify(mMockDevice, times(1)).pushFile(any(), any());
     }
 
@@ -453,7 +517,8 @@ public final class ModulePusherTest {
                 () ->
                         mPusher.installModules(
                                 ImmutableMultimap.of(APEX_PACKAGE_NAME, mFakeApex),
-                                /*factory_reset=*/ true));
+                                /*factoryReset=*/ true,
+                                /*disablePackageCache=*/ false));
         verify(mMockDevice, times(1)).pushFile(any(), any());
     }
 

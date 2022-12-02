@@ -80,6 +80,7 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     private ITestsZipInstaller mTestsZipInstaller = null;
 
     private Collection<String> mFlashOptions = new ArrayList<>();
+    private boolean mDisableRamdump = false;
 
     private Collection<String> mDataWipeSkipList = null;
 
@@ -160,6 +161,10 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         mFlashOptions = flashOptions.stream().map(String::trim).collect(Collectors.toList());
     }
 
+    public void setDisableRamdump(boolean disableRamdump) {
+        mDisableRamdump = disableRamdump;
+    }
+
     /** {@inheritDoc} */
     @Override
     public void preFlashOperations(ITestDevice device, IDeviceBuildInfo deviceBuild)
@@ -177,7 +182,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 deviceBuild.getDeviceBuildId());
 
         // Get system build id and build flavor before booting into fastboot
-        setSystemBuildInfo(device.getBuildId(), device.getBuildFlavor());
+        if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+            setSystemBuildInfo(device.getBuildId(), device.getBuildFlavor());
+        }
 
         if (!initialStateFastbootD) {
             device.rebootIntoBootloader();
@@ -676,6 +683,15 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             flashRamdiskIfNeeded(device, deviceBuild);
             CLog.i("Flashed ramdisk anyways per flasher settings.");
         }
+        if (mDisableRamdump) {
+            CLog.i("Disabling ramdump.");
+            CommandResult result = device.executeFastbootCommand("oem", "ramdump", "disable");
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                CLog.w(
+                        "Failed to run ramdump disable: status: %s\nstdout: %s\nstderr: %s",
+                        result.getStatus(), result.getStdout(), result.getStderr());
+            }
+        }
         // reboot
         device.rebootUntilOnline();
         return false;
@@ -725,8 +741,14 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         try {
             if (getHostOptions().shouldFlashWithFuseZip()
                 && getFuseUtil().canMountZip()) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FLASHING_METHOD,
+                        FlashingMethod.FASTBOOT_FLASH_ALL_FUSE_ZIP.toString());
                 flashWithFuseZip(device, deviceBuild);
             } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.FLASHING_METHOD,
+                        FlashingMethod.FASTBOOT_UPDATE.toString());
                 flashWithUpdateCommand(device, deviceBuild);
             }
             flashRamdiskIfNeeded(device, deviceBuild);

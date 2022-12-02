@@ -31,6 +31,7 @@ import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -43,9 +44,13 @@ import com.google.common.base.Strings;
 
 import java.awt.Image;
 import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -137,10 +142,10 @@ public class TestDevice extends NativeDevice {
     private static final String APEX_SUFFIX = ".apex";
     private static final String APEX_ARG = "--apex";
 
-    /** If the device is a Microdroid, this will refer to the CID. Otherwise, it will be null. */
-    private String microdroidCID = null;
-    /** Contains a set of Microdroid CIDs which is running in this TestDevice. */
-    private Set<String> startedMicrodroids = new HashSet<>();
+    /** If the device is a Microdroid, this refers to the VM process. Otherwise, it is null. */
+    private Process mMicrodroidProcess = null;
+    /** Contains a set of Microdroid instances running in this TestDevice, and their CIDs. */
+    private Map<Process, String> mStartedMicrodroids = new HashMap<>();
 
     private static final String TEST_ROOT = "/data/local/tmp/virt/";
     private static final String VIRT_APEX = "/apex/com.android.virt/";
@@ -151,6 +156,8 @@ public class TestDevice extends NativeDevice {
     private static final long MICRODROID_MAX_LIFETIME_MINUTES = 20;
 
     private static final long MICRODROID_ADB_CONNECT_TIMEOUT_MINUTES = 5;
+
+    private static final String EARLY_REBOOT = "Too early to call shutdown() or reboot()";
 
     /**
      * @param device
@@ -1015,7 +1022,14 @@ public class TestDevice extends NativeDevice {
                     return false;
                 }
                 String command = "svc power reboot " + rebootMode.formatRebootCommand(reason);
-                executeShellCommand(command);
+                CommandResult result = executeShellV2Command(command);
+                if (result.getStdout().contains(EARLY_REBOOT)
+                        || result.getStderr().contains(EARLY_REBOOT)) {
+                    CLog.e(
+                            "Reboot was called too early: stdout: %s.\nstderr: %s.",
+                            result.getStdout(), result.getStderr());
+                    return false;
+                }
             } catch (DeviceUnresponsiveException due) {
                 CLog.v("framework reboot: device unresponsive to shell command, using fallback");
                 return false;
@@ -1331,6 +1345,21 @@ public class TestDevice extends NativeDevice {
      */
     @Override
     public boolean isMultiUserSupported() throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("get-max-running-users", 28);
+        final int apiLevel = getApiLevel();
+        if (apiLevel > 33) {
+            String command = "pm supports-multiple-users";
+            String commandOutput = executeShellCommand(command).trim();
+            try {
+                String parsedOutput =
+                        commandOutput.substring(commandOutput.lastIndexOf(" ")).trim();
+                Boolean retValue = Boolean.valueOf(parsedOutput);
+                return retValue;
+            } catch (NumberFormatException e) {
+                CLog.e("Failed to parse result: %s", commandOutput);
+                return false;
+            }
+        }
         return getMaxNumberOfUsersSupported() > 1;
     }
 
@@ -2105,32 +2134,55 @@ public class TestDevice extends NativeDevice {
     }
 
     /**
+     * Forwards contents of a file to log. To be used when testing microdroid, to forward console
+     * and log outputs to the host device's log.
+     */
+    private void forwardFileToLog(String logPath, String tag) {
+        try {
+            // Keep redirecting as long as the expecting maximum test time. When an adb
+            // command times out, it may trigger the device recovery process, which
+            // disconnect adb, which terminates any live adb commands. See an example at
+            // b/194974010#comment25.
+            String logwrapperCmd =
+                    "logwrapper "
+                            + "sh "
+                            + "-c "
+                            + "\"$'tail -f -n +0 "
+                            + logPath
+                            + " | sed \\'s/^/"
+                            + tag
+                            + ": /g\\''\""; // add tags in front of lines
+            CommandResult logwrapperResult =
+                    executeShellV2Command(
+                            logwrapperCmd,
+                            MICRODROID_MAX_LIFETIME_MINUTES * 60 * 1000,
+                            java.util.concurrent.TimeUnit.MILLISECONDS);
+            if (logwrapperResult.getStatus() != CommandStatus.SUCCESS) {
+                throw new DeviceRuntimeException(
+                        logwrapperCmd + " has failed: " + logwrapperResult,
+                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+            }
+        } catch (Exception e) {
+            // Consume
+        }
+    }
+
+    /**
      * Starts a Microdroid TestDevice.
      *
-     * @param apkFile APK file of the Microdroid app to install.
-     * @param apkPath path to the apk file.
-     * @param configPath the name of the VM config file that you embedded in the APK.
-     * @param debugLevel debugging level.
-     * @param memoryMib minimum memory size
-     * @param extraIdsigPaths Paths to extra idsig files.
+     * @param builder A {@link MicrodroidBuilder} with required properties to start a microdroid.
      * @return returns a ITestDevice for the microdroid, can return null.
      */
-    private ITestDevice startMicrodroid(
-            File apkFile,
-            String apkPath,
-            String configPath,
-            String debugLevel,
-            int memoryMib,
-            int numCpus,
-            String cpuAffinity,
-            List<String> extraIdsigPaths)
+    private ITestDevice startMicrodroid(MicrodroidBuilder builder)
             throws DeviceNotAvailableException {
-        if (!startedMicrodroids.isEmpty())
+        IDeviceManager deviceManager = GlobalConfiguration.getDeviceManagerInstance();
+
+        if (!mStartedMicrodroids.isEmpty())
             throw new IllegalStateException(
                     String.format(
-                            "Microdroid with cid '%s' already exists in device. Can not create"
+                            "Microdroid with cid '%s' already exists in device. Cannot create"
                                     + " another one.",
-                            startedMicrodroids.iterator().next()));
+                            mStartedMicrodroids.values().iterator().next()));
 
         String microdroidSerial;
         int vmAdbPort = -1;
@@ -2147,12 +2199,7 @@ public class TestDevice extends NativeDevice {
         microdroidSerial = "localhost:" + vmAdbPort;
 
         // disconnect from microdroid
-        getRunUtil()
-                .runTimedCmd(
-                        10000,
-                        GlobalConfiguration.getDeviceManagerInstance().getAdbPath(),
-                        "disconnect",
-                        microdroidSerial);
+        getRunUtil().runTimedCmd(10000, deviceManager.getAdbPath(), "disconnect", microdroidSerial);
 
         // remove any leftover files under test root
         executeShellV2Command("rm -rf " + TEST_ROOT + "*");
@@ -2164,10 +2211,10 @@ public class TestDevice extends NativeDevice {
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
         // Push the apk file to the test directory
-        if (apkFile != null) {
-            pushFile(apkFile, TEST_ROOT + apkFile.getName());
-            apkPath = TEST_ROOT + apkFile.getName();
-        } else if (apkPath == null) {
+        if (builder.mApkFile != null) {
+            pushFile(builder.mApkFile, TEST_ROOT + builder.mApkFile.getName());
+            builder.mApkPath = TEST_ROOT + builder.mApkFile.getName();
+        } else if (builder.mApkPath == null) {
             // if both apkFile and apkPath is null, we can not start a microdroid device
             throw new IllegalArgumentException(
                     "apkFile and apkPath is both null. Can not start microdroid.");
@@ -2175,87 +2222,95 @@ public class TestDevice extends NativeDevice {
 
         // This file is not what we provide. It will be created by the vm tool.
         final String outApkIdsigPath =
-                TEST_ROOT + (apkFile != null ? apkFile.getName() : "NULL") + ".idsig";
+                TEST_ROOT
+                        + (builder.mApkFile != null ? builder.mApkFile.getName() : "NULL")
+                        + ".idsig";
         final String instanceImg = TEST_ROOT + INSTANCE_IMG;
+        final String consolePath = TEST_ROOT + "console.txt";
         final String logPath = TEST_ROOT + "log.txt";
-        final String debugFlag = Strings.isNullOrEmpty(debugLevel) ? "" : "--debug " + debugLevel;
+        final String debugFlag =
+                Strings.isNullOrEmpty(builder.mDebugLevel) ? "" : "--debug " + builder.mDebugLevel;
         final String cpuAffinityFlag =
-                Strings.isNullOrEmpty(cpuAffinity) ? "" : "--cpu-affinity " + cpuAffinity;
+                Strings.isNullOrEmpty(builder.mCpuAffinity)
+                        ? ""
+                        : "--cpu-affinity " + builder.mCpuAffinity;
 
         List<String> args =
                 new ArrayList<>(
                         Arrays.asList(
+                                deviceManager.getAdbPath(),
+                                "-s",
+                                getSerialNumber(),
+                                "shell",
                                 VIRT_APEX + "bin/vm",
                                 "run-app",
-                                "--daemonize",
+                                "--console " + consolePath,
                                 "--log " + logPath,
-                                "--mem " + memoryMib,
+                                "--mem " + builder.mMemoryMib,
                                 debugFlag,
-                                "--cpus " + numCpus,
+                                "--cpus " + builder.mNumCpus,
                                 cpuAffinityFlag,
-                                apkPath,
+                                builder.mApkPath,
                                 outApkIdsigPath,
                                 instanceImg,
-                                configPath));
-        for (String path : extraIdsigPaths) {
+                                "--config-path",
+                                builder.mConfigPath));
+        if (builder.mProtectedVm) {
+            args.add("--protected");
+        }
+        for (String path : builder.mExtraIdsigPaths) {
             args.add("--extra-idsig");
             args.add(path);
         }
 
         // Run the VM
-        String vmRunCmd = String.join(" ", args);
-        result = executeShellV2Command(vmRunCmd);
-        if (result.getStatus() != CommandStatus.SUCCESS) {
+        String cid;
+        Process process;
+        try {
+            PipedInputStream pipe = new PipedInputStream();
+            process = getRunUtil().runCmdInBackground(args, new PipedOutputStream(pipe));
+            BufferedReader stdout = new BufferedReader(new InputStreamReader(pipe));
+
+            // Retrieve the CID from the vm tool output
+            Pattern pattern = Pattern.compile("with CID (\\d+)");
+            while ((cid = stdout.readLine()) != null) {
+                Matcher matcher = pattern.matcher(cid);
+                if (matcher.find()) {
+                    cid = matcher.group(1);
+                    break;
+                }
+            }
+            if (cid == null) {
+                throw new DeviceRuntimeException(
+                        "Failed to find the CID of the VM",
+                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+            }
+        } catch (IOException ex) {
             throw new DeviceRuntimeException(
-                    vmRunCmd + " has failed: " + result, DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+                    "IOException trying to start a VM", DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
-        String ret = result.getStdout().trim();
 
         // Redirect log.txt to logd using logwrapper
-        ExecutorService executor = Executors.newFixedThreadPool(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
         executor.execute(
                 () -> {
-                    try {
-                        // Keep redirecting as long as the expecting maximum test time. When an adb
-                        // command times out, it may trigger the device recovery process, which
-                        // disconnect adb, which terminates any live adb commands. See an example at
-                        // b/194974010#comment25.
-                        String logwrapperCmd =
-                                String.join(
-                                        " ",
-                                        Arrays.asList(
-                                                "logwrapper", "tail", "-f", "-n +0", logPath));
-                        CommandResult logwrapperResult =
-                                executeShellV2Command(
-                                        logwrapperCmd,
-                                        MICRODROID_MAX_LIFETIME_MINUTES * 60 * 1000,
-                                        java.util.concurrent.TimeUnit.MILLISECONDS);
-                        if (logwrapperResult.getStatus() != CommandStatus.SUCCESS) {
-                            throw new DeviceRuntimeException(
-                                    logwrapperCmd + " has failed: " + logwrapperResult,
-                                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
-                        }
-                    } catch (Exception e) {
-                        // Consume
-                    }
+                    forwardFileToLog(consolePath, "MicrodroidConsole");
+                });
+        executor.execute(
+                () -> {
+                    forwardFileToLog(logPath, "MicrodroidLog");
                 });
 
-        // Retrieve the CID from the vm tool output
-        Pattern pattern = Pattern.compile("with CID (\\d+)");
-        Matcher matcher = pattern.matcher(ret);
-        if (matcher.find()) {
-            String cid = matcher.group(1);
-            adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort);
-
-            final ITestDevice microdroid =
-                    GlobalConfiguration.getDeviceManagerInstance()
-                            .forceAllocateDevice(microdroidSerial);
-            ((TestDevice) microdroid).setMicrodroidCID(cid);
-            startedMicrodroids.add(cid);
-            return microdroid;
-        } else {
-            return null;
+        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort);
+        TestDevice microdroid = (TestDevice) deviceManager.forceAllocateDevice(microdroidSerial);
+        if (microdroid == null) {
+            throw new DeviceRuntimeException(
+                    "Unable to force allocate the microdroid device",
+                    InfraErrorIdentifier.RUNNER_ALLOCATION_ERROR);
         }
+        microdroid.setMicrodroidProcess(process);
+        mStartedMicrodroids.put(process, cid);
+        return microdroid;
     }
 
     /**
@@ -2335,8 +2390,6 @@ public class TestDevice extends NativeDevice {
                     String.format("Device '%s' was not booted.", microdroidSerial),
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
-        microdroidHelper.tryRunOnMicrodroid(
-                microdroidSerial, "watch -e \"getprop init.svc.logd-reinit | grep '^$'\"");
     }
 
     /**
@@ -2346,21 +2399,19 @@ public class TestDevice extends NativeDevice {
      */
     public void shutdownMicrodroid(@Nonnull ITestDevice microdroidDevice)
             throws DeviceNotAvailableException {
-        String cid = ((TestDevice) microdroidDevice).getMicrodroidCID();
-        if (cid == null) {
-            throw new IllegalArgumentException("CID is null. TestDevice is not a Microdroid. ");
+        Process process = ((TestDevice) microdroidDevice).getMicrodroidProcess();
+        if (process == null) {
+            throw new IllegalArgumentException("Process is null. TestDevice is not a Microdroid. ");
         }
-        if (!startedMicrodroids.contains(cid)) {
+        if (!mStartedMicrodroids.containsKey(process)) {
             throw new IllegalArgumentException(
                     "Microdroid device was not started in this TestDevice.");
         }
 
-        // Shutdown the VM
-        CommandResult result = executeShellV2Command(VIRT_APEX + "bin/vm stop " + cid);
-        if (result.getStatus() != CommandStatus.SUCCESS) {
-            throw new DeviceRuntimeException(
-                    VIRT_APEX + "bin/vm stop " + cid + " has failed: " + result,
-                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        process.destroy();
+        try {
+            process.waitFor();
+        } catch (InterruptedException ex) {
         }
 
         // disconnect from microdroid
@@ -2373,23 +2424,24 @@ public class TestDevice extends NativeDevice {
 
         GlobalConfiguration.getDeviceManagerInstance()
                 .freeDevice(microdroidDevice, FreeDeviceState.AVAILABLE);
-        startedMicrodroids.remove(cid);
+        mStartedMicrodroids.remove(process);
     }
 
     /**
      * Marks the TestDevice as microdroid and sets its CID.
      *
-     * @param cid CID of the microdroid vm.
+     * @param process Process of the Microdroid VM.
      */
-    private void setMicrodroidCID(String cid) {
-        microdroidCID = cid;
+    private void setMicrodroidProcess(Process process) {
+        mMicrodroidProcess = process;
     }
 
     /**
-     * @return Returns the CID of the microdroid vm. If TestDevice is not a microdroid, return null.
+     * @return Returns the Process of the Microdroid VM. If TestDevice is not a Microdroid, returns
+     *     null.
      */
-    public String getMicrodroidCID() {
-        return microdroidCID;
+    public Process getMicrodroidProcess() {
+        return mMicrodroidProcess;
     }
 
     /** A builder used to create a Microdroid TestDevice. */
@@ -2402,6 +2454,7 @@ public class TestDevice extends NativeDevice {
         private int mNumCpus;
         private String mCpuAffinity;
         private List<String> mExtraIdsigPaths;
+        private boolean mProtectedVm;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -2413,6 +2466,7 @@ public class TestDevice extends NativeDevice {
             mNumCpus = 1;
             mCpuAffinity = null;
             mExtraIdsigPaths = new ArrayList<>();
+            mProtectedVm = false; // Vm is unprotected by default.
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -2461,6 +2515,12 @@ public class TestDevice extends NativeDevice {
             return this;
         }
 
+        /** Sets whether the VM will be protected or not. */
+        public MicrodroidBuilder protectedVm(boolean isProtectedVm) {
+            mProtectedVm = isProtectedVm;
+            return this;
+        }
+
         /** Adds extra idsig file to the list. */
         public MicrodroidBuilder addExtraIdsigPath(String extraIdsigPath) {
             if (!Strings.isNullOrEmpty(extraIdsigPath)) {
@@ -2482,15 +2542,7 @@ public class TestDevice extends NativeDevice {
                         "CPU affinity [" + mCpuAffinity + "]" + " is invalid");
             }
 
-            return device.startMicrodroid(
-                    mApkFile,
-                    mApkPath,
-                    mConfigPath,
-                    mDebugLevel,
-                    mMemoryMib,
-                    mNumCpus,
-                    mCpuAffinity,
-                    mExtraIdsigPaths);
+            return device.startMicrodroid(this);
         }
     }
 }

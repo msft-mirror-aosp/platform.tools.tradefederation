@@ -24,6 +24,7 @@ import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
+import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -43,6 +44,7 @@ public final class GlobalTestFilter {
 
     public static final String INCLUDE_FILTER_OPTION = "include-filter";
     public static final String EXCLUDE_FILTER_OPTION = "exclude-filter";
+    public static final String STRICT_INCLUDE_FILTER_OPTION = "strict-include-filter";
 
     @Option(
             name = INCLUDE_FILTER_OPTION,
@@ -57,6 +59,16 @@ public final class GlobalTestFilter {
                     "Filters applied to the invocation. Format: [abi] [module-name]"
                             + " [test-class][#method-name]")
     private Set<String> mExcludeFilters = new LinkedHashSet<>();
+
+    @Option(
+            name = STRICT_INCLUDE_FILTER_OPTION,
+            description =
+                    "Filters applied to the invocation. Format: [abi] [module-name]"
+                            + " [test-class][#method-name]. All other filters "
+                            + "will be ignored to strictly run this set."
+                            + "This is still best-effort as not all runners "
+                            + "support filtering equally.")
+    private Set<String> mStrictIncludeFilters = new LinkedHashSet<>();
 
     @Option(
             name = "disable-global-filters",
@@ -83,6 +95,11 @@ public final class GlobalTestFilter {
         return new LinkedHashSet<>(mExcludeFilters);
     }
 
+    /** Returns the Set of global strict include filters. */
+    public Set<String> getStrictIncludeFilters() {
+        return new LinkedHashSet<>(mStrictIncludeFilters);
+    }
+
     public void addPreviousPassedTests(Set<String> previousPassed) {
         if (!previousPassed.isEmpty()) {
             CLog.d("Adding following exclusion to GlobalTestFilter: %s", previousPassed);
@@ -106,13 +123,30 @@ public final class GlobalTestFilter {
             populateGlobalFilters();
         }
         // Apply filters
-        for (IRemoteTest test : config.getTests()) {
-            if (test instanceof BaseTestSuite) {
-                ((BaseTestSuite) test).setIncludeFilter(mIncludeFilters);
-                ((BaseTestSuite) test).setExcludeFilter(mExcludeFilters);
-            } else if (test instanceof ITestFilterReceiver) {
-                ITestFilterReceiver filterableTest = (ITestFilterReceiver) test;
-                applyFiltersToTest(filterableTest);
+        if (mStrictIncludeFilters.isEmpty()) {
+            for (IRemoteTest test : config.getTests()) {
+                if (test instanceof BaseTestSuite) {
+                    ((BaseTestSuite) test).setIncludeFilter(mIncludeFilters);
+                    ((BaseTestSuite) test).setExcludeFilter(mExcludeFilters);
+                } else if (test instanceof ITestFilterReceiver) {
+                    ITestFilterReceiver filterableTest = (ITestFilterReceiver) test;
+                    applyFiltersToTest(filterableTest);
+                }
+            }
+        } else {
+            CLog.d("Strict include filters specified: %s", mStrictIncludeFilters);
+            for (IRemoteTest test : config.getTests()) {
+                if (test instanceof BaseTestSuite) {
+                    ((BaseTestSuite) test).clearExcludeFilter();
+                    ((BaseTestSuite) test).clearIncludeFilter();
+                    ((BaseTestSuite) test).setIncludeFilter(mStrictIncludeFilters);
+                    if (test instanceof TestMappingSuiteRunner) {
+                        ((TestMappingSuiteRunner) test).clearTestGroup();
+                    }
+                } else if (test instanceof ITestFilterReceiver) {
+                    ITestFilterReceiver filterableTest = (ITestFilterReceiver) test;
+                    applyFiltersToTest(filterableTest);
+                }
             }
         }
         mSetupDone = true;
@@ -120,21 +154,37 @@ public final class GlobalTestFilter {
 
     /** Apply the global filters to the test. */
     public void applyFiltersToTest(ITestFilterReceiver filterableTest) {
-        Set<String> includeFilters = new LinkedHashSet<>(filterableTest.getIncludeFilters());
-        includeFilters.addAll(filtersFromGlobal(mIncludeFilters));
-        filterableTest.clearIncludeFilters();
-        filterableTest.addAllIncludeFilters(includeFilters);
+        if (mStrictIncludeFilters.isEmpty()) {
+            Set<String> includeFilters = new LinkedHashSet<>(filterableTest.getIncludeFilters());
+            includeFilters.addAll(filtersFromGlobal(mIncludeFilters));
+            filterableTest.clearIncludeFilters();
+            filterableTest.addAllIncludeFilters(includeFilters);
 
-        Set<String> excludeFilters = new LinkedHashSet<>(filterableTest.getExcludeFilters());
-        excludeFilters.addAll(filtersFromGlobal(mExcludeFilters));
-        filterableTest.clearExcludeFilters();
-        filterableTest.addAllExcludeFilters(excludeFilters);
+            Set<String> excludeFilters = new LinkedHashSet<>(filterableTest.getExcludeFilters());
+            excludeFilters.addAll(filtersFromGlobal(mExcludeFilters));
+            filterableTest.clearExcludeFilters();
+            filterableTest.addAllExcludeFilters(excludeFilters);
+        } else {
+            filterableTest.clearExcludeFilters();
+            filterableTest.clearIncludeFilters();
+            filterableTest.addAllIncludeFilters(filtersFromGlobal(mStrictIncludeFilters));
+        }
     }
 
     /** Apply global filters to the suite */
     public void applyFiltersToTest(BaseTestSuite suite) {
-        suite.setIncludeFilter(mIncludeFilters);
-        suite.setExcludeFilter(mExcludeFilters);
+        if (mStrictIncludeFilters.isEmpty()) {
+            suite.setIncludeFilter(mIncludeFilters);
+            suite.setExcludeFilter(mExcludeFilters);
+        } else {
+            CLog.d("Applying strict filters to suite.");
+            suite.clearExcludeFilter();
+            suite.clearIncludeFilter();
+            suite.setIncludeFilter(mStrictIncludeFilters);
+            if (suite instanceof TestMappingSuiteRunner) {
+                ((TestMappingSuiteRunner) suite).clearTestGroup();
+            }
+        }
         suite.reevaluateFilters();
     }
 
@@ -154,6 +204,8 @@ public final class GlobalTestFilter {
                         mIncludeFilters.addAll(splitStringFilters(rep.getValue()));
                     } else if (rep.getKey().equals(EXCLUDE_FILTER_OPTION)) {
                         mExcludeFilters.addAll(splitStringFilters(rep.getValue()));
+                    } else if (rep.getKey().equals(STRICT_INCLUDE_FILTER_OPTION)) {
+                        mStrictIncludeFilters.addAll(splitStringFilters(rep.getValue()));
                     } else {
                         CLog.w("Unexpected response key '%s' for global filters", rep.getKey());
                     }
@@ -175,13 +227,17 @@ public final class GlobalTestFilter {
 
     private Set<String> filtersFromGlobal(Set<String> filters) {
         Set<String> globalFilters = new LinkedHashSet<>();
-        filters.forEach(f->{
+        filters.forEach(
+                f -> {
                     SuiteTestFilter suiteFilter = SuiteTestFilter.createFrom(f);
                     if (!Strings.isNullOrEmpty(suiteFilter.getTest())) {
                         globalFilters.add(suiteFilter.getTest());
+                    } else if (!Strings.isNullOrEmpty(suiteFilter.getName())) {
+                        // For non-suite, if the test isn't present due to no module, fallback to
+                        // name
+                        globalFilters.add(suiteFilter.getName());
                     }
-                }
-        );
+                });
         return globalFilters;
     }
 }

@@ -25,6 +25,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
@@ -128,6 +129,7 @@ public class SandboxedInvocationExecutionTest {
         mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
 
         doReturn(new ByteArrayInputStreamSource("".getBytes())).when(mMockDevice).getLogcat();
+        when(mMockDevice.waitForDeviceAvailable()).thenReturn(true);
 
         mExecution = new SandboxedInvocationExecution();
         mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
@@ -219,7 +221,7 @@ public class SandboxedInvocationExecutionTest {
                 .saveLogData(any(), any(), any());
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         mInvocation.invoke(mContext, mConfig, mMockRescheduler, mMockListener);
     }
@@ -246,7 +248,7 @@ public class SandboxedInvocationExecutionTest {
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
         result.setExitCode(0);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         doReturn(new BuildInfo()).when(mMockProvider).getBuild();
 
@@ -298,7 +300,7 @@ public class SandboxedInvocationExecutionTest {
                 .saveLogData(any(), any(), any());
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         doReturn(new BuildInfo()).when(mMockProvider).getBuild();
 
@@ -355,7 +357,7 @@ public class SandboxedInvocationExecutionTest {
                 .saveLogData(any(), any(), any());
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         IBuildInfo info = new BuildInfo();
         doReturn(info).when(mMockProvider).getBuild();

@@ -88,7 +88,10 @@ public class AndroidJUnitTestTest {
                 new AndroidJUnitTest() {
                     @Override
                     IRemoteAndroidTestRunner createRemoteAndroidTestRunner(
-                            String packageName, String runnerName, IDevice device) {
+                            String packageName,
+                            String runnerName,
+                            IDevice device,
+                            TestInformation testInformation) {
                         return mMockRemoteRunner;
                     }
                 };

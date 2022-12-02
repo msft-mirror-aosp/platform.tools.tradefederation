@@ -41,6 +41,7 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -329,7 +330,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                                         getInitialIp(),
                                         getInitialUser(),
                                         getInitialDeviceNumOffset(),
-                                        attributes);
+                                        attributes,
+                                        mTestLogger);
                 if (mGceAvd != null) {
                     break;
                 }
@@ -341,7 +343,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
                 if (getOptions().useOxygen()) {
                     OxygenUtil util = new OxygenUtil();
-                    util.downloadLaunchFailureLogs(tse.getMessage(), mTestLogger);
+                    util.downloadLaunchFailureLogs(tse, mTestLogger);
                 }
             }
         }
@@ -420,7 +422,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     }
 
     @Override
-    public void recoverDevice() throws DeviceNotAvailableException {
+    public boolean recoverDevice() throws DeviceNotAvailableException {
         if (getGceSshMonitor() == null) {
             if (mTunnelInitFailed != null) {
                 // We threw before but was not reported, so throw the root cause here.
@@ -449,7 +451,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             }
         }
         // Then attempt regular recovery
-        super.recoverDevice();
+        return super.recoverDevice();
     }
 
     @Override
@@ -512,7 +514,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                     String.format(
                             "The GceAvdInfo of the device %s is already set, override is not"
                                     + " permitted. Current GceAvdInfo: %s",
-                            getSerialNumber(), mGceAvd));
+                            getSerialNumber(), mGceAvd),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
     }
 
@@ -545,9 +548,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
     /**
      * Returns the {@link com.android.tradefed.device.cloud.GceSshTunnelMonitor} of the device.
-     * Exposed for testing.
      */
-    protected GceSshTunnelMonitor getGceSshMonitor() {
+    public GceSshTunnelMonitor getGceSshMonitor() {
         return mGceSshMonitor;
     }
 

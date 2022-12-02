@@ -112,6 +112,21 @@ public class OxygenClient {
     }
 
     /**
+     * Check if no_wait_for_boot is specified in Oxygen lease request
+     *
+     * @param deviceOptions {@link TestDeviceOptions}
+     * @return true if no_wait_for_boot is specified
+     */
+    public Boolean noWaitForBootSpecified(TestDeviceOptions deviceOptions) {
+        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
+            if (arg.getKey().equals("no_wait_for_boot")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Attempt to lease a device by calling Oxygen client binary.
      *
      * @param b {@link IBuildInfo}
@@ -123,14 +138,17 @@ public class OxygenClient {
         List<String> gceDriverParams = deviceOptions.getGceDriverParams();
         oxygenClientArgs.add("-lease");
         // Add options from GceDriverParams
-        for (int i = 0; i < gceDriverParams.size(); i = i + 2) {
+        int i = 0;
+        while (i < gceDriverParams.size()) {
             String gceDriverOption = gceDriverParams.get(i);
             if (sGceDeviceParamsToOxygenMap.containsKey(gceDriverOption)) {
                 // add device build options in oxygen's way
                 oxygenClientArgs.add(sGceDeviceParamsToOxygenMap.get(gceDriverOption));
                 // add option's value
                 oxygenClientArgs.add(gceDriverParams.get(i + 1));
+                i++;
             }
+            i++;
         }
 
         // check if build info exists after added from GceDriverParams

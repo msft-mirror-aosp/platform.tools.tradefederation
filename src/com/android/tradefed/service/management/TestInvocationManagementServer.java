@@ -40,10 +40,10 @@ import com.proto.tradefed.invocation.TestInvocationManagementGrpc.TestInvocation
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -59,7 +59,7 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
     private final Server mServer;
     private final ICommandScheduler mCommandScheduler;
     private final DeviceManagementGrpcServer mDeviceReservationManager;
-    private Map<String, InvocationInformation> mTracker = new HashMap<>();
+    private Map<String, InvocationInformation> mTracker = new ConcurrentHashMap<>();
 
     public class InvocationInformation {
         public final long invocationId;
@@ -120,6 +120,9 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
     public void shutdown() throws InterruptedException {
         if (mServer != null) {
             CLog.d("Stopping invocation server.");
+            if (mTracker.size() > 0) {
+                CLog.d("Remaining tracked test invocations: %s", mTracker.size());
+            }
             mServer.shutdown();
             mServer.awaitTermination();
         }

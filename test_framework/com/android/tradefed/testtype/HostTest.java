@@ -34,6 +34,7 @@ import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -44,6 +45,7 @@ import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.host.PrettyTestEventLogger;
 import com.android.tradefed.testtype.junit4.CarryDnaeError;
+import com.android.tradefed.testtype.junit4.ExceptionThrowingRunnerWrapper;
 import com.android.tradefed.testtype.junit4.JUnit4ResultForwarder;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
@@ -702,7 +704,7 @@ public class HostTest
                         new TestTimeoutEnforcer(
                                 mTestCaseTimeout.toMillis(), TimeUnit.MILLISECONDS, listener);
             }
-            return JUnitRunUtil.runTest(listener, junitTest, className);
+            return JUnitRunUtil.runTest(listener, junitTest, className, mTestInfo);
         }
     }
 
@@ -722,12 +724,14 @@ public class HostTest
             // If no tests are remaining after filtering, it returns an Error Runner.
             long startTime = System.currentTimeMillis();
             listener.testRunStarted(className, checkRunner.testCount());
-            try {
+            try (CloseableTraceScope ignore = new CloseableTraceScope(className)) {
                 if (mCollectTestsOnly) {
                     fakeDescriptionExecution(checkRunner.getDescription(), list);
                 } else {
                     setTestObjectInformation(checkRunner);
-                    runnerCore.run(checkRunner);
+                    ExceptionThrowingRunnerWrapper runnerWrapper =
+                            new ExceptionThrowingRunnerWrapper(checkRunner, mTestInfo);
+                    runnerCore.run(runnerWrapper);
                 }
             } catch (CarryDnaeError e) {
                 throw e.getDeviceNotAvailableException();

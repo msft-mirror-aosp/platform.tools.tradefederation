@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -98,6 +99,11 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
             description = "The timeout for decompressing, unsparsing, and compressing the images.",
             isTimeVal = true)
     private long mImageConversionTimeoutMs = 20 * 60 * 1000;
+
+    @Option(
+            name = "compress-images",
+            description = "Whether to compress the images pushed to the device.")
+    private boolean mCompressImages = false;
 
     private boolean isDSURunning(ITestDevice device) throws DeviceNotAvailableException {
         CollectingOutputReceiver receiver = new CollectingOutputReceiver();
@@ -231,6 +237,9 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
                     try (FileOutputStream foStream = new FileOutputStream(dsuImageZip);
                             BufferedOutputStream boStream = new BufferedOutputStream(foStream);
                             ZipOutputStream out = new ZipOutputStream(boStream)) {
+                        if (!mCompressImages) {
+                            out.setLevel(Deflater.NO_COMPRESSION);
+                        }
                         out.putNextEntry(new ZipEntry(SYSTEM_IMAGE_NAME));
                         copyStreamsWithDeadline(
                                 systemImageStream,

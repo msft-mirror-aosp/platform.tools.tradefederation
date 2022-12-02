@@ -19,10 +19,12 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
+import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /** An implementation of {@link ProtoResultReporter} */
 public final class StreamProtoResultReporter extends ProtoResultReporter {
@@ -38,6 +40,13 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
     private Socket mReportSocket = null;
     private boolean mPrintedMessage = false;
 
+    private ResultWriterThread mResultWriterThread;
+    private ConcurrentLinkedQueue<TestRecord> mToBeSent = new ConcurrentLinkedQueue<>();
+
+    public StreamProtoResultReporter() {
+        setInlineRecordOfChildren(false);
+    }
+
     public void setProtoReportPort(Integer portValue) {
         mReportPort = portValue;
     }
@@ -49,52 +58,68 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
     @Override
     public void processStartInvocation(
             TestRecord invocationStartRecord, IInvocationContext context) {
-        writeRecordToSocket(invocationStartRecord);
+        mResultWriterThread = new ResultWriterThread();
+        mResultWriterThread.start();
+        mToBeSent.add(invocationStartRecord);
     }
 
     @Override
     public void processTestModuleStarted(TestRecord moduleStartRecord) {
-        writeRecordToSocket(moduleStartRecord);
+        mToBeSent.add(moduleStartRecord);
     }
 
     @Override
     public void processTestModuleEnd(TestRecord moduleRecord) {
-        writeRecordToSocket(moduleRecord);
+        mToBeSent.add(moduleRecord);
     }
 
     @Override
     public void processTestRunStarted(TestRecord runStartedRecord) {
-        writeRecordToSocket(runStartedRecord);
+        mToBeSent.add(runStartedRecord);
     }
 
     @Override
     public void processTestRunEnded(TestRecord runRecord, boolean moduleInProgress) {
-        writeRecordToSocket(runRecord);
+        mToBeSent.add(runRecord);
     }
 
     @Override
     public void processTestCaseStarted(TestRecord testCaseStartedRecord) {
-        writeRecordToSocket(testCaseStartedRecord);
+        mToBeSent.add(testCaseStartedRecord);
     }
 
     @Override
     public void processTestCaseEnded(TestRecord testCaseRecord) {
-        writeRecordToSocket(testCaseRecord);
+        mToBeSent.add(testCaseRecord);
     }
 
     @Override
     public void processFinalInvocationLogs(TestRecord invocationLogs) {
-        writeRecordToSocket(invocationLogs);
+        if (mResultWriterThread.mCancelled) {
+            writeRecordToSocket(invocationLogs);
+        } else {
+            mToBeSent.add(invocationLogs);
+        }
     }
 
     @Override
     public void processFinalProto(TestRecord finalRecord) {
         try {
-            writeRecordToSocket(finalRecord);
+            if (mResultWriterThread.mCancelled) {
+                writeRecordToSocket(finalRecord);
+            } else {
+                mToBeSent.add(finalRecord);
+            }
         } finally {
             // Upon invocation ended, trigger the end of the socket when the process finishes
             SocketFinisher thread = new SocketFinisher();
             Runtime.getRuntime().addShutdownHook(thread);
+            mResultWriterThread.mCancelled = true;
+            try {
+                mResultWriterThread.join();
+            } catch (InterruptedException e) {
+                CLog.e(e);
+            }
         }
     }
 
@@ -131,6 +156,37 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
         @Override
         public void run() {
             closeSocket();
+        }
+    }
+
+    /** Send events from the event queue */
+    private class ResultWriterThread extends Thread {
+
+        private boolean mCancelled = false;
+
+        public ResultWriterThread() {
+            super();
+            setName("ResultWriterThread");
+        }
+
+        @Override
+        public void run() {
+            while (!mCancelled) {
+                flushEvents();
+                if (!mCancelled) {
+                    RunUtil.getDefault().sleep(1000);
+                }
+            }
+            // Flush remaining events if any
+            flushEvents();
+        }
+
+        public void flushEvents() {
+            TestRecord record = mToBeSent.poll();
+            while (record != null) {
+                writeRecordToSocket(record);
+                record = mToBeSent.poll();
+            }
         }
     }
 }

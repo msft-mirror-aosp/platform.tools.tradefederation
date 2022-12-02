@@ -772,6 +772,9 @@ public class Configuration implements IConfiguration {
                     clonedConfig.getDeviceConfig().get(i).removeObjectType(objType);
                     for (Object o : listOfType) {
                         clonedConfig.getDeviceConfig().get(i).addSpecificConfig(o, objType);
+                        if (o instanceof IConfigurationReceiver) {
+                            ((IConfigurationReceiver) o).setConfiguration(clonedConfig);
+                        }
                     }
                 }
             } else {
@@ -1311,7 +1314,8 @@ public class Configuration implements IConfiguration {
                 CLog.d("Resolving only delegator object dynamic download.");
             } else if (options.getShardCount() != null
                     && options.getShardCount() > 1
-                    && options.getShardIndex() == null) {
+                    && options.getShardIndex() == null
+                    && !getCommandOptions().shouldUseSandboxing()) {
                 CLog.w("Skipping dynamic download due to local sharding detected.");
                 return;
             }
@@ -1604,6 +1608,13 @@ public class Configuration implements IConfiguration {
                 serializer,
                 COVERAGE_OPTIONS_TYPE_NAME,
                 getCoverageOptions(),
+                excludeFilters,
+                printDeprecatedOptions,
+                printUnchangedOptions);
+        ConfigurationUtil.dumpClassToXml(
+                serializer,
+                GLOBAL_FILTERS_TYPE_NAME,
+                getGlobalFilters(),
                 excludeFilters,
                 printDeprecatedOptions,
                 printUnchangedOptions);

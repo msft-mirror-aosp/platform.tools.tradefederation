@@ -112,6 +112,9 @@ public interface ICommandOptions {
     /** Sets whether or not to capture a bugreportz at the end of the invocation. */
     public void setBugreportzOnInvocationEnded(boolean takeBugreportz);
 
+    /** Returns whether or not conditional bugreport is disabled */
+    public boolean isConditionalBugreportDisabled();
+
     /**
      * Return the invocation timeout specified. 0 if no timeout to be used.
      */

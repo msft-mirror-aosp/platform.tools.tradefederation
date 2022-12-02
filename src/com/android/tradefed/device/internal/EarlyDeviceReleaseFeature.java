@@ -68,12 +68,16 @@ public class EarlyDeviceReleaseFeature
     public FeatureResponse execute(FeatureRequest featureRequest) {
         Map<String, String> deviceStatusMap = featureRequest.getArgsMap();
         Map<ITestDevice, FreeDeviceState> deviceStates = new LinkedHashMap<>();
+        int index = 0;
         for (Map.Entry<String, String> entry : deviceStatusMap.entrySet()) {
-            deviceStates.put(
-                    mTestInformation.getContext().getDevice(entry.getKey()),
-                    FreeDeviceState.valueOf(entry.getValue()));
+            ITestDevice device = mTestInformation.getContext().getDevice(entry.getKey());
+            if (device == null) {
+                device = mTestInformation.getContext().getDevices().get(index);
+            }
+            deviceStates.put(device, FreeDeviceState.valueOf(entry.getValue()));
+            index++;
         }
-
+        mTestInformation.getContext().markReleasedEarly();
         for (IScheduledInvocationListener listener : mScheduledInvocationListeners) {
             listener.releaseDevices(mTestInformation.getContext(), deviceStates);
         }

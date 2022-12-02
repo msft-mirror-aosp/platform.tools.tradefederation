@@ -54,6 +54,9 @@ public class InvocationMetricLogger {
         METADATA_RETRY_COUNT("metadata_retry_count", true),
         XTS_STAGE_TESTS_TIME("xts_stage_tests_time_ms", true),
         XTS_STAGE_TESTS_BYTES("xts_stage_tests_bytes", true),
+        XTS_PARTIAL_DOWNLOAD_SUCCESS_COUNT("xts_partial_download_success_count", true),
+        XTS_PARTIAL_DOWNLOAD_UNSUPPORTED_FILTER_FALLBACK_COUNT(
+                "xts_partial_download_unsupported_filter_fallback_count", true),
         XTS_PARTIAL_DOWNLOAD_FALLBACK_COUNT("xts_partial_download_fallback_count", true),
         XTS_PARTIAL_DOWNLOAD_TOTAL_COUNT("xts_partial_download_total_count", true),
         // -- Disk memory usage --
@@ -165,6 +168,7 @@ public class InvocationMetricLogger {
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
         INVOCATION_START("tf_invocation_start_timestamp", false),
+        LOAD_TEST_CONFIGS_TIME("load_test_configs_time_ms", true),
         // Track the way of requesting Oxygen device lease/release.
         OXYGEN_DEVICE_LEASE_THROUGH_ACLOUD_COUNT("oxygen_device_lease_through_acloud_count", true),
         OXYGEN_DEVICE_RELEASE_THROUGH_ACLOUD_COUNT(
@@ -189,6 +193,7 @@ public class InvocationMetricLogger {
         FLASHING_FROM_FASTBOOTD("flashing_from_fastbootd", true),
         FLASHING_TIME("flashing_time_ms", true),
         FLASHING_PERMIT_LATENCY("flashing_permit_latency_ms", true),
+        FLASHING_METHOD("flashing_method", false),
         DOWNLOAD_PERMIT_LATENCY("download_permit_latency_ms", true),
         // Unzipping metrics
         UNZIP_TESTS_DIR_TIME("unzip_tests_dir_time_ms", true),
@@ -200,6 +205,7 @@ public class InvocationMetricLogger {
         TEARDOWN_START("tf_teardown_start_timestamp", false),
         TEARDOWN_END("tf_teardown_end_timestamp", false),
         TEARDOWN_PAIR("tf_teardown_pair_timestamp", true),
+        TEST_TEARDOWN_PAIR("tf_test_teardown_pair_timestamp", true),
 
         INVOCATION_END("tf_invocation_end_timestamp", false),
 
@@ -219,6 +225,21 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_TIME("cas_download_time_ms", true),
         // Records the wait time caused by CAS downloader concurrency limitation.
         CAS_DOWNLOAD_WAIT_TIME("cas_download_wait_time_ms", true),
+        // Records cache hit metrics
+        CAS_DOWNLOAD_HOT_BYTES("cas_download_hot_bytes", true),
+        CAS_DOWNLOAD_COLD_BYTES("cas_download_cold_bytes", true),
+
+        // Download Cache
+        CACHE_HIT_COUNT("cache_hit_count", true),
+
+        // CF Cache metrics
+        CF_CACHE_WAIT_TIME("cf_cache_wait_time_sec", false),
+        CF_ARTIFACTS_FETCH_SOURCE("cf_artifacts_fetch_source", false),
+
+        // Ab downloader metrics
+        AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
+
+        TOTAL_TEST_COUNT("total_test_count", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
@@ -227,6 +248,7 @@ public class InvocationMetricLogger {
         start_logcat("start_logcat", true),
         pre_sharding_required_setup("pre_sharding_required_setup", true),
         sharding("sharding", true),
+        pre_multi_preparer("pre_multi_preparer", true),
         lab_setup("lab_setup", true),
         test_setup("test_setup", true),
         test_execution("test_execution", true),
@@ -235,6 +257,7 @@ public class InvocationMetricLogger {
         test_teardown("test_teardown", true),
         test_cleanup("test_cleanup", true),
         log_and_release_device("log_and_release_device", true),
+        invocation_events_processing("invocation_events_processing", true),
         ;
 
         private final String mKeyName;
