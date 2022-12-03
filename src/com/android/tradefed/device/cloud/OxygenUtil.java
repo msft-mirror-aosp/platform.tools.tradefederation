@@ -81,21 +81,10 @@ public class OxygenUtil {
             // Also include the message from the internal cause.
             errorMessage = String.format("%s %s", errorMessage, error.getCause().getMessage());
         }
-        downloadLaunchFailureLogs(errorMessage, logger);
-    }
 
-    /**
-     * Download error logs from GCS when Oxygen failed to launch a virtual device.
-     *
-     * <p>TODO(dshi): Remove this method after GceBootTest is updated.
-     *
-     * @param error The error message returned from Oxygen service
-     * @param logger The {@link ITestLogger} where to log the file
-     */
-    public void downloadLaunchFailureLogs(String error, ITestLogger logger) {
-        CLog.d("Downloading device launch failure logs based on error message: %s", error);
+        CLog.d("Downloading device launch failure logs based on error message: %s", errorMessage);
         Pattern pattern = Pattern.compile(".*/storage/browser/(.*)\\?&project=.*", Pattern.DOTALL);
-        Matcher matcher = pattern.matcher(error);
+        Matcher matcher = pattern.matcher(errorMessage);
         if (!matcher.find()) {
             CLog.d("Error message doesn't contain expected GCS link.");
             return;
