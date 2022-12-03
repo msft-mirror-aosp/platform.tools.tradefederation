@@ -352,7 +352,7 @@ public class CommonLogRemoteFileUtil {
         try {
             File zipTombstones = ZipUtil.createZip(tombstonesDir);
             try (InputStreamSource source = new FileInputStreamSource(zipTombstones, true)) {
-                testLogger.testLog(TOMBSTONES_ZIP_NAME, LogDataType.ZIP, source);
+                testLogger.testLog(TOMBSTONES_ZIP_NAME, LogDataType.TOMBSTONEZ, source);
             }
         } catch (IOException e) {
             CLog.e("Failed to zip the tombstones:");
