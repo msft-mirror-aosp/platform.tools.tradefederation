@@ -29,6 +29,7 @@ import com.proto.tradefed.feature.PartResponse;
 public class GlobalFilterGetter implements IRemoteFeature, IConfigurationReceiver {
 
     public static final String GLOBAL_FILTER_GETTER = "getGlobalFilters";
+    private static final String DELIMITER = "+,";
 
     private IConfiguration mConfig;
 
@@ -49,21 +50,25 @@ public class GlobalFilterGetter implements IRemoteFeature, IConfigurationReceive
             MultiPartResponse.Builder multiPartBuilder = MultiPartResponse.newBuilder();
             multiPartBuilder.addResponsePart(
                     PartResponse.newBuilder()
+                            .setKey(GlobalTestFilter.DELIMITER_NAME)
+                            .setValue(DELIMITER));
+            multiPartBuilder.addResponsePart(
+                    PartResponse.newBuilder()
                             .setKey(GlobalTestFilter.INCLUDE_FILTER_OPTION)
                             .setValue(
-                                    Joiner.on(",")
+                                    Joiner.on(DELIMITER)
                                             .join(mConfig.getGlobalFilters().getIncludeFilters())));
             multiPartBuilder.addResponsePart(
                     PartResponse.newBuilder()
                             .setKey(GlobalTestFilter.EXCLUDE_FILTER_OPTION)
                             .setValue(
-                                    Joiner.on(",")
+                                    Joiner.on(DELIMITER)
                                             .join(mConfig.getGlobalFilters().getExcludeFilters())));
             multiPartBuilder.addResponsePart(
                     PartResponse.newBuilder()
                             .setKey(GlobalTestFilter.STRICT_INCLUDE_FILTER_OPTION)
                             .setValue(
-                                    Joiner.on(",")
+                                    Joiner.on(DELIMITER)
                                             .join(
                                                     mConfig.getGlobalFilters()
                                                             .getStrictIncludeFilters())));
