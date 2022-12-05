@@ -121,6 +121,12 @@ public class TestDeviceOptions {
             + "to be available aka fully boot.")
     private long mAvailableTimeout = 6 * 60 * 1000;
 
+    @Option(
+            name = "adb-root-unavailable-timeout",
+            description = "time in ms to wait for a device to become unavailable after adb root.",
+            isTimeVal = true)
+    private long mAdbRootUnavailableTimeout = 2 * 1000;
+
     @Option(name = "conn-check-url",
             description = "default URL to be used for connectivity checks.")
     private String mConnCheckUrl = "http://www.google.com";
@@ -514,6 +520,21 @@ public class TestDeviceOptions {
      */
     public long getAvailableTimeout() {
         return mAvailableTimeout;
+    }
+
+    /**
+     * @return the time in ms to wait for a device to become unavailable after adb root.
+     */
+    public long getAdbRootUnavailableTimeout() {
+        return mAdbRootUnavailableTimeout;
+    }
+
+    /**
+     * @param adbRootUnavailableTimeout time in ms to wait for a device to become unavailable after
+     *     adb root.
+     */
+    public void setAdbRootUnavailableTimeout(long adbRootUnavailableTimeout) {
+        mAdbRootUnavailableTimeout = adbRootUnavailableTimeout;
     }
 
     /**
