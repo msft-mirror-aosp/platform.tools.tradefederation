@@ -3905,7 +3905,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             for (int i = 1; i <= attempts; i++) {
                 String output = executeAdbCommand("root");
                 // wait for device to disappear from adb
-                boolean res = waitForDeviceNotAvailable("root", 2 * 1000);
+                boolean res =
+                        waitForDeviceNotAvailable(
+                                "root", getOptions().getAdbRootUnavailableTimeout());
                 if (!res && TestDeviceState.ONLINE.equals(getDeviceState())) {
                     if (isAdbRoot()) {
                         return true;
