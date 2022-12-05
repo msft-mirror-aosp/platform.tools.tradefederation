@@ -45,6 +45,7 @@ public final class GlobalTestFilter {
     public static final String INCLUDE_FILTER_OPTION = "include-filter";
     public static final String EXCLUDE_FILTER_OPTION = "exclude-filter";
     public static final String STRICT_INCLUDE_FILTER_OPTION = "strict-include-filter";
+    public static final String DELIMITER_NAME = "delimiter";
 
     @Option(
             name = INCLUDE_FILTER_OPTION,
@@ -198,14 +199,24 @@ public final class GlobalTestFilter {
                     mClient.triggerFeature(
                             GlobalFilterGetter.GLOBAL_FILTER_GETTER, new HashMap<>());
             if (globalFilters.hasMultiPartResponse()) {
+                String delimiter = ",";
+                for (PartResponse rep :
+                        globalFilters.getMultiPartResponse().getResponsePartList()) {
+                    if (rep.getKey().equals(DELIMITER_NAME)) {
+                        delimiter = rep.getValue().trim();
+                    }
+                }
+
                 for (PartResponse rep :
                         globalFilters.getMultiPartResponse().getResponsePartList()) {
                     if (rep.getKey().equals(INCLUDE_FILTER_OPTION)) {
-                        mIncludeFilters.addAll(splitStringFilters(rep.getValue()));
+                        mIncludeFilters.addAll(splitStringFilters(delimiter, rep.getValue()));
                     } else if (rep.getKey().equals(EXCLUDE_FILTER_OPTION)) {
-                        mExcludeFilters.addAll(splitStringFilters(rep.getValue()));
+                        mExcludeFilters.addAll(splitStringFilters(delimiter, rep.getValue()));
                     } else if (rep.getKey().equals(STRICT_INCLUDE_FILTER_OPTION)) {
-                        mStrictIncludeFilters.addAll(splitStringFilters(rep.getValue()));
+                        mStrictIncludeFilters.addAll(splitStringFilters(delimiter, rep.getValue()));
+                    } else if (rep.getKey().equals(DELIMITER_NAME)) {
+                        // Ignore
                     } else {
                         CLog.w("Unexpected response key '%s' for global filters", rep.getKey());
                     }
@@ -218,11 +229,11 @@ public final class GlobalTestFilter {
         }
     }
 
-    private List<String> splitStringFilters(String value) {
+    private List<String> splitStringFilters(String delimiter, String value) {
         if (Strings.isNullOrEmpty(value)) {
             return new ArrayList<String>();
         }
-        return Arrays.asList(value.split(","));
+        return Arrays.asList(value.split(delimiter));
     }
 
     private Set<String> filtersFromGlobal(Set<String> filters) {
