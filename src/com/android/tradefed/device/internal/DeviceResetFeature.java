@@ -93,8 +93,19 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
         try {
             mTestInformation.setActiveDeviceIndex(index);
             if (mTestInformation.getDevice() instanceof RemoteAndroidVirtualDevice) {
+                int offset =
+                        ((RemoteAndroidVirtualDevice) mTestInformation.getDevice())
+                                        .getAvdInfo()
+                                        .hostAndPort()
+                                        .getPort()
+                                - 6520;
+                String user =
+                        ((RemoteAndroidVirtualDevice) mTestInformation.getDevice())
+                                .getAvdInfo()
+                                .instanceName();
                 CommandResult powerwashResult =
-                        ((RemoteAndroidVirtualDevice) mTestInformation.getDevice()).powerwash();
+                        ((RemoteAndroidVirtualDevice) mTestInformation.getDevice())
+                                .powerwashGce(user, offset);
                 if (!CommandStatus.SUCCESS.equals(powerwashResult.getStatus())) {
                     throw new DeviceNotAvailableException(
                             String.format(
