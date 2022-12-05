@@ -52,6 +52,8 @@ interface DeviceAllocationEventHandler {
                     return DeviceAllocationState.Unavailable;
                 case FORCE_AVAILABLE:
                     return DeviceAllocationState.Available;
+                case FASTBOOT_DETECTED:
+                    return DeviceAllocationState.Available;
                 default:
                     return DeviceAllocationState.Unknown;
             }
