@@ -1489,7 +1489,8 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    public File pullFile(String remoteFilePath) throws DeviceNotAvailableException {
+                    public File pullFile(String remoteFilePath, int userId)
+                            throws DeviceNotAvailableException {
                         try {
                             // Return an empty zip file for the partial bugreportz
                             return FileUtil.createTempFile("bugreportz-test", ".zip");
