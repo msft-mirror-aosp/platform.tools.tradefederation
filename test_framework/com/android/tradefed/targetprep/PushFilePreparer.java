@@ -474,6 +474,10 @@ public class PushFilePreparer extends BaseTargetPreparer
             for (File f : getPushSpecs(null).values()) {
                 if (!f.exists()) {
                     deps.add(f.getName());
+                } else {
+                    CLog.d(
+                            "%s detected as existing. Not reported as dependency.",
+                            f.getAbsolutePath());
                 }
             }
         } catch (TargetSetupError e) {
