@@ -59,6 +59,10 @@ public class InvocationMetricLogger {
                 "xts_partial_download_unsupported_filter_fallback_count", true),
         XTS_PARTIAL_DOWNLOAD_FALLBACK_COUNT("xts_partial_download_fallback_count", true),
         XTS_PARTIAL_DOWNLOAD_TOTAL_COUNT("xts_partial_download_total_count", true),
+        SANDBOX_JAR_STAGING_PARTIAL_DOWNLOAD_FEATURE_COUNT(
+                "sandbox_jar_staging_partial_download_FEATURE_count", true),
+        SANDBOX_JAR_STAGING_PARTIAL_DOWNLOAD_SUCCESS_COUNT(
+                "sandbox_jar_staging_partial_download_SUCCESS_count", true),
         // -- Disk memory usage --
         // Approximate peak disk space usage of the invocation
         // Represent files that would usually live for the full invocation (min usage)

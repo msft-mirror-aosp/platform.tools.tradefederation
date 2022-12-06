@@ -31,6 +31,8 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.UniqueMultiMap;
 
+import com.google.common.base.Joiner;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,6 +43,7 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -269,5 +272,59 @@ public class TestDiscoveryInvokerTest {
                 testDependencies
                         .get(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY)
                         .contains(TEST_MODULE_2_NAME));
+    }
+
+    /**
+     * Test the invocation when command line args does not contain a config name but default config
+     * name is updated.
+     */
+    @Test
+    public void testTestMappingDependencyDiscovery() throws Exception {
+        mTestDiscoveryInvoker =
+                new TestDiscoveryInvoker(mConfiguration, DEFAULT_TEST_CONFIG_NAME, mRootDir) {
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mRunUtil;
+                    }
+                };
+        mTestDiscoveryInvoker.setTestDir(mRootDir);
+        String successStdout = "{\"TestModules\":[" + TEST_MODULE_1_NAME + "]}";
+        String commandLine =
+                String.format(
+                        "abcd/template/efgh --additional-files-filter .*-tests_list.zip"
+                            + " --additional-files-filter .*/test_mappings.zip --template:map"
+                            + " test=suite/test_mapping_suite --test-arg"
+                            + " com.android.something.testtype.SomeTest:shell-timeout:60000"
+                            + " --force-test-mapping-module SomeHostTestCases --branch, git_master"
+                            + " --build-flavor some_phone-userdebug --build-id 12345");
+        when(mConfiguration.getCommandLine()).thenReturn(commandLine);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                List<String> args = new ArrayList<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    args.add(mock.getArgument(i));
+                                }
+
+                                String argString = Joiner.on(" ").join(args);
+                                assertTrue(argString.endsWith(commandLine));
+
+                                CommandResult res = new CommandResult();
+                                res.setExitCode(0);
+                                res.setStatus(CommandStatus.SUCCESS);
+                                res.setStdout(successStdout);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        Map<String, List<String>> testDependencies =
+                mTestDiscoveryInvoker.discoverTestMappingDependencies();
+        assertEquals(testDependencies.size(), 1);
+        assertTrue(
+                testDependencies
+                        .get(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY)
+                        .contains(TEST_MODULE_1_NAME));
     }
 }

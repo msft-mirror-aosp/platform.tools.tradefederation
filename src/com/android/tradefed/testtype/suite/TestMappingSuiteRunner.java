@@ -146,6 +146,9 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "provide a feasibility for test mapping sampling.")
     private boolean mAllowEmptyTests = false;
 
+    /** Flag to indicate whether the test mapping suite runner is in test discovery mode. */
+    private Boolean mIsTestDiscovery = false;
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
@@ -155,6 +158,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
 
     public TestMappingSuiteRunner() {
         setSkipjarLoading(true);
+    }
+
+    /** Set the test discovery mode flag. */
+    public void setTestDiscovery(Boolean testDiscovery) {
+        mIsTestDiscovery = testDiscovery;
     }
 
     /**
@@ -247,6 +255,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             mTestGroup = null;
             mTestMappingPaths.clear();
             mUseTestMappingPath = false;
+        }
+
+        // In test discovery mode, abort here and the return value should not be used.
+        if (mIsTestDiscovery) {
+            return null;
         }
 
         // load all the configurations with include-filter injected.
