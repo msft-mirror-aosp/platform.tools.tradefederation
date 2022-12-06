@@ -2658,10 +2658,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public InputStreamSource getLogcat() {
         if (mLogcatReceiver == null) {
             if (!(getIDevice() instanceof StubDevice)) {
-                CLog.w(
-                        "Not capturing logcat for %s in background, returning a logcat dump",
-                        getSerialNumber());
-                return getLogcatDump();
+                TestDeviceState state = getDeviceState();
+                if (!TestDeviceState.ONLINE.equals(state)) {
+                    CLog.w("Skipping logcat capture, no buffer and device state is '%s'", state);
+                } else {
+                    CLog.w(
+                            "Not capturing logcat for %s in background, returning a logcat dump",
+                            getSerialNumber());
+                    return getLogcatDump();
+                }
             }
             return new ByteArrayInputStreamSource(new byte[0]);
         } else {
