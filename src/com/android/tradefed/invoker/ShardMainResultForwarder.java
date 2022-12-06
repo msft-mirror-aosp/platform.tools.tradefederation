@@ -288,7 +288,7 @@ public class ShardMainResultForwarder extends ResultForwarder implements ILogSav
                             long newVal = baseValue + Long.parseLong(val);
                             mInvocationMetrics.put(key.toString(), newVal);
                         } catch (NumberFormatException e) {
-                            CLog.e(e);
+                            // Ignored, it's just not a number
                         }
                     } else {
                         main.addInvocationAttribute(key.toString(), val);
