@@ -217,7 +217,7 @@ public class TestInvocationMultiTest {
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
         verify(mMockLogRegistry, times(2)).unregisterLogger();
-        verify(mMockConfig, times(2)).getTestInvocationListeners();
+        verify(mMockConfig, times(1)).getTestInvocationListeners();
         verify(mMockConfig, times(3)).getConfigurationDescription();
         verify(mMockConfig).resolveDynamicOptions(Mockito.any());
         verify(mMockConfig).cleanConfigurationData();
@@ -306,7 +306,7 @@ public class TestInvocationMultiTest {
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
         verify(mMockLogRegistry, times(2)).unregisterLogger();
-        verify(mMockConfig, times(2)).getTestInvocationListeners();
+        verify(mMockConfig, times(1)).getTestInvocationListeners();
         verify(mMockConfig, times(3)).getConfigurationDescription();
         verify(mDevice1).clearLogcat();
         verify(mDevice2).clearLogcat();
@@ -375,7 +375,7 @@ public class TestInvocationMultiTest {
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
         verify(mMockLogRegistry, times(2)).unregisterLogger();
-        verify(mMockConfig, times(2)).getTestInvocationListeners();
+        verify(mMockConfig, times(1)).getTestInvocationListeners();
         verify(mMockConfig, times(3)).getConfigurationDescription();
         verify(mMockConfig).resolveDynamicOptions(Mockito.any());
         verify(mMockConfig).cleanConfigurationData();
@@ -450,7 +450,7 @@ public class TestInvocationMultiTest {
         verify(mMockLogger, times(2)).closeLog();
         verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
         verify(mMockLogRegistry, times(2)).unregisterLogger();
-        verify(mMockConfig, times(2)).getTestInvocationListeners();
+        verify(mMockConfig, times(1)).getTestInvocationListeners();
         verify(mMockConfig, times(3)).getConfigurationDescription();
         verify(mMockConfig).resolveDynamicOptions(Mockito.any());
         verify(mMockConfig).cleanConfigurationData();
