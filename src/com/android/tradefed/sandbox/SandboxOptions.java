@@ -45,6 +45,7 @@ public final class SandboxOptions {
     private static final String START_AVD_IN_PARENT = "avd-in-parent";
     private static final String PARALLEL_SANDBOX_SETUP = "parallel-sandbox-setup";
     private static final String UPDATED_FLAG_ORDER = "update-flag-orders";
+    private static final String SANDBOX_USE_TEST_DISCOVERY = "sandbox-use-test-discovery";
 
     @Option(
         name = TF_LOCATION,
@@ -136,6 +137,12 @@ public final class SandboxOptions {
     @Option(name = UPDATED_FLAG_ORDER, description = "Feature flag to test safely new flags order")
     private boolean mNewFlagOrder = true;
 
+    @Option(
+            name = SANDBOX_USE_TEST_DISCOVERY,
+            description =
+                    "Feature flag to use observatory to discovery test modules for staging jars")
+    private boolean mUseTestDiscovery = false;
+
     /**
      * Returns the provided directories containing the Trade Federation version to use for
      * sandboxing the run.
@@ -219,5 +226,10 @@ public final class SandboxOptions {
     /** Returns whether or not to use the new flag order */
     public boolean shouldUseNewFlagOrder() {
         return mNewFlagOrder;
+    }
+
+    /** Returns whether or not to use tradefed observatory to optimize jar staging */
+    public boolean shouldUseTestDiscovery() {
+        return mUseTestDiscovery;
     }
 }
