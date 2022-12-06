@@ -18,10 +18,12 @@ package com.android.tradefed.device.metric;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
+import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.PerfettoTraceRecorder;
 
@@ -36,7 +38,10 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
     private PerfettoTraceRecorder mPerfettoTraceRecorder = new PerfettoTraceRecorder();
 
     @Override
-    public void onTestRunStart(DeviceMetricData runData) throws DeviceNotAvailableException {
+    public ITestInvocationListener init(
+            IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
+        super.init(context, listener);
         for (ITestDevice device : getRealDevices()) {
             try {
                 mPerfettoTraceRecorder.startTrace(device);
@@ -46,6 +51,7 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
                         device.getSerialNumber(), e.getMessage());
             }
         }
+        return this;
     }
 
     @Override
