@@ -2863,7 +2863,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     CLog.d("bugreport entry: %s", name);
                     // Only get left-over zipped data to avoid confusing data types.
                     if (name.endsWith(".zip")) {
-                        File pulledZip = pullFile(BUGREPORTZ_TMP_PATH + name);
+                        // Pull always on user 0 to avoid content provider and
+                        // let the path resolve itself
+                        File pulledZip = pullFile(BUGREPORTZ_TMP_PATH + name, 0);
                         try {
                             // Validate the zip before returning it.
                             if (ZipUtil.isZipFileValid(pulledZip, false)) {
