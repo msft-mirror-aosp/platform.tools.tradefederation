@@ -222,7 +222,7 @@ public final class GlobalTestFilter {
                     }
                 }
             } else {
-                CLog.w("Unexpected response for global filters");
+                CLog.w("Unexpected response for global filters: %s", globalFilters);
             }
         } finally {
             mClient.close();
