@@ -27,6 +27,7 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
+import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 import com.android.tradefed.util.MultiMap;
 
 import com.google.common.collect.ImmutableSet;
@@ -36,10 +37,13 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -226,5 +230,52 @@ public class TestDiscoveryExecutorTest {
                 "{\"TestModules\":[\"TestModule1\",\"TestModule2\",\"TestModule3\"],"
                         + "\"TestDependencies\":[\"someapk.apk\"]}";
         assertEquals(expected, output);
+    }
+
+    /** Test the executor to discover test modules from tests. */
+    @Test
+    public void testDiscoverTestMappingSuiteRunner() throws Exception {
+        // Mock to return some include filters
+        TestMappingSuiteRunner test1 = Mockito.mock(TestMappingSuiteRunner.class);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                Set<String> includeFilters1 = new HashSet<>();
+                                includeFilters1.add("TestModule1 class#function1");
+                                includeFilters1.add("TestModule2");
+                                return includeFilters1;
+                            }
+                        })
+                .when(test1)
+                .getIncludeFilter();
+
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return new LinkedHashMap<>();
+                            }
+                        })
+                .when(test1)
+                .loadTests();
+
+        List<IRemoteTest> testList = new ArrayList<>();
+        testList.add(test1);
+        when(mMockedConfiguration.getTests()).thenReturn(testList);
+
+        try {
+            String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
+            String expected =
+                    "{\"TestModules\":[\"TestModule1\",\"TestModule2\"],\"TestDependencies\":[]}";
+            assertEquals(expected, output);
+
+            // In test discovery, the loadTest() should have been called exactly once
+            Mockito.verify(test1, Mockito.times(1)).loadTests();
+            // In test discovery, the flag should have been set to true
+            Mockito.verify(test1, Mockito.times(1)).setTestDiscovery(true);
+        } catch (Exception e) {
+            fail(String.format("Should not throw exception %s", e.getMessage()));
+        }
     }
 }

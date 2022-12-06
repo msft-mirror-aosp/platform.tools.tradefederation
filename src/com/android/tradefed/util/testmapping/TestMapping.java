@@ -19,6 +19,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.observatory.TestDiscoveryInvoker;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ZipUtil2;
@@ -411,7 +412,12 @@ public class TestMapping {
         Set<String> keywords,
         List<String> extraZipNames) {
         Set<TestInfo> tests = new HashSet<TestInfo>();
-        File zipFile = buildInfo.getFile(TEST_MAPPINGS_ZIP);
+        File zipFile;
+        if (buildInfo == null) {
+            zipFile = lookupTestMappingZip(TEST_MAPPINGS_ZIP);
+        } else {
+            zipFile = buildInfo.getFile(TEST_MAPPINGS_ZIP);
+        }
         File testMappingsDir = extractTestMappingsZip(zipFile);
         Stream<Path> stream = null;
         try {
@@ -646,7 +652,12 @@ public class TestMapping {
         throws IOException {
         Set<String> baseNames = getTestMappingSources(baseFile);
         for (String zipName : extraZips) {
-            File zipFile = buildInfo.getFile(zipName);
+            File zipFile;
+            if (buildInfo == null) {
+                zipFile = lookupTestMappingZip(zipName);
+            } else {
+                zipFile = buildInfo.getFile(zipName);
+            }
             if (zipFile == null) {
                 throw new HarnessRuntimeException(
                         String.format("Missing %s in the BuildInfo file.", zipName),
@@ -701,5 +712,32 @@ public class TestMapping {
             }
         }
         return fileNames;
+    }
+
+    /**
+     * Helper to locate the test mapping zip file in the test directory. Will match file in test
+     * directory, like test_mapping_174371283.zip to "test_mapping.zip"
+     *
+     * @param zipName The original name of a test mappings zip, like test_mapping.zip or
+     *     test_mapping_platform.zip
+     * @return The test mapping file, or null if unable to locate one.
+     */
+    private static File lookupTestMappingZip(String zipName) {
+        String testDirPath = System.getenv(TestDiscoveryInvoker.TEST_DIRECTORY_ENV_VARIABLE_KEY);
+        if (testDirPath == null) {
+            return null;
+        }
+        File testDir = new File(testDirPath);
+        String zipRegex = zipName.replace(".zip", "_[^_]*\\.zip");
+        File testMappingZipFile = FileUtil.findFile(testDir, zipRegex);
+        CLog.i(
+                String.format(
+                        "Found test mapping zip file %s for name %s", testMappingZipFile, zipName));
+        if (testMappingZipFile == null) {
+            throw new HarnessRuntimeException(
+                    String.format("Unable to locate the test mapping zip file %s", zipName),
+                    InfraErrorIdentifier.TEST_MAPPING_FILE_NOT_EXIST);
+        }
+        return testMappingZipFile;
     }
 }
