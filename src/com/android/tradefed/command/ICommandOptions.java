@@ -19,6 +19,7 @@ package com.android.tradefed.command;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.util.UniqueMultiMap;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -265,4 +266,7 @@ public interface ICommandOptions {
 
     /** Returns whether or not invocation tracing is enabled. */
     public boolean isTracingEnabled();
+
+    /** Returns the jdk folder to use when forking execution in a subprocess. */
+    public File getJdkFolderForSubprocess();
 }
