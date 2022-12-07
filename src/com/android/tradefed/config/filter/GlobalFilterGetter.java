@@ -20,6 +20,7 @@ import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.service.IRemoteFeature;
 
 import com.google.common.base.Joiner;
+import com.proto.tradefed.feature.ErrorInfo;
 import com.proto.tradefed.feature.FeatureRequest;
 import com.proto.tradefed.feature.FeatureResponse;
 import com.proto.tradefed.feature.MultiPartResponse;
@@ -30,6 +31,7 @@ public class GlobalFilterGetter implements IRemoteFeature, IConfigurationReceive
 
     public static final String GLOBAL_FILTER_GETTER = "getGlobalFilters";
     private static final String DELIMITER = "+,";
+    private static final String ESCAPED_DELIMITER = "\\+,";
 
     private IConfiguration mConfig;
 
@@ -51,7 +53,7 @@ public class GlobalFilterGetter implements IRemoteFeature, IConfigurationReceive
             multiPartBuilder.addResponsePart(
                     PartResponse.newBuilder()
                             .setKey(GlobalTestFilter.DELIMITER_NAME)
-                            .setValue(DELIMITER));
+                            .setValue(ESCAPED_DELIMITER));
             multiPartBuilder.addResponsePart(
                     PartResponse.newBuilder()
                             .setKey(GlobalTestFilter.INCLUDE_FILTER_OPTION)
@@ -73,6 +75,9 @@ public class GlobalFilterGetter implements IRemoteFeature, IConfigurationReceive
                                                     mConfig.getGlobalFilters()
                                                             .getStrictIncludeFilters())));
             responseBuilder.setMultiPartResponse(multiPartBuilder);
+        } else {
+            responseBuilder.setErrorInfo(
+                    ErrorInfo.newBuilder().setErrorTrace("Configuration not set."));
         }
         return responseBuilder.build();
     }

@@ -62,6 +62,7 @@ import com.android.tradefed.config.OptionUpdateRuleTest;
 import com.android.tradefed.config.RetryConfigurationFactoryTest;
 import com.android.tradefed.config.SandboxConfigurationFactoryTest;
 import com.android.tradefed.config.filter.CommandOptionsGetterTest;
+import com.android.tradefed.config.filter.GlobalFilterGetterTest;
 import com.android.tradefed.config.filter.OptionFetcherTest;
 import com.android.tradefed.config.gcs.GCSConfigurationFactoryTest;
 import com.android.tradefed.config.gcs.GCSConfigurationServerTest;
@@ -525,6 +526,7 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // config.filter
     CommandOptionsGetterTest.class,
+    GlobalFilterGetterTest.class,
     OptionFetcherTest.class,
 
     // config.gcs
