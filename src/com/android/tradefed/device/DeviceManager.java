@@ -577,6 +577,15 @@ public class DeviceManager implements IDeviceManager {
         }
     }
 
+    public void addFastbootDevice(FastbootDevice fastbootDevice) {
+        IManagedTestDevice d = mManagedDeviceList.findOrCreateFastboot(fastbootDevice);
+        if (d != null) {
+            mManagedDeviceList.handleDeviceEvent(d, DeviceEvent.FASTBOOT_DETECTED);
+        } else {
+            CLog.e("Could not create stub device");
+        }
+    }
+
     public void addAvailableDevice(IDevice stubDevice) {
         IManagedTestDevice d = mManagedDeviceList.findOrCreate(stubDevice);
         if (d != null) {
@@ -1484,7 +1493,7 @@ public class DeviceManager implements IDeviceManager {
                             d.setFastbootd(true);
                         }
                         if (mGlobalDeviceFilter != null && mGlobalDeviceFilter.matches(d)) {
-                            addAvailableDevice(d);
+                            addFastbootDevice(d);
                         }
                     }
                 }

@@ -2658,10 +2658,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public InputStreamSource getLogcat() {
         if (mLogcatReceiver == null) {
             if (!(getIDevice() instanceof StubDevice)) {
-                CLog.w(
-                        "Not capturing logcat for %s in background, returning a logcat dump",
-                        getSerialNumber());
-                return getLogcatDump();
+                TestDeviceState state = getDeviceState();
+                if (!TestDeviceState.ONLINE.equals(state)) {
+                    CLog.w("Skipping logcat capture, no buffer and device state is '%s'", state);
+                } else {
+                    CLog.w(
+                            "Not capturing logcat for %s in background, returning a logcat dump",
+                            getSerialNumber());
+                    return getLogcatDump();
+                }
             }
             return new ByteArrayInputStreamSource(new byte[0]);
         } else {
@@ -2863,7 +2868,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     CLog.d("bugreport entry: %s", name);
                     // Only get left-over zipped data to avoid confusing data types.
                     if (name.endsWith(".zip")) {
-                        File pulledZip = pullFile(BUGREPORTZ_TMP_PATH + name);
+                        // Pull always on user 0 to avoid content provider and
+                        // let the path resolve itself
+                        File pulledZip = pullFile(BUGREPORTZ_TMP_PATH + name, 0);
                         try {
                             // Validate the zip before returning it.
                             if (ZipUtil.isZipFileValid(pulledZip, false)) {
@@ -3905,7 +3912,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             for (int i = 1; i <= attempts; i++) {
                 String output = executeAdbCommand("root");
                 // wait for device to disappear from adb
-                boolean res = waitForDeviceNotAvailable("root", 2 * 1000);
+                boolean res =
+                        waitForDeviceNotAvailable(
+                                "root", getOptions().getAdbRootUnavailableTimeout());
                 if (!res && TestDeviceState.ONLINE.equals(getDeviceState())) {
                     if (isAdbRoot()) {
                         return true;

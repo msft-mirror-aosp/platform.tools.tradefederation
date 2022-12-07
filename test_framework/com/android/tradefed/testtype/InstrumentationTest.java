@@ -49,6 +49,7 @@ import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.ddmlib.DefaultRemoteAndroidTestRunner;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryStrategy;
@@ -766,9 +767,11 @@ public class InstrumentationTest
         }
         if (mRunnerName == null) {
             setRunnerName(queryRunnerName());
-            checkArgument(
-                    mRunnerName != null,
-                    "Runner name has not been set and no matching instrumentations were found.");
+            if (mRunnerName == null) {
+                throw new HarnessRuntimeException(
+                        "Runner name has not been set and no matching instrumentations were found.",
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+            }
             CLog.i("No runner name specified. Using: %s.", mRunnerName);
         }
         mRunner =

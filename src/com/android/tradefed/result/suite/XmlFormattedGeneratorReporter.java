@@ -44,6 +44,10 @@ public class XmlFormattedGeneratorReporter extends FormattedGeneratorReporter {
         File resultReportFile = null;
         try {
             resultReportFile = generator.writeResults(resultHolder, resultDir);
+            // Once report is created, release memory from base class
+            for (String runName : getTestRunNames()) {
+                clearResultsForName(runName);
+            }
         } catch (IOException e) {
             CLog.e("Failed to generate the formatted report file:");
             CLog.e(e);

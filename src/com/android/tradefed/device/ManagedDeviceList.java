@@ -17,6 +17,7 @@
 package com.android.tradefed.device;
 
 import com.android.ddmlib.IDevice;
+import com.android.tradefed.device.DeviceManager.FastbootDevice;
 import com.android.tradefed.device.IManagedTestDevice.DeviceEventResponse;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.ConditionPriorityBlockingQueue.IMatcher;
@@ -245,6 +246,32 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
             if (d == null || DeviceAllocationState.Unavailable.equals(d.getAllocationState())) {
                 mList.remove(d);
                 d = mDeviceFactory.createDevice(idevice);
+                mList.add(d);
+            }
+            return d;
+        } finally {
+            mListLock.unlock();
+        }
+    }
+
+    /**
+     * Find the {@link IManagedTestDevice} corresponding to the {@link FastbootDevice}.
+     * if it does not exist, create a new one. Special one for fastboot devices
+     * since it as a different lifecycle.
+     *
+     * @param fastboot
+     * @return the {@link IManagedTestDevice}.
+     */
+    public IManagedTestDevice findOrCreateFastboot(FastbootDevice fastboot) {
+        if (!isValidDeviceSerial(fastboot.getSerialNumber())) {
+            return null;
+        }
+        mListLock.lock();
+        try {
+            IManagedTestDevice d = find(fastboot.getSerialNumber());
+            if (d == null) {
+                mList.remove(d);
+                d = mDeviceFactory.createDevice(fastboot);
                 mList.add(d);
             }
             return d;

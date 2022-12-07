@@ -23,7 +23,9 @@ import com.android.ddmlib.RawImage;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.TimeoutException;
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
+import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -56,6 +58,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -2167,6 +2170,18 @@ public class TestDevice extends NativeDevice {
         }
     }
 
+    private void setTestDeviceOptions(
+            TestDevice microdroidDevice, Map<String, String> deviceOptions) {
+        try {
+            OptionSetter setter = new OptionSetter(microdroidDevice.getOptions());
+            for (Map.Entry<String, String> optionsKeyValue : deviceOptions.entrySet()) {
+                setter.setOptionValue(optionsKeyValue.getKey(), optionsKeyValue.getValue());
+            }
+        } catch (ConfigurationException e) {
+            CLog.w(e);
+        }
+    }
+
     /**
      * Starts a Microdroid TestDevice.
      *
@@ -2304,10 +2319,18 @@ public class TestDevice extends NativeDevice {
         adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort);
         TestDevice microdroid = (TestDevice) deviceManager.forceAllocateDevice(microdroidSerial);
         if (microdroid == null) {
+            process.destroy();
+            try {
+                process.waitFor();
+            } catch (InterruptedException ex) {
+            }
             throw new DeviceRuntimeException(
                     "Unable to force allocate the microdroid device",
                     InfraErrorIdentifier.RUNNER_ALLOCATION_ERROR);
         }
+        // microdroid can be slow to become unavailable after root. (b/259208275)
+        microdroid.getOptions().setAdbRootUnavailableTimeout(4 * 1000);
+        setTestDeviceOptions(microdroid, builder.mTestDeviceOptions);
         microdroid.setMicrodroidProcess(process);
         mStartedMicrodroids.put(process, cid);
         return microdroid;
@@ -2455,6 +2478,7 @@ public class TestDevice extends NativeDevice {
         private String mCpuAffinity;
         private List<String> mExtraIdsigPaths;
         private boolean mProtectedVm;
+        private Map<String, String> mTestDeviceOptions;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -2467,6 +2491,7 @@ public class TestDevice extends NativeDevice {
             mCpuAffinity = null;
             mExtraIdsigPaths = new ArrayList<>();
             mProtectedVm = false; // Vm is unprotected by default.
+            mTestDeviceOptions = new LinkedHashMap<>();
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -2526,6 +2551,18 @@ public class TestDevice extends NativeDevice {
             if (!Strings.isNullOrEmpty(extraIdsigPath)) {
                 mExtraIdsigPaths.add(extraIdsigPath);
             }
+            return this;
+        }
+
+        /**
+         * Sets a {@link TestDeviceOptions} for the microdroid TestDevice.
+         *
+         * @param optionName The name of the TestDeviceOption to set
+         * @param valueText The value
+         * @return the microdroid builder.
+         */
+        public MicrodroidBuilder addTestDeviceOption(String optionName, String valueText) {
+            mTestDeviceOptions.put(optionName, valueText);
             return this;
         }
 
