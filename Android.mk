@@ -46,8 +46,6 @@ tradefed_dist_test_apks := TradeFedUiTestApp TradeFedTestApp
 # installed location, as that will force installation, and cause this zip to be
 # regenerated too often during incremental builds.
 
-tradefed_jarjar_files := $(foreach m, $(tradefed_dist_host_jars), $(m).jar)
-
 tradefed_dist_copy_pairs := $(foreach m, $(tradefed_dist_host_jars), $(call intermediates-dir-for,JAVA_LIBRARIES,$(m),HOST,COMMON)/javalib.jar:$(m).jar)
 tradefed_dist_copy_pairs += $(foreach m, $(tradefed_dist_host_exes), $(LOCAL_PATH)/$(m):$(m))
 tradefed_dist_copy_pairs += $(foreach m, $(tradefed_dist_test_apks), $(call intermediates-dir-for,APPS,$(m))/package.apk:$(m).apk)
@@ -59,14 +57,10 @@ tradefed_dist_test_apks :=
 tradefed_dist_intermediates := $(call intermediates-dir-for,PACKAGING,tradefed_dist,HOST,COMMON)
 tradefed_dist_zip := $(tradefed_dist_intermediates)/tradefed.zip
 $(tradefed_dist_zip) : PRIVATE_COPY_PAIRS := $(tradefed_dist_copy_pairs)
-$(tradefed_dist_zip) : PRIVATE_JARJAR_FILES := $(tradefed_jarjar_files)
 $(tradefed_dist_zip) : $(SOONG_ZIP) $(foreach f,$(tradefed_dist_copy_pairs),$(call word-colon,1,$(f)))
 	rm -rf $(dir $@)/tmp && mkdir -p $(dir $@)/tmp
-	echo "rule com.google.protobuf.** com.android.tradefed.runner.protobuf.@1" > $(dir $@)/tmp/jarjar_rules.txt
 	$(foreach f,$(PRIVATE_COPY_PAIRS), \
 	  cp -f $(call word-colon,1,$(f)) $(dir $@)/tmp/$(call word-colon,2,$(f)) &&) true
-	$(foreach f,$(PRIVATE_JARJAR_FILES), \
-	  $(JAVA) -jar $(JARJAR) process $(dir $@)/tmp/jarjar_rules.txt $(dir $@)/tmp/$(f) $(dir $@)/tmp/$(f) &&) true
 	echo $(BUILD_NUMBER_FROM_FILE) > $(dir $@)/tmp/version.txt
 	$(SOONG_ZIP) -o $@ -C $(dir $@)/tmp -f $(dir $@)/tmp/version.txt \
 	  $(foreach f,$(PRIVATE_COPY_PAIRS),-f $(dir $@)/tmp/$(call word-colon,2,$(f)))
@@ -76,7 +70,7 @@ $(call declare-container-license-deps,$(tradefed_dist_zip),$(filter $(OUT_DIR)/%
 
 $(call dist-for-goals, tradefed, $(tradefed_dist_zip))
 
-tradefed_jarjar_files :=
 tradefed_dist_copy_pairs :=
 tradefed_dist_intermediates :=
 tradefed_dist_zip :=
+
