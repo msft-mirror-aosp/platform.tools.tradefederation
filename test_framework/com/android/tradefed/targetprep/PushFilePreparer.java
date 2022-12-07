@@ -472,7 +472,8 @@ public class PushFilePreparer extends BaseTargetPreparer
         Set<String> deps = new HashSet<>();
         try {
             for (File f : getPushSpecs(null).values()) {
-                if (!f.exists()) {
+                // Match the resolving logic when actually pushing
+                if (!f.isAbsolute()) {
                     deps.add(f.getName());
                 } else {
                     CLog.d(
