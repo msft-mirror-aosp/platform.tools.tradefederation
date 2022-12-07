@@ -76,6 +76,10 @@ public class JsonHttpTestResultReporter extends CollectingTestListener {
             importance = Importance.ALWAYS)
     private String mPostingEndpoint;
 
+    @Option(name = "disable", description =
+            "flag to skip reporting of all the results")
+    private boolean mSkipReporting = false;
+
     @Option(name = "reporting-unit-key-suffix",
             description = "suffix to append after the regular reporting unit key")
     private String mReportingUnitKeySuffix = null;
@@ -119,7 +123,9 @@ public class JsonHttpTestResultReporter extends CollectingTestListener {
     public void invocationEnded(long elapsedTime) {
         super.invocationEnded(elapsedTime);
 
-        if (mHasInvocationFailures) {
+        if (mSkipReporting) {
+            CLog.d("Skipping reporting because it's disabled.");
+        } else if (mHasInvocationFailures) {
             CLog.d("Skipping reporting beacuse there are invocation failures.");
         } else {
             try {
