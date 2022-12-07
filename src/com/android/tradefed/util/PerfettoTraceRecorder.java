@@ -60,8 +60,10 @@ public class PerfettoTraceRecorder {
      * PerfettoTraceRecorder#stopTrace(ITestDevice)} afterwards to stop the trace recording.
      *
      * @param device A {@link ITestDevice} where trace will be recorded.
+     * @param extraConfigs A map of extra configs that needs to be added in the trace config file.
      */
-    public void startTrace(ITestDevice device) throws IOException {
+    public void startTrace(ITestDevice device, Map<String, String> extraConfigs)
+            throws IOException {
         if (deviceMetadataMap.containsKey(device)) {
             CLog.d(
                     "Already recording trace on %s in pid %s.",
@@ -89,9 +91,22 @@ public class PerfettoTraceRecorder {
 
         // Get the trace config file from resource
         File traceConfigFile = FileUtil.createTempFile("trace_config", ".textproto");
-        InputStream config =
+        InputStream configStream =
                 PerfettoTraceRecorder.class.getResourceAsStream("/perfetto/trace_config.textproto");
-        FileUtil.writeToFile(config, traceConfigFile);
+        String configStr = StreamUtil.getStringFromStream(configStream);
+        // insert extra configs in the trace config file
+        if (extraConfigs != null) {
+            StringBuilder sb = new StringBuilder();
+            for (Map.Entry<String, String> configKeyValue : extraConfigs.entrySet()) {
+                sb.append(
+                        String.format(
+                                "%s: %s\n", configKeyValue.getKey(), configKeyValue.getValue()));
+            }
+            String injectedStr = sb.toString();
+            configStr = configStr.replace("# {injected_config}", injectedStr);
+        }
+        FileUtil.writeToFile(configStr, traceConfigFile);
+
         deviceTraceMetadata.setTraceConfig(traceConfigFile, true);
 
         File traceOutput =
@@ -163,7 +178,7 @@ public class PerfettoTraceRecorder {
     /**
      * Stops recording perfetto trace on the device.
      *
-     * <p>Must have called {@link PerfettoTraceRecorder#startTrace(ITestDevice)} before.
+     * <p>Must have called {@link PerfettoTraceRecorder#startTrace(ITestDevice, Map)} before.
      *
      * @param device device for which to stop the recording. @Return Returns the perfetto trace
      *     file.
