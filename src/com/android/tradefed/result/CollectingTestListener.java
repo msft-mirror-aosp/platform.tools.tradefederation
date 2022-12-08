@@ -52,6 +52,9 @@ public class CollectingTestListener
             description = "attempt to add test metrics values for test runs with the same name.")
     private boolean mIsAggregateMetrics = false;
 
+    @Option(name = "disable", description = "Whether or not to disable this reporter.")
+    private boolean mDisable = false;
+
     /** Toggle the 'aggregate metrics' option */
     protected void setIsAggregrateMetrics(boolean aggregate) {
         mIsAggregateMetrics = aggregate;
@@ -596,5 +599,15 @@ public class CollectingTestListener
     /** Allows cleaning the module file so we avoid carrying them for too long. */
     protected final synchronized void clearModuleLogFiles() {
         mModuleLogFiles = new MultiMap<>();
+    }
+
+    @Override
+    public boolean isDisabled() {
+        return mDisable;
+    }
+
+    @Override
+    public void setDisable(boolean isDisabled) {
+        mDisable = isDisabled;
     }
 }
