@@ -32,6 +32,7 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
+import com.android.tradefed.device.metric.DeviceTraceCollector;
 import com.android.tradefed.device.metric.GcovCodeCoverageCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
@@ -898,6 +899,10 @@ public class InstrumentationTest
                             if (collector instanceof IConfigurationReceiver) {
                                 ((IConfigurationReceiver) collector)
                                         .setConfiguration(mConfiguration);
+                            }
+                            if (collector instanceof DeviceTraceCollector) {
+                                ((DeviceTraceCollector) collector)
+                                        .setInstrumentationPkgName(mPackageName);
                             }
                             listener = collector.init(testInfo.getContext(), listener);
                         }
