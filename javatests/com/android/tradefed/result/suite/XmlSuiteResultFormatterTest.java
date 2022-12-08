@@ -672,6 +672,8 @@ public class XmlSuiteResultFormatterTest {
         mContext.addInvocationAttribute("invocation-attr", "attr");
         BuildInfo buildInfo = new BuildInfo();
         buildInfo.addBuildAttribute("device_kernel_info", "kernel info");
+        buildInfo.addBuildAttribute("system_img_info", "system img info");
+        buildInfo.addBuildAttribute("vendor_img_info", "vendor img info");
         mContext.addDeviceBuildInfo("device", buildInfo);
 
         Collection<TestRunResult> runResults = new ArrayList<>();
@@ -696,6 +698,8 @@ public class XmlSuiteResultFormatterTest {
         assertXmlContainsNode(content, "Result/Build");
         assertXmlContainsAttribute(content, "Result/Build", "invocation-attr", "attr");
         assertXmlContainsAttribute(content, "Result/Build", "device_kernel_info", "kernel info");
+        assertXmlContainsAttribute(content, "Result/Build", "system_img_info", "system img info");
+        assertXmlContainsAttribute(content, "Result/Build", "vendor_img_info", "vendor img info");
     }
 
     private TestRunResult createResultWithLog(String runName, int count, LogDataType type) {
