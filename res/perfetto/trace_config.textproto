@@ -71,8 +71,9 @@ data_sources {
 
       # New (userspace) LMK
       atrace_apps: "lmkd"
-      # Added for userspace annotation in the platform scenario test app
-      atrace_apps: "android.platform.test.scenario"
+
+      # Following line will be used to inject additional configs. Do not remove or modify.
+      # {injected_config}
 
       atrace_categories: "am"
       atrace_categories: "dalvik"

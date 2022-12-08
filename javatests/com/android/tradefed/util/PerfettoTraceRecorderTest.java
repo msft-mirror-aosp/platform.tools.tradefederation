@@ -66,7 +66,7 @@ public class PerfettoTraceRecorderTest implements IDeviceTest {
 
     @Test
     public void testPerfettoTraceRecorded() throws IOException {
-        mPerfettoTraceRecorder.startTrace(getDevice());
+        mPerfettoTraceRecorder.startTrace(getDevice(), null);
         RunUtil.getDefault().sleep(5000); // collect trace for five seconds
         File traceFile = mPerfettoTraceRecorder.stopTrace(getDevice());
 
