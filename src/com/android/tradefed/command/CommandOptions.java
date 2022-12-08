@@ -23,6 +23,7 @@ import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.UniqueMultiMap;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -286,6 +287,15 @@ public class CommandOptions implements ICommandOptions {
 
     @Option(name = "enable-tracing", description = "Enable test invocation tracing.")
     private boolean mTracingEnabled = true;
+
+    public static final String JDK_FOLDER_OPTION_NAME = "jdk-folder-for-subprocess";
+
+    @Option(
+            name = JDK_FOLDER_OPTION_NAME,
+            description =
+                    "Whenever the java execution is forked to another subprocess, use this jdk"
+                            + " folder instead of current one.")
+    private File mJdkFolder;
 
     /**
      * Set the help mode for the config.
@@ -734,5 +744,11 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public boolean isTracingEnabled() {
         return mTracingEnabled;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public File getJdkFolderForSubprocess() {
+        return mJdkFolder;
     }
 }
