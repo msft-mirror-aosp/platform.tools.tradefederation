@@ -18,6 +18,7 @@ package com.android.tradefed.testtype.suite;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceProperties;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -66,13 +67,15 @@ public class TestFailureListener implements ITestInvocationListener {
     private void captureFailure(ITestDevice device, TestDescription test) {
         String serial = device.getSerialNumber();
         if (mBugReportOnFailure && mModuleBugReportOnFailure) {
-            if (!device.logBugreport(
-                    String.format("%s-%s-bugreport", test.toString(), serial), mLogger)) {
-                CLog.e("Failed to capture bugreport for %s failure on %s.", test, serial);
+            try (CloseableTraceScope ignored = new CloseableTraceScope("bugreport_on_failure")) {
+                if (!device.logBugreport(
+                        String.format("%s-%s-bugreport", test.toString(), serial), mLogger)) {
+                    CLog.e("Failed to capture bugreport for %s failure on %s.", test, serial);
+                }
             }
         }
         if (mRebootOnFailure) {
-            try {
+            try (CloseableTraceScope ignored = new CloseableTraceScope("reboot_on_failure")) {
                 // Rebooting on all failures can hide legitimate issues and platform instabilities,
                 // therefore only allowed on "user-debug" and "eng" builds.
                 if ("user".equals(device.getProperty(DeviceProperties.BUILD_TYPE))) {
