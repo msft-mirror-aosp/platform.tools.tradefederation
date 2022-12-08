@@ -297,9 +297,6 @@ public class GoogleApiClientUtil {
             public void initialize(HttpRequest request) throws IOException {
                 initializer.initialize(request);
                 request.setUnsuccessfulResponseHandler(new RetryResponseHandler());
-                CLog.d(
-                        "Setting retry strategy. current connect timeout: %s",
-                        request.getConnectTimeout());
             }
         };
     }
