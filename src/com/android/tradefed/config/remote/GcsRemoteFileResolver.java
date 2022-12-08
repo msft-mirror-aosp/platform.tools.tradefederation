@@ -19,6 +19,7 @@ import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.gcs.GCSDownloaderHelper;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.RunUtil;
@@ -44,7 +45,7 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
         File consideredFile = args.getConsideredFile();
         // Don't use absolute path as it would not start with gs:
         String path = consideredFile.getPath();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("gs_download " + path)) {
             // We need to download the file from the bucket
             File downloadedFile = fetchResourceWithRetry(path, args.getQueryArgs());
             // Unzip it if required
