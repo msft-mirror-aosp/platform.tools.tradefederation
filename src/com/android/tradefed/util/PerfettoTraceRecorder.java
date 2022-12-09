@@ -18,16 +18,21 @@ package com.android.tradefed.util;
 
 import com.android.loganalysis.util.config.Option;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /** A utility class for recording perfetto trace on a {@link ITestDevice}. */
 public class PerfettoTraceRecorder {
@@ -44,18 +49,25 @@ public class PerfettoTraceRecorder {
 
     // A device-metadata map to store trace related metadata.
     private Map<ITestDevice, DeviceTraceMetadata> deviceMetadataMap = new LinkedHashMap<>();
+    // A list of device serials where trace has started.
+    private Set<String> deviceSerialsWithTrace = new HashSet<>();
+
+    // Time in ms to wait for the perfettoScript to start
+    private static final long SCRIPT_START_TIMEOUT = 10 * 1000;
 
     /**
      * Starts recording perfetto trace on device. Must call {@link
      * PerfettoTraceRecorder#stopTrace(ITestDevice)} afterwards to stop the trace recording.
      *
      * @param device A {@link ITestDevice} where trace will be recorded.
+     * @param extraConfigs A map of extra configs that needs to be added in the trace config file.
      */
-    public void startTrace(ITestDevice device) throws IOException {
+    public void startTrace(ITestDevice device, Map<String, String> extraConfigs)
+            throws IOException {
         if (deviceMetadataMap.containsKey(device)) {
             CLog.d(
                     "Already recording trace on %s in pid %s.",
-                    device.getSerialNumber(), deviceMetadataMap.get(device).getPid());
+                    device.getSerialNumber(), deviceMetadataMap.get(device).getProcess().pid());
             return;
         }
         // Stores metadata related to this trace
@@ -64,7 +76,6 @@ public class PerfettoTraceRecorder {
         // Get the perfetto executable
         if (perfettoExecutable == null) {
             perfettoExecutable = FileUtil.createTempFile("record_android_trace", ".txt");
-            perfettoExecutable.createNewFile();
             InputStream script =
                     PerfettoTraceRecorder.class.getResourceAsStream(
                             "/perfetto/record_android_trace");
@@ -80,10 +91,22 @@ public class PerfettoTraceRecorder {
 
         // Get the trace config file from resource
         File traceConfigFile = FileUtil.createTempFile("trace_config", ".textproto");
-        traceConfigFile.createNewFile();
-        InputStream config =
+        InputStream configStream =
                 PerfettoTraceRecorder.class.getResourceAsStream("/perfetto/trace_config.textproto");
-        FileUtil.writeToFile(config, traceConfigFile);
+        String configStr = StreamUtil.getStringFromStream(configStream);
+        // insert extra configs in the trace config file
+        if (extraConfigs != null) {
+            StringBuilder sb = new StringBuilder();
+            for (Map.Entry<String, String> configKeyValue : extraConfigs.entrySet()) {
+                sb.append(
+                        String.format(
+                                "%s: %s\n", configKeyValue.getKey(), configKeyValue.getValue()));
+            }
+            String injectedStr = sb.toString();
+            configStr = configStr.replace("# {injected_config}", injectedStr);
+        }
+        FileUtil.writeToFile(configStr, traceConfigFile);
+
         deviceTraceMetadata.setTraceConfig(traceConfigFile, true);
 
         File traceOutput =
@@ -103,15 +126,59 @@ public class PerfettoTraceRecorder {
                         "-o",
                         traceOutput.getAbsolutePath(),
                         "-n");
-        Process process = RunUtil.getDefault().runCmdInBackground(cmd);
-        deviceTraceMetadata.setPid("" + process.pid());
+        Process process =
+                RunUtil.getDefault()
+                        .runCmdInBackground(
+                                cmd,
+                                new OutputStream() {
+                                    public String output = "";
+
+                                    @Override
+                                    public void write(int b) throws IOException {
+                                        output += b;
+                                        checkOutput();
+                                    }
+
+                                    @Override
+                                    public void write(byte[] b) throws IOException {
+                                        write(b, 0, b.length);
+                                    }
+
+                                    @Override
+                                    public void write(byte[] b, int off, int len)
+                                            throws IOException {
+                                        output += new String(b, off, len);
+                                        checkOutput();
+                                    }
+
+                                    private void checkOutput() {
+                                        if (output.contains("beginning of main")) {
+                                            deviceSerialsWithTrace.add(device.getSerialNumber());
+                                        }
+                                    }
+                                });
+        try (CloseableTraceScope ignore = new CloseableTraceScope("perfetto-script-start-time")) {
+            long startTime = System.currentTimeMillis();
+            while (!deviceSerialsWithTrace.contains(device.getSerialNumber())
+                    && System.currentTimeMillis() - startTime < SCRIPT_START_TIMEOUT) {
+                // wait until perfetto trace has started
+                RunUtil.getDefault().sleep(1 * 1000);
+            }
+        }
+        if (!deviceSerialsWithTrace.contains(device.getSerialNumber())) {
+            CLog.w(
+                    "Perfetto script did not start on device %s within %sms. Trace file may miss"
+                            + " some events.",
+                    device.getSerialNumber(), SCRIPT_START_TIMEOUT);
+        }
+        deviceTraceMetadata.setProcess(process);
         deviceMetadataMap.put(device, deviceTraceMetadata);
     }
 
     /**
      * Stops recording perfetto trace on the device.
      *
-     * <p>Must have called {@link PerfettoTraceRecorder#startTrace(ITestDevice)} before.
+     * <p>Must have called {@link PerfettoTraceRecorder#startTrace(ITestDevice, Map)} before.
      *
      * @param device device for which to stop the recording. @Return Returns the perfetto trace
      *     file.
@@ -120,14 +187,25 @@ public class PerfettoTraceRecorder {
         if (deviceMetadataMap.containsKey(device)) {
             // remove the metadata from the map so that a new trace can be started.
             DeviceTraceMetadata metadata = deviceMetadataMap.remove(device);
+            deviceSerialsWithTrace.remove(device.getSerialNumber());
             CommandResult result =
-                    RunUtil.getDefault().runTimedCmd(10000, "kill", "-2", metadata.getPid());
+                    RunUtil.getDefault()
+                            .runTimedCmd(
+                                    10000,
+                                    "kill",
+                                    "-2",
+                                    String.valueOf(metadata.getProcess().pid()));
             if (result.getStatus() != CommandStatus.SUCCESS) {
                 CLog.d(result.getStderr());
                 return null;
             }
             // wait for the recorder to finish and pull the trace file
-            RunUtil.getDefault().sleep(5000);
+            try {
+                // 10 second wait is arbitrary. Should be enough time to pull big trace files.
+                metadata.getProcess().waitFor(10 * 1000, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                CLog.w(e);
+            }
             metadata.cleanUp();
             return metadata.getTraceOutput();
         }
@@ -136,8 +214,8 @@ public class PerfettoTraceRecorder {
 
     /** Stores metadata related to a trace running on an {@link ITestDevice}. */
     private class DeviceTraceMetadata {
-        // pid of the process running the script
-        public String pid;
+        // the process running the script
+        public Process process;
         // config file which was used to collect trace
         private File traceConfig;
         // Output file where traces will be pulled after trace is stopped.
@@ -147,12 +225,12 @@ public class PerfettoTraceRecorder {
 
         private List<File> tempFiles = new ArrayList<>();
 
-        public String getPid() {
-            return pid;
+        public Process getProcess() {
+            return process;
         }
 
-        public void setPid(String pid) {
-            this.pid = pid;
+        public void setProcess(Process process) {
+            this.process = process;
         }
 
         public File getTraceConfig() {
