@@ -34,7 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @RunWith(DeviceJUnit4ClassRunner.class)
-public class PerfettoTraceRecorderTest implements IDeviceTest {
+public class PerfettoTraceRecorderFuncTest implements IDeviceTest {
 
     private ITestDevice mTestDevice;
     private PerfettoTraceRecorder mPerfettoTraceRecorder;
