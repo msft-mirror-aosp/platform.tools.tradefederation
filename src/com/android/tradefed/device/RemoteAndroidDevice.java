@@ -331,22 +331,22 @@ public class RemoteAndroidDevice extends TestDevice {
     /**
      * Returns the initial associated ip to the device if any. Returns null if no known initial ip.
      */
-    public String getInitialIp() {
+    protected String getInitialIp() {
         return mInitialIpDevice;
     }
 
     /** Returns the initial known user if any. Returns null if no initial known user. */
-    public String getInitialUser() {
+    protected String getInitialUser() {
         return mInitialUser;
     }
 
     /** Returns the known device num offset if any. Returns null if not available. */
-    public Integer getInitialDeviceNumOffset() {
+    protected Integer getInitialDeviceNumOffset() {
         return mInitialDeviceNumOffset;
     }
 
     /** Returns the initial serial name of the device. */
-    public String getInitialSerial() {
+    protected String getInitialSerial() {
         return mInitialSerial;
     }
 }
