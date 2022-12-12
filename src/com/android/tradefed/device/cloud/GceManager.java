@@ -337,6 +337,8 @@ public class GceManager {
                             HostAndPort.fromString(mGceHost)
                                     .withDefaultPort(mDeviceOptions.getRemoteAdbPort()));
             mGceAvdInfo.setIpPreconfigured(ipDevice != null);
+            mGceAvdInfo.setDeviceOffset(offset);
+            mGceAvdInfo.setInstanceUser(user);
             return mGceAvdInfo;
         }
 
@@ -390,6 +392,8 @@ public class GceManager {
                     mGceAvdInfo =
                             new GceAvdInfo(instanceName, null, null, errors, GceStatus.BOOT_FAIL);
                     mGceAvdInfo.setIpPreconfigured(ipDevice != null);
+                    mGceAvdInfo.setDeviceOffset(offset);
+                    mGceAvdInfo.setInstanceUser(user);
                     return mGceAvdInfo;
                 }
                 throw new TargetSetupError(
@@ -404,6 +408,8 @@ public class GceManager {
                     // We always return the GceAvdInfo describing the instance when possible
                     // The caller can decide actions to be taken.
                     mGceAvdInfo.setIpPreconfigured(ipDevice != null);
+                    mGceAvdInfo.setDeviceOffset(offset);
+                    mGceAvdInfo.setInstanceUser(user);
                     return mGceAvdInfo;
                 } else {
                     errors =
@@ -428,6 +434,8 @@ public class GceManager {
                 mBuildInfo.addBuildAttribute(GCE_HOSTNAME_KEY, mGceAvdInfo.hostAndPort().getHost());
             }
             mGceAvdInfo.setIpPreconfigured(ipDevice != null);
+            mGceAvdInfo.setDeviceOffset(offset);
+            mGceAvdInfo.setInstanceUser(user);
             return mGceAvdInfo;
         } catch (IOException e) {
             throw new TargetSetupError(
