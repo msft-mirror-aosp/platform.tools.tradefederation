@@ -20,6 +20,7 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 
 import java.util.ArrayList;
@@ -77,7 +78,8 @@ public final class FastbootCommandPreparer extends BaseTargetPreparer {
                             String.format(
                                     "Command %s failed, stdout = [%s], stderr = [%s].",
                                     cmd, result.getStdout(), result.getStderr()),
-                            device.getDeviceDescriptor());
+                            device.getDeviceDescriptor(),
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 }
             }
             exitFastboot(device);
