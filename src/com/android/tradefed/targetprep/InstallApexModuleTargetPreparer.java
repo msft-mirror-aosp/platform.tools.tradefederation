@@ -22,7 +22,6 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.ApexInfo;
-import com.android.tradefed.device.PackageInfo;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -168,7 +167,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             testAppFiles = optimizeModuleInstallation(activatedApexes, testAppFiles, device);
             if (testAppFiles.isEmpty()) {
                 if (!mApexModulesToUninstall.isEmpty() || !mApkModulesToUninstall.isEmpty()) {
-                    activateApex(device);
+                    activateStagedInstall(device);
                 }
                 // If both the list of files to be installed and uninstalled are empty, that means
                 // the mainline modules are the same as the previous ones.
@@ -179,30 +178,17 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
 
         if (containsApks(testAppFiles)) {
             installUsingBundleTool(testInfo, testAppFiles);
-            if (mTestApexInfoList.isEmpty()
-                    && mApexModulesToUninstall.isEmpty()
-                    && mApkModulesToUninstall.isEmpty()) {
-                CLog.i("No Apex module in the train. Skipping reboot.");
-                return;
-            } else {
-                activateApex(device);
-            }
         } else {
             Map<File, String> appFilesAndPackages = resolveApkFiles(testInfo, testAppFiles);
+            CLog.i("Staging install for " + appFilesAndPackages);
             installer(testInfo, appFilesAndPackages);
-            if (containsApex(appFilesAndPackages.keySet())
-                    || containsPersistentApk(appFilesAndPackages.keySet(), testInfo)
-                    || !mApexModulesToUninstall.isEmpty()
-                    || !mApkModulesToUninstall.isEmpty()) {
-                activateApex(device);
-            }
-            if (mTestApexInfoList.isEmpty()) {
-                CLog.i("Train activation succeed.");
-                return;
-            }
         }
 
-        checkApexActivation(device);
+        activateStagedInstall(device);
+        if (!mTestApexInfoList.isEmpty()) {
+            checkApexActivation(device);
+        }
+        CLog.i("Train activation succeed.");
     }
 
     /**
@@ -211,7 +197,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * @param device under test.
      * @throws DeviceNotAvailableException if reboot fails.
      */
-    private void activateApex(ITestDevice device) throws DeviceNotAvailableException {
+    private void activateStagedInstall(ITestDevice device) throws DeviceNotAvailableException {
         RunUtil.getDefault().sleep(mApexStagingWaitTime);
         device.reboot();
         // Some devices need extra waiting time after reboot to get fully ready.
@@ -1001,44 +987,6 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             }
         }
         return splitsArgs;
-    }
-
-    /**
-     * Checks if the input files contain any persistent apk.
-     *
-     * @param testAppFileNames The list of the file names of the modules to install
-     * @param testInfo The {@link TestInformation}
-     * @return <code>true</code> if the input files contains a persistent apk module.
-     */
-    protected boolean containsPersistentApk(
-            Collection<File> testAppFileNames, TestInformation testInfo)
-            throws TargetSetupError, DeviceNotAvailableException {
-        for (File moduleFileName : testAppFileNames) {
-            if (isPersistentApk(moduleFileName, testInfo)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Checks if an apk is a persistent apk.
-     *
-     * @param filename The apk module file to check
-     * @param testInfo The {@link TestInformation}
-     * @return <code>true</code> if this is a persistent apk module.
-     */
-    protected boolean isPersistentApk(File filename, TestInformation testInfo)
-            throws TargetSetupError, DeviceNotAvailableException {
-        if (!filename.getName().endsWith(APK_SUFFIX)) {
-            return false;
-        }
-        PackageInfo pkgInfo =
-                testInfo.getDevice()
-                        .getAppPackageInfo(
-                                parsePackageName(
-                                        filename, testInfo.getDevice().getDeviceDescriptor()));
-        return pkgInfo.isPersistentApp();
     }
 
     /**
