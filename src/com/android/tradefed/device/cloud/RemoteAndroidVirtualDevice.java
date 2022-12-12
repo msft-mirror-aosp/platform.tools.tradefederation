@@ -607,13 +607,39 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
      * @throws TargetSetupError
      */
     public CommandResult powerwash() throws TargetSetupError {
+        return powerwashGce(null, null);
+    }
+
+    /**
+     * Attempt to powerwash a GCE instance
+     *
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @return returns CommandResult of the powerwash attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult powerwashGce(String user, Integer offset) throws TargetSetupError {
         if (mGceAvd == null) {
             String errorMsg = String.format("Can not get GCE AVD Info. launch GCE first?");
             throw new TargetSetupError(
                     errorMsg, getDeviceDescriptor(), DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
         }
-        String username = this.getOptions().getInstanceUser();
-        String powerwashCommand = String.format("/home/%s/bin/powerwash_cvd", username);
+        // Get the user from options instance-user if user is null.
+        if (user == null) {
+            user = this.getOptions().getInstanceUser();
+        }
+
+        String powerwashCommand = String.format("/home/%s/bin/powerwash_cvd", user);
+
+        if (offset != null) {
+            powerwashCommand =
+                    String.format(
+                            "HOME=/home/%s/acloud_cf_%d acloud_cf_%d/bin/powerwash_cvd"
+                                    + " -instance_num %d",
+                            user, offset + 1, offset + 1, offset + 1);
+        }
+
         if (this.getOptions().useOxygen()) {
             // TODO(dshi): Simplify the logic after Oxygen creates symlink of the tmp dir.
             CommandResult result =

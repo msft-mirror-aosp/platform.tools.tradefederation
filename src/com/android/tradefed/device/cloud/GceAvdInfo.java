@@ -132,6 +132,8 @@ public class GceAvdInfo {
     private HashMap<String, String> mBuildVars;
     private List<LogFileEntry> mLogs;
     private boolean mIsIpPreconfigured = false;
+    private Integer mDeviceOffset = null;
+    private String mInstanceUser = null;
 
     public static enum GceStatus {
         SUCCESS,
@@ -166,6 +168,10 @@ public class GceAvdInfo {
                 + mInstanceName
                 + ", mHostAndPort="
                 + mHostAndPort
+                + ", mDeviceOffset="
+                + mDeviceOffset
+                + ", mInstanceUser="
+                + mInstanceUser
                 + ", mErrorType="
                 + mErrorType
                 + ", mErrors="
@@ -220,6 +226,22 @@ public class GceAvdInfo {
 
     public boolean isIpPreconfigured() {
         return mIsIpPreconfigured;
+    }
+
+    public void setDeviceOffset(Integer deviceOffset) {
+        mDeviceOffset = deviceOffset;
+    }
+
+    public Integer getDeviceOffset() {
+        return mDeviceOffset;
+    }
+
+    public void setInstanceUser(String instanceUser) {
+        mInstanceUser = instanceUser;
+    }
+
+    public String getInstanceUser() {
+        return mInstanceUser;
     }
 
     /**
