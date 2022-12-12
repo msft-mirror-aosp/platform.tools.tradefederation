@@ -243,6 +243,7 @@ public class InvocationMetricLogger {
         // Ab downloader metrics
         AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
 
+        HAS_ANY_RUN_FAILURES("has_any_run_failures", false),
         TOTAL_TEST_COUNT("total_test_count", true),
 
         // Following are trace events also reporting as metrics

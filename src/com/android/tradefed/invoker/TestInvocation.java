@@ -351,6 +351,10 @@ public class TestInvocation implements ITestInvocation {
                     invocationPath.reportLogs(device, listener, Stage.TEST);
                 }
             }
+            if (mConditionalFailureMonitor.hasRunFailures()) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.HAS_ANY_RUN_FAILURES, "true");
+            }
             CurrentInvocation.setActionInProgress(ActionInProgress.TEAR_DOWN);
             getRunUtil().allowInterrupt(false);
             if (!mDelegatedInvocation) {
