@@ -23,9 +23,14 @@ import com.android.tradefed.result.TestDescription;
 public class ConditionFailureMonitor implements ITestInvocationListener {
 
     private boolean mHasFailures = false;
+    private boolean mHasRunFailures = false;
 
     public boolean hasFailures() {
         return mHasFailures;
+    }
+
+    public boolean hasRunFailures() {
+        return mHasRunFailures;
     }
 
     @Override
@@ -41,20 +46,24 @@ public class ConditionFailureMonitor implements ITestInvocationListener {
     @Override
     public void testRunFailed(FailureDescription failure) {
         mHasFailures = true;
+        mHasRunFailures = true;
     }
 
     @Override
     public void testRunFailed(String errorMessage) {
         mHasFailures = true;
+        mHasRunFailures = true;
     }
 
     @Override
     public void testFailed(TestDescription test, FailureDescription failure) {
         mHasFailures = true;
+        mHasRunFailures = true;
     }
 
     @Override
     public void testFailed(TestDescription test, String trace) {
         mHasFailures = true;
+        mHasRunFailures = true;
     }
 }
