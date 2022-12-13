@@ -19,6 +19,7 @@ package com.android.tradefed.suite.checker;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.log.LogUtil;
 import com.android.tradefed.suite.checker.StatusCheckerResult.CheckStatus;
 import com.android.tradefed.suite.checker.baseline.DeviceBaselineSetter;
 import com.android.tradefed.testtype.suite.ITestSuite;
@@ -120,6 +121,7 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
     @Override
     public StatusCheckerResult preExecutionCheck(ITestDevice device)
             throws DeviceNotAvailableException {
+        long startTime = System.currentTimeMillis();
         if (mDeviceBaselineSetters == null) {
             initializeDeviceBaselineSetters();
         }
@@ -134,7 +136,9 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
                     && !mEnableExperimentDeviceBaselineSetters.contains(setter.getName())) {
                 continue;
             }
-            setterHelperList.add(new SetterHelper(setter, device));
+            if (device.checkApiLevelAgainstNextRelease(setter.getMinimalApiLevel())) {
+                setterHelperList.add(new SetterHelper(setter, device));
+            }
         }
         try {
             // Set device baseline settings in parallel.
@@ -163,8 +167,11 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
             result.setErrorMessage(errorMessage.toString());
             result.setBugreportNeeded(true);
         }
-        result.addModuleProperty(
-                "enabled_device_baseline", String.join(",", enabledDeviceBaselines));
+        String timeInfo = String.valueOf(System.currentTimeMillis() - startTime);
+        String enabledBaselineInfo = String.join(",", enabledDeviceBaselines);
+        LogUtil.CLog.i("Enable device baselines %s in %s millis.", enabledBaselineInfo, timeInfo);
+        result.addModuleProperty("enabled_device_baseline", enabledBaselineInfo);
+        result.addModuleProperty("time_for_device_baseline", timeInfo);
         return result;
     }
 }

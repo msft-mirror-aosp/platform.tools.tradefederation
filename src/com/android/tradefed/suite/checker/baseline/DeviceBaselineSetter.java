@@ -27,15 +27,26 @@ public abstract class DeviceBaselineSetter {
 
     private final String mName;
     private final boolean mExperimental;
+    private final int mMinApiLevel;
 
     public DeviceBaselineSetter(JSONObject object, String name) throws JSONException {
         mName = name;
         mExperimental = object.has("experimental") && object.getBoolean("experimental");
+        if (object.has("min_api_level")) {
+            mMinApiLevel = Integer.parseInt(object.getString("min_api_level"));
+        } else {
+            mMinApiLevel = 30;
+        }
     }
 
     /** Gets the unique name of the setter. */
     public String getName() {
         return mName;
+    }
+
+    /** Gets the minimal API level supported by the setter. */
+    public int getMinimalApiLevel() {
+        return mMinApiLevel;
     }
 
     /** Sets the baseline setting for the device. */
