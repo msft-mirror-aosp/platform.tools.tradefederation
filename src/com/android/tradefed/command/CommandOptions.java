@@ -719,6 +719,9 @@ public class CommandOptions implements ICommandOptions {
         if (filterPreviousPassedTests()) {
             tags.add("incremental_retry");
         }
+        if (mAutoCollectors.contains(AutoLogCollector.DEVICE_TRACE)) {
+            tags.add("device_tracing_enable");
+        }
         return tags;
     }
 
