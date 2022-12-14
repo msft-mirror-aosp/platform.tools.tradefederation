@@ -69,6 +69,10 @@ public class ShardListener extends CollectingTestListener implements ISupportGra
         }
     }
 
+    public List<ITestInvocationListener> getUnderlyingResultReporter() {
+        return mShardMainForwarder.getListeners();
+    }
+
     /** {@inheritDoc} */
     @Override
     public boolean supportGranularResults() {
