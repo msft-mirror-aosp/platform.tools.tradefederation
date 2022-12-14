@@ -56,21 +56,12 @@ data_sources {
       ftrace_events: "sched/sched_process_exit"
       ftrace_events: "sched/sched_process_free"
 
-      # Memory events
-      ftrace_events: "rss_stat"
-      ftrace_events: "ion_heap_shrink"
-      ftrace_events: "ion_heap_grow"
-      ftrace_events: "ion/ion_stat"
-      ftrace_events: "dmabuf_heap/dma_heap_stat"
-      ftrace_events: "oom_score_adj_update"
-      ftrace_events: "gpu_mem/gpu_mem_total"
-      ftrace_events: "fastrpc/fastrpc_dma_stat"
-
       # Old (kernel) LMK
       ftrace_events: "lowmemorykiller/lowmemory_kill"
 
       # New (userspace) LMK
       atrace_apps: "lmkd"
+      atrace_apps: "*"
 
       # Following line will be used to inject additional configs. Do not remove or modify.
       # {injected_config}
