@@ -672,6 +672,7 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         if (shouldFlashSystem(systemBuildId, systemBuildFlavor, deviceBuild)) {
             CLog.i("Flashing system %s", deviceBuild.getDeviceBuildId());
             flashSystem(device, deviceBuild);
+            disableRampdump(device);
             return true;
         }
         CLog.i(
@@ -683,6 +684,13 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             flashRamdiskIfNeeded(device, deviceBuild);
             CLog.i("Flashed ramdisk anyways per flasher settings.");
         }
+        disableRampdump(device);
+        // reboot
+        device.rebootUntilOnline();
+        return false;
+    }
+
+    private void disableRampdump(ITestDevice device) throws DeviceNotAvailableException {
         if (mDisableRamdump) {
             CLog.i("Disabling ramdump.");
             CommandResult result = device.executeFastbootCommand("oem", "ramdump", "disable");
@@ -692,9 +700,6 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                         result.getStatus(), result.getStdout(), result.getStderr());
             }
         }
-        // reboot
-        device.rebootUntilOnline();
-        return false;
     }
 
     /**
