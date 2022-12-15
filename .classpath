@@ -23,7 +23,7 @@
 			<attribute name="module" value="true"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry exported="true" kind="var" path="TRADEFED_ROOT/prebuilts/misc/common/commons-compress/commons-compress-prebuilt.jar"/>
+	<classpathentry exported="true" kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/apache-commons-compress/apache-commons-compress/linux_glibc_common/combined/apache-commons-compress.jar"/>
 	<classpathentry exported="true" kind="var" path="TRADEFED_ROOT/prebuilts/misc/common/devtools-annotations/devtools-annotations-prebuilt.jar"/>
 	<classpathentry exported="true" kind="var" path="TRADEFED_ROOT/prebuilts/misc/common/kxml2/kxml2-2.3.0.jar"/>
 	<classpathentry exported="true" kind="var" path="TRADEFED_ROOT/prebuilts/misc/common/sdklib/sdklib-prebuilt.jar"/>
