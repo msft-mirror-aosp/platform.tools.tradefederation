@@ -76,6 +76,11 @@ public class ShardMainResultForwarder extends ResultForwarder implements ILogSav
         mShardContextList = new ArrayList<>();
     }
 
+    @Override
+    public List<ITestInvocationListener> getListeners() {
+        return super.getListeners();
+    }
+
     /**
      * {@inheritDoc}
      */
