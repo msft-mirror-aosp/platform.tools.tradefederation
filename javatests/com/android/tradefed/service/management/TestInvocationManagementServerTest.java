@@ -50,6 +50,7 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import java.io.File;
+import java.util.Arrays;
 
 import io.grpc.Server;
 import io.grpc.stub.StreamObserver;
@@ -141,13 +142,56 @@ public class TestInvocationManagementServerTest {
                             return null;
                         })
                 .when(mMockScheduler)
-                .execCommand(Mockito.any(), Mockito.eq(mockDevice), Mockito.any());
+                .execCommand(Mockito.any(), Mockito.eq(Arrays.asList(mockDevice)), Mockito.any());
         when(mMockDeviceManagement.getDeviceFromReservation(Mockito.eq("reservation-1")))
                 .thenReturn(mockDevice);
         NewTestCommandRequest.Builder requestBuilder =
                 NewTestCommandRequest.newBuilder()
                         .addArgs("empty")
                         .addReservationId("reservation-1");
+        mServer.submitTestCommand(requestBuilder.build(), mRequestObserver);
+
+        verify(mRequestObserver).onNext(mResponseCaptor.capture());
+        NewTestCommandResponse response = mResponseCaptor.getValue();
+        assertThat(response.getInvocationId()).isNotEmpty();
+
+        InvocationDetailRequest.Builder detailBuilder =
+                InvocationDetailRequest.newBuilder().setInvocationId(response.getInvocationId());
+        mServer.getInvocationDetail(detailBuilder.build(), mDetailObserver);
+        verify(mDetailObserver).onNext(mResponseDetailCaptor.capture());
+        InvocationDetailResponse responseDetails = mResponseDetailCaptor.getValue();
+        assertThat(responseDetails.getInvocationStatus().getStatus())
+                .isEqualTo(InvocationStatus.Status.DONE);
+        File record = new File(responseDetails.getTestRecordPath());
+        assertThat(record.exists()).isTrue();
+        FileUtil.deleteFile(record);
+    }
+
+    @Test
+    public void testSubmitTestCommand_reservedMultiDevice() throws Exception {
+        ITestDevice mockDevice = Mockito.mock(ITestDevice.class);
+        ITestDevice mockDevice2 = Mockito.mock(ITestDevice.class);
+        doAnswer(
+                        invocation -> {
+                            Object listeners = invocation.getArgument(0);
+                            ((IScheduledInvocationListener) listeners)
+                                    .invocationComplete(null, null);
+                            return null;
+                        })
+                .when(mMockScheduler)
+                .execCommand(
+                        Mockito.any(),
+                        Mockito.eq(Arrays.asList(mockDevice, mockDevice2)),
+                        Mockito.any());
+        when(mMockDeviceManagement.getDeviceFromReservation(Mockito.eq("reservation-1")))
+                .thenReturn(mockDevice);
+        when(mMockDeviceManagement.getDeviceFromReservation(Mockito.eq("reservation-2")))
+                .thenReturn(mockDevice2);
+        NewTestCommandRequest.Builder requestBuilder =
+                NewTestCommandRequest.newBuilder()
+                        .addArgs("empty")
+                        .addReservationId("reservation-1")
+                        .addReservationId("reservation-2");
         mServer.submitTestCommand(requestBuilder.build(), mRequestObserver);
 
         verify(mRequestObserver).onNext(mResponseCaptor.capture());
