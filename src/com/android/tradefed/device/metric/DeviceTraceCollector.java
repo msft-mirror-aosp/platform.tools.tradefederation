@@ -21,7 +21,6 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement;
-import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
@@ -60,11 +59,6 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
             }
         }
         return this;
-    }
-
-    @Override
-    public void onTestRunFailed(DeviceMetricData testData, FailureDescription failure) {
-        logTraceFile();
     }
 
     @Override
