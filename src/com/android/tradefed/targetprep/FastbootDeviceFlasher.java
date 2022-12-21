@@ -98,7 +98,7 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     private String mSystemBuildFlavor = null;
 
     @VisibleForTesting
-    FuseUtil getFuseUtil() {
+    protected FuseUtil getFuseUtil() {
         return new FuseUtil();
     }
 
