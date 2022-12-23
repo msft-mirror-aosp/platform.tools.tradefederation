@@ -125,7 +125,8 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer
 
     /** Creates a secondary user and returns the new user ID. */
     private static int createSecondaryUser(ITestDevice device) throws DeviceNotAvailableException {
-        return device.createUser("secondary");
+        return device.createUser(
+                "secondary", /* guest= */ false, /* ephemeral= */ false, /* forTesting= */ true);
     }
 
     @Override

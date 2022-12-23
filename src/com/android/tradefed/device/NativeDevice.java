@@ -4787,6 +4787,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public int createUser(String name, boolean guest, boolean ephemeral, boolean forTesting)
+            throws DeviceNotAvailableException, IllegalStateException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
     /**
      * {@inheritDoc}
      */

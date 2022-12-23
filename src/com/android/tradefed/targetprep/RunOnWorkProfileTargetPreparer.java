@@ -143,7 +143,13 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
     /** Creates a work profile and returns the new user ID. */
     private static int createWorkProfile(ITestDevice device) throws DeviceNotAvailableException {
         int parentProfile = device.getCurrentUser();
-        String command = "pm create-user --profileOf " + parentProfile + " --managed work";
+        String command = "pm create-user --profileOf " + parentProfile + " --managed";
+
+        if (device.getApiLevel() >= 34) { // --for-testing was added in U
+            command += " --for-testing";
+        }
+
+        command += " work";
         final String createUserOutput = device.executeShellCommand(command);
 
         try {

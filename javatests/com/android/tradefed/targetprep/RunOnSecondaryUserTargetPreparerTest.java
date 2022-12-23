@@ -23,6 +23,7 @@ import static com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparer.R
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -78,12 +79,18 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
     @Test
     public void setUp_createsStartsAndSwitchesToSecondaryUser() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(0);
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mTestInfo.getDevice()).createUser("secondary");
+        verify(mTestInfo.getDevice())
+                .createUser(
+                        "secondary",
+                        /* guest= */ false,
+                        /* ephemeral= */ false,
+                        /* forTesting= */ true);
         verify(mTestInfo.getDevice()).startUser(2, /* waitFlag= */ true);
         verify(mTestInfo.getDevice()).switchUser(2);
     }
@@ -91,13 +98,19 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void setUp_oldVersion_createsStartsAndSwitchesToSecondaryUserWithoutWait()
             throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(0);
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(28);
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mTestInfo.getDevice()).createUser("secondary");
+        verify(mTestInfo.getDevice())
+                .createUser(
+                        "secondary",
+                        /* guest= */ false,
+                        /* ephemeral= */ false,
+                        /* forTesting= */ true);
         verify(mTestInfo.getDevice()).startUser(2, /* waitFlag= */ false);
         verify(mTestInfo.getDevice()).switchUser(2);
     }
@@ -110,7 +123,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mTestInfo.getDevice(), never()).createUser(any());
+        verify(mTestInfo.getDevice(), never())
+                .createUser(any(), anyBoolean(), anyBoolean(), anyBoolean());
     }
 
     @Test
@@ -129,7 +143,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
     @Test
     public void tearDown_switchesBackToInitialUser() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(0);
         mPreparer.setUp(mTestInfo);
         Mockito.reset(mTestInfo);
@@ -168,7 +183,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
     @Test
     public void setUp_setsRunTestsAsUser() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
 
         mPreparer.setUp(mTestInfo);
 
@@ -191,7 +207,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
     @Test
     public void setUp_installsPackagesInSecondaryUser() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         mOptionSetter.setOptionValue(
                 RunOnSecondaryUserTargetPreparer.TEST_PACKAGE_NAME_OPTION,
                 "com.android.testpackage");
@@ -217,7 +234,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
     @Test
     public void setUp_doesNotDisableTearDown() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         mOptionSetter.setOptionValue("disable-tear-down", "false");
 
         mPreparer.setUp(mTestInfo);
@@ -227,7 +245,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
     @Test
     public void tearDown_removesSecondaryUser() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         mPreparer.setUp(mTestInfo);
 
         mPreparer.tearDown(mTestInfo, /* throwable= */ null);
