@@ -644,8 +644,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         setCommandForBinaryState(mEthernet, mRunCommandAfterSettings,
                 "ifconfig eth0 up", "ifconfig eth0 down");
 
-        setCommandForBinaryState(mBluetooth, mRunCommandAfterSettings,
-                "svc bluetooth enable", "svc bluetooth disable");
+        setCommandForBinaryState(
+                mBluetooth,
+                mRunCommandAfterSettings,
+                "cmd bluetooth_manager enable && cmd bluetooth_manager wait-for-state:STATE_ON",
+                "cmd bluetooth_manager disable && cmd bluetooth_manager wait-for-state:STATE_OFF");
 
         setCommandForBinaryState(mNfc, mRunCommandAfterSettings,
                 "svc nfc enable", "svc nfc disable");
