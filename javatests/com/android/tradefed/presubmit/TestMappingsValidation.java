@@ -71,7 +71,7 @@ public class TestMappingsValidation implements IBuildReceiver {
 
     @Option(name = "test-group-to-validate", description = "The test groups to be validated.")
     private Set<String> mTestGroupToValidate =
-            new HashSet<>(Arrays.asList("presubmit", "postsubmit"));
+            new HashSet<>(Arrays.asList("presubmit", "postsubmit", "presubmit-large"));
 
     @Option(name = "skip-modules", description = "Test modules that could be skipped.")
     private Set<String> mSkipModules = new HashSet<>();
