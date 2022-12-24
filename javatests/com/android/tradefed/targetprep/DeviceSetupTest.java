@@ -455,7 +455,10 @@ public class DeviceSetupTest {
         mDeviceSetup.setBluetooth(BinaryState.ON);
         mDeviceSetup.setUp(mTestInfo);
 
-        verify(mMockDevice).executeShellCommand("svc bluetooth enable");
+        verify(mMockDevice)
+                .executeShellCommand(
+                        "cmd bluetooth_manager enable && cmd bluetooth_manager"
+                                + " wait-for-state:STATE_ON");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
@@ -467,7 +470,10 @@ public class DeviceSetupTest {
         mDeviceSetup.setBluetooth(BinaryState.OFF);
         mDeviceSetup.setUp(mTestInfo);
 
-        verify(mMockDevice).executeShellCommand("svc bluetooth disable");
+        verify(mMockDevice)
+                .executeShellCommand(
+                        "cmd bluetooth_manager disable && cmd bluetooth_manager"
+                                + " wait-for-state:STATE_OFF");
         verify(mMockDevice, atLeastOnce()).getOptions();
     }
 
