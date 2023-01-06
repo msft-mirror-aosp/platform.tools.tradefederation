@@ -303,6 +303,11 @@ public class GceManager {
                             InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE);
                 }
             }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_OXYGEN_SESSION_ID, oxygenDeviceInfo.instanceName());
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_OXYGEN_SERVER_URL,
+                    oxygenDeviceInfo.hostAndPort().getHost());
             return oxygenDeviceInfo;
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
