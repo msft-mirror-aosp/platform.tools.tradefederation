@@ -118,6 +118,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
 
     private static final String A2DP_SNK_PROPERTY = "bluetooth.profile.a2dp.sink.enabled";
     private static final String A2DP_SRC_PROPERTY = "bluetooth.profile.a2dp.source.enabled";
+    private static final String HFP_HF_PROPERTY = "bluetooth.profile.hfp.hf.enabled";
+    private static final String HFP_AG_PROPERTY = "bluetooth.profile.hfp.ag.enabled";
 
     private IRunUtil mRunUtil = new RunUtil();
 
@@ -519,6 +521,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                 long startTimestamp = System.currentTimeMillis();
                 for (String testName : profileTests) {
                     toggleA2dpSinkIfNeeded(testInfo.getDevice(), testName);
+                    toggleHfpHfIfNeeded(testInfo.getDevice(), testName);
                     runPtsBotTest(profile, testName, testInfo, listener);
                 }
                 long endTimestamp = System.currentTimeMillis();
@@ -541,6 +544,17 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         } else if (!getProperty(testDevice, A2DP_SRC_PROPERTY).equals("true")) {
             setProperty(testDevice, A2DP_SNK_PROPERTY, false);
             setProperty(testDevice, A2DP_SRC_PROPERTY, true);
+        }
+    }
+
+    private void toggleHfpHfIfNeeded(ITestDevice testDevice, String testName) {
+        CLog.i("toggleHfpHfIfNeeded: " + testName);
+        if (testName.startsWith("HFP/HF")) {
+            setProperty(testDevice, HFP_HF_PROPERTY, true);
+            setProperty(testDevice, HFP_AG_PROPERTY, false);
+        } else if (!getProperty(testDevice, HFP_HF_PROPERTY).equals("true")) {
+            setProperty(testDevice, HFP_HF_PROPERTY, false);
+            setProperty(testDevice, HFP_AG_PROPERTY, true);
         }
     }
 
