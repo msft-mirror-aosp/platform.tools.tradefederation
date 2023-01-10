@@ -94,6 +94,7 @@ public class OxygenClientTest {
         mOxygenBinaryFile = FileUtil.createTempFile("oxygen", "binary");
         mBuildInfo = new BuildInfo("P1234567", "target");
         mBuildInfo.setBuildBranch("testBranch");
+        mBuildInfo.addBuildAttribute("build_target", "target");
         mGceAvdInfo =
                 new GceAvdInfo(
                         "6a6a744e-0653-4926-b7b8-535d121a2fc9",
