@@ -1756,10 +1756,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         devices.stream()
                                 .map(d -> d.getSerialNumber())
                                 .collect(Collectors.toList())));
+        // Supports ATE use case, number of device configs can be 2 or more.
+        CLog.i("Device conifgs: %s", config.getDeviceConfig().size());
         ExecutableCommand execCmd = createExecutableCommand(cmdTracker, config, false);
-        if (config.getDeviceConfig().size() > 2) {
-            throw new RuntimeException("execCommand assume a maximum of two devices invocation.");
-        }
 
         synchronized (this) {
             if (isShuttingDown()) {
