@@ -38,6 +38,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.TestRunnerUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -213,8 +214,19 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     private CommandResult runInvocation(final Invocation invocation, final String... extraArgs) {
         IRunUtil runUtil = getRunUtil();
         runUtil.setWorkingDir(invocation.workingDir);
+        boolean ldLibraryPathSetInEnv = false;
         for (EnvPair envPair : invocation.env) {
             runUtil.setEnvVariable(envPair.key, envPair.val);
+            if ("LD_LIBRARY_PATH".equals(envPair.key)) {
+                ldLibraryPathSetInEnv = true;
+            }
+        }
+        // Update LD_LIBRARY_PATH if it's not set already through command line args.
+        if (!ldLibraryPathSetInEnv) {
+            String ldLibraryPath = TestRunnerUtil.getLdLibraryPath(new File(invocation.command[0]));
+            if (ldLibraryPath != null) {
+                runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
+            }
         }
         ArrayList<String> command = new ArrayList<String>(Arrays.asList(invocation.command));
         command.addAll(Arrays.asList(extraArgs));
