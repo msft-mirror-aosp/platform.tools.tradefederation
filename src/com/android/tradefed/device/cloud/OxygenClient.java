@@ -204,10 +204,11 @@ public class OxygenClient {
         List<String> buildIds = new ArrayList<>();
 
         for (IBuildInfo b : buildInfos) {
-            if (b.getBuildTargetName().isEmpty()) {
-                buildTargets.add(b.getBuildFlavor());
+            if (b.getBuildAttributes().containsKey("build_target")) {
+                // If BuildInfo contains the attribute for a build target, use that.
+                buildTargets.add(b.getBuildAttributes().get("build_target"));
             } else {
-                buildTargets.add(b.getBuildTargetName());
+                buildTargets.add(b.getBuildFlavor());
             }
             buildBranches.add(b.getBuildBranch());
             buildIds.add(b.getBuildId());
