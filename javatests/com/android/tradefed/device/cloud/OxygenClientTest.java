@@ -27,6 +27,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.MultiMap;
 
 import com.google.common.base.Joiner;
 import com.google.common.net.HostAndPort;
@@ -146,7 +147,8 @@ public class OxygenClientTest {
                                                 + " -kernel_build_id K1234567 -target_region"
                                                 + " us-east -accounting_user random1234@space.com"
                                                 + " -lease_length_secs 3600"
-                                                + " -arg1 value1";
+                                                + " -arg1 value1"
+                                                + " -user_debug_info work_unit_id:some_id";
                                 assertEquals(timeout, 900000);
                                 assertEquals(expectedCmdString, cmdString);
 
@@ -159,7 +161,9 @@ public class OxygenClientTest {
                         })
                 .when(mRunUtil)
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
-        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions);
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions, attributes);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
@@ -187,7 +191,8 @@ public class OxygenClientTest {
                                                 + " -target_region us-east"
                                                 + " -accounting_user random1234@space.com"
                                                 + " -lease_length_secs 3600"
-                                                + " -arg1 value1";
+                                                + " -arg1 value1"
+                                                + " -user_debug_info work_unit_id:some_id";
                                 assertEquals(timeout, 900000);
                                 assertEquals(expectedCmdString, cmdString);
 
@@ -200,9 +205,11 @@ public class OxygenClientTest {
                         })
                 .when(mRunUtil)
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
         CommandResult res =
                 mOxygenClient.leaseMultipleDevices(
-                        Arrays.asList(mBuildInfo, mBuildInfo), mTestDeviceOptions);
+                        Arrays.asList(mBuildInfo, mBuildInfo), mTestDeviceOptions, attributes);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }

@@ -692,7 +692,8 @@ public class InvocationExecution implements IInvocationExecution {
         List<IBuildInfo> buildInfos = context.getBuildInfos();
 
         // Start multiple devices in a group
-        List<GceAvdInfo> gceAvdInfoList = multiDeviceRequester.startMultiDevicesGce(buildInfos);
+        List<GceAvdInfo> gceAvdInfoList =
+                multiDeviceRequester.startMultiDevicesGce(buildInfos, context.getAttributes());
         for (int i = 0; i < devices.size(); i++) {
             RemoteAndroidVirtualDevice device = (RemoteAndroidVirtualDevice) devices.get(i);
             // For each device, do setup with its GceAvdInfo
