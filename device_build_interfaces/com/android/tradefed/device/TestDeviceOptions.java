@@ -870,7 +870,6 @@ public class TestDeviceOptions {
         return Collections.emptyList();
     }
 
-    /** Returns true if we should block on GCE tear down completion before proceeding. */
     public List<String> getInvocationAttributeToMetadata() {
         return mInvocationAttributeToMetadata;
     }
