@@ -118,7 +118,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             name = "additional-test-mapping-zip",
             description =
                     "A list of additional test_mappings.zip that contains TEST_MAPPING files. The "
-                            + "runner will collect tests based on them. If none  is specified, "
+                            + "runner will collect tests based on them. If none is specified, "
                             + "only the tests on the triggering device build will be run.")
     private List<String> mAdditionalTestMappingZips = new ArrayList<>();
 
@@ -228,7 +228,8 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             mTestGroup,
                             getPrioritizeHostConfig(),
                             mKeywords,
-                            mAdditionalTestMappingZips);
+                            mAdditionalTestMappingZips,
+                            mMatchedPatternPaths);
             if (!mTestModulesForced.isEmpty()) {
                 CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
                 testInfosToRun =
