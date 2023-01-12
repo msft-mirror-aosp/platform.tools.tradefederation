@@ -69,6 +69,7 @@ public class TestMapping {
     private static final String KEY_IMPORT_PATH = "path";
     private static final String KEY_HOST = "host";
     private static final String KEY_KEYWORDS = "keywords";
+    private static final String KEY_FILE_PATTERNS = "file_patterns";
     private static final String KEY_NAME = "name";
     private static final String KEY_OPTIONS = "options";
     private static final String TEST_MAPPING = "TEST_MAPPING";
@@ -112,8 +113,9 @@ public class TestMapping {
      *
      * @param path The {@link Path} to a TEST_MAPPING file.
      * @param testMappingsDir The {@link Path} to the folder of all TEST_MAPPING files for a build.
+     * @param matchedPatternPaths The {@link Set<String>} to file paths matched patterns.
      */
-    public TestMapping(Path path, Path testMappingsDir) {
+    public TestMapping(Path path, Path testMappingsDir, Set<String> matchedPatternPaths) {
         mTestCollection = new LinkedHashMap<>();
         String relativePath = testMappingsDir.relativize(path.getParent()).toString();
         String errorMessage = null;
@@ -154,6 +156,16 @@ public class TestMapping {
                             keywords.add(keywordArray.getString(j));
                         }
                     }
+                    Set<String> filePatterns = new HashSet<>();
+                    if (testObject.has(KEY_FILE_PATTERNS)) {
+                        JSONArray filePatternArray = testObject.getJSONArray(KEY_FILE_PATTERNS);
+                        for (int k = 0; k < filePatternArray.length(); k++) {
+                            filePatterns.add(filePatternArray.getString(k));
+                        }
+                    }
+                    if (!isMatchedFilePatterns(relativePath, matchedPatternPaths, filePatterns)) {
+                        continue;
+                    }
                     TestInfo test =
                             new TestInfo(
                                     testObject.getString(KEY_NAME),
@@ -182,7 +194,8 @@ public class TestMapping {
                     mIgnoreTestMappingImports = true;
                     for (Path filePath : filePaths) {
                         Map<String, Set<TestInfo>> filePathImportedTestCollection =
-                                new TestMapping(filePath, testMappingsDir).getTestCollection();
+                                new TestMapping(filePath, testMappingsDir, matchedPatternPaths)
+                                        .getTestCollection();
                         for (String group : filePathImportedTestCollection.keySet()) {
                             // Add all imported TestInfo to mTestCollection.
                             if (filePathImportedTestCollection.get(group) != null) {
@@ -216,6 +229,42 @@ public class TestMapping {
             throw new HarnessRuntimeException(
                     errorMessage, InfraErrorIdentifier.TEST_MAPPING_FILE_FORMAT_ISSUE);
         }
+    }
+
+    /**
+     * Helper to check whether the given matched-pattern-paths matches the file patterns.
+     *
+     * @param testMappingDir A {@link String} to Test_MAPPING directory path.
+     * @param matchedPatternPaths A {@link Set<String>} to file paths matched patterns.
+     * @param filePatterns A {@link Set<String>} to filePatterns from a TEST_MAPPING file.
+     * @return A {@link Boolean} of matched result.
+     */
+    private static boolean isMatchedFilePatterns(
+            String testMappingDir, Set<String> matchedPatternPaths, Set<String> filePatterns) {
+        Set<String> matchedPatternPathsInSource = new HashSet<>();
+        for (String matchedPatternPath : matchedPatternPaths) {
+            if (matchedPatternPath.matches(
+                    String.join(File.separator, new String[] {testMappingDir, ".*"}))) {
+                matchedPatternPathsInSource.add(matchedPatternPath);
+            }
+        }
+        // For POSTSUBMIT runs, Test Mapping should run the full tests, so return true when
+        // mTestMappingRelativePaths is empty.
+        if (mTestMappingRelativePaths.isEmpty() || filePatterns.isEmpty()) {
+            return true;
+        }
+        for (String matchedPatternPathInSource : matchedPatternPathsInSource) {
+            Path matchedPatternFilePath = Paths.get(matchedPatternPathInSource);
+            if (matchedPatternFilePath.getFileName().toString().equals(TEST_MAPPING)) {
+                return true;
+            }
+            for (String filePattern : filePatterns) {
+                if (matchedPatternPathInSource.matches(filePattern)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -386,7 +435,8 @@ public class TestMapping {
      */
     public static Set<TestInfo> getTests(
             IBuildInfo buildInfo, String testGroup, boolean hostOnly, Set<String> keywords) {
-        return getTests(buildInfo, testGroup, hostOnly, keywords, new ArrayList<>());
+        return getTests(
+                buildInfo, testGroup, hostOnly, keywords, new ArrayList<>(), new HashSet<>());
     }
 
     /**
@@ -402,15 +452,17 @@ public class TestMapping {
      *     Mapping suite.
      * @param extraZipNames A set of {@link String} for the name of additional test_mappings.zip
      *     that will be merged.
+     * @param matchedPatternPaths The {@link Set<String>} to file paths matched patterns.
      * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
      */
     @SuppressWarnings("StreamResourceLeak")
     public static Set<TestInfo> getTests(
-        IBuildInfo buildInfo,
-        String testGroup,
-        boolean hostOnly,
-        Set<String> keywords,
-        List<String> extraZipNames) {
+            IBuildInfo buildInfo,
+            String testGroup,
+            boolean hostOnly,
+            Set<String> keywords,
+            List<String> extraZipNames,
+            Set<String> matchedPatternPaths) {
         Set<TestInfo> tests = new HashSet<TestInfo>();
         File zipFile;
         if (buildInfo == null) {
@@ -434,7 +486,10 @@ public class TestMapping {
                     .forEach(
                             path ->
                                     tests.addAll(
-                                            new TestMapping(path, testMappingsRootPath)
+                                            new TestMapping(
+                                                            path,
+                                                            testMappingsRootPath,
+                                                            matchedPatternPaths)
                                                     .getTests(
                                                             testGroup,
                                                             disabledTests,
@@ -560,7 +615,7 @@ public class TestMapping {
     private static void getAllTests(Map<String, Set<TestInfo>> allTests,
         Path path, Path testMappingsRootPath) {
         Map<String, Set<TestInfo>> testCollection =
-            new TestMapping(path, testMappingsRootPath).getTestCollection();
+                new TestMapping(path, testMappingsRootPath, new HashSet<>()).getTestCollection();
         for (String group : testCollection.keySet()) {
             allTests.computeIfAbsent(group, k -> new HashSet<>()).addAll(testCollection.get(group));
         }
