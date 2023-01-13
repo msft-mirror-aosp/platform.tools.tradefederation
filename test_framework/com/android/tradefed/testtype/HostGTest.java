@@ -40,6 +40,7 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil.EnvPriority;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ShellOutputReceiverStream;
+import com.android.tradefed.util.TestRunnerUtil;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -121,6 +122,12 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         CLog.d("Using updated $PATH: %s", path);
         runUtil.setEnvVariablePriority(EnvPriority.SET);
         runUtil.setEnvVariable("PATH", path);
+
+        // Update LD_LIBRARY_PATH
+        String ldLibraryPath = TestRunnerUtil.getLdLibraryPath(gtestFile);
+        if (ldLibraryPath != null) {
+            runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
+        }
 
         // If there's a shell output receiver to pass results along to, then
         // ShellOutputReceiverStream will write that into the IShellOutputReceiver. If not, the
