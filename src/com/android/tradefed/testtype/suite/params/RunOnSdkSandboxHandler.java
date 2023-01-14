@@ -19,8 +19,12 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.RunOnSdkSandboxTargetPreparer;
+import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.ITestAnnotationFilterReceiver;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Handler for {@link ModuleParameters#RUN_ON_SDK_SANDBOX}. */
 public class RunOnSdkSandboxHandler implements IModuleParameterHandler {
@@ -43,6 +47,22 @@ public class RunOnSdkSandboxHandler implements IModuleParameterHandler {
     /** {@inheritDoc} */
     @Override
     public void applySetup(IConfiguration moduleConfiguration) {
-        // nothing to do here, move along.
+        // The SDK sandbox is at least as restrictive as instant apps. Therefore we only run tests
+        // marked for @AppModeInstant and exclude tests for @FullAppMode.
+        for (IRemoteTest test : moduleConfiguration.getTests()) {
+            if (test instanceof ITestAnnotationFilterReceiver) {
+                ITestAnnotationFilterReceiver filterTest = (ITestAnnotationFilterReceiver) test;
+                // Retrieve the current set of excludeAnnotations to maintain for after the
+                // clearing/reset of the annotations.
+                Set<String> excludeAnnotations = new HashSet<>(filterTest.getExcludeAnnotations());
+                // Remove any global filter on AppModeInstant so instant mode tests can run.
+                excludeAnnotations.remove("android.platform.test.annotations.AppModeInstant");
+                // Prevent full mode tests from running.
+                excludeAnnotations.add("android.platform.test.annotations.AppModeFull");
+                // Reset the annotations of the tests
+                filterTest.clearExcludeAnnotations();
+                filterTest.addAllExcludeAnnotation(excludeAnnotations);
+            }
+        }
     }
 }

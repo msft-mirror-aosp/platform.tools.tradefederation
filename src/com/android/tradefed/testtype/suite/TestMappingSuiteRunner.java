@@ -146,6 +146,13 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "provide a feasibility for test mapping sampling.")
     private boolean mAllowEmptyTests = false;
 
+    @Option(
+            name = "force-full-run",
+            description =
+                    "Whether or not to run full tests. It is to provide a feasibility for tests on "
+                            + "kernel branches. The option should only be used for kernel tests.")
+    private boolean mForceFullRun = false;
+
     /** Flag to indicate whether the test mapping suite runner is in test discovery mode. */
     private Boolean mIsTestDiscovery = false;
 
@@ -219,6 +226,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
 
         if (mTestGroup != null) {
             TestMapping.setIgnoreTestMappingImports(mIgnoreTestMappingImports);
+            if (mForceFullRun) {
+                CLog.d("--force-full-run is specified, all tests in test group %s will be ran.",
+                        mTestGroup);
+                mTestMappingPaths.clear();
+            }
             if (!mTestMappingPaths.isEmpty()) {
                 TestMapping.setTestMappingPaths(mTestMappingPaths);
             }

@@ -15,11 +15,14 @@
  */
 package com.android.tradefed.testtype.suite.params;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.targetprep.RunOnSdkSandboxTargetPreparer;
+import com.android.tradefed.targetprep.suite.SuiteApkInstaller;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -46,5 +49,23 @@ public class RunOnSdkSandboxHandlerTest {
         assertTrue(
                 mConfiguration.getTargetPreparers().get(0)
                         instanceof RunOnSdkSandboxTargetPreparer);
+    }
+
+    /** Test that when a module configuration go through the handler it gets tuned properly. */
+    @Test
+    public void testApplySetup() {
+        SuiteApkInstaller installer = new SuiteApkInstaller();
+        assertFalse(installer.isInstantMode());
+        TestFilterable test = new TestFilterable();
+        assertEquals(0, test.getExcludeAnnotations().size());
+        mConfiguration.setTest(test);
+        mConfiguration.setTargetPreparer(installer);
+        mHandler.applySetup(mConfiguration);
+
+        // Full mode is filtered out.
+        assertEquals(1, test.getExcludeAnnotations().size());
+        assertEquals(
+                "android.platform.test.annotations.AppModeFull",
+                test.getExcludeAnnotations().iterator().next());
     }
 }
