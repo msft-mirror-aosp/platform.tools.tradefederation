@@ -23,6 +23,7 @@
 
     <uses-sdk android:minSdkVersion="7"
               android:targetSdkVersion="31" />
+
     <application>
         <uses-library android:name="android.test.runner" />
         <service android:name=".WifiMonitorService">
