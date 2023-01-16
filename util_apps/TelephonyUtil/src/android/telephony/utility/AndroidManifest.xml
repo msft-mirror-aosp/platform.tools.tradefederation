@@ -17,8 +17,9 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="android.telephony.utility">
+
     <uses-sdk android:minSdkVersion="28"
-          android:targetSdkVersion="30"/>
+          android:targetSdkVersion="31"/>
 
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
