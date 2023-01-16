@@ -217,7 +217,8 @@ public class WifiConnector {
         try {
             urlConnection = (HttpURLConnection) url.openConnection();
             urlConnection.connect();
-        } catch (final IOException e) {
+        } catch (final Exception e) {
+            Log.e(TAG, "Failed to open connection to check connectivity", e);
             return false;
         } finally {
             if (urlConnection != null) {
