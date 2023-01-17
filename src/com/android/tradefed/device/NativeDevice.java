@@ -4871,6 +4871,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public Integer getMainUserId() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
     /** Used internally to fallback to non-user logic */
     private int getCurrentUserCompatible() throws DeviceNotAvailableException {
         try {
