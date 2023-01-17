@@ -98,11 +98,13 @@ public class RunOnWorkProfileTargetPreparerTest {
         when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(30);
         when(mTestInfo.getDevice().executeShellCommand("dumpsys device_policy")).thenReturn("");
+        when(mTestInfo.getDevice().getApiLevel()).thenReturn(34); // U
     }
 
     @Test
     public void setUp_createsAndStartsWorkProfile() throws Exception {
-        String expectedCreateUserCommand = "pm create-user --profileOf 0 --managed work";
+        String expectedCreateUserCommand =
+                "pm create-user --profileOf 0 --managed --for-testing work";
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
 
@@ -127,7 +129,8 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void setup_hasDeviceOwner_removesDeviceOwner() throws Exception {
-        String expectedCreateUserCommand = "pm create-user --profileOf 0 --managed work";
+        String expectedCreateUserCommand =
+                "pm create-user --profileOf 0 --managed --for-testing work";
         String expectedRemoveDeviceOwnerCommand =
                 "dpm remove-active-admin --user 0 " + DEVICE_OWNER_COMPONENT_NAME;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
@@ -145,7 +148,8 @@ public class RunOnWorkProfileTargetPreparerTest {
     @Test
     public void setup_hasDeviceOwner_errorWhenRemovingDeviceOwner_throwsException()
             throws Exception {
-        String expectedCreateUserCommand = "pm create-user --profileOf 0 --managed work";
+        String expectedCreateUserCommand =
+                "pm create-user --profileOf 0 --managed --for-testing work";
         String expectedRemoveDeviceOwnerCommand =
                 "dpm remove-active-admin --user 0 " + DEVICE_OWNER_COMPONENT_NAME;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
@@ -203,7 +207,8 @@ public class RunOnWorkProfileTargetPreparerTest {
     @Test
     public void setUp_nonZeroCurrentUser_createsWorkProfileForCorrectUser() throws Exception {
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(1);
-        String expectedCreateUserCommand = "pm create-user --profileOf 1 --managed work";
+        String expectedCreateUserCommand =
+                "pm create-user --profileOf 1 --managed --for-testing work";
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
 
@@ -231,7 +236,8 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void setUp_setsRunTestsAsUser() throws Exception {
-        String expectedCreateUserCommand = "pm create-user --profileOf 0 --managed work";
+        String expectedCreateUserCommand =
+                "pm create-user --profileOf 0 --managed --for-testing work";
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
 
@@ -261,7 +267,8 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void setUp_installsPackagesInWorkUser() throws Exception {
-        String expectedCreateUserCommand = "pm create-user --profileOf 0 --managed work";
+        String expectedCreateUserCommand =
+                "pm create-user --profileOf 0 --managed --for-testing work";
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
         mOptionSetter.setOptionValue(TEST_PACKAGE_NAME_OPTION, "com.android.testpackage");
@@ -292,7 +299,8 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void setUp_doesNotDisableTearDown() throws Exception {
-        String expectedCreateUserCommand = "pm create-user --profileOf 0 --managed work";
+        String expectedCreateUserCommand =
+                "pm create-user --profileOf 0 --managed --for-testing work";
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
         mOptionSetter.setOptionValue("disable-tear-down", "false");
@@ -304,7 +312,8 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void tearDown_removesWorkUser() throws Exception {
-        String expectedCreateUserCommand = "pm create-user --profileOf 0 --managed work";
+        String expectedCreateUserCommand =
+                "pm create-user --profileOf 0 --managed --for-testing work";
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
         mPreparer.setUp(mTestInfo);
@@ -325,7 +334,8 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void teardown_didRemoveDeviceOwner_setsDeviceOwner() throws Exception {
-        String expectedCreateUserCommand = "pm create-user --profileOf 0 --managed work";
+        String expectedCreateUserCommand =
+                "pm create-user --profileOf 0 --managed --for-testing work";
         String expectedRemoveDeviceOwnerCommand =
                 "dpm remove-active-admin --user 0 " + DEVICE_OWNER_COMPONENT_NAME;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
