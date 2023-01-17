@@ -119,6 +119,8 @@ public class TestDevice extends NativeDevice {
 
     private static final int FLAG_PRIMARY = 1; // From the UserInfo class
 
+    private static final int FLAG_MAIN = 0x00004000; // From the UserInfo class
+
     private static final String[] SETTINGS_NAMESPACE = {"system", "secure", "global"};
 
     /** user pattern in the output of "pm list users" = TEXT{<id>:<name>:<flags>} TEXT * */
@@ -1503,10 +1505,20 @@ public class TestDevice extends NativeDevice {
      */
     @Override
     public Integer getPrimaryUserId() throws DeviceNotAvailableException {
+        return getUserIdByFlag(FLAG_PRIMARY);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Integer getMainUserId() throws DeviceNotAvailableException {
+        return getUserIdByFlag(FLAG_MAIN);
+    }
+
+    private Integer getUserIdByFlag(int requiredFlag) throws DeviceNotAvailableException {
         ArrayList<String[]> users = tokenizeListUsers();
         for (String[] user : users) {
             int flag = Integer.parseInt(user[3], 16);
-            if ((flag & FLAG_PRIMARY) != 0) {
+            if ((flag & requiredFlag) != 0) {
                 return Integer.parseInt(user[1]);
             }
         }
