@@ -841,6 +841,15 @@ public interface ITestDevice extends INativeDevice {
     public Integer getPrimaryUserId() throws DeviceNotAvailableException;
 
     /**
+     * Returns the main user id.
+     *
+     * @return the userId of the main user if there is one, and null if there is no main user.
+     * @throws DeviceNotAvailableException
+     * @throws DeviceRuntimeException if the output from the device is not as expected.
+     */
+    public Integer getMainUserId() throws DeviceNotAvailableException;
+
+    /**
      * Return the id of the current running user. In case of error, return -10000.
      *
      * @throws DeviceNotAvailableException
