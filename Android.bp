@@ -34,6 +34,7 @@ java_library_host {
         include_dirs: ["external/protobuf/src"],
         type: "full",
     },
+    java_version: "11",
 }
 
 java_library_host {
@@ -51,6 +52,7 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    java_version: "11",
 }
 
 java_library_host {
@@ -73,6 +75,7 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    java_version: "11",
 }
 
 java_library_host {
@@ -90,6 +93,7 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    java_version: "11",
 }
 
 java_library_host {
@@ -107,6 +111,7 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    java_version: "11",
 }
 
 // Main Target to build tradefed jar
@@ -126,6 +131,7 @@ tradefed_java_library_host {
         "tradefed-test-framework",
     ],
     manifest: "MANIFEST.mf",
+    java_version: "11",
 }
 
 // Tradefed build target without the test framework statically linked
@@ -142,6 +148,7 @@ java_library_host {
         "tradefed-test-framework",
     ],
     manifest: "MANIFEST.mf",
+    java_version: "11",
 }
 
 java_library_host {
@@ -195,6 +202,7 @@ java_library_host {
     libs: [
         "loganalysis",
     ],
+    java_version: "11",
 }
 
 // Turn off various doclava warnings when generating
