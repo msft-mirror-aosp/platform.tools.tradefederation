@@ -29,7 +29,6 @@ import android.util.Log;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -154,7 +153,7 @@ public class WifiConnector {
             config.preSharedKey = quote(psk);
         }
 
-        if (disableMacRandomization && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        if (disableMacRandomization && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             config.setMacRandomizationSetting(WifiConfiguration.RANDOMIZATION_NONE);
         }
 
