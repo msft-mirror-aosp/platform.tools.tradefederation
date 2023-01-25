@@ -19,6 +19,7 @@ LOCAL_ERROR_PRONE_FLAGS:= -XDandroidCompatible=false \
                           -Xep:BadInmport:ERROR \
                           -Xep:BoxedPrimitiveConstructor:ERROR \
                           -Xep:CatchFail:ERROR \
+                          -Xep:CheckReturnValue:ERROR \
                           -Xep:ConstantField:ERROR \
                           -Xep:DeadException:ERROR \
                           -Xep:EqualsIncompatibleType:ERROR \
