@@ -176,7 +176,7 @@ public class FailureDescription {
             s.append(mErrorId.status());
             s.append("] ");
         }
-        s.append(mErrorMessage);
+        s.append(this.toString());
         return s.toString();
     }
 
