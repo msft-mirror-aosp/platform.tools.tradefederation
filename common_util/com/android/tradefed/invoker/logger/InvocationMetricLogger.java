@@ -58,6 +58,7 @@ public class InvocationMetricLogger {
         XTS_PARTIAL_DOWNLOAD_UNSUPPORTED_FILTER_FALLBACK_COUNT(
                 "xts_partial_download_unsupported_filter_fallback_count", true),
         XTS_PARTIAL_DOWNLOAD_FALLBACK_COUNT("xts_partial_download_fallback_count", true),
+        XTS_PARTIAL_DOWNLOAD_UNFOUND_MODULES("xts_partial_download_unfound_modules", true),
         XTS_PARTIAL_DOWNLOAD_TOTAL_COUNT("xts_partial_download_total_count", true),
         SANDBOX_JAR_STAGING_PARTIAL_DOWNLOAD_FEATURE_COUNT(
                 "sandbox_jar_staging_partial_download_FEATURE_count", true),
