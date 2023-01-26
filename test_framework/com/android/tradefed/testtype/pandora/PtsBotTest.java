@@ -687,7 +687,13 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
             androidLogInfo(testInfo.getDevice(), "Test Ended [Success]: " + testName);
         } else {
             androidLogError(testInfo.getDevice(), "Test Ended [Failed]: " + testName);
-            listener.testFailed(testDescription, "Unknown");
+            listener.testFailed(
+                    testDescription,
+                    String.format(
+                            "Test case %s failed, please route bugs to"
+                                    + " android-bluetooth@google.com\n"
+                                    + "Refer to host_log files to find the test logs",
+                            testName));
         }
 
         listener.testEnded(testDescription, Collections.emptyMap());
