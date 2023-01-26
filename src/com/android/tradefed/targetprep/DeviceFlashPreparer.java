@@ -119,11 +119,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                             + "should be flashed to")
     private String mRamdiskPartition = "boot";
 
-    @Option(
-            name = "disable-ramdump",
-            description = "Will set the flag to disable ramdump on the device.")
-    private boolean mDisableRamdump = false;
-
     /**
      * Sets the device boot time
      * <p/>
@@ -221,7 +216,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 }
                 if (flasher instanceof FastbootDeviceFlasher) {
                     ((FastbootDeviceFlasher) flasher).setFlashOptions(mFastbootFlashOptions);
-                    ((FastbootDeviceFlasher) flasher).setDisableRamdump(mDisableRamdump);
                 }
                 start = System.currentTimeMillis();
                 flasher.preFlashOperations(device, deviceBuild);
