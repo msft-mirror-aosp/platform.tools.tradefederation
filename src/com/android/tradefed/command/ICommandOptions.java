@@ -177,6 +177,9 @@ public interface ICommandOptions {
     /** Whether or not to use sandbox mode in remote invocation. */
     public boolean shouldUseRemoteSandboxMode();
 
+    /** Whether or not to trigger a deviceless remote invocation. */
+    public boolean isRemoteInvocationDeviceless();
+
     /** Returns the set of auto log collectors to be added for an invocation */
     public Set<AutoLogCollector> getAutoLogCollectors();
 
