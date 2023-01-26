@@ -176,6 +176,11 @@ public class CommandOptions implements ICommandOptions {
     )
     private boolean mUseRemoteSandbox = false;
 
+    @Option(
+            name = "deviceless-remote-exec",
+            description = "Whether or not to trigger --null-deviec in the remote invocation.")
+    private boolean mDevicelessRemoteExecution = false;
+
     @Deprecated
     @Option(
             name = "parallel-remote-setup",
@@ -570,6 +575,12 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public boolean shouldUseRemoteSandboxMode() {
         return mUseRemoteSandbox;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isRemoteInvocationDeviceless() {
+        return mDevicelessRemoteExecution;
     }
 
     /** {@inheritDoc} */
