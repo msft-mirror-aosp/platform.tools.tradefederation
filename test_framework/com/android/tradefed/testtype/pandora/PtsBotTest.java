@@ -36,6 +36,7 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.PythonVirtualenvHelper;
 import com.android.tradefed.util.RunUtil;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -56,6 +57,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 
 /**
@@ -627,6 +630,17 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                 BufferedReader stdError =
                         new BufferedReader(new InputStreamReader(process.getErrorStream()));
 
+                CompletableFuture<Void> future =
+                        CompletableFuture.runAsync(
+                                () -> {
+                                    stdError.lines().forEach(line -> CLog.e(line));
+                                    try {
+                                        stdError.close();
+                                    } catch (IOException e) {
+                                        throw new CompletionException(e);
+                                    }
+                                });
+
                 Optional<String> lastLine =
                         stdInput.lines().peek(line -> CLog.i(line)).reduce((last, value) -> value);
 
@@ -645,9 +659,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                 }
 
                 stdInput.close();
-
-                stdError.lines().forEach(line -> CLog.e(line));
-                stdError.close();
+                future.join();
 
             } catch (Exception e) {
                 CLog.e(e);
