@@ -464,6 +464,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     // device_config set_sync_disabled_for_tests persistent
 
     private static final String PERSIST_PREFIX = "persist.";
+    private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
 
     public ITestDevice getDevice(TestInformation testInfo) {
         return testInfo.getDevice();
@@ -796,12 +797,19 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
+        boolean needsReboot = false;
         // Set persistent props and build a map of all the nonpersistent ones
         Map<String, String> nonpersistentProps = new HashMap<String, String>();
         for (Map.Entry<String, String> prop : mSetProps.entrySet()) {
             if (prop.getKey().startsWith(PERSIST_PREFIX)) {
                 // TODO: Check that set was successful
                 device.setProperty(prop.getKey(), prop.getValue());
+            } else if (prop.getKey().equals(MEMTAG_BOOTCTL)) {
+                // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
+                // stores the value in the misc partition, and gets applied and restored on
+                // reboot.
+                device.setProperty(prop.getKey(), prop.getValue());
+                needsReboot = true;
             } else {
                 nonpersistentProps.put(prop.getKey(), prop.getValue());
             }
@@ -847,6 +855,10 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             }
             // Set reasonable permissions for /data/local.prop
             device.executeShellCommand("chmod 644 /data/local.prop");
+            needsReboot = true;
+        }
+
+        if (needsReboot) {
             CLog.i("Rebooting %s due to system property change", device.getSerialNumber());
             device.reboot();
         }
