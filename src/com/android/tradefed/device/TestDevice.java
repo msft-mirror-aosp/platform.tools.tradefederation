@@ -1368,6 +1368,17 @@ public class TestDevice extends NativeDevice {
         return getMaxNumberOfUsersSupported() > 1;
     }
 
+    @Override
+    public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("isHeadlessSystemUserMode", 29);
+        if (getApiLevel() >= 34) {
+            String command = "cmd user is-headless-system-user-mode";
+            String commandOutput = executeShellCommand(command).trim();
+            return Boolean.valueOf(commandOutput);
+        }
+        return getBooleanProperty("ro.fw.mu.headless_system_user", false);
+    }
+
     /**
      * {@inheritDoc}
      */
