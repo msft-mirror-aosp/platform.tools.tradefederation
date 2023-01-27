@@ -18,6 +18,7 @@ package com.android.tradefed.util;
 
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IFileDownloader;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 
@@ -203,7 +204,7 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         String[] pathParts = parseGcsPath(remotePath);
         String bucketName = pathParts[0];
         String remoteFilename = pathParts[1];
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("gcs_is_fresh " + remotePath)) {
             StorageObject remoteFileMeta = getRemoteFileMetaData(bucketName, remoteFilename);
             if (localFile == null || !localFile.exists()) {
                 if (!isRemoteFolder(bucketName, remoteFilename) && remoteFileMeta == null) {
