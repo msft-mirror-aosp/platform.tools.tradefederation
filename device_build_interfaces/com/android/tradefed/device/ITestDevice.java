@@ -699,6 +699,9 @@ public interface ITestDevice extends INativeDevice {
      */
     public boolean isMultiUserSupported() throws DeviceNotAvailableException;
 
+    /** Returns whether the device uses headless system user mode. */
+    public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException;
+
     /**
      * Create a user with a given name and default flags 0.
      *
