@@ -19,7 +19,6 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -42,6 +41,7 @@ public class DeviceSyncHelper {
     public boolean sync() throws DeviceNotAvailableException {
         try {
             List<String> partitions = getPartitions(mTargetFilesFolder);
+            lowerCaseDirectory(mTargetFilesFolder);
             syncFiles(mDevice, partitions);
             return true;
         } catch (IOException e) {
@@ -56,6 +56,16 @@ public class DeviceSyncHelper {
         return Arrays.asList(partitionString.split("\n"));
     }
 
+    private void lowerCaseDirectory(File rootFolder) {
+        for (File f : rootFolder.listFiles()) {
+            if (f.isDirectory()) {
+                File newName = new File(f.getParentFile(), f.getName().toLowerCase());
+                f.renameTo(newName);
+            }
+        }
+        CLog.d("Directory content: %s", Arrays.asList(rootFolder.listFiles()));
+    }
+
     private void syncFiles(ITestDevice device, List<String> partitions)
             throws DeviceNotAvailableException, IOException {
         device.enableAdbRoot();
@@ -66,6 +76,7 @@ public class DeviceSyncHelper {
             File localToPush = new File(mTargetFilesFolder, partition);
             if (!localToPush.exists()) {
                 CLog.w("%s is in the partition but doesn't exist", partition);
+                continue;
             }
             String output =
                     device.executeAdbCommand(0L, "push", localToPush.getAbsolutePath(), "/");
