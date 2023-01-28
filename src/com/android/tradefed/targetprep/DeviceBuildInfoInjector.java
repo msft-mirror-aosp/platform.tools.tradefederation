@@ -23,6 +23,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceProperties;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
 
 /**
  * A {@link ITargetPreparer} that inserts {@link DeviceBuildDescriptor} metadata into the {@link
@@ -33,6 +34,10 @@ import com.android.tradefed.invoker.TestInformation;
  */
 @OptionClass(alias = "device-build-injector")
 public class DeviceBuildInfoInjector extends BaseTargetPreparer {
+
+    @Option(name = "override-device-build-branch", description =
+            "the device buid branch to inject.")
+    private String mOverrideDeviceBuildBranch = null;
 
     @Option(name = "override-device-build-id", description =
             "the device buid id to inject.")
@@ -51,6 +56,7 @@ public class DeviceBuildInfoInjector extends BaseTargetPreparer {
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         IBuildInfo buildInfo = testInfo.getBuildInfo();
+        CLog.e("changing build info: %s, hash: %d", buildInfo.toString(), buildInfo.hashCode());
         ITestDevice device = testInfo.getDevice();
         if (mOverrideDeviceBuildId != null) {
             buildInfo.addBuildAttribute(DeviceBuildDescriptor.DEVICE_BUILD_ID,
@@ -64,6 +70,10 @@ public class DeviceBuildInfoInjector extends BaseTargetPreparer {
         } else {
             buildInfo.addBuildAttribute(DeviceBuildDescriptor.DEVICE_BUILD_ALIAS,
                     device.getBuildAlias());
+        }
+        if (mOverrideDeviceBuildBranch != null){
+            buildInfo.addBuildAttribute(DeviceBuildDescriptor.DEVICE_BUILD_BRANCH,
+                    mOverrideDeviceBuildBranch);
         }
         if (mOverrideDeviceBuildFlavor != null){
             buildInfo.addBuildAttribute(DeviceBuildDescriptor.DEVICE_BUILD_FLAVOR,
