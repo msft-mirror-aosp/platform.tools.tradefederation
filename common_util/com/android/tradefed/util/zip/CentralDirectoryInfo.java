@@ -34,7 +34,7 @@ import java.util.Arrays;
 public final class CentralDirectoryInfo {
 
     private static final byte[] CENTRAL_DIRECTORY_SIGNATURE = {0x50, 0x4b, 0x01, 0x02};
-    private static final byte[] ZIP64_FILE_FIELD_ID = {0x01, 0x00};
+    private static final int ZIP64_EXTRA_FIELD_HEADER_ID = 0x0001;
 
     private int mCompressionMethod;
     private long mCrc;
@@ -237,22 +237,33 @@ public final class CentralDirectoryInfo {
         }
         // Get the real data while use-zip64-in-partial-download is set and the 3 corresponding
         // elements match the condition.
-        if (Long.toHexString(mUncompressedSize).equals("ffffffff") ||
-            Long.toHexString(mCompressedSize).equals("ffffffff") ||
-            Long.toHexString(mLocalHeaderOffset).equals("ffffffff")) {
-            byte[] zip64FieldId = Arrays.copyOfRange(
-                    data, startOffset + mFileNameLength + 46, startOffset + mFileNameLength + 48);
+        if (Long.toHexString(mUncompressedSize).equals("ffffffff")
+                || Long.toHexString(mCompressedSize).equals("ffffffff")
+                || Long.toHexString(mLocalHeaderOffset).equals("ffffffff")) {
+
+            // Read through extra field. The extra field consist of
+            //   header1+data1 + header2+data2 + header3+data3 . . .
+            // Each header contains 2 bytes of Header ID and 2 bytes of Data Size.
+            boolean hasZip64HeaderId = false;
+            int currPos = startOffset + mFileNameLength + 46;
+            int endPos = currPos + mExtraFieldLength;
+            while (currPos + 4 <= endPos) {
+                int headerId = ByteArrayUtil.getInt(data, currPos, 2);
+                int size = ByteArrayUtil.getInt(data, currPos + 2, 2);
+                if (headerId == ZIP64_EXTRA_FIELD_HEADER_ID) {
+                    mUncompressedSize = ByteArrayUtil.getLong(data, currPos + 4, 8);
+                    mCompressedSize = ByteArrayUtil.getLong(data, currPos + 12, 8);
+                    mLocalHeaderOffset = ByteArrayUtil.getLong(data, currPos + 20, 8);
+                    hasZip64HeaderId = true;
+                    break;
+                }
+                currPos += 4 + size;
+            }
             // There should be a ZIP64 Field ID(0x0001) existing here.
-            if (!Arrays.equals(ZIP64_FILE_FIELD_ID, zip64FieldId)) {
+            if (!hasZip64HeaderId) {
                 throw new RuntimeException(String.format("Failed to find ZIP64 field id(0x0001) "
                         + "from the Central Directory Info for file: %s", mFileName));
             }
-            mUncompressedSize = ByteArrayUtil.getLong(
-                data, startOffset + mFileNameLength + 50, 8);
-            mCompressedSize = ByteArrayUtil.getLong(
-                data, startOffset + mFileNameLength + 58, 8);
-            mLocalHeaderOffset = ByteArrayUtil.getLong(
-                data, startOffset + mFileNameLength + 66, 8);
         }
     }
 
