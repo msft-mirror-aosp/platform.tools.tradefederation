@@ -39,6 +39,8 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.BinaryState;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.MultiMap;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -463,6 +465,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     private boolean mDisableDeviceConfigSync = false;
     // device_config set_sync_disabled_for_tests persistent
 
+    @Option(
+            name = "disable-ramdump",
+            description = "Will set the flag to disable ramdump on the device.")
+    private boolean mDisableRamdump = false;
+
     private static final String PERSIST_PREFIX = "persist.";
     private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
 
@@ -855,6 +862,20 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             }
             // Set reasonable permissions for /data/local.prop
             device.executeShellCommand("chmod 644 /data/local.prop");
+
+            if (mDisableRamdump) {
+                device.rebootIntoBootloader();
+                CLog.i("Disabling ramdump.");
+                CommandResult resultRampdump =
+                        device.executeFastbootCommand("oem", "ramdump", "disable");
+                if (!CommandStatus.SUCCESS.equals(resultRampdump.getStatus())) {
+                    CLog.w(
+                            "Failed to run ramdump disable: status: %s\nstdout: %s\nstderr: %s",
+                            resultRampdump.getStatus(),
+                            resultRampdump.getStdout(),
+                            resultRampdump.getStderr());
+                }
+            }
             needsReboot = true;
         }
 

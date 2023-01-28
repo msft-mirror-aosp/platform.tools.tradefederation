@@ -15,6 +15,10 @@
  */
 package com.android.tradefed.device;
 
+import static com.google.common.truth.Truth.assertThat;
+
+import static org.junit.Assert.assertThrows;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -2896,6 +2900,58 @@ public class TestDeviceTest {
         injectShellResponse(getMaxUsersCommand, "not the output we expect");
 
         assertFalse(mTestDevice.isMultiUserSupported());
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_unsupported_preApi29() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "28");
+
+        assertThrows(HarnessRuntimeException.class, () -> mTestDevice.isHeadlessSystemUserMode());
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_true_preApi34() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "33");
+        injectSystemProperty("ro.fw.mu.headless_system_user", "true");
+        injectShellResponse("cmd user is-headless-system-user-mode", "doesn't matter");
+
+        assertThat(mTestDevice.isHeadlessSystemUserMode()).isTrue();
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_false_preApi34() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "33");
+        injectSystemProperty("ro.fw.mu.headless_system_user", "false");
+
+        assertThat(mTestDevice.isHeadlessSystemUserMode()).isFalse();
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_invalidOutput_api34() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "34");
+        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
+        injectShellResponse("cmd user is-headless-system-user-mode", "doh");
+
+        assertThat(mTestDevice.isHeadlessSystemUserMode()).isFalse();
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_true_api34() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "34");
+        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
+        injectSystemProperty("ro.fw.mu.headless_system_user", "doesn't matter");
+        injectShellResponse("cmd user is-headless-system-user-mode", "true");
+
+        assertThat(mTestDevice.isHeadlessSystemUserMode()).isTrue();
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_false_api34() throws Exception {
+        injectSystemProperty("ro.build.version.sdk", "34");
+        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
+        injectShellResponse("cmd user is-headless-system-user-mode", "false");
+
+        assertThat(mTestDevice.isHeadlessSystemUserMode()).isFalse();
     }
 
     /** Test that successful user creation is handled by {@link TestDevice#createUser(String)}. */
