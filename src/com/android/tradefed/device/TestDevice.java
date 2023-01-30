@@ -1393,8 +1393,19 @@ public class TestDevice extends NativeDevice {
     @Override
     public int createUser(String name, boolean guest, boolean ephemeral)
             throws DeviceNotAvailableException, IllegalStateException {
-        String command ="pm create-user " + (guest ? "--guest " : "")
-                + (ephemeral ? "--ephemeral " : "") + name;
+        return createUser(name, guest, ephemeral, /* forTesting= */ false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int createUser(String name, boolean guest, boolean ephemeral, boolean forTesting)
+            throws DeviceNotAvailableException, IllegalStateException {
+        String command =
+                "pm create-user "
+                        + (guest ? "--guest " : "")
+                        + (ephemeral ? "--ephemeral " : "")
+                        + (forTesting && getApiLevel() >= 34 ? "--for-testing " : "")
+                        + name;
         final String output = executeShellCommand(command);
         if (output.startsWith("Success")) {
             try {
