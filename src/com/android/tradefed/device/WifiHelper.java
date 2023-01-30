@@ -119,8 +119,12 @@ public class WifiHelper implements IWifiHelper {
         // Attempt to install utility
         try {
             setupWifiUtilApkFile(wifiUtilApkPath);
+            String[] extraArgs = new String[] {};
+            if (mDevice.isBypassLowTargetSdkBlockSupported()) {
+                extraArgs = new String[] {"--bypass-low-target-sdk-block"};
+            }
 
-            final String error = mDevice.installPackage(mWifiUtilApkFile, true);
+            final String error = mDevice.installPackage(mWifiUtilApkFile, true, extraArgs);
             if (error == null) {
                 // Installed successfully; good to go.
                 return;

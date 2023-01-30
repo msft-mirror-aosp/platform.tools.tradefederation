@@ -635,6 +635,14 @@ public interface INativeDevice {
     public boolean isAppEnumerationSupported() throws DeviceNotAvailableException;
 
     /**
+     * Check whether platform on device supports bypassing low target sdk block on app installs
+     *
+     * @return True if bypass low target sdk block is supported, false otherwise
+     * @throws DeviceNotAvailableException
+     */
+    public boolean isBypassLowTargetSdkBlockSupported() throws DeviceNotAvailableException;
+
+    /**
      * Retrieves a file off device.
      *
      * @param remoteFilePath the absolute path to file on device.
