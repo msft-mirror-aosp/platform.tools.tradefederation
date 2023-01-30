@@ -724,6 +724,19 @@ public interface ITestDevice extends INativeDevice {
             throws DeviceNotAvailableException, IllegalStateException;
 
     /**
+     * Create a user with a given name and the provided flags
+     *
+     * @param name of the user to create on the device
+     * @param guest enable the user flag --guest during creation
+     * @param ephemeral enable the user flag --ephemeral during creation
+     * @param forTesting enable the test flag --for-testing during creation
+     * @return id of the created user
+     * @throws DeviceNotAvailableException
+     */
+    public int createUser(String name, boolean guest, boolean ephemeral, boolean forTesting)
+            throws DeviceNotAvailableException, IllegalStateException;
+
+    /**
      * Create a user with a given name and default flags 0.
      *
      * @param name of the user to create on the device
