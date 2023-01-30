@@ -16,8 +16,12 @@
 package com.android.tradefed.device;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assertWithMessage;
 
 import static org.junit.Assert.assertThrows;
+
+import static com.android.tradefed.device.DeviceProperties.BUILD_CODENAME;
+import static com.android.tradefed.device.DeviceProperties.SDK_VERSION;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -59,6 +63,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
@@ -66,6 +71,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.KeyguardControllerState;
+import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.ZipUtil2;
@@ -93,6 +99,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -110,6 +117,7 @@ public class TestDeviceTest {
     private static final int MIN_API_LEVEL_GET_CURRENT_USER = 23;
     private static final int MIN_API_LEVEL_STOP_USER = 22;
     private static final String RAWIMAGE_RESOURCE = "/testdata/rawImage.zip";
+
     @Mock IDevice mMockIDevice;
     @Mock IShellOutputReceiver mMockReceiver;
     private TestDevice mTestDevice;
@@ -162,6 +170,102 @@ public class TestDeviceTest {
         @Override
         protected AaptParser createParser(File appFile) {
             return null;
+        }
+    }
+
+    private final class TestableTestDeviceForApiLevel extends TestableTestDevice {
+        private final int mApiLevel;
+        private final List<Pair<String, Object>> mShellV2Commands;
+        private final Map<String, String> mSystemProperties;
+
+        private TestableTestDeviceForApiLevel(TestableTestDeviceForApiLevelBuilder builder) {
+            mApiLevel = builder.mApiLevel;
+            mShellV2Commands = builder.mShellV2Commands;
+            mSystemProperties = builder.mSystemProperties;
+            CLog.i(
+                    "TestableTestDeviceForApi(): api=%d, v2cmds=%s, props=%s",
+                    mApiLevel, mShellV2Commands, mSystemProperties);
+        }
+
+        @Override
+        public int getApiLevel() throws DeviceNotAvailableException {
+            return mApiLevel;
+        }
+
+        @Override
+        public CommandResult executeShellV2Command(String command)
+                throws DeviceNotAvailableException {
+            ListIterator<Pair<String, Object>> iterator = mShellV2Commands.listIterator();
+            while (iterator.hasNext()) {
+                Pair<String, Object> injectedCommand = iterator.next();
+                if (injectedCommand.first.equals(command)) {
+                    iterator.remove();
+                    Object injectedResult = injectedCommand.second;
+                    if (injectedResult instanceof CommandStatus) {
+                        return new CommandResult((CommandStatus) injectedResult);
+                    }
+                    if (injectedResult instanceof String) {
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout((String) injectedResult);
+                        return res;
+                    }
+                    // Shouldn't happen
+                    throw new IllegalStateException(
+                            "Object of invalid class inject as response of "
+                                    + "command '"
+                                    + command
+                                    + "': "
+                                    + injectedCommand);
+                }
+            }
+            throw new IllegalStateException("Command '" + command + "' not injected");
+        }
+
+        @Override
+        public String getProperty(String name) throws DeviceNotAvailableException {
+            return mSystemProperties.get(name);
+        }
+    }
+
+    private final class TestableTestDeviceForApiLevelBuilder {
+        private final int mApiLevel;
+        private final @Nullable String mBuildCodename;
+        private final List<Pair<String, Object>> mShellV2Commands = new ArrayList<>();
+        private final Map<String, String> mSystemProperties = new HashMap<>();
+
+        private TestableTestDeviceForApiLevelBuilder(int apiLevel, String buildCodename) {
+            mApiLevel = apiLevel;
+            mBuildCodename = buildCodename;
+            injectSystemProperty(SDK_VERSION, String.valueOf(apiLevel));
+            if (buildCodename != null) {
+                injectSystemProperty(BUILD_CODENAME, buildCodename);
+            }
+        }
+
+        private TestableTestDeviceForApiLevelBuilder(int api) {
+            this(api, /* buildCodename= */ null);
+        }
+
+        public TestableTestDeviceForApiLevelBuilder injectShellV2Command(
+                String command, String result) {
+            mShellV2Commands.add(new Pair<>(command, result));
+            return this;
+        }
+
+        public TestableTestDeviceForApiLevelBuilder injectShellV2CommandError(
+                String command, CommandStatus error) {
+            mShellV2Commands.add(new Pair<>(command, error));
+            return this;
+        }
+
+        public TestableTestDeviceForApiLevelBuilder injectSystemProperty(
+                String property, String value) {
+            mSystemProperties.put(property, value);
+            return this;
+        }
+
+        public TestableTestDeviceForApiLevel build() {
+            return new TestableTestDeviceForApiLevel(this);
         }
     }
 
@@ -712,7 +816,7 @@ public class TestDeviceTest {
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
         when(mMockStateMonitor.waitForDeviceOnline()).thenReturn(mMockIDevice);
-        injectSystemProperty("ro.build.version.sdk", "23");
+        injectSystemProperty(SDK_VERSION, "23");
 
         mTestDevice.executeShellCommand(testCommand, mMockReceiver);
 
@@ -806,7 +910,7 @@ public class TestDeviceTest {
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
         when(mMockStateMonitor.waitForDeviceOnline()).thenReturn(mMockIDevice);
-        injectSystemProperty("ro.build.version.sdk", "23");
+        injectSystemProperty(SDK_VERSION, "23");
 
         mTestDevice.executeShellCommand(testCommand, mMockReceiver);
 
@@ -817,7 +921,7 @@ public class TestDeviceTest {
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
         assertRecoverySuccess();
-        verifySystemProperty("ro.build.version.sdk", "23", 1);
+        verifySystemProperty(SDK_VERSION, "23", 1);
     }
 
     /**
@@ -864,7 +968,7 @@ public class TestDeviceTest {
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
         when(mMockStateMonitor.waitForDeviceOnline()).thenReturn(mMockIDevice);
-        injectSystemProperty("ro.build.version.sdk", "23");
+        injectSystemProperty(SDK_VERSION, "23");
 
         try {
             mTestDevice.executeShellCommand(testCommand, mMockReceiver);
@@ -874,7 +978,7 @@ public class TestDeviceTest {
         }
 
         assertRecoverySuccess(TestDevice.MAX_RETRY_ATTEMPTS + 1);
-        verifySystemProperty("ro.build.version.sdk", "23", 3);
+        verifySystemProperty(SDK_VERSION, "23", 3);
         verify(mMockStateMonitor, times(3)).waitForDeviceOnline();
         verify(mMockIDevice, times(TestDevice.MAX_RETRY_ATTEMPTS + 1))
                 .executeShellCommand(
@@ -1288,8 +1392,8 @@ public class TestDeviceTest {
      */
     @Test
     public void testRuntimePermissionSupportedLmpRelease() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "21");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "21");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         injectSystemProperty(DeviceProperties.BUILD_ID, "1642709");
 
         assertFalse(mTestDevice.isRuntimePermissionSupported());
@@ -1303,8 +1407,8 @@ public class TestDeviceTest {
      */
     @Test
     public void testRuntimePermissionSupportedLmpMr1Dev() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "22");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "22");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         injectSystemProperty(DeviceProperties.BUILD_ID, "1844090");
 
         assertFalse(mTestDevice.isRuntimePermissionSupported());
@@ -1318,8 +1422,8 @@ public class TestDeviceTest {
      */
     @Test
     public void testRuntimePermissionSupportedNonMncLocal() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "21");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "LMP");
+        injectSystemProperty(SDK_VERSION, "21");
+        injectSystemProperty(BUILD_CODENAME, "LMP");
         injectSystemProperty(DeviceProperties.BUILD_ID, "eng.foo.20150414.190304");
 
         assertFalse(mTestDevice.isRuntimePermissionSupported());
@@ -1353,24 +1457,24 @@ public class TestDeviceTest {
 
     /** Convenience method for setting up mMockIDevice to not support runtime permission */
     private void setMockIDeviceRuntimePermissionNotSupported() {
-        setGetPropertyExpectation("ro.build.version.sdk", "22");
+        setGetPropertyExpectation(SDK_VERSION, "22");
     }
 
     private void verifyMockIDeviceRuntimePermissionNotSupported() {
-        verifyGetPropertyExpectation("ro.build.version.sdk", "22", 1);
+        verifyGetPropertyExpectation(SDK_VERSION, "22", 1);
     }
 
     /** Convenience method for setting up mMockIDevice to support runtime permission */
     private void setMockIDeviceRuntimePermissionSupported() {
-        setGetPropertyExpectation("ro.build.version.sdk", "23");
+        setGetPropertyExpectation(SDK_VERSION, "23");
     }
 
     private void verifyMockIDeviceRuntimePermissionSupported() {
-        verifyGetPropertyExpectation("ro.build.version.sdk", "23", 1);
+        verifyGetPropertyExpectation(SDK_VERSION, "23", 1);
     }
 
     private void verifyMockIDeviceRuntimePermissionSupported(int times) {
-        verifyGetPropertyExpectation("ro.build.version.sdk", "23", times);
+        verifyGetPropertyExpectation(SDK_VERSION, "23", times);
     }
 
     /**
@@ -2477,8 +2581,8 @@ public class TestDeviceTest {
         final String output =
                 "ModuleInfo{foo123456 Module NameFoo} packageName: com.android.foo\n"
                         + "ModuleInfo{bar123456 Module NameBar} packageName: com.android.bar";
-        injectSystemProperty("ro.build.version.sdk", "29");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "29");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         injectShellResponse(TestDevice.GET_MODULEINFOS_CMD, output);
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
@@ -2496,8 +2600,8 @@ public class TestDeviceTest {
     @Test
     public void testGetMainlineModuleInfoForBadOutput() throws Exception {
         final String output = "junk output";
-        injectSystemProperty("ro.build.version.sdk", "29");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "29");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         injectShellResponse(TestDevice.GET_MODULEINFOS_CMD, output);
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
@@ -2850,8 +2954,8 @@ public class TestDeviceTest {
      */
     @Test
     public void testMaxNumberOfRunningUsersSupported() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "28");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "28");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         final String getMaxRunningUsersCommand = "pm get-max-running-users";
         injectShellResponse(getMaxRunningUsersCommand, "Maximum supported running users: 4");
 
@@ -2861,8 +2965,8 @@ public class TestDeviceTest {
     /** Test that invalid output is handled by {@link TestDevice#getMaxNumberOfUsersSupported()}. */
     @Test
     public void testMaxNumberOfRunningUsersSupported_invalid() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "28");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "28");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         final String getMaxRunningUsersCommand = "pm get-max-running-users";
         injectShellResponse(getMaxRunningUsersCommand, "not the output we expect");
 
@@ -2874,8 +2978,8 @@ public class TestDeviceTest {
      */
     @Test
     public void testIsMultiUserSupported_singleUser_api34() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "34");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
+        injectSystemProperty(SDK_VERSION, "34");
+        injectSystemProperty(BUILD_CODENAME, "U");
         final String getSupportsMultiUserCommand = "pm supports-multiple-users";
         injectShellResponse(
                 getSupportsMultiUserCommand, "Is multiuser supported: " + Boolean.FALSE);
@@ -2889,8 +2993,8 @@ public class TestDeviceTest {
      */
     @Test
     public void testIsMultiUserSupported_singleUser_api28() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "28");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "28");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         final String getMaxUsersCommand = "pm get-max-users";
         injectShellResponse(getMaxUsersCommand, "Maximum supported users: 1");
 
@@ -2900,8 +3004,8 @@ public class TestDeviceTest {
     /** API 34+ Test that {@link TestDevice#isMultiUserSupported()} works. */
     @Test
     public void testIsMultiUserSupported_api34() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "34");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
+        injectSystemProperty(SDK_VERSION, "34");
+        injectSystemProperty(BUILD_CODENAME, "U");
         final String getSupportsMultiUserCommand = "pm supports-multiple-users";
         injectShellResponse(getSupportsMultiUserCommand, "Is multiuser supported: " + Boolean.TRUE);
 
@@ -2911,8 +3015,8 @@ public class TestDeviceTest {
     /** API 28 and below. Test that {@link TestDevice#isMultiUserSupported()} works. */
     @Test
     public void testIsMultiUserSupported_api28() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "28");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "28");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         final String getMaxUsersCommand = "pm get-max-users";
         injectShellResponse(getMaxUsersCommand, "Maximum supported users: 4");
 
@@ -2922,8 +3026,8 @@ public class TestDeviceTest {
     /** API 34+ Test that invalid output is handled by {@link TestDevice#isMultiUserSupported()}. */
     @Test
     public void testIsMultiUserSupported_invalidOutput_api34() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "34");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
+        injectSystemProperty(SDK_VERSION, "34");
+        injectSystemProperty(BUILD_CODENAME, "U");
         final String getSupportsMultiUserCommand = "pm supports-multiple-users";
         injectShellResponse(getSupportsMultiUserCommand, "not the output we expect");
 
@@ -2936,8 +3040,8 @@ public class TestDeviceTest {
      */
     @Test
     public void testIsMultiUserSupported_invalidOutput_api24() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "28");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "28");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         final String getMaxUsersCommand = "pm get-max-users";
         injectShellResponse(getMaxUsersCommand, "not the output we expect");
 
@@ -2945,55 +3049,84 @@ public class TestDeviceTest {
     }
 
     @Test
-    public void testIsHeadlessSystemUserMode_unsupported_preApi29() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "28");
+    public void testIsHeadlessSystemUserMode_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = new TestableTestDeviceForApiLevelBuilder(28).build();
 
-        assertThrows(HarnessRuntimeException.class, () -> mTestDevice.isHeadlessSystemUserMode());
+        assertThrows(HarnessRuntimeException.class, () -> testDevice.isHeadlessSystemUserMode());
     }
 
     @Test
     public void testIsHeadlessSystemUserMode_true_preApi34() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "33");
-        injectSystemProperty("ro.fw.mu.headless_system_user", "true");
-        injectShellResponse("cmd user is-headless-system-user-mode", "doesn't matter");
+        TestDevice testDevice =
+                new TestableTestDeviceForApiLevelBuilder(33)
+                        .injectSystemProperty("ro.fw.mu.headless_system_user", "true")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "false")
+                        .build();
 
-        assertThat(mTestDevice.isHeadlessSystemUserMode()).isTrue();
+        assertThat(testDevice.isHeadlessSystemUserMode()).isTrue();
     }
 
     @Test
     public void testIsHeadlessSystemUserMode_false_preApi34() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "33");
-        injectSystemProperty("ro.fw.mu.headless_system_user", "false");
+        TestDevice testDevice =
+                new TestableTestDeviceForApiLevelBuilder(33)
+                        .injectSystemProperty("ro.fw.mu.headless_system_user", "false")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "true")
+                        .build();
 
-        assertThat(mTestDevice.isHeadlessSystemUserMode()).isFalse();
+        assertThat(testDevice.isHeadlessSystemUserMode()).isFalse();
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_cmdError_api34() throws Exception {
+        TestDevice testDevice =
+                new TestableTestDeviceForApiLevelBuilder(34, "U")
+                        .injectShellV2CommandError(
+                                "cmd user is-headless-system-user-mode", CommandStatus.FAILED)
+                        .build();
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class, () -> testDevice.isHeadlessSystemUserMode());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
     }
 
     @Test
     public void testIsHeadlessSystemUserMode_invalidOutput_api34() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "34");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
-        injectShellResponse("cmd user is-headless-system-user-mode", "doh");
+        TestDevice testDevice =
+                new TestableTestDeviceForApiLevelBuilder(34, "U")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "D'OH!")
+                        .build();
 
-        assertThat(mTestDevice.isHeadlessSystemUserMode()).isFalse();
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class, () -> testDevice.isHeadlessSystemUserMode());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
     }
 
     @Test
     public void testIsHeadlessSystemUserMode_true_api34() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "34");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
-        injectSystemProperty("ro.fw.mu.headless_system_user", "doesn't matter");
-        injectShellResponse("cmd user is-headless-system-user-mode", "true");
+        TestDevice testDevice =
+                new TestableTestDeviceForApiLevelBuilder(34, "U")
+                        .injectSystemProperty("ro.fw.mu.headless_system_user", "false")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "true")
+                        .build();
 
-        assertThat(mTestDevice.isHeadlessSystemUserMode()).isTrue();
+        assertThat(testDevice.isHeadlessSystemUserMode()).isTrue();
     }
 
     @Test
     public void testIsHeadlessSystemUserMode_false_api34() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "34");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "U");
-        injectShellResponse("cmd user is-headless-system-user-mode", "false");
+        TestDevice testDevice =
+                new TestableTestDeviceForApiLevelBuilder(34, "U")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "false")
+                        .build();
 
-        assertThat(mTestDevice.isHeadlessSystemUserMode()).isFalse();
+        assertThat(testDevice.isHeadlessSystemUserMode()).isFalse();
     }
 
     /** Test that successful user creation is handled by {@link TestDevice#createUser(String)}. */
