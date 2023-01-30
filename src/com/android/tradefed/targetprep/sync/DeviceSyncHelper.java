@@ -70,7 +70,7 @@ public class DeviceSyncHelper {
             throws DeviceNotAvailableException, IOException {
         device.enableAdbRoot();
         device.remountSystemWritable();
-        device.executeAdbCommand("stop");
+        device.executeAdbCommand("shell", "stop");
 
         for (String partition : partitions) {
             File localToPush = new File(mTargetFilesFolder, partition);
