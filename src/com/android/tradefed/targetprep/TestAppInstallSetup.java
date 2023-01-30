@@ -398,6 +398,11 @@ public class TestAppInstallSetup extends BaseTargetPreparer
             mInstallArgs.add("--force-queryable");
         }
 
+        // Add bypass flag for low target sdk apps when installing on U+ devices
+        if (getDevice().isBypassLowTargetSdkBlockSupported()) {
+            mInstallArgs.add("--bypass-low-target-sdk-block");
+        }
+
         for (File testAppName : mTestFiles) {
             Map<File, String> appFilesAndPackages =
                     resolveApkFiles(

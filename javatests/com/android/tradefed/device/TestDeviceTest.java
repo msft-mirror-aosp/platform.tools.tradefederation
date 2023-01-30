@@ -1405,6 +1405,48 @@ public class TestDeviceTest {
                         Mockito.eq(TimeUnit.MINUTES));
     }
 
+    /**
+     * Test that isBypassLowTargetSdkBlockSupported returns correct result for device reporting SDK
+     * version 33 or lower
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testBypassLowTargetSdkNotSupported() throws Exception {
+        setGetPropertyExpectation("ro.build.version.sdk", "33");
+        setGetPropertyExpectation("ro.build.version.codename", "REL");
+
+        assertFalse(mTestDevice.isBypassLowTargetSdkBlockSupported());
+    }
+
+    /**
+     * Test that isBypassLowTargetSdkBlockSupported returns correct result for device reporting SDK
+     * version 34 or higher
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testBypassLowTargetSdkSupported() throws Exception {
+        setGetPropertyExpectation("ro.build.version.sdk", "34");
+        setGetPropertyExpectation("ro.build.version.codename", "REL");
+
+        assertTrue(mTestDevice.isBypassLowTargetSdkBlockSupported());
+    }
+
+    /**
+     * Test that isBypassLowTargetSdkBlockSupported returns correct result for device reporting SDK
+     * version of UpsideDownCake prior to SDK finalization.
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testBypassLowTargetSdkSupportedUDC() throws Exception {
+        setGetPropertyExpectation("ro.build.version.sdk", "33");
+        setGetPropertyExpectation("ro.build.version.codename", "UpsideDownCake");
+
+        assertTrue(mTestDevice.isBypassLowTargetSdkBlockSupported());
+    }
+
     /** Test when a timeout during installation is thrown. */
     @Test
     public void testInstallPackage_default_timeout() throws Exception {
@@ -5110,6 +5152,12 @@ public class TestDeviceTest {
                     @Override
                     ContentProviderHandler getContentProvider() throws DeviceNotAvailableException {
                         return null;
+                    }
+
+                    @Override
+                    public boolean isBypassLowTargetSdkBlockSupported()
+                            throws DeviceNotAvailableException {
+                        return true;
                     }
                 };
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
