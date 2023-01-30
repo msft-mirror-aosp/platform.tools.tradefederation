@@ -1191,6 +1191,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return false;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public boolean isBypassLowTargetSdkBlockSupported() throws DeviceNotAvailableException {
+        return checkApiLevelAgainstNextRelease(34);
+    }
+
     /**
      * helper method to throw exception if runtime permission isn't supported
      * @throws DeviceNotAvailableException
