@@ -1557,7 +1557,6 @@ public class TestDevice extends NativeDevice {
             CLog.e("Invalid user id '%s' was returned for get-current-user", userId);
         } catch (NumberFormatException e) {
             CLog.e("Invalid string was returned for get-current-user: %s.", output);
-            CLog.e(e);
         }
         return INVALID_USER_ID;
     }
