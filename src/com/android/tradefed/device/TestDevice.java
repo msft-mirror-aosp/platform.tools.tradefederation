@@ -1371,7 +1371,7 @@ public class TestDevice extends NativeDevice {
     @Override
     public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException {
         checkApiLevelAgainst("isHeadlessSystemUserMode", 29);
-        return getApiLevel() >= 34
+        return checkApiLevelAgainstNextRelease(34)
                 ? executeShellV2CommandThatReturnsBoolean("cmd user is-headless-system-user-mode")
                 : getBooleanProperty("ro.fw.mu.headless_system_user", false);
     }

@@ -99,8 +99,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -173,100 +173,91 @@ public class TestDeviceTest {
         }
     }
 
-    private final class TestableTestDeviceForApiLevel extends TestableTestDevice {
-        private final int mApiLevel;
-        private final List<Pair<String, Object>> mShellV2Commands;
-        private final Map<String, String> mSystemProperties;
+    // TODO: merge TestableTestDeviceV2 with TestableTestDevice, as it's easier to use:
+    // - replace tests that uses TestableTestDevice with TestableTestDevice2
+    //   - might need to override more methods
+    // - remove TestableTestDevice
+    // - rename TestableTestDeviceV2 to TestableTestDevice
+    // - optionally, improve mShellV2Commands to use a custom object (instead of a Pair)
 
-        private TestableTestDeviceForApiLevel(TestableTestDeviceForApiLevelBuilder builder) {
-            mApiLevel = builder.mApiLevel;
-            mShellV2Commands = builder.mShellV2Commands;
-            mSystemProperties = builder.mSystemProperties;
-            CLog.i(
-                    "TestableTestDeviceForApi(): api=%d, v2cmds=%s, props=%s",
-                    mApiLevel, mShellV2Commands, mSystemProperties);
+    /** A {@link TestDevice} that makes it easier to inject {@code executeShellV2Command}. */
+    private class TestableTestDeviceV2 extends TestDevice {
+
+        private final Map<String, Pair<String, Object>> mShellV2Commands = new HashMap<>();
+
+        public TestableTestDeviceV2() {
+            super(mMockIDevice, mMockStateMonitor, mMockDvcMonitor);
         }
 
-        @Override
-        public int getApiLevel() throws DeviceNotAvailableException {
-            return mApiLevel;
+        public TestableTestDeviceV2 injectShellV2Command(String command, String result) {
+            if (mShellV2Commands.containsKey(command)) {
+                CLog.d("Replacing command '%s' with valid result '%s'", command, result);
+            }
+            mShellV2Commands.put(command, new Pair<>(command, result));
+            return this;
+        }
+
+        public TestableTestDeviceV2 injectShellV2CommandError(String command, CommandStatus error) {
+            if (mShellV2Commands.containsKey(command)) {
+                CLog.d("Replacing command '%s' with valid error '%s'", command, error);
+            }
+            mShellV2Commands.put(command, new Pair<>(command, error));
+            return this;
+        }
+
+        public TestableTestDeviceV2 injectSystemProperty(String property, String value) {
+            injectShellV2Command("getprop " + property, value);
+            return this;
         }
 
         @Override
         public CommandResult executeShellV2Command(String command)
                 throws DeviceNotAvailableException {
-            ListIterator<Pair<String, Object>> iterator = mShellV2Commands.listIterator();
-            while (iterator.hasNext()) {
-                Pair<String, Object> injectedCommand = iterator.next();
-                if (injectedCommand.first.equals(command)) {
-                    iterator.remove();
-                    Object injectedResult = injectedCommand.second;
-                    if (injectedResult instanceof CommandStatus) {
-                        return new CommandResult((CommandStatus) injectedResult);
-                    }
-                    if (injectedResult instanceof String) {
-                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                        res.setStdout((String) injectedResult);
-                        return res;
-                    }
-                    // Shouldn't happen
-                    throw new IllegalStateException(
-                            "Object of invalid class inject as response of "
-                                    + "command '"
-                                    + command
-                                    + "': "
-                                    + injectedCommand);
-                }
+            Pair<String, Object> injectedCommand = mShellV2Commands.get(command);
+            if (injectedCommand == null) {
+                CLog.i("Command '%s' not injected; returning error");
+                return new CommandResult(CommandStatus.FAILED);
             }
-            throw new IllegalStateException("Command '" + command + "' not injected");
+            Object injectedResult = injectedCommand.second;
+            if (injectedResult instanceof CommandStatus) {
+                return new CommandResult((CommandStatus) injectedResult);
+            }
+            if (injectedResult instanceof String) {
+                CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                res.setStdout((String) injectedResult);
+                return res;
+            }
+            // Shouldn't happen
+            throw new IllegalStateException(
+                    "Object of invalid class inject as response of "
+                            + "command '"
+                            + command
+                            + "': "
+                            + injectedCommand);
         }
 
-        @Override
-        public String getProperty(String name) throws DeviceNotAvailableException {
-            return mSystemProperties.get(name);
+        private TestableTestDeviceV2 setApiLevel(Integer apiLevel) {
+            return setApiLevel(apiLevel, /* buildCodename= */ null);
+        }
+
+        private TestableTestDeviceV2 setApiLevel(Integer apiLevel, @Nullable String buildCodename) {
+            Objects.requireNonNull(apiLevel);
+            CLog.i("Setting API level to %d", apiLevel);
+            injectSystemProperty(SDK_VERSION, String.valueOf(apiLevel));
+            if (buildCodename != null) {
+                CLog.i("Setting build codename to %s", buildCodename);
+                injectSystemProperty(BUILD_CODENAME, buildCodename);
+            }
+            return this;
         }
     }
 
-    private final class TestableTestDeviceForApiLevelBuilder {
-        private final int mApiLevel;
-        private final @Nullable String mBuildCodename;
-        private final List<Pair<String, Object>> mShellV2Commands = new ArrayList<>();
-        private final Map<String, String> mSystemProperties = new HashMap<>();
+    private TestableTestDeviceV2 newTestDeviceForDevelopmentApiLevel(int apiLevel) {
+        return new TestableTestDeviceV2().setApiLevel(apiLevel, "I AM GROOT!");
+    }
 
-        private TestableTestDeviceForApiLevelBuilder(int apiLevel, String buildCodename) {
-            mApiLevel = apiLevel;
-            mBuildCodename = buildCodename;
-            injectSystemProperty(SDK_VERSION, String.valueOf(apiLevel));
-            if (buildCodename != null) {
-                injectSystemProperty(BUILD_CODENAME, buildCodename);
-            }
-        }
-
-        private TestableTestDeviceForApiLevelBuilder(int api) {
-            this(api, /* buildCodename= */ null);
-        }
-
-        public TestableTestDeviceForApiLevelBuilder injectShellV2Command(
-                String command, String result) {
-            mShellV2Commands.add(new Pair<>(command, result));
-            return this;
-        }
-
-        public TestableTestDeviceForApiLevelBuilder injectShellV2CommandError(
-                String command, CommandStatus error) {
-            mShellV2Commands.add(new Pair<>(command, error));
-            return this;
-        }
-
-        public TestableTestDeviceForApiLevelBuilder injectSystemProperty(
-                String property, String value) {
-            mSystemProperties.put(property, value);
-            return this;
-        }
-
-        public TestableTestDeviceForApiLevel build() {
-            return new TestableTestDeviceForApiLevel(this);
-        }
+    private TestableTestDeviceV2 newTestDeviceForReleaseApiLevel(int apiLevel) {
+        return new TestableTestDeviceV2().setApiLevel(apiLevel, "REL");
     }
 
     @Before
@@ -3050,7 +3041,7 @@ public class TestDeviceTest {
 
     @Test
     public void testIsHeadlessSystemUserMode_unsupportedApiLevel() throws Exception {
-        TestDevice testDevice = new TestableTestDeviceForApiLevelBuilder(28).build();
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
 
         assertThrows(HarnessRuntimeException.class, () -> testDevice.isHeadlessSystemUserMode());
     }
@@ -3058,10 +3049,9 @@ public class TestDeviceTest {
     @Test
     public void testIsHeadlessSystemUserMode_true_preApi34() throws Exception {
         TestDevice testDevice =
-                new TestableTestDeviceForApiLevelBuilder(33)
+                newTestDeviceForReleaseApiLevel(33)
                         .injectSystemProperty("ro.fw.mu.headless_system_user", "true")
-                        .injectShellV2Command("cmd user is-headless-system-user-mode", "false")
-                        .build();
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "false");
 
         assertThat(testDevice.isHeadlessSystemUserMode()).isTrue();
     }
@@ -3069,10 +3059,9 @@ public class TestDeviceTest {
     @Test
     public void testIsHeadlessSystemUserMode_false_preApi34() throws Exception {
         TestDevice testDevice =
-                new TestableTestDeviceForApiLevelBuilder(33)
+                newTestDeviceForReleaseApiLevel(33)
                         .injectSystemProperty("ro.fw.mu.headless_system_user", "false")
-                        .injectShellV2Command("cmd user is-headless-system-user-mode", "true")
-                        .build();
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "true");
 
         assertThat(testDevice.isHeadlessSystemUserMode()).isFalse();
     }
@@ -3080,10 +3069,9 @@ public class TestDeviceTest {
     @Test
     public void testIsHeadlessSystemUserMode_cmdError_api34() throws Exception {
         TestDevice testDevice =
-                new TestableTestDeviceForApiLevelBuilder(34, "U")
+                newTestDeviceForReleaseApiLevel(34)
                         .injectShellV2CommandError(
-                                "cmd user is-headless-system-user-mode", CommandStatus.FAILED)
-                        .build();
+                                "cmd user is-headless-system-user-mode", CommandStatus.FAILED);
 
         DeviceRuntimeException e =
                 assertThrows(
@@ -3096,9 +3084,8 @@ public class TestDeviceTest {
     @Test
     public void testIsHeadlessSystemUserMode_invalidOutput_api34() throws Exception {
         TestDevice testDevice =
-                new TestableTestDeviceForApiLevelBuilder(34, "U")
-                        .injectShellV2Command("cmd user is-headless-system-user-mode", "D'OH!")
-                        .build();
+                newTestDeviceForReleaseApiLevel(34)
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "D'OH!");
 
         DeviceRuntimeException e =
                 assertThrows(
@@ -3111,10 +3098,9 @@ public class TestDeviceTest {
     @Test
     public void testIsHeadlessSystemUserMode_true_api34() throws Exception {
         TestDevice testDevice =
-                new TestableTestDeviceForApiLevelBuilder(34, "U")
+                newTestDeviceForReleaseApiLevel(34)
                         .injectSystemProperty("ro.fw.mu.headless_system_user", "false")
-                        .injectShellV2Command("cmd user is-headless-system-user-mode", "true")
-                        .build();
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "true");
 
         assertThat(testDevice.isHeadlessSystemUserMode()).isTrue();
     }
@@ -3122,9 +3108,28 @@ public class TestDeviceTest {
     @Test
     public void testIsHeadlessSystemUserMode_false_api34() throws Exception {
         TestDevice testDevice =
-                new TestableTestDeviceForApiLevelBuilder(34, "U")
-                        .injectShellV2Command("cmd user is-headless-system-user-mode", "false")
-                        .build();
+                newTestDeviceForReleaseApiLevel(34)
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "false");
+
+        assertThat(testDevice.isHeadlessSystemUserMode()).isFalse();
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_true_api34_dev() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectSystemProperty("ro.fw.mu.headless_system_user", "false")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "true");
+
+        assertThat(testDevice.isHeadlessSystemUserMode()).isTrue();
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_false_api34_dev() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectSystemProperty("ro.fw.mu.headless_system_user", "true")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "false");
 
         assertThat(testDevice.isHeadlessSystemUserMode()).isFalse();
     }
@@ -5575,6 +5580,68 @@ public class TestDeviceTest {
 
         DeviceFoldableState state = mTestDevice.getCurrentFoldableState();
         assertEquals(2, state.getIdentifier());
+    }
+
+    // TODO: tests for getApiLevel() and checkApiLevelAgainstNextRelease() should belong to
+    // NativeDeviceTest, but TestableTestDeviceV2 is defined here
+
+    @Test
+    public void testGetApiLevel_propertyNotSet() throws Exception {
+        TestDevice testDevice = new TestableTestDeviceV2().injectSystemProperty(SDK_VERSION, "");
+
+        assertThat(testDevice.getApiLevel()).isEqualTo(INativeDevice.UNKNOWN_API_LEVEL);
+    }
+
+    @Test
+    public void testGetApiLevel_invalidProperty() throws Exception {
+        TestDevice testDevice =
+                new TestableTestDeviceV2().injectSystemProperty(SDK_VERSION, "forty two");
+
+        assertThat(testDevice.getApiLevel()).isEqualTo(INativeDevice.UNKNOWN_API_LEVEL);
+    }
+
+    @Test
+    public void testGetApiLevel_release() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(42);
+
+        assertThat(testDevice.getApiLevel()).isEqualTo(42);
+    }
+
+    @Test
+    public void testGetApiLevel_development() throws Exception {
+        TestDevice testDevice = newTestDeviceForDevelopmentApiLevel(42);
+
+        assertThat(testDevice.getApiLevel()).isEqualTo(42);
+    }
+
+    @Test
+    public void testCheckApiLevelAgainstNextRelease_propertyNotSet() throws Exception {
+        TestDevice testDevice = new TestableTestDeviceV2().injectSystemProperty(BUILD_CODENAME, "");
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.checkApiLevelAgainstNextRelease(42));
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    @Test
+    public void testCheckApiLevelAgainstNextRelease_release() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(42);
+
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(41)).isTrue();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(42)).isTrue();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(43)).isFalse();
+    }
+
+    @Test
+    public void testCheckApiLevelAgainstNextRelease_dev() throws Exception {
+        TestDevice testDevice = newTestDeviceForDevelopmentApiLevel(42);
+
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(41)).isTrue();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(42)).isTrue();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(43)).isTrue();
     }
 
     private void setGetPropertyExpectation(String property, String value) {
