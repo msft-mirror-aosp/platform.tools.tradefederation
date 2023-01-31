@@ -55,6 +55,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.MockDeviceManager;
 import com.android.tradefed.device.NoDeviceException;
+import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TcpDevice;
 import com.android.tradefed.device.TestDeviceState;
@@ -401,7 +402,9 @@ public class CommandSchedulerTest {
                 new TestableCommandScheduler() {
                     @Override
                     DeviceAllocationResult allocateDevices(
-                            IConfiguration config, IDeviceManager manager) {
+                            IConfiguration config,
+                            IDeviceManager manager,
+                            ArrayList<String> excludeDevices) {
                         DeviceAllocationResult results = new DeviceAllocationResult();
                         Map<String, ITestDevice> allocated = new HashMap<>();
                         ((MockDeviceManager) manager).addDevice(mockDevice);
@@ -1183,6 +1186,15 @@ public class CommandSchedulerTest {
         return mockConfig;
     }
 
+    private IDeviceConfiguration createNullDeviceConfig(String serial) throws Exception {
+        IDeviceConfiguration mockConfig = new DeviceConfigurationHolder(serial);
+        DeviceSelectionOptions options = new DeviceSelectionOptions();
+        options.addSerial(serial);
+        options.setNullDeviceRequested(true);
+        mockConfig.addSpecificConfig(options);
+        return mockConfig;
+    }
+
     @Test
     public void testAllocateDevices_multipleDevices() throws Exception {
         String[] args = new String[] {"foo", "test"};
@@ -1304,6 +1316,204 @@ public class CommandSchedulerTest {
     }
 
     /**
+     * Test case for execCommand with reserved device. {@link
+     * CommandScheduler#execCommand(IScheduledInvocationListener, List<ITestDevice>, String[])}
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecCommand_reservedDevice() throws Throwable {
+        String[] args = new String[] {"foo"};
+        List<ITestDevice> reservedDevices = Arrays.asList(mock(ITestDevice.class));
+        mDeviceConfigList.add(createDeviceConfig("serial0"));
+        setCreateConfigExpectations(args);
+
+        mMockInvocation.invoke(
+                (IInvocationContext) any(),
+                (IConfiguration) any(),
+                (IRescheduler) any(),
+                (ITestInvocationListener) any(),
+                // This is FreeDeviceHandler.
+                (IScheduledInvocationListener) any());
+        IScheduledInvocationListener mockListener = mock(IScheduledInvocationListener.class);
+        mockListener.invocationInitiated((IInvocationContext) any());
+        mockListener.invocationComplete(
+                (IInvocationContext) any(), (Map<ITestDevice, FreeDeviceState>) any());
+        verify(mMockInvocation, times(1))
+                .invoke(
+                        (IInvocationContext) any(),
+                        (IConfiguration) any(),
+                        (IRescheduler) any(),
+                        (ITestInvocationListener) any(),
+                        // This is FreeDeviceHandler.
+                        (IScheduledInvocationListener) any());
+
+        mScheduler.start();
+        mScheduler.execCommand(mockListener, reservedDevices, args);
+        mScheduler.shutdownOnEmpty();
+        mScheduler.join(2 * 1000);
+
+        verify(mMockConfiguration).validateOptions();
+
+        verify(mMockConfigFactory, times(1))
+                .createConfigurationFromArgs(
+                        AdditionalMatchers.aryEq(args), isNull(), (IKeyStoreClient) any());
+    }
+
+    /**
+     * Test case for execCommand with reserved devices and null devices. {@link
+     * CommandScheduler#execCommand(IScheduledInvocationListener, List<ITestDevice>, String[])}
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecCommand_reservedAndNullDevices() throws Throwable {
+        String[] args = new String[] {"foo"};
+        List<ITestDevice> reservedDevices = Arrays.asList(mock(ITestDevice.class));
+        mFakeDeviceManager.setNumDevicesCustom(2, TestDeviceState.ONLINE, NullDevice.class);
+        mDeviceConfigList.add(createDeviceConfig("reserved0"));
+        mDeviceConfigList.add(createNullDeviceConfig("serial0"));
+        mDeviceConfigList.add(createNullDeviceConfig("serial1"));
+        setCreateConfigExpectations(args);
+
+        mMockInvocation.invoke(
+                (IInvocationContext) any(),
+                (IConfiguration) any(),
+                (IRescheduler) any(),
+                (ITestInvocationListener) any(),
+                // This is FreeDeviceHandler.
+                (IScheduledInvocationListener) any());
+        IScheduledInvocationListener mockListener = mock(IScheduledInvocationListener.class);
+        mockListener.invocationInitiated((IInvocationContext) any());
+        mockListener.invocationComplete(
+                (IInvocationContext) any(), (Map<ITestDevice, FreeDeviceState>) any());
+        verify(mMockInvocation, times(1))
+                .invoke(
+                        (IInvocationContext) any(),
+                        (IConfiguration) any(),
+                        (IRescheduler) any(),
+                        (ITestInvocationListener) any(),
+                        // This is FreeDeviceHandler.
+                        (IScheduledInvocationListener) any());
+
+        mScheduler.start();
+        mScheduler.execCommand(mockListener, reservedDevices, args);
+        mScheduler.shutdownOnEmpty();
+        mScheduler.join(2 * 1000);
+
+        verify(mMockConfiguration).validateOptions();
+
+        verify(mMockConfigFactory, times(1))
+                .createConfigurationFromArgs(
+                        AdditionalMatchers.aryEq(args), isNull(), (IKeyStoreClient) any());
+        mFakeDeviceManager.assertDevicesFreed();
+    }
+
+    /**
+     * Test case for execCommand with too many reserved devices and null devices. {@link
+     * CommandScheduler#execCommand(IScheduledInvocationListener, List<ITestDevice>, String[])}
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecCommand_reservedTooManyDevices() throws Throwable {
+        String[] args = new String[] {"foo"};
+        List<ITestDevice> reservedDevices =
+                Arrays.asList(mock(ITestDevice.class), mock(ITestDevice.class));
+        mFakeDeviceManager.setNumDevicesCustom(2, TestDeviceState.ONLINE, NullDevice.class);
+        mDeviceConfigList.add(createDeviceConfig("reserved0"));
+        mDeviceConfigList.add(createNullDeviceConfig("serial0"));
+        mDeviceConfigList.add(createNullDeviceConfig("serial1"));
+        setCreateConfigExpectations(args);
+
+        mMockInvocation.invoke(
+                (IInvocationContext) any(),
+                (IConfiguration) any(),
+                (IRescheduler) any(),
+                (ITestInvocationListener) any(),
+                // This is FreeDeviceHandler.
+                (IScheduledInvocationListener) any());
+        IScheduledInvocationListener mockListener = mock(IScheduledInvocationListener.class);
+        mockListener.invocationInitiated((IInvocationContext) any());
+        mockListener.invocationComplete(
+                (IInvocationContext) any(), (Map<ITestDevice, FreeDeviceState>) any());
+        verify(mMockInvocation, times(1))
+                .invoke(
+                        (IInvocationContext) any(),
+                        (IConfiguration) any(),
+                        (IRescheduler) any(),
+                        (ITestInvocationListener) any(),
+                        // This is FreeDeviceHandler.
+                        (IScheduledInvocationListener) any());
+
+        mScheduler.start();
+
+        try {
+            mScheduler.execCommand(mockListener, reservedDevices, args);
+            fail("NoDeviceException was not rethrown");
+        } catch (NoDeviceException e) {
+            // expected
+            assertEquals("Reserved devices (2) more than required (1).", e.getMessage());
+        }
+
+        verify(mMockConfiguration).validateOptions();
+
+        verify(mMockConfigFactory, times(1))
+                .createConfigurationFromArgs(
+                        AdditionalMatchers.aryEq(args), isNull(), (IKeyStoreClient) any());
+    }
+
+    /**
+     * Test case for execCommand with too few reserved devices and null devices. {@link
+     * CommandScheduler#execCommand(IScheduledInvocationListener, List<ITestDevice>, String[])}
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testExecCommand_reservedTooFewDevices() throws Throwable {
+        String[] args = new String[] {"foo"};
+        List<ITestDevice> reservedDevices = Arrays.asList(mock(ITestDevice.class));
+        mFakeDeviceManager.setNumDevicesCustom(2, TestDeviceState.ONLINE, NullDevice.class);
+        mDeviceConfigList.add(createDeviceConfig("reserved0"));
+        mDeviceConfigList.add(createDeviceConfig("reserved1"));
+        mDeviceConfigList.add(createNullDeviceConfig("serial0"));
+        mDeviceConfigList.add(createNullDeviceConfig("serial1"));
+        setCreateConfigExpectations(args);
+
+        mMockInvocation.invoke(
+                (IInvocationContext) any(),
+                (IConfiguration) any(),
+                (IRescheduler) any(),
+                (ITestInvocationListener) any(),
+                // This is FreeDeviceHandler.
+                (IScheduledInvocationListener) any());
+        IScheduledInvocationListener mockListener = mock(IScheduledInvocationListener.class);
+        mockListener.invocationInitiated((IInvocationContext) any());
+        mockListener.invocationComplete(
+                (IInvocationContext) any(), (Map<ITestDevice, FreeDeviceState>) any());
+        verify(mMockInvocation, times(1))
+                .invoke(
+                        (IInvocationContext) any(),
+                        (IConfiguration) any(),
+                        (IRescheduler) any(),
+                        (ITestInvocationListener) any(),
+                        // This is FreeDeviceHandler.
+                        (IScheduledInvocationListener) any());
+
+        mScheduler.start();
+
+        try {
+            mScheduler.execCommand(mockListener, reservedDevices, args);
+            fail("NoDeviceException was not rethrown");
+        } catch (NoDeviceException e) {
+            // expected
+            assertEquals("Reserved devices (1) fewer than required.", e.getMessage());
+        }
+
+        verify(mMockConfiguration).validateOptions();
+
+        verify(mMockConfigFactory, times(1))
+                .createConfigurationFromArgs(
+                        AdditionalMatchers.aryEq(args), isNull(), (IKeyStoreClient) any());
+    }
+
+    /**
      * Test that when a command runs in the versioned subprocess with --invocation-data option we do
      * not add the attributes again
      */
@@ -1336,7 +1546,9 @@ public class CommandSchedulerTest {
                 new TestableCommandScheduler() {
                     @Override
                     DeviceAllocationResult allocateDevices(
-                            IConfiguration config, IDeviceManager manager) {
+                            IConfiguration config,
+                            IDeviceManager manager,
+                            ArrayList<String> excludeDevices) {
                         DeviceAllocationResult results = new DeviceAllocationResult();
                         Map<String, ITestDevice> allocated = new HashMap<>();
                         ((MockDeviceManager) manager).addDevice(mockDevice);
