@@ -215,19 +215,30 @@ public class GceManager {
         mSkipSerialLogCollection =
                 (!Strings.isNullOrEmpty(ipDevice) || getTestDeviceOptions().useOxygen());
         if (getTestDeviceOptions().useOxygenProxy()) {
-            return startGceWithOxygenClient(logger);
+            return startGceWithOxygenClient(logger, attributes);
         } else {
             return startGceWithAcloud(ipDevice, user, offset, attributes);
         }
     }
 
     /**
+     * @deprecated Remove this after master branch is updated.
+     */
+    @Deprecated
+    public List<GceAvdInfo> startMultiDevicesGce(List<IBuildInfo> buildInfos)
+            throws TargetSetupError {
+        return startMultiDevicesGce(buildInfos, null);
+    }
+
+    /**
      * Attempt to start multi devices gce instance with Oxygen.
      *
      * @param buildInfos {@link List<IBuildInfo>}
+     * @param attributes attributes associated with current invocation
      * @return a {@link List<GceAvdInfo>} describing the GCE Avd Info.
      */
-    public List<GceAvdInfo> startMultiDevicesGce(List<IBuildInfo> buildInfos)
+    public List<GceAvdInfo> startMultiDevicesGce(
+            List<IBuildInfo> buildInfos, MultiMap<String, String> attributes)
             throws TargetSetupError {
         List<GceAvdInfo> gceAvdInfos;
         long startTime = System.currentTimeMillis();
@@ -235,7 +246,8 @@ public class GceManager {
             File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
             OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
             CommandResult res =
-                    oxygenClient.leaseMultipleDevices(buildInfos, getTestDeviceOptions());
+                    oxygenClient.leaseMultipleDevices(
+                            buildInfos, getTestDeviceOptions(), attributes);
             gceAvdInfos =
                     GceAvdInfo.parseGceInfoFromOxygenClientOutput(
                             res, mDeviceOptions.getRemoteAdbPort());
@@ -253,14 +265,17 @@ public class GceManager {
      * Attempt to start a gce instance with Oxygen.
      *
      * @param loggger The {@link ITestLogger} where to log the device launch logs.
+     * @param attributes attributes associated with current invocation
      * @return a {@link GceAvdInfo} describing the GCE instance.
      */
-    private GceAvdInfo startGceWithOxygenClient(ITestLogger logger) throws TargetSetupError {
+    private GceAvdInfo startGceWithOxygenClient(
+            ITestLogger logger, MultiMap<String, String> attributes) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
         try {
             File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
             OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
-            CommandResult res = oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions());
+            CommandResult res =
+                    oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions(), attributes);
             GceAvdInfo oxygenDeviceInfo =
                     GceAvdInfo.parseGceInfoFromOxygenClientOutput(
                                     res, mDeviceOptions.getRemoteAdbPort())
