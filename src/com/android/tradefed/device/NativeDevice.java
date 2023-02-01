@@ -273,11 +273,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         private String[] mCmd;
         private long mTimeout;
         private boolean mIsShellCommand;
+        private Map<String, String> mEnvMap;
 
-        AdbAction(long timeout, String[] cmd, boolean isShell) {
+        AdbAction(long timeout, String[] cmd, boolean isShell, Map<String, String> envMap) {
             mTimeout = timeout;
             mCmd = cmd;
             mIsShellCommand = isShell;
+            mEnvMap = envMap;
         }
 
         private void logExceptionAndOutput(CommandResult result) {
@@ -288,7 +290,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         @Override
         public boolean run() throws TimeoutException, IOException {
-            CommandResult result = getRunUtil().runTimedCmd(mTimeout, mCmd);
+            IRunUtil runUtil = getRunUtil();
+            if (!mEnvMap.isEmpty()) {
+                runUtil = createRunUtil();
+            }
+            for (String key : mEnvMap.keySet()) {
+                runUtil.setEnvVariable(key, mEnvMap.get(key));
+            }
+            CommandResult result = runUtil.runTimedCmd(mTimeout, mCmd);
             // TODO: how to determine device not present with command failing for other reasons
             if (result.getStatus() == CommandStatus.EXCEPTION) {
                 logExceptionAndOutput(result);
@@ -404,6 +413,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @VisibleForTesting
     protected IRunUtil getRunUtil() {
         return RunUtil.getDefault();
+    }
+
+    protected IRunUtil createRunUtil() {
+        return new RunUtil();
     }
 
     /** Set the Clock instance to use. */
@@ -2202,8 +2215,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public String executeAdbCommand(long timeout, String... cmdArgs)
             throws DeviceNotAvailableException {
+        return executeAdbCommand(getCommandTimeout(), new HashMap<>(), cmdArgs);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String executeAdbCommand(long timeout, Map<String, String> envMap, String... cmdArgs)
+            throws DeviceNotAvailableException {
         final String[] fullCmd = buildAdbCommand(cmdArgs);
-        AdbAction adbAction = new AdbAction(timeout, fullCmd, "shell".equals(cmdArgs[0]));
+        AdbAction adbAction = new AdbAction(timeout, fullCmd, "shell".equals(cmdArgs[0]), envMap);
         performDeviceAction(String.format("adb %s", cmdArgs[0]), adbAction, MAX_RETRY_ATTEMPTS);
         return adbAction.mOutput;
     }
