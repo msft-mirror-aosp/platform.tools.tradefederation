@@ -15,18 +15,17 @@
  */
 package com.android.tradefed.device;
 
-import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
-
-import static org.junit.Assert.assertThrows;
-
 import static com.android.tradefed.device.DeviceProperties.BUILD_CODENAME;
 import static com.android.tradefed.device.DeviceProperties.SDK_VERSION;
+
+import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assertWithMessage;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.atLeastOnce;
@@ -2402,6 +2401,13 @@ public class TestDeviceTest {
         verify(mMockStateMonitor).waitForDeviceAvailable(Mockito.anyLong());
     }
 
+    private void verifyRebootAndRootExpectations() throws Exception {
+        verify(mMockStateMonitor, times(4)).waitForDeviceOnline();
+        verifyShellResponse("id", 4);
+        verifyGetPropertyExpectation("ro.crypto.state", "unsupported", 1);
+        verify(mMockStateMonitor).waitForDeviceAvailable(Mockito.anyLong());
+    }
+
     /** Test normal success case for {@link TestDevice#reboot()} */
     @Test
     public void testReboot() throws Exception {
@@ -3344,6 +3350,7 @@ public class TestDeviceTest {
     @Test
     public void testRemount_verityUnsupported() throws Exception {
         injectSystemProperty("partition.system.verified", "");
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
@@ -3358,6 +3365,7 @@ public class TestDeviceTest {
     @Test
     public void testRemountVendor_verityUnsupported() throws Exception {
         injectSystemProperty("partition.vendor.verified", "");
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
@@ -3375,11 +3383,12 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountSystemWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
     /**
      * Test that remount vendor works as expected on a device supporting dm verity v1
@@ -3392,11 +3401,12 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountVendorWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
 
     /**
@@ -3410,11 +3420,12 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountSystemWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
 
     /**
@@ -3428,11 +3439,12 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountVendorWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
 
     /**
@@ -3446,11 +3458,12 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountSystemWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
 
     /**
@@ -3465,11 +3478,12 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountVendorWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
 
     /**
