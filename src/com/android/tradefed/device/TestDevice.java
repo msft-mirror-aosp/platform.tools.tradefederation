@@ -1371,12 +1371,9 @@ public class TestDevice extends NativeDevice {
     @Override
     public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException {
         checkApiLevelAgainst("isHeadlessSystemUserMode", 29);
-        if (getApiLevel() >= 34) {
-            String command = "cmd user is-headless-system-user-mode";
-            String commandOutput = executeShellCommand(command).trim();
-            return Boolean.valueOf(commandOutput);
-        }
-        return getBooleanProperty("ro.fw.mu.headless_system_user", false);
+        return checkApiLevelAgainstNextRelease(34)
+                ? executeShellV2CommandThatReturnsBoolean("cmd user is-headless-system-user-mode")
+                : getBooleanProperty("ro.fw.mu.headless_system_user", false);
     }
 
     /**
@@ -1560,7 +1557,6 @@ public class TestDevice extends NativeDevice {
             CLog.e("Invalid user id '%s' was returned for get-current-user", userId);
         } catch (NumberFormatException e) {
             CLog.e("Invalid string was returned for get-current-user: %s.", output);
-            CLog.e(e);
         }
         return INVALID_USER_ID;
     }
@@ -2499,6 +2495,28 @@ public class TestDevice extends NativeDevice {
      */
     public Process getMicrodroidProcess() {
         return mMicrodroidProcess;
+    }
+
+    private boolean executeShellV2CommandThatReturnsBoolean(String cmdFormat, Object... cmdArgs)
+            throws DeviceNotAvailableException {
+        String cmd = String.format(cmdFormat, cmdArgs);
+        CommandResult res = executeShellV2Command(cmd);
+        if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
+            throw new DeviceRuntimeException(
+                    "Command  '" + cmd + "' failed: " + res,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        String output = res.getStdout();
+        switch (output.trim().toLowerCase()) {
+            case "true":
+                return true;
+            case "false":
+                return false;
+            default:
+                throw new DeviceRuntimeException(
+                        "Non-boolean result for '" + cmd + "': " + output,
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
     }
 
     /** A builder used to create a Microdroid TestDevice. */
