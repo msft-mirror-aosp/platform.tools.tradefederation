@@ -635,6 +635,14 @@ public interface INativeDevice {
     public boolean isAppEnumerationSupported() throws DeviceNotAvailableException;
 
     /**
+     * Check whether platform on device supports bypassing low target sdk block on app installs
+     *
+     * @return True if bypass low target sdk block is supported, false otherwise
+     * @throws DeviceNotAvailableException
+     */
+    public boolean isBypassLowTargetSdkBlockSupported() throws DeviceNotAvailableException;
+
+    /**
      * Retrieves a file off device.
      *
      * @param remoteFilePath the absolute path to file on device.
@@ -1191,16 +1199,18 @@ public interface INativeDevice {
      *
      * @param waitTime the time in ms to wait
      * @throws DeviceNotAvailableException if device is still unresponsive after waitTime expires.
+     * @return True if device is available, False if recovery is disabled and unavailable.
      */
-    public void waitForDeviceAvailable(final long waitTime) throws DeviceNotAvailableException;
+    public boolean waitForDeviceAvailable(final long waitTime) throws DeviceNotAvailableException;
 
     /**
-     * Waits for the device to be responsive and available for testing.  Uses default timeout.
+     * Waits for the device to be responsive and available for testing. Uses default timeout.
      *
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
-     * recovered.
+     *     recovered.
+     * @return True if device is available, False if recovery is disabled and unavailable.
      */
-    public void waitForDeviceAvailable() throws DeviceNotAvailableException;
+    public boolean waitForDeviceAvailable() throws DeviceNotAvailableException;
 
     /**
      * Blocks until device is visible via adb.
@@ -1519,10 +1529,26 @@ public interface INativeDevice {
     public DeviceDescriptor getDeviceDescriptor();
 
     /**
+     * Return a {@link DeviceDescriptor} from the device information to get info on it without
+     * passing the actual device object.
+     *
+     * @param shortDescriptor Whether or not to limit descriptor to bare minimum info
+     */
+    public DeviceDescriptor getDeviceDescriptor(boolean shortDescriptor);
+
+    /**
      * Returns a cached {@link DeviceDescriptor} if the device is allocated, otherwise returns the
      * current {@link DeviceDescriptor}.
      */
     public DeviceDescriptor getCachedDeviceDescriptor();
+
+    /**
+     * Returns a cached {@link DeviceDescriptor} if the device is allocated, otherwise returns the
+     * current {@link DeviceDescriptor}.
+     *
+     * @param shortDescriptor Whether or not to limit descriptor to bare minimum info
+     */
+    public DeviceDescriptor getCachedDeviceDescriptor(boolean shortDescriptor);
 
     /**
      * Helper method runs the "pidof" and "stat" command and returns {@link ProcessInfo} object with

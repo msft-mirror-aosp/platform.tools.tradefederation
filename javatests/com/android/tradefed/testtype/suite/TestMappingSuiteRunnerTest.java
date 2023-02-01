@@ -1134,6 +1134,53 @@ public class TestMappingSuiteRunnerTest {
         }
     }
 
+    /**
+     * Test for {@link TestMappingSuiteRunner#loadTests()} ()} for loading tests when full run is
+     * forced.
+     */
+    @Test
+    public void testLoadTests_ForceFullRun() throws Exception {
+        File tempDir = null;
+        try {
+            mOptionSetter.setOptionValue("test-mapping-test-group", "postsubmit");
+            mOptionSetter.setOptionValue("force-full-run", "true");
+
+            tempDir = FileUtil.createTempDir("test_mapping");
+
+            File srcDir = FileUtil.createTempDir("src", tempDir);
+            String srcFile =
+                    File.separator + TEST_DATA_DIR + File.separator + DISABLED_PRESUBMIT_TESTS;
+            InputStream resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, srcDir, DISABLED_PRESUBMIT_TESTS);
+
+            srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_1";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, srcDir, TEST_MAPPING);
+            File subDir = FileUtil.createTempDir("sub_dir", srcDir);
+            srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_2";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir, TEST_MAPPING);
+
+            List<File> filesToZip =
+                    Arrays.asList(srcDir, new File(tempDir, DISABLED_PRESUBMIT_TESTS));
+            File zipFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPINGS_ZIP).toFile();
+            ZipUtil.createZip(filesToZip, zipFile);
+
+            mOptionSetter.setOptionValue("test-mapping-path", srcDir.getName());
+
+            IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
+            when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
+            when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
+            mRunner.setBuild(mockBuildInfo);
+            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
+            assertEquals(4, configMap.size());
+
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+        }
+    }
+
     @Test
     public void testLoadTests_WithoutCollisionAdditionalTestMappingZip() throws Exception {
         File tempDir = null;
@@ -1192,6 +1239,207 @@ public class TestMappingSuiteRunnerTest {
             FileUtil.recursiveDelete(tempDir);
             TestMapping.setIgnoreTestMappingImports(true);
             TestMapping.setTestMappingPaths(new ArrayList<String>());
+        }
+    }
+
+    /**
+     * Test for {@link TestMappingSuiteRunner#loadTests()} for loading tests with checking modified
+     * files matched file patterns.
+     */
+    @Test
+    public void testLoadTestsWithFilePatternsExample1() throws Exception {
+        // Test directory structure:
+        // ├── a/TEST_MAPPING (File patterns: *.java)
+        // └── b/TEST_MAPPING (No file patterns)
+        File tempDir = null;
+        try {
+            mOptionSetter.setOptionValue("test-mapping-test-group", "presubmit");
+            mOptionSetter.setOptionValue("test-mapping-path", "a");
+            mOptionSetter.setOptionValue("test-mapping-path", "b");
+            mOptionSetter.setOptionValue("test-mapping-matched-pattern-paths", "a/b.java");
+
+            tempDir = FileUtil.createTempDir("test_mapping");
+            File subDir_a = new File(tempDir.getAbsolutePath() + File.separator + "a");
+            subDir_a.mkdir();
+            String srcFile =
+                    File.separator
+                            + TEST_DATA_DIR
+                            + File.separator
+                            + "test_mapping_with_file_patterns_java";
+            InputStream resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir_a, TEST_MAPPING);
+            File subDir_b = new File(tempDir.getAbsolutePath() + File.separator + "b");
+            subDir_b.mkdir();
+            srcFile =
+                    File.separator
+                            + TEST_DATA_DIR
+                            + File.separator
+                            + "test_mapping_with_no_file_patterns";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir_b, TEST_MAPPING);
+
+            List<File> filesToZip = Arrays.asList(subDir_a, subDir_b);
+            File zipFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPINGS_ZIP).toFile();
+            ZipUtil.createZip(filesToZip, zipFile);
+
+            IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
+            when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
+            when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
+            mRunner.setBuild(mockBuildInfo);
+
+            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
+            assertEquals(2, mRunner.getIncludeFilter().size());
+            assertTrue(mRunner.getIncludeFilter().contains("test_java"));
+            assertTrue(mRunner.getIncludeFilter().contains("test_no_pattern"));
+
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+        }
+    }
+
+    /**
+     * Test for {@link TestMappingSuiteRunner#loadTests()} for loading tests with checking modified
+     * files matched file patterns.
+     */
+    @Test
+    public void testLoadTestsWithFilePatternsExample2() throws Exception {
+        // Test directory structure:
+        // ├── a/TEST_MAPPING (File patterns: *.java)
+        // ├── a/b/TEST_MAPPING (File patterns: *.txt)
+        // └── a/c/TEST_MAPPING (No file patterns)
+        File tempDir = null;
+        try {
+            mOptionSetter.setOptionValue("test-mapping-test-group", "presubmit");
+            mOptionSetter.setOptionValue("test-mapping-path", "a/b");
+            mOptionSetter.setOptionValue("test-mapping-path", "a/c");
+            mOptionSetter.setOptionValue("test-mapping-matched-pattern-paths", "a/c.java");
+            mOptionSetter.setOptionValue("test-mapping-matched-pattern-paths", "a/b/d.txt");
+
+            tempDir = FileUtil.createTempDir("test_mapping");
+            File subDir_a = new File(tempDir.getAbsolutePath() + File.separator + "a");
+            subDir_a.mkdir();
+            String srcFile =
+                    File.separator
+                            + TEST_DATA_DIR
+                            + File.separator
+                            + "test_mapping_with_file_patterns_java";
+            InputStream resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir_a, TEST_MAPPING);
+            File subDir_b = new File(subDir_a.getAbsolutePath() + File.separator + "b");
+            subDir_b.mkdir();
+            srcFile =
+                    File.separator
+                            + TEST_DATA_DIR
+                            + File.separator
+                            + "test_mapping_with_file_patterns_txt";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir_b, TEST_MAPPING);
+            File subDir_c = new File(subDir_a.getAbsolutePath() + File.separator + "c");
+            subDir_c.mkdir();
+            srcFile =
+                    File.separator
+                            + TEST_DATA_DIR
+                            + File.separator
+                            + "test_mapping_with_no_file_patterns";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir_c, TEST_MAPPING);
+
+            List<File> filesToZip = Arrays.asList(subDir_a);
+            File zipFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPINGS_ZIP).toFile();
+            ZipUtil.createZip(filesToZip, zipFile);
+
+            IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
+            when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
+            when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
+            mRunner.setBuild(mockBuildInfo);
+
+            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
+            assertEquals(3, mRunner.getIncludeFilter().size());
+            assertTrue(mRunner.getIncludeFilter().contains("test_java"));
+            assertTrue(mRunner.getIncludeFilter().contains("test_txt"));
+            assertTrue(mRunner.getIncludeFilter().contains("test_no_pattern"));
+
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+        }
+    }
+
+    /**
+     * Test for {@link TestMappingSuiteRunner#loadTests()} for loading tests with checking modified
+     * files matched file patterns.
+     */
+    @Test
+    public void testLoadTestsWithFilePatternsExample3() throws Exception {
+        // Test directory structure:
+        // ├── a/TEST_MAPPING (File patterns: *.java)
+        // ├── a/b/TEST_MAPPING (No file patterns)
+        // ├── a/b/c/TEST_MAPPING (File patterns: *.txt)
+        // └── a/b/c/d/TEST_MAPPING (No file patterns)
+        File tempDir = null;
+        try {
+            mOptionSetter.setOptionValue("test-mapping-test-group", "presubmit");
+            mOptionSetter.setOptionValue("test-mapping-path", "a/b/c/d");
+            mOptionSetter.setOptionValue("test-mapping-matched-pattern-paths", "a/b/c/d/e.java");
+            mOptionSetter.setOptionValue("test-mapping-matched-pattern-paths", "a/b/c/d.txt");
+
+            tempDir = FileUtil.createTempDir("test_mapping");
+            File subDir_a = new File(tempDir.getAbsolutePath() + File.separator + "a");
+            subDir_a.mkdir();
+            String srcFile =
+                    File.separator
+                            + TEST_DATA_DIR
+                            + File.separator
+                            + "test_mapping_with_file_patterns_java";
+            InputStream resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir_a, TEST_MAPPING);
+            File subDir_b = new File(subDir_a.getAbsolutePath() + File.separator + "b");
+            subDir_b.mkdir();
+            srcFile =
+                    File.separator
+                            + TEST_DATA_DIR
+                            + File.separator
+                            + "test_mapping_with_no_file_patterns";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir_b, TEST_MAPPING);
+            File subDir_c = new File(subDir_b.getAbsolutePath() + File.separator + "c");
+            subDir_c.mkdir();
+            srcFile =
+                    File.separator
+                            + TEST_DATA_DIR
+                            + File.separator
+                            + "test_mapping_with_file_patterns_txt";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir_c, TEST_MAPPING);
+            File subDir_d = new File(subDir_c.getAbsolutePath() + File.separator + "d");
+            subDir_d.mkdir();
+            srcFile =
+                    File.separator
+                            + TEST_DATA_DIR
+                            + File.separator
+                            + "test_mapping_with_no_file_patterns";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir_d, TEST_MAPPING);
+
+            List<File> filesToZip = Arrays.asList(subDir_a);
+            File zipFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPINGS_ZIP).toFile();
+            ZipUtil.createZip(filesToZip, zipFile);
+
+            IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
+            when(mockBuildInfo.getFile(BuildInfoFileKey.TARGET_LINKED_DIR)).thenReturn(null);
+            when(mockBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
+            when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
+            mRunner.setBuild(mockBuildInfo);
+
+            LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
+            assertEquals(3, mRunner.getIncludeFilter().size());
+            assertTrue(mRunner.getIncludeFilter().contains("test_java"));
+            assertTrue(mRunner.getIncludeFilter().contains("test_txt"));
+            assertTrue(mRunner.getIncludeFilter().contains("test_no_pattern"));
+
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
         }
     }
 

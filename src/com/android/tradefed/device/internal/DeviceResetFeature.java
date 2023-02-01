@@ -27,6 +27,8 @@ import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.service.IRemoteFeature;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.testtype.ITestInformationReceiver;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.SerializationUtil;
 
 import com.proto.tradefed.feature.ErrorInfo;
@@ -91,12 +93,27 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
         try {
             mTestInformation.setActiveDeviceIndex(index);
             if (mTestInformation.getDevice() instanceof RemoteAndroidVirtualDevice) {
-                boolean res =
-                        ((RemoteAndroidVirtualDevice) mTestInformation.getDevice()).powerwashGce();
-                if (!res) {
+                Integer offset =
+                        ((RemoteAndroidVirtualDevice) mTestInformation.getDevice())
+                                .getAvdInfo()
+                                .getDeviceOffset();
+                String user =
+                        ((RemoteAndroidVirtualDevice) mTestInformation.getDevice())
+                                .getAvdInfo()
+                                .getInstanceUser();
+                CommandResult powerwashResult =
+                        ((RemoteAndroidVirtualDevice) mTestInformation.getDevice())
+                                .powerwashGce(user, offset);
+                if (!CommandStatus.SUCCESS.equals(powerwashResult.getStatus())) {
                     throw new DeviceNotAvailableException(
-                            String.format("Failed to powerwash device: %s",
-                                    mTestInformation.getDevice().getSerialNumber()),
+                            String.format(
+                                    "Failed to powerwash device: %s. status:%s\n"
+                                            + "stdout: %s\n"
+                                            + "stderr:%s",
+                                    mTestInformation.getDevice().getSerialNumber(),
+                                    powerwashResult.getStatus(),
+                                    powerwashResult.getStdout(),
+                                    powerwashResult.getStderr()),
                             mTestInformation.getDevice().getSerialNumber(),
                             DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
                 }

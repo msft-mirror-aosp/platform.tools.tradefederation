@@ -24,18 +24,17 @@ import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.sandbox.SandboxOptions;
 import com.android.tradefed.service.IRemoteFeature;
-
 import com.proto.tradefed.feature.ErrorInfo;
 import com.proto.tradefed.feature.FeatureRequest;
 import com.proto.tradefed.feature.FeatureResponse;
 import com.proto.tradefed.feature.MultiPartResponse;
 import com.proto.tradefed.feature.PartResponse;
-
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Service implementation that returns the command options value of a given invocation.
@@ -110,9 +109,29 @@ public class CommandOptionsGetter implements IRemoteFeature, IConfigurationRecei
                 if (option.name().equals(toResolve)) {
                     Object fieldValue = OptionSetter.getFieldValue(field, objectForFields);
                     if (fieldValue != null) {
-                        responses.add(PartResponse.newBuilder()
-                                .setKey(toResolve).setValue(fieldValue.toString())
-                                .build());
+                        if (fieldValue instanceof Set) {
+                            for (Object o : (Set) fieldValue) {
+                                responses.add(
+                                        PartResponse.newBuilder()
+                                                .setKey(toResolve)
+                                                .setValue(o.toString())
+                                                .build());
+                            }
+                        } else if (fieldValue instanceof List) {
+                            for (Object o : (List) fieldValue) {
+                                responses.add(
+                                        PartResponse.newBuilder()
+                                                .setKey(toResolve)
+                                                .setValue(o.toString())
+                                                .build());
+                            }
+                        } else {
+                            responses.add(
+                                    PartResponse.newBuilder()
+                                            .setKey(toResolve)
+                                            .setValue(fieldValue.toString())
+                                            .build());
+                        }
                         continue;
                     }
                 }

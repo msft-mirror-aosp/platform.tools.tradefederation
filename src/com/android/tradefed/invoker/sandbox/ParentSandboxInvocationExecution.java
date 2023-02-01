@@ -25,11 +25,14 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceSelectionOptions;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.InvocationExecution;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.TestInvocation.Stage;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -52,6 +55,9 @@ import java.util.List;
  */
 public class ParentSandboxInvocationExecution extends InvocationExecution {
 
+    private SandboxSetupThread setupThread;
+    private TestInformation mTestInfo;
+
     @Override
     public boolean fetchBuild(
             TestInformation testInfo,
@@ -59,6 +65,7 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             IRescheduler rescheduler,
             ITestInvocationListener listener)
             throws DeviceNotAvailableException, BuildRetrievalError {
+        mTestInfo = testInfo;
         if (!testInfo.getContext().getBuildInfos().isEmpty()) {
             CLog.d(
                     "Context already contains builds: %s. Skipping download as we are in "
@@ -87,6 +94,14 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
     @Override
     public void doSetup(TestInformation testInfo, IConfiguration config, ITestLogger listener)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
+        if (shouldRunDeviceSpecificSetup(config)
+                && getSandboxOptions(config).shouldParallelSetup()
+                && !getSandboxOptions(config).shouldUseNewFlagOrder()) {
+            setupThread =
+                    new SandboxSetupThread(testInfo, config, (ITestInvocationListener) listener);
+            setupThread.start();
+        }
+
         // TODO address the situation where multi-target preparers are configured
         // (they will be run by both the parent and sandbox if configured)
         super.doSetup(testInfo, config, listener);
@@ -115,35 +130,46 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             IInvocationContext context, IConfiguration config, ITestLogger logger)
             throws DeviceNotAvailableException, TargetSetupError {
         if (shouldRunDeviceSpecificSetup(config)) {
+            if (getSandboxOptions(config).shouldParallelSetup()
+                    && getSandboxOptions(config).shouldUseNewFlagOrder()) {
+                setupThread =
+                        new SandboxSetupThread(mTestInfo, config, (ITestInvocationListener) logger);
+                setupThread.start();
+            }
             super.runDevicePreInvocationSetup(context, config, logger);
-            String commandLine = config.getCommandLine();
-            for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
-                if (deviceConfig.getDeviceRequirements().gceDeviceRequested()) {
-                    // Turn off the gce-device option and force the serial instead to use the
-                    // started virtual device.
-                    String deviceName = (config.getDeviceConfig().size() > 1) ?
-                            String.format("{%s}", deviceConfig.getDeviceName()) : "";
-                    commandLine +=
-                            String.format(
-                                    " --%sno-gce-device --%sserial %s",
-                                    deviceName,
-                                    deviceName,
-                                    context.getDevice(deviceConfig.getDeviceName())
-                                            .getSerialNumber());
-                    // If we are using the device-type selector, override it
-                    if (DeviceSelectionOptions.DeviceRequestedType.GCE_DEVICE.equals(
-                            ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
-                                    .getDeviceTypeRequested())) {
+            if (!getSandboxOptions(config).shouldUseNewFlagOrder()) {
+                String commandLine = config.getCommandLine();
+                for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+                    if (deviceConfig.getDeviceRequirements().gceDeviceRequested()) {
+                        // Turn off the gce-device option and force the serial instead to use the
+                        // started virtual device.
+                        String deviceName =
+                                (config.getDeviceConfig().size() > 1)
+                                        ? String.format("{%s}", deviceConfig.getDeviceName())
+                                        : "";
                         commandLine +=
                                 String.format(
-                                        " --%sdevice-type %s",
+                                        " --%sno-gce-device --%sserial %s",
                                         deviceName,
-                                        DeviceSelectionOptions.DeviceRequestedType.EXISTING_DEVICE
-                                                .name());
+                                        deviceName,
+                                        context.getDevice(deviceConfig.getDeviceName())
+                                                .getSerialNumber());
+                        // If we are using the device-type selector, override it
+                        if (DeviceSelectionOptions.DeviceRequestedType.GCE_DEVICE.equals(
+                                ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
+                                        .getDeviceTypeRequested())) {
+                            commandLine +=
+                                    String.format(
+                                            " --%sdevice-type %s",
+                                            deviceName,
+                                            DeviceSelectionOptions.DeviceRequestedType
+                                                    .EXISTING_DEVICE
+                                                    .name());
+                        }
                     }
                 }
+                config.setCommandLine(QuotationAwareTokenizer.tokenizeLine(commandLine, false));
             }
-            config.setCommandLine(QuotationAwareTokenizer.tokenizeLine(commandLine, false));
         }
     }
 
@@ -190,6 +216,34 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
     protected boolean prepareAndRunSandbox(
             TestInformation info, IConfiguration config, ITestInvocationListener listener)
             throws Throwable {
+        // Stop background logcat in parent process during the sandbox
+        for (String deviceName : info.getContext().getDeviceConfigNames()) {
+            if (!(info.getContext().getDevice(deviceName).getIDevice() instanceof StubDevice)) {
+                info.getContext().getDevice(deviceName).stopLogcat();
+                CLog.i(
+                        "Done stopping logcat for %s",
+                        info.getContext().getDevice(deviceName).getSerialNumber());
+            }
+        }
+
+        if (getSandboxOptions(config).shouldParallelSetup()) {
+            long startTime = System.currentTimeMillis();
+            try {
+                setupThread.join();
+            } finally {
+                // Only track as overhead the time that setup runs longer
+                // than other actions (critical path)
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
+                        startTime,
+                        System.currentTimeMillis());
+            }
+            if (setupThread.error != null) {
+                CLog.e("An exception occurred during parallel setup.");
+                throw setupThread.error;
+            }
+            return SandboxInvocationRunner.runSandbox(info, config, listener);
+        }
         return SandboxInvocationRunner.prepareAndRun(info, config, listener);
     }
 
@@ -197,12 +251,42 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
      * Whether or not to run the device pre invocation setup or not.
      */
     private boolean shouldRunDeviceSpecificSetup(IConfiguration config) {
-        SandboxOptions options =
-                (SandboxOptions)
-                        config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME);
+        SandboxOptions options = getSandboxOptions(config);
         if (options != null && options.startAvdInParent()) {
             return true;
         }
         return false;
+    }
+
+    private SandboxOptions getSandboxOptions(IConfiguration config) {
+        return (SandboxOptions)
+                config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME);
+    }
+
+    private class SandboxSetupThread extends Thread {
+
+        private final TestInformation info;
+        private final IConfiguration config;
+        private final ITestInvocationListener listener;
+        // The error that might be returned by the setup
+        public Throwable error;
+
+        public SandboxSetupThread(
+                TestInformation info, IConfiguration config, ITestInvocationListener listener) {
+            setDaemon(true);
+            setName("SandboxSetupThread");
+            this.info = info;
+            this.config = config;
+            this.listener = listener;
+        }
+
+        @Override
+        public void run() {
+            try {
+                SandboxInvocationRunner.prepareSandbox(info, config, listener);
+            } catch (Throwable e) {
+                error = e;
+            }
+        }
     }
 }

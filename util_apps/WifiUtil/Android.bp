@@ -16,9 +16,17 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-android_test_helper_app {
+android_test {
     name: "WifiUtil",
     srcs: ["src/**/*.java"],
     min_sdk_version: "7",
+    target_sdk_version: "31",
+    sdk_version: "current",
     manifest: "src/com/android/tradefed/utils/wifi/AndroidManifest.xml",
+    optimize: {
+        enabled: false,
+    },
+    visibility: [
+        "//tools/tradefederation/core"
+    ],
 }

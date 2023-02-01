@@ -16,6 +16,7 @@
 
 package com.android.tradefed.suite.checker.baseline;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import com.android.tradefed.device.ITestDevice;
@@ -57,5 +58,20 @@ public final class DeviceBaselineSetterTest {
         assertTrue(
                 new Setter(new JSONObject("{\"experimental\": true}"), SETTING_NAME)
                         .isExperimental());
+    }
+
+    /** Test that the minimal api level is set to the value of input filed. */
+    @Test
+    public void getMinimalApiLevel_withApiTestField_returnApiLevel() throws Exception {
+        assertEquals(
+                new Setter(new JSONObject("{\"min_api_level\": \"28\"}"), SETTING_NAME)
+                        .getMinimalApiLevel(),
+                28);
+    }
+
+    /** Test that the api level is set to default value when the input field is null. */
+    @Test
+    public void getMinimalApiLevel_withoutApiTestField_returnDefaultApiLevel() throws Exception {
+        assertEquals(new Setter(new JSONObject("{}"), SETTING_NAME).getMinimalApiLevel(), 30);
     }
 }

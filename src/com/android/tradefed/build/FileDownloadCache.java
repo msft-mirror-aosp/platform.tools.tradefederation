@@ -16,6 +16,7 @@
 package com.android.tradefed.build;
 
 import com.android.tradefed.command.FatalHostError;
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -72,7 +73,8 @@ public class FileDownloadCache {
     private long mCurrentCacheSize = 0;
 
     /** The approximate maximum allowed size of the local file cache. Default to 20 gig */
-    private long mMaxFileCacheSize = 20L * 1024L * 1024L * 1024L;
+    private long mMaxFileCacheSize =
+            GlobalConfiguration.getInstance().getHostOptions().getCacheSizeLimit();
 
     /**
      * Struct for a {@link File} and its remote relative path
@@ -363,6 +365,8 @@ public class FileDownloadCache {
                     }
                     downloadFile(downloader, remotePath, cachedFile);
                 } else {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.CACHE_HIT_COUNT, 1);
                     CLog.d(
                             "Retrieved remote file %s from cached file %s",
                             remotePath, cachedFile.getAbsolutePath());

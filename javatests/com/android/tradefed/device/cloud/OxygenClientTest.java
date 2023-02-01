@@ -17,6 +17,7 @@
 package com.android.tradefed.device.cloud;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.android.tradefed.build.BuildInfo;
@@ -26,6 +27,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.MultiMap;
 
 import com.google.common.base.Joiner;
 import com.google.common.net.HostAndPort;
@@ -62,6 +64,7 @@ public class OxygenClientTest {
 
     private static final String[] GCE_DEVICE_PARAMS =
             new String[] {
+                "random-arg",
                 "--branch",
                 "testBranch",
                 "--build-target",
@@ -92,6 +95,7 @@ public class OxygenClientTest {
         mOxygenBinaryFile = FileUtil.createTempFile("oxygen", "binary");
         mBuildInfo = new BuildInfo("P1234567", "target");
         mBuildInfo.setBuildBranch("testBranch");
+        mBuildInfo.addBuildAttribute("build_target", "target");
         mGceAvdInfo =
                 new GceAvdInfo(
                         "6a6a744e-0653-4926-b7b8-535d121a2fc9",
@@ -143,7 +147,8 @@ public class OxygenClientTest {
                                                 + " -kernel_build_id K1234567 -target_region"
                                                 + " us-east -accounting_user random1234@space.com"
                                                 + " -lease_length_secs 3600"
-                                                + " -arg1 value1";
+                                                + " -arg1 value1"
+                                                + " -user_debug_info work_unit_id:some_id";
                                 assertEquals(timeout, 900000);
                                 assertEquals(expectedCmdString, cmdString);
 
@@ -156,7 +161,9 @@ public class OxygenClientTest {
                         })
                 .when(mRunUtil)
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
-        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions);
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions, attributes);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
@@ -184,7 +191,8 @@ public class OxygenClientTest {
                                                 + " -target_region us-east"
                                                 + " -accounting_user random1234@space.com"
                                                 + " -lease_length_secs 3600"
-                                                + " -arg1 value1";
+                                                + " -arg1 value1"
+                                                + " -user_debug_info work_unit_id:some_id";
                                 assertEquals(timeout, 900000);
                                 assertEquals(expectedCmdString, cmdString);
 
@@ -197,9 +205,11 @@ public class OxygenClientTest {
                         })
                 .when(mRunUtil)
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
         CommandResult res =
                 mOxygenClient.leaseMultipleDevices(
-                        Arrays.asList(mBuildInfo, mBuildInfo), mTestDeviceOptions);
+                        Arrays.asList(mBuildInfo, mBuildInfo), mTestDeviceOptions, attributes);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
@@ -244,5 +254,14 @@ public class OxygenClientTest {
         boolean isReleased = mOxygenClient.release(emptyGceAvdInfo, mTestDeviceOptions);
         // Should return true as there is nothing need to be released
         assertTrue(isReleased);
+    }
+
+    @Test
+    public void testNoWaitForBootSpecified() throws Exception {
+        assertFalse(mOxygenClient.noWaitForBootSpecified(mTestDeviceOptions));
+
+        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
+        setter.setOptionValue("extra-oxygen-args", "no_wait_for_boot", "");
+        assertTrue(mOxygenClient.noWaitForBootSpecified(mTestDeviceOptions));
     }
 }

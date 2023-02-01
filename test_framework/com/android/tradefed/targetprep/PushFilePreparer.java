@@ -472,8 +472,13 @@ public class PushFilePreparer extends BaseTargetPreparer
         Set<String> deps = new HashSet<>();
         try {
             for (File f : getPushSpecs(null).values()) {
-                if (!f.exists()) {
+                // Match the resolving logic when actually pushing
+                if (!f.isAbsolute()) {
                     deps.add(f.getName());
+                } else {
+                    CLog.d(
+                            "%s detected as existing. Not reported as dependency.",
+                            f.getAbsolutePath());
                 }
             }
         } catch (TargetSetupError e) {

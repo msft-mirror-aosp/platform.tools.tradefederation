@@ -148,8 +148,9 @@ public class NativeDeviceTest {
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
-                    public void recoverDevice() throws DeviceNotAvailableException {
+                    public boolean recoverDevice() throws DeviceNotAvailableException {
                         // ignore
+                        return true;
                     }
 
                     @Override
@@ -1488,7 +1489,8 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    public File pullFile(String remoteFilePath) throws DeviceNotAvailableException {
+                    public File pullFile(String remoteFilePath, int userId)
+                            throws DeviceNotAvailableException {
                         try {
                             // Return an empty zip file for the partial bugreportz
                             return FileUtil.createTempFile("bugreportz-test", ".zip");
@@ -3094,8 +3096,9 @@ public class NativeDeviceTest {
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
-                    public void recoverDevice() throws DeviceNotAvailableException {
+                    public boolean recoverDevice() throws DeviceNotAvailableException {
                         // ignore
+                        return true;
                     }
 
                     @Override
@@ -3336,10 +3339,11 @@ public class NativeDeviceTest {
         mTestDevice =
                 new TestableAndroidNativeDevice() {
                     @Override
-                    public void recoverDevice() throws DeviceNotAvailableException {
+                    public boolean recoverDevice() throws DeviceNotAvailableException {
                         // change shell command result since now we want success on retry
                         res.setStatus(CommandStatus.SUCCESS);
                         res.setStderr("");
+                        return true;
                     }
                 };
         when(mMockRunUtil.runTimedCmd(

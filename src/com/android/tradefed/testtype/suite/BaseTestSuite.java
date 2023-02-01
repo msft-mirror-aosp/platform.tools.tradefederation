@@ -26,6 +26,8 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.LogDataType;
@@ -55,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** A Test for running Compatibility Test Suite with new suite system. */
 @OptionClass(alias = "base-suite")
@@ -75,18 +78,18 @@ public class BaseTestSuite extends ITestSuite {
     @Option(
             name = INCLUDE_FILTER_OPTION,
             description =
-                    "the include module filters to apply. Format: '[abi] <module-name> [test]'."
-                        + " See documentation:"
-                        + "https://source.android.com/devices/tech/test_infra/tradefed/testing/through-suite/option-passing",
+                    "the include module filters to apply. Format: '[abi] <module-name> [test]'. See"
+                        + " documentation:"
+                        + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
     private Set<String> mIncludeFilters = new HashSet<>();
 
     @Option(
             name = EXCLUDE_FILTER_OPTION,
             description =
-                    "the exclude module filters to apply. Format: '[abi] <module-name> [test]'."
-                        + " See documentation:"
-                        + "https://source.android.com/devices/tech/test_infra/tradefed/testing/through-suite/option-passing",
+                    "the exclude module filters to apply. Format: '[abi] <module-name> [test]'. See"
+                        + " documentation:"
+                        + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
     private Set<String> mExcludeFilters = new HashSet<>();
 
@@ -98,28 +101,25 @@ public class BaseTestSuite extends ITestSuite {
     private boolean mReverseExcludeFilters = false;
 
     @Option(
-        name = MODULE_OPTION,
-        shortName = MODULE_OPTION_SHORT_NAME,
-        description = "the test module to run. Only works for configuration in the tests dir.",
-        importance = Importance.IF_UNSET
-    )
+            name = MODULE_OPTION,
+            shortName = MODULE_OPTION_SHORT_NAME,
+            description = "the test module to run. Only works for configuration in the tests dir.",
+            importance = Importance.IF_UNSET)
     private String mModuleName = null;
 
     @Option(
-        name = TEST_OPTION,
-        shortName = TEST_OPTION_SHORT_NAME,
-        description = "the test to run.",
-        importance = Importance.IF_UNSET
-    )
+            name = TEST_OPTION,
+            shortName = TEST_OPTION_SHORT_NAME,
+            description = "the test to run.",
+            importance = Importance.IF_UNSET)
     private String mTestName = null;
 
     @Option(
-        name = MODULE_ARG_OPTION,
-        description =
-                "the arguments to pass to a module. The expected format is"
-                        + "\"<module-name>:[{alias}]<arg-name>:[<arg-key>:=]<arg-value>\"",
-        importance = Importance.ALWAYS
-    )
+            name = MODULE_ARG_OPTION,
+            description =
+                    "the arguments to pass to a module. The expected format is"
+                            + "\"<module-name>:[{alias}]<arg-name>:[<arg-key>:=]<arg-value>\"",
+            importance = Importance.ALWAYS)
     private List<String> mModuleArgs = new ArrayList<>();
 
     @Option(
@@ -131,82 +131,73 @@ public class BaseTestSuite extends ITestSuite {
     private List<String> mTestArgs = new ArrayList<>();
 
     @Option(
-        name = "run-suite-tag",
-        description =
-                "The tag that must be run. If specified, only configurations containing the "
-                        + "matching suite tag will be able to run."
-    )
+            name = "run-suite-tag",
+            description =
+                    "The tag that must be run. If specified, only configurations containing the "
+                            + "matching suite tag will be able to run.")
     private String mSuiteTag = null;
 
     @Option(
-        name = "prioritize-host-config",
-        description =
-                "If there are duplicate test configs for host/target, prioritize the host config, "
-                        + "otherwise use the target config."
-    )
+            name = "prioritize-host-config",
+            description =
+                    "If there are duplicate test configs for host/target, prioritize the host"
+                            + " config, otherwise use the target config.")
     private boolean mPrioritizeHostConfig = false;
 
     @Option(
-        name = "suite-config-prefix",
-        description = "Search only configs with given prefix for suite tags."
-    )
+            name = "suite-config-prefix",
+            description = "Search only configs with given prefix for suite tags.")
     private String mSuitePrefix = null;
 
     @Option(
-        name = "skip-loading-config-jar",
-        description = "Whether or not to skip loading configurations from the JAR on the classpath."
-    )
+            name = "skip-loading-config-jar",
+            description =
+                    "Whether or not to skip loading configurations from the JAR on the classpath.")
     private boolean mSkipJarLoading = false;
 
     @Option(
-        name = CONFIG_PATTERNS_OPTION,
-        description =
-                "The pattern(s) of the configurations that should be loaded from a directory."
-                        + " If none is explicitly specified, .*.xml and .*.config will be used."
-                        + " Can be repeated."
-    )
+            name = CONFIG_PATTERNS_OPTION,
+            description =
+                    "The pattern(s) of the configurations that should be loaded from a directory."
+                            + " If none is explicitly specified, .*.xml and .*.config will be used."
+                            + " Can be repeated.")
     private List<String> mConfigPatterns = new ArrayList<>();
 
     @Option(
-        name = "enable-parameterized-modules",
-        description =
-                "Whether or not to enable parameterized modules. This is a feature flag for work "
-                        + "in development."
-    )
+            name = "enable-parameterized-modules",
+            description =
+                    "Whether or not to enable parameterized modules. This is a feature flag for"
+                            + " work in development.")
     private boolean mEnableParameter = false;
 
     @Option(
-        name = "enable-mainline-parameterized-modules",
-        description =
-                "Whether or not to enable mainline parameterized modules. This is a feature flag "
-                        + "for work in development."
-    )
+            name = "enable-mainline-parameterized-modules",
+            description =
+                    "Whether or not to enable mainline parameterized modules. This is a feature"
+                            + " flag for work in development.")
     private boolean mEnableMainlineParameter = false;
 
     @Option(
-        name = "enable-optional-parameterization",
-        description =
-                "Whether or not to enable optional parameters. Optional parameters are "
-                        + "parameters not usually used by default."
-    )
+            name = "enable-optional-parameterization",
+            description =
+                    "Whether or not to enable optional parameters. Optional parameters are "
+                            + "parameters not usually used by default.")
     private boolean mEnableOptionalParameter = false;
 
     @Option(
-        name = "module-parameter",
-        description =
-                "Allows to run only one module parameter type instead of all the combinations. "
-                        + "For example: 'instant_app' would only run the instant_app version of "
-                        + "modules"
-    )
+            name = "module-parameter",
+            description =
+                    "Allows to run only one module parameter type instead of all the combinations."
+                        + " For example: 'instant_app' would only run the instant_app version of "
+                        + "modules")
     private ModuleParameters mForceParameter = null;
 
     @Option(
-        name = "exclude-module-parameters",
-        description =
-                "Exclude some modules parameter from being evaluated in the run combinations."
-                        + "For example: 'instant_app' would exclude all the instant_app version of "
-                        + "modules."
-    )
+            name = "exclude-module-parameters",
+            description =
+                    "Exclude some modules parameter from being evaluated in the run"
+                            + " combinations.For example: 'instant_app' would exclude all the"
+                            + " instant_app version of modules.")
     private Set<ModuleParameters> mExcludedModuleParameters = new HashSet<>();
 
     @Option(
@@ -218,13 +209,23 @@ public class BaseTestSuite extends ITestSuite {
 
     @Option(
             name = "ignore-non-preloaded-mainline-module",
-            description = "Skip installing the module(s) when the module(s) that are not"
+            description =
+                    "Skip installing the module(s) when the module(s) that are not"
                             + "preloaded on device. Otherwise an exception will be thrown.")
     private boolean mIgnoreNonPreloadedMainlineModule = false;
 
+    @Option(
+            name = "load-configs-with-include-filters",
+            description =
+                    "An experimental flag to improve the performance of loading test configs with "
+                            + "given module defined in include-filter.")
+    private boolean mLoadConfigsWithIncludeFilters = false;
+
     private SuiteModuleLoader mModuleRepo;
-    private Map<String, LinkedHashSet<SuiteTestFilter>> mIncludeFiltersParsed = new LinkedHashMap<>();
-    private Map<String, LinkedHashSet<SuiteTestFilter>> mExcludeFiltersParsed = new LinkedHashMap<>();
+    private Map<String, LinkedHashSet<SuiteTestFilter>> mIncludeFiltersParsed =
+            new LinkedHashMap<>();
+    private Map<String, LinkedHashSet<SuiteTestFilter>> mExcludeFiltersParsed =
+            new LinkedHashMap<>();
     private List<File> mConfigPaths = new ArrayList<>();
     private Set<IAbi> mAbis = new LinkedHashSet<>();
     private Set<DeviceFoldableState> mFoldableStates = new LinkedHashSet<>();
@@ -279,6 +280,8 @@ public class BaseTestSuite extends ITestSuite {
                         FileUtil.deleteFile(suiteIncludeFilters);
                     }
                 }
+            } else if (mIncludeFiltersParsed.size() > 0) {
+                includeFilters = String.format("Includes: %s", mIncludeFiltersParsed.toString());
             }
 
             String excludeFilters = "";
@@ -303,12 +306,13 @@ public class BaseTestSuite extends ITestSuite {
                         FileUtil.deleteFile(suiteExcludeFilters);
                     }
                 }
+            } else if (mExcludeFiltersParsed.size() > 0) {
+                excludeFilters = String.format("Excludes: %s", mExcludeFiltersParsed.toString());
             }
 
             CLog.d(
-                    "Initializing ModuleRepo\nABIs:%s\n"
-                            + "Test Args:%s\nModule Args:%s\n%s\n%s",
-                            mAbis, mTestArgs, mModuleArgs, includeFilters, excludeFilters);
+                    "Initializing ModuleRepo\nABIs:%s\n" + "Test Args:%s\nModule Args:%s\n%s\n%s",
+                    mAbis, mTestArgs, mModuleArgs, includeFilters, excludeFilters);
             if (!mFoldableStates.isEmpty()) {
                 CLog.d("Foldable states: %s", mFoldableStates);
             }
@@ -340,6 +344,7 @@ public class BaseTestSuite extends ITestSuite {
             mModuleRepo.setModuleParameter(mForceParameter);
             mModuleRepo.setExcludedModuleParameters(mExcludedModuleParameters);
             mModuleRepo.setFoldableStates(mFoldableStates);
+            mModuleRepo.setLoadConfigsWithIncludeFilters(mLoadConfigsWithIncludeFilters);
 
             List<File> testsDirectories = new ArrayList<>();
 
@@ -360,17 +365,33 @@ public class BaseTestSuite extends ITestSuite {
             // Finally add the full test cases directory in case there is no special sub-dir.
             testsDirectories.add(testsDir);
             // Actual loading of the configurations.
+            long start = System.currentTimeMillis();
             LinkedHashMap<String, IConfiguration> loadedTests =
                     loadingStrategy(mAbis, testsDirectories, mSuitePrefix, mSuiteTag);
-
+            long duration = System.currentTimeMillis() - start;
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.LOAD_TEST_CONFIGS_TIME, duration);
             if (mFailOnEverythingFiltered
                     && loadedTests.isEmpty()
                     && !mIncludeFiltersParsed.isEmpty()) {
+                // remove modules with empty filters from the message
+                Map<String, LinkedHashSet<SuiteTestFilter>> includeFiltersCleaned =
+                        mIncludeFiltersParsed.entrySet().stream()
+                                .filter(
+                                        entry ->
+                                                entry.getValue() != null
+                                                        && !entry.getValue().isEmpty())
+                                .collect(
+                                        Collectors.toMap(
+                                                Map.Entry::getKey,
+                                                Map.Entry::getValue,
+                                                (x, y) -> y,
+                                                LinkedHashMap::new));
                 throw new HarnessRuntimeException(
                         String.format(
                                 "Include filter '%s' was specified"
                                         + " but resulted in an empty test set.",
-                                        mIncludeFiltersParsed.toString()),
+                                includeFiltersCleaned.toString()),
                         InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             return loadedTests;
@@ -439,9 +460,17 @@ public class BaseTestSuite extends ITestSuite {
         return new HashSet<String>(mIncludeFilters);
     }
 
+    public void clearIncludeFilter() {
+        mIncludeFilters.clear();
+    }
+
     /** Sets exclude-filters for the compatibility test */
     public void setExcludeFilter(Set<String> excludeFilters) {
         mExcludeFilters.addAll(excludeFilters);
+    }
+
+    public void clearExcludeFilter() {
+        mExcludeFilters.clear();
     }
 
     /** Gets a copy of exclude-filters for the compatibility test */
@@ -572,21 +601,26 @@ public class BaseTestSuite extends ITestSuite {
                         if (moduleParam.getValue() instanceof FoldableExpandingHandler) {
                             List<IModuleParameterHandler> foldableHandlers =
                                     ((FoldableExpandingHandler) moduleParam.getValue())
-                                        .expandHandler(mFoldableStates);
+                                            .expandHandler(mFoldableStates);
                             for (IModuleParameterHandler foldableHandler : foldableHandlers) {
                                 String paramModuleName =
                                         String.format(
-                                                "%s[%s]", moduleName,
+                                                "%s[%s]",
+                                                moduleName,
                                                 foldableHandler.getParameterIdentifier());
                                 mIncludeFilters.add(
-                                        new SuiteTestFilter(getRequestedAbi(), paramModuleName,
-                                                            mTestName).toString());
+                                        new SuiteTestFilter(
+                                                        getRequestedAbi(),
+                                                        paramModuleName,
+                                                        mTestName)
+                                                .toString());
                             }
                             continue;
                         }
                         String paramModuleName =
                                 String.format(
-                                        "%s[%s]", moduleName,
+                                        "%s[%s]",
+                                        moduleName,
                                         moduleParam.getValue().getParameterIdentifier());
                         mIncludeFilters.add(
                                 new SuiteTestFilter(getRequestedAbi(), paramModuleName, mTestName)
@@ -609,8 +643,7 @@ public class BaseTestSuite extends ITestSuite {
     }
 
     /**
-     * Add the config path for {@link SuiteModuleLoader} to limit the search loading
-     * configurations.
+     * Add the config path for {@link SuiteModuleLoader} to limit the search loading configurations.
      *
      * @param configPath A {@code File} with the absolute path of the configuration.
      */

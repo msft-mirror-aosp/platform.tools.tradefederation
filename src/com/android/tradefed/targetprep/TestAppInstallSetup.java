@@ -135,9 +135,10 @@ public class TestAppInstallSetup extends BaseTargetPreparer
                     + "including leading dash, e.g. \"-d\"")
     private Collection<String> mInstallArgs = new ArrayList<>();
 
-    @Option(name = "force-queryable",
+    @Option(
+            name = "force-queryable",
             description = "Whether apks should be installed as force queryable.")
-    private boolean mForceQueryable = true;
+    private Boolean mForceQueryable = null;
 
     @Option(
             name = "cleanup-apks",
@@ -384,8 +385,22 @@ public class TestAppInstallSetup extends BaseTargetPreparer
             }
         }
 
+        if (mForceQueryable == null) {
+            // Do not add --force-queryable if the device api level >= 34. Ideally,
+            // checkApiLevelAgainstNextRelease(34) should only return true for api 34 devices. But,
+            // it also returns true for branches like the tm-xx-plus-aosp. Adding another condition
+            // ro.build.id==TM to handle this special case.
+            mForceQueryable =
+                    !getDevice().checkApiLevelAgainstNextRelease(34)
+                            || "TM".equals(getDevice().getBuildAlias());
+        }
         if (mForceQueryable && getDevice().isAppEnumerationSupported()) {
             mInstallArgs.add("--force-queryable");
+        }
+
+        // Add bypass flag for low target sdk apps when installing on U+ devices
+        if (getDevice().isBypassLowTargetSdkBlockSupported()) {
+            mInstallArgs.add("--bypass-low-target-sdk-block");
         }
 
         for (File testAppName : mTestFiles) {
@@ -721,7 +736,9 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         AaptParser parser = AaptParser.parse(testAppFile, mAaptVersion);
         if (parser == null) {
             throw new TargetSetupError(
-                    "apk installed but AaptParser failed",
+                    String.format(
+                            "AaptParser failed for file %s. The APK won't be installed",
+                            testAppFile.getName()),
                     deviceDescriptor,
                     DeviceErrorIdentifier.AAPT_PARSER_FAILED);
         }

@@ -96,7 +96,6 @@ public class SystemServerStatusChecker implements ISystemStatusChecker {
         }
 
         StatusCheckerResult result = new StatusCheckerResult(CheckStatus.FAILED);
-        result.setBugreportNeeded(true);
         result.setErrorMessage("The system-server crashed during test execution");
         return result;
     }

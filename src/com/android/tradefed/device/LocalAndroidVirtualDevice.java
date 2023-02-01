@@ -48,6 +48,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /** The class for local virtual devices running on TradeFed host. */
 public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements ITestLoggerReceiver {
@@ -64,6 +65,10 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
     private static final String BOOT_IMAGE_ZIP_NAME = "boot-img.zip";
     private static final String SYSTEM_IMAGE_ZIP_NAME = "system-img.zip";
     private static final String OTA_TOOLS_ZIP_NAME = "otatools.zip";
+
+    // Acloud option names.
+    private static final String ACLOUD_LOCAL_TOOL_OPTION = "local-tool";
+    private static final String ACLOUD_LOCAL_IMAGE_OPTION = "local-image";
 
     private ITestLogger mTestLogger = null;
 
@@ -82,6 +87,10 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
     public LocalAndroidVirtualDevice(
             IDevice device, IDeviceStateMonitor stateMonitor, IDeviceMonitor allocationMonitor) {
         super(device, stateMonitor, allocationMonitor);
+        if (getInitialDeviceNumOffset() == null) {
+            throw new IllegalStateException(
+                    "LocalAndroidVirtualDevice requires initial device num offset.");
+        }
     }
 
     /** Execute common setup procedure and launch the virtual device. */
@@ -235,26 +244,6 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
         return null;
     }
 
-    /** Find device images in build info and extract to a temporary directory. */
-    private File findDeviceImages(IBuildInfo buildInfo) throws TargetSetupError {
-        File imageZip = buildInfo.getFile(BuildInfoFileKey.DEVICE_IMAGE);
-        if (imageZip == null) {
-            throw new TargetSetupError(
-                    "Cannot find image zip in build info.",
-                    getDeviceDescriptor(),
-                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
-        }
-        try {
-            return extractArchive(imageZip);
-        } catch (IOException ex) {
-            throw new TargetSetupError(
-                    "Cannot extract image zip.",
-                    ex,
-                    getDeviceDescriptor(),
-                    InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
-        }
-    }
-
     /** Create a temporary directory that will be deleted when teardown. */
     private File createTempDir() throws TargetSetupError {
         try {
@@ -272,10 +261,11 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
 
     /** Get the necessary files to create the instance. */
     private void prepareToolsAndImages(IBuildInfo info) throws TargetSetupError {
+        MultiMap<String, File> fileMap = getOptions().getGceDriverFileParams();
         try {
             mHostPackageDir =
                     findAndExtractFile(info, CVD_HOST_PACKAGE_NAME, ANDROID_SOONG_HOST_OUT);
-            if (mHostPackageDir == null) {
+            if (mHostPackageDir == null && !fileMap.containsKey(ACLOUD_LOCAL_TOOL_OPTION)) {
                 throw new TargetSetupError(
                         String.format(
                                 "Cannot find %s in build info and %s.",
@@ -283,7 +273,14 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
                         getDeviceDescriptor(),
                         InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
             }
-            mImageDir = findDeviceImages(info);
+            mImageDir = findAndExtractFile(info, BuildInfoFileKey.DEVICE_IMAGE.getFileKey());
+            if (mImageDir == null && !fileMap.containsKey(ACLOUD_LOCAL_IMAGE_OPTION)) {
+                throw new TargetSetupError(
+                        "Cannot find image zip in build info.",
+                        getDeviceDescriptor(),
+                        InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+            }
+            // TODO(b/240589011): Remove the build info keys after the config files are updated.
             mBootImageDir = findAndExtractFile(info, BOOT_IMAGE_ZIP_NAME);
             mSystemImageDir = findAndExtractFile(info, SYSTEM_IMAGE_ZIP_NAME);
             mOtaToolsDir = findAndExtractFile(info, OTA_TOOLS_ZIP_NAME);
@@ -292,9 +289,16 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
             deleteTempDirs();
             throw ex;
         }
-        FileUtil.chmodRWXRecursively(new File(mHostPackageDir, "bin"));
         if (mOtaToolsDir != null) {
             FileUtil.chmodRWXRecursively(new File(mOtaToolsDir, "bin"));
+        }
+        if (mHostPackageDir != null) {
+            FileUtil.chmodRWXRecursively(new File(mHostPackageDir, "bin"));
+        }
+        if (fileMap.containsKey(ACLOUD_LOCAL_TOOL_OPTION)) {
+            for (File toolDir : fileMap.get(ACLOUD_LOCAL_TOOL_OPTION)) {
+                FileUtil.chmodRWXRecursively(new File(toolDir, "bin"));
+            }
         }
     }
 
@@ -333,29 +337,44 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
                     getDeviceDescriptor(),
                     InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
-        setIDevice(new StubLocalAndroidVirtualDevice(newSerialNumber));
+        setIDevice(new StubLocalAndroidVirtualDevice(newSerialNumber, getInitialDeviceNumOffset()));
         setFastbootEnabled(false);
     }
 
     /** Restore the {@link StubLocalAndroidVirtualDevice} with the initial serial number. */
     private void restoreStubDevice() {
-        setIDevice(new StubLocalAndroidVirtualDevice(getInitialSerial()));
+        setIDevice(
+                new StubLocalAndroidVirtualDevice(getInitialSerial(), getInitialDeviceNumOffset()));
         setFastbootEnabled(false);
     }
 
-    private void addExtraDirsToAcloudCommand(List<String> command) {
+    private List<String> getAcloudFileArgs(MultiMap<String, File> fileMap) {
+        List<String> args = new ArrayList<>();
+        if (mImageDir != null) {
+            args.add("--" + ACLOUD_LOCAL_IMAGE_OPTION);
+            args.add(mImageDir.getAbsolutePath());
+        }
+        if (mHostPackageDir != null) {
+            args.add("--" + ACLOUD_LOCAL_TOOL_OPTION);
+            args.add(mHostPackageDir.getAbsolutePath());
+        }
         if (mBootImageDir != null) {
-            command.add("--local-boot-image");
-            command.add(mBootImageDir.getAbsolutePath());
+            args.add("--local-boot-image");
+            args.add(mBootImageDir.getAbsolutePath());
         }
         if (mSystemImageDir != null) {
-            command.add("--local-system-image");
-            command.add(mSystemImageDir.getAbsolutePath());
+            args.add("--local-system-image");
+            args.add(mSystemImageDir.getAbsolutePath());
         }
         if (mOtaToolsDir != null) {
-            command.add("--local-tool");
-            command.add(mOtaToolsDir.getAbsolutePath());
+            args.add("--local-tool");
+            args.add(mOtaToolsDir.getAbsolutePath());
         }
+        for (Map.Entry<String, File> entry : fileMap.entries()) {
+            args.add("--" + entry.getKey());
+            args.add(entry.getValue().getAbsolutePath());
+        }
+        return args;
     }
 
     private static void addLogLevelToAcloudCommand(List<String> command, LogLevel logLevel) {
@@ -385,6 +404,7 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
                             acloud,
                             report,
                             options.getGceDriverLogLevel(),
+                            options.getGceDriverFileParams(),
                             options.getGceDriverParams());
             if (CommandStatus.SUCCESS.equals(result.getStatus())) {
                 break;
@@ -401,6 +421,7 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
             File acloud,
             File report,
             LogLevel logLevel,
+            MultiMap<String, File> fileMap,
             List<String> args) {
         IRunUtil runUtil = createRunUtil();
         // The command creates files under TMPDIR.
@@ -413,19 +434,16 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
                                 acloud.getAbsolutePath(),
                                 "create",
                                 "--local-instance",
-                                "--local-image",
-                                mImageDir.getAbsolutePath(),
+                                Integer.toString(getInitialDeviceNumOffset() + 1),
                                 "--local-instance-dir",
                                 mInstanceDir.getAbsolutePath(),
-                                "--local-tool",
-                                mHostPackageDir.getAbsolutePath(),
                                 "--report_file",
                                 report.getAbsolutePath(),
                                 "--no-autoconnect",
                                 "--yes",
                                 "--skip-pre-run-check"));
-        addExtraDirsToAcloudCommand(command);
         addLogLevelToAcloudCommand(command, logLevel);
+        command.addAll(getAcloudFileArgs(fileMap));
         command.addAll(args);
 
         mCanShutdown = true;

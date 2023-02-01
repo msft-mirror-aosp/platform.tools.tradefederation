@@ -28,6 +28,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -37,6 +38,7 @@ import com.android.tradefed.util.StreamUtil;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -63,6 +65,15 @@ public class FileDownloadCacheTest {
     private File mCacheDir;
     private FileDownloadCache mCache;
     private boolean mFailCopy = false;
+
+    @BeforeClass
+    public static void setUpBeforeClass() throws Exception {
+        try {
+            GlobalConfiguration.getInstance();
+        } catch (IllegalStateException e) {
+            GlobalConfiguration.createGlobalConfiguration(new String[] {});
+        }
+    }
 
     @Before
     public void setUp() throws Exception {

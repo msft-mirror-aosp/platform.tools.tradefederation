@@ -19,6 +19,7 @@ package com.android.tradefed.command;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.util.UniqueMultiMap;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +113,9 @@ public interface ICommandOptions {
     /** Sets whether or not to capture a bugreportz at the end of the invocation. */
     public void setBugreportzOnInvocationEnded(boolean takeBugreportz);
 
+    /** Returns whether or not conditional bugreport is disabled */
+    public boolean isConditionalBugreportDisabled();
+
     /**
      * Return the invocation timeout specified. 0 if no timeout to be used.
      */
@@ -172,6 +176,9 @@ public interface ICommandOptions {
 
     /** Whether or not to use sandbox mode in remote invocation. */
     public boolean shouldUseRemoteSandboxMode();
+
+    /** Whether or not to trigger a deviceless remote invocation. */
+    public boolean isRemoteInvocationDeviceless();
 
     /** Returns the set of auto log collectors to be added for an invocation */
     public Set<AutoLogCollector> getAutoLogCollectors();
@@ -262,4 +269,7 @@ public interface ICommandOptions {
 
     /** Returns whether or not invocation tracing is enabled. */
     public boolean isTracingEnabled();
+
+    /** Returns the jdk folder to use when forking execution in a subprocess. */
+    public File getJdkFolderForSubprocess();
 }

@@ -59,14 +59,26 @@ public class TestDiscoveryInvoker {
     private final IConfiguration mConfiguration;
     private final String mDefaultConfigName;
     private final File mRootDir;
+    private final IRunUtil mRunUtil = new RunUtil();
+    private File mTestDir;
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
     public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
     public static final String TEST_MODULES_LIST_KEY = "TestModules";
+    public static final String TEST_DIRECTORY_ENV_VARIABLE_KEY =
+            "TF_TEST_DISCOVERY_USE_TEST_DIRECTORY";
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
-        return RunUtil.getDefault();
+        return mRunUtil;
+    }
+
+    public File getTestDir() {
+        return mTestDir;
+    }
+
+    public void setTestDir(File testDir) {
+        mTestDir = testDir;
     }
 
     /** Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration} and root directory. */
@@ -74,6 +86,7 @@ public class TestDiscoveryInvoker {
         mConfiguration = config;
         mDefaultConfigName = null;
         mRootDir = rootDir;
+        mTestDir = null;
     }
 
     /**
@@ -84,11 +97,12 @@ public class TestDiscoveryInvoker {
         mConfiguration = config;
         mDefaultConfigName = defaultConfigName;
         mRootDir = rootDir;
+        mTestDir = null;
     }
 
     /**
-     * Retrieve a map of test dependency names - categorized by either test modules or other test
-     * dependencies.
+     * Retrieve a map of xTS test dependency names - categorized by either test modules or other
+     * test dependencies.
      *
      * @return A map of test dependencies which grouped by TEST_MODULES_LIST_KEY and
      *     TEST_DEPENDENCIES_LIST_KEY.
@@ -101,7 +115,7 @@ public class TestDiscoveryInvoker {
             throws IOException, JSONException, ConfigurationException, TestDiscoveryException {
         Map<String, List<String>> dependencies = new HashMap<>();
         // Build the classpath base on test root directory which should contain all the jars
-        String classPath = buildClasspath(mRootDir);
+        String classPath = buildXtsClasspath(mRootDir);
         // Build command line args to query the tradefed.jar in the root directory
         List<String> args = buildJavaCmdForXtsDiscovery(classPath);
         String[] subprocessArgs = args.toArray(new String[args.size()]);
@@ -116,8 +130,12 @@ public class TestDiscoveryInvoker {
         }
         String stdout = res.getStdout();
         CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
+
         List<String> testModules = parseTestDiscoveryOutput(stdout, TEST_MODULES_LIST_KEY);
-        dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+        if (!testModules.isEmpty()) {
+            dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+        }
+
         List<String> testDependencies =
                 parseTestDiscoveryOutput(stdout, TEST_DEPENDENCIES_LIST_KEY);
         if (!testDependencies.isEmpty()) {
@@ -127,7 +145,88 @@ public class TestDiscoveryInvoker {
     }
 
     /**
-     * Build java cmd for invoking a subprocess to discover test module names.
+     * Retrieve a map of test mapping test module names.
+     *
+     * @return A map of test module names which grouped by TEST_MODULES_LIST_KEY.
+     * @throws IOException
+     * @throws JSONException
+     * @throws ConfigurationException
+     * @throws TestDiscoveryException
+     */
+    public Map<String, List<String>> discoverTestMappingDependencies()
+            throws IOException, JSONException, ConfigurationException, TestDiscoveryException {
+        Map<String, List<String>> dependencies = new HashMap<>();
+        // Build the classpath base on the working directory
+        String classPath = buildTestMappingClasspath(mRootDir);
+        // Build command line args to query the tradefed.jar in the working directory
+        List<String> args = buildJavaCmdForTestMappingDiscovery(classPath);
+        String[] subprocessArgs = args.toArray(new String[args.size()]);
+
+        // Pass the test directory path to subprocess by environment variable
+        if (mTestDir != null) {
+            getRunUtil()
+                    .setEnvVariable(TEST_DIRECTORY_ENV_VARIABLE_KEY, mTestDir.getAbsolutePath());
+        } else {
+            throw new TestDiscoveryException(
+                    "The TestDiscoveryInvoker need test directory to be set to do test mapping"
+                            + " discovery.");
+        }
+        CommandResult res = getRunUtil().runTimedCmd(30000, subprocessArgs);
+        if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
+            throw new TestDiscoveryException(
+                    String.format(
+                            "Tradefed observatory error, unable to discover test module names."
+                                    + " command used: %s error: %s",
+                            Joiner.on(" ").join(subprocessArgs), res.getStderr()),
+                    null);
+        }
+        String stdout = res.getStdout();
+        CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
+
+        List<String> testModules = parseTestDiscoveryOutput(stdout, TEST_MODULES_LIST_KEY);
+        if (!testModules.isEmpty()) {
+            dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+        }
+        return dependencies;
+    }
+
+    /**
+     * Build java cmd for invoking a subprocess to discover test mapping test module names.
+     *
+     * @return A list of java command args.
+     * @throws ConfigurationException
+     */
+    private List<String> buildJavaCmdForTestMappingDiscovery(String classpath) {
+        List<String> fullCommandLineArgs =
+                new ArrayList<String>(
+                        Arrays.asList(
+                                QuotationAwareTokenizer.tokenizeLine(
+                                        mConfiguration.getCommandLine())));
+
+        List<String> args = new ArrayList<>();
+
+        args.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
+
+        args.add("-cp");
+        args.add(classpath);
+
+        args.add(TRADEFED_OBSERVATORY_ENTRY_PATH);
+
+        // Delete invocation data from args which test discovery don't need
+        int i = 0;
+        while (i < fullCommandLineArgs.size()) {
+            if (fullCommandLineArgs.get(i).equals("--invocation-data")) {
+                i = i + 2;
+            } else {
+                args.add(fullCommandLineArgs.get(i));
+                i = i + 1;
+            }
+        }
+        return args;
+    }
+
+    /**
+     * Build java cmd for invoking a subprocess to discover XTS test module names.
      *
      * @return A list of java command args.
      * @throws ConfigurationException
@@ -191,12 +290,40 @@ public class TestDiscoveryInvoker {
     }
 
     /**
-     * Build the classpath string based on jars in the test root directory's tools folder.
+     * Build the classpath string based on jars in the sandbox's working directory.
      *
      * @return A string of classpaths.
      * @throws IOException
      */
-    private String buildClasspath(File ctsRoot) throws IOException {
+    private String buildTestMappingClasspath(File workingDir) throws IOException {
+        List<File> classpathList = new ArrayList<>();
+
+        if (!workingDir.exists()) {
+            throw new FileNotFoundException("Couldn't find the build directory");
+        }
+
+        if (workingDir.listFiles().length == 0) {
+            throw new FileNotFoundException(
+                    String.format(
+                            "Could not find any files under %s", workingDir.getAbsolutePath()));
+        }
+        for (File toolsFile : workingDir.listFiles()) {
+            if (toolsFile.getName().endsWith(".jar")) {
+                classpathList.add(toolsFile);
+            }
+        }
+        Collections.sort(classpathList);
+
+        return Joiner.on(":").join(classpathList);
+    }
+
+    /**
+     * Build the classpath string based on jars in the XTS test root directory's tools folder.
+     *
+     * @return A string of classpaths.
+     * @throws IOException
+     */
+    private String buildXtsClasspath(File ctsRoot) throws IOException {
         List<File> classpathList = new ArrayList<>();
 
         if (!ctsRoot.exists()) {
@@ -226,22 +353,6 @@ public class TestDiscoveryInvoker {
         Collections.sort(classpathList);
 
         return Joiner.on(":").join(classpathList);
-    }
-
-    /**
-     * Parse test module names from the tradefed observatory's output JSON string.
-     *
-     * @return A list of test module names.
-     * @throws JSONException
-     */
-    private List<String> parseTestModules(String discoveryOutput) throws JSONException {
-        JSONObject jsonObject = new JSONObject(discoveryOutput);
-        List<String> testModules = new ArrayList<>();
-        JSONArray jsonArray = jsonObject.getJSONArray(TEST_DEPENDENCIES_LIST_KEY);
-        for (int i = 0; i < jsonArray.length(); i++) {
-            testModules.add(jsonArray.getString(i));
-        }
-        return testModules;
     }
 
     /**

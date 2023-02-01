@@ -41,6 +41,7 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -67,7 +68,7 @@ import javax.annotation.Nullable;
  */
 public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements ITestLoggerReceiver {
 
-    private GceAvdInfo mGceAvd;
+    private GceAvdInfo mGceAvd = null;
     private ITestLogger mTestLogger;
 
     private GceManager mGceHandler = null;
@@ -99,47 +100,56 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             throws TargetSetupError, DeviceNotAvailableException {
         super.preInvocationSetup(info, attributes);
         try {
-            mGceAvd = null;
             mGceSshMonitor = null;
             mTunnelInitFailed = null;
             // We create a brand new GceManager each time to ensure clean state.
             mGceHandler = new GceManager(getDeviceDescriptor(), getOptions(), info);
             setFastbootEnabled(false);
 
-            // Launch GCE helper script.
-            long startTime = getCurrentTime();
             long remainingTime = 0;
-            try {
-                if (GlobalConfiguration.getInstance().getHostOptions().getConcurrentFlasherLimit()
-                        != null) {
-                    GlobalConfiguration.getInstance()
-                            .getHostOptions()
-                            .takePermit(PermitLimitType.CONCURRENT_FLASHER);
-                    long queueTime = System.currentTimeMillis() - startTime;
-                    CLog.v(
-                            "Fetch and launch CVD permit obtained after %ds",
-                            TimeUnit.MILLISECONDS.toSeconds(queueTime));
+            // mGceAvd is null means the device hasn't been launched.
+            if (mGceAvd != null) {
+                CLog.d("skipped GCE launch because GceAvdInfo %s is already set", mGceAvd);
+            } else {
+                // Launch GCE helper script.
+                long startTime = getCurrentTime();
+
+                try {
+                    if (GlobalConfiguration.getInstance()
+                                    .getHostOptions()
+                                    .getConcurrentVirtualDeviceStartupLimit()
+                            != null) {
+                        GlobalConfiguration.getInstance()
+                                .getHostOptions()
+                                .takePermit(PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP);
+                        long queueTime = System.currentTimeMillis() - startTime;
+                        CLog.v(
+                                "Fetch and launch CVD permit obtained after %ds",
+                                TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                    }
+                    launchGce(info, attributes);
+                    remainingTime =
+                            getOptions().getGceCmdTimeout() - (getCurrentTime() - startTime);
+                } finally {
+                    if (GlobalConfiguration.getInstance()
+                                    .getHostOptions()
+                                    .getConcurrentVirtualDeviceStartupLimit()
+                            != null) {
+                        GlobalConfiguration.getInstance()
+                                .getHostOptions()
+                                .returnPermit(PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP);
+                    }
                 }
-                launchGce(info, attributes);
-                remainingTime =
-                        getOptions().getGceCmdTimeout()
-                                - (getCurrentTime() - startTime);
-            } finally {
-                if (GlobalConfiguration.getInstance().getHostOptions().getConcurrentFlasherLimit()
-                        != null) {
-                    GlobalConfiguration.getInstance()
-                            .getHostOptions()
-                            .returnPermit(PermitLimitType.CONCURRENT_FLASHER);
+                if (remainingTime < 0) {
+                    throw new DeviceNotAvailableException(
+                            String.format(
+                                    "Failed to launch GCE after %sms",
+                                    getOptions().getGceCmdTimeout()),
+                            getSerialNumber(),
+                            DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE);
                 }
+                CLog.d("%sms left before timeout after GCE launch returned", remainingTime);
             }
-            if (remainingTime < 0) {
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to launch GCE after %sms", getOptions().getGceCmdTimeout()),
-                        getSerialNumber(),
-                        DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE);
-            }
-            CLog.d("%sms left before timeout after GCE launch returned", remainingTime);
             // Wait for device to be ready.
             RecoveryMode previousMode = getRecoveryMode();
             setRecoveryMode(RecoveryMode.NONE);
@@ -320,7 +330,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                                         getInitialIp(),
                                         getInitialUser(),
                                         getInitialDeviceNumOffset(),
-                                        attributes);
+                                        attributes,
+                                        mTestLogger);
                 if (mGceAvd != null) {
                     break;
                 }
@@ -332,7 +343,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
                 if (getOptions().useOxygen()) {
                     OxygenUtil util = new OxygenUtil();
-                    util.downloadLaunchFailureLogs(tse.getMessage(), mTestLogger);
+                    util.downloadLaunchFailureLogs(tse, mTestLogger);
                 }
             }
         }
@@ -411,7 +422,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     }
 
     @Override
-    public void recoverDevice() throws DeviceNotAvailableException {
+    public boolean recoverDevice() throws DeviceNotAvailableException {
         if (getGceSshMonitor() == null) {
             if (mTunnelInitFailed != null) {
                 // We threw before but was not reported, so throw the root cause here.
@@ -440,7 +451,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             }
         }
         // Then attempt regular recovery
-        super.recoverDevice();
+        return super.recoverDevice();
     }
 
     @Override
@@ -494,6 +505,20 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         return super.getTombstones();
     }
 
+    /** Set the {@link GceAvdInfo} for launched device. */
+    public void setAvdInfo(GceAvdInfo gceAvdInfo) throws TargetSetupError {
+        if (mGceAvd == null) {
+            mGceAvd = gceAvdInfo;
+        } else {
+            throw new TargetSetupError(
+                    String.format(
+                            "The GceAvdInfo of the device %s is already set, override is not"
+                                    + " permitted. Current GceAvdInfo: %s",
+                            getSerialNumber(), mGceAvd),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+    }
+
     /**
      * Returns the {@link GceAvdInfo} from the created remote VM. Returns null if the bring up was
      * not successful.
@@ -523,9 +548,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
     /**
      * Returns the {@link com.android.tradefed.device.cloud.GceSshTunnelMonitor} of the device.
-     * Exposed for testing.
      */
-    protected GceSshTunnelMonitor getGceSshMonitor() {
+    public GceSshTunnelMonitor getGceSshMonitor() {
         return mGceSshMonitor;
     }
 
@@ -568,18 +592,54 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     /**
      * Attempt to powerwash a GCE instance
      *
-     * @return returns true if powerwash Gce success.
-     * @throws TargetSetupError
-     * @throws DeviceNotAvailableException
+     * @return returns CommandResult of the powerwash attempts
+     * @throws TargetSetupError @Deprecated Use {@link #powerwash()} instead
      */
-    public boolean powerwashGce() throws TargetSetupError, DeviceNotAvailableException {
+    @Deprecated
+    public boolean powerwashGce() throws TargetSetupError {
+        return CommandStatus.SUCCESS.equals(powerwash().getStatus());
+    }
+
+    /**
+     * Attempt to powerwash a GCE instance
+     *
+     * @return returns CommandResult of the powerwash attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult powerwash() throws TargetSetupError {
+        return powerwashGce(null, null);
+    }
+
+    /**
+     * Attempt to powerwash a GCE instance
+     *
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @return returns CommandResult of the powerwash attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult powerwashGce(String user, Integer offset) throws TargetSetupError {
         if (mGceAvd == null) {
             String errorMsg = String.format("Can not get GCE AVD Info. launch GCE first?");
             throw new TargetSetupError(
                     errorMsg, getDeviceDescriptor(), DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
         }
-        String username = this.getOptions().getInstanceUser();
-        String powerwashCommand = String.format("/home/%s/bin/powerwash_cvd", username);
+        // Get the user from options instance-user if user is null.
+        if (user == null) {
+            user = this.getOptions().getInstanceUser();
+        }
+
+        String powerwashCommand = String.format("/home/%s/bin/powerwash_cvd", user);
+
+        if (offset != null) {
+            powerwashCommand =
+                    String.format(
+                            "HOME=/home/%s/acloud_cf_%d acloud_cf_%d/bin/powerwash_cvd"
+                                    + " -instance_num %d",
+                            user, offset + 1, offset + 1, offset + 1);
+        }
+
         if (this.getOptions().useOxygen()) {
             // TODO(dshi): Simplify the logic after Oxygen creates symlink of the tmp dir.
             CommandResult result =
@@ -591,7 +651,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                             "toybox find /tmp -name powerwash_cvd".split(" "));
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
                 CLog.e("Failed to locate powerwash_cvd: %s", result.getStderr());
-                return false;
+                return result;
             }
             String powerwashPath = result.getStdout();
             // Remove tailing `/bin/powerwash_cvd`
@@ -611,10 +671,10 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             CommandResult printAdbDevices = getRunUtil().runTimedCmd(60000L, "adb", "devices");
             CLog.e("%s\n%s", printAdbDevices.getStdout(), printAdbDevices.getStderr());
             // Proceed here, device could have been already gone.
-            return false;
+            return powerwashRes;
         }
         getMonitor().waitForDeviceAvailable();
         resetContentProviderSetup();
-        return true;
+        return powerwashRes;
     }
 }

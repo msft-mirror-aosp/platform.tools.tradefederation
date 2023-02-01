@@ -43,6 +43,9 @@ public final class SandboxOptions {
     private static final String ENABLE_DEFAULT_TESTS_ZIPS_OPTIONS = "sandbox-default-zips";
     private static final String DUMP_TEST_TEMPLATE = "dump-test-template";
     private static final String START_AVD_IN_PARENT = "avd-in-parent";
+    private static final String PARALLEL_SANDBOX_SETUP = "parallel-sandbox-setup";
+    private static final String UPDATED_FLAG_ORDER = "update-flag-orders";
+    private static final String SANDBOX_USE_TEST_DISCOVERY = "sandbox-use-test-discovery";
 
     @Option(
         name = TF_LOCATION,
@@ -126,6 +129,20 @@ public final class SandboxOptions {
                     "Whether or not to start the avd device in the parent sandbox")
     private boolean mStartAvdInParent = true;
 
+    @Option(
+            name = PARALLEL_SANDBOX_SETUP,
+            description = "Execute the sandbox setup step in parallel")
+    private boolean mParallelSandboxSetup = true;
+
+    @Option(name = UPDATED_FLAG_ORDER, description = "Feature flag to test safely new flags order")
+    private boolean mNewFlagOrder = true;
+
+    @Option(
+            name = SANDBOX_USE_TEST_DISCOVERY,
+            description =
+                    "Feature flag to use observatory to discovery test modules for staging jars")
+    private boolean mUseTestDiscovery = false;
+
     /**
      * Returns the provided directories containing the Trade Federation version to use for
      * sandboxing the run.
@@ -199,5 +216,20 @@ public final class SandboxOptions {
      */
     public boolean startAvdInParent() {
         return mStartAvdInParent;
+    }
+
+    /** Returns whether or not to execute the sandbox setup in parallel. */
+    public boolean shouldParallelSetup() {
+        return mParallelSandboxSetup;
+    }
+
+    /** Returns whether or not to use the new flag order */
+    public boolean shouldUseNewFlagOrder() {
+        return mNewFlagOrder;
+    }
+
+    /** Returns whether or not to use tradefed observatory to optimize jar staging */
+    public boolean shouldUseTestDiscovery() {
+        return mUseTestDiscovery;
     }
 }

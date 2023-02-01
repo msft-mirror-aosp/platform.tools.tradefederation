@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.device.metric;
 
+import static java.util.Map.entry;
+
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -52,26 +54,24 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
     private Map<String, Long> mGranularInfo = new HashMap<>();
     private Set<String> mProcessObjInfo = new HashSet<>();
     private final Map<String, Integer> mIndexMemoryMap =
-            new HashMap<String, Integer>() {
-                {
-                    put("virtualsize", 0);
-                    put("rss", 1);
-                    put("pss", 2);
-                    put("sharedclean", 3);
-                    put("shareddirty", 4);
-                    put("privateclean", 5);
-                    put("privatedirty", 6);
-                    put("swap", 7);
-                    put("swappss", 8);
-                    put("anonhugepages", 9);
-                    put("shmempmdmapped", 10);
-                    put("filepmdmapped", 11);
-                    put("sharedhugetlb", 12);
-                    put("privatehugetlb", 13);
-                    // put("flags", 14);
-                    put("object", 15);
-                }
-            };
+            Map.ofEntries(
+                    entry("virtualsize", 0),
+                    entry("rss", 1),
+                    entry("pss", 2),
+                    entry("sharedclean", 3),
+                    entry("shareddirty", 4),
+                    entry("privateclean", 5),
+                    entry("privatedirty", 6),
+                    entry("swap", 7),
+                    entry("swappss", 8),
+                    entry("anonhugepages", 9),
+                    entry("shmempmdmapped", 10),
+                    entry("filepmdmapped", 11),
+                    entry("sharedhugetlb", 12),
+                    entry("privatehugetlb", 13),
+                    // entry("locked", 14),
+                    // entry("flags", 15),
+                    entry("object", 16));
 
     @Option(
             name = "showmap-metric-prefix",

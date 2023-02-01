@@ -34,23 +34,17 @@ public enum ModuleParameters {
 
     // Foldable mode
     ALL_FOLDABLE_STATES("all_foldable_states", "foldable_family"),
-    NO_FOLDABLE_STATES("no_foldable_states", "foldable_family");
+    NO_FOLDABLE_STATES("no_foldable_states", "foldable_family"),
+
+    // SDK sandbox mode
+    RUN_ON_SDK_SANDBOX("run_on_sdk_sandbox", "run_on_sdk_sandbox_family"),
+    NOT_RUN_ON_SDK_SANDBOX("not_run_on_sdk_sandbox", "run_on_sdk_sandbox_family");
 
     public static final String INSTANT_APP_FAMILY = "instant_app_family";
     public static final String MULTI_ABI_FAMILY = "multi_abi_family";
     public static final String SECONDARY_USER_FAMILY = "secondary_user_family";
     public static final String MULTIUSER_FAMILY = "multiuser_family";
-    public static final String RUN_ON_WORK_PROFILE_FAMILY = "run_on_work_profile_family";
-    public static final String RUN_ON_SECONDARY_USER_FAMILY = "run_on_secondary_user_family";
-    public static final String[] FAMILY_LIST =
-            new String[] {
-                INSTANT_APP_FAMILY,
-                MULTI_ABI_FAMILY,
-                SECONDARY_USER_FAMILY,
-                MULTIUSER_FAMILY,
-                RUN_ON_WORK_PROFILE_FAMILY,
-                RUN_ON_SECONDARY_USER_FAMILY
-            };
+    public static final String FOLDABLE_STATES_FAMILY = "foldable_family";
 
     private final String mName;
     /** Defines whether several module parameters are associated and mutually exclusive. */

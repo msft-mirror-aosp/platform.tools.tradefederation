@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 
 /** GRPC server allowing to reserve a device from Tradefed. */
@@ -77,17 +78,17 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
     /** Start the grpc server. */
     public void start() {
         try {
-            CLog.d("Starting invocation server.");
+            CLog.d("Starting device management server.");
             mServer.start();
         } catch (IOException e) {
-            CLog.w("Invocation server already started: %s", e.getMessage());
+            CLog.w("Device management server already started: %s", e.getMessage());
         }
     }
 
     /** Stop the grpc server. */
     public void shutdown() throws InterruptedException {
         if (mServer != null) {
-            CLog.d("Stopping invocation server.");
+            CLog.d("Stopping device management server.");
             mServer.shutdown();
             mServer.awaitTermination();
         }
@@ -99,7 +100,7 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
             StreamObserver<GetDevicesStatusResponse> responseObserver) {
         GetDevicesStatusResponse.Builder responseBuilder = GetDevicesStatusResponse.newBuilder();
         if (request.getDeviceIdList().isEmpty()) {
-            for (DeviceDescriptor descriptor : mDeviceManager.listAllDevices()) {
+            for (DeviceDescriptor descriptor : mDeviceManager.listAllDevices(true)) {
                 responseBuilder.addDeviceStatus(descriptorToStatus(descriptor));
             }
         } else {
@@ -118,16 +119,23 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
             StreamObserver<ReleaseReservationResponse> responseObserver) {
         ReleaseReservationResponse.Builder responseBuilder =
                 ReleaseReservationResponse.newBuilder();
-        ITestDevice device = getDeviceFromReservationAndClear(request.getReservationId());
+        ITestDevice device = getDeviceFromReservation(request.getReservationId());
         if (device == null) {
             responseBuilder
-                    .setResult(ReleaseReservationResponse.Result.FAIL)
+                    .setResult(ReleaseReservationResponse.Result.RESERVATION_NOT_EXIST)
                     .setMessage(
                             String.format(
                                     "Reservation id released '%s' is untracked",
                                     request.getReservationId()));
+        } else if (mCommandScheduler.isDeviceInInvocationThread(device)) {
+            responseBuilder
+                    .setResult(ReleaseReservationResponse.Result.DEVICE_IN_USE)
+                    .setMessage(
+                            String.format(
+                                    "Reservation '%s' is still in use",
+                                    request.getReservationId()));
         } else {
-            mDeviceManager.freeDevice(device, FreeDeviceState.AVAILABLE);
+            releaseReservationInternal(request.getReservationId());
             responseBuilder.setResult(ReleaseReservationResponse.Result.SUCCEED);
         }
         responseObserver.onNext(responseBuilder.build());
@@ -138,6 +146,8 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
     public void reserveDevice(
             ReserveDeviceRequest request, StreamObserver<ReserveDeviceResponse> responseObserver) {
         ReserveDeviceResponse.Builder responseBuilder = ReserveDeviceResponse.newBuilder();
+        ServerCallStreamObserver<ReserveDeviceResponse> serverCallStreamObserver =
+                (ServerCallStreamObserver<ReserveDeviceResponse>) responseObserver;
         String serial = request.getDeviceId();
         if (Strings.isNullOrEmpty(serial)) {
             responseBuilder
@@ -167,7 +177,7 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
             responseBuilder
                     .setResult(Result.UNAVAILABLE)
                     .setMessage("device is currently in unavailable state.");
-        } else {
+        } else if (!serverCallStreamObserver.isCancelled()) {
             DeviceSelectionOptions selection = new DeviceSelectionOptions();
             selection.addSerial(serial);
             ITestDevice device = mDeviceManager.allocateDevice(selection);
@@ -183,6 +193,18 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
                 responseBuilder.setResult(Result.SUCCEED).setReservationId(reservationId);
                 mSerialToReservation.put(serial, new ReservationInformation(device, reservationId));
             }
+        }
+        // Double check isCancelled because the client may cancel the RPC when allocating device.
+        if (serverCallStreamObserver.isCancelled()) {
+            CLog.d("The client call is cancelled.");
+            if (responseBuilder.getResult().equals(Result.SUCCEED)
+                    && !responseBuilder.getReservationId().isEmpty()) {
+                releaseReservationInternal(responseBuilder.getReservationId());
+            }
+            responseBuilder
+                    .clear()
+                    .setResult(Result.UNKNOWN)
+                    .setMessage("The device reservation RPC is cancelled by client.");
         }
         responseObserver.onNext(responseBuilder.build());
         responseObserver.onCompleted();
@@ -205,6 +227,13 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
 
         responseObserver.onNext(responseBuilder.build());
         responseObserver.onCompleted();
+    }
+
+    private void releaseReservationInternal(String reservationId) {
+        ITestDevice device = getDeviceFromReservationAndClear(reservationId);
+        if (device != null) {
+            mDeviceManager.freeDevice(device, FreeDeviceState.AVAILABLE);
+        }
     }
 
     private DeviceStatus descriptorToStatus(DeviceDescriptor descriptor) {

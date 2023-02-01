@@ -35,6 +35,7 @@ import io.grpc.StatusRuntimeException;
 /** A grpc client to request feature execution from the server. */
 public class TradefedFeatureClient implements AutoCloseable {
 
+    private static final int MAX_MESSAGE_SIZE_BYTES = 33554432; // 32 MB
     private TradefedInformationBlockingStub mBlockingStub;
     private ManagedChannel mChannel;
 
@@ -42,6 +43,7 @@ public class TradefedFeatureClient implements AutoCloseable {
         mChannel =
                 ManagedChannelBuilder.forAddress("localhost", TradefedFeatureServer.getPort())
                         .usePlaintext()
+                        .maxInboundMessageSize(MAX_MESSAGE_SIZE_BYTES)
                         .build();
         mBlockingStub = TradefedInformationGrpc.newBlockingStub(mChannel);
     }

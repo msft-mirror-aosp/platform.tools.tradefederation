@@ -22,7 +22,6 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.ApexInfo;
-import com.android.tradefed.device.PackageInfo;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -31,6 +30,8 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.suite.SuiteApkInstaller;
 import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.BundletoolUtil;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -60,6 +61,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private static final String APEX_DATA_DIR = "/data/apex/active/";
     private static final String STAGING_DATA_DIR = "/data/app-staging/";
     private static final String SESSION_DATA_DIR = "/data/apex/sessions/";
+    private static final String MODULE_PUSH_REMOTE_PATH = "/data/local/tmp/";
     private static final String TRAIN_WITH_APEX_INSTALL_OPTION = "install-multi-package";
     private static final String ENABLE_ROLLBACK_INSTALL_OPTION = "--enable-rollback";
     private static final String STAGED_INSTALL_OPTION = "--staged";
@@ -70,6 +72,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     protected static final String APEX_SUFFIX = ".apex";
     protected static final String APK_SUFFIX = ".apk";
     protected static final String SPLIT_APKS_SUFFIX = ".apks";
+    protected static final String PARENT_SESSION_CREATION_CMD = "pm install-create --multi-package";
+    protected static final String CHILD_SESSION_CREATION_CMD = "pm install-create";
+    protected static final String APEX_OPTION = "--apex";
 
     private List<ApexInfo> mTestApexInfoList = new ArrayList<>();
     private List<String> mApexModulesToUninstall = new ArrayList<>();
@@ -95,6 +100,12 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private long mApexStagingWaitTime = 1 * 60 * 1000;
 
     @Option(
+            name="extra-booting-wait-time",
+            description = "The extra time in ms to wait for device ready.",
+            isTimeVal = true)
+    private long mExtraBootingWaitTime = 0;
+
+    @Option(
             name = "ignore-if-module-not-preloaded",
             description =
                     "Skip installing the module(s) when the module(s) that are not "
@@ -107,6 +118,11 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     "Skip teardown if all files to be installed are apex files. "
                             + "Currently, this option is only used for Test Mapping use case.")
     private boolean mSkipApexTearDown = false;
+
+    @Option(
+            name = "enable-rollback",
+            description = "Add the '--enable-rollback' flag when installing modules.")
+    private boolean mEnableRollback = true;
 
     @Override
     public void setUp(TestInformation testInfo)
@@ -151,8 +167,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             testAppFiles = optimizeModuleInstallation(activatedApexes, testAppFiles, device);
             if (testAppFiles.isEmpty()) {
                 if (!mApexModulesToUninstall.isEmpty() || !mApkModulesToUninstall.isEmpty()) {
-                    RunUtil.getDefault().sleep(mApexStagingWaitTime);
-                    device.reboot();
+                    activateStagedInstall(device);
                 }
                 // If both the list of files to be installed and uninstalled are empty, that means
                 // the mainline modules are the same as the previous ones.
@@ -163,32 +178,36 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
 
         if (containsApks(testAppFiles)) {
             installUsingBundleTool(testInfo, testAppFiles);
-            if (mTestApexInfoList.isEmpty()
-                    && mApexModulesToUninstall.isEmpty()
-                    && mApkModulesToUninstall.isEmpty()) {
-                CLog.i("No Apex module in the train. Skipping reboot.");
-                return;
-            } else {
-                RunUtil.getDefault().sleep(mApexStagingWaitTime);
-                device.reboot();
-            }
         } else {
             Map<File, String> appFilesAndPackages = resolveApkFiles(testInfo, testAppFiles);
+            CLog.i("Staging install for " + appFilesAndPackages);
             installer(testInfo, appFilesAndPackages);
-            if (containsApex(appFilesAndPackages.keySet())
-                    || containsPersistentApk(appFilesAndPackages.keySet(), testInfo)
-                    || !mApexModulesToUninstall.isEmpty()
-                    || !mApkModulesToUninstall.isEmpty()) {
-                RunUtil.getDefault().sleep(mApexStagingWaitTime);
-                device.reboot();
-            }
-            if (mTestApexInfoList.isEmpty()) {
-                CLog.i("Train activation succeed.");
-                return;
-            }
         }
 
-        checkApexActivation(device);
+        activateStagedInstall(device);
+        if (!mTestApexInfoList.isEmpty()) {
+            checkApexActivation(device);
+        }
+        CLog.i("Train activation succeed.");
+    }
+
+    /**
+     * Boot the device to activate the updated apex modules.
+     *
+     * @param device under test.
+     * @throws DeviceNotAvailableException if reboot fails.
+     */
+    private void activateStagedInstall(ITestDevice device) throws DeviceNotAvailableException {
+        RunUtil.getDefault().sleep(mApexStagingWaitTime);
+        device.reboot();
+        // Some devices need extra waiting time after reboot to get fully ready.
+        if (mExtraBootingWaitTime > 0) {
+            RunUtil.getDefault().sleep(mExtraBootingWaitTime);
+            device.waitForDeviceAvailable();
+            // Do a second post-boot setup (by default it is just adb root)
+            // in case its first execution inside reboot() was not at a right time.
+            device.postBootSetup();
+        }
     }
 
     /**
@@ -494,6 +513,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         for (ApexInfo installedApex : installedApexes) {
             installedPackages.add(installedApex.name);
         }
+        Set<String> trainInstalledPackages = new HashSet<>();
         List<File> moduleFileNames = getTestsFileName();
         List<File> moduleNamesToInstall = new ArrayList<>();
         for (File moduleFileName : moduleFileNames) {
@@ -519,14 +539,19 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             if (installedPackages.contains(modulePackageName)) {
                 CLog.i("Found preloaded module for %s.", modulePackageName);
                 moduleNamesToInstall.add(moduleFile);
-                installedPackages.remove(modulePackageName);
+                if (trainInstalledPackages.contains(modulePackageName)) {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Mainline module %s is listed for install more than once.",
+                                    modulePackageName),
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                }
+                trainInstalledPackages.add(modulePackageName);
             } else {
                 if (!mIgnoreIfNotPreloaded) {
-                    if (!installedPackages.isEmpty()) {
-                        CLog.i(
-                                "The following modules are preloaded on the device %s",
-                                installedPackages);
-                    }
+                    CLog.i(
+                            "The following modules are preloaded on the device %s",
+                            installedPackages);
                     throw new TargetSetupError(
                             String.format(
                                     "Mainline module %s is not preloaded on the device "
@@ -542,11 +567,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             }
         }
         // Log the modules that are not included in the train.
-        if (!installedPackages.isEmpty()) {
+        Set<String> nonTrainPackages = new HashSet<>(installedPackages);
+        nonTrainPackages.removeAll(trainInstalledPackages);
+        if (!nonTrainPackages.isEmpty()) {
             CLog.i(
                     "The following modules are preloaded on the device, but not included in the "
                             + "train: %s",
-                    installedPackages);
+                    nonTrainPackages);
         }
         return moduleNamesToInstall;
     }
@@ -558,10 +585,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         if (containsApex(testAppFileNames.keySet())) {
             mTestApexInfoList = collectApexInfoFromApexModules(testAppFileNames, testInfo);
         }
-        installTrain(
-                testInfo,
-                new ArrayList<>(testAppFileNames.keySet()),
-                new String[] {ENABLE_ROLLBACK_INSTALL_OPTION, STAGED_INSTALL_OPTION});
+        installTrain(testInfo, new ArrayList<>(testAppFileNames.keySet()));
     }
 
     /**
@@ -572,57 +596,147 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      *     installed.
      */
     protected void installTrain(
-            TestInformation testInfo, List<File> moduleFilenames, final String[] extraArgs)
+            TestInformation testInfo, List<File> moduleFilenames)
             throws TargetSetupError, DeviceNotAvailableException {
-        // TODO(b/137883918):remove after new adb is released, which supports installing
-        // single apk/apex using 'install-multi-package'
         ITestDevice device = testInfo.getDevice();
-        if (moduleFilenames.size() == 1) {
-            device.installPackage(moduleFilenames.get(0), true, extraArgs);
-            if (moduleFilenames.get(0).getName().endsWith(APK_SUFFIX)) {
-                String packageName =
-                        parsePackageName(moduleFilenames.get(0), device.getDeviceDescriptor());
-                mApkInstalled.add(packageName);
+        List<String> apkPackageNames = new ArrayList<>();
+
+        //This is a short term fix for atomic install issue on Q. We will either remove the fix
+        //after Q support is deprecated or a long term fix is provided(b/257675597).
+        if (device.getApiLevel() == 29) {
+            List<String> trainInstallCmd = new ArrayList<>();
+            trainInstallCmd.add(TRAIN_WITH_APEX_INSTALL_OPTION);
+            trainInstallCmd.add(STAGED_INSTALL_OPTION);
+            if (mEnableRollback) {
+                trainInstallCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
             }
+            for (File moduleFile : moduleFilenames) {
+                trainInstallCmd.add(moduleFile.getAbsolutePath());
+                if (moduleFile.getName().endsWith(APK_SUFFIX)) {
+                    String packageName = parsePackageName(moduleFile, device.getDeviceDescriptor());
+                    apkPackageNames.add(packageName);
+                }
+            }
+            String log = device.executeAdbCommand(trainInstallCmd.toArray(new String[0]));
+            if (log == null) {
+                throw new TargetSetupError(
+                    trainInstallCmd.toString(),
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
+            }
+            RunUtil.getDefault().sleep(mApexStagingWaitTime);
+
+            if (log.contains("Success")) {
+                CLog.d(
+                    "Train is staged successfully. Cmd: %s, Output: %s.",
+                    trainInstallCmd.toString(), log);
+            } else {
+                throw new TargetSetupError(
+                    String.format(
+                        "Failed to install %s on %s. Error log: '%s'",
+                        moduleFilenames.toString(), device.getSerialNumber(), log),
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
+            }
+            mApkInstalled.addAll(apkPackageNames);
             return;
         }
 
-        List<String> apkPackageNames = new ArrayList<>();
-        List<String> trainInstallCmd = new ArrayList<>();
-
-        trainInstallCmd.add(TRAIN_WITH_APEX_INSTALL_OPTION);
-        trainInstallCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
-        trainInstallCmd.add(STAGED_INSTALL_OPTION);
-        if (extraArgs != null) {
-            for (String arg : extraArgs) {
-                if (!trainInstallCmd.contains(arg)) {
-                trainInstallCmd.add(arg);
-                }
-            }
-        }
-
         for (File moduleFile : moduleFilenames) {
-            trainInstallCmd.add(moduleFile.getAbsolutePath());
+            if (!device.pushFile(moduleFile, MODULE_PUSH_REMOTE_PATH + moduleFile.getName())) {
+                throw new TargetSetupError(
+                        String.format(
+                                "Failed to push local '%s' to remote '%s'",
+                                moduleFile.getAbsolutePath(), MODULE_PUSH_REMOTE_PATH + moduleFile.getName()),
+                        device.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.FAIL_PUSH_FILE);
+            } else {
+              CLog.d("%s pushed successfully to %s.", moduleFile.getName(), MODULE_PUSH_REMOTE_PATH + moduleFile.getName());
+            }
             if (moduleFile.getName().endsWith(APK_SUFFIX)) {
                 String packageName = parsePackageName(moduleFile, device.getDeviceDescriptor());
                 apkPackageNames.add(packageName);
             }
         }
-        String log = device.executeAdbCommand(trainInstallCmd.toArray(new String[0]));
+
+        String cmd = PARENT_SESSION_CREATION_CMD + " " + STAGED_INSTALL_OPTION;
+        if (mEnableRollback) {
+            cmd += " " + ENABLE_ROLLBACK_INSTALL_OPTION;
+        }
+        CommandResult res = device.executeShellV2Command(cmd + " | egrep -o -e '[0-9]+'");
+        String parentSessionId;
+        if (res.getStatus() == CommandStatus.SUCCESS) {
+            parentSessionId = res.getStdout();
+            CLog.d("Parent session %s created successfully. ", parentSessionId);
+        } else {
+            throw new TargetSetupError(
+                    String.format("Failed to create parent session. Error: %s, Stdout: %s", res.getStderr(), res.getStdout()),
+                    device.getDeviceDescriptor());
+        }
+
+        for (File moduleFile : moduleFilenames) {
+            String childSessionId = null;
+            if (moduleFile.getName().endsWith(APEX_SUFFIX)) {
+                if (mEnableRollback) {
+                    res = device.executeShellV2Command(String.format("%s %s %s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, APEX_OPTION, STAGED_INSTALL_OPTION, ENABLE_ROLLBACK_INSTALL_OPTION));
+                } else {
+                    res = device.executeShellV2Command(String.format("%s %s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, APEX_OPTION, STAGED_INSTALL_OPTION));
+                }
+            } else {
+                if (mEnableRollback) {
+                    res = device.executeShellV2Command(String.format("%s %s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, STAGED_INSTALL_OPTION, ENABLE_ROLLBACK_INSTALL_OPTION));
+                } else {
+                    res = device.executeShellV2Command(String.format("%s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, STAGED_INSTALL_OPTION));
+                }
+            }
+            if (res.getStatus() == CommandStatus.SUCCESS) {
+                childSessionId = res.getStdout();
+                CLog.d("Child session %s created successfully for %s. ", childSessionId, moduleFile.getName());
+            } else {
+                throw new TargetSetupError(
+                        String.format(
+                                "Failed to create child session for %s. Error: %s, Stdout: %s",
+                            moduleFile.getName(), res.getStderr(), res.getStdout()),
+                        device.getDeviceDescriptor());
+            }
+            res = device.executeShellV2Command(
+                            String.format(
+                                    "pm install-write -S %d %s %s %s",
+                                    moduleFile.length(),
+                                    childSessionId,
+                                    parsePackageName(moduleFile, device.getDeviceDescriptor()),
+                                    MODULE_PUSH_REMOTE_PATH + moduleFile.getName()));
+            if (res.getStatus() == CommandStatus.SUCCESS) {
+                CLog.d("Successfully wrote %s to session %s. ", moduleFile.getName(), childSessionId);
+            } else {
+                throw new TargetSetupError(
+                        String.format("Failed to write %s to session %s. Error: %s, Stdout: %s",
+                            moduleFile.getName(), childSessionId, res.getStderr(), res.getStdout()),
+                    device.getDeviceDescriptor());
+            }
+            res = device.executeShellV2Command(
+                            String.format(
+                                    "pm install-add-session " + parentSessionId + " " + childSessionId));
+            if (res.getStatus() != CommandStatus.SUCCESS) {
+                throw new TargetSetupError(
+                        String.format("Failed to add child session %s to parent session %s. Error: %s, Stdout: %s",
+                            childSessionId, parentSessionId, res.getStderr(), res.getStdout()),
+                    device.getDeviceDescriptor());
+            }
+        }
+        res = device.executeShellV2Command("pm install-commit " + parentSessionId);
 
         // Wait until all apexes are fully staged and ready.
         // TODO: should have adb level solution b/130039562
         RunUtil.getDefault().sleep(mApexStagingWaitTime);
 
-        if (log.contains("Success")) {
-            CLog.d(
-                    "Train is staged successfully. Cmd: %s, Output: %s.",
-                    trainInstallCmd.toString(), log);
+        if (res.getStatus() == CommandStatus.SUCCESS) {
+            CLog.d("Train is staged successfully. Stdout: %s.", res.getStdout());
         } else {
             throw new TargetSetupError(
                     String.format(
-                            "Failed to install %s on %s. Error log: '%s'",
-                            moduleFilenames.toString(), device.getSerialNumber(), log),
+                            "Failed to commit %s on %s. Error: %s, Output: %s",
+                            parentSessionId, device.getSerialNumber(), res.getStderr(), res.getStdout()),
                     device.getDeviceDescriptor(),
                     DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
         }
@@ -723,7 +837,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         List<String> installCmd = new ArrayList<>();
 
         installCmd.add(TRAIN_WITH_APEX_INSTALL_OPTION);
-        installCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
+        if (mEnableRollback) {
+            installCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
+        }
         for (String arg : mSplitsInstallArgs) {
             installCmd.add(arg);
         }
@@ -871,44 +987,6 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             }
         }
         return splitsArgs;
-    }
-
-    /**
-     * Checks if the input files contain any persistent apk.
-     *
-     * @param testAppFileNames The list of the file names of the modules to install
-     * @param testInfo The {@link TestInformation}
-     * @return <code>true</code> if the input files contains a persistent apk module.
-     */
-    protected boolean containsPersistentApk(
-            Collection<File> testAppFileNames, TestInformation testInfo)
-            throws TargetSetupError, DeviceNotAvailableException {
-        for (File moduleFileName : testAppFileNames) {
-            if (isPersistentApk(moduleFileName, testInfo)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Checks if an apk is a persistent apk.
-     *
-     * @param filename The apk module file to check
-     * @param testInfo The {@link TestInformation}
-     * @return <code>true</code> if this is a persistent apk module.
-     */
-    protected boolean isPersistentApk(File filename, TestInformation testInfo)
-            throws TargetSetupError, DeviceNotAvailableException {
-        if (!filename.getName().endsWith(APK_SUFFIX)) {
-            return false;
-        }
-        PackageInfo pkgInfo =
-                testInfo.getDevice()
-                        .getAppPackageInfo(
-                                parsePackageName(
-                                        filename, testInfo.getDevice().getDeviceDescriptor()));
-        return pkgInfo.isPersistentApp();
     }
 
     /**

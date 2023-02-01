@@ -69,6 +69,10 @@ public class ShardListener extends CollectingTestListener implements ISupportGra
         }
     }
 
+    public List<ITestInvocationListener> getUnderlyingResultReporter() {
+        return mShardMainForwarder.getListeners();
+    }
+
     /** {@inheritDoc} */
     @Override
     public boolean supportGranularResults() {
@@ -244,6 +248,16 @@ public class ShardListener extends CollectingTestListener implements ISupportGra
             } else {
                 mMainListener.invocationEnded(elapsedTime);
             }
+        }
+    }
+
+    @Override
+    public void logAssociation(String dataName, LogFile logFile) {
+        if (dataName.equals("invocation-trace")) {
+            CLog.d("Received a trace for shard");
+            mShardMainForwarder.logAssociation(dataName, logFile);
+        } else {
+            super.logAssociation(dataName, logFile);
         }
     }
 

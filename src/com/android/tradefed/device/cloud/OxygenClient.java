@@ -26,11 +26,15 @@ import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -44,6 +48,10 @@ public class OxygenClient {
     private final File mClientBinary;
 
     private IRunUtil mRunUtil;
+
+    // A list of attributes to be stored in Oxygen metadata.
+    private static final Set<String> INVOCATION_ATTRIBUTES =
+            new HashSet<>(Arrays.asList("work_unit_id"));
 
     // We can't be sure from GceDeviceParams use _ in options or -. This is because acloud used -
     // in its options while Oxygen use _. For compatibility reason, this mapping is needed.
@@ -112,25 +120,68 @@ public class OxygenClient {
     }
 
     /**
+     * Check if no_wait_for_boot is specified in Oxygen lease request
+     *
+     * @param deviceOptions {@link TestDeviceOptions}
+     * @return true if no_wait_for_boot is specified
+     */
+    public Boolean noWaitForBootSpecified(TestDeviceOptions deviceOptions) {
+        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
+            if (arg.getKey().equals("no_wait_for_boot")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if no_wait_for_boot is specified in Oxygen lease request
+     *
+     * @param args command line args to call Oxygen client
+     * @param attributes attributes associated with current invocation
+     * @return true if no_wait_for_boot is specified
+     */
+    private void addInvocationAttributes(List<String> args, MultiMap<String, String> attributes) {
+        if (attributes == null) {
+            return;
+        }
+        List<String> debugInfo = new ArrayList<>();
+        for (Map.Entry<String, String> attr : attributes.entries()) {
+            if (INVOCATION_ATTRIBUTES.contains(attr.getKey())) {
+                debugInfo.add(String.format("%s:%s", attr.getKey(), attr.getValue()));
+            }
+        }
+        if (debugInfo.size() > 0) {
+            args.add("-user_debug_info");
+            args.add(String.join(",", debugInfo));
+        }
+    }
+
+    /**
      * Attempt to lease a device by calling Oxygen client binary.
      *
      * @param b {@link IBuildInfo}
      * @param deviceOptions {@link TestDeviceOptions}
+     * @param attributes attributes associated with current invocation
      * @return a {@link CommandResult} that Oxygen binary returned.
      */
-    public CommandResult leaseDevice(IBuildInfo b, TestDeviceOptions deviceOptions) {
+    public CommandResult leaseDevice(
+            IBuildInfo b, TestDeviceOptions deviceOptions, MultiMap<String, String> attributes) {
         List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
         List<String> gceDriverParams = deviceOptions.getGceDriverParams();
         oxygenClientArgs.add("-lease");
         // Add options from GceDriverParams
-        for (int i = 0; i < gceDriverParams.size(); i = i + 2) {
+        int i = 0;
+        while (i < gceDriverParams.size()) {
             String gceDriverOption = gceDriverParams.get(i);
             if (sGceDeviceParamsToOxygenMap.containsKey(gceDriverOption)) {
                 // add device build options in oxygen's way
                 oxygenClientArgs.add(sGceDeviceParamsToOxygenMap.get(gceDriverOption));
                 // add option's value
                 oxygenClientArgs.add(gceDriverParams.get(i + 1));
+                i++;
             }
+            i++;
         }
 
         // check if build info exists after added from GceDriverParams
@@ -163,6 +214,8 @@ public class OxygenClient {
             }
         }
 
+        addInvocationAttributes(oxygenClientArgs, attributes);
+
         CLog.i("Leasing device from oxygen client with %s", oxygenClientArgs.toString());
         return runOxygenTimedCmd(
                 oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]),
@@ -174,10 +227,13 @@ public class OxygenClient {
      *
      * @param buildInfos {@link List<IBuildInfo>}
      * @param deviceOptions {@link TestDeviceOptions}
+     * @param attributes attributes associated with current invocation
      * @return {@link CommandResult} that Oxygen binary returned.
      */
     public CommandResult leaseMultipleDevices(
-            List<IBuildInfo> buildInfos, TestDeviceOptions deviceOptions) {
+            List<IBuildInfo> buildInfos,
+            TestDeviceOptions deviceOptions,
+            MultiMap<String, String> attributes) {
         List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
         oxygenClientArgs.add("-lease");
 
@@ -186,10 +242,11 @@ public class OxygenClient {
         List<String> buildIds = new ArrayList<>();
 
         for (IBuildInfo b : buildInfos) {
-            if (b.getBuildTargetName().isEmpty()) {
-                buildTargets.add(b.getBuildFlavor());
+            if (b.getBuildAttributes().containsKey("build_target")) {
+                // If BuildInfo contains the attribute for a build target, use that.
+                buildTargets.add(b.getBuildAttributes().get("build_target"));
             } else {
-                buildTargets.add(b.getBuildTargetName());
+                buildTargets.add(b.getBuildFlavor());
             }
             buildBranches.add(b.getBuildBranch());
             buildIds.add(b.getBuildId());
@@ -223,6 +280,8 @@ public class OxygenClient {
                 oxygenClientArgs.add(arg.getValue());
             }
         }
+
+        addInvocationAttributes(oxygenClientArgs, attributes);
 
         CLog.i("Leasing multiple devices from oxygen client with %s", oxygenClientArgs.toString());
         return runOxygenTimedCmd(

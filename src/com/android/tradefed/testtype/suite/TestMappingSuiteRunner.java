@@ -118,7 +118,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             name = "additional-test-mapping-zip",
             description =
                     "A list of additional test_mappings.zip that contains TEST_MAPPING files. The "
-                            + "runner will collect tests based on them. If none  is specified, "
+                            + "runner will collect tests based on them. If none is specified, "
                             + "only the tests on the triggering device build will be run.")
     private List<String> mAdditionalTestMappingZips = new ArrayList<>();
 
@@ -131,6 +131,31 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "to run for the given change.")
     private Set<String> mUnmatchedFilePatternPaths = new HashSet<>();
 
+    @Option(
+            name = "test-mapping-matched-pattern-paths",
+            description =
+                    "A list of modified paths that matches with a certain file_pattern in "
+                            + "the TEST_MAPPING file. This is used only for Work Node, and handled "
+                            + "by provider service.")
+    private Set<String> mMatchedPatternPaths = new HashSet<>();
+
+    @Option(
+            name = "allow-empty-tests",
+            description =
+                    "Whether or not to raise an exception if no tests to be ran. This is to "
+                            + "provide a feasibility for test mapping sampling.")
+    private boolean mAllowEmptyTests = false;
+
+    @Option(
+            name = "force-full-run",
+            description =
+                    "Whether or not to run full tests. It is to provide a feasibility for tests on "
+                            + "kernel branches. The option should only be used for kernel tests.")
+    private boolean mForceFullRun = false;
+
+    /** Flag to indicate whether the test mapping suite runner is in test discovery mode. */
+    private Boolean mIsTestDiscovery = false;
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
@@ -140,6 +165,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
 
     public TestMappingSuiteRunner() {
         setSkipjarLoading(true);
+    }
+
+    /** Set the test discovery mode flag. */
+    public void setTestDiscovery(Boolean testDiscovery) {
+        mIsTestDiscovery = testDiscovery;
     }
 
     /**
@@ -196,6 +226,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
 
         if (mTestGroup != null) {
             TestMapping.setIgnoreTestMappingImports(mIgnoreTestMappingImports);
+            if (mForceFullRun) {
+                CLog.d("--force-full-run is specified, all tests in test group %s will be ran.",
+                        mTestGroup);
+                mTestMappingPaths.clear();
+            }
             if (!mTestMappingPaths.isEmpty()) {
                 TestMapping.setTestMappingPaths(mTestMappingPaths);
             }
@@ -205,7 +240,8 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             mTestGroup,
                             getPrioritizeHostConfig(),
                             mKeywords,
-                            mAdditionalTestMappingZips);
+                            mAdditionalTestMappingZips,
+                            mMatchedPatternPaths);
             if (!mTestModulesForced.isEmpty()) {
                 CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
                 testInfosToRun =
@@ -218,7 +254,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                 CLog.i("Filtering tests from allowed test lists: %s", mAllowedTestLists);
                 testInfosToRun = filterByAllowedTestLists(testInfosToRun);
             }
-            if (testInfosToRun.isEmpty()) {
+            if (testInfosToRun.isEmpty() && !mAllowEmptyTests) {
                 throw new HarnessRuntimeException(
                         String.format("No test found for the given group: %s.", mTestGroup),
                         InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
@@ -232,6 +268,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             mTestGroup = null;
             mTestMappingPaths.clear();
             mUseTestMappingPath = false;
+        }
+
+        // In test discovery mode, abort here and the return value should not be used.
+        if (mIsTestDiscovery) {
+            return null;
         }
 
         // load all the configurations with include-filter injected.
@@ -272,6 +313,10 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     @VisibleForTesting
     String getTestGroup() {
         return mTestGroup;
+    }
+
+    public void clearTestGroup() {
+        mTestGroup = null;
     }
 
     @VisibleForTesting

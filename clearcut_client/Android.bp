@@ -27,8 +27,8 @@ java_library_host {
         "com/**/*.java",
     ],
     static_libs: [
-        "protobuf-java-util-prebuilt-jar",
         "asuite_proto_java",
+        "libprotobuf-java-util-full",
     ],
     libs: [
         "tradefed-common-util",

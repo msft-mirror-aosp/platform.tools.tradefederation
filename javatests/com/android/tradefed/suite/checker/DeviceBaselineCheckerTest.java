@@ -59,20 +59,30 @@ public class DeviceBaselineCheckerTest {
 
         DeviceBaselineSetter mockSetterExp = mock(SettingsBaselineSetter.class);
         doReturn("test1").when(mockSetterExp).getName();
+        doReturn(30).when(mockSetterExp).getMinimalApiLevel();
         doReturn(true).when(mockSetterExp).isExperimental();
         doReturn(true).when(mockSetterExp).setBaseline(mMockDevice);
 
         DeviceBaselineSetter mockSetterNotExp = mock(SettingsBaselineSetter.class);
         doReturn("test2").when(mockSetterNotExp).getName();
+        doReturn(30).when(mockSetterNotExp).getMinimalApiLevel();
         doReturn(false).when(mockSetterNotExp).isExperimental();
         doReturn(true).when(mockSetterNotExp).setBaseline(mMockDevice);
+
+        doReturn(true).when(mMockDevice).checkApiLevelAgainstNextRelease(30);
 
         List<DeviceBaselineSetter> deviceBaselineSetters = new ArrayList<>();
         deviceBaselineSetters.add(mockSetterExp);
         deviceBaselineSetters.add(mockSetterNotExp);
         mChecker.setDeviceBaselineSetters(deviceBaselineSetters);
 
-        assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
+        StatusCheckerResult result = mChecker.preExecutionCheck(mMockDevice);
+
+        assertEquals(CheckStatus.SUCCESS, result.getStatus());
+        assertEquals(
+                result.getModuleProperties()
+                        .getOrDefault("system_checker_enabled_device_baseline", ""),
+                "test1,test2");
         verify(mockSetterExp, times(1)).setBaseline(mMockDevice);
         verify(mockSetterNotExp, times(1)).setBaseline(mMockDevice);
     }
@@ -84,14 +94,23 @@ public class DeviceBaselineCheckerTest {
 
         DeviceBaselineSetter mockSetter = mock(SettingsBaselineSetter.class);
         doReturn("test").when(mockSetter).getName();
+        doReturn(30).when(mockSetter).getMinimalApiLevel();
         doReturn(true).when(mockSetter).isExperimental();
         doReturn(true).when(mockSetter).setBaseline(mMockDevice);
+
+        doReturn(true).when(mMockDevice).checkApiLevelAgainstNextRelease(30);
 
         List<DeviceBaselineSetter> deviceBaselineSetters = new ArrayList<>();
         deviceBaselineSetters.add(mockSetter);
         mChecker.setDeviceBaselineSetters(deviceBaselineSetters);
 
-        assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
+        StatusCheckerResult result = mChecker.preExecutionCheck(mMockDevice);
+
+        assertEquals(CheckStatus.SUCCESS, result.getStatus());
+        assertEquals(
+                result.getModuleProperties()
+                        .getOrDefault("system_checker_enabled_device_baseline", ""),
+                "");
         verify(mockSetter, times(0)).setBaseline(mMockDevice);
     }
 
@@ -102,16 +121,50 @@ public class DeviceBaselineCheckerTest {
 
         DeviceBaselineSetter mockSetter = mock(SettingsBaselineSetter.class);
         doReturn("test").when(mockSetter).getName();
+        doReturn(30).when(mockSetter).getMinimalApiLevel();
         doReturn(false).when(mockSetter).isExperimental();
         doReturn(false).when(mockSetter).setBaseline(mMockDevice);
+
+        doReturn(true).when(mMockDevice).checkApiLevelAgainstNextRelease(30);
 
         List<DeviceBaselineSetter> deviceBaselineSetters = new ArrayList<>();
         deviceBaselineSetters.add(mockSetter);
         mChecker.setDeviceBaselineSetters(deviceBaselineSetters);
 
-        assertEquals(CheckStatus.FAILED, mChecker.preExecutionCheck(mMockDevice).getStatus());
+        StatusCheckerResult result = mChecker.preExecutionCheck(mMockDevice);
+
+        assertEquals(CheckStatus.FAILED, result.getStatus());
+        assertEquals("Failed to set baseline test. ", result.getErrorMessage());
         assertEquals(
-                "Failed to set baseline test. ",
-                mChecker.preExecutionCheck(mMockDevice).getErrorMessage());
+                result.getModuleProperties()
+                        .getOrDefault("system_checker_enabled_device_baseline", ""),
+                "");
+    }
+
+    /** Test that the baseline setting is skipped when the device api level is too old. */
+    @Test
+    public void testSetBaselineSettings_oldDeviceApiLevel() throws Exception {
+        mOptionSetter.setOptionValue("enable-device-baseline-settings", "true");
+
+        DeviceBaselineSetter mockSetter = mock(SettingsBaselineSetter.class);
+        doReturn("test").when(mockSetter).getName();
+        doReturn(30).when(mockSetter).getMinimalApiLevel();
+        doReturn(false).when(mockSetter).isExperimental();
+        doReturn(true).when(mockSetter).setBaseline(mMockDevice);
+
+        doReturn(false).when(mMockDevice).checkApiLevelAgainstNextRelease(30);
+
+        List<DeviceBaselineSetter> deviceBaselineSetters = new ArrayList<>();
+        deviceBaselineSetters.add(mockSetter);
+        mChecker.setDeviceBaselineSetters(deviceBaselineSetters);
+
+        StatusCheckerResult result = mChecker.preExecutionCheck(mMockDevice);
+
+        assertEquals(CheckStatus.SUCCESS, result.getStatus());
+        assertEquals(
+                result.getModuleProperties()
+                        .getOrDefault("system_checker_enabled_device_baseline", ""),
+                "");
+        verify(mockSetter, times(0)).setBaseline(mMockDevice);
     }
 }

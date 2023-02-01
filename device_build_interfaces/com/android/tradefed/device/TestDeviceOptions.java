@@ -121,6 +121,12 @@ public class TestDeviceOptions {
             + "to be available aka fully boot.")
     private long mAvailableTimeout = 6 * 60 * 1000;
 
+    @Option(
+            name = "adb-root-unavailable-timeout",
+            description = "time in ms to wait for a device to become unavailable after adb root.",
+            isTimeVal = true)
+    private long mAdbRootUnavailableTimeout = 2 * 1000;
+
     @Option(name = "conn-check-url",
             description = "default URL to be used for connectivity checks.")
     private String mConnCheckUrl = "http://www.google.com";
@@ -182,6 +188,12 @@ public class TestDeviceOptions {
             description =
                     "Feature flag to test out an updated approach to bootloader state status.")
     private boolean mUpdatedBootloaderStatus = true;
+
+    @Option(
+            name = "bugreportz-timeout",
+            description = "Timeout applied to bugreportz capture.",
+            isTimeVal = true)
+    private long mBugreportzTimeout = 5 * 60 * 1000;
 
     // ====================== Options Related to Virtual Devices ======================
     @Option(
@@ -511,6 +523,21 @@ public class TestDeviceOptions {
     }
 
     /**
+     * @return the time in ms to wait for a device to become unavailable after adb root.
+     */
+    public long getAdbRootUnavailableTimeout() {
+        return mAdbRootUnavailableTimeout;
+    }
+
+    /**
+     * @param adbRootUnavailableTimeout time in ms to wait for a device to become unavailable after
+     *     adb root.
+     */
+    public void setAdbRootUnavailableTimeout(long adbRootUnavailableTimeout) {
+        mAdbRootUnavailableTimeout = adbRootUnavailableTimeout;
+    }
+
+    /**
      * @return the default URL to be used for connectivity tests.
      */
     public String getConnCheckUrl() {
@@ -742,6 +769,11 @@ public class TestDeviceOptions {
     }
 
     /** Returns true if GCE tear down should be skipped. False otherwise. */
+    public void setSkipTearDown(boolean shouldSkipTearDown) {
+        mSkipTearDown = shouldSkipTearDown;
+    }
+
+    /** Returns true if GCE tear down should be skipped. False otherwise. */
     public boolean shouldSkipTearDown() {
         return mSkipTearDown;
     }
@@ -838,7 +870,6 @@ public class TestDeviceOptions {
         return Collections.emptyList();
     }
 
-    /** Returns true if we should block on GCE tear down completion before proceeding. */
     public List<String> getInvocationAttributeToMetadata() {
         return mInvocationAttributeToMetadata;
     }
@@ -881,6 +912,11 @@ public class TestDeviceOptions {
     /** Returns whether or not to use the newer bootloader state status. */
     public boolean useUpdatedBootloaderStatus() {
         return mUpdatedBootloaderStatus;
+    }
+
+    /** Returns the timeout value to be applied to bugreportz capture. */
+    public long getBugreportzTimeout() {
+        return mBugreportzTimeout;
     }
 }
 

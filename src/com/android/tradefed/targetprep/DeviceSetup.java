@@ -39,6 +39,8 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.BinaryState;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.MultiMap;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -61,6 +63,10 @@ import java.util.TimeZone;
  * <p>Requires a device where 'adb root' is possible, typically a userdebug build type.
  *
  * <p>Should be performed <strong>after</strong> a new build is flashed.
+ *
+ * <p><strong>Note:</strong> this preparer is meant for continuous testing labs and assumes that the
+ * device under test will be flashed and wiped before the next run. As such, it does minimal clean
+ * up during teardown and should not be used in a test module.
  */
 @OptionClass(alias = "device-setup")
 public class DeviceSetup extends BaseTargetPreparer implements IExternalDependency {
@@ -459,7 +465,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     private boolean mDisableDeviceConfigSync = false;
     // device_config set_sync_disabled_for_tests persistent
 
+    @Option(
+            name = "disable-ramdump",
+            description = "Will set the flag to disable ramdump on the device.")
+    private boolean mDisableRamdump = false;
+
     private static final String PERSIST_PREFIX = "persist.";
+    private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
 
     public ITestDevice getDevice(TestInformation testInfo) {
         return testInfo.getDevice();
@@ -640,8 +652,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         setCommandForBinaryState(mEthernet, mRunCommandAfterSettings,
                 "ifconfig eth0 up", "ifconfig eth0 down");
 
-        setCommandForBinaryState(mBluetooth, mRunCommandAfterSettings,
-                "svc bluetooth enable", "svc bluetooth disable");
+        setCommandForBinaryState(
+                mBluetooth,
+                mRunCommandAfterSettings,
+                "cmd bluetooth_manager enable && cmd bluetooth_manager wait-for-state:STATE_ON",
+                "cmd bluetooth_manager disable && cmd bluetooth_manager wait-for-state:STATE_OFF");
 
         setCommandForBinaryState(mNfc, mRunCommandAfterSettings,
                 "svc nfc enable", "svc nfc disable");
@@ -789,12 +804,19 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
+        boolean needsReboot = false;
         // Set persistent props and build a map of all the nonpersistent ones
         Map<String, String> nonpersistentProps = new HashMap<String, String>();
         for (Map.Entry<String, String> prop : mSetProps.entrySet()) {
             if (prop.getKey().startsWith(PERSIST_PREFIX)) {
                 // TODO: Check that set was successful
                 device.setProperty(prop.getKey(), prop.getValue());
+            } else if (prop.getKey().equals(MEMTAG_BOOTCTL)) {
+                // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
+                // stores the value in the misc partition, and gets applied and restored on
+                // reboot.
+                device.setProperty(prop.getKey(), prop.getValue());
+                needsReboot = true;
             } else {
                 nonpersistentProps.put(prop.getKey(), prop.getValue());
             }
@@ -840,6 +862,24 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             }
             // Set reasonable permissions for /data/local.prop
             device.executeShellCommand("chmod 644 /data/local.prop");
+
+            if (mDisableRamdump) {
+                device.rebootIntoBootloader();
+                CLog.i("Disabling ramdump.");
+                CommandResult resultRampdump =
+                        device.executeFastbootCommand("oem", "ramdump", "disable");
+                if (!CommandStatus.SUCCESS.equals(resultRampdump.getStatus())) {
+                    CLog.w(
+                            "Failed to run ramdump disable: status: %s\nstdout: %s\nstderr: %s",
+                            resultRampdump.getStatus(),
+                            resultRampdump.getStdout(),
+                            resultRampdump.getStderr());
+                }
+            }
+            needsReboot = true;
+        }
+
+        if (needsReboot) {
             CLog.i("Rebooting %s due to system property change", device.getSerialNumber());
             device.reboot();
         }

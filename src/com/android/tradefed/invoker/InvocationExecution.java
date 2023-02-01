@@ -34,6 +34,9 @@ import com.android.tradefed.config.filter.GetPreviousPassedHelper;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.device.cloud.GceAvdInfo;
+import com.android.tradefed.device.cloud.GceManager;
+import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
@@ -57,6 +60,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryLogSaverResultForwarder;
 import com.android.tradefed.retry.RetryStatistics;
@@ -81,6 +85,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.PrettyPrintDelimiter;
+import com.android.tradefed.util.RunInterruptedException;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.SystemUtil.EnvVariable;
@@ -99,6 +104,8 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -117,6 +124,61 @@ public class InvocationExecution implements IInvocationExecution {
     private Set<IMultiTargetPreparer> mTrackMultiPreparers = null;
     private Map<String, Set<ITargetPreparer>> mTrackLabPreparers = null;
     private Map<String, Set<ITargetPreparer>> mTrackTargetPreparers = null;
+
+    /** Timer to make sure Test Phase does not run for too long. */
+    private class TestPhaseMonitor extends TimerTask {
+
+        private TestThread mTestThread;
+
+        public TestPhaseMonitor(TestThread toMonitor) {
+            mTestThread = toMonitor;
+        }
+
+        @Override
+        public void run() {
+            if (mTestThread != null) {
+                mTestThread.stopTestThread();
+            }
+        }
+    }
+
+    /** A Thread to execute {@link IRemoteTest} */
+    private class TestThread extends Thread {
+        private TestInformation mTestInfo;
+        private ITestInvocationListener mTestListener;
+        private IRemoteTest mTest;
+        private Throwable lastThrownException;
+
+        public TestThread(
+                TestInformation info, ITestInvocationListener listener, IRemoteTest test) {
+            mTestInfo = info;
+            mTestListener = listener;
+            mTest = test;
+        }
+
+        @Override
+        public void run() {
+            try {
+                mTest.run(mTestInfo, mTestListener);
+            } catch (Exception e) {
+                lastThrownException = e;
+            }
+        }
+
+        public Throwable getLastThrownException() {
+            return lastThrownException;
+        }
+
+        public void stopTestThread() {
+            this.interrupt();
+            mTestInfo.notifyTimeout();
+            // record this interrupt as an exception so that TestInvocation thread can throw this.
+            lastThrownException =
+                    new RunInterruptedException(
+                            "Test Phase Timeout Reached.",
+                            TestErrorIdentifier.TEST_PHASE_TIMED_OUT);
+        }
+    }
 
     @Override
     public boolean fetchBuild(
@@ -262,24 +324,34 @@ public class InvocationExecution implements IInvocationExecution {
         mTrackLabPreparers = new ConcurrentHashMap<>();
         mTrackTargetPreparers = new ConcurrentHashMap<>();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_START, start);
-        try (CloseableTraceScope ignored =
-                new CloseableTraceScope(InvocationMetricKey.lab_setup.name())) {
-            for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
-                ITestDevice device = testInfo.getContext().getDevice(deviceName);
-                CLog.d("Starting setup for device: '%s'", device.getSerialNumber());
-                if (device instanceof ITestLoggerReceiver) {
-                    ((ITestLoggerReceiver) testInfo.getContext().getDevice(deviceName))
-                            .setTestLogger(listener);
-                }
-                mTrackLabPreparers.put(deviceName, new HashSet<>());
-                mTrackTargetPreparers.put(deviceName, new HashSet<>());
+
+        for (String deviceName : testInfo.getContext().getDeviceConfigNames()) {
+            ITestDevice device = testInfo.getContext().getDevice(deviceName);
+            CLog.d("Starting setup for device: '%s'", device.getSerialNumber());
+            if (device instanceof ITestLoggerReceiver) {
+                ((ITestLoggerReceiver) testInfo.getContext().getDevice(deviceName))
+                        .setTestLogger(listener);
             }
+            mTrackLabPreparers.put(deviceName, new HashSet<>());
+            mTrackTargetPreparers.put(deviceName, new HashSet<>());
+        }
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(InvocationMetricKey.pre_multi_preparer.name())) {
             // Before all the individual setup, make the multi-pre-target-preparer devices setup
             runMultiTargetPreparers(
                     config.getMultiPreTargetPreparers(),
                     listener,
                     testInfo,
                     "multi pre target preparer setup");
+        } finally {
+            long end = System.currentTimeMillis();
+            // Pre-multi-preparer are test specific and account toward test setup
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.TEST_SETUP_PAIR, start, end);
+        }
+        start = System.currentTimeMillis();
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(InvocationMetricKey.lab_setup.name())) {
             runLabPreparersSetup(testInfo, config, listener);
         } finally {
             long end = System.currentTimeMillis();
@@ -559,22 +631,92 @@ public class InvocationExecution implements IInvocationExecution {
             return;
         }
         long start = System.currentTimeMillis();
-        try (CloseableTraceScope ignore = new CloseableTraceScope("device_pre_invocation_setup")) {
-            customizeDevicePreInvocation(config, context);
-            for (String deviceName : context.getDeviceConfigNames()) {
-                ITestDevice device = context.getDevice(deviceName);
+        customizeDevicePreInvocation(config, context);
 
-                CLog.d("Starting device pre invocation setup for : '%s'", device.getSerialNumber());
-                if (device instanceof ITestLoggerReceiver) {
-                    ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+        // Multi-device test scenario
+        Integer multiDeviceCount = config.getCommandOptions().getMultiDeviceCount();
+        boolean allVirtualDevices = true;
+        for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+            if (!deviceConfig.getDeviceRequirements().gceDeviceRequested()) {
+                allVirtualDevices = false;
+                break;
+            }
+        }
+        if (multiDeviceCount != null && multiDeviceCount != 1 && allVirtualDevices) {
+            runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
+        } else {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope("device_pre_invocation_setup")) {
+                for (String deviceName : context.getDeviceConfigNames()) {
+                    ITestDevice device = context.getDevice(deviceName);
+                    CLog.d(
+                            "Starting device pre invocation setup for : '%s'",
+                            device.getSerialNumber());
+                    if (device instanceof ITestLoggerReceiver) {
+                        ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+                    }
+                    device.preInvocationSetup(
+                            context.getBuildInfo(deviceName), context.getAttributes());
                 }
-                device.preInvocationSetup(
-                        context.getBuildInfo(deviceName), context.getAttributes());
             }
         }
         // Also report device pre invocation into setup
         InvocationMetricLogger.addInvocationPairMetrics(
                 InvocationMetricKey.SETUP_PAIR, start, System.currentTimeMillis());
+    }
+
+    /**
+     * Launch multiple virtual devices together, then invoke the {@link
+     * ITestDevice#preInvocationSetup(IBuildInfo)} for each device part of the invocation with
+     * setting the GceAvdInfo of the device beforehand.
+     *
+     * @param context the {@link IInvocationContext} of the invocation.
+     * @param config the {@link IConfiguration} of this test run.
+     * @param logger the {@link ITestLogger} to report logs.
+     * @throws DeviceNotAvailableException
+     * @throws TargetSetupError
+     */
+    private void runMultiVirtualDevicesPreInvocationSetup(
+            IInvocationContext context, IConfiguration config, ITestLogger logger)
+            throws TargetSetupError, DeviceNotAvailableException {
+        // One GceManager is needed to lease the whole device group
+        String firstDeviceName = context.getDeviceConfigNames().get(0);
+        ITestDevice firstDevice = context.getDevice(firstDeviceName);
+        GceManager multiDeviceRequester =
+                new GceManager(
+                        firstDevice.getDeviceDescriptor(),
+                        firstDevice.getOptions(),
+                        context.getBuildInfo(firstDeviceName));
+
+        List<ITestDevice> devices = context.getDevices();
+        List<IBuildInfo> buildInfos = context.getBuildInfos();
+
+        // Start multiple devices in a group
+        List<GceAvdInfo> gceAvdInfoList =
+                multiDeviceRequester.startMultiDevicesGce(buildInfos, context.getAttributes());
+        for (int i = 0; i < devices.size(); i++) {
+            RemoteAndroidVirtualDevice device = (RemoteAndroidVirtualDevice) devices.get(i);
+            // For each device, do setup with its GceAvdInfo
+            CLog.d(
+                    "Starting device pre invocation launched device setup with GceAvdInfo %s"
+                            + " for : '%s'",
+                    gceAvdInfoList.get(i), device.getSerialNumber());
+            device.setAvdInfo(gceAvdInfoList.get(i));
+            device.preInvocationSetup(buildInfos.get(i), context.getAttributes());
+
+            // Last device in the group is responsible for releasing the whole device group
+            if (i != devices.size() - 1) {
+                CLog.d(
+                        "Set device %s to skip tear down because only the last device in the"
+                                + " device group will be responsible for tearing down the whole"
+                                + " device group",
+                        device.getSerialNumber());
+                device.getOptions().setSkipTearDown(true);
+            }
+
+            // Every RemoteAndroidVirtualDevice is a ITestLoggerReceiver
+            ((ITestLoggerReceiver) device).setTestLogger(logger);
+        }
     }
 
     /**
@@ -622,10 +764,17 @@ public class InvocationExecution implements IInvocationExecution {
             if (multiPreparer instanceof ITestLoggerReceiver) {
                 ((ITestLoggerReceiver) multiPreparer).setTestLogger(logger);
             }
-            CLog.d("Starting %s '%s'", description, multiPreparer);
-            multiPreparer.setUp(testInfo);
-            mTrackMultiPreparers.add(multiPreparer);
-            CLog.d("done with %s '%s'", description, multiPreparer);
+            long startTime = System.currentTimeMillis();
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(multiPreparer.getClass().getSimpleName())) {
+                CLog.d("Starting %s '%s'", description, multiPreparer);
+                multiPreparer.setUp(testInfo);
+                mTrackMultiPreparers.add(multiPreparer);
+                long elapsedTime = System.currentTimeMillis() - startTime;
+                CLog.d(
+                        "Done with %s '%s' in %s",
+                        description, multiPreparer, TimeUtil.formatElapsedTime(elapsedTime));
+            }
         }
     }
 
@@ -656,7 +805,8 @@ public class InvocationExecution implements IInvocationExecution {
             }
             long startTime = System.currentTimeMillis();
             CLog.d("Starting %s '%s'", description, multipreparer);
-            try {
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(multipreparer.getClass().getSimpleName())) {
                 multipreparer.tearDown(testInfo, throwable);
             } catch (Throwable t) {
                 // We catch it and rethrow later to allow each multi_targetprep to be attempted.
@@ -693,80 +843,95 @@ public class InvocationExecution implements IInvocationExecution {
         long start = System.currentTimeMillis();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.TEARDOWN_START, start);
         try {
-            List<IMultiTargetPreparer> multiPreparers = config.getMultiTargetPreparers();
-            deferredThrowable =
-                    runMultiTargetPreparersTearDown(
-                            multiPreparers,
-                            testInfo,
-                            logger,
-                            exception,
-                            "multi target preparer teardown");
-
             int deviceIndex = 0;
-            for (String deviceName : context.getDeviceConfigNames()) {
-                ITestDevice device = context.getDevice(deviceName);
-                device.clearLastConnectedWifiNetwork();
-
-                List<ITargetPreparer> targetPreparersToRun =
-                        getTargetPreparersToRun(config, deviceName);
-                Throwable firstLocalThrowable =
-                        runPreparersTearDown(
+            try {
+                List<IMultiTargetPreparer> multiPreparers = config.getMultiTargetPreparers();
+                deferredThrowable =
+                        runMultiTargetPreparersTearDown(
+                                multiPreparers,
                                 testInfo,
-                                device,
-                                deviceName,
-                                deviceIndex,
                                 logger,
                                 exception,
-                                targetPreparersToRun,
-                                mTrackTargetPreparers);
-                if (deferredThrowable == null) {
-                    deferredThrowable = firstLocalThrowable;
+                                "multi target preparer teardown");
+
+                for (String deviceName : context.getDeviceConfigNames()) {
+                    ITestDevice device = context.getDevice(deviceName);
+                    device.clearLastConnectedWifiNetwork();
+
+                    List<ITargetPreparer> targetPreparersToRun =
+                            getTargetPreparersToRun(config, deviceName);
+                    Throwable firstLocalThrowable =
+                            runPreparersTearDown(
+                                    testInfo,
+                                    device,
+                                    deviceName,
+                                    deviceIndex,
+                                    logger,
+                                    exception,
+                                    targetPreparersToRun,
+                                    mTrackTargetPreparers);
+                    if (deferredThrowable == null) {
+                        deferredThrowable = firstLocalThrowable;
+                    }
+
+                    deviceIndex++;
+                }
+            } finally {
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.TEST_TEARDOWN_PAIR, start, System.currentTimeMillis());
+            }
+
+            start = System.currentTimeMillis();
+            try {
+                deviceIndex = 0;
+                for (String deviceName : context.getDeviceConfigNames()) {
+                    ITestDevice device = context.getDevice(deviceName);
+                    List<ITargetPreparer> labPreparersToRun =
+                            getLabPreparersToRun(config, deviceName);
+                    Throwable secondLocalThrowable =
+                            runPreparersTearDown(
+                                    testInfo,
+                                    device,
+                                    deviceName,
+                                    deviceIndex,
+                                    logger,
+                                    exception,
+                                    labPreparersToRun,
+                                    mTrackLabPreparers);
+                    if (deferredThrowable == null) {
+                        deferredThrowable = secondLocalThrowable;
+                    }
+
+                    deviceIndex++;
                 }
 
-                List<ITargetPreparer> labPreparersToRun = getLabPreparersToRun(config, deviceName);
-                Throwable secondLocalThrowable =
-                        runPreparersTearDown(
+                // Extra tear down step for the device
+                if (exception == null) {
+                    exception = deferredThrowable;
+                }
+                runDevicePostInvocationTearDown(context, config, exception);
+
+                // After all, run the multi_pre_target_preparer tearDown.
+                List<IMultiTargetPreparer> multiPrePreparers = config.getMultiPreTargetPreparers();
+                Throwable preTargetTearDownException =
+                        runMultiTargetPreparersTearDown(
+                                multiPrePreparers,
                                 testInfo,
-                                device,
-                                deviceName,
-                                deviceIndex,
                                 logger,
                                 exception,
-                                labPreparersToRun,
-                                mTrackLabPreparers);
+                                "multi pre target preparer teardown");
                 if (deferredThrowable == null) {
-                    deferredThrowable = secondLocalThrowable;
+                    deferredThrowable = preTargetTearDownException;
                 }
-
-                deviceIndex++;
+            } finally {
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.TEARDOWN_PAIR, start, System.currentTimeMillis());
             }
-
-            // Extra tear down step for the device
-            if (exception == null) {
-                exception = deferredThrowable;
-            }
-            runDevicePostInvocationTearDown(context, config, exception);
-
-            // After all, run the multi_pre_target_preparer tearDown.
-            List<IMultiTargetPreparer> multiPrePreparers = config.getMultiPreTargetPreparers();
-            Throwable preTargetTearDownException =
-                    runMultiTargetPreparersTearDown(
-                            multiPrePreparers,
-                            testInfo,
-                            logger,
-                            exception,
-                            "multi pre target preparer teardown");
-            if (deferredThrowable == null) {
-                deferredThrowable = preTargetTearDownException;
-            }
-
+        } finally {
             // Collect adb logs.
             logHostAdb(config, logger);
-        } finally {
-            long end = System.currentTimeMillis();
-            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.TEARDOWN_END, end);
-            InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.TEARDOWN_PAIR, start, end);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.TEARDOWN_END, System.currentTimeMillis());
         }
 
         if (deferredThrowable != null) {
@@ -883,6 +1048,16 @@ public class InvocationExecution implements IInvocationExecution {
     public void runTests(
             TestInformation info, IConfiguration config, ITestInvocationListener listener)
             throws Throwable {
+        Timer testPhaseTimer = new Timer(true);
+        long remainingTestPhaseTime =
+                GlobalConfiguration.getInstance().getHostOptions().getTestPhaseTimeout();
+        boolean testPhaseTimeoutNeeded = remainingTestPhaseTime > 0;
+        // Make sure Test Phase timeout is less than or equal to invocation timeout
+        long invocationTimeout = config.getCommandOptions().getInvocationTimeout();
+        if (testPhaseTimeoutNeeded && invocationTimeout > 0) {
+            remainingTestPhaseTime = Math.min(remainingTestPhaseTime, invocationTimeout);
+        }
+
         List<IRemoteTest> remainingTests = new ArrayList<>(config.getTests());
         UnexecutedTestReporterThread reporterThread =
                 new UnexecutedTestReporterThread(listener, remainingTests);
@@ -935,7 +1110,16 @@ public class InvocationExecution implements IInvocationExecution {
                             || (!(test instanceof ITestFilterReceiver)
                                     && !(test instanceof IAutoRetriableTest))) {
                         try {
-                            runTest(config, info, listener, test);
+                            long timeSpentOnTest =
+                                    runTest(
+                                            config,
+                                            info,
+                                            listener,
+                                            test,
+                                            testPhaseTimer,
+                                            remainingTestPhaseTime,
+                                            testPhaseTimeoutNeeded);
+                            remainingTestPhaseTime -= timeSpentOnTest;
                         } finally {
                             CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                             CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
@@ -950,7 +1134,16 @@ public class InvocationExecution implements IInvocationExecution {
                     mainGranularRunListener.setAttemptIsolation(
                             CurrentInvocation.runCurrentIsolation());
                     try {
-                        runTest(config, info, runListener, test);
+                        long timeSpentOnTest =
+                                runTest(
+                                        config,
+                                        info,
+                                        runListener,
+                                        test,
+                                        testPhaseTimer,
+                                        remainingTestPhaseTime,
+                                        testPhaseTimeoutNeeded);
+                        remainingTestPhaseTime -= timeSpentOnTest;
                     } finally {
                         CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                         CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
@@ -989,7 +1182,16 @@ public class InvocationExecution implements IInvocationExecution {
                                     CurrentInvocation.runCurrentIsolation());
                             try {
                                 // Run the tests again
-                                runTest(config, info, runListener, test);
+                                long timeSpent =
+                                        runTest(
+                                                config,
+                                                info,
+                                                runListener,
+                                                test,
+                                                testPhaseTimer,
+                                                remainingTestPhaseTime,
+                                                testPhaseTimeoutNeeded);
+                                remainingTestPhaseTime -= timeSpent;
                             } finally {
                                 CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                                 CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
@@ -1009,6 +1211,7 @@ public class InvocationExecution implements IInvocationExecution {
                 }
             }
         } finally {
+            testPhaseTimer.cancel();
             TestInvocation.printStageDelimiter(Stage.TEST, true);
             // TODO: Look if this can be improved to DeviceNotAvailableException too.
             try {
@@ -1098,12 +1301,21 @@ public class InvocationExecution implements IInvocationExecution {
         }
     }
 
-    private void runTest(
+    /**
+     * Runs a test and returns the time taken to finish the test.
+     *
+     * <p>Tests will be run on a separate thread with a timer when test phase level timeout is
+     * needed.
+     */
+    private long runTest(
             IConfiguration config,
             TestInformation info,
             ITestInvocationListener listener,
-            IRemoteTest test)
-            throws DeviceNotAvailableException {
+            IRemoteTest test,
+            Timer timer,
+            long testPhaseTimeout,
+            boolean testPhaseTimeoutNeeded)
+            throws DeviceNotAvailableException, Throwable {
         // We clone the collectors for each IRemoteTest to ensure no state conflicts.
         List<IMetricCollector> clonedCollectors = new ArrayList<>();
         // Add automated collectors
@@ -1115,7 +1327,13 @@ public class InvocationExecution implements IInvocationExecution {
         if (test instanceof IMetricCollectorReceiver) {
             ((IMetricCollectorReceiver) test).setMetricCollectors(clonedCollectors);
             // If test can receive collectors then let it handle the how to set them up
-            test.run(info, listener);
+            if (testPhaseTimeoutNeeded) {
+                return runTestThread(info, listener, test, timer, testPhaseTimeout);
+            } else {
+                long startTime = System.currentTimeMillis();
+                test.run(info, listener);
+                return System.currentTimeMillis() - startTime;
+            }
         } else {
             // Wrap collectors in each other and collection will be sequential, do this in the
             // loop to ensure they are always initialized against the right context.
@@ -1136,7 +1354,46 @@ public class InvocationExecution implements IInvocationExecution {
                     TfObjectTracker.countWithParents(collector.getClass());
                 }
             }
-            test.run(info, listenerWithCollectors);
+            if (testPhaseTimeoutNeeded) {
+                return runTestThread(info, listenerWithCollectors, test, timer, testPhaseTimeout);
+            } else {
+                long startTime = System.currentTimeMillis();
+                test.run(info, listenerWithCollectors);
+                return System.currentTimeMillis() - startTime;
+            }
+        }
+    }
+
+    /** Runs a test in a separate thread and returns the time spent on running the test. */
+    private long runTestThread(
+            TestInformation info,
+            ITestInvocationListener listener,
+            IRemoteTest test,
+            Timer timer,
+            long testPhaseTimeout)
+            throws Throwable {
+        if (testPhaseTimeout <= 0) {
+            // throw run interrupted exception so that it can be handled the same way as TestThreads
+            // when timeout is reached.
+            throw new RunInterruptedException(
+                    "Test Phase Timeout Reached.", TestErrorIdentifier.TEST_PHASE_TIMED_OUT);
+        }
+        TestThread testThread = new TestThread(info, listener, test);
+        TestPhaseMonitor testPhaseMonitor = new TestPhaseMonitor(testThread);
+        timer.schedule(testPhaseMonitor, testPhaseTimeout);
+        long startTime = System.currentTimeMillis();
+        testThread.start();
+        try {
+            testThread.join();
+        } catch (InterruptedException e) {
+            CLog.e(e);
+        } finally {
+            testPhaseMonitor.cancel();
+            long timeSpent = System.currentTimeMillis() - startTime;
+            if (testThread.getLastThrownException() != null) {
+                throw testThread.getLastThrownException();
+            }
+            return timeSpent;
         }
     }
 
@@ -1342,6 +1599,14 @@ public class InvocationExecution implements IInvocationExecution {
                 && CommandStatus.SUCCESS.equals(kernelInfoResult.getStatus())) {
             info.getBuildInfo()
                     .addBuildAttribute("device_kernel_info", kernelInfoResult.getStdout().trim());
+        }
+        String system_img_info = device.getProperty("ro.system.build.fingerprint");
+        if (system_img_info != null) {
+            info.getBuildInfo().addBuildAttribute("system_img_info", system_img_info);
+        }
+        String vendor_img_info = device.getProperty("ro.vendor.build.fingerprint");
+        if (vendor_img_info != null) {
+            info.getBuildInfo().addBuildAttribute("vendor_img_info", vendor_img_info);
         }
     }
 }

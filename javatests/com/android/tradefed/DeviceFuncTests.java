@@ -20,6 +20,7 @@ import com.android.tradefed.device.TestDeviceFileFuncTest;
 import com.android.tradefed.device.TestDeviceFuncTest;
 import com.android.tradefed.device.TestDevicePackageFuncTest;
 import com.android.tradefed.device.TestDeviceUserFuncTest;
+import com.android.tradefed.util.PerfettoTraceRecorderFuncTest;
 import com.android.tradefed.suite.checker.ActivityStatusCheckerFuncTest;
 import com.android.tradefed.targetprep.AppSetupFuncTest;
 import com.android.tradefed.targetprep.DeviceSetupFuncTest;
@@ -48,5 +49,7 @@ import org.junit.runners.Suite.SuiteClasses;
     UserCleanerFuncTest.class,
     // testtype
     InstrumentationTestFuncTest.class,
+    // collector
+    PerfettoTraceRecorderFuncTest.class,
 })
 public class DeviceFuncTests {}

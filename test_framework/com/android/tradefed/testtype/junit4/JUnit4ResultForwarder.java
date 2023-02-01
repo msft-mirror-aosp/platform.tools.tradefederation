@@ -16,11 +16,13 @@
 package com.android.tradefed.testtype.junit4;
 
 import com.android.tradefed.error.IHarnessException;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner.LogAnnotation;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner.MetricAnnotation;
@@ -50,6 +52,7 @@ public class JUnit4ResultForwarder extends RunListener {
     private List<Throwable> mTestCaseFailures;
     private Description mRunDescription;
     private boolean mBeforeClass = true;
+    private CloseableTraceScope mMethodTrace = null;
 
     private LogUploaderThread mLogUploaderThread;
 
@@ -69,7 +72,11 @@ public class JUnit4ResultForwarder extends RunListener {
             Throwable error = failure.getException();
             String message = error.getMessage();
             if (message == null) {
-                message = "Exception with no error message";
+                if (error instanceof CarryInterruptedException) {
+                    message = "Test Phase Timeout Reached.";
+                } else {
+                    message = "Exception with no error message";
+                }
             }
             FailureDescription failureDesc =
                     FailureDescription.create(message).setFailureStatus(FailureStatus.TEST_FAILURE);
@@ -84,6 +91,8 @@ public class JUnit4ResultForwarder extends RunListener {
                 }
                 failureDesc.setErrorIdentifier(((IHarnessException) error).getErrorId());
                 failureDesc.setOrigin(((IHarnessException) error).getOrigin());
+            } else if (error instanceof CarryInterruptedException) {
+                failureDesc.setErrorIdentifier(TestErrorIdentifier.TEST_PHASE_TIMED_OUT);
             }
             mListener.testRunFailed(failureDesc);
             // If the exception is ours thrown from before, rethrow it
@@ -130,6 +139,7 @@ public class JUnit4ResultForwarder extends RunListener {
 
     @Override
     public void testStarted(Description description) throws Exception {
+        mMethodTrace = new CloseableTraceScope(description.getMethodName());
         mBeforeClass = false;
         mTestCaseFailures.clear();
         TestDescription testid =
@@ -171,6 +181,10 @@ public class JUnit4ResultForwarder extends RunListener {
             }
             mListener.testEnded(testid, metrics);
             mTestCaseFailures.clear();
+            if (mMethodTrace != null) {
+                mMethodTrace.close();
+                mMethodTrace = null;
+            }
         }
     }
 

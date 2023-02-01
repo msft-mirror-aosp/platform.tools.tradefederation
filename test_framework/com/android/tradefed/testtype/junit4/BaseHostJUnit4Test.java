@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
 public abstract class BaseHostJUnit4Test implements IAbiReceiver, ITestInformationReceiver {
 
     static final long DEFAULT_TEST_TIMEOUT_MS = 10 * 60 * 1000L;
-    private static final long DEFAULT_MAX_TIMEOUT_TO_OUTPUT_MS = 10 * 60 * 1000L; // 10min
+    static final long DEFAULT_MAX_TIMEOUT_TO_OUTPUT_MS = 10 * 60 * 1000L; // 10 min
     private static final Map<String, String> DEFAULT_INSTRUMENTATION_ARGS = new HashMap<>();
 
     private IAbi mAbi;

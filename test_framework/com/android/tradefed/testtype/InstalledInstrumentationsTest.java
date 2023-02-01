@@ -33,9 +33,12 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.retry.IAutoRetriableTest;
 import com.android.tradefed.util.AbiFormatter;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ListInstrumentationParser;
 import com.android.tradefed.util.ListInstrumentationParser.InstrumentationTarget;
@@ -76,7 +79,7 @@ public class InstalledInstrumentationsTest
             description="Sets timeout (in milliseconds) that will be applied to each test. In the "
                     + "event of a test timeout it will log the results and proceed with executing "
                     + "the next test. For no timeout, set to 0.")
-    private int mTestTimeout = 5 * 60 * 1000;  // default to 5 minutes
+    private long mTestTimeout = 5 * 60 * 1000;  // default to 5 minutes
 
     @Option(name = "size",
             description = "Restrict tests to a specific test size. " +
@@ -305,14 +308,24 @@ public class InstalledInstrumentationsTest
         if (mTests == null) {
 
             ListInstrumentationParser parser = new ListInstrumentationParser();
-            String pmListOutput = getDevice().executeShellCommand(PM_LIST_CMD);
+            CommandResult pmListResult = getDevice().executeShellV2Command(PM_LIST_CMD);
+            if (!CommandStatus.SUCCESS.equals(pmListResult.getStatus())) {
+                throw new HarnessRuntimeException(
+                        String.format(
+                                "Failed to execute '%s'." + "stdout: %s\nstderr: %s",
+                                PM_LIST_CMD, pmListResult.getStdout(), pmListResult.getStderr()),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
+            String pmListOutput = pmListResult.getStdout();
             String pmListLines[] = pmListOutput.split(LINE_SEPARATOR);
             parser.processNewLines(pmListLines);
 
             if (parser.getInstrumentationTargets().isEmpty()) {
-                throw new IllegalArgumentException(String.format(
-                        "No instrumentations were found on device %s - <%s>", getDevice()
-                                .getSerialNumber(), pmListOutput));
+                throw new HarnessRuntimeException(
+                        String.format(
+                                "No instrumentations were found on device %s - <%s>",
+                                getDevice().getSerialNumber(), pmListOutput),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
 
             int numUnshardedTests = 0;
@@ -438,7 +451,7 @@ public class InstalledInstrumentationsTest
         return mShellTimeout;
     }
 
-    int getTestTimeout() {
+    long getTestTimeout() {
         return mTestTimeout;
     }
 

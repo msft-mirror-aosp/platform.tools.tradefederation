@@ -83,8 +83,8 @@ public class ShowmapPullerMetricCollectorTest {
                         ">>> system_server (6910) <<<",
                         "size      RSS      PSS    clean    dirty    clean    dirty",
                         "-------- -------- --------",
-                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 rw- obj1",
-                        "11 21 31 41 51 61 71 81 91  101 111 121  131 141 r-- obj1",
+                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
+                        "11 21 31 41 51 61 71 81 91  101 111 121  131 141 15 r-- obj1",
                         "-------- -------- --------");
         writer.write(log);
         writer.close();
@@ -122,8 +122,8 @@ public class ShowmapPullerMetricCollectorTest {
                         ">>> system_server (6910) <<<",
                         "size      RSS      PSS    clean    dirty    clean    dirty",
                         "-------- -------- --------",
-                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 rw- obj1",
-                        "11 21 31 41 51 61 71 81 91  101 111 121  131 141 r-- obj2",
+                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
+                        "11 21 31 41 51 61 71 81 91  101 111 121  131 141 15 r-- obj2",
                         "-------- -------- --------");
         writer.write(log);
         writer.close();
@@ -162,9 +162,9 @@ public class ShowmapPullerMetricCollectorTest {
                         ">>> system_server (6910) <<<",
                         "size      RSS      PSS    clean    dirty    clean    dirty",
                         "-------- -------- --------",
-                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 rw- obj1",
-                        "11 21 31 41 51 61 71 81 91  101 111 121  131 141 r-- obj2",
-                        "87 32 96 87 11 05 23 48 100 000 121 1 13 1991 rwx obj3./apex",
+                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
+                        "11 21 31 41 51 61 71 81 91  101 111 121  131 141 15 r-- obj2",
+                        "87 32 96 87 11 05 23 48 100 000 121 1 13 1991 15 rwx obj3./apex",
                         "-------- -------- --------");
         writer.write(log);
         writer.close();
@@ -204,12 +204,12 @@ public class ShowmapPullerMetricCollectorTest {
                         ">>> system_server (6910) <<<",
                         "size      RSS      PSS    clean    dirty    clean    dirty",
                         "-------- -------- --------",
-                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 rw- obj1",
+                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
                         "-------- -------- --------",
                         "   >>> netd (7038) <<<   ",
                         "size      RSS      PSS    clean    dirty    clean    dirty",
                         "-------- -------- --------",
-                        "100 2021 3033 4092 500 6 7  8 9 100 110 120 130 140 rw- obj123",
+                        "100 2021 3033 4092 500 6 7  8 9 100 110 120 130 140 15 rw- obj123",
                         "-------- -------- --------");
         writer.write(log);
         writer.close();
@@ -254,12 +254,12 @@ public class ShowmapPullerMetricCollectorTest {
                         ">>> system_server (6910) <<<",
                         "size      RSS      PSS    clean    dirty    clean    dirty",
                         "-------- -------- --------",
-                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 rw- obj1",
+                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
                         "-------- -------- --------",
                         "   >>> netd (7038) <<<   ",
                         "size      RSS      PSS    clean    dirty    clean    dirty",
                         "-------- -------- --------",
-                        "100 2021 3033 4092 500 6 7  8 9 100 110 120 130 140 rw- obj123",
+                        "100 2021 3033 4092 500 6 7  8 9 100 110 120 130 140 15 rw- obj123",
                         "-------- -------- --------");
         writer.write(log);
         writer.close();
@@ -293,13 +293,13 @@ public class ShowmapPullerMetricCollectorTest {
                         ">>> system_server (6910) <<<",
                         "size      RSS      PSS    clean    dirty    clean    dirty",
                         "-------- -------- --------",
-                        "10 20 30 40 50 60 70    100   110  120  130 140 rw- obj1",
-                        "100 2021 3033 4092 500 6 7  8 9 100 110 120 130 140 rw- obj123",
+                        "10 20 30 40 50 60 70    100   110  120  130 140 15 rw- obj1",
+                        "100 2021 3033 4092 500 6 7  8 9 100 110 120 130 140 15 rw- obj123",
                         "-------- -------- --------",
                         "   >>> netd (7038) <<<   ",
                         "size      RSS      PSS    clean    dirty    clean    dirty",
                         "-------- -------- --------",
-                        "zzz abc 4%d -md 5,g --c 0sd  asd 9# 1*0 1! 1ew qqq 14: rw- obj123",
+                        "zzz abc 4%d -md 5,g --c 0sd  asd 9# 1*0 1! 1ew qqq 14: 15. rw- obj123",
                         "-------- -------- --------");
         writer.write(log);
         writer.close();

@@ -17,6 +17,7 @@ package com.android.tradefed.result.suite;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -85,6 +86,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     private static final String CASE_TAG = "TestCase";
     private static final String COMMAND_LINE_ARGS = "command_line_args";
     private static final String DEVICES_ATTR = "devices";
+    private static final String DEVICE_KERNEL_INFO_ATTR = "device_kernel_info";
     private static final String DONE_ATTR = "done";
     private static final String END_DISPLAY_TIME_ATTR = "end_display";
     private static final String END_TIME_ATTR = "end";
@@ -124,8 +126,10 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     private static final String START_TIME_ATTR = "start";
 
     private static final String SUMMARY_TAG = "Summary";
+    private static final String SYSTEM_IMG_INFO_ATTR = "system_img_info";
     private static final String TEST_TAG = "Test";
     private static final String TOTAL_TESTS_ATTR = "total_tests";
+    private static final String VENDOR_IMG_INFO_ATTR = "vendor_img_info";
 
     private static final String LOG_FILE_NAME_ATTR = "file_name";
 
@@ -255,6 +259,12 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                     sanitizeAttributesKey(key),
                     String.join(",", holder.context.getAttributes().get(key)));
         }
+        if (!holder.context.getBuildInfos().isEmpty()) {
+            IBuildInfo buildInfo = holder.context.getBuildInfos().get(0);
+            addBuildInfoAttributesIfNotNull(serializer, buildInfo, DEVICE_KERNEL_INFO_ATTR);
+            addBuildInfoAttributesIfNotNull(serializer, buildInfo, SYSTEM_IMG_INFO_ATTR);
+            addBuildInfoAttributesIfNotNull(serializer, buildInfo, VENDOR_IMG_INFO_ATTR);
+        }
         addBuildInfoAttributes(serializer, holder);
         serializer.endTag(NS, BUILD_TAG);
 
@@ -364,7 +374,9 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                 HandleLoggedFiles(serializer, individualResult);
 
                 for (Entry<String, String> metric :
-                        individualResult.getValue().getMetrics().entrySet()) {
+                        TfMetricProtoUtil.compatibleConvert(
+                                        individualResult.getValue().getProtoMetrics())
+                                .entrySet()) {
                     serializer.startTag(NS, METRIC_TAG);
                     serializer.attribute(NS, METRIC_KEY, metric.getKey());
                     serializer.text(sanitizeXmlContent(metric.getValue()));
@@ -736,5 +748,14 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
 
     private static String sanitizeAttributesKey(String attribute) {
         return attribute.replace(":", "_");
+    }
+
+    private static void addBuildInfoAttributesIfNotNull(
+            XmlSerializer serializer, IBuildInfo buildInfo, String attributeName)
+            throws IOException {
+        String attributeValue = buildInfo.getBuildAttributes().get(attributeName);
+        if (attributeValue != null) {
+            serializer.attribute(NS, attributeName, attributeValue);
+        }
     }
 }

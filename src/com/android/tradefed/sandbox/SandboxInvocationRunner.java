@@ -35,7 +35,14 @@ public class SandboxInvocationRunner {
     public static boolean prepareAndRun(
             TestInformation info, IConfiguration config, ITestInvocationListener listener)
             throws Throwable {
-        // TODO: refactor TestInvocation to be more modular in the sandbox handling
+        prepareSandbox(info, config, listener);
+        return runSandbox(info, config, listener);
+    }
+
+    /** Preparation step of the sandbox */
+    public static void prepareSandbox(
+            TestInformation info, IConfiguration config, ITestInvocationListener listener)
+            throws Throwable {
         ISandbox sandbox =
                 (ISandbox) config.getConfigurationObject(Configuration.SANDBOX_TYPE_NAME);
         if (sandbox == null) {
@@ -49,8 +56,19 @@ public class SandboxInvocationRunner {
             throw res;
         }
         PrettyPrintDelimiter.printStageDelimiter("Done with Sandbox Environment Setup");
+    }
+
+    /** Execution step of the sandbox */
+    public static boolean runSandbox(
+            TestInformation info, IConfiguration config, ITestInvocationListener listener)
+            throws Throwable {
+        ISandbox sandbox =
+                (ISandbox) config.getConfigurationObject(Configuration.SANDBOX_TYPE_NAME);
+        if (sandbox == null) {
+            throw new RuntimeException("Couldn't find the sandbox object.");
+        }
         try {
-            CommandResult result = sandbox.run(config, listener);
+            CommandResult result = sandbox.run(info, config, listener);
             return CommandStatus.SUCCESS.equals(result.getStatus());
         } finally {
             sandbox.tearDown();

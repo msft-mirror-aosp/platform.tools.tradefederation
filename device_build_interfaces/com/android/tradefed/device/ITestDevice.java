@@ -699,6 +699,9 @@ public interface ITestDevice extends INativeDevice {
      */
     public boolean isMultiUserSupported() throws DeviceNotAvailableException;
 
+    /** Returns whether the device uses headless system user mode. */
+    public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException;
+
     /**
      * Create a user with a given name and default flags 0.
      *
@@ -718,6 +721,19 @@ public interface ITestDevice extends INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public int createUser(String name, boolean guest, boolean ephemeral)
+            throws DeviceNotAvailableException, IllegalStateException;
+
+    /**
+     * Create a user with a given name and the provided flags
+     *
+     * @param name of the user to create on the device
+     * @param guest enable the user flag --guest during creation
+     * @param ephemeral enable the user flag --ephemeral during creation
+     * @param forTesting enable the test flag --for-testing during creation
+     * @return id of the created user
+     * @throws DeviceNotAvailableException
+     */
+    public int createUser(String name, boolean guest, boolean ephemeral, boolean forTesting)
             throws DeviceNotAvailableException, IllegalStateException;
 
     /**
@@ -826,6 +842,15 @@ public interface ITestDevice extends INativeDevice {
      * @throws DeviceRuntimeException if the output from the device is not as expected.
      */
     public Integer getPrimaryUserId() throws DeviceNotAvailableException;
+
+    /**
+     * Returns the main user id.
+     *
+     * @return the userId of the main user if there is one, and null if there is no main user.
+     * @throws DeviceNotAvailableException
+     * @throws DeviceRuntimeException if the output from the device is not as expected.
+     */
+    public Integer getMainUserId() throws DeviceNotAvailableException;
 
     /**
      * Return the id of the current running user. In case of error, return -10000.

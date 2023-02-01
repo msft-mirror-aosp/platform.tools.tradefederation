@@ -486,6 +486,13 @@ public class ProtoResultParser {
         String[] info = testcaseProto.getTestRecordId().split("#");
         TestDescription description = new TestDescription(info[0], info[1]);
         if (testcaseProto.hasEndTime()) {
+            // Allow end event that also report start in one go. When using StreamProtoResultReporter
+            // we can save some socket communication by reporting test cases start and end at the
+            // same time in some instances.
+            if (mCurrentTestCase == null) {
+                log("Test case started proto: %s", description.toString());
+                mListener.testStarted(description, timeStampToMillis(testcaseProto.getStartTime()));
+            }
             handleTestCaseEnd(description, testcaseProto);
             mCurrentTestCase = null;
         } else {
@@ -551,9 +558,6 @@ public class ProtoResultParser {
         if (!(mListener instanceof ILogSaverListener)) {
             return;
         }
-        if (!mReportLogs) {
-            return;
-        }
         ILogSaverListener logger = (ILogSaverListener) mListener;
         for (Entry<String, Any> entry : proto.getArtifactsMap().entrySet()) {
             try {
@@ -573,36 +577,40 @@ public class ProtoResultParser {
                                 info.getSize());
                 if (Strings.isNullOrEmpty(file.getPath())) {
                     CLog.e("Log '%s' was registered but without a path.", entry.getKey());
-                    return;
+                    continue;
                 }
                 File path = new File(file.getPath());
                 if (Strings.isNullOrEmpty(file.getUrl()) && path.exists()) {
                     LogDataType type = file.getType();
-                    try (InputStreamSource source = new FileInputStreamSource(path)) {
-                        // File might have already been compressed
-                        if (file.getPath().endsWith(LogDataType.ZIP.getFileExt())) {
-                            type = LogDataType.ZIP;
+                    if (mReportLogs) {
+                        try (InputStreamSource source = new FileInputStreamSource(path)) {
+                            // File might have already been compressed
+                            if (file.getPath().endsWith(LogDataType.ZIP.getFileExt())) {
+                                type = LogDataType.ZIP;
+                            }
+                            log("Logging %s from subprocess: %s ", entry.getKey(), file.getPath());
+                            logger.testLog(mFilePrefix + entry.getKey(), type, source);
                         }
-                        log("Logging %s from subprocess: %s ", entry.getKey(), file.getPath());
-                        logger.testLog(mFilePrefix + entry.getKey(), type, source);
                     }
-                    if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
+                    if (entry.getKey().startsWith(ActiveTrace.TRACE_KEY)
                             && LogDataType.PERFETTO.equals(type)) {
                         CLog.d("Log the subprocess trace");
                         TracingLogger.getActiveTrace().addSubprocessTrace(path);
                         FileUtil.deleteFile(path);
                     }
                 } else {
-                    log(
-                            "Logging %s from subprocess. url: %s, path: %s [exists: %s]",
-                            entry.getKey(), file.getUrl(), file.getPath(), path.exists());
-                    if (ActiveTrace.TRACE_KEY.equals(entry.getKey())
+                    if (entry.getKey().startsWith(ActiveTrace.TRACE_KEY)
                             && LogDataType.PERFETTO.equals(file.getType())
                             && path.exists()) {
                         CLog.d("Log the subprocess trace");
                         TracingLogger.getActiveTrace().addSubprocessTrace(path);
                     }
-                    logger.logAssociation(mFilePrefix + entry.getKey(), file);
+                    if (mReportLogs) {
+                        log(
+                                "Logging %s from subprocess. url: %s, path: %s [exists: %s]",
+                                entry.getKey(), file.getUrl(), file.getPath(), path.exists());
+                        logger.logAssociation(mFilePrefix + entry.getKey(), file);
+                    }
                 }
             } catch (InvalidProtocolBufferException e) {
                 CLog.e("Couldn't unpack %s as a LogFileInfo", entry.getKey());
@@ -662,6 +670,9 @@ public class ProtoResultParser {
             Set<String> attKeys = new HashSet<>(attributes.keySet());
             for (String attKey : attKeys) {
                 if (attKey.startsWith(groupKey.toString() + ":")) {
+                    if (attributes.get(attKey) == null) {
+                        continue;
+                    }
                     List<String> values = attributes.get(attKey);
                     attributes.remove(attKey);
                     if (mSkipParsingAccounting) {
@@ -694,6 +705,9 @@ public class ProtoResultParser {
             attributes.remove(key.toString());
 
             if (mSkipParsingAccounting) {
+                continue;
+            }
+            if (values == null) {
                 continue;
             }
             for (String val : values) {

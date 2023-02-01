@@ -29,6 +29,7 @@ import com.android.tradefed.util.FileUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.net.HostAndPort;
 
 import org.json.JSONArray;
@@ -41,11 +42,43 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Structure to hold relevant data for a given GCE AVD instance. */
 public class GceAvdInfo {
+
+    // Patterns to match from Oxygen client's return message to identify error.
+    private static final ImmutableMap<InfraErrorIdentifier, String> OXYGEN_ERROR_PATTERN_MAP =
+            ImmutableMap.of(
+                    InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
+                            "Lease aborted due to launcher failure",
+                    InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN, "server_shutting_down",
+                    InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR,
+                            "UNAVAILABLE: HTTP status code 502",
+                    InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT, "DeadlineExceeded",
+                    InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED, "RESOURCE_EXHAUSTED",
+                    InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "502:Bad Gateway",
+                    InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR, "OxygenClient");
+
+    // Error message for specify Oxygen error.
+    private static final ImmutableMap<InfraErrorIdentifier, String> OXYGEN_ERROR_MESSAGE_MAP =
+            ImmutableMap.of(
+                    InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
+                            "Oxygen failed to boot up the device properly",
+                    InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN,
+                            "Unexpected error from Oxygen service",
+                    InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR,
+                            "Unexpected error from Oxygen service",
+                    InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT,
+                            "Unexpected error from Oxygen service. Request timed out.",
+                    InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED,
+                            "Oxygen ran out of capacity to lease virtual device",
+                    InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE,
+                            "Unexpected error from Oxygen service",
+                    InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR,
+                            "Oxygen client failed to lease a device");
 
     public static class LogFileEntry {
         public final String path;
@@ -99,6 +132,8 @@ public class GceAvdInfo {
     private HashMap<String, String> mBuildVars;
     private List<LogFileEntry> mLogs;
     private boolean mIsIpPreconfigured = false;
+    private Integer mDeviceOffset = null;
+    private String mInstanceUser = null;
 
     public static enum GceStatus {
         SUCCESS,
@@ -133,6 +168,10 @@ public class GceAvdInfo {
                 + mInstanceName
                 + ", mHostAndPort="
                 + mHostAndPort
+                + ", mDeviceOffset="
+                + mDeviceOffset
+                + ", mInstanceUser="
+                + mInstanceUser
                 + ", mErrorType="
                 + mErrorType
                 + ", mErrors="
@@ -187,6 +226,22 @@ public class GceAvdInfo {
 
     public boolean isIpPreconfigured() {
         return mIsIpPreconfigured;
+    }
+
+    public void setDeviceOffset(Integer deviceOffset) {
+        mDeviceOffset = deviceOffset;
+    }
+
+    public Integer getDeviceOffset() {
+        return mDeviceOffset;
+    }
+
+    public void setInstanceUser(String instanceUser) {
+        mInstanceUser = instanceUser;
+    }
+
+    public String getInstanceUser() {
+        return mInstanceUser;
     }
 
     /**
@@ -324,11 +379,16 @@ public class GceAvdInfo {
                             "Oxygen client binary CLI timed out",
                             GceStatus.FAIL));
         } else {
+            CLog.d(
+                    "OxygenClient - CommandStatus: %s, output: %s\", output",
+                    oxygenCliStatus, oxygenRes.getStdout() + " " + oxygenRes.getStderr());
+            InfraErrorIdentifier identifier = refineOxygenErrorType(oxygenRes.getStderr());
             throw new TargetSetupError(
-                    String.format(
-                            "OxygenClient - CommandStatus: %s, output: %s",
-                            oxygenCliStatus, oxygenRes.getStdout() + " " + oxygenRes.getStderr()),
-                    refineOxygenErrorType(oxygenRes.getStderr()));
+                    OXYGEN_ERROR_MESSAGE_MAP.getOrDefault(
+                            identifier, "Oxygen client failed to lease a device"),
+                    new Exception(
+                            oxygenRes.getStderr()), // Include the original error message as cause.
+                    identifier);
         }
     }
 
@@ -371,21 +431,10 @@ public class GceAvdInfo {
      * @return InfraErrorIdentifier for the Oxygen service error.
      */
     private static InfraErrorIdentifier refineOxygenErrorType(String errors) {
-        if (errors.contains("Lease aborted due to launcher failure")) {
-            return InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE;
-        } else if (errors.contains("server_shutting_down")) {
-            return InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN;
-        } else if (errors.contains("UNAVAILABLE: HTTP status code 502")) {
-            return InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR;
-        } else if (errors.contains("DeadlineExceeded")) {
-            return InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT;
-        } else if (errors.contains("RESOURCE_EXHAUSTED")) {
-            return InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED;
-        } else if (errors.contains("502:Bad Gateway")) {
-            return InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE;
-        } else if (errors.contains("OxygenClient")) {
-            return InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR;
-        }
+        for (Map.Entry<InfraErrorIdentifier, String> entry : OXYGEN_ERROR_PATTERN_MAP.entrySet()) {
+            if (errors.contains(entry.getValue()))
+                return entry.getKey();
+         }
 
         return InfraErrorIdentifier.ACLOUD_OXYGEN_LEASE_ERROR;
     }
@@ -455,6 +504,23 @@ public class GceAvdInfo {
                     InvocationMetricKey.CF_LAUNCH_CVD_TIME,
                     Double.valueOf(Double.parseDouble(launch_cvd_time) * 1000).longValue());
         }
+        JSONObject fetch_cvd_wrapper_log = json.optJSONObject("fetch_cvd_wrapper_log");
+        if (fetch_cvd_wrapper_log != null) {
+            String cf_cache_wait_time_sec =
+                    fetch_cvd_wrapper_log.optString("cf_cache_wait_time_sec");
+            if (!Strings.isNullOrEmpty(cf_cache_wait_time_sec)) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_CACHE_WAIT_TIME,
+                        Integer.parseInt(cf_cache_wait_time_sec));
+            }
+            String cf_artifacts_fetch_source =
+                    fetch_cvd_wrapper_log.optString("cf_artifacts_fetch_source");
+            if (!Strings.isNullOrEmpty(cf_artifacts_fetch_source)) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_ARTIFACTS_FETCH_SOURCE, cf_artifacts_fetch_source);
+            }
+        }
+
         if (!InvocationMetricLogger.getInvocationMetrics()
                 .containsKey(InvocationMetricKey.CF_INSTANCE_COUNT.toString())) {
             InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.CF_INSTANCE_COUNT, 1);

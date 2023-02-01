@@ -23,6 +23,7 @@ import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.UniqueMultiMap;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -98,6 +99,12 @@ public class CommandOptions implements ICommandOptions {
             + "instead of bugreport during the test invocation final bugreport.")
     private boolean mTakeBugreportzOnInvocationEnded = false;
 
+    @Option(
+            name = "disable-conditional-bugreport",
+            description =
+                    "Disable the optimization to capture ANR instead of bugreport if no failure.")
+    private boolean mDisableConditionalBugreport = false;
+
     @Option(name = "invocation-timeout", description =
             "the maximum time to wait for an invocation to terminate before attempting to force"
             + "stop it.", isTimeVal = true)
@@ -168,6 +175,11 @@ public class CommandOptions implements ICommandOptions {
         description = "Whether or not to trigger --use-sandbox in the remote invocation."
     )
     private boolean mUseRemoteSandbox = false;
+
+    @Option(
+            name = "deviceless-remote-exec",
+            description = "Whether or not to trigger --null-deviec in the remote invocation.")
+    private boolean mDevicelessRemoteExecution = false;
 
     @Deprecated
     @Option(
@@ -280,6 +292,15 @@ public class CommandOptions implements ICommandOptions {
 
     @Option(name = "enable-tracing", description = "Enable test invocation tracing.")
     private boolean mTracingEnabled = true;
+
+    public static final String JDK_FOLDER_OPTION_NAME = "jdk-folder-for-subprocess";
+
+    @Option(
+            name = JDK_FOLDER_OPTION_NAME,
+            description =
+                    "Whenever the java execution is forked to another subprocess, use this jdk"
+                            + " folder instead of current one.")
+    private File mJdkFolder;
 
     /**
      * Set the help mode for the config.
@@ -416,6 +437,12 @@ public class CommandOptions implements ICommandOptions {
         mTakeBugreportzOnInvocationEnded = takeBugreportz;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public boolean isConditionalBugreportDisabled() {
+        return mDisableConditionalBugreport;
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -548,6 +575,12 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public boolean shouldUseRemoteSandboxMode() {
         return mUseRemoteSandbox;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isRemoteInvocationDeviceless() {
+        return mDevicelessRemoteExecution;
     }
 
     /** {@inheritDoc} */
@@ -697,6 +730,9 @@ public class CommandOptions implements ICommandOptions {
         if (filterPreviousPassedTests()) {
             tags.add("incremental_retry");
         }
+        if (mAutoCollectors.contains(AutoLogCollector.DEVICE_TRACE)) {
+            tags.add("device_tracing_enable");
+        }
         return tags;
     }
 
@@ -722,5 +758,11 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public boolean isTracingEnabled() {
         return mTracingEnabled;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public File getJdkFolderForSubprocess() {
+        return mJdkFolder;
     }
 }

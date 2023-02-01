@@ -114,6 +114,19 @@ public interface ICommandScheduler {
             throws ConfigurationException, NoDeviceException;
 
     /**
+     * Directly execute command on already allocated devices.
+     *
+     * @param listener the {@link ICommandScheduler.IScheduledInvocationListener} to be informed
+     * @param devices the {@link List<ITestDevice>} to use
+     * @param args the command arguments
+     * @return The invocation id of the scheduled command.
+     * @throws ConfigurationException if command was invalid
+     */
+    public long execCommand(
+            IScheduledInvocationListener listener, List<ITestDevice> devices, String[] args)
+            throws ConfigurationException;
+
+    /**
      * Directly execute command on already allocated device.
      *
      * @param listener the {@link ICommandScheduler.IScheduledInvocationListener} to be informed
@@ -315,4 +328,7 @@ public interface ICommandScheduler {
 
     /** Set the client to report harness data */
     public void setClearcutClient(ClearcutClient client);
+
+    /** Returns true if the device is used by an active invocation thread. */
+    public boolean isDeviceInInvocationThread(ITestDevice device);
 }

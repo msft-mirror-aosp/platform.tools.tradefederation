@@ -55,6 +55,7 @@ import com.android.tradefed.util.keystore.KeyStoreException;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.impl.history.DefaultHistory;
@@ -1035,7 +1036,11 @@ public class Console extends Thread {
     @VisibleForTesting
     String getConsoleInput() throws IOException {
         if (mConsoleReader != null) {
-            return mConsoleReader.readLine(getConsolePrompt());
+            try {
+                return mConsoleReader.readLine(getConsolePrompt());
+            } catch (EndOfFileException e) {
+                return null;
+            }
         } else {
             return null;
         }

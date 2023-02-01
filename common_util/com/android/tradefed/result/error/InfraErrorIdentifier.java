@@ -42,6 +42,8 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     TRADEFED_SHUTTING_DOWN(500_014, FailureStatus.INFRA_FAILURE),
     LAB_HOST_FILESYSTEM_FULL(500_015, FailureStatus.INFRA_FAILURE),
     TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN(500_016, FailureStatus.CANCELLED),
+    SCHEDULING_ERROR(500_017, FailureStatus.INFRA_FAILURE),
+
     // 500_400 - 500_500: General errors - subprocess related
     INTERRUPTED_DURING_SUBPROCESS_SHUTDOWN(500_401, FailureStatus.INFRA_FAILURE),
 
@@ -95,6 +97,7 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     KEYSTORE_CONFIG_ERROR(505_255, FailureStatus.DEPENDENCY_ISSUE),
     TEST_MAPPING_PATH_COLLISION(505_256, FailureStatus.DEPENDENCY_ISSUE),
     TEST_MAPPING_FILE_FORMAT_ISSUE(505_257, FailureStatus.CUSTOMER_ISSUE),
+    TEST_MAPPING_FILE_NOT_EXIST(505_258, FailureStatus.CUSTOMER_ISSUE),
 
     UNDETERMINED(510_000, FailureStatus.UNSET);
 

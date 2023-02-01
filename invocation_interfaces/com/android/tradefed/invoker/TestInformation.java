@@ -44,6 +44,9 @@ public class TestInformation {
 
     private int mPrimaryDeviceIndex = 0;
 
+    // Flag to indicate if the test was informed of timeout
+    private boolean mTestTimedOut = false;
+
     private TestInformation(Builder builder) {
         mContext = builder.mContext;
         mProperties = builder.mProperties;
@@ -132,6 +135,16 @@ public class TestInformation {
     /** Returns the folder where all the dependencies are stored for an invocation. */
     public File dependenciesFolder() {
         return mDependenciesFolder;
+    }
+
+    /** Returns whether the test was informed of timeout or not. */
+    public boolean isTestTimedOut() {
+        return mTestTimedOut;
+    }
+
+    /** Notifies that test phase timeout has been triggered for this test. */
+    public void notifyTimeout() {
+        mTestTimedOut = true;
     }
 
     /** Builder to create a {@link TestInformation} instance. */

@@ -67,6 +67,7 @@ public enum LogDataType {
     MEM_INFO("txt", "text/plain", false, true),
     TOP("txt", "text/plain", false, true),
     DUMPSYS("txt", "text/plain", false, true),
+    DUMPTRACE("txt", "text/plain", true, true),
     COMPACT_MEMINFO("txt", "text/plain", false, true), // dumpsys meminfo -c
     SERVICES("txt", "text/plain", false, true), // dumpsys activity services
     GFX_INFO("txt", "text/plain", false, true), // dumpsys gfxinfo
@@ -90,6 +91,7 @@ public enum LogDataType {
             true, // b/230070438: don't compress this file
             true), // ScreenshotTest proto result
     CUTTLEFISH_LOG("txt", "text/plain", true, true), // Log from cuttlefish instance
+    TOMBSTONEZ("zip", "application/zip", true, false),
     /* Unknown file type */
     UNKNOWN("dat", "text/plain", false, false);
 

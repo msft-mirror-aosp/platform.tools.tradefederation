@@ -40,10 +40,11 @@ import com.proto.tradefed.invocation.TestInvocationManagementGrpc.TestInvocation
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -59,7 +60,7 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
     private final Server mServer;
     private final ICommandScheduler mCommandScheduler;
     private final DeviceManagementGrpcServer mDeviceReservationManager;
-    private Map<String, InvocationInformation> mTracker = new HashMap<>();
+    private Map<String, InvocationInformation> mTracker = new ConcurrentHashMap<>();
 
     public class InvocationInformation {
         public final long invocationId;
@@ -120,6 +121,9 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
     public void shutdown() throws InterruptedException {
         if (mServer != null) {
             CLog.d("Stopping invocation server.");
+            if (mTracker.size() > 0) {
+                CLog.d("Remaining tracked test invocations: %s", mTracker.size());
+            }
             mServer.shutdown();
             mServer.awaitTermination();
         }
@@ -141,15 +145,15 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
             fileReporter.setGranularResults(false);
             ScheduledInvocationForwarder forwarder =
                     new ScheduledInvocationForwarder(handler, fileReporter);
-            ITestDevice device = null;
+            List<ITestDevice> devices = null;
             if (!request.getReservationIdList().isEmpty()) {
-                device = getReservedDevices(request.getReservationIdList());
+                devices = getReservedDevices(request.getReservationIdList());
             }
             long invocationId = -1;
-            if (device == null) {
+            if (devices == null) {
                 invocationId = mCommandScheduler.execCommand(forwarder, command);
             } else {
-                invocationId = mCommandScheduler.execCommand(forwarder, device, command);
+                invocationId = mCommandScheduler.execCommand(forwarder, devices, command);
             }
             if (invocationId == -1) {
                 responseBuilder.setCommandErrorInfo(
@@ -263,17 +267,20 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
         return null;
     }
 
-    /** Fetch the device associated with reservation. TODO: Support multi-devices */
-    private ITestDevice getReservedDevices(List<String> reservationIds) {
+    private List<ITestDevice> getReservedDevices(List<String> reservationIds) {
         if (mDeviceReservationManager == null) {
             return null;
         }
+
+        List<ITestDevice> devices = new ArrayList<>();
         for (String id : reservationIds) {
             ITestDevice device = mDeviceReservationManager.getDeviceFromReservation(id);
-            if (device != null) {
-                return device;
+            if (device == null) {
+                throw new RuntimeException(
+                        String.format("Device with reservationId %s not found", id));
             }
+            devices.add(device);
         }
-        return null;
+        return devices;
     }
 }

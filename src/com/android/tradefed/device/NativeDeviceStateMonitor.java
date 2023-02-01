@@ -52,8 +52,9 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
     private TestDeviceState mDeviceState;
 
     /** the time in ms to wait between 'poll for responsiveness' attempts */
-    private static final long CHECK_POLL_TIME = 3 * 1000;
-    protected static final long MAX_CHECK_POLL_TIME = 30 * 1000;
+    private static final long CHECK_POLL_TIME = 1 * 1000;
+
+    protected static final long MAX_CHECK_POLL_TIME = 10 * 1000;
     /** the maximum operation time in ms for a 'poll for responsiveness' command */
     protected static final int MAX_OP_TIME = 10 * 1000;
     /** Reference for TMPFS from 'man statfs' */
@@ -314,6 +315,10 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
                                         60000L,
                                         TimeUnit.MILLISECONDS);
                         String bootFlag = receiver.getOutput();
+                        if (bootFlag != null) {
+                            // Workaround for microdroid: `adb shell` prints permission warnings
+                            bootFlag = bootFlag.lines().reduce((a, b) -> b).orElse(null);
+                        }
                         if (bootFlag != null && "1".equals(bootFlag.trim())) {
                             return BUSY_WAIT_STATUS.SUCCESS;
                         }

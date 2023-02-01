@@ -31,7 +31,7 @@ java_library_host {
         "com/**/*.java",
     ],
     static_libs: [
-        "commons-compress-prebuilt",
+        "apache-commons-compress",
         // Trace protos to do invocation tracing
         "perfetto_trace-full",
     ],

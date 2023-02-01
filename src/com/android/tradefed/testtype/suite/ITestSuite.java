@@ -760,16 +760,23 @@ public abstract class ITestSuite
                                 CollectorHelper.cloneCollectors(mMetricCollectors)) {
                             if (collector.isDisabled()) {
                                 CLog.d("%s has been disabled. Skipping.", collector);
+                            } else if (!collector.captureModuleLevel()) {
+                                CLog.d("%s isn't applicable at module level. Skipping.", collector);
                             } else {
                                 if (collector instanceof IConfigurationReceiver) {
                                     ((IConfigurationReceiver) collector)
                                             .setConfiguration(module.getModuleConfiguration());
                                 }
-                                listenerWithCollectors =
-                                        collector.init(
-                                                module.getModuleInvocationContext(),
-                                                listenerWithCollectors);
-                                TfObjectTracker.countWithParents(collector.getClass());
+                                try (CloseableTraceScope ignored =
+                                        new CloseableTraceScope(
+                                                "init_for_module_"
+                                                        + collector.getClass().getSimpleName())) {
+                                    listenerWithCollectors =
+                                            collector.init(
+                                                    module.getModuleInvocationContext(),
+                                                    listenerWithCollectors);
+                                    TfObjectTracker.countWithParents(collector.getClass());
+                                }
                             }
                         }
                     }
@@ -856,46 +863,51 @@ public abstract class ITestSuite
             List<ITestInvocationListener> moduleListeners,
             TestFailureListener failureListener)
             throws DeviceNotAvailableException {
-        if (mRebootPerModule) {
-            if ("user".equals(mDevice.getProperty(DeviceProperties.BUILD_TYPE))) {
-                CLog.e(
-                        "reboot-per-module should only be used during development, "
-                                + "this is a\" user\" build device");
-            } else {
-                CLog.d("Rebooting device before starting next module");
-                mDevice.reboot();
+        Map<String, String> properties = new LinkedHashMap<>();
+        try (CloseableTraceScope ignored = new CloseableTraceScope("module_pre_check")) {
+            if (mRebootPerModule) {
+                if ("user".equals(mDevice.getProperty(DeviceProperties.BUILD_TYPE))) {
+                    CLog.e(
+                            "reboot-per-module should only be used during development, "
+                                    + "this is a\" user\" build device");
+                } else {
+                    CLog.d("Rebooting device before starting next module");
+                    mDevice.reboot();
+                }
             }
-        }
 
-        if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
-            runPreModuleCheck(module.getId(), mSystemStatusCheckers, mDevice, listener);
-        }
-        if (mCollectTestsOnly) {
-            module.setCollectTestsOnly(mCollectTestsOnly);
-        }
-        // Pass the run defined collectors to be used.
-        module.setMetricCollectors(CollectorHelper.cloneCollectors(mMetricCollectors));
-        // Pass the main invocation logSaver
-        module.setLogSaver(mMainConfiguration.getLogSaver());
+            if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
+                properties.putAll(
+                        runPreModuleCheck(
+                                module.getId(), mSystemStatusCheckers, mDevice, listener));
+            }
+            if (mCollectTestsOnly) {
+                module.setCollectTestsOnly(mCollectTestsOnly);
+            }
+            // Pass the run defined collectors to be used.
+            module.setMetricCollectors(CollectorHelper.cloneCollectors(mMetricCollectors));
+            // Pass the main invocation logSaver
+            module.setLogSaver(mMainConfiguration.getLogSaver());
 
-        IRetryDecision decision = mMainConfiguration.getRetryDecision();
-        // Pass whether we should merge the attempts of not
-        if (mMergeAttempts
-                && decision.getMaxRetryCount() > 1
-                && !RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())) {
-            CLog.d("Overriding '--merge-attempts' to false for auto-retry.");
-            mMergeAttempts = false;
-        }
-        module.setMergeAttemps(mMergeAttempts);
-        // Pass the retry decision to be used.
-        module.setRetryDecision(decision);
-        // Restore the config, as the setter might have override it with module config.
-        if (decision instanceof IConfigurationReceiver) {
-            ((IConfigurationReceiver) decision).setConfiguration(mMainConfiguration);
-        }
+            IRetryDecision decision = mMainConfiguration.getRetryDecision();
+            // Pass whether we should merge the attempts of not
+            if (mMergeAttempts
+                    && decision.getMaxRetryCount() > 1
+                    && !RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())) {
+                CLog.d("Overriding '--merge-attempts' to false for auto-retry.");
+                mMergeAttempts = false;
+            }
+            module.setMergeAttemps(mMergeAttempts);
+            // Pass the retry decision to be used.
+            module.setRetryDecision(decision);
+            // Restore the config, as the setter might have override it with module config.
+            if (decision instanceof IConfigurationReceiver) {
+                ((IConfigurationReceiver) decision).setConfiguration(mMainConfiguration);
+            }
 
-        module.setEnableDynamicDownload(mEnableDynamicDownload);
-        module.transferSuiteLevelOptions(mMainConfiguration);
+            module.setEnableDynamicDownload(mEnableDynamicDownload);
+            module.transferSuiteLevelOptions(mMainConfiguration);
+        }
         // Actually run the module
         module.run(
                 moduleInfo,
@@ -905,7 +917,15 @@ public abstract class ITestSuite
                 getConfiguration().getRetryDecision().getMaxRetryCount());
 
         if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
-            runPostModuleCheck(module.getId(), mSystemStatusCheckers, mDevice, listener);
+            try (CloseableTraceScope ignored = new CloseableTraceScope("module_post_check")) {
+                properties.putAll(
+                        runPostModuleCheck(
+                                module.getId(), mSystemStatusCheckers, mDevice, listener));
+            }
+        }
+        for (Map.Entry<String, String> entry : properties.entrySet()) {
+            module.getModuleInvocationContext()
+                    .addInvocationAttribute(entry.getKey(), entry.getValue());
         }
     }
 
@@ -913,7 +933,7 @@ public abstract class ITestSuite
      * Helper to run the System Status checkers preExecutionChecks defined for the test and log
      * their failures.
      */
-    private void runPreModuleCheck(
+    private Map<String, String> runPreModuleCheck(
             String moduleName,
             List<ISystemStatusChecker> checkers,
             ITestDevice device,
@@ -922,6 +942,7 @@ public abstract class ITestSuite
         long startTime = System.currentTimeMillis();
         CLog.i("Running system status checker before module execution: %s", moduleName);
         Map<String, String> failures = new LinkedHashMap<>();
+        Map<String, String> properties = new LinkedHashMap<>();
         boolean bugreportNeeded = false;
         for (ISystemStatusChecker checker : checkers) {
             // Track usage of the checker
@@ -938,10 +959,12 @@ public abstract class ITestSuite
             try {
                 result = checker.preExecutionCheck(device);
             } catch (RuntimeException e) {
+                CLog.e(e);
                 // Catch RuntimeException to avoid leaking throws that go to the invocation.
                 result.setErrorMessage(e.getMessage());
                 result.setBugreportNeeded(true);
             }
+            properties.putAll(result.getModuleProperties());
             if (!CheckStatus.SUCCESS.equals(result.getStatus())) {
                 String errorMessage =
                         (result.getErrorMessage() == null) ? "" : result.getErrorMessage();
@@ -960,13 +983,14 @@ public abstract class ITestSuite
 
         // We report System checkers like tests.
         reportModuleCheckerResult(MODULE_CHECKER_PRE, moduleName, failures, startTime, listener);
+        return properties;
     }
 
     /**
      * Helper to run the System Status checkers postExecutionCheck defined for the test and log
      * their failures.
      */
-    private void runPostModuleCheck(
+    private Map<String, String> runPostModuleCheck(
             String moduleName,
             List<ISystemStatusChecker> checkers,
             ITestDevice device,
@@ -975,6 +999,7 @@ public abstract class ITestSuite
         long startTime = System.currentTimeMillis();
         CLog.i("Running system status checker after module execution: %s", moduleName);
         Map<String, String> failures = new LinkedHashMap<>();
+        Map<String, String> properties = new LinkedHashMap<>();
         boolean bugreportNeeded = false;
         for (ISystemStatusChecker checker : checkers) {
             // Check if the status checker should be skipped.
@@ -986,6 +1011,7 @@ public abstract class ITestSuite
             try {
                 result = checker.postExecutionCheck(device);
             } catch (RuntimeException e) {
+                CLog.e(e);
                 // Catch RuntimeException to avoid leaking throws that go to the invocation.
                 result.setErrorMessage(e.getMessage());
                 result.setBugreportNeeded(true);
@@ -999,6 +1025,7 @@ public abstract class ITestSuite
                         new DeviceNotAvailableException(message, dnae, dnae.getSerial());
                 throw wrapper;
             }
+            properties.putAll(result.getModuleProperties());
             if (!CheckStatus.SUCCESS.equals(result.getStatus())) {
                 String errorMessage =
                         (result.getErrorMessage() == null) ? "" : result.getErrorMessage();
@@ -1017,6 +1044,7 @@ public abstract class ITestSuite
 
         // We report System checkers like tests.
         reportModuleCheckerResult(MODULE_CHECKER_POST, moduleName, failures, startTime, listener);
+        return properties;
     }
 
     /** Helper to report status checker results as test results. */
@@ -1278,6 +1306,10 @@ public abstract class ITestSuite
             ModuleDefinition module = runModules.remove(0);
             module.reportNotExecuted(listener, message);
         }
+    }
+
+    public MultiMap<String, String> getModuleMetadataIncludeFilters() {
+        return mModuleMetadataIncludeFilter;
     }
 
     public void addModuleMetadataIncludeFilters(MultiMap<String, String> filters) {

@@ -20,6 +20,7 @@ import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GCSFileDownloader;
 
@@ -47,7 +48,10 @@ public class OxygenUtil {
                             new AbstractMap.SimpleEntry<>(
                                     Pattern.compile(".*bugreport.*zip"), LogDataType.BUGREPORTZ),
                             new AbstractMap.SimpleEntry<>(
-                                    Pattern.compile(".*bugreport.*txt"), LogDataType.BUGREPORT))
+                                    Pattern.compile(".*bugreport.*txt"), LogDataType.BUGREPORT),
+                            new AbstractMap.SimpleEntry<>(
+                                    Pattern.compile(".*tombstones-zip.*zip"),
+                                    LogDataType.TOMBSTONEZ))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /** Default constructor of OxygenUtil */
@@ -68,13 +72,19 @@ public class OxygenUtil {
     /**
      * Download error logs from GCS when Oxygen failed to launch a virtual device.
      *
-     * @param error The error message returned from Oxygen service
+     * @param error TargetSetupError raised when leasing device through Oxygen service.
      * @param logger The {@link ITestLogger} where to log the file
      */
-    public void downloadLaunchFailureLogs(String error, ITestLogger logger) {
-        CLog.d("Downloading device launch failure logs based on error message: %s", error);
+    public void downloadLaunchFailureLogs(TargetSetupError error, ITestLogger logger) {
+        String errorMessage = error.getMessage();
+        if (error.getCause() != null) {
+            // Also include the message from the internal cause.
+            errorMessage = String.format("%s %s", errorMessage, error.getCause().getMessage());
+        }
+
+        CLog.d("Downloading device launch failure logs based on error message: %s", errorMessage);
         Pattern pattern = Pattern.compile(".*/storage/browser/(.*)\\?&project=.*", Pattern.DOTALL);
-        Matcher matcher = pattern.matcher(error);
+        Matcher matcher = pattern.matcher(errorMessage);
         if (!matcher.find()) {
             CLog.d("Error message doesn't contain expected GCS link.");
             return;
@@ -97,7 +107,12 @@ public class OxygenUtil {
                                             .relativize(file.toPath())
                                             .toString()
                                             .replace(File.separatorChar, '_');
-                    logger.testLog(logFileName, LogDataType.TEXT, data);
+                    LogDataType logDataType = getDefaultLogType(logFileName);
+                    if (logDataType == LogDataType.UNKNOWN) {
+                        // Default log type to be CUTTLEFISH_LOG to avoid compression.
+                        logDataType = LogDataType.CUTTLEFISH_LOG;
+                    }
+                    logger.testLog(logFileName, logDataType, data);
                 }
             }
         } catch (Exception e) {

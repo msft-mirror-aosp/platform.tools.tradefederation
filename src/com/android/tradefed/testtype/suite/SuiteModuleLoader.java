@@ -67,6 +67,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Retrieves Compatibility test module definitions from the repository. TODO: Add the expansion of
@@ -88,6 +89,7 @@ public class SuiteModuleLoader {
     private boolean mOptimizeMainlineTest = false;
     private boolean mIgnoreNonPreloadedMainlineModule = false;
     private boolean mAllowOptionalParameterizedModules = false;
+    private boolean mLoadConfigsWithIncludeFilters = false;
     private ModuleParameters mForcedModuleParameter = null;
     private Set<ModuleParameters> mExcludedModuleParameters = new HashSet<>();
     private Set<DeviceFoldableState> mFoldableStates = new LinkedHashSet<>();
@@ -145,6 +147,11 @@ public class SuiteModuleLoader {
         mAllowOptionalParameterizedModules = allowed;
     }
 
+    /** Sets whether or not to load test config based on the given include-filter. */
+    public final void setLoadConfigsWithIncludeFilters(boolean allowed) {
+        mLoadConfigsWithIncludeFilters = allowed;
+    }
+
     /** Sets the only {@link ModuleParameters} type that should be run. */
     public final void setModuleParameter(ModuleParameters param) {
         mForcedModuleParameter = param;
@@ -162,9 +169,7 @@ public class SuiteModuleLoader {
 
     /** Main loading of configurations, looking into the specified files */
     public LinkedHashMap<String, IConfiguration> loadConfigsFromSpecifiedPaths(
-            List<File> listConfigFiles,
-            Set<IAbi> abis,
-            String suiteTag) {
+            List<File> listConfigFiles, Set<IAbi> abis, String suiteTag) {
         LinkedHashMap<String, IConfiguration> toRun = new LinkedHashMap<>();
         for (File configFile : listConfigFiles) {
             toRun.putAll(
@@ -185,6 +190,23 @@ public class SuiteModuleLoader {
         List<File> listConfigFiles = new ArrayList<>();
         listConfigFiles.addAll(
                 ConfigurationUtil.getConfigNamesFileFromDirs(suitePrefix, testsDirs, patterns));
+        if (mLoadConfigsWithIncludeFilters) {
+            CLog.i("Loading test configs based on the given include-filter.");
+            Set<String> filteredConfigNames = new HashSet<>();
+            for (LinkedHashSet<SuiteTestFilter> entry : mIncludeFilters.values()) {
+                for (SuiteTestFilter file : entry) {
+                    // Collect the test config name based on the given include filter.
+                    filteredConfigNames.add(String.format("%s.config", file.getBaseName()));
+                }
+            }
+            // Filter the test configs out based on the collected test config names.
+            List<File> filteredConfigs =
+                    listConfigFiles.stream()
+                            .filter(f -> filteredConfigNames.contains(f.getName()))
+                            .collect(Collectors.toList());
+            listConfigFiles.clear();
+            listConfigFiles.addAll(filteredConfigs);
+        }
         // Ensure stable initial order of configurations.
         Collections.sort(listConfigFiles);
         toRun.putAll(loadConfigsFromSpecifiedPaths(listConfigFiles, abis, suiteTag));
@@ -209,9 +231,7 @@ public class SuiteModuleLoader {
 
     /** Main loading of configurations, looking into the specified resources on the classpath. */
     public LinkedHashMap<String, IConfiguration> loadTfConfigsFromSpecifiedPaths(
-        List<String> configs,
-        Set<IAbi> abis,
-        String suiteTag) {
+            List<String> configs, Set<IAbi> abis, String suiteTag) {
         LinkedHashMap<String, IConfiguration> toRun = new LinkedHashMap<>();
         for (String configName : configs) {
             toRun.putAll(loadOneConfig(configName, configName, abis, suiteTag));
@@ -236,8 +256,11 @@ public class SuiteModuleLoader {
             String moduleId,
             Map<String, LinkedHashSet<SuiteTestFilter>> includeFilters,
             Map<String, LinkedHashSet<SuiteTestFilter>> excludeFilters) {
+
         if (!(test instanceof ITestFilterReceiver)) {
-            CLog.e("Test in module %s does not implement ITestFilterReceiver.", moduleId);
+            CLog.e(
+                    "Test (%s) in module %s does not implement ITestFilterReceiver.",
+                    test.getClass().getName(), moduleId);
             return;
         }
         LinkedHashSet<SuiteTestFilter> mdIncludes = getFilterList(includeFilters, moduleId);
@@ -281,7 +304,7 @@ public class SuiteModuleLoader {
                     if (parameter instanceof FoldableExpandingHandler) {
                         for (IModuleParameterHandler fParam :
                                 ((FoldableExpandingHandler) parameter)
-                                    .expandHandler(mFoldableStates)) {
+                                        .expandHandler(mFoldableStates)) {
                             mForcedParameterClasses.add(fParam.getClass());
                         }
                     } else {
@@ -421,16 +444,13 @@ public class SuiteModuleLoader {
                                         abi,
                                         mContext,
                                         mOptimizeMainlineTest,
-                                        mIgnoreNonPreloadedMainlineModule
-                                );
+                                        mIgnoreNonPreloadedMainlineModule);
                         skipCreatingBaseConfig = true;
                         IConfiguration paramConfig =
                                 mConfigFactory.createConfigurationFromArgs(pathArg);
                         paramConfig
                                 .getConfigurationDescription()
-                                .addMetadata(
-                                        ITestSuite.ACTIVE_MAINLINE_PARAMETER_KEY,
-                                        param);
+                                .addMetadata(ITestSuite.ACTIVE_MAINLINE_PARAMETER_KEY, param);
                         setUpConfig(name, nameWithParam, baseId, fullId, paramConfig, abi);
                         handler.applySetup(paramConfig);
                         toRun.put(fullId, paramConfig);
@@ -462,7 +482,9 @@ public class SuiteModuleLoader {
         return toRun;
     }
 
-    /** @return the {@link Set} of modules whose name contains the given pattern. */
+    /**
+     * @return the {@link Set} of modules whose name contains the given pattern.
+     */
     public static Set<File> getModuleNamesMatching(
             File directory, String suitePrefix, String pattern) {
         List<File> extraTestCasesDirs = Arrays.asList(directory);
@@ -482,8 +504,10 @@ public class SuiteModuleLoader {
      * @param abis The Abis to consider in the filtering.
      */
     public static void addFilters(
-            Set<String> stringFilters, Map<String, LinkedHashSet<SuiteTestFilter>> filters,
-            Set<IAbi> abis, Set<DeviceFoldableState> foldableStates) {
+            Set<String> stringFilters,
+            Map<String, LinkedHashSet<SuiteTestFilter>> filters,
+            Set<IAbi> abis,
+            Set<DeviceFoldableState> foldableStates) {
         for (String filterString : stringFilters) {
             SuiteTestFilter parentFilter = SuiteTestFilter.createFrom(filterString);
             List<SuiteTestFilter> expanded = expandFoldableFilters(parentFilter, foldableStates);
@@ -521,7 +545,9 @@ public class SuiteModuleLoader {
     }
 
     private static void addFilter(
-            String abi, SuiteTestFilter filter, Map<String, LinkedHashSet<SuiteTestFilter>> filters) {
+            String abi,
+            SuiteTestFilter filter,
+            Map<String, LinkedHashSet<SuiteTestFilter>> filters) {
         getFilterList(filters, AbiUtils.createId(abi, filter.getName())).add(filter);
     }
 
@@ -554,21 +580,24 @@ public class SuiteModuleLoader {
             Set<IModuleParameterHandler> forcedModuleParameters) {
         // Explicitly excluded
         LinkedHashSet<SuiteTestFilter> excluded = getFilterList(mExcludeFilters, parameterModuleId);
-        LinkedHashSet<SuiteTestFilter> excludedParam = getFilterList(mExcludeFilters, nameWithParam);
+        LinkedHashSet<SuiteTestFilter> excludedParam =
+                getFilterList(mExcludeFilters, nameWithParam);
         if (containsModuleExclude(excluded) || containsModuleExclude(excludedParam)) {
             return false;
         }
 
         // Implicitly included due to forced parameter
         if (forcedModuleParameters != null) {
-            LinkedHashSet<SuiteTestFilter> baseInclude = getFilterList(mIncludeFilters, baseModuleId);
+            LinkedHashSet<SuiteTestFilter> baseInclude =
+                    getFilterList(mIncludeFilters, baseModuleId);
             if (!baseInclude.isEmpty()) {
                 return true;
             }
         }
         // Explicitly included
         LinkedHashSet<SuiteTestFilter> included = getFilterList(mIncludeFilters, parameterModuleId);
-        LinkedHashSet<SuiteTestFilter> includedParam = getFilterList(mIncludeFilters, nameWithParam);
+        LinkedHashSet<SuiteTestFilter> includedParam =
+                getFilterList(mIncludeFilters, nameWithParam);
         if (mIncludeAll || !included.isEmpty() || !includedParam.isEmpty()) {
             return true;
         }
@@ -612,7 +641,8 @@ public class SuiteModuleLoader {
         return escaped;
     }
 
-    private File createFilterFile(String prefix, String suffix, Collection<SuiteTestFilter> filters) {
+    private File createFilterFile(
+            String prefix, String suffix, Collection<SuiteTestFilter> filters) {
         File filterFile = null;
         PrintWriter out = null;
         try {
@@ -702,8 +732,8 @@ public class SuiteModuleLoader {
     }
 
     /** Gets the list of {@link IModuleParameterHandler}s associated with a module. */
-    private List<IModuleParameterHandler> getModuleParameters(String moduleName, IConfiguration config)
-            throws ConfigurationException {
+    private List<IModuleParameterHandler> getModuleParameters(
+            String moduleName, IConfiguration config) throws ConfigurationException {
         List<IModuleParameterHandler> params = new ArrayList<>();
         Set<String> processedParameterArgs = new HashSet<>();
         // Track family of the parameters to make sure we have no duplicate.
@@ -719,8 +749,8 @@ public class SuiteModuleLoader {
         for (ModuleParameters moduleParameters : mExcludedModuleParameters) {
             expandedExcludedModuleParameters.addAll(
                     ModuleParametersHelper.resolveParam(
-                            moduleParameters,
-                            mAllowOptionalParameterizedModules).keySet());
+                                    moduleParameters, mAllowOptionalParameterizedModules)
+                            .keySet());
         }
 
         for (String p : parameters) {
@@ -732,7 +762,8 @@ public class SuiteModuleLoader {
                     ModuleParametersHelper.resolveParam(
                             ModuleParameters.valueOf(p.toUpperCase()),
                             mAllowOptionalParameterizedModules);
-            for (Entry<ModuleParameters, IModuleParameterHandler>  suiteParamEntry : suiteParams.entrySet()) {
+            for (Entry<ModuleParameters, IModuleParameterHandler> suiteParamEntry :
+                    suiteParams.entrySet()) {
                 ModuleParameters suiteParam = suiteParamEntry.getKey();
                 String family = suiteParam.getFamily();
                 if (duplicateModule.containsKey(family)) {
@@ -754,7 +785,7 @@ public class SuiteModuleLoader {
                 if (suiteParamEntry.getValue() instanceof FoldableExpandingHandler) {
                     List<IModuleParameterHandler> foldableHandlers =
                             ((FoldableExpandingHandler) suiteParamEntry.getValue())
-                                .expandHandler(mFoldableStates);
+                                    .expandHandler(mFoldableStates);
                     params.addAll(foldableHandlers);
                 } else {
                     params.add(suiteParamEntry.getValue());
@@ -766,8 +797,7 @@ public class SuiteModuleLoader {
 
     /** Gets the list of parameterized mainline modules associated with a module. */
     @VisibleForTesting
-    List<String> getMainlineModuleParameters(IConfiguration config)
-            throws ConfigurationException {
+    List<String> getMainlineModuleParameters(IConfiguration config) throws ConfigurationException {
         List<String> params = new ArrayList<>();
 
         List<String> parameters =
@@ -794,18 +824,18 @@ public class SuiteModuleLoader {
             if (!isValidMainlineParam(param)) {
                 throw new ConfigurationException(
                         String.format(
-                                "Illegal mainline module parameter: \"%s\" configured in the " +
-                                "test config: %s. Parameter must end with .apk/.apex/.apks and " +
-                                "have no any spaces configured.", param, configName)
-                );
+                                "Illegal mainline module parameter: \"%s\" configured in the test"
+                                    + " config: %s. Parameter must end with .apk/.apex/.apks and"
+                                    + " have no any spaces configured.",
+                                param, configName));
             }
             if (!isInAlphabeticalOrder(param)) {
                 throw new ConfigurationException(
                         String.format(
-                                "Illegal mainline module parameter: \"%s\" configured in the " +
-                                "test config: %s. Parameter must be configured in alphabetical " +
-                                "order or with no duplicated modules.", param, configName)
-                );
+                                "Illegal mainline module parameter: \"%s\" configured in the test"
+                                    + " config: %s. Parameter must be configured in alphabetical"
+                                    + " order or with no duplicated modules.",
+                                param, configName));
             }
             results.add(param);
         }
@@ -851,9 +881,14 @@ public class SuiteModuleLoader {
      * @param abi The abi of the module.
      * @throws ConfigurationException
      */
-    private void setUpConfig(String name, String nameWithParam, String id, String fullId,
-            IConfiguration config, IAbi abi)
-        throws ConfigurationException {
+    private void setUpConfig(
+            String name,
+            String nameWithParam,
+            String id,
+            String fullId,
+            IConfiguration config,
+            IAbi abi)
+            throws ConfigurationException {
         List<OptionDef> optionsToInject = new ArrayList<>();
         if (mModuleOptions.containsKey(name)) {
             optionsToInject.addAll(mModuleOptions.get(name));
@@ -901,7 +936,6 @@ public class SuiteModuleLoader {
 
         config.validateOptions();
     }
-
 
     /** Whether or not the base configuration should be created for all abis or not. */
     private boolean shouldCreateMultiAbiForBase(List<IModuleParameterHandler> params) {

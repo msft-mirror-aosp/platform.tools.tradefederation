@@ -135,7 +135,7 @@ public class DeviceManager implements IDeviceManager {
     private int mNumEmulatorSupported = 1;
     @Option(name = "max-null-devices",
             description = "the maximum number of no device runs that can be allocated at one time.")
-    private int mNumNullDevicesSupported = 5;
+    private int mNumNullDevicesSupported = 7;
     @Option(name = "max-tcp-devices",
             description = "the maximum number of tcp devices that can be allocated at one time")
     private int mNumTcpDevicesSupported = 1;
@@ -573,7 +573,16 @@ public class DeviceManager implements IDeviceManager {
         for (int i = 0; i < mNumLocalVirtualDevicesSupported; i++) {
             addAvailableDevice(
                     new StubLocalAndroidVirtualDevice(
-                            String.format("%s-%s", LOCAL_VIRTUAL_DEVICE_SERIAL_PREFIX, i)));
+                            String.format("%s-%s", LOCAL_VIRTUAL_DEVICE_SERIAL_PREFIX, i), i));
+        }
+    }
+
+    public void addFastbootDevice(FastbootDevice fastbootDevice) {
+        IManagedTestDevice d = mManagedDeviceList.findOrCreateFastboot(fastbootDevice);
+        if (d != null) {
+            mManagedDeviceList.handleDeviceEvent(d, DeviceEvent.FASTBOOT_DETECTED);
+        } else {
+            CLog.e("Could not create stub device");
         }
     }
 
@@ -1160,11 +1169,8 @@ public class DeviceManager implements IDeviceManager {
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    public List<DeviceDescriptor> listAllDevices() {
+    public List<DeviceDescriptor> listAllDevices(boolean shortDescriptor) {
         final List<DeviceDescriptor> serialStates = new ArrayList<DeviceDescriptor>();
         if (mAdbBridgeNeedRestart) {
             return serialStates;
@@ -1173,7 +1179,7 @@ public class DeviceManager implements IDeviceManager {
             if (d == null) {
                 continue;
             }
-            DeviceDescriptor desc = d.getCachedDeviceDescriptor();
+            DeviceDescriptor desc = d.getCachedDeviceDescriptor(shortDescriptor);
             if (desc != null) {
                 serialStates.add(desc);
             }
@@ -1183,12 +1189,18 @@ public class DeviceManager implements IDeviceManager {
 
     /** {@inheritDoc} */
     @Override
+    public List<DeviceDescriptor> listAllDevices() {
+        return listAllDevices(false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public DeviceDescriptor getDeviceDescriptor(String serial) {
         IManagedTestDevice device = mManagedDeviceList.find(serial);
         if (device == null) {
             return null;
         }
-        return device.getDeviceDescriptor();
+        return device.getDeviceDescriptor(false);
     }
 
     @Override
@@ -1481,7 +1493,7 @@ public class DeviceManager implements IDeviceManager {
                             d.setFastbootd(true);
                         }
                         if (mGlobalDeviceFilter != null && mGlobalDeviceFilter.matches(d)) {
-                            addAvailableDevice(d);
+                            addFastbootDevice(d);
                         }
                     }
                 }

@@ -52,6 +52,8 @@ interface DeviceAllocationEventHandler {
                     return DeviceAllocationState.Unavailable;
                 case FORCE_AVAILABLE:
                     return DeviceAllocationState.Available;
+                case FASTBOOT_DETECTED:
+                    return DeviceAllocationState.Available;
                 default:
                     return DeviceAllocationState.Unknown;
             }
@@ -183,10 +185,13 @@ interface DeviceAllocationEventHandler {
 
     /**
      * Handles events in {@link DeviceAllocationState#Ignored} state.
-     * <p/>
-     * Transitions:
+     *
+     * <p>Transitions:
+     *
      * <ul>
-     * <li>Ignored -> DISCONNECTED -> Unknown</li>
+     *   <li>Ignored -> DISCONNECTED -> Unknown
+     *   <li>Ignored -> EXPLICIT_ALLOCATE_REQUEST -> Allocated
+     *   <li>Ignored -> FORCE_ALLOCATE_REQUEST -> Allocated
      * </ul>
      */
     class IgnoredHandler implements DeviceAllocationEventHandler {
@@ -195,7 +200,10 @@ interface DeviceAllocationEventHandler {
             switch (event) {
                 case DISCONNECTED:
                     return DeviceAllocationState.Unknown;
+                    // Explicit and forced request can get an Ignored device
                 case EXPLICIT_ALLOCATE_REQUEST:
+                    return DeviceAllocationState.Allocated;
+                case FORCE_ALLOCATE_REQUEST:
                     return DeviceAllocationState.Allocated;
                 default:
                     return DeviceAllocationState.Ignored;

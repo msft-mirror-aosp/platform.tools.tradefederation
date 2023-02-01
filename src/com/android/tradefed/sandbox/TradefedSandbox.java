@@ -25,15 +25,19 @@ import com.android.tradefed.config.ConfigurationXmlParserSettings;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.IGlobalConfiguration;
 import com.android.tradefed.config.proxy.AutomatedReporters;
+import com.android.tradefed.device.DeviceSelectionOptions;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.RemoteInvocationExecution;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.proto.InvocationContext.Context;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -96,7 +100,8 @@ public class TradefedSandbox implements ISandbox {
     private IRunUtil mRunUtil;
 
     @Override
-    public CommandResult run(IConfiguration config, ITestLogger logger) throws Throwable {
+    public CommandResult run(TestInformation info, IConfiguration config, ITestLogger logger)
+            throws Throwable {
         List<String> mCmdArgs = new ArrayList<>();
         mCmdArgs.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
         mCmdArgs.add(String.format("-Djava.io.tmpdir=%s", mSandboxTmpFolder.getAbsolutePath()));
@@ -109,7 +114,8 @@ public class TradefedSandbox implements ISandbox {
         } catch (IOException e) {
             CLog.e(e);
         }
-        mCmdArgs.addAll(getSandboxOptions(config).getJavaOptions());
+        SandboxOptions sandboxOptions = getSandboxOptions(config);
+        mCmdArgs.addAll(sandboxOptions.getJavaOptions());
         mCmdArgs.add("-cp");
         mCmdArgs.add(createClasspath(mRootFolder));
         mCmdArgs.add(TradefedSandboxRunner.class.getCanonicalName());
@@ -125,6 +131,32 @@ public class TradefedSandbox implements ISandbox {
         if (config.getCommandOptions().shouldUseSandboxTestMode()) {
             // In test mode, re-add the --use-sandbox to trigger a sandbox run again in the process
             mCmdArgs.add("--" + CommandOptions.USE_SANDBOX);
+        }
+        if (sandboxOptions.shouldUseNewFlagOrder() && sandboxOptions.startAvdInParent()) {
+            for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+                if (deviceConfig.getDeviceRequirements().gceDeviceRequested()) {
+                    // Turn off the gce-device option and force the serial instead to use the
+                    // started virtual device.
+                    String deviceName =
+                            (config.getDeviceConfig().size() > 1)
+                                    ? String.format("{%s}", deviceConfig.getDeviceName())
+                                    : "";
+                    mCmdArgs.add(String.format("--%sno-gce-device", deviceName));
+                    mCmdArgs.add(String.format("--%sserial", deviceName));
+                    mCmdArgs.add(
+                            info.getContext()
+                                    .getDevice(deviceConfig.getDeviceName())
+                                    .getSerialNumber());
+                    // If we are using the device-type selector, override it
+                    if (DeviceSelectionOptions.DeviceRequestedType.GCE_DEVICE.equals(
+                            ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
+                                    .getDeviceTypeRequested())) {
+                        mCmdArgs.add(String.format("--%sdevice-type", deviceName));
+                        mCmdArgs.add(
+                                DeviceSelectionOptions.DeviceRequestedType.EXISTING_DEVICE.name());
+                    }
+                }
+            }
         }
 
         // Remove a bit of timeout to account for parent overhead
@@ -164,10 +196,14 @@ public class TradefedSandbox implements ISandbox {
         try {
             boolean joinResult = false;
             long waitTime = getSandboxOptions(config).getWaitForEventsTimeout();
-            if (mProtoReceiver != null) {
-                joinResult = mProtoReceiver.joinReceiver(waitTime);
-            } else {
-                joinResult = mEventParser.joinReceiver(waitTime);
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(
+                            InvocationMetricKey.invocation_events_processing.toString())) {
+                if (mProtoReceiver != null) {
+                    joinResult = mProtoReceiver.joinReceiver(waitTime);
+                } else {
+                    joinResult = mEventParser.joinReceiver(waitTime);
+                }
             }
             if (interruptedException != null) {
                 throw interruptedException;
@@ -227,64 +263,76 @@ public class TradefedSandbox implements ISandbox {
     @Override
     public Exception prepareEnvironment(
             IInvocationContext context, IConfiguration config, ITestInvocationListener listener) {
-        // Create our temp directories.
+        long startTime = System.currentTimeMillis();
         try {
-            mStdoutFile = FileUtil.createTempFile("stdout_subprocess_", ".log", getWorkFolder());
-            mStderrFile = FileUtil.createTempFile("stderr_subprocess_", ".log", getWorkFolder());
-            mSandboxTmpFolder = FileUtil.createTempDir("tf-container", getWorkFolder());
-        } catch (IOException e) {
-            return e;
-        }
-        // Unset the current global environment
-        mRunUtil = createRunUtil();
-        mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
-        mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
-        mRunUtil.unsetEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT);
-        mRunUtil.unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
+            // Create our temp directories.
+            try {
+                mStdoutFile =
+                        FileUtil.createTempFile("stdout_subprocess_", ".log", getWorkFolder());
+                mStderrFile =
+                        FileUtil.createTempFile("stderr_subprocess_", ".log", getWorkFolder());
+                mSandboxTmpFolder = FileUtil.createTempDir("tf-container", getWorkFolder());
+            } catch (IOException e) {
+                return e;
+            }
+            // Unset the current global environment
+            mRunUtil = createRunUtil();
+            mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
+            mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
+            mRunUtil.unsetEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT);
+            mRunUtil.unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
 
-        if (getSandboxOptions(config).shouldEnableDebugThread()) {
-            mRunUtil.setEnvVariable(TradefedSandboxRunner.DEBUG_THREAD_KEY, "true");
-        }
-        for (Entry<String, String> envEntry :
-                getSandboxOptions(config).getEnvVariables().entrySet()) {
-            mRunUtil.setEnvVariable(envEntry.getKey(), envEntry.getValue());
-        }
-        if (config.getConfigurationDescription().getMetaData(TradefedFeatureServer.SERVER_REFERENCE)
-                != null) {
-            mRunUtil.setEnvVariable(
-                    TradefedFeatureServer.SERVER_REFERENCE,
-                    config.getConfigurationDescription()
-                            .getAllMetaData()
-                            .getUniqueMap()
-                            .get(TradefedFeatureServer.SERVER_REFERENCE));
-        }
+            if (getSandboxOptions(config).shouldEnableDebugThread()) {
+                mRunUtil.setEnvVariable(TradefedSandboxRunner.DEBUG_THREAD_KEY, "true");
+            }
+            for (Entry<String, String> envEntry :
+                    getSandboxOptions(config).getEnvVariables().entrySet()) {
+                mRunUtil.setEnvVariable(envEntry.getKey(), envEntry.getValue());
+            }
+            if (config.getConfigurationDescription()
+                            .getMetaData(TradefedFeatureServer.SERVER_REFERENCE)
+                    != null) {
+                mRunUtil.setEnvVariable(
+                        TradefedFeatureServer.SERVER_REFERENCE,
+                        config.getConfigurationDescription()
+                                .getAllMetaData()
+                                .getUniqueMap()
+                                .get(TradefedFeatureServer.SERVER_REFERENCE));
+            }
 
-        try {
-            mRootFolder =
-                    getTradefedSandboxEnvironment(
-                            context,
-                            config,
-                            QuotationAwareTokenizer.tokenizeLine(
-                                    config.getCommandLine(),
-                                    /** no logging */
-                                    false));
-        } catch (Exception e) {
-            return e;
-        }
+            try {
+                mRootFolder =
+                        getTradefedSandboxEnvironment(
+                                context,
+                                config,
+                                QuotationAwareTokenizer.tokenizeLine(
+                                        config.getCommandLine(),
+                                        /** no logging */
+                                        false));
+            } catch (Exception e) {
+                return e;
+            }
 
-        PrettyPrintDelimiter.printStageDelimiter("Sandbox Configuration Preparation");
-        // Prepare the configuration
-        Exception res = prepareConfiguration(context, config, listener);
-        if (res != null) {
-            return res;
+            PrettyPrintDelimiter.printStageDelimiter("Sandbox Configuration Preparation");
+            // Prepare the configuration
+            Exception res = prepareConfiguration(context, config, listener);
+            if (res != null) {
+                return res;
+            }
+            // Prepare the context
+            try {
+                mSerializedContext = prepareContext(context, config);
+            } catch (IOException e) {
+                return e;
+            }
+        } finally {
+            if (!getSandboxOptions(config).shouldParallelSetup()) {
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
+                        startTime,
+                        System.currentTimeMillis());
+            }
         }
-        // Prepare the context
-        try {
-            mSerializedContext = prepareContext(context, config);
-        } catch (IOException e) {
-            return e;
-        }
-
         return null;
     }
 
@@ -421,11 +469,12 @@ public class TradefedSandbox implements ISandbox {
                     }
                 }
                 throw e;
+            } finally {
+                // Turn off some of the invocation level options that would be duplicated in the
+                // child sandbox subprocess.
+                config.getCommandOptions().setBugreportOnInvocationEnded(false);
+                config.getCommandOptions().setBugreportzOnInvocationEnded(false);
             }
-            // Turn off some of the invocation level options that would be duplicated in the
-            // child sandbox subprocess.
-            config.getCommandOptions().setBugreportOnInvocationEnded(false);
-            config.getCommandOptions().setBugreportzOnInvocationEnded(false);
         } catch (IOException | ConfigurationException e) {
             StreamUtil.close(mEventParser);
             StreamUtil.close(mProtoReceiver);

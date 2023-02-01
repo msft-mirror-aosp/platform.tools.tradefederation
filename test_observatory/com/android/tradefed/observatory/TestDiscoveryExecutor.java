@@ -24,6 +24,8 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
+import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
+import com.android.tradefed.util.MultiMap;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -83,6 +85,8 @@ public class TestDiscoveryExecutor {
     public String discoverDependencies(String[] args) throws Exception {
         // Create IConfiguration base on command line args.
         IConfiguration config = getConfiguration(args);
+
+        // Get tests from the configuration.
         List<IRemoteTest> tests = config.getTests();
 
         // Tests could be empty if input args are corrupted.
@@ -94,11 +98,6 @@ public class TestDiscoveryExecutor {
 
         List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));
 
-        if (testModules == null || testModules.isEmpty()) {
-            throw new TestDiscoveryException(
-                    "Tradefed Observatory discovered no test modules from the test config, it"
-                            + " might be component-based.");
-        }
         List<String> testDependencies = new ArrayList<>(discoverDependencies(config));
         Collections.sort(testModules);
         Collections.sort(testDependencies);
@@ -130,12 +129,33 @@ public class TestDiscoveryExecutor {
      * @return A set of test module names.
      */
     private Set<String> discoverTestModulesFromTests(List<IRemoteTest> testList)
-            throws IllegalStateException {
+            throws IllegalStateException, TestDiscoveryException {
         Set<String> includeFilters = new HashSet<>();
         // Collect include filters from every test.
         for (IRemoteTest test : testList) {
             if (test instanceof BaseTestSuite) {
-                includeFilters.addAll(((BaseTestSuite) test).getIncludeFilter());
+                if (test instanceof TestMappingSuiteRunner) {
+                    ((TestMappingSuiteRunner) test).setTestDiscovery(true);
+                    ((TestMappingSuiteRunner) test).loadTests();
+                }
+                Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
+                MultiMap<String, String> moduleMetadataIncludeFilters =
+                        ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
+                // Include/Exclude filters in suites are evaluated first,
+                // then metadata are applied on top, so having metadata filters
+                // and include-filters can actually be resolved to a super-set
+                // which is better than falling back.
+                if (!suiteIncludeFilters.isEmpty()) {
+                    includeFilters.addAll(suiteIncludeFilters);
+                } else if (!moduleMetadataIncludeFilters.isEmpty()) {
+                    throw new TestDiscoveryException(
+                            "Tradefed Observatory can't do test discovery because the existence of"
+                                    + " metadata include filter option.");
+                }
+            } else {
+                throw new TestDiscoveryException(
+                        "Tradefed Observatory can't do test discovery on non suite-based test"
+                                + " runner.");
             }
         }
         // Extract test module names from included filters.
@@ -155,7 +175,7 @@ public class TestDiscoveryExecutor {
         // Extract module name from each include filter.
         // TODO: Ensure if a module is fully excluded then it's excluded.
         for (String includeFilter : includeFilters) {
-            String testModuleName = SuiteTestFilter.createFrom(includeFilter).getName();
+            String testModuleName = SuiteTestFilter.createFrom(includeFilter).getBaseName();
             if (testModuleName == null) {
                 // If unable to parse an include filter, throw exception to exit.
                 throw new IllegalStateException(

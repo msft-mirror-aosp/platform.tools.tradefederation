@@ -390,7 +390,7 @@ public class StrictShardHelperTest {
     public void testReorderTestModulesWithUnexpectedMainlineModules() throws Exception {
         List<String> modules = Arrays.asList("module1[com.mod1.apex]", "module1[com.mod1]");
         try {
-            List<IRemoteTest> res = createITestSuiteList(modules);
+            createITestSuiteList(modules);
             fail("Should have thrown an exception.");
         } catch (RuntimeException expected) {
             // expected
