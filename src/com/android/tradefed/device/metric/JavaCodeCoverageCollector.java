@@ -41,6 +41,7 @@ import com.android.tradefed.util.TarUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
+import com.google.common.base.Strings;
 
 import org.jacoco.core.tools.ExecFileLoader;
 
@@ -228,14 +229,21 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
     /** Logs files as Java coverage measurements. */
     private void logCoverageMeasurement(File coverageFile) {
         try (FileInputStreamSource source = new FileInputStreamSource(coverageFile, true)) {
-            testLog(
-                    getRunName()
-                            + "_"
-                            + getNameWithoutExtension(coverageFile.getName())
-                            + "_runtime_coverage",
-                    LogDataType.COVERAGE,
-                    source);
+            testLog(generateMeasurementFileName(coverageFile), LogDataType.COVERAGE, source);
         }
+    }
+
+    /** Generate the .ec file prefix in format "$moduleName_MODULE_$runName". */
+    private String generateMeasurementFileName(File coverageFile) {
+        String moduleName = Strings.nullToEmpty(getModuleName());
+        if (moduleName.length() > 0) {
+            moduleName += "_MODULE_";
+        }
+        return moduleName
+                + getRunName()
+                + "_"
+                + getNameWithoutExtension(coverageFile.getName())
+                + "_runtime_coverage";
     }
 
     /** Cleans up .ec files in /data/misc/trace. */
