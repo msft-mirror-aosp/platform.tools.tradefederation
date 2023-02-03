@@ -4856,6 +4856,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             executeAdbCommand("disable-verity");
             reboot();
         }
+        enableAdbRoot();
         executeAdbCommand("remount");
         waitForDeviceAvailable();
     }
@@ -4870,6 +4871,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             executeAdbCommand("disable-verity");
             reboot();
         }
+        enableAdbRoot();
         executeAdbCommand("remount");
         waitForDeviceAvailable();
     }

@@ -17,7 +17,6 @@ package com.android.tradefed.targetprep.sync;
 
 import static org.junit.Assert.assertTrue;
 
-import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
@@ -36,7 +35,8 @@ public class DeviceSyncHelperFuncTest extends BaseHostJUnit4Test {
 
     @Test
     public void testSyncDevice() throws DeviceNotAvailableException {
-        DeviceDescriptor initialState = getDevice().getDeviceDescriptor();
+        String buildId = getDevice().getProperty("ro.system.build.version.incremental");
+        CLog.d("%s / buildid: %s", getDevice().getProperty("ro.build.fingerprint"), buildId);
 
         File targetFiles = getBuild().getFile("target_files");
         if (targetFiles == null || !targetFiles.exists() || !targetFiles.isDirectory()) {
@@ -47,11 +47,10 @@ public class DeviceSyncHelperFuncTest extends BaseHostJUnit4Test {
         boolean success = syncHelper.sync();
         assertTrue(success);
 
-        DeviceDescriptor endState = getDevice().getDeviceDescriptor();
-        CLog.d(
-                "Initial build: %s. Final build: %s",
-                initialState.getBuildId(), endState.getBuildId());
+        String afterBuildId = getDevice().getProperty("ro.system.build.version.incremental");
+        CLog.d("Initial build: %s. Final build: %s", buildId, afterBuildId);
+        CLog.d("%s", getDevice().getProperty("ro.build.fingerprint"));
 
-        Truth.assertThat(endState.getBuildId()).isNotEqualTo(initialState.getBuildId());
+        Truth.assertThat(buildId).isNotEqualTo(afterBuildId);
     }
 }

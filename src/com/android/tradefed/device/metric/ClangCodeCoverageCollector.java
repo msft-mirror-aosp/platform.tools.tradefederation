@@ -45,6 +45,7 @@ import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.ZipUtil;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -140,11 +141,20 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
                 if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
                     getCoverageFlusher(device).forceCoverageFlush();
                 }
-                logCoverageMeasurement(device, getRunName());
+                logCoverageMeasurement(device, generateMeasurementFileName());
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    /** Generate the .ec file prefix in format "$moduleName_MODULE_$runName". */
+    private String generateMeasurementFileName() {
+        String moduleName = Strings.nullToEmpty(getModuleName());
+        if (moduleName.length() > 0) {
+            moduleName += "_MODULE_";
+        }
+        return moduleName + getRunName().replace(' ', '_');
     }
 
     /**
