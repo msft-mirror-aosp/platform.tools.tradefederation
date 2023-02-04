@@ -812,6 +812,21 @@ public interface ITestDevice extends INativeDevice {
     public boolean startUser(int userId, boolean waitFlag) throws DeviceNotAvailableException;
 
     /**
+     * Starts a given user in the background, visible in the given display (i.e., allowing the user
+     * to launch activities in that display).
+     *
+     * <p><b>NOTE: </b>this command doesn't check if the user exists, display is available, {@link
+     * #isVisibleBackgroundUsersSupported() device supports such feature}, etc.
+     *
+     * @param userId of the user to start in the background
+     * @param displayId display to start user visible on
+     * @param waitFlag will make the command wait until user is started and unlocked.
+     * @return {@code true} if the user was successfully started visible in the background.
+     */
+    public boolean startVisibleBackgroundUser(int userId, int displayId, boolean waitFlag)
+            throws DeviceNotAvailableException;
+
+    /**
      * Stops a given user. If the user is already stopped, this method is a NOOP.
      * Cannot stop current and system user.
      *
@@ -832,6 +847,25 @@ public interface ITestDevice extends INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public boolean stopUser(int userId, boolean waitFlag, boolean forceFlag)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Returns whether the device allow users to be started visible in the background.
+     *
+     * <p>If it does, you could call {@link #startVisibleBackgroundUser(int, int, boolean)}, passing
+     * a display returned by {@link #listDisplayIdsForStartingVisibleBackgroundUsers()}.
+     */
+    public boolean isVisibleBackgroundUsersSupported() throws DeviceNotAvailableException;
+
+    /**
+     * Returns whether the device allow users to be started visible in the background in the {@link
+     * java.android.view.Display#DEFAULT_DISPLAY}.
+     *
+     * <p>If it does, you could call {@link #startVisibleBackgroundUser(int, int, boolean)}, passing
+     * a display returned by {@link #listDisplayIdsForStartingVisibleBackgroundUsers()} (which
+     * should include {@link java.android.view.Display#DEFAULT_DISPLAY}).
+     */
+    public boolean isVisibleBackgroundUsersOnDefaultDisplaySupported()
             throws DeviceNotAvailableException;
 
     /**
@@ -858,6 +892,23 @@ public interface ITestDevice extends INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public int getCurrentUser() throws DeviceNotAvailableException;
+
+    /**
+     * Checks if the given user is visible.
+     *
+     * <p>A "visible" user is a user that is interacting with the "human" user and hence is able to
+     * launch launch activities (typically in the default display).
+     */
+    public boolean isUserVisible(int userId) throws DeviceNotAvailableException;
+
+    /**
+     * Checks if the given user is visible in the given display.
+     *
+     * <p>A "visible" user is a user that is interacting with the "human" user and hence is able to
+     * launch launch activities in that display.
+     */
+    public boolean isUserVisibleOnDisplay(int userId, int displayId)
+            throws DeviceNotAvailableException;
 
     /**
      * Find and return the flags of a given user.
@@ -1039,8 +1090,15 @@ public interface ITestDevice extends INativeDevice {
     public Set<Long> listDisplayIds() throws DeviceNotAvailableException;
 
     /**
-     * Returns the list of foldable states on the device. Can be obtained with
-     * "cmd device_state print-states".
+     * Gets the list of displays that can be used to {@link #startVisibleBackgroundUser(int, int,
+     * boolean) start a user visible in the background}.
+     */
+    public Set<Integer> listDisplayIdsForStartingVisibleBackgroundUsers()
+            throws DeviceNotAvailableException;
+
+    /**
+     * Returns the list of foldable states on the device. Can be obtained with "cmd device_state
+     * print-states".
      *
      * @throws DeviceNotAvailableException
      */
