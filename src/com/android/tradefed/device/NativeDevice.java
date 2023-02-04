@@ -4827,6 +4827,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
+    @Override
+    public boolean startVisibleBackgroundUser(int userId, int displayId, boolean waitFlag)
+            throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -4840,6 +4846,17 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public boolean stopUser(int userId, boolean waitFlag, boolean forceFlag)
+            throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isVisibleBackgroundUsersSupported() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isVisibleBackgroundUsersOnDefaultDisplaySupported()
             throws DeviceNotAvailableException {
         throw new UnsupportedOperationException("No support for user's feature.");
     }
@@ -4904,6 +4921,17 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public int getCurrentUser() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isUserVisible(int userId) throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isUserVisibleOnDisplay(int userId, int displayId)
+            throws DeviceNotAvailableException {
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
@@ -5733,6 +5761,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public Set<Long> listDisplayIds() throws DeviceNotAvailableException {
         throw new UnsupportedOperationException("dumpsys SurfaceFlinger is not supported.");
+    }
+
+    @Override
+    public Set<Integer> listDisplayIdsForStartingVisibleBackgroundUsers()
+            throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
     }
 
     /** {@inheritDoc} */
