@@ -27,6 +27,7 @@ java_library_host {
         "//tools/tradefederation/core/test_result_interfaces",
     ],
     defaults: ["tradefed_defaults"],
+    java_version: "11",
     srcs: [
         "com/**/*.java",
     ],

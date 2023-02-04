@@ -32,6 +32,8 @@ java_library_host {
         "commons-cli-1.2",
     ],
     jarjar_rules: "jarjar_rules.txt",
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -50,4 +52,6 @@ java_library_host {
         include_dirs: ["external/protobuf/src"],
         type: "full",
     },
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }

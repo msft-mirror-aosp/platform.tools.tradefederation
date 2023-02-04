@@ -29,6 +29,8 @@ java_library_host {
     static_libs: [
         "jna-prebuilt",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_test_host {
