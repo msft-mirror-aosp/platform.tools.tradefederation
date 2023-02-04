@@ -74,9 +74,11 @@ import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.ZipUtil2;
+import com.google.common.truth.Expect;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -116,6 +118,8 @@ public class TestDeviceTest {
     private static final int MIN_API_LEVEL_GET_CURRENT_USER = 23;
     private static final int MIN_API_LEVEL_STOP_USER = 22;
     private static final String RAWIMAGE_RESOURCE = "/testdata/rawImage.zip";
+
+    @Rule public final Expect expect = Expect.create();
 
     @Mock IDevice mMockIDevice;
     @Mock IShellOutputReceiver mMockReceiver;
@@ -233,10 +237,6 @@ public class TestDeviceTest {
                             + command
                             + "': "
                             + injectedCommand);
-        }
-
-        private TestableTestDeviceV2 setApiLevel(Integer apiLevel) {
-            return setApiLevel(apiLevel, /* buildCodename= */ null);
         }
 
         private TestableTestDeviceV2 setApiLevel(Integer apiLevel, @Nullable String buildCodename) {
@@ -3342,6 +3342,69 @@ public class TestDeviceTest {
         }
     }
 
+    @Test
+    public void testStartVisibleBackgroundUser_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> testDevice.startVisibleBackgroundUser(42, 108, true));
+    }
+
+    @Test
+    public void testStartVisibleBackgroundUser_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "am start-user -w --display 108 42", CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.startVisibleBackgroundUser(42, 108, true));
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testStartVisibleBackgroundUser_failedWithWait() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("am start-user -w --display 108 42", "D'OH!");
+
+        assertThat(testDevice.startVisibleBackgroundUser(42, 108, true)).isFalse();
+    }
+
+    @Test
+    public void testStartVisibleBackgroundUser_failedNoWait() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("am start-user --display 108 42", "D'OH!");
+
+        assertThat(testDevice.startVisibleBackgroundUser(42, 108, false)).isFalse();
+    }
+
+    @Test
+    public void testStartVisibleBackgroundUser_successWithWait() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "am start-user -w --display 108 42", "Success: blah-blah-blah");
+
+        assertThat(testDevice.startVisibleBackgroundUser(42, 108, true)).isTrue();
+    }
+
+    @Test
+    public void testStartVisibleBackgroundUser_successNoWait() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "am start-user --display 108 42", "Success:blah-blah-blah");
+
+        assertThat(testDevice.startVisibleBackgroundUser(42, 108, false)).isTrue();
+    }
+
     /**
      * Test that remount works as expected on a device not supporting dm verity
      *
@@ -3390,6 +3453,7 @@ public class TestDeviceTest {
         mTestDevice.remountSystemWritable();
         verifyRebootAndRootExpectations();
     }
+
     /**
      * Test that remount vendor works as expected on a device supporting dm verity v1
      *
@@ -3621,6 +3685,88 @@ public class TestDeviceTest {
             return;
         }
         fail("getCurrentUser should have thrown an exception.");
+    }
+
+    @Test
+    public void testIsUserVisible_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(IllegalArgumentException.class, () -> testDevice.isUserVisible(42));
+    }
+
+    @Test
+    public void testIsUserVisible_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "adb shell cmd user is-user-visible 42", CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(DeviceRuntimeException.class, () -> testDevice.isUserVisible(42));
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testIsUserVisible_true() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("cmd user is-user-visible 42", "true");
+
+        assertThat(testDevice.isUserVisible(42)).isTrue();
+    }
+
+    @Test
+    public void testIsUserVisible_false() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("cmd user is-user-visible 42", "false");
+
+        assertThat(testDevice.isUserVisible(42)).isFalse();
+    }
+
+    @Test
+    public void testIsUserVisibleOnDisplay_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                IllegalArgumentException.class, () -> testDevice.isUserVisibleOnDisplay(42, 108));
+    }
+
+    @Test
+    public void testIsUserVisibleOnDisplay_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "adb shell cmd user is-user-visible --display 108 42",
+                                CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.isUserVisibleOnDisplay(42, 108));
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testIsUserVisibleOnDisplay_true() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("cmd user is-user-visible --display 108 42", "true");
+
+        assertThat(testDevice.isUserVisibleOnDisplay(42, 108)).isTrue();
+    }
+
+    @Test
+    public void testIsUserVisibleOnDisplay_false() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("cmd user is-user-visible --display 108 42", "false");
+
+        assertThat(testDevice.isUserVisibleOnDisplay(42, 108)).isFalse();
     }
 
     /** Unit test for {@link TestDevice#getUserFlags(int)}. */
@@ -4315,6 +4461,135 @@ public class TestDeviceTest {
                     }
                 };
         assertFalse(mTestDevice.stopUser(0));
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersSupported_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> testDevice.isVisibleBackgroundUsersSupported());
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersSupported_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "cmd user is-visible-background-users-supported",
+                                CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.isVisibleBackgroundUsersSupported());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersSupported_invalidOutput() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-supported", "D'OH!");
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.isVisibleBackgroundUsersSupported());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersSupported_false() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-supported", "false");
+
+        assertThat(testDevice.isVisibleBackgroundUsersSupported()).isFalse();
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersSupported_true() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-supported", "true");
+
+        assertThat(testDevice.isVisibleBackgroundUsersSupported()).isTrue();
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersOnDefaultDisplaySupported_unsupportedApiLevel()
+            throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> testDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported());
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersOnDefaultDisplaySupported_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "cmd user is-visible-background-users-on-default-display-supported",
+                                CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersOnDefaultDisplaySupported_invalidOutput()
+            throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-on-default-display-supported",
+                                "D'OH!");
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersOnDefaultDisplaySupported_false() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-on-default-display-supported",
+                                "false");
+
+        assertThat(testDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported()).isFalse();
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersOnDefaultDisplaySupported_true() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-on-default-display-supported",
+                                "true");
+
+        assertThat(testDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported()).isTrue();
     }
 
     /** Unit test for {@link TestDevice#isUserRunning(int)}. */
@@ -5356,6 +5631,123 @@ public class TestDeviceTest {
         assertEquals(2, displays.size());
         assertTrue(displays.contains(0L));
         assertTrue(displays.contains(5L));
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_unsupportedApiLevel()
+            throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> testDevice.listDisplayIdsForStartingVisibleBackgroundUsers());
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "cmd activity list-displays-for-starting-users",
+                                CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.listDisplayIdsForStartingVisibleBackgroundUsers());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_invalidOutput()
+            throws Exception {
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("D'OH");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("[none]");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("[none");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("none]");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("42");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("[42");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("42]");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("[42,108");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("42,108]");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("[42,0x108]");
+    }
+
+    private void expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput(String output)
+            throws DeviceNotAvailableException {
+        String cmd = "cmd activity list-displays-for-starting-users";
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33).injectShellV2Command(cmd, output);
+        try {
+            testDevice.listDisplayIdsForStartingVisibleBackgroundUsers();
+            expect.withMessage("'%s' failed with output '%s'", cmd, output).that(false).isTrue();
+        } catch (DeviceRuntimeException e) {
+            expect.withMessage("error on %s when cmd returns %s", e, output)
+                    .that(e.getErrorId())
+                    .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_empty() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd activity list-displays-for-starting-users", "none");
+
+        assertThat(testDevice.listDisplayIdsForStartingVisibleBackgroundUsers()).isEmpty();
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_notEmpty() throws Exception {
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput("[42]", 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput("[ 42 ]", 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput("[ 42]", 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput("[42 ]", 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput(
+                "[4,8,15,16,23,42]", 4, 8, 15, 16, 23, 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput(
+                "[4, 8, 15, 16, 23, 42]", 4, 8, 15, 16, 23, 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput(
+                "[ 4,8 , 15 ,16,  23,42  ]", 4, 8, 15, 16, 23, 42);
+    }
+
+    private void expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput(
+            String output, Integer... expectedIds) throws DeviceNotAvailableException {
+        String cmd = "cmd activity list-displays-for-starting-users";
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33).injectShellV2Command(cmd, output);
+
+        expect.withMessage("when '%s' returned " + "'%s'", cmd, output)
+                .that(testDevice.listDisplayIdsForStartingVisibleBackgroundUsers())
+                .containsExactlyElementsIn(expectedIds);
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_many() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd activity list-displays-for-starting-users",
+                                "[4, 8, 15, 16, 23, 42]");
+
+        assertThat(testDevice.listDisplayIdsForStartingVisibleBackgroundUsers())
+                .containsExactly(4, 8, 15, 16, 23, 42);
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_many_noSpaces()
+            throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd activity list-displays-for-starting-users",
+                                "[4,8,15,16,23,42]");
+
+        assertThat(testDevice.listDisplayIdsForStartingVisibleBackgroundUsers())
+                .containsExactly(4, 8, 15, 16, 23, 42);
     }
 
     /** Test for {@link TestDevice#getScreenshot(long)}. */
