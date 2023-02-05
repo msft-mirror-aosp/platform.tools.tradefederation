@@ -18,6 +18,8 @@ package com.android.tradefed.util;
 
 import com.android.annotations.Nullable;
 import com.android.tradefed.command.CommandInterrupter;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
 
@@ -526,7 +528,8 @@ public class RunUtil implements IRunUtil {
         if (time <= 0) {
             return;
         }
-        try {
+        try (CloseableTraceScope sleep =
+                new CloseableTraceScope(InvocationMetricKey.host_sleep.toString())) {
             Thread.sleep(time);
         } catch (InterruptedException e) {
             // ignore
