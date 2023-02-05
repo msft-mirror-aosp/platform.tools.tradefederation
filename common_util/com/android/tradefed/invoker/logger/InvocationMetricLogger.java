@@ -262,6 +262,7 @@ public class InvocationMetricLogger {
         test_execution("test_execution", true),
         check_device_availability("check_device_availability", true),
         bugreport("bugreport", true),
+        host_sleep("host_sleep", true),
         test_teardown("test_teardown", true),
         test_cleanup("test_cleanup", true),
         log_and_release_device("log_and_release_device", true),
