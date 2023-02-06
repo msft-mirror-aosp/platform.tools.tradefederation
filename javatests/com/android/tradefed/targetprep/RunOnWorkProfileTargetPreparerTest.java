@@ -22,15 +22,13 @@ import static com.android.tradefed.targetprep.RunOnWorkProfileTargetPreparer.TES
 
 import static com.google.common.truth.Truth.assertThat;
 
-import static junit.framework.Assert.fail;
-
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.UserInfo;
 import com.android.tradefed.invoker.TestInformation;
@@ -57,9 +55,6 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private TestInformation mTestInfo;
-
-    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
-    private IConfiguration mConfiguration;
 
     private RunOnWorkProfileTargetPreparer mPreparer;
     private OptionSetter mOptionSetter;
@@ -88,7 +83,6 @@ public class RunOnWorkProfileTargetPreparerTest {
     public void setUp() throws Exception {
         mPreparer = new RunOnWorkProfileTargetPreparer();
         mOptionSetter = new OptionSetter(mPreparer);
-        mPreparer.setConfiguration(mConfiguration);
 
         ArrayList<Integer> userIds = new ArrayList<>();
         userIds.add(0);
@@ -161,9 +155,9 @@ public class RunOnWorkProfileTargetPreparerTest {
 
         try {
             mPreparer.setUp(mTestInfo);
-            fail();
+            fail("Should have thrown exception");
         } catch (IllegalStateException expected) {
-
+            // Expected
         }
     }
 
@@ -367,17 +361,7 @@ public class RunOnWorkProfileTargetPreparerTest {
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mConfiguration)
-                .injectOptionValue(eq("instrumentation-arg"), eq(SKIP_TESTS_REASON_KEY), any());
-    }
-
-    @Test
-    public void setUp_doesNotSupportManagedUsers_disablesTearDown() throws Exception {
-        when(mTestInfo.getDevice().hasFeature("android.software.managed_users")).thenReturn(false);
-
-        mPreparer.setUp(mTestInfo);
-
-        assertThat(mPreparer.isTearDownDisabled()).isTrue();
+        verify(mTestInfo.properties()).put(eq(SKIP_TESTS_REASON_KEY), any());
     }
 
     @Test
@@ -387,25 +371,7 @@ public class RunOnWorkProfileTargetPreparerTest {
         mPreparer.setUp(mTestInfo);
 
         verify(mTestInfo.properties(), never()).put(eq(RUN_TESTS_AS_USER_KEY), any());
-    }
-
-    @Test
-    public void setUp_doesNotSupportAdditionalUsers_setsArgumentToSkipTests() throws Exception {
-        when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(1);
-
-        mPreparer.setUp(mTestInfo);
-
-        verify(mConfiguration)
-                .injectOptionValue(eq("instrumentation-arg"), eq(SKIP_TESTS_REASON_KEY), any());
-    }
-
-    @Test
-    public void setUp_doesNotSupportAdditionalUsers_disablesTearDown() throws Exception {
-        when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(1);
-
-        mPreparer.setUp(mTestInfo);
-
-        assertThat(mPreparer.isTearDownDisabled()).isTrue();
+        verify(mTestInfo.properties()).put(eq(SKIP_TESTS_REASON_KEY), any());
     }
 
     @Test
@@ -446,7 +412,6 @@ public class RunOnWorkProfileTargetPreparerTest {
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mConfiguration, never())
-                .injectOptionValue(eq("instrumentation-arg"), eq(SKIP_TESTS_REASON_KEY), any());
+        verify(mTestInfo.properties(), never()).put(eq(SKIP_TESTS_REASON_KEY), any());
     }
 }
