@@ -763,11 +763,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         CLog.i("Port passthrough pid: %s for RootCanal port: %s", pid, cfHostPort);
 
         // Wait a bit and see if pid is still there.
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            CLog.e("sleep interrupted");
-        }
+        RunUtil.getDefault().sleep(100);
+
         CommandResult psResult = testDevice.executeShellV2Command(String.format("ps -p %s", pid));
         if (psResult.getExitCode() != 0) {
             throw new RuntimeException(

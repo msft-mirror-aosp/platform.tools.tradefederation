@@ -56,6 +56,7 @@ import java.io.PipedOutputStream;
 import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -68,6 +69,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -224,6 +226,15 @@ public class TestDevice extends NativeDevice {
                                                 packageFile.getAbsolutePath());
                             } else {
                                 response[0] = receiver.getErrorMessage();
+                                if (response[0].contains("cmd: Failure calling service package")) {
+                                    String message =
+                                            String.format(
+                                                    "Failed to install '%s'. Device might have"
+                                                            + " crashed, it returned: %s",
+                                                    packageFile.getName(), response[0]);
+                                    throw new DeviceRuntimeException(
+                                            message, DeviceErrorIdentifier.DEVICE_CRASHED);
+                                }
                             }
                         } catch (InstallException e) {
                             String message = e.getMessage();
@@ -1471,6 +1482,24 @@ public class TestDevice extends NativeDevice {
         return true;
     }
 
+    @Override
+    public boolean startVisibleBackgroundUser(int userId, int displayId, boolean waitFlag)
+            throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("startVisibleBackgroundUser", 34);
+
+        String cmd =
+                String.format(
+                        "am start-user%s --display %d %d",
+                        (waitFlag ? " -w" : ""), displayId, userId);
+        CommandResult res = executeShellV2Command(cmd);
+        if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
+            throw new DeviceRuntimeException(
+                    "Command  '" + cmd + "' failed: " + res,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        return res.getStdout().trim().startsWith("Success");
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -1519,6 +1548,23 @@ public class TestDevice extends NativeDevice {
         return true;
     }
 
+    @Override
+    public boolean isVisibleBackgroundUsersSupported() throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("isHeadlessSystemUserMode", 34);
+
+        return executeShellV2CommandThatReturnsBoolean(
+                "cmd user is-visible-background-users-supported");
+    }
+
+    @Override
+    public boolean isVisibleBackgroundUsersOnDefaultDisplaySupported()
+            throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("isVisibleBackgroundUsersOnDefaultDisplaySupported", 34);
+
+        return executeShellV2CommandThatReturnsBoolean(
+                "cmd user is-visible-background-users-on-default-display-supported");
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -1559,6 +1605,22 @@ public class TestDevice extends NativeDevice {
             CLog.e("Invalid string was returned for get-current-user: %s.", output);
         }
         return INVALID_USER_ID;
+    }
+
+    @Override
+    public boolean isUserVisible(int userId) throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("isUserVisible", 34);
+
+        return executeShellV2CommandThatReturnsBoolean("cmd user is-user-visible %d", userId);
+    }
+
+    @Override
+    public boolean isUserVisibleOnDisplay(int userId, int displayId)
+            throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("isUserVisibleOnDisplay", 34);
+
+        return executeShellV2CommandThatReturnsBoolean(
+                "cmd user is-user-visible --display %d %d", displayId, userId);
     }
 
     private Matcher findUserInfo(String pmListUsersOutput) {
@@ -2061,6 +2123,43 @@ public class TestDevice extends NativeDevice {
         }
 
         return displays;
+    }
+
+    @Override
+    public Set<Integer> listDisplayIdsForStartingVisibleBackgroundUsers()
+            throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("getDisplayIdsForStartingVisibleBackgroundUsers", 34);
+
+        String cmd = "cmd activity list-displays-for-starting-users";
+        CommandResult res = executeShellV2Command(cmd);
+        if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
+            throw new DeviceRuntimeException(
+                    "Command  '" + cmd + "' failed: " + res,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        String output = res.getStdout().trim();
+
+        if (output.equalsIgnoreCase("none")) {
+            return Collections.emptySet();
+        }
+
+        // TODO: reuse some helper to parse the list
+        if (!output.startsWith("[") || !output.endsWith("]")) {
+            throw new DeviceRuntimeException(
+                    "Invalid output for command '" + cmd + "': " + output,
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+        String contents = output.substring(1, output.length() - 1);
+        try {
+            String[] ids = contents.split(",");
+            return Arrays.asList(ids).stream()
+                    .map(id -> Integer.parseInt(id.trim()))
+                    .collect(Collectors.toSet());
+        } catch (Exception e) {
+            throw new DeviceRuntimeException(
+                    "Invalid output for command '" + cmd + "': " + output,
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
     }
 
     @Override

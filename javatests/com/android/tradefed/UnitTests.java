@@ -452,6 +452,7 @@ import com.android.tradefed.util.statsd.ConfigUtilTest;
 import com.android.tradefed.util.statsd.MetricUtilTest;
 import com.android.tradefed.util.testmapping.TestInfoTest;
 import com.android.tradefed.util.testmapping.TestMappingTest;
+import com.android.tradefed.util.zip.CentralDirectoryInfoTest;
 import com.android.tradefed.util.zip.MergedZipEntryCollectionTest;
 
 import org.junit.runner.RunWith;
@@ -944,6 +945,7 @@ import org.junit.runners.Suite.SuiteClasses;
     BuildTestsZipUtilsTest.class,
     BundletoolUtilTest.class,
     ByteArrayListTest.class,
+    CentralDirectoryInfoTest.class,
     ClassPathScannerTest.class,
     ConditionPriorityBlockingQueueTest.class,
     DirectedGraphTest.class,
