@@ -226,6 +226,15 @@ public class TestDevice extends NativeDevice {
                                                 packageFile.getAbsolutePath());
                             } else {
                                 response[0] = receiver.getErrorMessage();
+                                if (response[0].contains("cmd: Failure calling service package")) {
+                                    String message =
+                                            String.format(
+                                                    "Failed to install '%s'. Device might have"
+                                                            + " crashed, it returned: %s",
+                                                    packageFile.getName(), response[0]);
+                                    throw new DeviceRuntimeException(
+                                            message, DeviceErrorIdentifier.DEVICE_CRASHED);
+                                }
                             }
                         } catch (InstallException e) {
                             String message = e.getMessage();
