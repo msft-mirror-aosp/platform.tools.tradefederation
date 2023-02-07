@@ -19,6 +19,7 @@ package com.android.tradefed.testtype.mobly;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -145,7 +146,7 @@ public class MoblyBinaryHostTestTest {
         mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
 
         verify(mSpyTest.getRunUtil()).runTimedCmd(anyLong(), any());
-        assertFalse(new File(mSpyTest.getLogDirAbsolutePath()).exists());
+        assertNull(mSpyTest.getLogDirFile());
     }
 
     @Test
@@ -184,7 +185,7 @@ public class MoblyBinaryHostTestTest {
         mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
 
         verify(mSpyTest.getRunUtil()).runTimedCmd(anyLong(), any());
-        assertFalse(new File(mSpyTest.getLogDirAbsolutePath()).exists());
+        assertNull(mSpyTest.getLogDirFile());
     }
 
     @Test
@@ -227,7 +228,7 @@ public class MoblyBinaryHostTestTest {
             assertThat(e)
                     .hasMessageThat()
                     .contains("Fail to find test summary file test_summary.yaml under directory");
-            assertFalse(new File(mSpyTest.getLogDirAbsolutePath()).exists());
+            assertNull(mSpyTest.getLogDirFile());
         }
     }
 
