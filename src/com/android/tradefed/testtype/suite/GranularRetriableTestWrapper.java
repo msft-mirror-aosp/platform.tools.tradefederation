@@ -117,7 +117,11 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             int maxRunLimit) {
         mTest = test;
         mModule = module;
-        initializeGranularRunListener(mainListener);
+        IInvocationContext context = null;
+        if (module != null) {
+            context = module.getModuleInvocationContext();
+        }
+        initializeGranularRunListener(mainListener, context);
         mFailureListener = failureListener;
         mModuleLevelListeners = moduleLevelListeners;
         mMaxRunLimit = maxRunLimit;
@@ -187,14 +191,14 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     }
 
     /**
-     * Initialize granular run listener with {@link RemoteTestTimeOutEnforcer} if timeout is
-     * set.
+     * Initialize granular run listener with {@link RemoteTestTimeOutEnforcer} if timeout is set.
      *
      * @param listener The listener for each test run should be wrapped.
-     *
+     * @param moduleContext the invocation context of the module
      */
-    private void initializeGranularRunListener(ITestInvocationListener listener) {
-        mMainGranularRunListener = new ModuleListener(listener);
+    private void initializeGranularRunListener(
+            ITestInvocationListener listener, IInvocationContext moduleContext) {
+        mMainGranularRunListener = new ModuleListener(listener, moduleContext);
         if (mModule != null) {
             ConfigurationDescriptor configDesc =
                     mModule.getModuleInvocationContext().getConfigurationDescriptor();
