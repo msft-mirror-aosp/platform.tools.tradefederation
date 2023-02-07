@@ -768,10 +768,6 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         }
         res = device.executeShellV2Command("pm install-commit " + parentSessionId);
 
-        // Wait until all apexes are fully staged and ready.
-        // TODO: should have adb level solution b/130039562
-        RunUtil.getDefault().sleep(mApexStagingWaitTime);
-
         if (res.getStatus() == CommandStatus.SUCCESS) {
             CLog.d("Train is staged successfully. Stdout: %s.", res.getStdout());
         } else {
