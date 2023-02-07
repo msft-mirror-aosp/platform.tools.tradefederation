@@ -1128,7 +1128,8 @@ public class InvocationExecution implements IInvocationExecution {
                         continue;
                     }
                     CLog.d("Using RetryLogSaverResultForwarder to forward results.");
-                    ModuleListener mainGranularRunListener = new ModuleListener(null);
+                    ModuleListener mainGranularRunListener =
+                            new ModuleListener(null, info.getContext());
                     RetryLogSaverResultForwarder runListener =
                             initializeListeners(config, listener, mainGranularRunListener);
                     mainGranularRunListener.setAttemptIsolation(
