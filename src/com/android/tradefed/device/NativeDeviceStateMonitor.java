@@ -223,6 +223,7 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
                                         cmd, receiver, MAX_OP_TIME, TimeUnit.MILLISECONDS);
                         String output = receiver.getOutput();
                         if (output.contains("/system/bin/adb")) {
+                            CLog.i("shell ready. ls output: %s", output);
                             return BUSY_WAIT_STATUS.SUCCESS;
                         }
                     } catch (IOException
