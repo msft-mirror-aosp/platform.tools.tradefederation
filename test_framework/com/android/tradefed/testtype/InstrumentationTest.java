@@ -98,6 +98,7 @@ public class InstrumentationTest
 
     public static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
     public static final String RUN_TESTS_ON_SDK_SANDBOX = "RUN_TESTS_ON_SDK_SANDBOX";
+    private static final String SKIP_TESTS_REASON_KEY = "skip-tests-reason";
 
     @Option(
             name = "package",
@@ -746,6 +747,10 @@ public class InstrumentationTest
                 createRemoteAndroidTestRunner(
                         mPackageName, mRunnerName, mDevice.getIDevice(), testInfo);
         setRunnerArgs(mRunner);
+        if (testInfo != null && testInfo.properties().containsKey(SKIP_TESTS_REASON_KEY)) {
+            mRunner.addInstrumentationArg(
+                    SKIP_TESTS_REASON_KEY, testInfo.properties().get(SKIP_TESTS_REASON_KEY));
+        }
 
         doTestRun(testInfo, listener);
         if (mInstallFile != null) {

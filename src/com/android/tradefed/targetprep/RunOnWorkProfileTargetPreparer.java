@@ -16,9 +16,6 @@
 
 package com.android.tradefed.targetprep;
 
-import com.android.tradefed.config.ConfigurationException;
-import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -48,16 +45,13 @@ import java.util.Map;
  * to this state.
  */
 @OptionClass(alias = "run-on-work-profile")
-public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
-        implements IConfigurationReceiver {
+public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer {
 
     @VisibleForTesting static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
     @VisibleForTesting static final String TEST_PACKAGE_NAME_OPTION = "test-package-name";
 
     @VisibleForTesting static final String SKIP_TESTS_REASON_KEY = "skip-tests-reason";
-
-    private IConfiguration mConfiguration;
 
     private int mUserIdToDelete = -1;
     private DeviceOwner mDeviceOwnerToSet = null;
@@ -81,17 +75,9 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
     private List<String> mTestPackages = new ArrayList<>();
 
     @Override
-    public void setConfiguration(IConfiguration configuration) {
-        if (configuration == null) {
-            throw new NullPointerException("configuration must not be null");
-        }
-        mConfiguration = configuration;
-    }
-
-    @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, DeviceNotAvailableException {
-        if (!requireFeatures(testInfo.getDevice(), "android.software.managed_users")) {
+        if (!requireFeatures(testInfo, "android.software.managed_users")) {
             return;
         }
 
@@ -101,7 +87,7 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
             if (!assumeTrue(
                     canCreateAdditionalUsers(testInfo.getDevice(), 1),
                     "Device cannot support additional users",
-                    testInfo.getDevice())) {
+                    testInfo)) {
                 return;
             }
 
@@ -162,6 +148,11 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
 
     @Override
     public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
+        String value = testInfo.properties().remove(SKIP_TESTS_REASON_KEY);
+        if (value != null) {
+            // Skip teardown if a skip test reason was set.
+            return;
+        }
         testInfo.properties().remove(RUN_TESTS_AS_USER_KEY);
         if (mUserIdToDelete != -1) {
             testInfo.getDevice().removeUser(mUserIdToDelete);
@@ -173,13 +164,13 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
         }
     }
 
-    private boolean requireFeatures(ITestDevice device, String... features)
-            throws TargetSetupError, DeviceNotAvailableException {
+    private boolean requireFeatures(TestInformation testInfo, String... features)
+            throws DeviceNotAvailableException {
         for (String feature : features) {
             if (!assumeTrue(
-                    device.hasFeature(feature),
+                    testInfo.getDevice().hasFeature(feature),
                     "Device does not have feature " + feature,
-                    device)) {
+                    testInfo)) {
                 return false;
             }
         }
@@ -192,16 +183,10 @@ public class RunOnWorkProfileTargetPreparer extends BaseTargetPreparer
      *
      * <p>This will return {@code value} and, if it is not true, setup should be skipped.
      */
-    private boolean assumeTrue(boolean value, String reason, ITestDevice device)
-            throws TargetSetupError {
+    private boolean assumeTrue(boolean value, String reason, TestInformation testInfo) {
         if (!value) {
-            setDisableTearDown(true);
-            try {
-                mConfiguration.injectOptionValue(
-                        "instrumentation-arg", SKIP_TESTS_REASON_KEY, reason.replace(" ", "\\ "));
-            } catch (ConfigurationException e) {
-                throw new TargetSetupError(
-                        "Error setting skip-tests-reason", e, device.getDeviceDescriptor());
+            if (!value) {
+                testInfo.properties().put(SKIP_TESTS_REASON_KEY, reason.replace(" ", "\\ "));
             }
         }
 
