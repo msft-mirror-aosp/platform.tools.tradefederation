@@ -277,6 +277,67 @@ public class XmlSuiteResultFormatterTest {
         assertFalse(result.isRunComplete());
     }
 
+    @Test
+    public void testFailuresReporting_largeStackTrace() throws Exception {
+        mResultHolder.context = mContext;
+
+        List<TestRunResult> runResults = new ArrayList<>();
+        runResults.add(createFakeResult("module1", 2, 1, 0, 0, 1024 * 1024, false, false));
+        mResultHolder.runResults = runResults;
+
+        Map<String, IAbi> modulesAbi = new HashMap<>();
+        modulesAbi.put("module1", new Abi("armeabi-v7a", "32"));
+        mResultHolder.modulesAbi = modulesAbi;
+
+        mResultHolder.completeModules = 2;
+        mResultHolder.totalModules = 1;
+        mResultHolder.passedTests = 2;
+        mResultHolder.failedTests = 1;
+        mResultHolder.startTime = 0L;
+        mResultHolder.endTime = 10L;
+        File res = mFormatter.writeResults(mResultHolder, mResultDir);
+        String content = FileUtil.readStringFromFile(res);
+
+        assertXmlContainsNode(content, "Result/Module");
+        assertXmlContainsAttribute(content, "Result/Module/TestCase", "name", "com.class.module1");
+        assertXmlContainsAttribute(
+                content, "Result/Module/TestCase/Test", "name", "module1.method0");
+        assertXmlContainsAttribute(
+                content, "Result/Module/TestCase/Test", "name", "module1.method1");
+        // Check that failures are showing in the xml for the test cases with error identifiers
+        assertXmlContainsAttribute(
+                content, "Result/Module/TestCase/Test", "name", "module1.failed0");
+        assertXmlContainsAttribute(content, "Result/Module/TestCase/Test", "result", "fail");
+        assertXmlContainsAttribute(
+                content, "Result/Module/TestCase/Test/Failure", "message", "module1 failed.");
+        assertXmlContainsAttribute(
+                content,
+                "Result/Module/TestCase/Test/Failure",
+                "error_name",
+                TestErrorIdentifier.TEST_ABORTED.name());
+        assertXmlContainsAttribute(
+                content,
+                "Result/Module/TestCase/Test/Failure",
+                "error_code",
+                Long.toString(TestErrorIdentifier.TEST_ABORTED.code()));
+        assertXmlContainsValue(
+                content,
+                "Result/Module/TestCase/Test/Failure/StackTrace",
+                mFormatter.sanitizeXmlContent("module1 failed." + "\nstack".repeat(174760) + "\n"));
+        // Test that we can read back the informations
+        SuiteResultHolder holder = mFormatter.parseResults(mResultDir, false);
+        assertEquals(holder.completeModules, mResultHolder.completeModules);
+        assertEquals(holder.totalModules, mResultHolder.totalModules);
+        assertEquals(holder.passedTests, mResultHolder.passedTests);
+        assertEquals(holder.failedTests, mResultHolder.failedTests);
+        assertEquals(holder.startTime, mResultHolder.startTime);
+        assertEquals(holder.endTime, mResultHolder.endTime);
+        assertEquals(
+                holder.modulesAbi.get("armeabi-v7a module1"),
+                mResultHolder.modulesAbi.get("module1"));
+        assertEquals(holder.runResults.size(), mResultHolder.runResults.size());
+    }
+
     /** Test that assumption failures and ignored tests are correctly reported in the xml. */
     @Test
     public void testAssumptionFailures_Ignore_Reporting() throws Exception {
@@ -731,6 +792,26 @@ public class XmlSuiteResultFormatterTest {
             int testIgnored,
             boolean withMetrics,
             boolean withBadKey) {
+        return createFakeResult(
+                runName,
+                passed,
+                failed,
+                assumptionFailures,
+                testIgnored,
+                2,
+                withMetrics,
+                withBadKey);
+    }
+
+    private TestRunResult createFakeResult(
+            String runName,
+            int passed,
+            int failed,
+            int assumptionFailures,
+            int testIgnored,
+            int stackDepth,
+            boolean withMetrics,
+            boolean withBadKey) {
         TestRunResult fakeRes = new TestRunResult();
         fakeRes.testRunStarted(runName, passed + failed);
         for (int i = 0; i < passed; i++) {
@@ -745,7 +826,8 @@ public class XmlSuiteResultFormatterTest {
             fakeRes.testStarted(description);
             // Include a null character \0 that is not XML supported
             FailureDescription failureDescription =
-                    FailureDescription.create(runName + " failed.\nstack\nstack\0")
+                    FailureDescription.create(
+                                    runName + " failed." + "\nstack".repeat(stackDepth) + "\0")
                             .setErrorIdentifier(TestErrorIdentifier.TEST_ABORTED);
             fakeRes.testFailed(description, failureDescription);
             HashMap<String, Metric> metrics = new HashMap<String, Metric>();
@@ -763,7 +845,8 @@ public class XmlSuiteResultFormatterTest {
             TestDescription description =
                     new TestDescription("com.class." + runName, runName + ".assumpFail" + i);
             fakeRes.testStarted(description);
-            fakeRes.testAssumptionFailure(description, runName + " failed.\nstack\nstack");
+            fakeRes.testAssumptionFailure(
+                    description, runName + " failed." + "\nstack".repeat(stackDepth));
             fakeRes.testEnded(description, new HashMap<String, Metric>());
         }
         for (int i = 0; i < testIgnored; i++) {
