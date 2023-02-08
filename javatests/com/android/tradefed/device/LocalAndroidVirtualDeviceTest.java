@@ -96,7 +96,7 @@ public class LocalAndroidVirtualDeviceTest {
         }
 
         @Override
-        IRunUtil createRunUtil() {
+        protected IRunUtil createRunUtil() {
             Assert.assertNotNull("Unexpected method call to createRunUtil.", currentRunUtil);
             IRunUtil returnValue = currentRunUtil;
             currentRunUtil = null;
