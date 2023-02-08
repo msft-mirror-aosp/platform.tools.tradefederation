@@ -46,6 +46,7 @@ import com.android.tradefed.retry.RetryStatistics;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestCollector;
 import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -448,7 +449,9 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     private FailureDescription createFromException(Throwable exception) {
         String message =
                 (exception.getMessage() == null)
-                        ? String.format("No error message reported for: %s", exception)
+                        ? String.format(
+                                "No error message reported for: %s",
+                                StreamUtil.getStackTrace(exception))
                         : exception.getMessage();
         FailureDescription failure =
                 CurrentInvocation.createFailure(message, null).setCause(exception);
