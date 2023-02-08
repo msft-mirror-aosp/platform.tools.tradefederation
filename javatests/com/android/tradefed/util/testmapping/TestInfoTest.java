@@ -50,5 +50,6 @@ public class TestInfoTest {
                 "Host: false",
                 info.toString());
         assertEquals("test1 - false", info.getNameAndHostOnly());
+        assertEquals("test1[option1:value1, option2:value2]", info.getNameOption());
     }
 }
