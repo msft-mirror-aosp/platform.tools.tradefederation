@@ -168,8 +168,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** The time in ms to wait for a device to become unavailable. Should usually be short */
     private static final int DEFAULT_UNAVAILABLE_TIMEOUT = 20 * 1000;
-    /** The time in ms to wait for a recovery that we skip because of the NONE mode */
-    static final int NONE_RECOVERY_MODE_DELAY = 1000;
 
     private static final String SIM_STATE_PROP = "gsm.sim.state";
     private static final String SIM_OPERATOR_PROP = "gsm.operator.alpha";
@@ -2566,7 +2564,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public boolean recoverDevice() throws DeviceNotAvailableException {
         if (mRecoveryMode.equals(RecoveryMode.NONE)) {
             CLog.i("Skipping recovery on %s", getSerialNumber());
-            getRunUtil().sleep(NONE_RECOVERY_MODE_DELAY);
             return false;
         }
         CLog.i("Attempting recovery on %s", getSerialNumber());
@@ -3099,6 +3096,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (!doesFileExist(ANRS_PATH)) {
             CLog.d("No ANRs at %s", ANRS_PATH);
             return true;
+        }
+        boolean root = enableAdbRoot();
+        if (!root) {
+            CLog.d("Skipping logAnrs, need to be root.");
         }
         File localDir = null;
         long startTime = System.currentTimeMillis();
