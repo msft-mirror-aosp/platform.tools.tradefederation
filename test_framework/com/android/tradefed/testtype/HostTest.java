@@ -587,7 +587,7 @@ public class HostTest
                     Test testObj = allTest.nextElement();
                     mDownloadedFiles.addAll(resolveRemoteFileForObject(testObj));
                 }
-                try (CloseableTraceScope ignored = new CloseableTraceScope(classObj.getName())) {
+                try {
                     runJUnit3Tests(listener, junitTest, classObj.getName());
                 } finally {
                     for (File f : mDownloadedFiles) {
@@ -704,7 +704,9 @@ public class HostTest
                         new TestTimeoutEnforcer(
                                 mTestCaseTimeout.toMillis(), TimeUnit.MILLISECONDS, listener);
             }
-            return JUnitRunUtil.runTest(listener, junitTest, className, mTestInfo);
+            try (CloseableTraceScope ignored = new CloseableTraceScope(className)) {
+                return JUnitRunUtil.runTest(listener, junitTest, className, mTestInfo);
+            }
         }
     }
 
