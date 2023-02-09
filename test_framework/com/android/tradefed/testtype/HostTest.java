@@ -587,7 +587,7 @@ public class HostTest
                     Test testObj = allTest.nextElement();
                     mDownloadedFiles.addAll(resolveRemoteFileForObject(testObj));
                 }
-                try {
+                try (CloseableTraceScope ignored = new CloseableTraceScope(classObj.getName())) {
                     runJUnit3Tests(listener, junitTest, classObj.getName());
                 } finally {
                     for (File f : mDownloadedFiles) {
@@ -1381,7 +1381,7 @@ public class HostTest
     }
 
     private Set<File> resolveRemoteFileForObject(Object obj) {
-        try {
+        try (CloseableTraceScope ignore = new CloseableTraceScope("infra:resolveRemoteFiles")) {
             OptionSetter setter = new OptionSetter(obj);
             return setter.validateRemoteFilePath(createResolver());
         } catch (BuildRetrievalError | ConfigurationException e) {
