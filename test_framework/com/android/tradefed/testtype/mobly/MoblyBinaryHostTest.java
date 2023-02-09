@@ -447,8 +447,13 @@ public class MoblyBinaryHostTest
     }
 
     @VisibleForTesting
-    String getLogDirAbsolutePath() {
+    protected String getLogDirAbsolutePath() {
         return getLogDir().getAbsolutePath();
+    }
+
+    @VisibleForTesting
+    protected File getLogDirFile() {
+        return mLogDir;
     }
 
     @VisibleForTesting
@@ -503,6 +508,8 @@ public class MoblyBinaryHostTest
             }
         }
         FileUtil.recursiveDelete(logDir);
+        // reset log dir to be recreated for retries
+        mLogDir = null;
     }
 
     @VisibleForTesting
