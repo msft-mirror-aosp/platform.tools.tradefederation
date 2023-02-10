@@ -725,9 +725,12 @@ public class BuildInfo implements IBuildInfo {
                             .map(p -> p.toString())
                             .collect(Collectors.joining(";"));
             args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+            long startTime = System.currentTimeMillis();
             FeatureResponse rep =
                     client.triggerFeature(
                             ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.STAGE_REMOTE_TIME, startTime, System.currentTimeMillis());
             if (rep.hasErrorInfo()) {
                 throw new HarnessRuntimeException(
                         rep.getErrorInfo().getErrorTrace(),
