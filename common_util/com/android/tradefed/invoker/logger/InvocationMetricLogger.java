@@ -45,6 +45,7 @@ public class InvocationMetricLogger {
         AUTO_RETRY_TIME("auto_retry_time_ms", true),
         BACKFILL_BUILD_INFO("backfill_build_info", false),
         STAGE_TESTS_TIME("stage_tests_time_ms", true),
+        STAGE_REMOTE_TIME("stage_remote_time_ms", true),
         STAGE_TESTS_BYTES("stage_tests_bytes", true),
         STAGE_TESTS_INDIVIDUAL_DOWNLOADS("stage_tests_individual_downloads", true),
         SERVER_REFERENCE("server_reference", false),
