@@ -322,6 +322,9 @@ public class IsolatedHostTest
 
         if (mRobolectricResources) {
             cmdArgs.addAll(compileRobolectricOptions());
+            // Prevent tradefed from eagerly loading classes, which may not load without shadows
+            // applied.
+            mExcludePaths.add("org/robolectric");
         }
 
         if (this.debug) {
