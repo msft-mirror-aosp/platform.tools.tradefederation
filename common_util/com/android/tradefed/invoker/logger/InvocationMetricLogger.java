@@ -272,6 +272,7 @@ public class InvocationMetricLogger {
         test_cleanup("test_cleanup", true),
         log_and_release_device("log_and_release_device", true),
         invocation_events_processing("invocation_events_processing", true),
+        stage_suite_test_artifacts("stage_suite_test_artifacts", true),
         ;
 
         private final String mKeyName;
