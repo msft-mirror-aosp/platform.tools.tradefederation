@@ -251,6 +251,9 @@ public class InvocationMetricLogger {
         HAS_ANY_RUN_FAILURES("has_any_run_failures", false),
         TOTAL_TEST_COUNT("total_test_count", true),
 
+        // Metrics to store Device failure signatures
+        DEVICE_ERROR_SIGNATURES("device_failure_signatures", true),
+
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
         dynamic_download("dynamic_download", true),
