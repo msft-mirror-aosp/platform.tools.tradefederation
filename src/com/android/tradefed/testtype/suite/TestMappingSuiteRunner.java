@@ -20,17 +20,20 @@ import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.testmapping.TestInfo;
 import com.android.tradefed.util.testmapping.TestMapping;
 import com.android.tradefed.util.testmapping.TestOption;
-import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
 import com.google.common.io.Files;
 
 import org.apache.commons.compress.archivers.zip.ZipFile;
@@ -41,6 +44,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -287,7 +291,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             IAbi abi = configDescriptor.getAbi();
             // Get the parameterized module name by striping the abi information out.
             String moduleName = entry.getKey().replace(String.format("%s ", abi.getName()), "");
-            String configPath = moduleConfig.getName();
             Set<TestInfo> testInfos = getTestInfos(testInfosToRun, moduleName);
             // Only keep the same matching abi runner
             allTests.addAll(createIndividualTests(testInfos, moduleConfig, abi));
@@ -353,6 +356,8 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         }
         // De-duplicate test infos so that there won't be duplicate test options.
         testInfos = dedupTestInfos(testInfos);
+        Set<String> duplicateSources = new LinkedHashSet<>();
+
         for (TestInfo testInfo : testInfos) {
             // Clean up all the test options injected in SuiteModuleLoader.
             super.cleanUpSuiteSetup();
@@ -376,8 +381,16 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                 if (mRemoteTestTimeOut != null) {
                     addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
                 }
+                duplicateSources.addAll(testInfo.getSources());
                 tests.addAll(remoteTests);
             }
+        }
+        // If size above 1 that means we have duplicated modules with different options
+        if (tests.size() > 1) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DUPLICATE_MAPPING_DIFFERENT_OPTIONS,
+                    String.format(
+                            "%s:" + Joiner.on("+").join(duplicateSources), configPath));
         }
         return tests;
     }
