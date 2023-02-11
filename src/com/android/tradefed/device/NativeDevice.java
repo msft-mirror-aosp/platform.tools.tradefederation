@@ -3933,7 +3933,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.ADB_ROOT_ROUTINE_COUNT, 1);
         long startTime = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("adb_root")) {
             CLog.i("adb root on device %s", getSerialNumber());
             int attempts = MAX_RETRY_ATTEMPTS + 1;
             for (int i = 1; i <= attempts; i++) {
