@@ -2374,10 +2374,15 @@ public class TestDevice extends NativeDevice {
         final String logPath = TEST_ROOT + "log.txt";
         final String debugFlag =
                 Strings.isNullOrEmpty(builder.mDebugLevel) ? "" : "--debug " + builder.mDebugLevel;
+        final String cpuFlag = builder.mNumCpus == null ? "" : "--cpus " + builder.mNumCpus;
         final String cpuAffinityFlag =
                 Strings.isNullOrEmpty(builder.mCpuAffinity)
                         ? ""
                         : "--cpu-affinity " + builder.mCpuAffinity;
+        final String cpuTopologyFlag =
+                Strings.isNullOrEmpty(builder.mCpuTopology)
+                        ? ""
+                        : "--cpu-topology " + builder.mCpuTopology;
 
         List<String> args =
                 new ArrayList<>(
@@ -2392,8 +2397,9 @@ public class TestDevice extends NativeDevice {
                                 "--log " + logPath,
                                 "--mem " + builder.mMemoryMib,
                                 debugFlag,
-                                "--cpus " + builder.mNumCpus,
+                                cpuFlag,
                                 cpuAffinityFlag,
+                                cpuTopologyFlag,
                                 builder.mApkPath,
                                 outApkIdsigPath,
                                 instanceImg,
@@ -2625,8 +2631,9 @@ public class TestDevice extends NativeDevice {
         private String mConfigPath;
         private String mDebugLevel;
         private int mMemoryMib;
-        private int mNumCpus;
+        private Integer mNumCpus;
         private String mCpuAffinity;
+        private String mCpuTopology;
         private List<String> mExtraIdsigPaths;
         private boolean mProtectedVm;
         private Map<String, String> mTestDeviceOptions;
@@ -2638,7 +2645,7 @@ public class TestDevice extends NativeDevice {
             mConfigPath = configPath;
             mDebugLevel = null;
             mMemoryMib = 0;
-            mNumCpus = 1;
+            mNumCpus = null;
             mCpuAffinity = null;
             mExtraIdsigPaths = new ArrayList<>();
             mProtectedVm = false; // Vm is unprotected by default.
@@ -2659,7 +2666,11 @@ public class TestDevice extends NativeDevice {
             return new MicrodroidBuilder(null, apkPath, configPath);
         }
 
-        /** Sets the debug level. Supported values: "none", "app_only", and "full". */
+        /**
+         * Sets the debug level.
+         *
+         * <p>Supported values: "none" and "full". Android T also supports "app_only".
+         */
         public MicrodroidBuilder debugLevel(String debugLevel) {
             mDebugLevel = debugLevel;
             return this;
@@ -2674,7 +2685,11 @@ public class TestDevice extends NativeDevice {
             return this;
         }
 
-        /** Sets the number of vCPUs in the VM. Defaults to 1. */
+        /**
+         * Sets the number of vCPUs in the VM. Defaults to 1.
+         *
+         * <p>Only supported in Android T.
+         */
         public MicrodroidBuilder numCpus(int num) {
             mNumCpus = num;
             return this;
@@ -2685,9 +2700,17 @@ public class TestDevice extends NativeDevice {
          * or CPU ranges to run vCPUs on. e.g. "0,1-3,5" to choose host CPUs 0, 1, 2, 3, and 5. Or
          * this can be a colon-separated list of assignments of vCPU to host CPU assignments. e.g.
          * "0=0:1=1:2=2" to map vCPU 0 to host CPU 0, and so on.
+         *
+         * <p>Only supported in Android T.
          */
         public MicrodroidBuilder cpuAffinity(String affinity) {
             mCpuAffinity = affinity;
+            return this;
+        }
+
+        /** Sets the CPU topology configuration. Supported values: "one_cpu" and "match_host". */
+        public MicrodroidBuilder cpuTopology(String cpuTopology) {
+            mCpuTopology = cpuTopology;
             return this;
         }
 
@@ -2719,15 +2742,30 @@ public class TestDevice extends NativeDevice {
 
         /** Starts a Micrdroid TestDevice on the given TestDevice. */
         public ITestDevice build(@Nonnull TestDevice device) throws DeviceNotAvailableException {
-            if (mNumCpus < 1) {
-                throw new IllegalArgumentException("Number of vCPUs can not be less than 1.");
+            if (mNumCpus != null) {
+                if (device.getApiLevel() != 33) {
+                    throw new IllegalStateException(
+                            "Setting number of CPUs only supported with API level 33");
+                }
+                if (mNumCpus < 1) {
+                    throw new IllegalArgumentException("Number of vCPUs can not be less than 1.");
+                }
             }
 
-            if (mCpuAffinity != null
-                    && !Pattern.matches("[\\d]+(-[\\d]+)?(,[\\d]+(-[\\d]+)?)*", mCpuAffinity)
-                    && !Pattern.matches("[\\d]+=[\\d]+(:[\\d]+=[\\d]+)*", mCpuAffinity)) {
-                throw new IllegalArgumentException(
-                        "CPU affinity [" + mCpuAffinity + "]" + " is invalid");
+            if (!Strings.isNullOrEmpty(mCpuTopology)) {
+                device.checkApiLevelAgainstNextRelease("vm-cpu-topology", 34);
+            }
+
+            if (mCpuAffinity != null) {
+                if (device.getApiLevel() != 33) {
+                    throw new IllegalStateException(
+                            "Setting CPU affinity only supported with API level 33");
+                }
+                if (!Pattern.matches("[\\d]+(-[\\d]+)?(,[\\d]+(-[\\d]+)?)*", mCpuAffinity)
+                        && !Pattern.matches("[\\d]+=[\\d]+(:[\\d]+=[\\d]+)*", mCpuAffinity)) {
+                    throw new IllegalArgumentException(
+                            "CPU affinity [" + mCpuAffinity + "]" + " is invalid");
+                }
             }
 
             return device.startMicrodroid(this);
