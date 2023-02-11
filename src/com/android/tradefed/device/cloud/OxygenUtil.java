@@ -71,7 +71,14 @@ public class OxygenUtil {
                                             Pattern.compile("^launcher\\.log.*"),
                                             Pair.create(
                                                     Pattern.compile(".*vcpu hw run failure: 0x7.*"),
-                                                    "crosvm_vcpu_hw_run_failure_7")))
+                                                    "crosvm_vcpu_hw_run_failure_7")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    Pattern.compile(
+                                                            ".*Unable to connect to vsock"
+                                                                    + " server.*"),
+                                                    "unable_to_connect_to_vsock_server")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /** Default constructor of OxygenUtil */
