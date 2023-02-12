@@ -248,8 +248,13 @@ public class InvocationMetricLogger {
         // Ab downloader metrics
         AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
 
+        DUPLICATE_MAPPING_DIFFERENT_OPTIONS("duplicate_mapping_different_options", true),
+
         HAS_ANY_RUN_FAILURES("has_any_run_failures", false),
         TOTAL_TEST_COUNT("total_test_count", true),
+
+        // Metrics to store Device failure signatures
+        DEVICE_ERROR_SIGNATURES("device_failure_signatures", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
@@ -269,6 +274,7 @@ public class InvocationMetricLogger {
         test_cleanup("test_cleanup", true),
         log_and_release_device("log_and_release_device", true),
         invocation_events_processing("invocation_events_processing", true),
+        stage_suite_test_artifacts("stage_suite_test_artifacts", true),
         ;
 
         private final String mKeyName;
