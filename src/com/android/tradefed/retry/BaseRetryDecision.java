@@ -267,25 +267,24 @@ public class BaseRetryDecision
             return false;
         }
 
-        mStatistics.addResultsFromRun(previousResults);
+        boolean shouldRetry = false;
+        long retryStartTime = System.currentTimeMillis();
         if (test instanceof ITestFilterReceiver) {
             // TODO(b/77548917): Right now we only support ITestFilterReceiver. We should expect to
             // support ITestFile*Filter*Receiver in the future.
             ITestFilterReceiver filterableTest = (ITestFilterReceiver) test;
-            boolean shouldRetry = handleRetryFailures(filterableTest, previousResults);
+            shouldRetry = handleRetryFailures(filterableTest, previousResults);
             if (shouldRetry) {
                 // In case of retry, go through the recovery routine
                 recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
             }
-            return shouldRetry;
         } else if (test instanceof IAutoRetriableTest) {
             // Routine for IRemoteTest that don't support filters but still needs retry.
             IAutoRetriableTest autoRetryTest = (IAutoRetriableTest) test;
-            boolean shouldRetry = autoRetryTest.shouldRetry(attemptJustExecuted, previousResults);
+            shouldRetry = autoRetryTest.shouldRetry(attemptJustExecuted, previousResults);
             if (shouldRetry) {
                 recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
             }
-            return shouldRetry;
         } else {
             CLog.d(
                     "%s does not implement ITestFilterReceiver or IAutoRetriableTest, thus "
@@ -293,6 +292,12 @@ public class BaseRetryDecision
                     test);
             return false;
         }
+        long retryCost = System.currentTimeMillis() - retryStartTime;
+        if (!shouldRetry) {
+            retryCost = 0L;
+        }
+        mStatistics.addResultsFromRun(previousResults, retryCost, attemptJustExecuted);
+        return shouldRetry;
     }
 
     @Override
