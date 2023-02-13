@@ -2361,6 +2361,7 @@ public class TestDevice extends NativeDevice {
         } catch (IOException e) {
             throw new DeviceRuntimeException(
                     "Unable to get an unused port for Microdroid.",
+                    e,
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
         }
 
@@ -2461,7 +2462,9 @@ public class TestDevice extends NativeDevice {
             }
         } catch (IOException ex) {
             throw new DeviceRuntimeException(
-                    "IOException trying to start a VM", DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+                    "IOException trying to start a VM",
+                    ex,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
 
         // Redirect log.txt to logd using logwrapper
