@@ -180,6 +180,14 @@ public class BaseRetryDecision
             return decision;
         }
 
+        // Resetting the device only happends when FULLY_ISOLATED is set, and that cleans up the
+        // device to pure state and re-run suite-level or module-level setup. Besides, it doesn't
+        // need to retry module for reboot isolation.
+        if (!IsolationGrade.FULLY_ISOLATED.equals(mRetryIsolationGrade)) {
+            CLog.i("Do not proceed on module retry because it's not set FULLY_ISOLATED.");
+            return decision;
+        }
+
         try {
             recoverStateOfDevices(getDevices(), attempt, module);
         } catch (DeviceNotAvailableException e) {
