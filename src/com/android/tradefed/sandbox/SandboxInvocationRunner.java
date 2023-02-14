@@ -58,7 +58,13 @@ public class SandboxInvocationRunner {
             throw new RuntimeException("Couldn't find the sandbox object.");
         }
         PrettyPrintDelimiter.printStageDelimiter("Starting Sandbox Environment Setup");
-        Exception res = sandbox.prepareEnvironment(info.getContext(), config, listener);
+        Exception res = null;
+        try {
+            res = sandbox.prepareEnvironment(info.getContext(), config, listener);
+        } catch (RuntimeException e) {
+            sandbox.tearDown();
+            throw e;
+        }
         if (res != null) {
             CLog.w("Sandbox prepareEnvironment threw an Exception.");
             sandbox.tearDown();
