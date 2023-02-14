@@ -17,6 +17,8 @@ package com.android.tradefed.util;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.targetprep.AltDirBehavior;
 
 import java.io.File;
@@ -146,6 +148,8 @@ public class BuildTestsZipUtils {
         if (testsDir != null) {
             File apkFile = buildInfo.stageRemoteFile(apkFileName, testsDir);
             if (apkFile != null) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.STAGE_UNDEFINED_DEPENDENCY, apkFileName);
                 return apkFile;
             }
         }
