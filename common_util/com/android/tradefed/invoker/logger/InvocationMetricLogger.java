@@ -48,6 +48,7 @@ public class InvocationMetricLogger {
         STAGE_REMOTE_TIME("stage_remote_time_ms", true),
         STAGE_TESTS_BYTES("stage_tests_bytes", true),
         STAGE_TESTS_INDIVIDUAL_DOWNLOADS("stage_tests_individual_downloads", true),
+        STAGE_UNDEFINED_DEPENDENCY("stage_undefined_dependency", true),
         SERVER_REFERENCE("server_reference", false),
         INSTRUMENTATION_RERUN_FROM_FILE("instrumentation_rerun_from_file", true),
         INSTRUMENTATION_RERUN_SERIAL("instrumentation_rerun_serial", true),
