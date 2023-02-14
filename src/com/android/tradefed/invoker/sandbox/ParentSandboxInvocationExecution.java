@@ -130,13 +130,29 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             IInvocationContext context, IConfiguration config, ITestLogger logger)
             throws DeviceNotAvailableException, TargetSetupError {
         if (shouldRunDeviceSpecificSetup(config)) {
-            if (getSandboxOptions(config).shouldParallelSetup()
-                    && getSandboxOptions(config).shouldUseNewFlagOrder()) {
+            boolean parallelSetup =
+                    getSandboxOptions(config).shouldParallelSetup()
+                            && getSandboxOptions(config).shouldUseNewFlagOrder();
+            if (parallelSetup) {
                 setupThread =
                         new SandboxSetupThread(mTestInfo, config, (ITestInvocationListener) logger);
                 setupThread.start();
             }
-            super.runDevicePreInvocationSetup(context, config, logger);
+            try {
+                super.runDevicePreInvocationSetup(context, config, logger);
+            } catch (DeviceNotAvailableException | TargetSetupError | RuntimeException e) {
+                if (parallelSetup) {
+                    // Join and clean up since run won't be called.
+                    try {
+                        setupThread.join();
+                    } catch (InterruptedException ie) {
+                        // Ignore
+                        CLog.e(e);
+                    }
+                    SandboxInvocationRunner.teardownSandbox(config);
+                }
+                throw e;
+            }
             if (!getSandboxOptions(config).shouldUseNewFlagOrder()) {
                 String commandLine = config.getCommandLine();
                 for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
