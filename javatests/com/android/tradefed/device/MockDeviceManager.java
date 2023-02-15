@@ -103,7 +103,7 @@ public class MockDeviceManager implements IDeviceManager {
     }
 
     public void setNumDevicesCustom(
-            int numDevices, TestDeviceState state, Class<? extends IDevice> idevicetype) {
+            int numDevices, TestDeviceState state, Class<IDevice> idevicetype) {
         mAvailableDeviceQueue.clear();
         mTotalDevices = numDevices;
         for (int i = 0; i < numDevices; i++) {
@@ -153,9 +153,7 @@ public class MockDeviceManager implements IDeviceManager {
     private static class TestDeviceMatcher implements IMatcher<ITestDevice> {
         private IDeviceSelection mDeviceOptions;
 
-        /**
-         * @param deviceSelectionOptions
-         */
+        /** @param deviceSelectionOptions */
         public TestDeviceMatcher(IDeviceSelection deviceSelectionOptions) {
             mDeviceOptions = deviceSelectionOptions;
         }
