@@ -78,10 +78,9 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
     private long mTimeoutMilli = 20 * 60 * 1000;
 
     @Override
-    public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener)
+    public void extraInit(IInvocationContext context, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        super.init(context, listener);
+        super.extraInit(context, listener);
 
         verifyNotNull(mConfiguration);
         setCoverageOptions(mConfiguration.getCoverageOptions());
@@ -94,8 +93,6 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                 }
             }
         }
-
-        return this;
     }
 
     @Override
