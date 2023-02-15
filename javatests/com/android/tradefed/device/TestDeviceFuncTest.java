@@ -44,7 +44,6 @@ import com.android.tradefed.util.KeyguardControllerState;
 import com.android.tradefed.util.ProcessInfo;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
-import android.platform.test.annotations.FlakyTest;
 
 import org.junit.Assume;
 import org.junit.Before;
@@ -665,7 +664,6 @@ public class TestDeviceFuncTest implements IDeviceTest {
     }
 
     /** Test device soft-restart detection API. */
-    @FlakyTest
     @Test
     public void testDeviceSoftRestart() throws DeviceNotAvailableException {
         CLog.i("testDeviceSoftRestartSince");

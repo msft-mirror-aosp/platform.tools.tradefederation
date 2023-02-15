@@ -35,6 +35,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 
 import java.io.File;
 import java.io.IOException;
@@ -75,6 +76,10 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     protected static final String PARENT_SESSION_CREATION_CMD = "pm install-create --multi-package";
     protected static final String CHILD_SESSION_CREATION_CMD = "pm install-create";
     protected static final String APEX_OPTION = "--apex";
+    // The dump logic in {@link com.android.server.pm.ComputerEngine#generateApexPackageInfo} is
+    // invalid.
+    private static final ImmutableList<String> PACKAGES_WITH_INVALID_DUMP_INFO =
+            ImmutableList.of("com.google.mainline.primary.libs");
 
     private List<ApexInfo> mTestApexInfoList = new ArrayList<>();
     private List<String> mApexModulesToUninstall = new ArrayList<>();
@@ -651,7 +656,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                         device.getDeviceDescriptor(),
                         DeviceErrorIdentifier.FAIL_PUSH_FILE);
             } else {
-              CLog.d("%s pushed successfully to %s.", moduleFile.getName(), MODULE_PUSH_REMOTE_PATH + moduleFile.getName());
+                CLog.d(
+                        "%s pushed successfully to %s.",
+                        moduleFile.getName(), MODULE_PUSH_REMOTE_PATH + moduleFile.getName());
             }
             if (moduleFile.getName().endsWith(APK_SUFFIX)) {
                 String packageName = parsePackageName(moduleFile, device.getDeviceDescriptor());
@@ -670,7 +677,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             CLog.d("Parent session %s created successfully. ", parentSessionId);
         } else {
             throw new TargetSetupError(
-                    String.format("Failed to create parent session. Error: %s, Stdout: %s", res.getStderr(), res.getStdout()),
+                    String.format(
+                            "Failed to create parent session. Error: %s, Stdout: %s",
+                            res.getStderr(), res.getStdout()),
                     device.getDeviceDescriptor());
         }
 
@@ -678,20 +687,45 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             String childSessionId = null;
             if (moduleFile.getName().endsWith(APEX_SUFFIX)) {
                 if (mEnableRollback) {
-                    res = device.executeShellV2Command(String.format("%s %s %s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, APEX_OPTION, STAGED_INSTALL_OPTION, ENABLE_ROLLBACK_INSTALL_OPTION));
+                    res =
+                            device.executeShellV2Command(
+                                    String.format(
+                                            "%s %s %s %s | egrep -o -e '[0-9]+'",
+                                            CHILD_SESSION_CREATION_CMD,
+                                            APEX_OPTION,
+                                            STAGED_INSTALL_OPTION,
+                                            ENABLE_ROLLBACK_INSTALL_OPTION));
                 } else {
-                    res = device.executeShellV2Command(String.format("%s %s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, APEX_OPTION, STAGED_INSTALL_OPTION));
+                    res =
+                            device.executeShellV2Command(
+                                    String.format(
+                                            "%s %s %s | egrep -o -e '[0-9]+'",
+                                            CHILD_SESSION_CREATION_CMD,
+                                            APEX_OPTION,
+                                            STAGED_INSTALL_OPTION));
                 }
             } else {
                 if (mEnableRollback) {
-                    res = device.executeShellV2Command(String.format("%s %s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, STAGED_INSTALL_OPTION, ENABLE_ROLLBACK_INSTALL_OPTION));
+                    res =
+                            device.executeShellV2Command(
+                                    String.format(
+                                            "%s %s %s | egrep -o -e '[0-9]+'",
+                                            CHILD_SESSION_CREATION_CMD,
+                                            STAGED_INSTALL_OPTION,
+                                            ENABLE_ROLLBACK_INSTALL_OPTION));
                 } else {
-                    res = device.executeShellV2Command(String.format("%s %s | egrep -o -e '[0-9]+'", CHILD_SESSION_CREATION_CMD, STAGED_INSTALL_OPTION));
+                    res =
+                            device.executeShellV2Command(
+                                    String.format(
+                                            "%s %s | egrep -o -e '[0-9]+'",
+                                            CHILD_SESSION_CREATION_CMD, STAGED_INSTALL_OPTION));
                 }
             }
             if (res.getStatus() == CommandStatus.SUCCESS) {
                 childSessionId = res.getStdout();
-                CLog.d("Child session %s created successfully for %s. ", childSessionId, moduleFile.getName());
+                CLog.d(
+                        "Child session %s created successfully for %s. ",
+                        childSessionId, moduleFile.getName());
             } else {
                 throw new TargetSetupError(
                         String.format(
@@ -707,28 +741,32 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                                     parsePackageName(moduleFile, device.getDeviceDescriptor()),
                                     MODULE_PUSH_REMOTE_PATH + moduleFile.getName()));
             if (res.getStatus() == CommandStatus.SUCCESS) {
-                CLog.d("Successfully wrote %s to session %s. ", moduleFile.getName(), childSessionId);
+                CLog.d(
+                        "Successfully wrote %s to session %s. ",
+                        moduleFile.getName(), childSessionId);
             } else {
                 throw new TargetSetupError(
                         String.format("Failed to write %s to session %s. Error: %s, Stdout: %s",
                             moduleFile.getName(), childSessionId, res.getStderr(), res.getStdout()),
                     device.getDeviceDescriptor());
             }
-            res = device.executeShellV2Command(
+            res =
+                    device.executeShellV2Command(
                             String.format(
-                                    "pm install-add-session " + parentSessionId + " " + childSessionId));
+                                    "pm install-add-session "
+                                            + parentSessionId
+                                            + " "
+                                            + childSessionId));
             if (res.getStatus() != CommandStatus.SUCCESS) {
                 throw new TargetSetupError(
-                        String.format("Failed to add child session %s to parent session %s. Error: %s, Stdout: %s",
-                            childSessionId, parentSessionId, res.getStderr(), res.getStdout()),
-                    device.getDeviceDescriptor());
+                        String.format(
+                                "Failed to add child session %s to parent session %s. Error: %s,"
+                                        + " Stdout: %s",
+                                childSessionId, parentSessionId, res.getStderr(), res.getStdout()),
+                        device.getDeviceDescriptor());
             }
         }
         res = device.executeShellV2Command("pm install-commit " + parentSessionId);
-
-        // Wait until all apexes are fully staged and ready.
-        // TODO: should have adb level solution b/130039562
-        RunUtil.getDefault().sleep(mApexStagingWaitTime);
 
         if (res.getStatus() == CommandStatus.SUCCESS) {
             CLog.d("Train is staged successfully. Stdout: %s.", res.getStdout());
@@ -1026,6 +1064,10 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         for (ApexInfo testApexInfo : mTestApexInfoList) {
             if (!activatedApexInfo.containsKey(testApexInfo.name)) {
                 failToActivateApex.add(testApexInfo);
+            } else if (PACKAGES_WITH_INVALID_DUMP_INFO.contains(testApexInfo.name)) {
+                // Skip checking version or sourceDir if we can't get the valid info.
+                // ToDo(b/265785212): Remove this if bug fixed.
+                continue;
             } else if (activatedApexInfo.get(testApexInfo.name).versionCode
                     != testApexInfo.versionCode) {
                 failToActivateApex.add(testApexInfo);

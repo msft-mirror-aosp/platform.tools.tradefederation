@@ -45,8 +45,10 @@ public class InvocationMetricLogger {
         AUTO_RETRY_TIME("auto_retry_time_ms", true),
         BACKFILL_BUILD_INFO("backfill_build_info", false),
         STAGE_TESTS_TIME("stage_tests_time_ms", true),
+        STAGE_REMOTE_TIME("stage_remote_time_ms", true),
         STAGE_TESTS_BYTES("stage_tests_bytes", true),
         STAGE_TESTS_INDIVIDUAL_DOWNLOADS("stage_tests_individual_downloads", true),
+        STAGE_UNDEFINED_DEPENDENCY("stage_undefined_dependency", true),
         SERVER_REFERENCE("server_reference", false),
         INSTRUMENTATION_RERUN_FROM_FILE("instrumentation_rerun_from_file", true),
         INSTRUMENTATION_RERUN_SERIAL("instrumentation_rerun_serial", true),
@@ -165,6 +167,7 @@ public class InvocationMetricLogger {
         CF_INSTANCE_COUNT("cf_instance_count", false),
         CF_OXYGEN_SERVER_URL("cf_oxygen_server_url", false),
         CF_OXYGEN_SESSION_ID("cf_oxygen_session_id", false),
+        CF_OXYGEN_VERSION("cf_oxygen_version", false),
         CRASH_FAILURES("crash_failures", true),
         UNCAUGHT_CRASH_FAILURES("uncaught_crash_failures", true),
         TEST_CRASH_FAILURES("test_crash_failures", true),
@@ -246,8 +249,13 @@ public class InvocationMetricLogger {
         // Ab downloader metrics
         AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
 
+        DUPLICATE_MAPPING_DIFFERENT_OPTIONS("duplicate_mapping_different_options", true),
+
         HAS_ANY_RUN_FAILURES("has_any_run_failures", false),
         TOTAL_TEST_COUNT("total_test_count", true),
+
+        // Metrics to store Device failure signatures
+        DEVICE_ERROR_SIGNATURES("device_failure_signatures", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
@@ -267,6 +275,7 @@ public class InvocationMetricLogger {
         test_cleanup("test_cleanup", true),
         log_and_release_device("log_and_release_device", true),
         invocation_events_processing("invocation_events_processing", true),
+        stage_suite_test_artifacts("stage_suite_test_artifacts", true),
         ;
 
         private final String mKeyName;

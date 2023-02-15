@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
@@ -64,6 +65,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
@@ -197,6 +199,7 @@ public class ClangCodeCoverageCollectorTest {
     public void testRun_logsCoverageFile() throws Exception {
         mCoverageOptionsSetter.setOptionValue("coverage", "true");
         mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
+        mCoverageOptionsSetter.setOptionValue("pull-timeout", "314159");
 
         // Setup mocks.
         doReturn(true).when(mMockDevice).isAdbRoot();
@@ -216,6 +219,15 @@ public class ClangCodeCoverageCollectorTest {
         mListener.testRunEnded(ELAPSED_TIME, mMetrics);
         mListener.invocationEnded(ELAPSED_TIME);
 
+        // Verify the timeout is set.
+        verify(mMockDevice, times(1))
+                .executeShellV2Command(
+                        eq("find /data/misc/trace -name '*.profraw' | tar -czf - -T - 2>/dev/null"),
+                        any(),
+                        any(),
+                        eq(314159L),
+                        eq(TimeUnit.MILLISECONDS),
+                        eq(1));
         // Verify that the command line contains the files above.
         List<String> command = mCommandArgumentCaptor.getCommand();
         checkListContainsSuffixes(

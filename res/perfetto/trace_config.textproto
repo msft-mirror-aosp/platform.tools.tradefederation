@@ -67,7 +67,13 @@ data_sources {
       # {injected_config}
 
       atrace_categories: "am"
+      atrace_categories: "aidl"
+      atrace_categories: "bionic"
       atrace_categories: "dalvik"
+      atrace_categories: "sched"
+      atrace_categories: "gfx"
+      atrace_categories: "view"
+      atrace_categories: "hal"
       atrace_categories: "binder_driver"
     }
   }

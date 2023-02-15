@@ -397,7 +397,9 @@ public class GceAvdInfo {
         CLog.d("Parsing oxygen client output: %s", output);
 
         Pattern pattern =
-                Pattern.compile("session_id:\"(.*?)\".*?server_url:\"(.*?)\"", Pattern.DOTALL);
+                Pattern.compile(
+                        "session_id:\"(.*?)\".*?server_url:\"(.*?)\".*?oxygen_version:\"(.*?)\"",
+                        Pattern.DOTALL);
         Matcher matcher = pattern.matcher(output);
 
         List<GceAvdInfo> gceAvdInfos = new ArrayList<>();
@@ -405,6 +407,7 @@ public class GceAvdInfo {
         while (matcher.find()) {
             String sessionId = matcher.group(1);
             String serverUrl = matcher.group(2);
+            String oxygenVersion = matcher.group(3);
             gceAvdInfos.add(
                     new GceAvdInfo(
                             sessionId,
@@ -413,6 +416,8 @@ public class GceAvdInfo {
                             null,
                             null,
                             GceStatus.SUCCESS));
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_OXYGEN_VERSION, oxygenVersion);
             deviceOffset++;
         }
         if (gceAvdInfos.isEmpty()) {

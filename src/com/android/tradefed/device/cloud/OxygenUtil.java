@@ -23,10 +23,15 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GCSFileDownloader;
+import com.android.tradefed.util.Pair;
 
 import java.io.File;
 import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -53,6 +58,28 @@ public class OxygenUtil {
                                     Pattern.compile(".*tombstones-zip.*zip"),
                                     LogDataType.TOMBSTONEZ))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+    private static final Map<Pattern, Pair<Pattern, String>>
+            REMOTE_LOG_NAME_PATTERN_TO_ERROR_SIGNATURE_MAP =
+                    Stream.of(
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    Pattern.compile(".*Address already in use.*"),
+                                                    "launch_cvd_port_collision")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    Pattern.compile(".*vcpu hw run failure: 0x7.*"),
+                                                    "crosvm_vcpu_hw_run_failure_7")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    Pattern.compile(
+                                                            ".*Unable to connect to vsock"
+                                                                    + " server.*"),
+                                                    "unable_to_connect_to_vsock_server")))
+                            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /** Default constructor of OxygenUtil */
     public OxygenUtil() {
@@ -142,5 +169,118 @@ public class OxygenUtil {
                                 + " UNKNOWN",
                         logFileName));
         return LogDataType.UNKNOWN;
+    }
+
+    /**
+     * Collect error signatures from logs.
+     *
+     * @param logDir directory of logs pulled from remote host.
+     */
+    public static List<String> collectErrorSignatures(File logDir) {
+        CLog.d("Collect error signature from logs under: %s.", logDir);
+        List<String> signatures = new ArrayList<>();
+        try {
+            Set<String> files = FileUtil.findFiles(logDir, ".*");
+            for (String f : files) {
+                File file = new File(f);
+                if (file.isDirectory()) {
+                    continue;
+                }
+                String fileName = file.getName();
+                List<Pair<Pattern, String>> pairs = new ArrayList<>();
+                for (Map.Entry<Pattern, Pair<Pattern, String>> entry :
+                        REMOTE_LOG_NAME_PATTERN_TO_ERROR_SIGNATURE_MAP.entrySet()) {
+                    Matcher matcher = entry.getKey().matcher(fileName);
+                    if (matcher.find()) {
+                        pairs.add(entry.getValue());
+                    }
+                }
+                if (pairs.size() == 0) {
+                    continue;
+                }
+                try (Scanner scanner = new Scanner(file)) {
+                    List<Pair<Pattern, String>> pairsToRemove = new ArrayList<>();
+                    while (scanner.hasNextLine()) {
+                        String line = scanner.nextLine();
+                        for (Pair<Pattern, String> pair : pairs) {
+                            if (pair.first.matcher(line).find()) {
+                                pairsToRemove.add(pair);
+                                signatures.add(pair.second);
+                            }
+                        }
+                        if (pairsToRemove.size() > 0) {
+                            pairs.removeAll(pairsToRemove);
+                            if (pairs.size() == 0) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            CLog.e("Failed to collect error signature.");
+            CLog.e(e);
+        }
+        Collections.sort(signatures);
+        return signatures;
+    }
+
+    /**
+     * Collect device launcher metrics from vdl_stdout.
+     *
+     * @param logDir directory of logs pulled from remote host.
+     */
+    public static long[] collectDeviceLaunchMetrics(File logDir) {
+        CLog.d("Collect device launcher metrics from logs under: %s.", logDir);
+        long[] metrics = {-1, -1};
+        try {
+            Set<String> files = FileUtil.findFiles(logDir, "^vdl_stdout\\.txt.*");
+            if (files.size() == 0) {
+                CLog.d("There is no vdl_stdout.txt found.");
+                return metrics;
+            }
+            File vdlStdout = new File(files.iterator().next());
+            double cuttlefishCommon = 0;
+            double launchDevice = 0;
+            double mainstart = 0;
+            Pattern cuttlefishCommonPatteren =
+                    Pattern.compile(".*\\|\\s*(\\d+\\.\\d+)\\s*\\|\\sCuttlefishCommon");
+            Pattern launchDevicePatteren =
+                    Pattern.compile(".*\\|\\s*(\\d+\\.\\d+)\\s*\\|\\sLaunchDevice");
+            Pattern mainstartPatteren =
+                    Pattern.compile(".*\\|\\s*(\\d+\\.\\d+)\\s*\\|\\sCuttlefishLauncherMainstart");
+            try (Scanner scanner = new Scanner(vdlStdout)) {
+                while (scanner.hasNextLine()) {
+                    String line = scanner.nextLine();
+                    Matcher matcher;
+                    if (cuttlefishCommon == 0) {
+                        matcher = cuttlefishCommonPatteren.matcher(line);
+                        if (matcher.find()) {
+                            cuttlefishCommon = Double.parseDouble(matcher.group(1));
+                        }
+                    }
+                    if (launchDevice == 0) {
+                        matcher = launchDevicePatteren.matcher(line);
+                        if (matcher.find()) {
+                            launchDevice = Double.parseDouble(matcher.group(1));
+                        }
+                    }
+                    if (mainstart == 0) {
+                        matcher = mainstartPatteren.matcher(line);
+                        if (matcher.find()) {
+                            mainstart = Double.parseDouble(matcher.group(1));
+                        }
+                    }
+                }
+            }
+            if (mainstart > 0) {
+                metrics[0] = (long) ((mainstart - launchDevice - cuttlefishCommon) * 1000);
+                metrics[1] = (long) (launchDevice * 1000);
+            }
+        } catch (Exception e) {
+            CLog.e("Failed to parse device launch time from vdl_stdout.txt.");
+            CLog.e(e);
+        }
+        return metrics;
     }
 }

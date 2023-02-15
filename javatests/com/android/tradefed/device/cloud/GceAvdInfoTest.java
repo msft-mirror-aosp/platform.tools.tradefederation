@@ -488,6 +488,7 @@ public class GceAvdInfoTest {
                     + " random_key:\"this-is-12345678\"\n"
                     + " leased_device_spec:{type:TESTTYPE build_artifacts:{build_id:\"P1234567\""
                     + " build_target:\"target\" build_branch:\"testBranch\"}}"
+                    + " oxygen_version:\"v20220509-0008-rc01-cl447382102\"  "
                     + " debug_info:{reserved_cores:1 region:\"test-region\" environment:\"test\"}";
         CommandResult res = Mockito.mock(CommandResult.class);
         Mockito.doAnswer(

@@ -446,9 +446,22 @@ public class MoblyBinaryHostTest
         listener.testRunEnded(0L, new HashMap<String, Metric>());
     }
 
+    private Set<String> cleanFilters(Set<String> filters) {
+        Set<String> new_filters = new LinkedHashSet<String>();
+        for (String filter : filters) {
+            new_filters.add(filter.replace("#", "."));
+        }
+        return new_filters;
+    }
+
     @VisibleForTesting
-    String getLogDirAbsolutePath() {
+    protected String getLogDirAbsolutePath() {
         return getLogDir().getAbsolutePath();
+    }
+
+    @VisibleForTesting
+    protected File getLogDirFile() {
+        return mLogDir;
     }
 
     @VisibleForTesting
@@ -478,6 +491,10 @@ public class MoblyBinaryHostTest
             commandLine.add("--device_serial=" + device.getSerialNumber());
         }
         commandLine.add("--log_path=" + getLogDirAbsolutePath());
+        if (!mIncludeFilters.isEmpty()) {
+            commandLine.add("--tests");
+            commandLine.addAll(cleanFilters(mIncludeFilters));
+        }
         // Add all the other options
         commandLine.addAll(getTestOptions());
         return commandLine.toArray(new String[0]);
@@ -503,6 +520,8 @@ public class MoblyBinaryHostTest
             }
         }
         FileUtil.recursiveDelete(logDir);
+        // reset log dir to be recreated for retries
+        mLogDir = null;
     }
 
     @VisibleForTesting

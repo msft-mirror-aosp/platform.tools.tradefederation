@@ -20,6 +20,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
+import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
@@ -43,7 +45,8 @@ public class ModuleListenerTest {
     @Before
     public void setUp() {
         mStubListener = new ITestInvocationListener() {};
-        mListener = new ModuleListener(mStubListener);
+        IInvocationContext context = new InvocationContext();
+        mListener = new ModuleListener(mStubListener, context);
     }
 
     /** Test that a regular execution yield the proper number of tests. */
