@@ -280,6 +280,44 @@ public class ShowmapPullerMetricCollectorTest {
     }
 
     @Test
+    public void testNoProcessFlow() throws Exception {
+        OptionSetter setter = new OptionSetter(mShowmapMetricCollector);
+        setter.setOptionValue("collect-on-run-ended-only", "false");
+        setter.setOptionValue("pull-pattern-keys", "showmap_output_file");
+        setter.setOptionValue("showmap-process-name", "");
+        FileWriter writer = new FileWriter(mTmpFile);
+        String log =
+                String.join(
+                        "\n",
+                        ">>> system_server (6910) <<<",
+                        "size      RSS      PSS    clean    dirty    clean    dirty",
+                        "-------- -------- --------",
+                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
+                        "-------- -------- --------",
+                        "   >>> netd (7038) <<<   ",
+                        "size      RSS      PSS    clean    dirty    clean    dirty",
+                        "-------- -------- --------",
+                        "100 2021 3033 4092 500 6 7  8 9 100 110 120 130 140 15 rw- obj123",
+                        "-------- -------- --------");
+        writer.write(log);
+        writer.close();
+        TestDescription testDesc = new TestDescription("xyz", "abc");
+        mShowmapMetricCollector.testStarted(testDesc);
+
+        HashMap<String, Metric> currentMetrics = new HashMap<>();
+        currentMetrics.put(
+                "showmap_output_file",
+                TfMetricProtoUtil.stringToMetric("/sdcard/test_results/showmap.txt"));
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/sdcard/test_results/showmap.txt")))
+                .thenReturn(mTmpFile);
+
+        mShowmapMetricCollector.testEnded(testDesc, currentMetrics);
+        Assert.assertEquals(1, currentMetrics.size());
+        Assert.assertEquals(
+                null, currentMetrics.get("showmap_granular_system_server_total_object_count"));
+    }
+
+    @Test
     public void testErrorFlow() throws Exception {
         OptionSetter setter = new OptionSetter(mShowmapMetricCollector);
         setter.setOptionValue("collect-on-run-ended-only", "false");
