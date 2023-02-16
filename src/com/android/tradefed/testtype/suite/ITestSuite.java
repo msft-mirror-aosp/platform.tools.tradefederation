@@ -997,6 +997,8 @@ public abstract class ITestSuite
 
         // We report System checkers like tests.
         reportModuleCheckerResult(MODULE_CHECKER_PRE, moduleName, failures, startTime, listener);
+        InvocationMetricLogger.addInvocationPairMetrics(
+                InvocationMetricKey.STATUS_CHECKER_PAIR, startTime, System.currentTimeMillis());
         return properties;
     }
 
@@ -1058,6 +1060,8 @@ public abstract class ITestSuite
 
         // We report System checkers like tests.
         reportModuleCheckerResult(MODULE_CHECKER_POST, moduleName, failures, startTime, listener);
+        InvocationMetricLogger.addInvocationPairMetrics(
+                InvocationMetricKey.STATUS_CHECKER_PAIR, startTime, System.currentTimeMillis());
         return properties;
     }
 
