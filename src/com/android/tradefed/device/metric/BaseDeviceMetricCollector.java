@@ -99,7 +99,7 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     private boolean mDeviceNoAvailable = false;
 
     @Override
-    public ITestInvocationListener init(
+    public final ITestInvocationListener init(
             IInvocationContext context, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         mContext = context;
@@ -110,7 +110,24 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         }
         mWasInitDone = true;
         mDeviceNoAvailable = false;
+        long start = System.currentTimeMillis();
+        try {
+            extraInit(context, listener);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+        }
         return this;
+    }
+
+    /**
+     * @param context
+     * @param listener
+     * @throws DeviceNotAvailableException
+     */
+    public void extraInit(IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
+        // Empty by default
     }
 
     @Override
@@ -257,6 +274,7 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testModuleStarted(IInvocationContext moduleContext) {
+        long start = System.currentTimeMillis();
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("module_start_" + this.getClass().getSimpleName())) {
             onTestModuleStarted();
@@ -266,12 +284,15 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         } catch (Throwable t) {
             CLog.e(t);
         } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
             mForwarder.testModuleStarted(moduleContext);
         }
     }
 
     @Override
     public final void testModuleEnded() {
+        long start = System.currentTimeMillis();
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("module_end_" + this.getClass().getSimpleName())) {
             onTestModuleEnded();
@@ -280,6 +301,8 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         } catch (Throwable t) {
             CLog.e(t);
         } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
             mForwarder.testModuleEnded();
         }
     }
