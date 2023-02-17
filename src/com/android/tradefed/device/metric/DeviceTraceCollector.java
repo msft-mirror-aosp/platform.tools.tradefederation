@@ -40,10 +40,9 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
     private String mInstrumentationPkgName;
 
     @Override
-    public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener)
+    public void extraInit(IInvocationContext context, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        super.init(context, listener);
+        super.extraInit(context, listener);
         for (ITestDevice device : getRealDevices()) {
             try {
                 Map<String, String> extraConfigs = new LinkedHashMap<>();
@@ -58,7 +57,6 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
                         device.getSerialNumber(), e.getMessage());
             }
         }
-        return this;
     }
 
     @Override
