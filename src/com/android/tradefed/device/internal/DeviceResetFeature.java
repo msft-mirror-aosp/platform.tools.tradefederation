@@ -20,6 +20,7 @@ import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.RemoteAndroidDevice;
+import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.invoker.TestInformation;
@@ -93,14 +94,13 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
         try {
             mTestInformation.setActiveDeviceIndex(index);
             if (mTestInformation.getDevice() instanceof RemoteAndroidVirtualDevice) {
-                Integer offset =
-                        ((RemoteAndroidVirtualDevice) mTestInformation.getDevice())
-                                .getAvdInfo()
-                                .getDeviceOffset();
-                String user =
-                        ((RemoteAndroidVirtualDevice) mTestInformation.getDevice())
-                                .getAvdInfo()
-                                .getInstanceUser();
+                GceAvdInfo info =
+                        ((RemoteAndroidVirtualDevice) mTestInformation.getDevice()).getAvdInfo();
+                if (info == null) {
+                    throw new RuntimeException("GceAvdInfo was null. skipping");
+                }
+                Integer offset = info.getDeviceOffset();
+                String user = info.getInstanceUser();
                 CommandResult powerwashResult =
                         ((RemoteAndroidVirtualDevice) mTestInformation.getDevice())
                                 .powerwashGce(user, offset);
