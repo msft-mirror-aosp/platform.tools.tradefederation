@@ -815,7 +815,7 @@ public class InstallApexModuleTargetPreparerTest {
 
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         verifySuccessfulInstallPackages(Arrays.asList(mFakeApex));
-        verifyCleanInstalledApexPackages();
+        verifyCleanInstalledApexPackages(1);
         verify(mMockDevice, times(2)).reboot();
         verify(mMockDevice, times(3)).getActiveApexes();
     }
@@ -851,7 +851,7 @@ public class InstallApexModuleTargetPreparerTest {
 
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         verifySuccessfulInstallPackages(Arrays.asList(mFakeApex));
-        verifyCleanInstalledApexPackages();
+        verifyCleanInstalledApexPackages(1);
         verify(mMockDevice, times(2)).reboot();
         verify(mMockDevice, times(3)).getActiveApexes();
     }
@@ -869,7 +869,7 @@ public class InstallApexModuleTargetPreparerTest {
 
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         verifySuccessfulInstallPackages(Arrays.asList(mFakeApex));
-        verifyCleanInstalledApexPackages();
+        verifyCleanInstalledApexPackages(1);
         verify(mMockDevice, times(2)).reboot();
         verify(mMockDevice, times(3)).getActiveApexes();
     }
@@ -883,7 +883,7 @@ public class InstallApexModuleTargetPreparerTest {
         when(mMockDevice.getInstalledPackageNames()).thenReturn(new HashSet<>());
 
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
-        verifyCleanInstalledApexPackages();
+        verifyCleanInstalledApexPackages(1);
         verify(mMockDevice, times(1)).reboot();
         verify(mMockDevice, times(2)).getActiveApexes();
     }
@@ -1037,7 +1037,7 @@ public class InstallApexModuleTargetPreparerTest {
 
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         verifySuccessfulInstallPackages(Arrays.asList(mFakeApex));
-        verifyCleanInstalledApexPackages();
+        verifyCleanInstalledApexPackages(1);
         verify(mMockDevice, times(2)).reboot();
         verify(mMockDevice, times(3)).getActiveApexes();
     }
@@ -1065,7 +1065,7 @@ public class InstallApexModuleTargetPreparerTest {
 
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
+        verifyCleanInstalledApexPackages(1);
         verify(mMockDevice, times(2)).reboot();
         verify(mMockDevice, times(1)).uninstallPackage(APK_PACKAGE_NAME);
         verify(mMockDevice, times(2)).getActiveApexes();
@@ -1094,7 +1094,7 @@ public class InstallApexModuleTargetPreparerTest {
 
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
+        verifyCleanInstalledApexPackages(1);
         verify(mMockDevice, times(2)).reboot();
         verify(mMockDevice, times(1)).uninstallPackage(APK_PACKAGE_NAME);
         verify(mMockDevice, times(1)).uninstallPackage(APK2_PACKAGE_NAME);
@@ -1204,8 +1204,8 @@ public class InstallApexModuleTargetPreparerTest {
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
         verifySuccessfulInstallPackages(Arrays.asList(mFakeApex));
-        verifyCleanInstalledApexPackages();
-        verify(mMockDevice, times(3)).reboot();
+        verifyCleanInstalledApexPackages(2);
+        verify(mMockDevice, times(4)).reboot();
         verify(mMockDevice, times(3)).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
         verify(mMockDevice).waitForDeviceAvailable();
@@ -1237,9 +1237,9 @@ public class InstallApexModuleTargetPreparerTest {
 
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
+        verifyCleanInstalledApexPackages(2);
         verifySuccessfulInstallMultiPackages();
-        verify(mMockDevice, times(3)).reboot();
+        verify(mMockDevice, times(4)).reboot();
         verify(mMockDevice, times(3)).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
         verify(mMockDevice, times(1)).getInstalledPackageNames();
@@ -1266,8 +1266,8 @@ public class InstallApexModuleTargetPreparerTest {
 
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
-        verify(mMockDevice, times(3)).reboot();
+        verifyCleanInstalledApexPackages(2);
+        verify(mMockDevice, times(4)).reboot();
         verify(mMockDevice, times(3)).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
         verify(mMockDevice, times(1)).getInstalledPackageNames();
@@ -1294,8 +1294,8 @@ public class InstallApexModuleTargetPreparerTest {
                             .contains("Failed to push local"));
         }
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
-        verify(mMockDevice, times(2)).reboot();
+        verifyCleanInstalledApexPackages(2);
+        verify(mMockDevice, times(3)).reboot();
         verify(mMockDevice, times(2)).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
         verify(mMockDevice, times(1)).getInstalledPackageNames();
@@ -1330,8 +1330,8 @@ public class InstallApexModuleTargetPreparerTest {
                                             parent_session_creation_res.getStdout())));
         }
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
-        verify(mMockDevice, times(2)).reboot();
+        verifyCleanInstalledApexPackages(2);
+        verify(mMockDevice, times(3)).reboot();
         verify(mMockDevice, times(2)).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
         verify(mMockDevice, times(1)).getInstalledPackageNames();
@@ -1367,8 +1367,8 @@ public class InstallApexModuleTargetPreparerTest {
                             .contains("Failed to create child session for"));
         }
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
-        verify(mMockDevice, times(2)).reboot();
+        verifyCleanInstalledApexPackages(2);
+        verify(mMockDevice, times(3)).reboot();
         verify(mMockDevice, times(2)).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
         verify(mMockDevice, times(1)).getInstalledPackageNames();
@@ -1419,8 +1419,8 @@ public class InstallApexModuleTargetPreparerTest {
                                             write_to_session_res.getStdout())));
         }
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
-        verify(mMockDevice, times(2)).reboot();
+        verifyCleanInstalledApexPackages(2);
+        verify(mMockDevice, times(3)).reboot();
         verify(mMockDevice, times(2)).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
         verify(mMockDevice, times(1)).getInstalledPackageNames();
@@ -1482,8 +1482,8 @@ public class InstallApexModuleTargetPreparerTest {
                         add_to_session_res.getStderr(), add_to_session_res.getStdout())));
         }
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
-        verify(mMockDevice, times(2)).reboot();
+        verifyCleanInstalledApexPackages(2);
+        verify(mMockDevice, times(3)).reboot();
         verify(mMockDevice, times(2)).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
         verify(mMockDevice, times(1)).getInstalledPackageNames();
@@ -1546,8 +1546,8 @@ public class InstallApexModuleTargetPreparerTest {
                                                     commit_session_res.getStdout())));
         }
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
-        verify(mMockDevice, times(2)).reboot();
+        verifyCleanInstalledApexPackages(2);
+        verify(mMockDevice, times(3)).reboot();
         verify(mMockDevice, times(2)).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
         verify(mMockDevice, times(1)).getInstalledPackageNames();
@@ -1571,7 +1571,7 @@ public class InstallApexModuleTargetPreparerTest {
 
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
+        verifyCleanInstalledApexPackages(1);
         verifySuccessfulInstallMultiPackages();
         verify(mMockDevice, times(3)).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
@@ -1656,7 +1656,7 @@ public class InstallApexModuleTargetPreparerTest {
 
             mInstallApexModuleTargetPreparer.setUp(mTestInfo);
             mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-            verifyCleanInstalledApexPackages();
+            verifyCleanInstalledApexPackages(2);
             Mockito.verify(mMockBundletoolUtil, times(1))
                     .generateDeviceSpecFile(Mockito.any(ITestDevice.class));
             // Extract splits 1 time to get the package name for the module, and again during
@@ -1673,7 +1673,7 @@ public class InstallApexModuleTargetPreparerTest {
                             anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
-            verify(mMockDevice, times(3)).reboot();
+            verify(mMockDevice, times(4)).reboot();
             verify(mMockDevice, times(1)).executeAdbCommand(trainInstallCmd.toArray(new String[0]));
             verify(mMockDevice, times(1))
                     .executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME);
@@ -1768,7 +1768,7 @@ public class InstallApexModuleTargetPreparerTest {
 
             mInstallApexModuleTargetPreparer.setUp(mTestInfo);
             mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-            verifyCleanInstalledApexPackages();
+            verifyCleanInstalledApexPackages(2);
             Mockito.verify(mMockBundletoolUtil, times(1))
                     .generateDeviceSpecFile(Mockito.any(ITestDevice.class));
             // Extract splits 1 time to get the package name for the module, and again during
@@ -1785,7 +1785,7 @@ public class InstallApexModuleTargetPreparerTest {
                             anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
-            verify(mMockDevice, times(3)).reboot();
+            verify(mMockDevice, times(4)).reboot();
             verify(mMockDevice, times(1)).executeAdbCommand(trainInstallCmd.toArray(new String[0]));
             verify(mMockDevice, times(3)).getActiveApexes();
             verify(mMockDevice, times(1))
@@ -1882,7 +1882,7 @@ public class InstallApexModuleTargetPreparerTest {
 
             mInstallApexModuleTargetPreparer.setUp(mTestInfo);
             mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-            verifyCleanInstalledApexPackages();
+            verifyCleanInstalledApexPackages(2);
             Mockito.verify(mMockBundletoolUtil, times(1))
                     .generateDeviceSpecFile(Mockito.any(ITestDevice.class));
             // Extract splits 1 time to get the package name for the module, and again during
@@ -1899,7 +1899,7 @@ public class InstallApexModuleTargetPreparerTest {
                             anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
-            verify(mMockDevice, times(3)).reboot();
+            verify(mMockDevice, times(4)).reboot();
             verify(mMockDevice, times(1)).executeAdbCommand(trainInstallCmd.toArray(new String[0]));
             verify(mMockDevice, times(3)).getActiveApexes();
             verify(mMockDevice, times(1))
@@ -1996,7 +1996,7 @@ public class InstallApexModuleTargetPreparerTest {
 
             mInstallApexModuleTargetPreparer.setUp(mTestInfo);
             mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-            verifyCleanInstalledApexPackages();
+            verifyCleanInstalledApexPackages(2);
             Mockito.verify(mMockBundletoolUtil, times(1))
                     .generateDeviceSpecFile(Mockito.any(ITestDevice.class));
             // Extract splits 1 time to get the package name for the module, and again during
@@ -2013,7 +2013,7 @@ public class InstallApexModuleTargetPreparerTest {
                             anyString(),
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
-            verify(mMockDevice, times(3)).reboot();
+            verify(mMockDevice, times(4)).reboot();
             verify(mMockDevice, times(1)).executeAdbCommand(trainInstallCmd.toArray(new String[0]));
             verify(mMockDevice, times(3)).getActiveApexes();
             verify(mMockDevice, times(1))
@@ -2283,7 +2283,7 @@ public class InstallApexModuleTargetPreparerTest {
 
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verifyCleanInstalledApexPackages();
+        verifyCleanInstalledApexPackages(1);
         verify(mMockDevice, times(1)).reboot();
         verify(mMockDevice, times(2)).getActiveApexes();
     }
@@ -2309,7 +2309,7 @@ public class InstallApexModuleTargetPreparerTest {
         mInstallApexModuleTargetPreparer.setUp(mTestInfo);
         mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
         verifySuccessfulInstallMultiPackages();
-        verify(mMockDevice, times(3)).reboot();
+        verify(mMockDevice, times(4)).reboot();
         verify(mMockDevice, times(3)).getActiveApexes();
         verify(mMockDevice, times(1)).executeShellCommand("pm rollback-app " + APEX_PACKAGE_NAME);
         verify(mMockDevice, times(1)).getInstalledPackageNames();
@@ -2483,10 +2483,10 @@ public class InstallApexModuleTargetPreparerTest {
         when(mMockDevice.executeShellV2Command("ls " + STAGING_DATA_DIR)).thenReturn(res);
     }
 
-    private void verifyCleanInstalledApexPackages() throws DeviceNotAvailableException {
-        verify(mMockDevice, times(1)).deleteFile(APEX_DATA_DIR + "*");
-        verify(mMockDevice, times(1)).deleteFile(SESSION_DATA_DIR + "*");
-        verify(mMockDevice, times(1)).deleteFile(STAGING_DATA_DIR + "*");
+    private void verifyCleanInstalledApexPackages(int count) throws DeviceNotAvailableException {
+        verify(mMockDevice, times(count)).deleteFile(APEX_DATA_DIR + "*");
+        verify(mMockDevice, times(count)).deleteFile(SESSION_DATA_DIR + "*");
+        verify(mMockDevice, times(count)).deleteFile(STAGING_DATA_DIR + "*");
     }
 
     private void setActivatedApex() throws DeviceNotAvailableException {
