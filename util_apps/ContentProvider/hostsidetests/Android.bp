@@ -24,6 +24,9 @@ java_test_host {
     // Only compile source java files in this jar.
     srcs: ["src/**/*.java"],
 
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+
     libs: ["tradefed"],
 
     static_libs: [
