@@ -242,7 +242,6 @@ import com.android.tradefed.targetprep.AllTestAppsInstallSetupTest;
 import com.android.tradefed.targetprep.AoaTargetPreparerTest;
 import com.android.tradefed.targetprep.AppSetupTest;
 import com.android.tradefed.targetprep.BaseTargetPreparerTest;
-import com.android.tradefed.targetprep.CreateUserForVisibleBackgroundUserPreparerTest;
 import com.android.tradefed.targetprep.CreateUserPreparerTest;
 import com.android.tradefed.targetprep.DefaultTestsZipInstallerTest;
 import com.android.tradefed.targetprep.DeviceFlashPreparerTest;
@@ -284,6 +283,7 @@ import com.android.tradefed.targetprep.TargetSetupErrorTest;
 import com.android.tradefed.targetprep.TestAppInstallSetupTest;
 import com.android.tradefed.targetprep.TestFilePushSetupTest;
 import com.android.tradefed.targetprep.UserCleanerTest;
+import com.android.tradefed.targetprep.VisibleBackgroundUserPreparerTest;
 import com.android.tradefed.targetprep.adb.AdbStopServerPreparerTest;
 import com.android.tradefed.targetprep.app.NoApkTestSkipperTest;
 import com.android.tradefed.targetprep.multi.MergeMultiBuildTargetPreparerTest;
@@ -745,7 +745,7 @@ import org.junit.runners.Suite.SuiteClasses;
     AoaTargetPreparerTest.class,
     AppSetupTest.class,
     BaseTargetPreparerTest.class,
-    CreateUserForVisibleBackgroundUserPreparerTest.class,
+    VisibleBackgroundUserPreparerTest.class,
     CreateUserPreparerTest.class,
     DefaultTestsZipInstallerTest.class,
     DeviceFlashPreparerTest.class,
