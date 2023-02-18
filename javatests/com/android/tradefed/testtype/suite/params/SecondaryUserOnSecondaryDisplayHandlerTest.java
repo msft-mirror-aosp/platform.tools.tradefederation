@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,22 +22,23 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.targetprep.CreateUserPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.RunCommandTargetPreparer;
+import com.android.tradefed.targetprep.VisibleBackgroundUserPreparer;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Unit tests for {@link SecondaryUserHandler}. */
+/** Unit tests for {@link SecondaryUserOnSecondaryDisplayHandler}. */
 @RunWith(JUnit4.class)
-public final class SecondaryUserHandlerTest {
+public final class SecondaryUserOnSecondaryDisplayHandlerTest {
 
-    private SecondaryUserHandler mHandler;
+    private SecondaryUserOnSecondaryDisplayHandler mHandler;
     private IConfiguration mModuleConfig;
 
     @Before
     public void setUp() {
-        mHandler = new SecondaryUserHandler();
+        mHandler = new SecondaryUserOnSecondaryDisplayHandler();
         mModuleConfig = new Configuration("test", "test");
     }
 
@@ -65,7 +66,7 @@ public final class SecondaryUserHandlerTest {
         assertThat(mModuleConfig.getTargetPreparers()).hasSize(2);
 
         ITargetPreparer preparer1 = mModuleConfig.getTargetPreparers().get(0);
-        assertThat(preparer1).isInstanceOf(CreateUserPreparer.class);
+        assertThat(preparer1).isInstanceOf(VisibleBackgroundUserPreparer.class);
         ITargetPreparer preparer2 = mModuleConfig.getTargetPreparers().get(1);
         assertThat(preparer2).isInstanceOf(RunCommandTargetPreparer.class);
         assertThat(((RunCommandTargetPreparer) preparer2).getCommands())
