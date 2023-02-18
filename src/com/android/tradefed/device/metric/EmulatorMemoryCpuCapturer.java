@@ -22,6 +22,7 @@ import com.android.tradefed.log.LogUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -77,14 +78,17 @@ public class EmulatorMemoryCpuCapturer {
 
     public float getCpuUsage() {
         CommandResult result =
-                RunUtil.getDefault()
-                        .runTimedCmd(20000L, "ps", "-o", "%cpu", "-p", Long.toString(mPid));
+                getRunUtil().runTimedCmd(20000L, "ps", "-o", "%cpu", "-p", Long.toString(mPid));
         if (result.getStatus() == CommandStatus.SUCCESS) {
             return parseCpuUsage(result.getStdout());
         } else {
             LogUtil.CLog.e("Failed to run ps %s", result.toString());
             return 0;
         }
+    }
+
+    protected IRunUtil getRunUtil() {
+        return RunUtil.getDefault();
     }
 
     /**
