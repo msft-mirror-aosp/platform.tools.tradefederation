@@ -18,20 +18,37 @@ package com.android.tradefed.device.metric;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.mockito.Mockito.doReturn;
+
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.IRunUtil;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 @RunWith(JUnit4.class)
 public class EmulatorMemoryCpuCapturerTest {
 
     private EmulatorMemoryCpuCapturer mEmulatorMemoryCpuCapturer;
+    @Mock IRunUtil mMockRunUtil;
 
     @Before
     public void setUp() {
+        MockitoAnnotations.initMocks(this);
         // just capture the current process'es id
-        mEmulatorMemoryCpuCapturer = new EmulatorMemoryCpuCapturer(ProcessHandle.current().pid());
+        mEmulatorMemoryCpuCapturer =
+                new EmulatorMemoryCpuCapturer(ProcessHandle.current().pid()) {
+                    @Override
+                    protected IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
     }
 
     @Test
@@ -67,10 +84,18 @@ public class EmulatorMemoryCpuCapturerTest {
     /** functional test for getting cpu usage using the current java processes' pid. */
     @Test
     public void getCpuUsage() {
+        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+        result.setStdout("%CPU\n35.4");
+        doReturn(result)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("ps"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("%cpu"),
+                        Mockito.eq("-p"),
+                        Mockito.any());
         float cpu = mEmulatorMemoryCpuCapturer.getCpuUsage();
-        // arbitrarily check bounds to make sure returned value is reasonable
-        assertThat(cpu).isGreaterThan(1);
-        // ensure less than 2 GB memory
-        assertThat(cpu).isLessThan(1000);
+        assertThat(cpu).isEqualTo(35.4F);
     }
 }
