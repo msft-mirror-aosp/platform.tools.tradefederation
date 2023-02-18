@@ -371,6 +371,7 @@ import com.android.tradefed.testtype.suite.params.MainlineModuleHandlerTest;
 import com.android.tradefed.testtype.suite.params.ModuleParametersHelperTest;
 import com.android.tradefed.testtype.suite.params.RunOnSdkSandboxHandlerTest;
 import com.android.tradefed.testtype.suite.params.SecondaryUserHandlerTest;
+import com.android.tradefed.testtype.suite.params.SecondaryUserOnSecondaryDisplayHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnSecondaryUserParameterHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnWorkProfileParameterHandlerTest;
 import com.android.tradefed.testtype.suite.retry.ResultsPlayerTest;
@@ -932,6 +933,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RunOnSecondaryUserParameterHandlerTest.class,
     RunOnWorkProfileParameterHandlerTest.class,
     SecondaryUserHandlerTest.class,
+    SecondaryUserOnSecondaryDisplayHandlerTest.class,
 
     // testtype/suite/retry
     ResultsPlayerTest.class,
