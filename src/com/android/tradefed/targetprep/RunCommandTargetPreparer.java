@@ -16,6 +16,7 @@
 
 package com.android.tradefed.targetprep;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.BackgroundDeviceAction;
@@ -157,6 +158,11 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
     /** Add a command that will be run by the preparer. */
     public final void addRunCommand(String cmd) {
         mCommands.add(cmd);
+    }
+
+    @VisibleForTesting
+    public List<String> getCommands() {
+        return mCommands;
     }
 
     /**

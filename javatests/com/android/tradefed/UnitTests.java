@@ -108,6 +108,7 @@ import com.android.tradefed.device.metric.AtraceCollectorTest;
 import com.android.tradefed.device.metric.AtraceRunMetricCollectorTest;
 import com.android.tradefed.device.metric.AutoLogCollectorTest;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollectorTest;
+import com.android.tradefed.device.metric.BluetoothHciSnoopLogCollectorTest;
 import com.android.tradefed.device.metric.BugreportzOnFailureCollectorTest;
 import com.android.tradefed.device.metric.BugreportzOnTestCaseFailureCollectorTest;
 import com.android.tradefed.device.metric.ClangCodeCoverageCollectorTest;
@@ -282,6 +283,7 @@ import com.android.tradefed.targetprep.TargetSetupErrorTest;
 import com.android.tradefed.targetprep.TestAppInstallSetupTest;
 import com.android.tradefed.targetprep.TestFilePushSetupTest;
 import com.android.tradefed.targetprep.UserCleanerTest;
+import com.android.tradefed.targetprep.VisibleBackgroundUserPreparerTest;
 import com.android.tradefed.targetprep.adb.AdbStopServerPreparerTest;
 import com.android.tradefed.targetprep.app.NoApkTestSkipperTest;
 import com.android.tradefed.targetprep.multi.MergeMultiBuildTargetPreparerTest;
@@ -369,6 +371,7 @@ import com.android.tradefed.testtype.suite.params.MainlineModuleHandlerTest;
 import com.android.tradefed.testtype.suite.params.ModuleParametersHelperTest;
 import com.android.tradefed.testtype.suite.params.RunOnSdkSandboxHandlerTest;
 import com.android.tradefed.testtype.suite.params.SecondaryUserHandlerTest;
+import com.android.tradefed.testtype.suite.params.SecondaryUserOnSecondaryDisplayHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnSecondaryUserParameterHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnWorkProfileParameterHandlerTest;
 import com.android.tradefed.testtype.suite.retry.ResultsPlayerTest;
@@ -595,6 +598,7 @@ import org.junit.runners.Suite.SuiteClasses;
     AtraceRunMetricCollectorTest.class,
     AutoLogCollectorTest.class,
     BaseDeviceMetricCollectorTest.class,
+    BluetoothHciSnoopLogCollectorTest.class,
     BugreportzOnTestCaseFailureCollectorTest.class,
     BugreportzOnFailureCollectorTest.class,
     ClangCodeCoverageCollectorTest.class,
@@ -742,6 +746,7 @@ import org.junit.runners.Suite.SuiteClasses;
     AoaTargetPreparerTest.class,
     AppSetupTest.class,
     BaseTargetPreparerTest.class,
+    VisibleBackgroundUserPreparerTest.class,
     CreateUserPreparerTest.class,
     DefaultTestsZipInstallerTest.class,
     DeviceFlashPreparerTest.class,
@@ -928,6 +933,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RunOnSecondaryUserParameterHandlerTest.class,
     RunOnWorkProfileParameterHandlerTest.class,
     SecondaryUserHandlerTest.class,
+    SecondaryUserOnSecondaryDisplayHandlerTest.class,
 
     // testtype/suite/retry
     ResultsPlayerTest.class,

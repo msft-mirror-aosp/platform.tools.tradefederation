@@ -60,6 +60,9 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
 
     private static final int MAX_CRASH_SIZE = 250000;
     private static final String MAX_CRASH_SIZE_MESSAGE = "\n<Truncated>";
+    // Message from crash collector that reflect an issue
+    private static final String FILTER_NOT_FOUND =
+            "java.lang.IllegalArgumentException: testfile not found:";
 
     private Long mStartTime = null;
     private Long mLastStartTime = null;
@@ -133,10 +136,19 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
         } else {
             errorMessage = extractCrashAndAddToMessage(errorMessage, mLastStartTime);
         }
-        error.setErrorMessage(errorMessage.trim());
+
         if (isCrash(errorMessage)) {
             error.setErrorIdentifier(DeviceErrorIdentifier.INSTRUMENTATION_CRASH);
+            // Special failure due to permission issue.
+            if (errorMessage.contains(FILTER_NOT_FOUND)) {
+                CLog.d("Detected a permission error with filters.");
+                // First stop retrying, it won't work
+                error.setRetriable(false);
+                error.setErrorIdentifier(TestErrorIdentifier.TEST_FILTER_NEEDS_UPDATE);
+                errorMessage = "See go/iae-testfile-not-found \n" + errorMessage;
+            }
         }
+        error.setErrorMessage(errorMessage.trim());
         // Add metrics for assessing uncaught IntrumentationTest crash failures.
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.CRASH_FAILURES, 1);
         if (error.getFailureStatus() == null) {
