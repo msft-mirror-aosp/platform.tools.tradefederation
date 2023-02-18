@@ -15,7 +15,7 @@
  */
 package com.android.tradefed.targetprep;
 
-import static com.android.tradefed.targetprep.CreateUserPreparer.RUN_TESTS_AS_USER_KEY;
+import static com.android.tradefed.targetprep.VisibleBackgroundUserPreparer.RUN_TESTS_AS_USER_KEY;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
@@ -42,32 +42,28 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Unit tests for {@link CreateUserPreparer} when it's started with the {@code
- * start-user-visible-on-background} parameter.
- */
+/** Unit tests for {@link VisibleBackgroundUserPreparer} */
 @RunWith(MockitoJUnitRunner.class)
-public final class CreateUserForVisibleBackgroundUserPreparerTest {
+public final class VisibleBackgroundUserPreparerTest {
 
     @Mock private ITestDevice mMockDevice;
 
     private OptionSetter mSetter;
 
     private ITestDeviceMockHelper mTestDeviceMockHelper;
-    private CreateUserPreparer mPreparer;
+    private VisibleBackgroundUserPreparer mPreparer;
     private TestInformation mTestInfo;
 
     @Before
     public void setFixtures() throws Exception {
         mTestDeviceMockHelper = new ITestDeviceMockHelper(mMockDevice);
-        mPreparer = new CreateUserPreparer();
+        mPreparer = new VisibleBackgroundUserPreparer();
         mSetter = new OptionSetter(mPreparer);
 
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockDevice);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
 
-        setParam("start-user-visible-on-background", "true");
         mockIsVisibleBackgroundUsersSupported(true);
     }
 
