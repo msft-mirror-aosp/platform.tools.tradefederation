@@ -196,6 +196,17 @@ public class InstalledInstrumentationsTest
                     "Create InstrumentationTest type rather than more recent AndroidJUnitTest.")
     private boolean mDowngradeInstrumentation = false;
 
+    @Option(
+            name = "test-storage-dir",
+            description = "The device directory path where test storage read files.")
+    private String mTestStorageInternalDir = "/sdcard/googletest/test_runfiles";
+
+    @Option(
+            name = "use-test-storage",
+            description =
+                    "If set to true, we will push filters to the test storage instead of disk.")
+    private boolean mUseTestStorage = false;
+
     private int mTotalShards = 0;
     private int mShardIndex = 0;
     private List<IMetricCollector> mMetricCollectorList = new ArrayList<>();
