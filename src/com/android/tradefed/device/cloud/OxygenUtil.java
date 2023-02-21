@@ -250,8 +250,16 @@ public class OxygenUtil {
             Pattern mainstartPatteren =
                     Pattern.compile(".*\\|\\s*(\\d+\\.\\d+)\\s*\\|\\sCuttlefishLauncherMainstart");
             try (Scanner scanner = new Scanner(vdlStdout)) {
+                boolean metricsPending = false;
                 while (scanner.hasNextLine()) {
                     String line = scanner.nextLine();
+                    if (!metricsPending) {
+                        if (line.indexOf("launch_cvd exited") != -1) {
+                            metricsPending = true;
+                        } else {
+                            continue;
+                        }
+                    }
                     Matcher matcher;
                     if (cuttlefishCommon == 0) {
                         matcher = cuttlefishCommonPatteren.matcher(line);
