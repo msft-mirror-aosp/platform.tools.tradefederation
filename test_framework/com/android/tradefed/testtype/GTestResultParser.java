@@ -762,6 +762,10 @@ public class GTestResultParser extends MultiLineReceiver {
                 listener.testFailed(testId, testFailure);
                 listener.testEnded(testId, emptyMap);
             }
+            if (mMethodScope != null) {
+                mMethodScope.close();
+                mMethodScope = null;
+            }
             clearCurrentTestResult();
         }
         // Report the test run failed
