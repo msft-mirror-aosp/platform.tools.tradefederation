@@ -221,6 +221,7 @@ public class InvocationMetricLogger {
 
         MODULE_SETUP_PAIR("tf_module_setup_pair_timestamp", true),
         MODULE_TEARDOWN_PAIR("tf_module_teardown_pair_timestamp", true),
+        STATUS_CHECKER_PAIR("status_checker_pair", true),
 
         LAB_PREPARER_NOT_ILAB("lab_preparer_not_ilab", true),
         TARGET_PREPARER_IS_ILAB("target_preparer_is_ilab", true),

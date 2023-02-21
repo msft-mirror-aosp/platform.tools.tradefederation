@@ -53,7 +53,6 @@ import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NoDeviceException;
-import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.error.HarnessRuntimeException;
@@ -130,6 +129,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * A scheduler for running TradeFederation commands across all available devices.
@@ -520,38 +520,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 }
             }
             releaseDevices(context, devicesStates);
-        }
-    }
-
-    /** A custom {@link FreeDeviceHandler} that frees only {@link NullDevice}. */
-    private class FreeNullDeviceHandler extends FreeDeviceHandler {
-
-        private final IDeviceManager mDeviceManager;
-        private boolean mDeviceReleased = false;
-
-        FreeNullDeviceHandler(
-                IDeviceManager deviceManager, IScheduledInvocationListener... listeners) {
-            super(deviceManager, listeners);
-            mDeviceManager = deviceManager;
-        }
-
-        @Override
-        public void releaseDevices(
-                IInvocationContext context, Map<ITestDevice, FreeDeviceState> devicesStates) {
-            if (mDeviceReleased) {
-                return;
-            }
-            for (ITestDevice device : context.getDevices()) {
-                if (!(device.getIDevice() instanceof NullDevice)) {
-                    continue;
-                }
-                mDeviceManager.freeDevice(device, devicesStates.get(device));
-                if (device instanceof IManagedTestDevice) {
-                    // This quite an important setting so we do make sure it's reset.
-                    ((IManagedTestDevice) device).setFastbootPath(mDeviceManager.getFastbootPath());
-                }
-            }
-            mDeviceReleased = true;
         }
     }
 
@@ -1731,23 +1699,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     public long execCommand(
             IInvocationContext context, IScheduledInvocationListener listener, String[] args)
             throws ConfigurationException, NoDeviceException {
-        return execCommand(context, listener, new ArrayList<ITestDevice>(), args);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public long execCommand(
-            IScheduledInvocationListener listener, List<ITestDevice> reservedDevices, String[] args)
-            throws ConfigurationException {
-        return execCommand(null, listener, reservedDevices, args);
-    }
-
-    private long execCommand(
-            IInvocationContext context,
-            IScheduledInvocationListener listener,
-            List<ITestDevice> reservedDevices,
-            String[] args)
-            throws ConfigurationException {
         assertStarted();
         IDeviceManager manager = getDeviceManager();
         CommandTracker cmdTracker = createCommandTracker(args, null);
@@ -1755,88 +1706,75 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         config.validateOptions();
 
         if (isShuttingDown()) {
-            if (context != null) {
-                // createConfiguration can be long for things like sandbox, so ensure we did not
-                // start a shutdown in the meantime.
-                CLog.w("Tradefed is shutting down, ignoring command.");
-                return -1;
-            }
-            // Prevent scheduling if we are shutting down
-            throw new ConfigurationException("Tradefed shutting down, skip scheduling.");
-        }
-
-        Map<String, ITestDevice> allocatedDevices = new HashMap<String, ITestDevice>();
-        if (!reservedDevices.isEmpty()) {
-            allocatedDevices = getAllocatedDevices(config.getDeviceConfig(), reservedDevices);
-        }
-        if (reservedDevices.size() < config.getDeviceConfig().size()) {
-            CLog.d(
-                    "%s of %s devices reserved.",
-                    reservedDevices.size(), config.getDeviceConfig().size());
-            // Allow devices (like NullDevices) and ignore already allocated devices (reserved).
-            DeviceAllocationResult allocationResults =
-                    allocateDevices(config, manager, new ArrayList<>(allocatedDevices.keySet()));
-            if (!allocationResults.wasAllocationSuccessful()) {
-                // Log adb output just to help debug
-                if (getDeviceManager() instanceof DeviceManager) {
-                    String adbOutput =
-                            ((DeviceManager) getDeviceManager()).executeGlobalAdbCommand("devices");
-                    CLog.e("'adb devices' output:\n%s", adbOutput);
-                }
-                throw new NoDeviceException(
-                        String.format(
-                                "No device match for allocation. Reason: %s.\ncommand: %s",
-                                allocationResults.formattedReason(), Arrays.asList(args)),
-                        InfraErrorIdentifier.SCHEDULER_ALLOCATION_ERROR);
-            }
-            for (Map.Entry<String, ITestDevice> entry :
-                    allocationResults.getAllocatedDevices().entrySet()) {
-                allocatedDevices.put(entry.getKey(), entry.getValue());
-            }
+            // createConfiguration can be long for things like sandbox, so ensure we did not
+            // start a shutdown in the meantime.
+            CLog.w("Tradefed is shutting down, ignoring command.");
+            return -1;
         }
 
         ExecutableCommand execCmd = createExecutableCommand(cmdTracker, config, false);
-        synchronized (this) {
-            mExecutingCommands.add(execCmd);
-        }
-        context = (context != null) ? context : createInvocationContext();
         context.setConfigurationDescriptor(config.getConfigurationDescription());
-        context.addAllocatedDevice(allocatedDevices);
-        CLog.d("Executing '%s' on '%s'", cmdTracker.getArgs()[0], allocatedDevices);
-        if (reservedDevices.isEmpty()) {
-            startInvocation(context, execCmd, listener, new FreeDeviceHandler(manager));
-        } else {
-            // Free NullDevice only. Leave alone reserved devices.
-            startInvocation(context, execCmd, listener, new FreeNullDeviceHandler(manager));
-        }
-        return execCmd.getCommandTracker().getId();
-    }
-
-    /** Returns a map of device config name & device for reserved devices, excluding null devices */
-    Map<String, ITestDevice> getAllocatedDevices(
-            List<IDeviceConfiguration> deviceConfig, List<ITestDevice> reservedDevices) {
-        Map<String, ITestDevice> allocatedDevices = new LinkedHashMap<String, ITestDevice>();
-        int iReserved = 0;
-        for (IDeviceConfiguration config : deviceConfig) {
-            if (!config.getDeviceRequirements().nullDeviceRequested()) {
-                if (iReserved >= reservedDevices.size()) {
-                    throw new NoDeviceException(
-                            String.format(
-                                    "Reserved devices (%s) fewer than required.",
-                                    reservedDevices.size()),
-                            InfraErrorIdentifier.SCHEDULER_ALLOCATION_ERROR);
-                }
-                allocatedDevices.put(config.getDeviceName(), reservedDevices.get(iReserved++));
+        DeviceAllocationResult allocationResults = allocateDevices(config, manager);
+        if (allocationResults.wasAllocationSuccessful()) {
+            Map<String, ITestDevice> devices = allocationResults.getAllocatedDevices();
+            context.addAllocatedDevice(devices);
+            synchronized (this) {
+                mExecutingCommands.add(execCmd);
             }
-        }
-        if (iReserved < reservedDevices.size()) {
+            CLog.d("Executing '%s' on '%s'", cmdTracker.getArgs()[0], devices);
+            startInvocation(context, execCmd, listener, new FreeDeviceHandler(manager));
+            return execCmd.getCommandTracker().getId();
+        } else {
+            // Log adb output just to help debug
+            if (getDeviceManager() instanceof DeviceManager) {
+                String adbOutput =
+                        ((DeviceManager) getDeviceManager()).executeGlobalAdbCommand("devices");
+                CLog.e("'adb devices' output:\n%s", adbOutput);
+            }
             throw new NoDeviceException(
                     String.format(
-                            "Reserved devices (%s) more than required (%s).",
-                            reservedDevices.size(), iReserved),
+                            "No device match for allocation. Reason: %s.\ncommand: %s",
+                            allocationResults.formattedReason(), Arrays.asList(args)),
                     InfraErrorIdentifier.SCHEDULER_ALLOCATION_ERROR);
         }
-        return allocatedDevices;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public long execCommand(
+            IScheduledInvocationListener listener, List<ITestDevice> devices, String[] args)
+            throws ConfigurationException {
+        assertStarted();
+        CommandTracker cmdTracker = createCommandTracker(args, null);
+        IConfiguration config = createConfiguration(cmdTracker.getArgs());
+        config.validateOptions();
+        CLog.i(
+                "Executing '%s' on '%s'",
+                cmdTracker.getArgs()[0],
+                String.join(
+                        ",",
+                        devices.stream()
+                                .map(d -> d.getSerialNumber())
+                                .collect(Collectors.toList())));
+        // Supports ATE use case, number of device configs can be 2 or more.
+        CLog.i("Device conifgs: %s", config.getDeviceConfig().size());
+        ExecutableCommand execCmd = createExecutableCommand(cmdTracker, config, false);
+
+        synchronized (this) {
+            if (isShuttingDown()) {
+                // Prevent scheduling if we are shutting down
+                throw new ConfigurationException("Tradefed shutting down, skip scheduling.");
+            }
+            mExecutingCommands.add(execCmd);
+        }
+        IInvocationContext context = createInvocationContext();
+        context.setConfigurationDescriptor(config.getConfigurationDescription());
+        for (int i = 0; i < config.getDeviceConfig().size(); i++) {
+            context.addAllocatedDevice(
+                    config.getDeviceConfig().get(i).getDeviceName(), devices.get(i));
+        }
+        startInvocation(context, execCmd, listener);
+        return execCmd.getCommandTracker().getId();
     }
 
     /** {@inheritDoc} */
@@ -1862,11 +1800,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
      * @return allocated devices
      */
     DeviceAllocationResult allocateDevices(IConfiguration config, IDeviceManager manager) {
-        return allocateDevices(config, manager, new ArrayList<String>());
-    }
-
-    DeviceAllocationResult allocateDevices(
-            IConfiguration config, IDeviceManager manager, ArrayList<String> excludeDevices) {
         Map<String, ITestDevice> devices = new LinkedHashMap<String, ITestDevice>();
         ITestDevice device = null;
         if (config.getDeviceConfig().isEmpty()) {
@@ -1877,9 +1810,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         synchronized (this) {
             DeviceAllocationResult allocationResults = new DeviceAllocationResult();
             for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
-                if (excludeDevices.contains(deviceConfig.getDeviceName())) {
-                    continue;
-                }
                 device =
                         manager.allocateDevice(
                                 deviceConfig.getDeviceRequirements(), deviceConfig.isFake());

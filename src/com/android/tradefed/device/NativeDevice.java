@@ -3469,7 +3469,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             enableAdbRoot();
             prePostBootSetup();
             for (String command : mOptions.getPostBootCommands()) {
-                executeShellCommand(command);
+                long start = System.currentTimeMillis();
+                try (CloseableTraceScope cmdTrace = new CloseableTraceScope(command)) {
+                    executeShellCommand(command);
+                }
+                if (command.startsWith("sleep")) {
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.host_sleep, start, System.currentTimeMillis());
+                }
             }
         } finally {
             long elapsed = System.currentTimeMillis() - startTime;
