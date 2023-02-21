@@ -119,7 +119,7 @@ public class OxygenUtilTest {
             tmpDir = FileUtil.createTempDir("logs");
             File file1 = FileUtil.createTempFile("vdl_stdout.txt", ".randomstring", tmpDir);
             String content =
-                    "some content\n"
+                    "some content\n2023/02/09 21:25:25 launch_cvd exited."
                             + "2023/02/09 21:25:30   Ended At  | Duration | Event Name\n"
                             + "2023/02/09 21:25:30      62.21  |    0.00  | SetupDependencies\n"
                             + "2023/02/09 21:25:30      62.55  |    0.33  | CuttlefishCommon\n"
