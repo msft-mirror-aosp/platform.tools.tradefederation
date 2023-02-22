@@ -468,7 +468,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     }
 
     /**
-     * De-duplicate test infos with the same test options.
+     * De-duplicate test infos and aggregate test-mapping sources with the same test options.
      *
      * @param testInfos A {@code Set<TestInfo>} containing multiple test options.
      * @return A {@code Set<TestInfo>} of tests without duplicated test options.
@@ -478,13 +478,29 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         Set<String> nameOptions = new HashSet<>();
         Set<TestInfo> dedupTestInfos = new HashSet<>();
         for (TestInfo testInfo : testInfos) {
-            String nameOption = testInfo.getName() + testInfo.getOptions().toString();
+            String nameOption = testInfo.getNameOption();
             if (!nameOptions.contains(nameOption)) {
                 dedupTestInfos.add(testInfo);
                 nameOptions.add(nameOption);
+            } else {
+                aggregateTestInfo(testInfo, dedupTestInfos);
             }
         }
         return dedupTestInfos;
+    }
+
+    /**
+     * Aggregate test-mapping sources of the test info with the same test options
+     *
+     * @param testInfo A {@code TestInfo} of duplicated test to be aggregated.
+     * @param dedupTestInfos A {@code Set<TestInfo>} of tests without duplicated test options.
+     */
+    private void aggregateTestInfo(TestInfo testInfo, Set<TestInfo> dedupTestInfos) {
+        for (TestInfo dedupTestInfo : dedupTestInfos) {
+            if (testInfo.getNameOption().equals(dedupTestInfo.getNameOption())) {
+                dedupTestInfo.addSources(testInfo.getSources());
+            }
+        }
     }
 
     /**
