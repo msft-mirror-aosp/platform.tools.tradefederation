@@ -63,6 +63,8 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
     // Message from crash collector that reflect an issue
     private static final String FILTER_NOT_FOUND =
             "java.lang.IllegalArgumentException: testfile not found:";
+    private static final String FILTER_NOT_READ =
+            "java.lang.IllegalArgumentException: Could not read test file";
 
     private Long mStartTime = null;
     private Long mLastStartTime = null;
@@ -140,7 +142,7 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
         if (isCrash(errorMessage)) {
             error.setErrorIdentifier(DeviceErrorIdentifier.INSTRUMENTATION_CRASH);
             // Special failure due to permission issue.
-            if (errorMessage.contains(FILTER_NOT_FOUND)) {
+            if (errorMessage.contains(FILTER_NOT_FOUND) || errorMessage.contains(FILTER_NOT_READ)) {
                 CLog.d("Detected a permission error with filters.");
                 // First stop retrying, it won't work
                 error.setRetriable(false);
