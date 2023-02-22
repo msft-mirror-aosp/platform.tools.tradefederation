@@ -386,7 +386,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             }
         }
         // If size above 1 that means we have duplicated modules with different options
-        if (tests.size() > 1) {
+        if (duplicateSources.size() > 1) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DUPLICATE_MAPPING_DIFFERENT_OPTIONS,
                     String.format(
