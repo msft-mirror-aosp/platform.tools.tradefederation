@@ -789,6 +789,20 @@ public class TestMappingSuiteRunnerTest {
         anotherInfo.addOption(new TestOption("include-filter", "value1"));
         testInfos.add(anotherInfo);
         assertEquals(2, mRunner.dedupTestInfos(testInfos).size());
+
+        // Aggregate the test-mapping sources with the same test options.
+        TestInfo anotherInfo2 = new TestInfo("test", "folder4", false);
+        anotherInfo2.addOption(new TestOption("include-filter", "value1"));
+        TestInfo anotherInfo3 = new TestInfo("test", "folder5", false);
+        anotherInfo3.addOption(new TestOption("include-filter", "value1"));
+        testInfos.clear();
+        testInfos = new HashSet<>(Arrays.asList(anotherInfo, anotherInfo2, anotherInfo3));
+        Set<TestInfo> dedupTestInfos = mRunner.dedupTestInfos(testInfos);
+        assertEquals(1, dedupTestInfos.size());
+        TestInfo dedupTestInfo = dedupTestInfos.iterator().next();
+        Set<String> expected_sources =
+                new HashSet<>(Arrays.asList("folder3", "folder4", "folder5"));
+        assertEquals(expected_sources, dedupTestInfo.getSources());
     }
 
     /**
