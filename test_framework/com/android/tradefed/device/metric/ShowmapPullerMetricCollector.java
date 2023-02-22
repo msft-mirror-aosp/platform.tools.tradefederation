@@ -249,12 +249,13 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
      * @return true or false
      */
     private Boolean isProcessFound(String line) {
+        if (mProcessNames.isEmpty()) return false;
         boolean psResult;
         Pattern psPattern = Pattern.compile(PROCESS_NAME_REGEX);
         Matcher psMatcher = psPattern.matcher(line);
         if (psMatcher.find()) {
             processName = psMatcher.group(2);
-            psResult = mProcessNames.isEmpty() || mProcessNames.contains(processName);
+            psResult = mProcessNames.contains(processName);
             return psResult;
         }
         return false;

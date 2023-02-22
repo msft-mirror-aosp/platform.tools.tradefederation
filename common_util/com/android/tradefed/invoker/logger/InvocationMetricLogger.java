@@ -48,6 +48,7 @@ public class InvocationMetricLogger {
         STAGE_REMOTE_TIME("stage_remote_time_ms", true),
         STAGE_TESTS_BYTES("stage_tests_bytes", true),
         STAGE_TESTS_INDIVIDUAL_DOWNLOADS("stage_tests_individual_downloads", true),
+        STAGE_UNDEFINED_DEPENDENCY("stage_undefined_dependency", true),
         SERVER_REFERENCE("server_reference", false),
         INSTRUMENTATION_RERUN_FROM_FILE("instrumentation_rerun_from_file", true),
         INSTRUMENTATION_RERUN_SERIAL("instrumentation_rerun_serial", true),
@@ -220,6 +221,7 @@ public class InvocationMetricLogger {
 
         MODULE_SETUP_PAIR("tf_module_setup_pair_timestamp", true),
         MODULE_TEARDOWN_PAIR("tf_module_teardown_pair_timestamp", true),
+        STATUS_CHECKER_PAIR("status_checker_pair", true),
 
         LAB_PREPARER_NOT_ILAB("lab_preparer_not_ilab", true),
         TARGET_PREPARER_IS_ILAB("target_preparer_is_ilab", true),

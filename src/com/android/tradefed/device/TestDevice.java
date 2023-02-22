@@ -2361,6 +2361,7 @@ public class TestDevice extends NativeDevice {
         } catch (IOException e) {
             throw new DeviceRuntimeException(
                     "Unable to get an unused port for Microdroid.",
+                    e,
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
         }
 
@@ -2378,6 +2379,11 @@ public class TestDevice extends NativeDevice {
                     "mkdir -p " + TEST_ROOT + " has failed: " + result,
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
+        for (File localFile : builder.mBootFiles.keySet()) {
+            String remoteFileName = builder.mBootFiles.get(localFile);
+            pushFile(localFile, TEST_ROOT + remoteFileName);
+        }
+
         // Push the apk file to the test directory
         if (builder.mApkFile != null) {
             pushFile(builder.mApkFile, TEST_ROOT + builder.mApkFile.getName());
@@ -2461,7 +2467,9 @@ public class TestDevice extends NativeDevice {
             }
         } catch (IOException ex) {
             throw new DeviceRuntimeException(
-                    "IOException trying to start a VM", DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+                    "IOException trying to start a VM",
+                    ex,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
 
         // Redirect log.txt to logd using logwrapper
@@ -2661,6 +2669,7 @@ public class TestDevice extends NativeDevice {
         private List<String> mExtraIdsigPaths;
         private boolean mProtectedVm;
         private Map<String, String> mTestDeviceOptions;
+        private Map<File, String> mBootFiles;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -2674,6 +2683,7 @@ public class TestDevice extends NativeDevice {
             mExtraIdsigPaths = new ArrayList<>();
             mProtectedVm = false; // Vm is unprotected by default.
             mTestDeviceOptions = new LinkedHashMap<>();
+            mBootFiles = new LinkedHashMap<>();
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -2761,6 +2771,21 @@ public class TestDevice extends NativeDevice {
          */
         public MicrodroidBuilder addTestDeviceOption(String optionName, String valueText) {
             mTestDeviceOptions.put(optionName, valueText);
+            return this;
+        }
+
+        /**
+         * Adds a file for booting to be pushed to {@link #TEST_ROOT}.
+         *
+         * <p>Use this method if an file is required for booting microdroid. Otherwise use {@link
+         * TestDevice#pushFile}.
+         *
+         * @param localFile The local file on the host
+         * @param remoteFileName The remote file name on the device
+         * @param the microdroid builder.
+         */
+        public MicrodroidBuilder addBootFile(File localFile, String remoteFileName) {
+            mBootFiles.put(localFile, remoteFileName);
             return this;
         }
 

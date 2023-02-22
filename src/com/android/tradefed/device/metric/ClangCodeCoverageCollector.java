@@ -96,10 +96,9 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
     private NativeCodeCoverageFlusher mFlusher;
 
     @Override
-    public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener)
+    public void extraInit(IInvocationContext context, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        super.init(context, listener);
+        super.extraInit(context, listener);
 
         verifyNotNull(mConfiguration);
         setCoverageOptions(mConfiguration.getCoverageOptions());
@@ -113,8 +112,6 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
                 }
             }
         }
-
-        return this;
     }
 
     @Override

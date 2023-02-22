@@ -124,7 +124,9 @@ public class DeviceSyncHelper {
         }
 
         try (CloseableTraceScope reboot = new CloseableTraceScope("reboot")) {
-            device.executeAdbCommand("reboot");
+            String output = device.executeAdbCommand("reboot");
+            CLog.d("reboot output: %s", output);
+            device.waitForDeviceNotAvailable(30 * 1000L);
             device.waitForDeviceAvailable(15 * 60 * 1000);
         }
         device.enableAdbRoot();

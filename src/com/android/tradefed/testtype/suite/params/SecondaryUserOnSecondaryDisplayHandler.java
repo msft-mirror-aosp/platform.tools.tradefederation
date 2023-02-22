@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package {
-    default_applicable_licenses: ["Android-Apache-2.0"],
-}
+package com.android.tradefed.testtype.suite.params;
 
-java_library_host {
-    name: "IsolatedSampleTests",
-    defaults: ["tradefed_defaults"],
-    srcs: ["./SampleTests.java"],
-    // b/267831518: Pin tradefed and dependencies to Java 11.
-    java_version: "11",
-    static_libs: [
-        "junit"
-    ]
+/** Handler for {@link ModuleParameters#SECONDARY_USER_ON_SECONDARY_DISPLAY}. */
+public final class SecondaryUserOnSecondaryDisplayHandler extends SecondaryUserHandler {
+
+    public SecondaryUserOnSecondaryDisplayHandler() {
+        super(/*startUserVisibleOnBackground= */ true);
+    }
+
+    @Override
+    public String getParameterIdentifier() {
+        return "secondary_user_on_secondary_display";
+    }
 }
