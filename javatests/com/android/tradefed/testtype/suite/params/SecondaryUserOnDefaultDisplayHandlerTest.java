@@ -31,14 +31,14 @@ import org.junit.runners.JUnit4;
 
 /** Unit tests for {@link SecondaryUserOnSecondaryDisplayHandler}. */
 @RunWith(JUnit4.class)
-public final class SecondaryUserOnSecondaryDisplayHandlerTest {
+public final class SecondaryUserOnDefaultDisplayHandlerTest {
 
-    private SecondaryUserOnDefaultDisplayHandler mHandler;
+    private SecondaryUserOnSecondaryDisplayHandler mHandler;
     private IConfiguration mModuleConfig;
 
     @Before
     public void setUp() {
-        mHandler = new SecondaryUserOnDefaultDisplayHandler();
+        mHandler = new SecondaryUserOnSecondaryDisplayHandler();
         mModuleConfig = new Configuration("test", "test");
     }
 
@@ -59,7 +59,7 @@ public final class SecondaryUserOnSecondaryDisplayHandlerTest {
     @Test
     public void testGetParameterIdentifier() {
         assertThat(mHandler.getParameterIdentifier())
-                .isEqualTo("secondary_user_on_default_display");
+                .isEqualTo("secondary_user_on_secondary_display");
     }
 
     /**
@@ -73,6 +73,9 @@ public final class SecondaryUserOnSecondaryDisplayHandlerTest {
 
         ITargetPreparer preparer1 = mModuleConfig.getTargetPreparers().get(0);
         assertThat(preparer1).isInstanceOf(VisibleBackgroundUserPreparer.class);
+        VisibleBackgroundUserPreparer userPreparer = (VisibleBackgroundUserPreparer) preparer1;
+        assertThat(userPreparer.getDisplayId())
+                .isEqualTo(VisibleBackgroundUserPreparer.INVALID_DISPLAY);
         ITargetPreparer preparer2 = mModuleConfig.getTargetPreparers().get(1);
         assertThat(preparer2).isInstanceOf(RunCommandTargetPreparer.class);
         assertThat(((RunCommandTargetPreparer) preparer2).getCommands())
