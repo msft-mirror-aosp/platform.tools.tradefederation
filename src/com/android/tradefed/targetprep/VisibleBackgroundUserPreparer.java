@@ -23,11 +23,17 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 
+import java.util.Iterator;
 import java.util.Set;
+
+import javax.annotation.Nullable;
 
 /** Target preparer for running tests in a user that is started in the visible in the background. */
 @OptionClass(alias = "visible-background-user-preparer")
 public class VisibleBackgroundUserPreparer extends BaseTargetPreparer {
+
+    @VisibleForTesting public static final int INVALID_DISPLAY = -1; // same as android.view.Display
+    @VisibleForTesting public static final int DEFAULT_DISPLAY = 0; // same as android.view.Display
 
     // Needed when running tests on background user on visible display
     @VisibleForTesting protected static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
@@ -39,6 +45,9 @@ public class VisibleBackgroundUserPreparer extends BaseTargetPreparer {
                             + " and re-create them between module runs.")
     private boolean mReuseTestUser;
 
+    @Option(name = "display-id", description = "Which display to start the user visible on")
+    private int mDisplayId = INVALID_DISPLAY;
+
     private Integer mUserId;
     private boolean mUserAlreadyVisible;
 
@@ -49,7 +58,7 @@ public class VisibleBackgroundUserPreparer extends BaseTargetPreparer {
         if (!device.isVisibleBackgroundUsersSupported()) {
             throw new TargetSetupError("feature not supported", device.getDeviceDescriptor());
         }
-        CLog.i("setUp(): mReuseTestUser=%b", mReuseTestUser);
+        CLog.i("setUp(): mReuseTestUser=%b, mDisplayId=%d", mReuseTestUser, mDisplayId);
 
         mUserId = UserCreationHelper.createUser(device, mReuseTestUser);
 
@@ -59,18 +68,50 @@ public class VisibleBackgroundUserPreparer extends BaseTargetPreparer {
         device.postBootSetup();
     }
 
+    public void setDisplayId(int displayId) {
+        if (displayId == INVALID_DISPLAY) {
+            throw new IllegalArgumentException(
+                    "Cannot set it as INVALID_DISPLAY (" + INVALID_DISPLAY + ")");
+        }
+        mDisplayId = displayId;
+    }
+
+    @VisibleForTesting
+    public @Nullable Integer getDisplayId() {
+        return mDisplayId;
+    }
+
     private void startUserVisibleOnBackground(
             TestInformation testInfo, ITestDevice device, int userId)
             throws TargetSetupError, DeviceNotAvailableException {
-        Set<Integer> displays = device.listDisplayIdsForStartingVisibleBackgroundUsers();
-        CLog.d("Displays: %s", displays);
-        if (displays.isEmpty()) {
-            throw new TargetSetupError(
-                    String.format("No display available to start to user '%d'", userId),
-                    device.getDeviceDescriptor());
+        int displayId = mDisplayId;
+        if (displayId == INVALID_DISPLAY) {
+            // If display is not explicitly set (by option / setter), get the first available one
+            Set<Integer> displays = device.listDisplayIdsForStartingVisibleBackgroundUsers();
+            CLog.d("Displays: %s", displays);
+            if (displays.isEmpty()) {
+                throw new TargetSetupError(
+                        String.format("No display available to start to user '%d'", userId),
+                        device.getDeviceDescriptor());
+            }
+            Iterator<Integer> iterator = displays.iterator();
+            displayId = iterator.next();
+            if (displayId == DEFAULT_DISPLAY
+                    && device.isVisibleBackgroundUsersOnDefaultDisplaySupported()) {
+                // Ignore default display - it's a special case where the display id should have
+                // been passed directly
+                CLog.d(
+                        "Ignoring DEFAULT_DISPLAY because device supports background users on"
+                                + " default display");
+                if (!iterator.hasNext()) {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Only DEFAULT_DISPLAY available to start to user '%d'", userId),
+                            device.getDeviceDescriptor());
+                }
+                displayId = iterator.next();
+            }
         }
-        // TODO(b/266851112): add option to explicitly set display id as parameter
-        int displayId = displays.iterator().next();
 
         mUserAlreadyVisible = device.isUserVisibleOnDisplay(userId, displayId);
         if (mUserAlreadyVisible) {
