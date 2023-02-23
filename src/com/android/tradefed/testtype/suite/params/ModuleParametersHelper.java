@@ -23,12 +23,14 @@ import static com.android.tradefed.testtype.suite.params.ModuleParameters.NOT_IN
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.NOT_MULTI_ABI;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.NOT_RUN_ON_SDK_SANDBOX;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.NOT_SECONDARY_USER;
+import static com.android.tradefed.testtype.suite.params.ModuleParameters.NOT_SECONDARY_USER_ON_DEFAULT_DISPLAY;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.NOT_SECONDARY_USER_ON_SECONDARY_DISPLAY;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.NO_FOLDABLE_STATES;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.RUN_ON_SDK_SANDBOX;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.RUN_ON_SECONDARY_USER;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.RUN_ON_WORK_PROFILE;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.SECONDARY_USER;
+import static com.android.tradefed.testtype.suite.params.ModuleParameters.SECONDARY_USER_ON_DEFAULT_DISPLAY;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.SECONDARY_USER_ON_SECONDARY_DISPLAY;
 
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnSecondaryUserParameterHandler;
@@ -67,13 +69,22 @@ public final class ModuleParametersHelper {
      */
     private static final Map<ModuleParameters, IModuleParameterHandler> sOptionalHandlerMap =
             Map.of(
-                    SECONDARY_USER, new SecondaryUserHandler(),
-                    NOT_SECONDARY_USER, new NegativeHandler(),
+                    SECONDARY_USER,
+                    new SecondaryUserHandler(),
+                    NOT_SECONDARY_USER,
+                    new NegativeHandler(),
                     SECONDARY_USER_ON_SECONDARY_DISPLAY,
-                            new SecondaryUserOnSecondaryDisplayHandler(),
-                    NOT_SECONDARY_USER_ON_SECONDARY_DISPLAY, new NegativeHandler(),
-                    RUN_ON_SDK_SANDBOX, new RunOnSdkSandboxHandler(),
-                    NOT_RUN_ON_SDK_SANDBOX, new NegativeHandler());
+                    new SecondaryUserOnSecondaryDisplayHandler(),
+                    NOT_SECONDARY_USER_ON_SECONDARY_DISPLAY,
+                    new NegativeHandler(),
+                    SECONDARY_USER_ON_DEFAULT_DISPLAY,
+                    new SecondaryUserOnDefaultDisplayHandler(),
+                    NOT_SECONDARY_USER_ON_DEFAULT_DISPLAY,
+                    new NegativeHandler(),
+                    RUN_ON_SDK_SANDBOX,
+                    new RunOnSdkSandboxHandler(),
+                    NOT_RUN_ON_SDK_SANDBOX,
+                    new NegativeHandler());
 
     // NOTE: sOptionalGroupMap is currently empty, but used on resolveParam(), so don't remove it
     private static Map<ModuleParameters, Set<ModuleParameters>> sOptionalGroupMap =

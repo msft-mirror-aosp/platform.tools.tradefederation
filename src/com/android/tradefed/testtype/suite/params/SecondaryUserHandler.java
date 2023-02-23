@@ -31,6 +31,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import javax.annotation.Nullable;
+
 /** Handler for {@link ModuleParameters#SECONDARY_USER}. */
 public class SecondaryUserHandler implements IModuleParameterHandler {
 
@@ -41,13 +43,19 @@ public class SecondaryUserHandler implements IModuleParameterHandler {
                     "settings put secure location_providers_allowed +gps");
 
     private final boolean mStartUserVisibleOnBackground;
+    private final @Nullable Integer mDisplayId;
 
     public SecondaryUserHandler() {
         this(/*startUserVisibleOnBackground= */ false);
     }
 
     protected SecondaryUserHandler(boolean startUserVisibleOnBackground) {
+        this(startUserVisibleOnBackground, /* displayId= */ null);
+    }
+
+    protected SecondaryUserHandler(boolean startUserVisibleOnBackground, Integer displayId) {
         mStartUserVisibleOnBackground = startUserVisibleOnBackground;
+        mDisplayId = displayId;
     }
 
     @Override
@@ -60,11 +68,16 @@ public class SecondaryUserHandler implements IModuleParameterHandler {
         for (IDeviceConfiguration deviceConfig : moduleConfiguration.getDeviceConfig()) {
             List<ITargetPreparer> preparers = deviceConfig.getTargetPreparers();
             // The first things module will do is switch to a secondary user
-            preparers.add(
-                    0,
-                    mStartUserVisibleOnBackground
-                            ? new VisibleBackgroundUserPreparer()
-                            : new CreateUserPreparer());
+            ITargetPreparer userPreparer;
+            if (mStartUserVisibleOnBackground) {
+                userPreparer = new VisibleBackgroundUserPreparer();
+                if (mDisplayId != null) {
+                    ((VisibleBackgroundUserPreparer) userPreparer).setDisplayId(mDisplayId);
+                }
+            } else {
+                userPreparer = new CreateUserPreparer();
+            }
+            preparers.add(0, userPreparer);
             // Add a preparer to setup the location settings on the new user
             RunCommandTargetPreparer locationPreparer = new RunCommandTargetPreparer();
             LOCATION_COMMANDS.forEach(cmd -> locationPreparer.addRunCommand(cmd));

@@ -38,7 +38,9 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -94,7 +96,7 @@ public final class VisibleBackgroundUserPreparerTest {
 
     @Test
     public void testSetUp_tearDown() throws Exception {
-        mockListDisplayIdsForStartingVisibleBackgroundUsers(Set.of(108));
+        mockListDisplayIdsForStartingVisibleBackgroundUsers(orderedSetOf(108));
         mockCreateUser(42);
         mockStartUserVisibleOnBackground(42, 108);
 
@@ -111,9 +113,88 @@ public final class VisibleBackgroundUserPreparerTest {
     }
 
     @Test
+    public void testSetUp_specificDisplayByOption() throws Exception {
+        setParam("display-id", "108");
+        mockCreateUser(42);
+        mockStartUserVisibleOnBackground(42, 108);
+
+        mPreparer.setUp(mTestInfo);
+        verifyUserCreated();
+        verifyUserStartedVisibleOnBackground(42, 108);
+        verifyTestInfoProperty(RUN_TESTS_AS_USER_KEY, "42");
+        verifyNoUserSwitched();
+    }
+
+    @Test
+    public void testSetUp_specificDisplayBySetter() throws Exception {
+        setParam("display-id", "666");
+        mPreparer.setDisplayId(108);
+        mockCreateUser(42);
+        mockStartUserVisibleOnBackground(42, 108);
+
+        mPreparer.setUp(mTestInfo);
+        verifyUserCreated();
+        verifyUserStartedVisibleOnBackground(42, 108);
+        verifyTestInfoProperty(RUN_TESTS_AS_USER_KEY, "42");
+        verifyNoUserSwitched();
+    }
+
+    @Test
+    public void
+            testSetUp_useDefaultDisplayWhenVisibleBackgroundUsersOnDefaultDisplayIsNotSupported()
+                    throws Exception {
+        mockIsVisibleBackgroundUsersOnDefaultDisplaySupported(false);
+        mockListDisplayIdsForStartingVisibleBackgroundUsers(orderedSetOf(0, 108));
+        mockCreateUser(42);
+        mockStartUserVisibleOnBackground(42, 0);
+
+        mPreparer.setUp(mTestInfo);
+        verifyUserCreated();
+        verifyUserStartedVisibleOnBackground(42, 0);
+        verifyTestInfoProperty(RUN_TESTS_AS_USER_KEY, "42");
+        verifyNoUserSwitched();
+    }
+
+    @Test
+    public void
+            testSetUp_ignoreDefaultDisplayWhenVisibleBackgroundUsersOnDefaultDisplayIsSupported()
+                    throws Exception {
+        mockIsVisibleBackgroundUsersOnDefaultDisplaySupported(true);
+        mockListDisplayIdsForStartingVisibleBackgroundUsers(orderedSetOf(0, 108));
+        mockCreateUser(42);
+        mockStartUserVisibleOnBackground(42, 108);
+
+        mPreparer.setUp(mTestInfo);
+        verifyUserCreated();
+        verifyUserStartedVisibleOnBackground(42, 108);
+        verifyTestInfoProperty(RUN_TESTS_AS_USER_KEY, "42");
+        verifyNoUserSwitched();
+    }
+
+    @Test
+    public void testSetUp_onlyDefaultDisplayWhenVisibleBackgroundUsersOnDefaultDisplayIsSupported()
+            throws Exception {
+        mockIsVisibleBackgroundUsersOnDefaultDisplaySupported(true);
+        mockListDisplayIdsForStartingVisibleBackgroundUsers(orderedSetOf(0));
+        mockCreateUser(42);
+        mockStartUserVisibleOnBackground(42, 108);
+
+        assertThrows(TargetSetupError.class, () -> mPreparer.setUp(mTestInfo));
+
+        verifyNoUserStartedVisibleOnBackground();
+    }
+
+    @Test
+    public void testSetDisplay_invalidId() throws Exception {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> mPreparer.setDisplayId(VisibleBackgroundUserPreparer.INVALID_DISPLAY));
+    }
+
+    @Test
     public void testSetUp_tearDown_reuseTestUser_invisible() throws Exception {
         setParam("reuse-test-user", "true");
-        mockListDisplayIdsForStartingVisibleBackgroundUsers(Set.of(108));
+        mockListDisplayIdsForStartingVisibleBackgroundUsers(orderedSetOf(108));
         Map<Integer, UserInfo> existingUsers =
                 Map.of(
                         0,
@@ -148,7 +229,7 @@ public final class VisibleBackgroundUserPreparerTest {
     @Test
     public void testSetUp_tearDown_reuseTestUser_alreadyVisible() throws Exception {
         setParam("reuse-test-user", "true");
-        mockListDisplayIdsForStartingVisibleBackgroundUsers(Set.of(108));
+        mockListDisplayIdsForStartingVisibleBackgroundUsers(orderedSetOf(108));
         Map<Integer, UserInfo> existingUsers =
                 Map.of(
                         0,
@@ -184,7 +265,7 @@ public final class VisibleBackgroundUserPreparerTest {
     @Test
     public void testSetUp_tearDown_reuseTestUser_noExistingTestUser() throws Exception {
         setParam("reuse-test-user", "true");
-        mockListDisplayIdsForStartingVisibleBackgroundUsers(Set.of(108));
+        mockListDisplayIdsForStartingVisibleBackgroundUsers(orderedSetOf(108));
         Map<Integer, UserInfo> existingUsers =
                 Map.of(
                         0,
@@ -257,7 +338,7 @@ public final class VisibleBackgroundUserPreparerTest {
 
     @Test
     public void testSetUp_starUserFailed() throws Exception {
-        mockListDisplayIdsForStartingVisibleBackgroundUsers(Set.of(108));
+        mockListDisplayIdsForStartingVisibleBackgroundUsers(orderedSetOf(108));
         mockCreateUser(12);
         mockStartUserVisibleOnBackground(42, 108, /*result= */ false);
 
@@ -272,6 +353,10 @@ public final class VisibleBackgroundUserPreparerTest {
 
         verifyNoUserRemoved();
         verifyNoUserStopped();
+    }
+
+    private <T> Set<T> orderedSetOf(@SuppressWarnings("unchecked") T... elements) {
+        return new LinkedHashSet<>(Arrays.asList(elements));
     }
 
     private void setParam(String key, String value) throws ConfigurationException {
@@ -306,6 +391,11 @@ public final class VisibleBackgroundUserPreparerTest {
 
     private void mockIsVisibleBackgroundUsersSupported(boolean supported) throws Exception {
         mTestDeviceMockHelper.mockIsVisibleBackgroundUsersSupported(supported);
+    }
+
+    private void mockIsVisibleBackgroundUsersOnDefaultDisplaySupported(boolean supported)
+            throws Exception {
+        mTestDeviceMockHelper.mockIsVisibleBackgroundUsersOnDefaultDisplaySupported(supported);
     }
 
     private void mockIsUserVisibleOnDisplay(int userId, int displayId) throws Exception {
