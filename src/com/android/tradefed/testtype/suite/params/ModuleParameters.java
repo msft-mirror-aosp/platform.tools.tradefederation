@@ -27,13 +27,21 @@ public enum ModuleParameters {
     SECONDARY_USER("secondary_user", ModuleParameters.SECONDARY_USER_FAMILY),
     NOT_SECONDARY_USER("not_secondary_user", ModuleParameters.SECONDARY_USER_FAMILY),
 
-    // Secondary user started on background, but visible in a secondary display
+    // Secondary user started on background, visible in a secondary display
     SECONDARY_USER_ON_SECONDARY_DISPLAY(
             "secondary_user_on_secondary_display",
             ModuleParameters.SECONDARY_USER_ON_SECONDARY_DISPLAY_FAMILY),
     NOT_SECONDARY_USER_ON_SECONDARY_DISPLAY(
             "not_secondary_user_on_secondary_display",
             ModuleParameters.SECONDARY_USER_ON_SECONDARY_DISPLAY_FAMILY),
+
+    // Secondary user started on background, visible in the default display
+    SECONDARY_USER_ON_DEFAULT_DISPLAY(
+            "secondary_user_on_defauilt_display",
+            ModuleParameters.SECONDARY_USER_ON_DEFAULT_DISPLAY_FAMILY),
+    NOT_SECONDARY_USER_ON_DEFAULT_DISPLAY(
+            "not_secondary_user_on_default_display",
+            ModuleParameters.SECONDARY_USER_ON_DEFAULT_DISPLAY_FAMILY),
 
     // Multi-user
     MULTIUSER("multiuser", ModuleParameters.MULTIUSER_FAMILY),
@@ -53,6 +61,8 @@ public enum ModuleParameters {
     public static final String SECONDARY_USER_FAMILY = "secondary_user_family";
     public static final String SECONDARY_USER_ON_SECONDARY_DISPLAY_FAMILY =
             "secondary_user_on_secondary_display_family";
+    public static final String SECONDARY_USER_ON_DEFAULT_DISPLAY_FAMILY =
+            "secondary_user_on_default_display_family";
     public static final String MULTIUSER_FAMILY = "multiuser_family";
     public static final String FOLDABLE_STATES_FAMILY = "foldable_family";
     public static final String RUN_ON_SDK_SANDBOX_FAMILY = "run_on_sdk_sandbox_family";
