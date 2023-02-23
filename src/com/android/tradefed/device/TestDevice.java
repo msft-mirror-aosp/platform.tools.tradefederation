@@ -1061,6 +1061,7 @@ public class TestDevice extends NativeDevice {
                     CLog.v("framework reboot: can't detect framework running");
                     return false;
                 }
+                notifyRebootStarted();
                 String command = "svc power reboot " + rebootMode.formatRebootCommand(reason);
                 CommandResult result = executeShellV2Command(command);
                 if (result.getStdout().contains(EARLY_REBOOT)
@@ -1068,6 +1069,8 @@ public class TestDevice extends NativeDevice {
                     CLog.e(
                             "Reboot was called too early: stdout: %s.\nstderr: %s.",
                             result.getStdout(), result.getStderr());
+                    // notify of this reboot end, since reboot will be retried again at later stage.
+                    notifyRebootEnded();
                     return false;
                 }
             } catch (DeviceUnresponsiveException due) {
