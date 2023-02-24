@@ -23,6 +23,7 @@ import com.android.tradefed.device.CollectingOutputReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
@@ -214,7 +215,7 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
             CollectingOutputReceiver outputCollector = createOutputCollector();
             GoogleBenchmarkResultParser resultParser = createResultParser(runName, listener);
             listener.testRunStarted(runName, numTests);
-            try {
+            try (CloseableTraceScope ignore = new CloseableTraceScope(runName)) {
                 String cmd =
                         String.format(
                                 "%s%s%s %s",
