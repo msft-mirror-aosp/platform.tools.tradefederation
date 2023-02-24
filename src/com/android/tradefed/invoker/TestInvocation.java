@@ -96,6 +96,7 @@ import com.android.tradefed.testtype.ITestInformationReceiver;
 import com.android.tradefed.testtype.SubprocessTfLauncher;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IDisableable;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.PrettyPrintDelimiter;
 import com.android.tradefed.util.QuotationAwareTokenizer;
@@ -349,6 +350,10 @@ public class TestInvocation implements ITestInvocation {
                 for (ITestDevice device : context.getDevices()) {
                     invocationPath.reportLogs(device, listener, Stage.TEST);
                 }
+            }
+            if (mConditionalFailureMonitor.hasRunFailures()) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.HAS_ANY_RUN_FAILURES, "true");
             }
             CurrentInvocation.setActionInProgress(ActionInProgress.TEAR_DOWN);
             getRunUtil().allowInterrupt(false);
@@ -1040,9 +1045,7 @@ public class TestInvocation implements ITestInvocation {
             Runtime.getRuntime().addShutdownHook(cleanUpThread);
             registerExecutionFiles(info.executionFiles());
 
-            List<ITestInvocationListener> allListeners =
-                    new ArrayList<>(
-                            config.getTestInvocationListeners().size() + extraListeners.length);
+            List<ITestInvocationListener> allListeners = new ArrayList<>();
             // If it's not a subprocess, report the passed tests.
             ReportPassedTests reportPass = null;
             if (config.getConfigurationObject(TradefedDelegator.DELEGATE_OBJECT) == null
@@ -1052,7 +1055,15 @@ public class TestInvocation implements ITestInvocation {
                 reportPass.setConfiguration(config);
                 allListeners.add(reportPass);
             }
-            allListeners.addAll(config.getTestInvocationListeners());
+            List<ITestInvocationListener> resultReporters =
+                    new ArrayList<ITestInvocationListener>(config.getTestInvocationListeners());
+            boolean disableReporter =
+                    resultReporters.removeIf(
+                            l -> ((l instanceof IDisableable) && ((IDisableable) l).isDisabled()));
+            if (disableReporter) {
+                CLog.d("Some reporters are disabled and won't be used.");
+            }
+            allListeners.addAll(resultReporters);
             allListeners.addAll(Arrays.asList(extraListeners));
             allListeners.add(mUnavailableMonitor);
             allListeners.add(mConditionalFailureMonitor);

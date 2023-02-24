@@ -52,8 +52,9 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
     private TestDeviceState mDeviceState;
 
     /** the time in ms to wait between 'poll for responsiveness' attempts */
-    private static final long CHECK_POLL_TIME = 3 * 1000;
-    protected static final long MAX_CHECK_POLL_TIME = 30 * 1000;
+    private static final long CHECK_POLL_TIME = 1 * 1000;
+
+    protected static final long MAX_CHECK_POLL_TIME = 10 * 1000;
     /** the maximum operation time in ms for a 'poll for responsiveness' command */
     protected static final int MAX_OP_TIME = 10 * 1000;
     /** Reference for TMPFS from 'man statfs' */
@@ -222,6 +223,7 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
                                         cmd, receiver, MAX_OP_TIME, TimeUnit.MILLISECONDS);
                         String output = receiver.getOutput();
                         if (output.contains("/system/bin/adb")) {
+                            CLog.i("shell ready. ls output: %s", output);
                             return BUSY_WAIT_STATUS.SUCCESS;
                         }
                     } catch (IOException

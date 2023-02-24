@@ -53,23 +53,25 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
     private String processName = null;
     private Map<String, Long> mGranularInfo = new HashMap<>();
     private Set<String> mProcessObjInfo = new HashSet<>();
-    private final Map<String, Integer> mIndexMemoryMap = Map.ofEntries(
-            entry("virtualsize", 0),
-            entry("rss", 1),
-            entry("pss", 2),
-            entry("sharedclean", 3),
-            entry("shareddirty", 4),
-            entry("privateclean", 5),
-            entry("privatedirty", 6),
-            entry("swap", 7),
-            entry("swappss", 8),
-            entry("anonhugepages", 9),
-            entry("shmempmdmapped", 10),
-            entry("filepmdmapped", 11),
-            entry("sharedhugetlb", 12),
-            entry("privatehugetlb", 13),
-            // entry("flags", 14),
-            entry("object", 15));
+    private final Map<String, Integer> mIndexMemoryMap =
+            Map.ofEntries(
+                    entry("virtualsize", 0),
+                    entry("rss", 1),
+                    entry("pss", 2),
+                    entry("sharedclean", 3),
+                    entry("shareddirty", 4),
+                    entry("privateclean", 5),
+                    entry("privatedirty", 6),
+                    entry("swap", 7),
+                    entry("swappss", 8),
+                    entry("anonhugepages", 9),
+                    entry("shmempmdmapped", 10),
+                    entry("filepmdmapped", 11),
+                    entry("sharedhugetlb", 12),
+                    entry("privatehugetlb", 13),
+                    // entry("locked", 14),
+                    // entry("flags", 15),
+                    entry("object", 16));
 
     @Option(
             name = "showmap-metric-prefix",
@@ -247,12 +249,13 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
      * @return true or false
      */
     private Boolean isProcessFound(String line) {
+        if (mProcessNames.isEmpty()) return false;
         boolean psResult;
         Pattern psPattern = Pattern.compile(PROCESS_NAME_REGEX);
         Matcher psMatcher = psPattern.matcher(line);
         if (psMatcher.find()) {
             processName = psMatcher.group(2);
-            psResult = mProcessNames.isEmpty() || mProcessNames.contains(processName);
+            psResult = mProcessNames.contains(processName);
             return psResult;
         }
         return false;

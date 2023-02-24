@@ -23,7 +23,9 @@ import com.android.ddmlib.RawImage;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.TimeoutException;
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
+import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -54,8 +56,10 @@ import java.io.PipedOutputStream;
 import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +69,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -115,6 +120,8 @@ public class TestDevice extends NativeDevice {
             Pattern.compile("package:(.*) versionCode:(.*)");
 
     private static final int FLAG_PRIMARY = 1; // From the UserInfo class
+
+    private static final int FLAG_MAIN = 0x00004000; // From the UserInfo class
 
     private static final String[] SETTINGS_NAMESPACE = {"system", "secure", "global"};
 
@@ -189,60 +196,81 @@ public class TestDevice extends NativeDevice {
     private String internalInstallPackage(
             final File packageFile, final boolean reinstall, final List<String> extraArgs)
                     throws DeviceNotAvailableException {
-        List<String> args = new ArrayList<>(extraArgs);
-        if (packageFile.getName().endsWith(APEX_SUFFIX)) {
-            args.add(APEX_ARG);
-        }
-        // use array to store response, so it can be returned to caller
-        final String[] response = new String[1];
-        DeviceAction installAction =
-                new DeviceAction() {
-                    @Override
-                    public boolean run() throws InstallException {
-                        try {
-                            InstallReceiver receiver = createInstallReceiver();
-                            getIDevice()
-                                    .installPackage(
-                                            packageFile.getAbsolutePath(),
-                                            reinstall,
-                                            receiver,
-                                            INSTALL_TIMEOUT_MINUTES,
-                                            INSTALL_TIMEOUT_TO_OUTPUT_MINUTES,
-                                            TimeUnit.MINUTES,
-                                            args.toArray(new String[] {}));
-                            if (receiver.isSuccessfullyCompleted()) {
-                                response[0] = null;
-                            } else if (receiver.getErrorMessage() == null) {
-                                response[0] =
-                                        String.format(
-                                                "Installation of %s timed out",
-                                                packageFile.getAbsolutePath());
-                            } else {
-                                response[0] = receiver.getErrorMessage();
+        long startTime = System.currentTimeMillis();
+        try {
+            List<String> args = new ArrayList<>(extraArgs);
+            if (packageFile.getName().endsWith(APEX_SUFFIX)) {
+                args.add(APEX_ARG);
+            }
+            // use array to store response, so it can be returned to caller
+            final String[] response = new String[1];
+            DeviceAction installAction =
+                    new DeviceAction() {
+                        @Override
+                        public boolean run() throws InstallException {
+                            try {
+                                InstallReceiver receiver = createInstallReceiver();
+                                getIDevice()
+                                        .installPackage(
+                                                packageFile.getAbsolutePath(),
+                                                reinstall,
+                                                receiver,
+                                                INSTALL_TIMEOUT_MINUTES,
+                                                INSTALL_TIMEOUT_TO_OUTPUT_MINUTES,
+                                                TimeUnit.MINUTES,
+                                                args.toArray(new String[] {}));
+                                if (receiver.isSuccessfullyCompleted()) {
+                                    response[0] = null;
+                                } else if (receiver.getErrorMessage() == null) {
+                                    response[0] =
+                                            String.format(
+                                                    "Installation of %s timed out",
+                                                    packageFile.getAbsolutePath());
+                                } else {
+                                    response[0] = receiver.getErrorMessage();
+                                    if (response[0].contains(
+                                            "cmd: Failure calling service package")) {
+                                        String message =
+                                                String.format(
+                                                        "Failed to install '%s'. Device might have"
+                                                                + " crashed, it returned: %s",
+                                                        packageFile.getName(), response[0]);
+                                        throw new DeviceRuntimeException(
+                                                message, DeviceErrorIdentifier.DEVICE_CRASHED);
+                                    }
+                                }
+                            } catch (InstallException e) {
+                                String message = e.getMessage();
+                                if (message == null) {
+                                    message =
+                                            String.format(
+                                                    "InstallException during package installation. "
+                                                            + "cause: %s",
+                                                    StreamUtil.getStackTrace(e));
+                                }
+                                response[0] = message;
                             }
-                        } catch (InstallException e) {
-                            String message = e.getMessage();
-                            if (message == null) {
-                                message =
-                                        String.format(
-                                                "InstallException during package installation. "
-                                                        + "cause: %s",
-                                                StreamUtil.getStackTrace(e));
-                            }
-                            response[0] = message;
+                            return response[0] == null;
                         }
-                        return response[0] == null;
-                    }
-                };
-        CLog.v(
-                "Installing package file %s with args %s on %s",
-                packageFile.getAbsolutePath(), extraArgs.toString(), getSerialNumber());
-        performDeviceAction(String.format("install %s", packageFile.getAbsolutePath()),
-                installAction, MAX_RETRY_ATTEMPTS);
-        List<File> packageFiles = new ArrayList<>();
-        packageFiles.add(packageFile);
-        allowLegacyStorageForApps(packageFiles);
-        return response[0];
+                    };
+            CLog.v(
+                    "Installing package file %s with args %s on %s",
+                    packageFile.getAbsolutePath(), extraArgs.toString(), getSerialNumber());
+            performDeviceAction(
+                    String.format("install %s", packageFile.getAbsolutePath()),
+                    installAction,
+                    MAX_RETRY_ATTEMPTS);
+            List<File> packageFiles = new ArrayList<>();
+            packageFiles.add(packageFile);
+            allowLegacyStorageForApps(packageFiles);
+            return response[0];
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PACKAGE_INSTALL_COUNT, 1);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PACKAGE_INSTALL_TIME,
+                    System.currentTimeMillis() - startTime);
+        }
     }
 
     /**
@@ -285,71 +313,83 @@ public class TestDevice extends NativeDevice {
 
     public String installPackage(final File packageFile, final File certFile,
             final boolean reinstall, final String... extraArgs) throws DeviceNotAvailableException {
-        // use array to store response, so it can be returned to caller
-        final String[] response = new String[1];
-        DeviceAction installAction =
-                new DeviceAction() {
-                    @Override
-                    public boolean run()
-                            throws InstallException, SyncException, IOException, TimeoutException,
-                                    AdbCommandRejectedException {
-                        // TODO: create a getIDevice().installPackage(File, File...) method when the
-                        // dist cert functionality is ready to be open sourced
-                        String remotePackagePath =
-                                getIDevice().syncPackageToDevice(packageFile.getAbsolutePath());
-                        String remoteCertPath =
-                                getIDevice().syncPackageToDevice(certFile.getAbsolutePath());
-                        // trick installRemotePackage into issuing a 'pm install <apk> <cert>'
-                        // command, by adding apk path to extraArgs, and using cert as the
-                        // 'apk file'.
-                        String[] newExtraArgs = new String[extraArgs.length + 1];
-                        System.arraycopy(extraArgs, 0, newExtraArgs, 0, extraArgs.length);
-                        newExtraArgs[newExtraArgs.length - 1] =
-                                String.format("\"%s\"", remotePackagePath);
-                        try {
-                            InstallReceiver receiver = createInstallReceiver();
-                            getIDevice()
-                                    .installRemotePackage(
-                                            remoteCertPath,
-                                            reinstall,
-                                            receiver,
-                                            INSTALL_TIMEOUT_MINUTES,
-                                            INSTALL_TIMEOUT_TO_OUTPUT_MINUTES,
-                                            TimeUnit.MINUTES,
-                                            newExtraArgs);
-                            if (receiver.isSuccessfullyCompleted()) {
-                                response[0] = null;
-                            } else if (receiver.getErrorMessage() == null) {
-                                response[0] =
-                                        String.format(
-                                                "Installation of %s timed out.",
-                                                packageFile.getAbsolutePath());
-                            } else {
-                                response[0] = receiver.getErrorMessage();
+        long startTime = System.currentTimeMillis();
+        try {
+            // use array to store response, so it can be returned to caller
+            final String[] response = new String[1];
+            DeviceAction installAction =
+                    new DeviceAction() {
+                        @Override
+                        public boolean run()
+                                throws InstallException, SyncException, IOException,
+                                        TimeoutException, AdbCommandRejectedException {
+                            // TODO: create a getIDevice().installPackage(File, File...) method when
+                            // the
+                            // dist cert functionality is ready to be open sourced
+                            String remotePackagePath =
+                                    getIDevice().syncPackageToDevice(packageFile.getAbsolutePath());
+                            String remoteCertPath =
+                                    getIDevice().syncPackageToDevice(certFile.getAbsolutePath());
+                            // trick installRemotePackage into issuing a 'pm install <apk> <cert>'
+                            // command, by adding apk path to extraArgs, and using cert as the
+                            // 'apk file'.
+                            String[] newExtraArgs = new String[extraArgs.length + 1];
+                            System.arraycopy(extraArgs, 0, newExtraArgs, 0, extraArgs.length);
+                            newExtraArgs[newExtraArgs.length - 1] =
+                                    String.format("\"%s\"", remotePackagePath);
+                            try {
+                                InstallReceiver receiver = createInstallReceiver();
+                                getIDevice()
+                                        .installRemotePackage(
+                                                remoteCertPath,
+                                                reinstall,
+                                                receiver,
+                                                INSTALL_TIMEOUT_MINUTES,
+                                                INSTALL_TIMEOUT_TO_OUTPUT_MINUTES,
+                                                TimeUnit.MINUTES,
+                                                newExtraArgs);
+                                if (receiver.isSuccessfullyCompleted()) {
+                                    response[0] = null;
+                                } else if (receiver.getErrorMessage() == null) {
+                                    response[0] =
+                                            String.format(
+                                                    "Installation of %s timed out.",
+                                                    packageFile.getAbsolutePath());
+                                } else {
+                                    response[0] = receiver.getErrorMessage();
+                                }
+                            } catch (InstallException e) {
+                                String message = e.getMessage();
+                                if (message == null) {
+                                    message =
+                                            String.format(
+                                                    "InstallException during package installation. "
+                                                            + "cause: %s",
+                                                    StreamUtil.getStackTrace(e));
+                                }
+                                response[0] = message;
+                            } finally {
+                                getIDevice().removeRemotePackage(remotePackagePath);
+                                getIDevice().removeRemotePackage(remoteCertPath);
                             }
-                        } catch (InstallException e) {
-                            String message = e.getMessage();
-                            if (message == null) {
-                                message =
-                                        String.format(
-                                                "InstallException during package installation. "
-                                                        + "cause: %s",
-                                                StreamUtil.getStackTrace(e));
-                            }
-                            response[0] = message;
-                        } finally {
-                            getIDevice().removeRemotePackage(remotePackagePath);
-                            getIDevice().removeRemotePackage(remoteCertPath);
+                            return true;
                         }
-                        return true;
-                    }
-                };
-        performDeviceAction(String.format("install %s", packageFile.getAbsolutePath()),
-                installAction, MAX_RETRY_ATTEMPTS);
-        List<File> packageFiles = new ArrayList<>();
-        packageFiles.add(packageFile);
-        allowLegacyStorageForApps(packageFiles);
-        return response[0];
+                    };
+            performDeviceAction(
+                    String.format("install %s", packageFile.getAbsolutePath()),
+                    installAction,
+                    MAX_RETRY_ATTEMPTS);
+            List<File> packageFiles = new ArrayList<>();
+            packageFiles.add(packageFile);
+            allowLegacyStorageForApps(packageFiles);
+            return response[0];
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PACKAGE_INSTALL_COUNT, 1);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PACKAGE_INSTALL_TIME,
+                    System.currentTimeMillis() - startTime);
+        }
     }
 
     /**
@@ -1363,6 +1403,14 @@ public class TestDevice extends NativeDevice {
         return getMaxNumberOfUsersSupported() > 1;
     }
 
+    @Override
+    public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("isHeadlessSystemUserMode", 29);
+        return checkApiLevelAgainstNextRelease(34)
+                ? executeShellV2CommandThatReturnsBoolean("cmd user is-headless-system-user-mode")
+                : getBooleanProperty("ro.fw.mu.headless_system_user", false);
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -1377,8 +1425,19 @@ public class TestDevice extends NativeDevice {
     @Override
     public int createUser(String name, boolean guest, boolean ephemeral)
             throws DeviceNotAvailableException, IllegalStateException {
-        String command ="pm create-user " + (guest ? "--guest " : "")
-                + (ephemeral ? "--ephemeral " : "") + name;
+        return createUser(name, guest, ephemeral, /* forTesting= */ false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int createUser(String name, boolean guest, boolean ephemeral, boolean forTesting)
+            throws DeviceNotAvailableException, IllegalStateException {
+        String command =
+                "pm create-user "
+                        + (guest ? "--guest " : "")
+                        + (ephemeral ? "--ephemeral " : "")
+                        + (forTesting && getApiLevel() >= 34 ? "--for-testing " : "")
+                        + name;
         final String output = executeShellCommand(command);
         if (output.startsWith("Success")) {
             try {
@@ -1447,6 +1506,24 @@ public class TestDevice extends NativeDevice {
         return true;
     }
 
+    @Override
+    public boolean startVisibleBackgroundUser(int userId, int displayId, boolean waitFlag)
+            throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("startVisibleBackgroundUser", 34);
+
+        String cmd =
+                String.format(
+                        "am start-user%s --display %d %d",
+                        (waitFlag ? " -w" : ""), displayId, userId);
+        CommandResult res = executeShellV2Command(cmd);
+        if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
+            throw new DeviceRuntimeException(
+                    "Command  '" + cmd + "' failed: " + res,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        return res.getStdout().trim().startsWith("Success");
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -1495,15 +1572,42 @@ public class TestDevice extends NativeDevice {
         return true;
     }
 
+    @Override
+    public boolean isVisibleBackgroundUsersSupported() throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("isHeadlessSystemUserMode", 34);
+
+        return executeShellV2CommandThatReturnsBoolean(
+                "cmd user is-visible-background-users-supported");
+    }
+
+    @Override
+    public boolean isVisibleBackgroundUsersOnDefaultDisplaySupported()
+            throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("isVisibleBackgroundUsersOnDefaultDisplaySupported", 34);
+
+        return executeShellV2CommandThatReturnsBoolean(
+                "cmd user is-visible-background-users-on-default-display-supported");
+    }
+
     /**
      * {@inheritDoc}
      */
     @Override
     public Integer getPrimaryUserId() throws DeviceNotAvailableException {
+        return getUserIdByFlag(FLAG_PRIMARY);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Integer getMainUserId() throws DeviceNotAvailableException {
+        return getUserIdByFlag(FLAG_MAIN);
+    }
+
+    private Integer getUserIdByFlag(int requiredFlag) throws DeviceNotAvailableException {
         ArrayList<String[]> users = tokenizeListUsers();
         for (String[] user : users) {
             int flag = Integer.parseInt(user[3], 16);
-            if ((flag & FLAG_PRIMARY) != 0) {
+            if ((flag & requiredFlag) != 0) {
                 return Integer.parseInt(user[1]);
             }
         }
@@ -1523,9 +1627,24 @@ public class TestDevice extends NativeDevice {
             CLog.e("Invalid user id '%s' was returned for get-current-user", userId);
         } catch (NumberFormatException e) {
             CLog.e("Invalid string was returned for get-current-user: %s.", output);
-            CLog.e(e);
         }
         return INVALID_USER_ID;
+    }
+
+    @Override
+    public boolean isUserVisible(int userId) throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("isUserVisible", 34);
+
+        return executeShellV2CommandThatReturnsBoolean("cmd user is-user-visible %d", userId);
+    }
+
+    @Override
+    public boolean isUserVisibleOnDisplay(int userId, int displayId)
+            throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("isUserVisibleOnDisplay", 34);
+
+        return executeShellV2CommandThatReturnsBoolean(
+                "cmd user is-user-visible --display %d %d", displayId, userId);
     }
 
     private Matcher findUserInfo(String pmListUsersOutput) {
@@ -2031,6 +2150,43 @@ public class TestDevice extends NativeDevice {
     }
 
     @Override
+    public Set<Integer> listDisplayIdsForStartingVisibleBackgroundUsers()
+            throws DeviceNotAvailableException {
+        checkApiLevelAgainstNextRelease("getDisplayIdsForStartingVisibleBackgroundUsers", 34);
+
+        String cmd = "cmd activity list-displays-for-starting-users";
+        CommandResult res = executeShellV2Command(cmd);
+        if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
+            throw new DeviceRuntimeException(
+                    "Command  '" + cmd + "' failed: " + res,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        String output = res.getStdout().trim();
+
+        if (output.equalsIgnoreCase("none")) {
+            return Collections.emptySet();
+        }
+
+        // TODO: reuse some helper to parse the list
+        if (!output.startsWith("[") || !output.endsWith("]")) {
+            throw new DeviceRuntimeException(
+                    "Invalid output for command '" + cmd + "': " + output,
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+        String contents = output.substring(1, output.length() - 1);
+        try {
+            String[] ids = contents.split(",");
+            return Arrays.asList(ids).stream()
+                    .map(id -> Integer.parseInt(id.trim()))
+                    .collect(Collectors.toSet());
+        } catch (Exception e) {
+            throw new DeviceRuntimeException(
+                    "Invalid output for command '" + cmd + "': " + output,
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+    }
+
+    @Override
     public Set<DeviceFoldableState> getFoldableStates() throws DeviceNotAvailableException {
         if (getIDevice() instanceof StubDevice) {
             return new HashSet<>();
@@ -2167,6 +2323,18 @@ public class TestDevice extends NativeDevice {
         }
     }
 
+    private void setTestDeviceOptions(
+            TestDevice microdroidDevice, Map<String, String> deviceOptions) {
+        try {
+            OptionSetter setter = new OptionSetter(microdroidDevice.getOptions());
+            for (Map.Entry<String, String> optionsKeyValue : deviceOptions.entrySet()) {
+                setter.setOptionValue(optionsKeyValue.getKey(), optionsKeyValue.getValue());
+            }
+        } catch (ConfigurationException e) {
+            CLog.w(e);
+        }
+    }
+
     /**
      * Starts a Microdroid TestDevice.
      *
@@ -2193,6 +2361,7 @@ public class TestDevice extends NativeDevice {
         } catch (IOException e) {
             throw new DeviceRuntimeException(
                     "Unable to get an unused port for Microdroid.",
+                    e,
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
         }
 
@@ -2210,6 +2379,11 @@ public class TestDevice extends NativeDevice {
                     "mkdir -p " + TEST_ROOT + " has failed: " + result,
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
+        for (File localFile : builder.mBootFiles.keySet()) {
+            String remoteFileName = builder.mBootFiles.get(localFile);
+            pushFile(localFile, TEST_ROOT + remoteFileName);
+        }
+
         // Push the apk file to the test directory
         if (builder.mApkFile != null) {
             pushFile(builder.mApkFile, TEST_ROOT + builder.mApkFile.getName());
@@ -2230,10 +2404,15 @@ public class TestDevice extends NativeDevice {
         final String logPath = TEST_ROOT + "log.txt";
         final String debugFlag =
                 Strings.isNullOrEmpty(builder.mDebugLevel) ? "" : "--debug " + builder.mDebugLevel;
+        final String cpuFlag = builder.mNumCpus == null ? "" : "--cpus " + builder.mNumCpus;
         final String cpuAffinityFlag =
                 Strings.isNullOrEmpty(builder.mCpuAffinity)
                         ? ""
                         : "--cpu-affinity " + builder.mCpuAffinity;
+        final String cpuTopologyFlag =
+                Strings.isNullOrEmpty(builder.mCpuTopology)
+                        ? ""
+                        : "--cpu-topology " + builder.mCpuTopology;
 
         List<String> args =
                 new ArrayList<>(
@@ -2248,8 +2427,9 @@ public class TestDevice extends NativeDevice {
                                 "--log " + logPath,
                                 "--mem " + builder.mMemoryMib,
                                 debugFlag,
-                                "--cpus " + builder.mNumCpus,
+                                cpuFlag,
                                 cpuAffinityFlag,
+                                cpuTopologyFlag,
                                 builder.mApkPath,
                                 outApkIdsigPath,
                                 instanceImg,
@@ -2287,7 +2467,9 @@ public class TestDevice extends NativeDevice {
             }
         } catch (IOException ex) {
             throw new DeviceRuntimeException(
-                    "IOException trying to start a VM", DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+                    "IOException trying to start a VM",
+                    ex,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
 
         // Redirect log.txt to logd using logwrapper
@@ -2304,10 +2486,18 @@ public class TestDevice extends NativeDevice {
         adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort);
         TestDevice microdroid = (TestDevice) deviceManager.forceAllocateDevice(microdroidSerial);
         if (microdroid == null) {
+            process.destroy();
+            try {
+                process.waitFor();
+            } catch (InterruptedException ex) {
+            }
             throw new DeviceRuntimeException(
                     "Unable to force allocate the microdroid device",
                     InfraErrorIdentifier.RUNNER_ALLOCATION_ERROR);
         }
+        // microdroid can be slow to become unavailable after root. (b/259208275)
+        microdroid.getOptions().setAdbRootUnavailableTimeout(4 * 1000);
+        setTestDeviceOptions(microdroid, builder.mTestDeviceOptions);
         microdroid.setMicrodroidProcess(process);
         mStartedMicrodroids.put(process, cid);
         return microdroid;
@@ -2444,6 +2634,28 @@ public class TestDevice extends NativeDevice {
         return mMicrodroidProcess;
     }
 
+    private boolean executeShellV2CommandThatReturnsBoolean(String cmdFormat, Object... cmdArgs)
+            throws DeviceNotAvailableException {
+        String cmd = String.format(cmdFormat, cmdArgs);
+        CommandResult res = executeShellV2Command(cmd);
+        if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
+            throw new DeviceRuntimeException(
+                    "Command  '" + cmd + "' failed: " + res,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        String output = res.getStdout();
+        switch (output.trim().toLowerCase()) {
+            case "true":
+                return true;
+            case "false":
+                return false;
+            default:
+                throw new DeviceRuntimeException(
+                        "Non-boolean result for '" + cmd + "': " + output,
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+    }
+
     /** A builder used to create a Microdroid TestDevice. */
     public static class MicrodroidBuilder {
         private File mApkFile;
@@ -2451,10 +2663,13 @@ public class TestDevice extends NativeDevice {
         private String mConfigPath;
         private String mDebugLevel;
         private int mMemoryMib;
-        private int mNumCpus;
+        private Integer mNumCpus;
         private String mCpuAffinity;
+        private String mCpuTopology;
         private List<String> mExtraIdsigPaths;
         private boolean mProtectedVm;
+        private Map<String, String> mTestDeviceOptions;
+        private Map<File, String> mBootFiles;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -2463,10 +2678,12 @@ public class TestDevice extends NativeDevice {
             mConfigPath = configPath;
             mDebugLevel = null;
             mMemoryMib = 0;
-            mNumCpus = 1;
+            mNumCpus = null;
             mCpuAffinity = null;
             mExtraIdsigPaths = new ArrayList<>();
             mProtectedVm = false; // Vm is unprotected by default.
+            mTestDeviceOptions = new LinkedHashMap<>();
+            mBootFiles = new LinkedHashMap<>();
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -2483,7 +2700,11 @@ public class TestDevice extends NativeDevice {
             return new MicrodroidBuilder(null, apkPath, configPath);
         }
 
-        /** Sets the debug level. Supported values: "none", "app_only", and "full". */
+        /**
+         * Sets the debug level.
+         *
+         * <p>Supported values: "none" and "full". Android T also supports "app_only".
+         */
         public MicrodroidBuilder debugLevel(String debugLevel) {
             mDebugLevel = debugLevel;
             return this;
@@ -2498,7 +2719,11 @@ public class TestDevice extends NativeDevice {
             return this;
         }
 
-        /** Sets the number of vCPUs in the VM. Defaults to 1. */
+        /**
+         * Sets the number of vCPUs in the VM. Defaults to 1.
+         *
+         * <p>Only supported in Android T.
+         */
         public MicrodroidBuilder numCpus(int num) {
             mNumCpus = num;
             return this;
@@ -2509,9 +2734,17 @@ public class TestDevice extends NativeDevice {
          * or CPU ranges to run vCPUs on. e.g. "0,1-3,5" to choose host CPUs 0, 1, 2, 3, and 5. Or
          * this can be a colon-separated list of assignments of vCPU to host CPU assignments. e.g.
          * "0=0:1=1:2=2" to map vCPU 0 to host CPU 0, and so on.
+         *
+         * <p>Only supported in Android T.
          */
         public MicrodroidBuilder cpuAffinity(String affinity) {
             mCpuAffinity = affinity;
+            return this;
+        }
+
+        /** Sets the CPU topology configuration. Supported values: "one_cpu" and "match_host". */
+        public MicrodroidBuilder cpuTopology(String cpuTopology) {
+            mCpuTopology = cpuTopology;
             return this;
         }
 
@@ -2529,17 +2762,59 @@ public class TestDevice extends NativeDevice {
             return this;
         }
 
+        /**
+         * Sets a {@link TestDeviceOptions} for the microdroid TestDevice.
+         *
+         * @param optionName The name of the TestDeviceOption to set
+         * @param valueText The value
+         * @return the microdroid builder.
+         */
+        public MicrodroidBuilder addTestDeviceOption(String optionName, String valueText) {
+            mTestDeviceOptions.put(optionName, valueText);
+            return this;
+        }
+
+        /**
+         * Adds a file for booting to be pushed to {@link #TEST_ROOT}.
+         *
+         * <p>Use this method if an file is required for booting microdroid. Otherwise use {@link
+         * TestDevice#pushFile}.
+         *
+         * @param localFile The local file on the host
+         * @param remoteFileName The remote file name on the device
+         * @param the microdroid builder.
+         */
+        public MicrodroidBuilder addBootFile(File localFile, String remoteFileName) {
+            mBootFiles.put(localFile, remoteFileName);
+            return this;
+        }
+
         /** Starts a Micrdroid TestDevice on the given TestDevice. */
         public ITestDevice build(@Nonnull TestDevice device) throws DeviceNotAvailableException {
-            if (mNumCpus < 1) {
-                throw new IllegalArgumentException("Number of vCPUs can not be less than 1.");
+            if (mNumCpus != null) {
+                if (device.getApiLevel() != 33) {
+                    throw new IllegalStateException(
+                            "Setting number of CPUs only supported with API level 33");
+                }
+                if (mNumCpus < 1) {
+                    throw new IllegalArgumentException("Number of vCPUs can not be less than 1.");
+                }
             }
 
-            if (mCpuAffinity != null
-                    && !Pattern.matches("[\\d]+(-[\\d]+)?(,[\\d]+(-[\\d]+)?)*", mCpuAffinity)
-                    && !Pattern.matches("[\\d]+=[\\d]+(:[\\d]+=[\\d]+)*", mCpuAffinity)) {
-                throw new IllegalArgumentException(
-                        "CPU affinity [" + mCpuAffinity + "]" + " is invalid");
+            if (!Strings.isNullOrEmpty(mCpuTopology)) {
+                device.checkApiLevelAgainstNextRelease("vm-cpu-topology", 34);
+            }
+
+            if (mCpuAffinity != null) {
+                if (device.getApiLevel() != 33) {
+                    throw new IllegalStateException(
+                            "Setting CPU affinity only supported with API level 33");
+                }
+                if (!Pattern.matches("[\\d]+(-[\\d]+)?(,[\\d]+(-[\\d]+)?)*", mCpuAffinity)
+                        && !Pattern.matches("[\\d]+=[\\d]+(:[\\d]+=[\\d]+)*", mCpuAffinity)) {
+                    throw new IllegalArgumentException(
+                            "CPU affinity [" + mCpuAffinity + "]" + " is invalid");
+                }
             }
 
             return device.startMicrodroid(this);

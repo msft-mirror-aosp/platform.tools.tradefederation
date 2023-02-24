@@ -27,11 +27,12 @@ java_library_host {
         "//tools/tradefederation/core/test_result_interfaces",
     ],
     defaults: ["tradefed_defaults"],
+    java_version: "11",
     srcs: [
         "com/**/*.java",
     ],
     static_libs: [
-        "commons-compress-prebuilt",
+        "apache-commons-compress",
         // Trace protos to do invocation tracing
         "perfetto_trace-full",
     ],

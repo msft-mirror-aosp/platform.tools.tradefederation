@@ -19,6 +19,7 @@ package com.android.tradefed.testtype.mobly;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -64,7 +65,9 @@ import java.io.StringWriter;
 import java.io.Writer;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Unit tests for {@link MoblyBinaryHostTest}. */
 @RunWith(JUnit4.class)
@@ -88,6 +91,7 @@ public class MoblyBinaryHostTestTest {
     private File mVenvDir;
     private DeviceBuildInfo mMockBuildInfo;
     private TestInformation mTestInfo;
+    private Set<String> mIncludeFilters = new LinkedHashSet<>();
 
     @Before
     public void setUp() throws Exception {
@@ -145,7 +149,7 @@ public class MoblyBinaryHostTestTest {
         mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
 
         verify(mSpyTest.getRunUtil()).runTimedCmd(anyLong(), any());
-        assertFalse(new File(mSpyTest.getLogDirAbsolutePath()).exists());
+        assertNull(mSpyTest.getLogDirFile());
     }
 
     @Test
@@ -184,7 +188,7 @@ public class MoblyBinaryHostTestTest {
         mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
 
         verify(mSpyTest.getRunUtil()).runTimedCmd(anyLong(), any());
-        assertFalse(new File(mSpyTest.getLogDirAbsolutePath()).exists());
+        assertNull(mSpyTest.getLogDirFile());
     }
 
     @Test
@@ -227,7 +231,7 @@ public class MoblyBinaryHostTestTest {
             assertThat(e)
                     .hasMessageThat()
                     .contains("Fail to find test summary file test_summary.yaml under directory");
-            assertFalse(new File(mSpyTest.getLogDirAbsolutePath()).exists());
+            assertNull(mSpyTest.getLogDirFile());
         }
     }
 
@@ -380,6 +384,28 @@ public class MoblyBinaryHostTestTest {
                             "--log_path=" + LOG_PATH,
                             "--option1",
                             "--option2=test_option"
+                        });
+    }
+
+    @Test
+    public void testBuildCommandLineArrayWithIncludeFilter() throws Exception {
+        Mockito.doReturn(DEVICE_SERIAL).when(mMockDevice).getSerialNumber();
+        Mockito.doReturn(LOG_PATH).when(mSpyTest).getLogDirAbsolutePath();
+        mIncludeFilters.addAll(
+            Arrays.asList("ExampleTest#test_print_addresses", "ExampleTest#test_le_connect"));
+        mSpyTest.addAllIncludeFilters(mIncludeFilters);
+        String[] cmdArray = mSpyTest.buildCommandLineArray(BINARY_PATH, "path");
+        Truth.assertThat(cmdArray)
+                .isEqualTo(
+                        new String[] {
+                            BINARY_PATH,
+                            "--",
+                            "--config=path",
+                            "--device_serial=" + DEVICE_SERIAL,
+                            "--log_path=" + LOG_PATH,
+                            "--tests",
+                            "ExampleTest.test_print_addresses",
+                            "ExampleTest.test_le_connect"
                         });
     }
 

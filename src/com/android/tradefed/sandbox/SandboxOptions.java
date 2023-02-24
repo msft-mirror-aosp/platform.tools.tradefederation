@@ -20,6 +20,7 @@ import com.android.tradefed.config.OptionClass;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -45,6 +46,9 @@ public final class SandboxOptions {
     private static final String START_AVD_IN_PARENT = "avd-in-parent";
     private static final String PARALLEL_SANDBOX_SETUP = "parallel-sandbox-setup";
     private static final String UPDATED_FLAG_ORDER = "update-flag-orders";
+    private static final String SANDBOX_USE_TEST_DISCOVERY = "sandbox-use-test-discovery";
+    private static final String SANDBOX_FORCE_PARTIAL_DOWNLOAD_FILE_REGEX =
+            "sandbox-force-partial-download-file-regex";
 
     @Option(
         name = TF_LOCATION,
@@ -136,6 +140,19 @@ public final class SandboxOptions {
     @Option(name = UPDATED_FLAG_ORDER, description = "Feature flag to test safely new flags order")
     private boolean mNewFlagOrder = true;
 
+    @Option(
+            name = SANDBOX_USE_TEST_DISCOVERY,
+            description =
+                    "Feature flag to use observatory to discovery test modules for staging jars")
+    private boolean mUseTestDiscovery = false;
+
+    @Option(
+            name = SANDBOX_FORCE_PARTIAL_DOWNLOAD_FILE_REGEX,
+            description =
+                    "The set of regex to force sandbox partial download always stage the files"
+                            + " that match any of the regex in the list")
+    private Set<String> mSandboxForcePartialDownloadFileRegexList = new HashSet<>();
+
     /**
      * Returns the provided directories containing the Trade Federation version to use for
      * sandboxing the run.
@@ -219,5 +236,18 @@ public final class SandboxOptions {
     /** Returns whether or not to use the new flag order */
     public boolean shouldUseNewFlagOrder() {
         return mNewFlagOrder;
+    }
+
+    /** Returns whether or not to use tradefed observatory to optimize jar staging */
+    public boolean shouldUseTestDiscovery() {
+        return mUseTestDiscovery;
+    }
+
+    /**
+     * Returns a set of regex, sandbox partial download will always download those files that match
+     * the regex
+     */
+    public Set<String> getForcePartialDownloadFileRegexList() {
+        return mSandboxForcePartialDownloadFileRegexList;
     }
 }

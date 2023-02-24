@@ -32,6 +32,7 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
+import com.android.tradefed.device.metric.DeviceTraceCollector;
 import com.android.tradefed.device.metric.GcovCodeCoverageCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
@@ -49,6 +50,7 @@ import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.ddmlib.DefaultRemoteAndroidTestRunner;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryStrategy;
@@ -96,60 +98,61 @@ public class InstrumentationTest
 
     public static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
     public static final String RUN_TESTS_ON_SDK_SANDBOX = "RUN_TESTS_ON_SDK_SANDBOX";
+    private static final String SKIP_TESTS_REASON_KEY = "skip-tests-reason";
 
     @Option(
-        name = "package",
-        shortName = 'p',
-        description = "The manifest package name of the Android test application to run.",
-        importance = Importance.IF_UNSET
-    )
+            name = "package",
+            shortName = 'p',
+            description = "The manifest package name of the Android test application to run.",
+            importance = Importance.IF_UNSET)
     private String mPackageName = null;
 
-    @Option(name = "runner",
-            description="The instrumentation test runner class name to use. Will try to determine "
-                    + "automatically if it is not specified.")
+    @Option(
+            name = "runner",
+            description =
+                    "The instrumentation test runner class name to use. Will try to determine "
+                            + "automatically if it is not specified.")
     private String mRunnerName = null;
 
-    @Option(name = "class", shortName = 'c',
-            description="The test class name to run.")
+    @Option(name = "class", shortName = 'c', description = "The test class name to run.")
     private String mTestClassName = null;
 
-    @Option(name = "method", shortName = 'm',
-            description="The test method name to run.")
+    @Option(name = "method", shortName = 'm', description = "The test method name to run.")
     private String mTestMethodName = null;
 
-    @Option(name = "test-package",
-            description="Only run tests within this specific java package. " +
-            "Will be ignored if --class is set.")
+    @Option(
+            name = "test-package",
+            description =
+                    "Only run tests within this specific java package. "
+                            + "Will be ignored if --class is set.")
     private String mTestPackageName = null;
 
     /**
      * @deprecated use shell-timeout or test-timeout option instead.
      */
     @Deprecated
-    @Option(name = "timeout",
-            description="Deprecated - Use \"shell-timeout\" or \"test-timeout\" instead.")
+    @Option(
+            name = "timeout",
+            description = "Deprecated - Use \"shell-timeout\" or \"test-timeout\" instead.")
     private Integer mTimeout = null;
 
     @Option(
-        name = "shell-timeout",
-        description =
-                "The defined timeout (in milliseconds) is used as a maximum waiting time when "
-                        + "expecting the command output from the device. At any time, if the shell "
-                        + "command does not output anything for a period longer than defined "
-                        + "timeout the TF run terminates. For no timeout, set to 0.",
-        isTimeVal = true
-    )
+            name = "shell-timeout",
+            description =
+                    "The defined timeout (in milliseconds) is used as a maximum waiting time when"
+                        + " expecting the command output from the device. At any time, if the shell"
+                        + " command does not output anything for a period longer than defined"
+                        + " timeout the TF run terminates. For no timeout, set to 0.",
+            isTimeVal = true)
     private long mShellTimeout = 10 * 60 * 1000L; // default to 10 minutes
 
     @Option(
-        name = "test-timeout",
-        description =
-                "Sets timeout (in milliseconds) that will be applied to each test. In the event of "
-                        + "a test timeout, it will log the results and proceed with executing the "
-                        + "next test. For no timeout, set to 0.",
-        isTimeVal = true
-    )
+            name = "test-timeout",
+            description =
+                    "Sets timeout (in milliseconds) that will be applied to each test. In the event"
+                        + " of a test timeout, it will log the results and proceed with executing"
+                        + " the next test. For no timeout, set to 0.",
+            isTimeVal = true)
     private long mTestTimeout = 5 * 60 * 1000L; // default to 5 minutes
 
     @Option(
@@ -160,22 +163,26 @@ public class InstrumentationTest
             isTimeVal = true)
     private long mMaxTimeout = 0L;
 
-    @Option(name = "size",
-            description="Restrict test to a specific test size.")
+    @Option(name = "size", description = "Restrict test to a specific test size.")
     private String mTestSize = null;
 
-    @Option(name = "rerun",
-            description = "Rerun unexecuted tests individually on same device if test run " +
-            "fails to complete.")
+    @Option(
+            name = "rerun",
+            description =
+                    "Rerun unexecuted tests individually on same device if test run "
+                            + "fails to complete.")
     private boolean mIsRerunMode = true;
 
-    @Option(name = "install-file",
-            description="Optional file path to apk file that contains the tests.")
+    @Option(
+            name = "install-file",
+            description = "Optional file path to apk file that contains the tests.")
     private File mInstallFile = null;
 
-    @Option(name = "run-name",
-            description="Optional custom test run name to pass to listener. " +
-            "If unspecified, will use package name.")
+    @Option(
+            name = "run-name",
+            description =
+                    "Optional custom test run name to pass to listener. "
+                            + "If unspecified, will use package name.")
     private String mRunName = null;
 
     @Option(
@@ -192,27 +199,29 @@ public class InstrumentationTest
     private boolean mReRunUsingTestFile = false;
 
     @Option(
-        name = "rerun-from-file-attempts",
-        description = "Max attempts to rerun tests from file. -1 means rerun from file infinitely."
-    )
+            name = "rerun-from-file-attempts",
+            description =
+                    "Max attempts to rerun tests from file. -1 means rerun from file infinitely.")
     private int mReRunUsingTestFileAttempts = 3;
 
-    @Option(name = AbiFormatter.FORCE_ABI_STRING,
+    @Option(
+            name = AbiFormatter.FORCE_ABI_STRING,
             description = AbiFormatter.FORCE_ABI_DESCRIPTION,
             importance = Importance.IF_UNSET)
     private String mForceAbi = null;
 
-    @Option(name = "collect-tests-only",
-            description = "Only invoke the instrumentation to collect list of applicable test "
-                    + "cases. All test run callbacks will be triggered, but test execution will "
-                    + "not be actually carried out.")
+    @Option(
+            name = "collect-tests-only",
+            description =
+                    "Only invoke the instrumentation to collect list of applicable test cases. All"
+                        + " test run callbacks will be triggered, but test execution will not be"
+                        + " actually carried out.")
     private boolean mCollectTestsOnly = false;
 
     @Option(
-        name = "collect-tests-timeout",
-        description = "Timeout for the tests collection operation.",
-        isTimeVal = true
-    )
+            name = "collect-tests-timeout",
+            description = "Timeout for the tests collection operation.",
+            isTimeVal = true)
     private long mCollectTestTimeout = TEST_COLLECTION_TIMEOUT_MS;
 
     @Option(
@@ -222,14 +231,15 @@ public class InstrumentationTest
                             + " be used for local debugging, not suitable for automated runs.")
     protected boolean mDebug = false;
 
-    /** @deprecated Use the --coverage option in CoverageOptions instead. */
+    /**
+     * @deprecated Use the --coverage option in CoverageOptions instead.
+     */
     @Deprecated
     @Option(
-        name = "coverage",
-        description =
-                "Collect code coverage for this test run. Note that the build under test must be a "
-                        + "coverage build or else this will fail."
-    )
+            name = "coverage",
+            description =
+                    "Collect code coverage for this test run. Note that the build under test must"
+                            + " be a coverage build or else this will fail.")
     private boolean mCoverage = false;
 
     @Deprecated
@@ -247,11 +257,10 @@ public class InstrumentationTest
     private boolean mShouldEnforceFormat = false;
 
     @Option(
-        name = "hidden-api-checks",
-        description =
-                "If set to false, the '--no-hidden-api-checks' flag will be passed to the am "
-                        + "instrument command. Only works for P or later."
-    )
+            name = "hidden-api-checks",
+            description =
+                    "If set to false, the '--no-hidden-api-checks' flag will be passed to the am "
+                            + "instrument command. Only works for P or later.")
     private boolean mHiddenApiChecks = true;
 
     @Option(
@@ -270,11 +279,10 @@ public class InstrumentationTest
     private boolean mIsolatedStorage = true;
 
     @Option(
-        name = "window-animation",
-        description =
-                "If set to false, the '--no-window-animation' flag will be passed to the am "
-                        + "instrument command. Only works for ICS or later."
-    )
+            name = "window-animation",
+            description =
+                    "If set to false, the '--no-window-animation' flag will be passed to the am "
+                            + "instrument command. Only works for ICS or later.")
     private boolean mWindowAnimation = true;
 
     @Option(
@@ -339,84 +347,64 @@ public class InstrumentationTest
         return mConfiguration;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public void setDevice(ITestDevice device) {
         mDevice = device;
     }
 
-    /**
-     * Set the Android manifest package to run.
-     */
+    /** Set the Android manifest package to run. */
     public void setPackageName(String packageName) {
         mPackageName = packageName;
     }
 
-    /**
-     * Optionally, set the Android instrumentation runner to use.
-     */
+    /** Optionally, set the Android instrumentation runner to use. */
     public void setRunnerName(String runnerName) {
         mRunnerName = runnerName;
     }
 
-    /**
-     * Gets the Android instrumentation runner to be used.
-     */
+    /** Gets the Android instrumentation runner to be used. */
     public String getRunnerName() {
         return mRunnerName;
     }
 
-    /**
-     * Optionally, set the test class name to run.
-     */
+    /** Optionally, set the test class name to run. */
     public void setClassName(String testClassName) {
         mTestClassName = testClassName;
     }
 
-    /**
-     * Optionally, set the test method to run.
-     */
+    /** Optionally, set the test method to run. */
     public void setMethodName(String testMethodName) {
         mTestMethodName = StringEscapeUtils.escapeShell(testMethodName);
     }
 
     /**
      * Optionally, set the path to a file located on the device that should contain a list of line
-     * separated test classes and methods (format: com.foo.Class#method) to be run.
-     * If set, will automatically attempt to re-run tests using this test file
-     * via {@link InstrumentationFileTest} instead of executing separate adb commands for each
-     * remaining test via rerun.
+     * separated test classes and methods (format: com.foo.Class#method) to be run. If set, will
+     * automatically attempt to re-run tests using this test file via {@link
+     * InstrumentationFileTest} instead of executing separate adb commands for each remaining test
+     * via rerun.
      */
     public void setTestFilePathOnDevice(String testFilePathOnDevice) {
         mTestFilePathOnDevice = testFilePathOnDevice;
     }
 
-    /**
-     * Optionally, set the test size to run.
-     */
+    /** Optionally, set the test size to run. */
     public void setTestSize(String size) {
         mTestSize = size;
     }
 
-    /**
-     * Get the Android manifest package to run.
-     */
+    /** Get the Android manifest package to run. */
     public String getPackageName() {
         return mPackageName;
     }
 
-    /**
-     * Get the custom test run name that will be provided to listener
-     */
+    /** Get the custom test run name that will be provided to listener */
     public String getRunName() {
         return mRunName;
     }
 
-    /**
-     * Set the custom test run name that will be provided to listener
-     */
+    /** Set the custom test run name that will be provided to listener */
     public void setRunName(String runName) {
         mRunName = runName;
     }
@@ -430,23 +418,17 @@ public class InstrumentationTest
         mTestsToRun = tests;
     }
 
-    /**
-     * Get the class name to run.
-     */
+    /** Get the class name to run. */
     protected String getClassName() {
         return mTestClassName;
     }
 
-    /**
-     * Get the test method to run.
-     */
+    /** Get the test method to run. */
     protected String getMethodName() {
         return mTestMethodName;
     }
 
-    /**
-     * Get the path to a file that contains class#method combinations to be run
-     */
+    /** Get the path to a file that contains class#method combinations to be run */
     String getTestFilePathOnDevice() {
         return mTestFilePathOnDevice;
     }
@@ -462,18 +444,16 @@ public class InstrumentationTest
 
     /**
      * Sets the test package filter.
-     * <p/>
-     * If non-null, only tests within the given java package will be executed.
-     * <p/>
-     * Will be ignored if a non-null value has been provided to {@link #setClassName(String)}
+     *
+     * <p>If non-null, only tests within the given java package will be executed.
+     *
+     * <p>Will be ignored if a non-null value has been provided to {@link #setClassName(String)}
      */
     public void setTestPackageName(String testPackageName) {
         mTestPackageName = testPackageName;
     }
 
-    /**
-     * Get the test size to run. Returns <code>null</code> if no size has been set.
-     */
+    /** Get the test size to run. Returns <code>null</code> if no size has been set. */
     String getTestSize() {
         return mTestSize;
     }
@@ -492,24 +472,20 @@ public class InstrumentationTest
 
     /**
      * Set the coverage target of this test.
-     * <p/>
-     * Currently unused. This method is just present so coverageTarget can be later retrieved via
+     *
+     * <p>Currently unused. This method is just present so coverageTarget can be later retrieved via
      * {@link #getCoverageTarget()}
      */
     public void setCoverageTarget(String coverageTarget) {
         mCoverageTarget = coverageTarget;
     }
 
-    /**
-     * Get the coverageTarget previously set via {@link #setCoverageTarget(String)}.
-     */
+    /** Get the coverageTarget previously set via {@link #setCoverageTarget(String)}. */
     public String getCoverageTarget() {
         return mCoverageTarget;
     }
 
-    /**
-     * Return <code>true</code> if rerun mode is on.
-     */
+    /** Return <code>true</code> if rerun mode is on. */
     boolean isRerunMode() {
         return mIsRerunMode;
     }
@@ -519,16 +495,12 @@ public class InstrumentationTest
         mIsRerun = isRerun;
     }
 
-    /**
-     * Optionally, set the rerun mode.
-     */
+    /** Optionally, set the rerun mode. */
     public void setRerunMode(boolean rerun) {
         mIsRerunMode = rerun;
     }
 
-    /**
-     * Get the shell timeout in ms.
-     */
+    /** Get the shell timeout in ms. */
     long getShellTimeout() {
         return mShellTimeout;
     }
@@ -552,9 +524,7 @@ public class InstrumentationTest
         mInstallFile = installFile;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public ITestDevice getDevice() {
         return mDevice;
@@ -563,7 +533,9 @@ public class InstrumentationTest
     /**
      * Set the max time in ms to allow for the 'max time to shell output response' when collecting
      * tests.
-     * <p/>
+     *
+     * <p>
+     *
      * @deprecated This method is a no-op
      */
     @Deprecated
@@ -591,8 +563,7 @@ public class InstrumentationTest
      * Retrieve the value of an argument to provide when running the instrumentation tests.
      *
      * @param key the argument name
-     * <p/>
-     * Exposed for testing
+     *     <p>Exposed for testing
      */
     String getInstrumentationArg(String key) {
         if (mInstrArgMap.containsKey(key)) {
@@ -603,6 +574,7 @@ public class InstrumentationTest
 
     /**
      * Sets force-abi option.
+     *
      * @param abi
      */
     public void setForceAbi(String abi) {
@@ -697,9 +669,7 @@ public class InstrumentationTest
         return abiName;
     }
 
-    /**
-     * Set the {@link ListInstrumentationParser}.
-     */
+    /** Set the {@link ListInstrumentationParser}. */
     @VisibleForTesting
     void setListInstrumentationParser(ListInstrumentationParser listInstrumentationParser) {
         mListInstrumentationParser = listInstrumentationParser;
@@ -766,15 +736,21 @@ public class InstrumentationTest
         }
         if (mRunnerName == null) {
             setRunnerName(queryRunnerName());
-            checkArgument(
-                    mRunnerName != null,
-                    "Runner name has not been set and no matching instrumentations were found.");
+            if (mRunnerName == null) {
+                throw new HarnessRuntimeException(
+                        "Runner name has not been set and no matching instrumentations were found.",
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+            }
             CLog.i("No runner name specified. Using: %s.", mRunnerName);
         }
         mRunner =
                 createRemoteAndroidTestRunner(
                         mPackageName, mRunnerName, mDevice.getIDevice(), testInfo);
         setRunnerArgs(mRunner);
+        if (testInfo != null && testInfo.properties().containsKey(SKIP_TESTS_REASON_KEY)) {
+            mRunner.addInstrumentationArg(
+                    SKIP_TESTS_REASON_KEY, testInfo.properties().get(SKIP_TESTS_REASON_KEY));
+        }
 
         doTestRun(testInfo, listener);
         if (mInstallFile != null) {
@@ -807,13 +783,13 @@ public class InstrumentationTest
         }
     }
 
-    /**
-     * Helper method to add test-timeout & shell-timeout timeouts to  given runner
-     */
+    /** Helper method to add test-timeout & shell-timeout timeouts to given runner */
     private void addTimeoutsToRunner(IRemoteAndroidTestRunner runner) {
         if (mTimeout != null) {
-            CLog.w("\"timeout\" argument is deprecated and should not be used! \"shell-timeout\""
-                    + " argument value is overwritten with %d ms", mTimeout);
+            CLog.w(
+                    "\"timeout\" argument is deprecated and should not be used! \"shell-timeout\""
+                            + " argument value is overwritten with %d ms",
+                    mTimeout);
             setShellTimeout(mTimeout);
         }
         if (mTestTimeout < 0) {
@@ -823,9 +799,11 @@ public class InstrumentationTest
         if (mShellTimeout <= mTestTimeout) {
             // set shell timeout to 110% of test timeout
             mShellTimeout = mTestTimeout + mTestTimeout / 10;
-            CLog.w(String.format("shell-timeout should be larger than test-timeout %d; "
-                    + "NOTE: extending shell-timeout to %d, please consider fixing this!",
-                    mTestTimeout, mShellTimeout));
+            CLog.w(
+                    String.format(
+                            "shell-timeout should be larger than test-timeout %d; NOTE: extending"
+                                    + " shell-timeout to %d, please consider fixing this!",
+                            mTestTimeout, mShellTimeout));
         }
         runner.setMaxTimeToOutputResponse(mShellTimeout, TimeUnit.MILLISECONDS);
         runner.setMaxTimeout(mMaxTimeout, TimeUnit.MILLISECONDS);
@@ -876,7 +854,8 @@ public class InstrumentationTest
         if (!mIsRerun) {
 
             List<IMetricCollector> copyList = new ArrayList<IMetricCollector>(mCollectors);
-            if (mConfiguration.getCommandOptions().reportTestCaseCount()) {
+            if (mConfiguration != null
+                    && mConfiguration.getCommandOptions().reportTestCaseCount()) {
                 CountTestCasesCollector counter = new CountTestCasesCollector(this);
                 copyList.add(counter);
             }
@@ -895,6 +874,10 @@ public class InstrumentationTest
                             if (collector instanceof IConfigurationReceiver) {
                                 ((IConfigurationReceiver) collector)
                                         .setConfiguration(mConfiguration);
+                            }
+                            if (collector instanceof DeviceTraceCollector) {
+                                ((DeviceTraceCollector) collector)
+                                        .setInstrumentationPkgName(mPackageName);
                             }
                             listener = collector.init(testInfo.getContext(), listener);
                         }
@@ -1102,7 +1085,7 @@ public class InstrumentationTest
             final ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         boolean communicationFailure = false;
-        for (int i=0; i < COLLECT_TESTS_ATTEMPTS; i++) {
+        for (int i = 0; i < COLLECT_TESTS_ATTEMPTS; i++) {
             CollectingTestListener collector = new CollectingTestListener();
             boolean instrResult = false;
             // We allow to override the ddmlib default timeout for collection of tests.
@@ -1122,9 +1105,9 @@ public class InstrumentationTest
             } else if (runResults.isRunFailure()) {
                 // not a communication failure, but run still failed.
                 // TODO: should retry be attempted
-                CLog.w("Run failure %s when collecting tests to run for %s on device %s.",
-                        runResults.getRunFailureMessage(), mPackageName,
-                        mDevice.getSerialNumber());
+                CLog.w(
+                        "Run failure %s when collecting tests to run for %s on device %s.",
+                        runResults.getRunFailureMessage(), mPackageName, mDevice.getSerialNumber());
                 return null;
             } else {
                 // success!
@@ -1136,20 +1119,22 @@ public class InstrumentationTest
             // throwing DeviceUnresponsiveException is not always ideal because a misbehaving
             // instrumentation can hang, even though device is responsive. Would be nice to have
             // a louder signal for this situation though than just logging an error
-//            throw new DeviceUnresponsiveException(String.format(
-//                    "Communication failure when attempting to collect tests %s on device %s",
-//                    mPackageName, mDevice.getSerialNumber()));
-            CLog.w("Ignoring repeated communication failure when collecting tests %s for device %s",
+            //            throw new DeviceUnresponsiveException(String.format(
+            //                    "Communication failure when attempting to collect tests %s on
+            // device %s",
+            //                    mPackageName, mDevice.getSerialNumber()));
+            CLog.w(
+                    "Ignoring repeated communication failure when collecting tests %s for device"
+                            + " %s",
                     mPackageName, mDevice.getSerialNumber());
         }
-        CLog.e("Failed to collect tests to run for %s on device %s.",
+        CLog.e(
+                "Failed to collect tests to run for %s on device %s.",
                 mPackageName, mDevice.getSerialNumber());
         return null;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public void setCollectTestsOnly(boolean shouldCollectTest) {
         mCollectTestsOnly = shouldCollectTest;

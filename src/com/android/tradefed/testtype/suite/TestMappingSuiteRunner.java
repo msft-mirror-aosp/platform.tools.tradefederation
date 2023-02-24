@@ -20,17 +20,20 @@ import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.testmapping.TestInfo;
 import com.android.tradefed.util.testmapping.TestMapping;
 import com.android.tradefed.util.testmapping.TestOption;
-import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
 import com.google.common.io.Files;
 
 import org.apache.commons.compress.archivers.zip.ZipFile;
@@ -41,6 +44,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -118,7 +122,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             name = "additional-test-mapping-zip",
             description =
                     "A list of additional test_mappings.zip that contains TEST_MAPPING files. The "
-                            + "runner will collect tests based on them. If none  is specified, "
+                            + "runner will collect tests based on them. If none is specified, "
                             + "only the tests on the triggering device build will be run.")
     private List<String> mAdditionalTestMappingZips = new ArrayList<>();
 
@@ -146,6 +150,16 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "provide a feasibility for test mapping sampling.")
     private boolean mAllowEmptyTests = false;
 
+    @Option(
+            name = "force-full-run",
+            description =
+                    "Whether or not to run full tests. It is to provide a feasibility for tests on "
+                            + "kernel branches. The option should only be used for kernel tests.")
+    private boolean mForceFullRun = false;
+
+    /** Flag to indicate whether the test mapping suite runner is in test discovery mode. */
+    private Boolean mIsTestDiscovery = false;
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
@@ -155,6 +169,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
 
     public TestMappingSuiteRunner() {
         setSkipjarLoading(true);
+    }
+
+    /** Set the test discovery mode flag. */
+    public void setTestDiscovery(Boolean testDiscovery) {
+        mIsTestDiscovery = testDiscovery;
     }
 
     /**
@@ -211,6 +230,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
 
         if (mTestGroup != null) {
             TestMapping.setIgnoreTestMappingImports(mIgnoreTestMappingImports);
+            if (mForceFullRun) {
+                CLog.d("--force-full-run is specified, all tests in test group %s will be ran.",
+                        mTestGroup);
+                mTestMappingPaths.clear();
+            }
             if (!mTestMappingPaths.isEmpty()) {
                 TestMapping.setTestMappingPaths(mTestMappingPaths);
             }
@@ -220,7 +244,8 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             mTestGroup,
                             getPrioritizeHostConfig(),
                             mKeywords,
-                            mAdditionalTestMappingZips);
+                            mAdditionalTestMappingZips,
+                            mMatchedPatternPaths);
             if (!mTestModulesForced.isEmpty()) {
                 CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
                 testInfosToRun =
@@ -249,6 +274,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             mUseTestMappingPath = false;
         }
 
+        // In test discovery mode, abort here and the return value should not be used.
+        if (mIsTestDiscovery) {
+            return null;
+        }
+
         // load all the configurations with include-filter injected.
         LinkedHashMap<String, IConfiguration> testConfigs = super.loadTests();
 
@@ -261,7 +291,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             IAbi abi = configDescriptor.getAbi();
             // Get the parameterized module name by striping the abi information out.
             String moduleName = entry.getKey().replace(String.format("%s ", abi.getName()), "");
-            String configPath = moduleConfig.getName();
             Set<TestInfo> testInfos = getTestInfos(testInfosToRun, moduleName);
             // Only keep the same matching abi runner
             allTests.addAll(createIndividualTests(testInfos, moduleConfig, abi));
@@ -327,6 +356,8 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         }
         // De-duplicate test infos so that there won't be duplicate test options.
         testInfos = dedupTestInfos(testInfos);
+        Set<String> duplicateSources = new LinkedHashSet<>();
+
         for (TestInfo testInfo : testInfos) {
             // Clean up all the test options injected in SuiteModuleLoader.
             super.cleanUpSuiteSetup();
@@ -350,8 +381,16 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                 if (mRemoteTestTimeOut != null) {
                     addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
                 }
+                duplicateSources.addAll(testInfo.getSources());
                 tests.addAll(remoteTests);
             }
+        }
+        // If size above 1 that means we have duplicated modules with different options
+        if (duplicateSources.size() > 1) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DUPLICATE_MAPPING_DIFFERENT_OPTIONS,
+                    String.format(
+                            "%s:" + Joiner.on("+").join(duplicateSources), configPath));
         }
         return tests;
     }
@@ -429,7 +468,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     }
 
     /**
-     * De-duplicate test infos with the same test options.
+     * De-duplicate test infos and aggregate test-mapping sources with the same test options.
      *
      * @param testInfos A {@code Set<TestInfo>} containing multiple test options.
      * @return A {@code Set<TestInfo>} of tests without duplicated test options.
@@ -439,13 +478,29 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         Set<String> nameOptions = new HashSet<>();
         Set<TestInfo> dedupTestInfos = new HashSet<>();
         for (TestInfo testInfo : testInfos) {
-            String nameOption = testInfo.getName() + testInfo.getOptions().toString();
+            String nameOption = testInfo.getNameOption();
             if (!nameOptions.contains(nameOption)) {
                 dedupTestInfos.add(testInfo);
                 nameOptions.add(nameOption);
+            } else {
+                aggregateTestInfo(testInfo, dedupTestInfos);
             }
         }
         return dedupTestInfos;
+    }
+
+    /**
+     * Aggregate test-mapping sources of the test info with the same test options
+     *
+     * @param testInfo A {@code TestInfo} of duplicated test to be aggregated.
+     * @param dedupTestInfos A {@code Set<TestInfo>} of tests without duplicated test options.
+     */
+    private void aggregateTestInfo(TestInfo testInfo, Set<TestInfo> dedupTestInfos) {
+        for (TestInfo dedupTestInfo : dedupTestInfos) {
+            if (testInfo.getNameOption().equals(dedupTestInfo.getNameOption())) {
+                dedupTestInfo.addSources(testInfo.getSources());
+            }
+        }
     }
 
     /**

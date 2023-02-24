@@ -18,9 +18,13 @@ package com.android.tradefed.util;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.command.CommandOptions;
+import com.android.tradefed.config.filter.CommandOptionsGetter;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.service.TradefedFeatureClient;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -189,6 +193,16 @@ public class SystemUtil {
     /** Returns the path to the Java binary that current test harness is running in */
     public static File getRunningJavaBinaryPath() {
         String javaHome = System.getProperty("java.home");
+        try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+            Map<String, String> args = new HashMap<String, String>();
+            args.put(CommandOptionsGetter.OPTION_NAME, CommandOptions.JDK_FOLDER_OPTION_NAME);
+            FeatureResponse rep =
+                    client.triggerFeature(CommandOptionsGetter.COMMAND_OPTIONS_GETTER, args);
+            if (!rep.hasErrorInfo()) {
+                javaHome = rep.getResponse();
+                CLog.d("Using jdk: %s", javaHome);
+            }
+        }
         if (javaHome == null) {
             throw new RuntimeException("System property \"java.home\" is not set.");
         }

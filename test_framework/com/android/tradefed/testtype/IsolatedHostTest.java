@@ -175,6 +175,12 @@ public class IsolatedHostTest
 
     private File mIsolationJar;
 
+    private boolean debug = false;
+
+    public void setDebug(boolean debug) {
+        this.debug = debug;
+    }
+
     /** {@inheritDoc} */
     @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
@@ -211,7 +217,9 @@ public class IsolatedHostTest
             CLog.v("Started subprocess.");
 
             Socket socket = mServer.accept();
-            socket.setSoTimeout(mSocketTimeout);
+            if (!this.debug) {
+                socket.setSoTimeout(mSocketTimeout);
+            }
             CLog.v("Connected to subprocess.");
 
             List<String> testJarAbsPaths = getJarPaths(mJars);
@@ -314,6 +322,13 @@ public class IsolatedHostTest
 
         if (mRobolectricResources) {
             cmdArgs.addAll(compileRobolectricOptions());
+            // Prevent tradefed from eagerly loading classes, which may not load without shadows
+            // applied.
+            mExcludePaths.add("org/robolectric");
+        }
+
+        if (this.debug) {
+            cmdArgs.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8656");
         }
 
         cmdArgs.addAll(
@@ -482,11 +497,9 @@ public class IsolatedHostTest
         // such.
         options.add("-Drobolectric.conscryptMode=OFF");
 
-        // TODO(murj) hide these options behind a debug option
-        // options.add("-Drobolectric.logging.enabled=true");
-        // options.add("-Xdebug");
-        // options.add("-Xrunjdwp:transport=dt_socket,address=8600,server=y,suspend=y");
-
+        if (this.debug) {
+            options.add("-Drobolectric.logging.enabled=true");
+        }
         return options;
     }
 

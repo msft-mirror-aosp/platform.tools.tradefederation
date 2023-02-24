@@ -18,15 +18,17 @@ package com.android.tradefed.device.metric;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement;
-import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
+import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.PerfettoTraceRecorder;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 /**
  * Collector that will start perfetto trace when a test run starts and log trace file at the end.
@@ -34,23 +36,27 @@ import java.util.Map;
 public class DeviceTraceCollector extends BaseDeviceMetricCollector {
     private static final String NAME_FORMAT = "device-trace_%s_";
     private PerfettoTraceRecorder mPerfettoTraceRecorder = new PerfettoTraceRecorder();
+    // package name for an instrumentation test, null otherwise.
+    private String mInstrumentationPkgName;
 
     @Override
-    public void onTestRunStart(DeviceMetricData runData) throws DeviceNotAvailableException {
+    public void extraInit(IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
+        super.extraInit(context, listener);
         for (ITestDevice device : getRealDevices()) {
             try {
-                mPerfettoTraceRecorder.startTrace(device);
+                Map<String, String> extraConfigs = new LinkedHashMap<>();
+                if (mInstrumentationPkgName != null) {
+                    extraConfigs.put(
+                            "atrace_apps", String.format("\"%s\"", mInstrumentationPkgName));
+                }
+                mPerfettoTraceRecorder.startTrace(device, extraConfigs);
             } catch (IOException e) {
                 CLog.d(
                         "Failed to start perfetto trace on %s with error: %s",
                         device.getSerialNumber(), e.getMessage());
             }
         }
-    }
-
-    @Override
-    public void onTestRunFailed(DeviceMetricData testData, FailureDescription failure) {
-        logTraceFile();
     }
 
     @Override
@@ -72,5 +78,9 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
                 super.testLog(name, LogDataType.PERFETTO, source);
             }
         }
+    }
+
+    public void setInstrumentationPkgName(String packageName) {
+        mInstrumentationPkgName = packageName;
     }
 }

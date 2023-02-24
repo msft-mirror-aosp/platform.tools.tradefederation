@@ -23,6 +23,7 @@ import com.android.tradefed.device.CollectingOutputReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
@@ -49,9 +50,11 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
     static final String GBENCHMARK_FILTER_OPTION = "--benchmark_filter";
     static final int ADB_CMD_CHAR_LIMIT = 4000; // May apply to some old device models.
 
-    private static final String GBENCHMARK_JSON_OUTPUT_FORMAT = "--benchmark_format=json";
     private static final String GBENCHMARK_LIST_TESTS_OPTION = "--benchmark_list_tests=true";
     private static final List<String> DEFAULT_FILE_EXCLUDE_FILTERS = new ArrayList<>();
+
+    @VisibleForTesting
+    static final String GBENCHMARK_JSON_OUTPUT_FORMAT = "--benchmark_format=json";
 
     static {
         // Exclude .config by default as they are not runnable.
@@ -59,23 +62,27 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
     }
 
     @Option(
-        name = "file-exclusion-filter-regex",
-        description = "Regex to exclude certain files from executing. Can be repeated"
-    )
+            name = "file-exclusion-filter-regex",
+            description = "Regex to exclude certain files from executing. Can be repeated")
     private List<String> mFileExclusionFilterRegex = new ArrayList<>(DEFAULT_FILE_EXCLUDE_FILTERS);
 
-    @Option(name = "native-benchmark-device-path",
-            description="The path on the device where native stress tests are located.")
+    @Option(
+            name = "native-benchmark-device-path",
+            description = "The path on the device where native stress tests are located.")
     private String mDeviceTestPath = DEFAULT_TEST_PATH;
 
-    @Option(name = "benchmark-module-name",
-          description="The name of the native benchmark test module to run. " +
-          "If not specified all tests in --native-benchmark-device-path will be run.")
-    private String mTestModule = null;
+    @Option(
+            name = "benchmark-module-name",
+            description =
+                    "The name of the native benchmark test module to run. If not specified all"
+                        + " tests in --native-benchmark-device-path will be run. Can be repeated")
+    private List<String> mTestModules = new ArrayList<>();
 
-    @Option(name = "benchmark-run-name",
-          description="Optional name to pass to test reporters. If unspecified, will use " +
-          "test binary as run name.")
+    @Option(
+            name = "benchmark-run-name",
+            description =
+                    "Optional name to pass to test reporters. If unspecified, will use "
+                            + "test binary as run name.")
     private String mReportRunName = null;
 
     @Option(name = "max-run-time", description =
@@ -120,12 +127,12 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
     }
 
     /**
-     * Set the Android native benchmark test module to run.
+     * Add the Android native benchmark test module to run.
      *
      * @param moduleName The name of the native test module to run
      */
-    public void setModuleName(String moduleName) {
-        mTestModule = moduleName;
+    public void addModuleName(String moduleName) {
+        mTestModules.add(moduleName);
     }
 
     /**
@@ -133,8 +140,8 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
      *
      * @return the name of the native test module to run, or null if not set
      */
-    public String getModuleName() {
-        return mTestModule;
+    public List<String> getModuleNames() {
+        return mTestModules;
     }
 
     public void setReportRunName(String reportRunName) {
@@ -157,11 +164,11 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
      *
      * @return The path on the device where the native tests live.
      */
-    private String getTestPath() {
-        StringBuilder testPath = new StringBuilder(mDeviceTestPath);
-        if (mTestModule != null) {
+    private String getTestPath(String root, String child) {
+        StringBuilder testPath = new StringBuilder(root);
+        if (child != null) {
             testPath.append(FileListingService.FILE_SEPARATOR);
-            testPath.append(mTestModule);
+            testPath.append(child);
         }
         return testPath.toString();
     }
@@ -208,7 +215,7 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
             CollectingOutputReceiver outputCollector = createOutputCollector();
             GoogleBenchmarkResultParser resultParser = createResultParser(runName, listener);
             listener.testRunStarted(runName, numTests);
-            try {
+            try (CloseableTraceScope ignore = new CloseableTraceScope(runName)) {
                 String cmd =
                         String.format(
                                 "%s%s%s %s",
@@ -331,18 +338,28 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
         if (mDevice == null) {
             throw new IllegalArgumentException("Device has not been set");
         }
-        String testPath = getTestPath();
-        if (!Strings.isNullOrEmpty(mLdLibraryPath)) {
-            mLdCommand = String.format("LD_LIBRARY_PATH=%s ", mLdLibraryPath);
+
+        // null will cause all modules under the test path to be run.
+        if (mTestModules.isEmpty()) {
+            addModuleName(null);
         }
 
-        if (!mDevice.doesFileExist(testPath)) {
-            CLog.w(String.format("Could not find native benchmark test directory %s in %s!",
-                    testPath, mDevice.getSerialNumber()));
-            throw new RuntimeException(
-                    String.format("Could not find native benchmark test directory %s", testPath));
+        for (String testModule : mTestModules) {
+            String testPath = getTestPath(mDeviceTestPath, testModule);
+            if (!Strings.isNullOrEmpty(mLdLibraryPath)) {
+                mLdCommand = String.format("LD_LIBRARY_PATH=%s ", mLdLibraryPath);
+            }
+            if (!mDevice.doesFileExist(testPath)) {
+                CLog.w(
+                        String.format(
+                                "Could not find native benchmark test directory %s in %s!",
+                                testPath, mDevice.getSerialNumber()));
+                throw new RuntimeException(
+                        String.format(
+                                "Could not find native benchmark test directory %s", testPath));
+            }
+            doRunAllTestsInSubdirectory(testPath, mDevice, listener);
         }
-        doRunAllTestsInSubdirectory(testPath, mDevice, listener);
     }
 
     /*

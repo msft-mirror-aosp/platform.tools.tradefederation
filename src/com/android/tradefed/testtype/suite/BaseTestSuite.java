@@ -78,8 +78,8 @@ public class BaseTestSuite extends ITestSuite {
     @Option(
             name = INCLUDE_FILTER_OPTION,
             description =
-                    "the include module filters to apply. Format: '[abi] <module-name> [test]'."
-                        + " See documentation:"
+                    "the include module filters to apply. Format: '[abi] <module-name> [test]'. See"
+                        + " documentation:"
                         + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
     private Set<String> mIncludeFilters = new HashSet<>();
@@ -87,8 +87,8 @@ public class BaseTestSuite extends ITestSuite {
     @Option(
             name = EXCLUDE_FILTER_OPTION,
             description =
-                    "the exclude module filters to apply. Format: '[abi] <module-name> [test]'."
-                        + " See documentation:"
+                    "the exclude module filters to apply. Format: '[abi] <module-name> [test]'. See"
+                        + " documentation:"
                         + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
     private Set<String> mExcludeFilters = new HashSet<>();
@@ -381,7 +381,12 @@ public class BaseTestSuite extends ITestSuite {
                                         entry ->
                                                 entry.getValue() != null
                                                         && !entry.getValue().isEmpty())
-                                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+                                .collect(
+                                        Collectors.toMap(
+                                                Map.Entry::getKey,
+                                                Map.Entry::getValue,
+                                                (x, y) -> y,
+                                                LinkedHashMap::new));
                 throw new HarnessRuntimeException(
                         String.format(
                                 "Include filter '%s' was specified"

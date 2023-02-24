@@ -21,6 +21,7 @@
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/frameworks/base/platformprotos/linux_glibc_common/combined/platformprotos.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/prebuilts/misc/common/sdklib/sdklib-prebuilt.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/prebuilts/misc/common/tools-common/tools-common-prebuilt.jar"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/prebuilts/tools/common/m2/repository/org/mockito/mockito-core/4.6.1/mockito-core-4.6.1.jar" sourcepath="/TRADEFED_ROOT/prebuilts/tools/common/m2/repository/org/mockito/mockito-core/4.6.1/mockito-core-4.6.1-sources.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/mockito/mockito-byte-buddy-agent/linux_glibc_common/combined/mockito-byte-buddy-agent.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/mockito/mockito-byte-buddy/linux_glibc_common/combined/mockito-byte-buddy.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/truth/truth/linux_glibc_common/combined/truth.jar"/>
@@ -28,11 +29,10 @@
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/tools/tradefederation/core/tradefed-protos/linux_glibc_common/combined/tradefed-protos.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/prebuilts/tools/common/google-api-services-storage/1.24.1/google-api-services-storage-v1-rev155-1.24.1.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/perfetto/perfetto_metrics-full/linux_glibc_common/combined/perfetto_metrics-full.jar"/>
-	<classpathentry kind="var" path="TRADEFED_ROOT/prebuilts/tools/common/m2/repository/org/mockito/mockito-all/1.9.5/mockito-all-1.9.5.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/grpc-grpc-java/grpc-java/linux_glibc_common/combined/grpc-java.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/grpc-grpc-java/testing/grpc-java-testing/linux_glibc_common/javac/grpc-java-testing.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/protobuf/libprotobuf-java-util-full/linux_glibc_common/combined/libprotobuf-java-util-full.jar"/>
-	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/tools/asuite/atest/asuite_proto_java/linux_glibc_common/combined/asuite_proto_java.jar"/>
+        <classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/tools/asuite/asuite_proto_java/linux_glibc_common/combined/asuite_proto_java.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/prebuilts/tools/common/google-api-java-client/1.33.2/google-api-java-client-assembly/linux_glibc_common/combined/google-api-java-client-assembly.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/jline/jline/linux_glibc_common/combined/jline.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/tools/tradefederation/core/aoa_helper/aoa-helper/linux_glibc_common/combined/aoa-helper.jar"/>

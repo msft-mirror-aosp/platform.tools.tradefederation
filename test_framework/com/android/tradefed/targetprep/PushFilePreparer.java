@@ -27,6 +27,8 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -327,6 +329,8 @@ public class PushFilePreparer extends BaseTargetPreparer
                 // Try to stage the files from remote zip files.
                 src = buildInfo.stageRemoteFile(fileName, testDir);
                 if (src != null) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.STAGE_UNDEFINED_DEPENDENCY, fileName);
                     try {
                         // Search again with filtering on ABI
                         File srcWithAbi = FileUtil.findFile(fileName, mAbi, testDir);
@@ -472,8 +476,13 @@ public class PushFilePreparer extends BaseTargetPreparer
         Set<String> deps = new HashSet<>();
         try {
             for (File f : getPushSpecs(null).values()) {
-                if (!f.exists()) {
+                // Match the resolving logic when actually pushing
+                if (!f.isAbsolute()) {
                     deps.add(f.getName());
+                } else {
+                    CLog.d(
+                            "%s detected as existing. Not reported as dependency.",
+                            f.getAbsolutePath());
                 }
             }
         } catch (TargetSetupError e) {

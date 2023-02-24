@@ -17,6 +17,7 @@ package com.android.tradefed.result.suite;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -72,6 +73,9 @@ import java.util.Set;
  */
 public class XmlSuiteResultFormatter implements IFormatterGenerator {
 
+    // The maximum size of a stack trace saved in the report.
+    private static final int STACK_TRACE_MAX_SIZE = 1024 * 1024;
+
     private static final String ENCODING = "UTF-8";
     private static final String TYPE = "org.kxml2.io.KXmlParser,org.kxml2.io.KXmlSerializer";
     public static final String NS = null;
@@ -85,7 +89,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     private static final String CASE_TAG = "TestCase";
     private static final String COMMAND_LINE_ARGS = "command_line_args";
     private static final String DEVICES_ATTR = "devices";
-    private static final String DEVICE_KERNEL_INFO = "device_kernel_info";
+    private static final String DEVICE_KERNEL_INFO_ATTR = "device_kernel_info";
     private static final String DONE_ATTR = "done";
     private static final String END_DISPLAY_TIME_ATTR = "end_display";
     private static final String END_TIME_ATTR = "end";
@@ -125,8 +129,10 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     private static final String START_TIME_ATTR = "start";
 
     private static final String SUMMARY_TAG = "Summary";
+    private static final String SYSTEM_IMG_INFO_ATTR = "system_img_info";
     private static final String TEST_TAG = "Test";
     private static final String TOTAL_TESTS_ATTR = "total_tests";
+    private static final String VENDOR_IMG_INFO_ATTR = "vendor_img_info";
 
     private static final String LOG_FILE_NAME_ATTR = "file_name";
 
@@ -257,15 +263,10 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                     String.join(",", holder.context.getAttributes().get(key)));
         }
         if (!holder.context.getBuildInfos().isEmpty()) {
-            String deviceKernelInfo =
-                    holder.context
-                            .getBuildInfos()
-                            .get(0)
-                            .getBuildAttributes()
-                            .get(DEVICE_KERNEL_INFO);
-            if (deviceKernelInfo != null) {
-                serializer.attribute(NS, DEVICE_KERNEL_INFO, deviceKernelInfo);
-            }
+            IBuildInfo buildInfo = holder.context.getBuildInfos().get(0);
+            addBuildInfoAttributesIfNotNull(serializer, buildInfo, DEVICE_KERNEL_INFO_ATTR);
+            addBuildInfoAttributesIfNotNull(serializer, buildInfo, SYSTEM_IMG_INFO_ATTR);
+            addBuildInfoAttributesIfNotNull(serializer, buildInfo, VENDOR_IMG_INFO_ATTR);
         }
         addBuildInfoAttributes(serializer, holder);
         serializer.endTag(NS, BUILD_TAG);
@@ -404,6 +405,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
             }
             ErrorIdentifier errorIdentifier =
                     testResult.getValue().getFailure().getErrorIdentifier();
+            String truncatedStackTrace = getTruncatedStackTrace(fullStack, testResult.getKey());
             serializer.startTag(NS, FAILURE_TAG);
 
             serializer.attribute(NS, MESSAGE_ATTR, sanitizeXmlContent(message));
@@ -412,11 +414,29 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                 serializer.attribute(NS, ERROR_CODE_ATTR, Long.toString(errorIdentifier.code()));
             }
             serializer.startTag(NS, STACK_TAG);
-            serializer.text(sanitizeXmlContent(fullStack));
+            serializer.text(sanitizeXmlContent(truncatedStackTrace));
             serializer.endTag(NS, STACK_TAG);
 
             serializer.endTag(NS, FAILURE_TAG);
         }
+    }
+
+    /** Truncates the full stack trace with maximum {@link STACK_TRACE_MAX_SIZE} characters. */
+    private static String getTruncatedStackTrace(String fullStackTrace, String testCaseName) {
+        if (fullStackTrace == null) {
+            return null;
+        }
+        if (fullStackTrace.length() > STACK_TRACE_MAX_SIZE) {
+            CLog.i(
+                    "The stack trace for test case %s contains %d characters, and has been"
+                            + " truncated to %d characters in %s.",
+                    testCaseName,
+                    fullStackTrace.length(),
+                    STACK_TRACE_MAX_SIZE,
+                    TEST_RESULT_FILE_NAME);
+            return fullStackTrace.substring(0, STACK_TRACE_MAX_SIZE);
+        }
+        return fullStackTrace;
     }
 
     /** Add files captured by {@link TestFailureListener} on test failures. */
@@ -750,5 +770,14 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
 
     private static String sanitizeAttributesKey(String attribute) {
         return attribute.replace(":", "_");
+    }
+
+    private static void addBuildInfoAttributesIfNotNull(
+            XmlSerializer serializer, IBuildInfo buildInfo, String attributeName)
+            throws IOException {
+        String attributeValue = buildInfo.getBuildAttributes().get(attributeName);
+        if (attributeValue != null) {
+            serializer.attribute(NS, attributeName, attributeValue);
+        }
     }
 }

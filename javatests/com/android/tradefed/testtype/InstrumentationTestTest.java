@@ -47,6 +47,7 @@ import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.metric.IMetricCollector;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -921,7 +922,7 @@ public class InstrumentationTestTest {
         try {
             mInstrumentationTest.run(mTestInfo, mMockListener);
             fail("Should have thrown an exception.");
-        } catch (IllegalArgumentException e) {
+        } catch (HarnessRuntimeException e) {
             // expected
         }
     }

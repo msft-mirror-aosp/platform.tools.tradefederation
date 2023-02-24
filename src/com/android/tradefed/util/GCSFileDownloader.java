@@ -18,6 +18,7 @@ package com.android.tradefed.util;
 
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IFileDownloader;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 
@@ -26,6 +27,9 @@ import com.google.api.services.storage.Storage;
 import com.google.api.services.storage.model.Objects;
 import com.google.api.services.storage.model.StorageObject;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -45,6 +49,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -62,16 +67,35 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
     // Allow downloader to create empty files instead of throwing exception.
     private Boolean mCreateEmptyFile = false;
 
+    // Cache the freshness
+    private final LoadingCache<String, Boolean> mFreshnessCache;
+
     public GCSFileDownloader(File jsonKeyFile) {
-        super(jsonKeyFile);
+        this(false);
+        setJsonKeyFile(jsonKeyFile);
     }
 
     public GCSFileDownloader(Boolean createEmptyFile) {
         mCreateEmptyFile = createEmptyFile;
+        mFreshnessCache =
+                CacheBuilder.newBuilder()
+                        .maximumSize(50)
+                        .expireAfterAccess(60, TimeUnit.MINUTES)
+                        .build(
+                                new CacheLoader<String, Boolean>() {
+                                    @Override
+                                    public Boolean load(String key) throws BuildRetrievalError {
+                                        return true;
+                                    }
+                                });
     }
 
     public GCSFileDownloader() {
         this(false);
+    }
+
+    protected void clearCache() {
+        mFreshnessCache.invalidateAll();
     }
 
     private Storage getStorage() throws IOException {
@@ -203,7 +227,15 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         String[] pathParts = parseGcsPath(remotePath);
         String bucketName = pathParts[0];
         String remoteFilename = pathParts[1];
-        try {
+
+        if (localFile != null && localFile.exists()) {
+            Boolean cache = mFreshnessCache.getIfPresent(remotePath);
+            if (cache != null && Boolean.TRUE.equals(cache)) {
+                return true;
+            }
+        }
+
+        try (CloseableTraceScope ignored = new CloseableTraceScope("gcs_is_fresh " + remotePath)) {
             StorageObject remoteFileMeta = getRemoteFileMetaData(bucketName, remoteFilename);
             if (localFile == null || !localFile.exists()) {
                 if (!isRemoteFolder(bucketName, remoteFilename) && remoteFileMeta == null) {
@@ -216,8 +248,11 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
                 return isFileFresh(localFile, remoteFileMeta);
             }
             remoteFilename = sanitizeDirectoryName(remoteFilename);
-            return recursiveCheckFolderFreshness(bucketName, remoteFilename, localFile);
+            boolean fresh = recursiveCheckFolderFreshness(bucketName, remoteFilename, localFile);
+            mFreshnessCache.put(remotePath, fresh);
+            return fresh;
         } catch (IOException e) {
+            mFreshnessCache.invalidate(remotePath);
             throw new BuildRetrievalError(e.getMessage(), e, InfraErrorIdentifier.GCS_ERROR);
         }
     }

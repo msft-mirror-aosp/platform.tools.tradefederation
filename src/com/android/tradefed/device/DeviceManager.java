@@ -573,7 +573,16 @@ public class DeviceManager implements IDeviceManager {
         for (int i = 0; i < mNumLocalVirtualDevicesSupported; i++) {
             addAvailableDevice(
                     new StubLocalAndroidVirtualDevice(
-                            String.format("%s-%s", LOCAL_VIRTUAL_DEVICE_SERIAL_PREFIX, i)));
+                            String.format("%s-%s", LOCAL_VIRTUAL_DEVICE_SERIAL_PREFIX, i), i));
+        }
+    }
+
+    public void addFastbootDevice(FastbootDevice fastbootDevice) {
+        IManagedTestDevice d = mManagedDeviceList.findOrCreateFastboot(fastbootDevice);
+        if (d != null) {
+            mManagedDeviceList.handleDeviceEvent(d, DeviceEvent.FASTBOOT_DETECTED);
+        } else {
+            CLog.e("Could not create stub device");
         }
     }
 
@@ -1484,7 +1493,7 @@ public class DeviceManager implements IDeviceManager {
                             d.setFastbootd(true);
                         }
                         if (mGlobalDeviceFilter != null && mGlobalDeviceFilter.matches(d)) {
-                            addAvailableDevice(d);
+                            addFastbootDevice(d);
                         }
                     }
                 }

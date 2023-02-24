@@ -36,4 +36,6 @@ tradefed_java_library_host {
     "ddmlib-prebuilt",
     "devtools-annotations-prebuilt",
   ],
+  // b/267831518: Pin tradefed and dependencies to Java 11.
+  java_version: "11",
 }

@@ -20,6 +20,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,14 +44,17 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.AdditionalMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -178,11 +182,11 @@ public class GoogleBenchmarkTestTest {
 
     /** Test the run method for a couple tests with a module name */
     @Test
-    public void testRun_withModuleName() throws DeviceNotAvailableException {
+    public void testRun_withSingleModuleName() throws DeviceNotAvailableException {
         final String moduleName = "module";
         final String nativeTestPath =
                 String.format("%s/%s", GoogleBenchmarkTest.DEFAULT_TEST_PATH, moduleName);
-        mGoogleBenchmarkTest.setModuleName(moduleName);
+        mGoogleBenchmarkTest.addModuleName(moduleName);
         final String test1 = "test1";
         final String test2 = "test2";
         MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
@@ -224,6 +228,55 @@ public class GoogleBenchmarkTestTest {
         verify(mMockITestDevice, times(2)).executeShellCommand(Mockito.contains("chmod"));
         verify(mMockInvocationListener, times(2))
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+    }
+
+    /** Test the run method for a couple tests with multiple module names */
+    @Test
+    public void testRun_withMultipleModuleNames() throws DeviceNotAvailableException {
+        final List<String> moduleNames =
+                new ArrayList<>(Arrays.asList("module1", "module2", "module3"));
+        List<String> nativeTestPaths = new ArrayList<>();
+        for (String moduleName : moduleNames) {
+            nativeTestPaths.add(
+                    String.format("%s/%s", GoogleBenchmarkTest.DEFAULT_TEST_PATH, moduleName));
+            mGoogleBenchmarkTest.addModuleName(moduleName);
+        }
+        final String test1 = "test1";
+        final String test2 = "test2";
+
+        for (String nativeTestPath : nativeTestPaths) {
+            MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
+            when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
+            when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
+            when(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).thenReturn(false);
+            when(mMockITestDevice.isDirectory(nativeTestPath + "/test2")).thenReturn(false);
+            String[] files = new String[] {"test1", "test2"};
+            when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+            when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
+            when(mMockITestDevice.executeShellV2Command(
+                            String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)))
+                    .thenReturn(getCommandResult("\nmethod1\nmethod2\nmethod3\n\n"));
+            when(mMockITestDevice.executeShellV2Command(
+                            String.format("%s/test2 --benchmark_list_tests=true", nativeTestPath)))
+                    .thenReturn(getCommandResult("method1\nmethod2\n"));
+        }
+
+        mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
+
+        InOrder inOrderVerifier = inOrder(mMockITestDevice);
+
+        for (String moduleName : moduleNames) {
+            String patten =
+                    ".*" + moduleName + ".*" + mGoogleBenchmarkTest.GBENCHMARK_JSON_OUTPUT_FORMAT;
+            inOrderVerifier
+                    .verify(mMockITestDevice)
+                    .executeShellCommand(
+                            Mockito.matches(patten),
+                            Mockito.same(mMockReceiver),
+                            Mockito.anyLong(),
+                            (TimeUnit) Mockito.any(),
+                            Mockito.anyInt());
+        }
     }
 
     /** Test the run method for a couple tests with a module name */

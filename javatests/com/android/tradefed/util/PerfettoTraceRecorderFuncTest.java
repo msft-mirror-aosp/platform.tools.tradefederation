@@ -34,7 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @RunWith(DeviceJUnit4ClassRunner.class)
-public class PerfettoTraceRecorderTest implements IDeviceTest {
+public class PerfettoTraceRecorderFuncTest implements IDeviceTest {
 
     private ITestDevice mTestDevice;
     private PerfettoTraceRecorder mPerfettoTraceRecorder;
@@ -66,7 +66,7 @@ public class PerfettoTraceRecorderTest implements IDeviceTest {
 
     @Test
     public void testPerfettoTraceRecorded() throws IOException {
-        mPerfettoTraceRecorder.startTrace(getDevice());
+        mPerfettoTraceRecorder.startTrace(getDevice(), null);
         RunUtil.getDefault().sleep(5000); // collect trace for five seconds
         File traceFile = mPerfettoTraceRecorder.stopTrace(getDevice());
 

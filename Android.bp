@@ -34,6 +34,8 @@ java_library_host {
         include_dirs: ["external/protobuf/src"],
         type: "full",
     },
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -51,6 +53,8 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -73,6 +77,8 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -90,6 +96,8 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -107,6 +115,8 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 // Main Target to build tradefed jar
@@ -119,13 +129,16 @@ tradefed_java_library_host {
     java_resources: [
         ":TradefedContentProvider",
         ":TelephonyUtility",
-        ":WifiUtil"
+        ":WifiUtil",
+        ":test-services.apk",
     ],
     static_libs: [
         "tradefed-lib-core",
         "tradefed-test-framework",
     ],
     manifest: "MANIFEST.mf",
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 // Tradefed build target without the test framework statically linked
@@ -142,6 +155,8 @@ java_library_host {
         "tradefed-test-framework",
     ],
     manifest: "MANIFEST.mf",
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -195,6 +210,8 @@ java_library_host {
     libs: [
         "loganalysis",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 // Turn off various doclava warnings when generating

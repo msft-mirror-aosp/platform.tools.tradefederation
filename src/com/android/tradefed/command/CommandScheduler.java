@@ -43,6 +43,7 @@ import com.android.tradefed.config.proxy.ProxyConfiguration;
 import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.DeviceManager;
+import com.android.tradefed.device.DeviceManager.FastbootDevice;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.FreeDeviceState;
@@ -128,19 +129,21 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * A scheduler for running TradeFederation commands across all available devices.
- * <p/>
- * Will attempt to prioritize commands to run based on a total running count of their execution
+ *
+ * <p>Will attempt to prioritize commands to run based on a total running count of their execution
  * time. e.g. infrequent or fast running commands will get prioritized over long running commands.
- * <p/>
- * Runs forever in background until shutdown.
+ *
+ * <p>Runs forever in background until shutdown.
  */
 public class CommandScheduler extends Thread implements ICommandScheduler, ICommandFileListener {
 
     /** the queue of commands ready to be executed. */
     private List<ExecutableCommand> mReadyCommands;
+
     private Set<ExecutableCommand> mUnscheduledWarning;
 
     /** the queue of commands sleeping. */
@@ -175,32 +178,38 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     private WaitObj mCommandProcessWait = new WaitObj();
 
-    /** The last {@link InvocationThread} that ran error code and error stack*/
+    /** The last {@link InvocationThread} that ran error code and error stack */
     private ExitCode mLastInvocationExitCode = ExitCode.NO_ERROR;
+
     private Throwable mLastInvocationThrowable = null;
 
     /** Client to report metric data of the harness. */
     private ClearcutClient mClient = null;
 
-    @Option(name = "reload-cmdfiles", description =
-            "Whether to enable the command file autoreload mechanism")
+    @Option(
+            name = "reload-cmdfiles",
+            description = "Whether to enable the command file autoreload mechanism")
     // FIXME: enable this to be enabled or disabled on a per-cmdfile basis
     private boolean mReloadCmdfiles = false;
 
     @Option(
-        name = "max-poll-time",
-        description = "ms between forced command scheduler execution time"
-    )
+            name = "max-poll-time",
+            description = "ms between forced command scheduler execution time")
     private long mPollTime = 30 * 1000; // 30 seconds
 
-    @Option(name = "shutdown-on-cmdfile-error", description =
-            "terminate TF session if a configuration exception on command file occurs")
+    @Option(
+            name = "shutdown-on-cmdfile-error",
+            description =
+                    "terminate TF session if a configuration exception on command file occurs")
     private boolean mShutdownOnCmdfileError = false;
 
-    @Option(name = "shutdown-delay", description =
-            "maximum time to wait before allowing final interruption of scheduler to terminate"
-            + " TF session. If value is zero, interruption will only be triggered"
-            + " when Invocation become interruptible. (Default behavior).", isTimeVal = true)
+    @Option(
+            name = "shutdown-delay",
+            description =
+                    "maximum time to wait before allowing final interruption of scheduler to"
+                        + " terminate TF session. If value is zero, interruption will only be"
+                        + " triggered when Invocation become interruptible. (Default behavior).",
+            isTimeVal = true)
     private long mShutdownTimeout = 0;
 
     private HostState mHostState = HostState.UNKNOWN;
@@ -241,7 +250,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
      * Represents one active command added to the scheduler. Will track total execution time of all
      * instances of this command
      */
-     static class CommandTracker {
+    static class CommandTracker {
         private final int mId;
         private final String[] mArgs;
         private final String mCommandFilePath;
@@ -268,9 +277,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             return mTotalExecTime;
         }
 
-        /**
-         * Get the full list of config arguments associated with this command.
-         */
+        /** Get the full list of config arguments associated with this command. */
         String[] getArgs() {
             return mArgs;
         }
@@ -279,9 +286,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             return mId;
         }
 
-        /**
-         * Return the path of the file this command is associated with. null if not applicable
-         */
+        /** Return the path of the file this command is associated with. null if not applicable */
         String getCommandFilePath() {
             return mCommandFilePath;
         }
@@ -295,9 +300,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    /**
-     * Represents one instance of a command to be executed.
-     */
+    /** Represents one instance of a command to be executed. */
     private class ExecutableCommand {
         private final CommandTracker mCmdTracker;
         private final IConfiguration mConfig;
@@ -305,31 +308,25 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         private final long mCreationTime;
         private Long mSleepTime;
 
-        private ExecutableCommand(CommandTracker tracker, IConfiguration config,
-                boolean rescheduled) {
+        private ExecutableCommand(
+                CommandTracker tracker, IConfiguration config, boolean rescheduled) {
             mConfig = config;
             mCmdTracker = tracker;
             mRescheduled = rescheduled;
             mCreationTime = System.currentTimeMillis();
         }
 
-        /**
-         * Gets the {@link IConfiguration} for this command instance
-         */
+        /** Gets the {@link IConfiguration} for this command instance */
         public IConfiguration getConfiguration() {
             return mConfig;
         }
 
-        /**
-         * Gets the associated {@link CommandTracker}.
-         */
+        /** Gets the associated {@link CommandTracker}. */
         CommandTracker getCommandTracker() {
             return mCmdTracker;
         }
 
-        /**
-         * Callback to inform listener that command has started execution.
-         */
+        /** Callback to inform listener that command has started execution. */
         void commandStarted() {
             mSleepTime = null;
         }
@@ -370,9 +367,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    /**
-     * struct for a command and its state
-     */
+    /** struct for a command and its state */
     private static class ExecutableCommandState {
         final ExecutableCommand cmd;
         final CommandState state;
@@ -383,9 +378,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    /**
-     * A {@link IRescheduler} that will add a command back to the queue.
-     */
+    /** A {@link IRescheduler} that will add a command back to the queue. */
     private class Rescheduler implements IRescheduler {
 
         private CommandTracker mCmdTracker;
@@ -394,9 +387,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             mCmdTracker = cmdTracker;
         }
 
-        /**
-         * {@inheritDoc}
-         */
+        /** {@inheritDoc} */
         @Override
         public boolean scheduleConfig(IConfiguration config) {
             // force loop mode to off, otherwise each rescheduled config will be treated as
@@ -406,23 +397,23 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             return addExecCommandToQueue(rescheduledCmd, 0);
         }
 
-        /**
-         * {@inheritDoc}
-         */
+        /** {@inheritDoc} */
         @Override
         public boolean rescheduleCommand() {
             try {
                 CLog.d("rescheduling for command %d", mCmdTracker.getId());
-                IConfiguration config = getConfigFactory().createConfigurationFromArgs(
-                        mCmdTracker.getArgs());
+                IConfiguration config =
+                        getConfigFactory().createConfigurationFromArgs(mCmdTracker.getArgs());
                 ExecutableCommand execCmd = createExecutableCommand(mCmdTracker, config, true);
                 return addExecCommandToQueue(execCmd, config.getCommandOptions().getLoopTime());
             } catch (ConfigurationException e) {
                 // FIXME: do this with jline somehow for ANSI support
                 // note: make sure not to log (aka record) this line, as (args) may contain
                 // passwords.
-                System.out.println(String.format("Error while processing args: %s",
-                        Arrays.toString(mCmdTracker.getArgs())));
+                System.out.println(
+                        String.format(
+                                "Error while processing args: %s",
+                                Arrays.toString(mCmdTracker.getArgs())));
                 System.out.println(e.getMessage());
                 System.out.println();
                 return false;
@@ -432,15 +423,13 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     /**
      * Comparator for {@link ExecutableCommand}.
-     * <p/>
-     * Delegates to {@link CommandTrackerTimeComparator}.
+     *
+     * <p>Delegates to {@link CommandTrackerTimeComparator}.
      */
     private static class ExecutableCommandComparator implements Comparator<ExecutableCommand> {
         CommandTrackerTimeComparator mTrackerComparator = new CommandTrackerTimeComparator();
 
-        /**
-         * {@inheritDoc}
-         */
+        /** {@inheritDoc} */
         @Override
         public int compare(ExecutableCommand c1, ExecutableCommand c2) {
             return mTrackerComparator.compare(c1.getCommandTracker(), c2.getCommandTracker());
@@ -449,8 +438,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     /**
      * Comparator for {@link CommandTracker}.
-     * <p/>
-     * Compares by mTotalExecTime, prioritizing configs with lower execution time
+     *
+     * <p>Compares by mTotalExecTime, prioritizing configs with lower execution time
      */
     private static class CommandTrackerTimeComparator implements Comparator<CommandTracker> {
 
@@ -468,8 +457,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     /**
      * Comparator for {@link CommandTracker}.
-     * <p/>
-     * Compares by id.
+     *
+     * <p>Compares by id.
      */
     static class CommandTrackerIdComparator implements Comparator<CommandTracker> {
 
@@ -486,19 +475,18 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     /**
-     * An {@link com.android.tradefed.command.ICommandScheduler.IScheduledInvocationListener}
-     * for locally scheduled commands added via addCommand.
-     * <p/>
-     * Returns device to device manager and remote handover server if applicable.
+     * An {@link com.android.tradefed.command.ICommandScheduler.IScheduledInvocationListener} for
+     * locally scheduled commands added via addCommand.
+     *
+     * <p>Returns device to device manager and remote handover server if applicable.
      */
-    private class FreeDeviceHandler extends ResultForwarder implements
-            IScheduledInvocationListener {
+    private class FreeDeviceHandler extends ResultForwarder
+            implements IScheduledInvocationListener {
 
         private final IDeviceManager mDeviceManager;
         private boolean mDeviceReleased = false;
 
-        FreeDeviceHandler(IDeviceManager deviceManager,
-                IScheduledInvocationListener... listeners) {
+        FreeDeviceHandler(IDeviceManager deviceManager, IScheduledInvocationListener... listeners) {
             super(listeners);
             mDeviceManager = deviceManager;
         }
@@ -513,7 +501,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 mDeviceManager.freeDevice(device, devicesStates.get(device));
                 if (device instanceof IManagedTestDevice) {
                     // This quite an important setting so we do make sure it's reset.
-                    ((IManagedTestDevice)device).setFastbootPath(mDeviceManager.getFastbootPath());
+                    ((IManagedTestDevice) device).setFastbootPath(mDeviceManager.getFastbootPath());
                 }
             }
             mDeviceReleased = true;
@@ -535,9 +523,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    /**
-     * Monitor Class for {@link InvocationThread} to make sure it does not run for too long.
-     */
+    /** Monitor Class for {@link InvocationThread} to make sure it does not run for too long. */
     private class InvocationThreadMonitor extends TimerTask {
 
         private InvocationThread mInvocationThread = null;
@@ -576,8 +562,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         private final Timer mExecutionTimer;
         private long mStartTime = -1;
 
-        public InvocationThread(String name, IInvocationContext invocationContext,
-                ExecutableCommand command, IScheduledInvocationListener... listeners) {
+        public InvocationThread(
+                String name,
+                IInvocationContext invocationContext,
+                ExecutableCommand command,
+                IScheduledInvocationListener... listeners) {
             // create a thread group so LoggerRegistry can identify this as an invocationThread
             super(new ThreadGroup(name), name);
             mListeners = listeners;
@@ -637,8 +626,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     CLog.i("Setting a timer for the invocation in %sms", invocTimeout);
                     mExecutionTimer.schedule(mInvocationThreadMonitor, invocTimeout);
                 }
-                instance.invoke(mInvocationContext, config,
-                        new Rescheduler(mCmd.getCommandTracker()), mListeners);
+                instance.invoke(
+                        mInvocationContext,
+                        config,
+                        new Rescheduler(mCmd.getCommandTracker()),
+                        mListeners);
             } catch (DeviceUnresponsiveException e) {
                 CLog.w("Device %s is unresponsive. Reason: %s", e.getSerial(), e.getMessage());
                 trackDeviceException = e;
@@ -650,7 +642,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 setLastInvocationExitCode(ExitCode.DEVICE_UNAVAILABLE, e);
                 lastInvocationSet = true;
             } catch (FatalHostError e) {
-                CLog.wtf(String.format("Fatal error occurred: %s, shutting down", e.getMessage()),
+                CLog.wtf(
+                        String.format("Fatal error occurred: %s, shutting down", e.getMessage()),
                         e);
                 setLastInvocationExitCode(ExitCode.FATAL_HOST_ERROR, e);
                 lastInvocationSet = true;
@@ -690,13 +683,13 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     if (!lastInvocationSet && instance.getExitInfo() != null) {
                         setLastInvocationExitCode(
                                 instance.getExitInfo().mExitCode, instance.getExitInfo().mStack);
-                }
-                if (getFeatureServer() != null) {
-                    getFeatureServer().unregisterInvocation(config);
-                }
-                mCmd.commandFinished(elapsedTime);
-                logInvocationEndedEvent(
-                        mCmd.getCommandTracker().getId(), elapsedTime, mInvocationContext);
+                    }
+                    if (getFeatureServer() != null) {
+                        getFeatureServer().unregisterInvocation(config);
+                    }
+                    mCmd.commandFinished(elapsedTime);
+                    logInvocationEndedEvent(
+                            mCmd.getCommandTracker().getId(), elapsedTime, mInvocationContext);
                 }
                 CLog.logAndDisplay(LogLevel.INFO, "Finalizing the logger and invocation.");
                 ActiveTrace trace = TracingLogger.getActiveTrace();
@@ -849,9 +842,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
 
         /**
-         * Disable the reporting from reporters that implements a non-default
-         * {@link ITestInvocationListener#invocationInterrupted()}.
-         * Should be called on shutdown.
+         * Disable the reporting from reporters that implements a non-default {@link
+         * ITestInvocationListener#invocationInterrupted()}. Should be called on shutdown.
          */
         public void disableReporters() {
             for (ITestInvocationListener listener :
@@ -866,13 +858,16 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
          */
         public void checkDeviceBatteryLevel() {
             for (String deviceName : mInvocationContext.getDeviceConfigNames()) {
-                if (mCmd.getConfiguration().getDeviceConfigByName(deviceName)
-                        .getDeviceOptions() == null) {
+                if (mCmd.getConfiguration().getDeviceConfigByName(deviceName).getDeviceOptions()
+                        == null) {
                     CLog.d("No deviceOptions in the configuration, cannot do Battery level check");
                     return;
                 }
-                final Integer cutoffBattery = mCmd.getConfiguration()
-                        .getDeviceConfigByName(deviceName).getDeviceOptions().getCutoffBattery();
+                final Integer cutoffBattery =
+                        mCmd.getConfiguration()
+                                .getDeviceConfigByName(deviceName)
+                                .getDeviceOptions()
+                                .getCutoffBattery();
 
                 if (mInvocationContext.getDevice(deviceName) != null && cutoffBattery != null) {
                     final ITestDevice device = mInvocationContext.getDevice(deviceName);
@@ -886,7 +881,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     // So batteryLevel=0 will not trigger a stop.
                     if (0 < batteryLevel && batteryLevel < cutoffBattery) {
                         if (RunUtil.getDefault().isInterruptAllowed()) {
-                            CLog.i("Stopping %s: battery too low (%d%% < %d%%)",
+                            CLog.i(
+                                    "Stopping %s: battery too low (%d%% < %d%%)",
                                     getName(), batteryLevel, cutoffBattery);
                             stopInvocation(
                                     String.format(
@@ -896,7 +892,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                             // In this case, the battery is check periodically by CommandScheduler
                             // so there will be more opportunity to terminate the invocation when
                             // it's interruptible.
-                            CLog.w("device: %s has a low battery but is in uninterruptible state.",
+                            CLog.w(
+                                    "device: %s has a low battery but is in uninterruptible state.",
                                     device.getSerialNumber());
                         }
                     }
@@ -914,7 +911,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
 
         for (ITestDevice device : context.getDevices()) {
-            if (device.getIDevice() instanceof StubDevice) {
+            if (device.getIDevice() instanceof StubDevice
+                    && !(device.getIDevice() instanceof FastbootDevice)) {
                 // Never release stub and Tcp devices, otherwise they will disappear
                 // during deallocation since they are only placeholder.
                 deviceStates.put(device, FreeDeviceState.AVAILABLE);
@@ -926,7 +924,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 if (!TestDeviceState.ONLINE.equals(deviceState)) {
                     // If the device is offline at the end of the test
                     deviceStates.put(device, FreeDeviceState.UNAVAILABLE);
-                } else if (!device.waitForDeviceShell(30000)) {
+                } else if (!device.waitForDeviceShell(30000L)) {
                     // If device cannot pass basic shell responsiveness test.
                     deviceStates.put(device, FreeDeviceState.UNAVAILABLE);
                 }
@@ -972,7 +970,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
         @Override
         public void run() {
-           // ignore
+            // ignore
         }
 
         @Override
@@ -986,8 +984,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
 
         @Override
-        public void notifyDeviceStateChange(String serial, DeviceAllocationState oldState,
-                DeviceAllocationState newState) {
+        public void notifyDeviceStateChange(
+                String serial, DeviceAllocationState oldState, DeviceAllocationState newState) {
             if (newState.equals(DeviceAllocationState.Available)) {
                 // new avail device was added, wake up scheduler
                 mCommandProcessWait.signalEventReceived();
@@ -997,11 +995,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     /**
      * Creates a {@link CommandScheduler}.
-     * <p />
-     * Note: start must be called before use.
+     *
+     * <p>Note: start must be called before use.
      */
     public CommandScheduler() {
-        super("CommandScheduler");  // set the thread name
+        super("CommandScheduler"); // set the thread name
         mReadyCommands = new LinkedList<>();
         mUnscheduledWarning = new HashSet<>();
         mSleepingCommands = new HashSet<>();
@@ -1031,9 +1029,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         setHostState(HostState.RUNNING);
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public synchronized CommandFileWatcher getCommandFileWatcher() {
         assertStarted();
@@ -1044,9 +1040,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return mCommandFileWatcher;
     }
 
-    /**
-     * Initialize the device manager, optionally using a global device filter if specified.
-     */
+    /** Initialize the device manager, optionally using a global device filter if specified. */
     void initDeviceManager() {
         getDeviceManager().init();
         if (getDeviceManager().waitForFirstDeviceAdded(ADB_INIT_TIME_MS)) {
@@ -1109,31 +1103,30 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     /**
-     * Fetches a {@link IKeyStoreClient} using the {@link IKeyStoreFactory}
-     * declared in {@link IGlobalConfiguration} or null if none is defined.
+     * Fetches a {@link IKeyStoreClient} using the {@link IKeyStoreFactory} declared in {@link
+     * IGlobalConfiguration} or null if none is defined.
+     *
      * @return IKeyStoreClient
      */
     protected IKeyStoreClient getKeyStoreClient() {
-       try {
-           IKeyStoreFactory f = GlobalConfiguration.getInstance().getKeyStoreFactory();
-           if (f != null) {
-               try {
-                  return f.createKeyStoreClient();
-               } catch (KeyStoreException e) {
-                   CLog.e("Failed to create key store client");
-                   CLog.e(e);
-               }
-           }
-       } catch (IllegalStateException e) {
-           CLog.w("Global configuration has not been created, failed to get keystore");
-           CLog.e(e);
-       }
-       return null;
+        try {
+            IKeyStoreFactory f = GlobalConfiguration.getInstance().getKeyStoreFactory();
+            if (f != null) {
+                try {
+                    return f.createKeyStoreClient();
+                } catch (KeyStoreException e) {
+                    CLog.e("Failed to create key store client");
+                    CLog.e(e);
+                }
+            }
+        } catch (IllegalStateException e) {
+            CLog.w("Global configuration has not been created, failed to get keystore");
+            CLog.e(e);
+        }
+        return null;
     }
 
-    /**
-     * The main execution block of this thread.
-     */
+    /** The main execution block of this thread. */
     @Override
     public void run() {
         assertStarted();
@@ -1209,7 +1202,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     void checkInvocations() {
         CLog.d("Checking invocations...");
         final List<InvocationThread> copy;
-        synchronized(this) {
+        synchronized (this) {
             copy = new ArrayList<InvocationThread>(mInvocationThreadMap.values());
         }
         for (InvocationThread thread : copy) {
@@ -1244,8 +1237,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     mUnscheduledWarning.remove(cmd);
                 } else {
                     if (!mUnscheduledWarning.contains(cmd)) {
-                        CLog.logAndDisplay(LogLevel.DEBUG, "No available device matching all the "
-                                + "config's requirements for cmd id %d.",
+                        CLog.logAndDisplay(
+                                LogLevel.DEBUG,
+                                "No available device matching all the "
+                                        + "config's requirements for cmd id %d.",
                                 cmd.getCommandTracker().getId());
                         // make sure not to record since it may contains password
                         System.out.println(
@@ -1259,11 +1254,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
 
         // now actually execute the commands
-        for (Map.Entry<ExecutableCommand, IInvocationContext> cmdDeviceEntry : scheduledCommandMap
-                .entrySet()) {
+        for (Map.Entry<ExecutableCommand, IInvocationContext> cmdDeviceEntry :
+                scheduledCommandMap.entrySet()) {
             ExecutableCommand cmd = cmdDeviceEntry.getKey();
-            startInvocation(cmdDeviceEntry.getValue(), cmd,
-                    new FreeDeviceHandler(getDeviceManager()));
+            startInvocation(
+                    cmdDeviceEntry.getValue(), cmd, new FreeDeviceHandler(getDeviceManager()));
             cmd.getCommandTracker().incrementScheduledCount();
             if (cmd.isLoopMode()
                     && cmd.getCommandTracker().getScheduledCount() < cmd.getMaxLoopCount()) {
@@ -1273,9 +1268,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         CLog.d("done processReadyCommands...");
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public void await() throws InterruptedException {
         while (mRunLatch.getCount() > 0) {
@@ -1491,8 +1484,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
      *
      * @param args the config arguments.
      * @param cmdFilePath the filesystem path of command file
-     * @return Command tracker id (non-negative value) if the command was added successfully,
-     *     return 0 when command is added for all devices. Otherwise -1.
+     * @return Command tracker id (non-negative value) if the command was added successfully, return
+     *     0 when command is added for all devices. Otherwise -1.
      */
     private Integer internalAddCommand(String[] args, String cmdFilePath)
             throws ConfigurationException {
@@ -1525,16 +1518,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return -1;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public void addCommandFile(String cmdFilePath, List<String> extraArgs)
             throws ConfigurationException {
         // verify we aren't already watching this command file, don't want to add it twice!
         File cmdFile = new File(cmdFilePath);
         if (mReloadCmdfiles && getCommandFileWatcher().isFileWatched(cmdFile)) {
-            CLog.logAndDisplay(LogLevel.INFO,
+            CLog.logAndDisplay(
+                    LogLevel.INFO,
                     "cmd file %s is already running and being watched for changes. Reloading",
                     cmdFilePath);
             removeCommandsFromFile(cmdFile);
@@ -1542,9 +1534,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         internalAddCommandFile(cmdFile, extraArgs);
     }
 
-    /**
-     * Adds a command file without verifying if its already being watched
-     */
+    /** Adds a command file without verifying if its already being watched */
     private void internalAddCommandFile(File cmdFile, List<String> extraArgs)
             throws ConfigurationException {
         try {
@@ -1565,8 +1555,11 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 try {
                     internalAddCommand(arrayCommand, cmdFile.getAbsolutePath());
                 } catch (ConfigurationException e) {
-                    throw new ConfigurationException(String.format(
-                            "Failed to add command '%s': %s", prettyCmdLine, e.getMessage()), e);
+                    throw new ConfigurationException(
+                            String.format(
+                                    "Failed to add command '%s': %s",
+                                    prettyCmdLine, e.getMessage()),
+                            e);
                 }
             }
         } catch (IOException e) {
@@ -1603,10 +1596,12 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 argsWithDevice[argsWithDevice.length - 2] = "-s";
                 argsWithDevice[argsWithDevice.length - 1] = device;
                 CommandTracker cmdTracker = createCommandTracker(argsWithDevice, cmdFilePath);
-                IConfiguration config = getConfigFactory().createConfigurationFromArgs(
-                        cmdTracker.getArgs(), null, getKeyStoreClient());
-                CLog.logAndDisplay(LogLevel.INFO, "Scheduling '%s' on '%s'",
-                        cmdTracker.getArgs()[0], device);
+                IConfiguration config =
+                        getConfigFactory()
+                                .createConfigurationFromArgs(
+                                        cmdTracker.getArgs(), null, getKeyStoreClient());
+                CLog.logAndDisplay(
+                        LogLevel.INFO, "Scheduling '%s' on '%s'", cmdTracker.getArgs()[0], device);
                 config.getDeviceRequirements().setSerial(device);
                 ExecutableCommand execCmd = createExecutableCommand(cmdTracker, config, false);
                 addExecCommandToQueue(execCmd, 0);
@@ -1614,22 +1609,19 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    /**
-     * Creates a new {@link CommandTracker} with a unique id.
-     */
-    private synchronized CommandTracker createCommandTracker(String[] args,
-            String commandFilePath) {
+    /** Creates a new {@link CommandTracker} with a unique id. */
+    private synchronized CommandTracker createCommandTracker(
+            String[] args, String commandFilePath) {
         mCurrentCommandId++;
-        CLog.d("Creating command tracker id %d for command args: '%s'", mCurrentCommandId,
-                ArrayUtil.join(" ", (Object[])args));
+        CLog.d(
+                "Creating command tracker id %d for command args: '%s'",
+                mCurrentCommandId, ArrayUtil.join(" ", (Object[]) args));
         return new CommandTracker(mCurrentCommandId, args, commandFilePath);
     }
 
-    /**
-     * Creates a new {@link ExecutableCommand}.
-     */
-    private ExecutableCommand createExecutableCommand(CommandTracker cmdTracker,
-            IConfiguration config, boolean rescheduled) {
+    /** Creates a new {@link ExecutableCommand}. */
+    private ExecutableCommand createExecutableCommand(
+            CommandTracker cmdTracker, IConfiguration config, boolean rescheduled) {
         ExecutableCommand cmd = new ExecutableCommand(cmdTracker, config, rescheduled);
         CLog.d("creating exec command for id %d", cmdTracker.getId());
         return cmd;
@@ -1657,8 +1649,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
      * @param delayTime the time in ms to delay before adding command to queue
      * @return <code>true</code> if command will be added to queue, <code>false</code> otherwise
      */
-    private synchronized boolean addExecCommandToQueue(final ExecutableCommand cmd,
-            long delayTime) {
+    private synchronized boolean addExecCommandToQueue(
+            final ExecutableCommand cmd, long delayTime) {
         // If the command is local sharding one being rescheduled, do not apply the shutdown yet
         // This allows commandAndExit to still works with local sharding.
         if (isShutdown()) {
@@ -1672,17 +1664,18 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         if (delayTime > 0) {
             mSleepingCommands.add(cmd);
             // delay before making command active
-            Runnable delayCommand = new Runnable() {
-                @Override
-                public void run() {
-                    synchronized (CommandScheduler.this) {
-                        if (mSleepingCommands.remove(cmd)) {
-                            mReadyCommands.add(cmd);
-                            mCommandProcessWait.signalEventReceived();
+            Runnable delayCommand =
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            synchronized (CommandScheduler.this) {
+                                if (mSleepingCommands.remove(cmd)) {
+                                    mReadyCommands.add(cmd);
+                                    mCommandProcessWait.signalEventReceived();
+                                }
+                            }
                         }
-                    }
-                }
-            };
+                    };
             mCommandTimer.schedule(delayCommand, delayTime, TimeUnit.MILLISECONDS);
         } else {
             mReadyCommands.add(cmd);
@@ -1698,7 +1691,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
      * @return a display friendly {@link String} of args contents
      */
     private String getArgString(String[] args) {
-        return ArrayUtil.join(" ", (Object[])args);
+        return ArrayUtil.join(" ", (Object[]) args);
     }
 
     /** {@inheritDoc} */
@@ -1749,18 +1742,23 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     /** {@inheritDoc} */
     @Override
     public long execCommand(
-            IScheduledInvocationListener listener, ITestDevice device, String[] args)
+            IScheduledInvocationListener listener, List<ITestDevice> devices, String[] args)
             throws ConfigurationException {
-        // TODO: add support for execCommand multi-device allocation
         assertStarted();
         CommandTracker cmdTracker = createCommandTracker(args, null);
         IConfiguration config = createConfiguration(cmdTracker.getArgs());
         config.validateOptions();
-        CLog.i("Executing '%s' on '%s'", cmdTracker.getArgs()[0], device.getSerialNumber());
+        CLog.i(
+                "Executing '%s' on '%s'",
+                cmdTracker.getArgs()[0],
+                String.join(
+                        ",",
+                        devices.stream()
+                                .map(d -> d.getSerialNumber())
+                                .collect(Collectors.toList())));
+        // Supports ATE use case, number of device configs can be 2 or more.
+        CLog.i("Device conifgs: %s", config.getDeviceConfig().size());
         ExecutableCommand execCmd = createExecutableCommand(cmdTracker, config, false);
-        if (config.getDeviceConfig().size() > 1) {
-            throw new RuntimeException("execCommand assume single device invocation.");
-        }
 
         synchronized (this) {
             if (isShuttingDown()) {
@@ -1771,9 +1769,20 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
         IInvocationContext context = createInvocationContext();
         context.setConfigurationDescriptor(config.getConfigurationDescription());
-        context.addAllocatedDevice(config.getDeviceConfig().get(0).getDeviceName(), device);
+        for (int i = 0; i < config.getDeviceConfig().size(); i++) {
+            context.addAllocatedDevice(
+                    config.getDeviceConfig().get(i).getDeviceName(), devices.get(i));
+        }
         startInvocation(context, execCmd, listener);
         return execCmd.getCommandTracker().getId();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public long execCommand(
+            IScheduledInvocationListener listener, ITestDevice device, String[] args)
+            throws ConfigurationException {
+        return execCommand(listener, Arrays.asList(device), args);
     }
 
     /** {@inheritDoc} */
@@ -1798,7 +1807,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
         // If we need to replicate the setup on all devices
         ParentShardReplicate.replicatedSetup(config, getKeyStoreClient());
-        synchronized(this) {
+        synchronized (this) {
             DeviceAllocationResult allocationResults = new DeviceAllocationResult();
             for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
                 device =
@@ -1865,13 +1874,12 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         int invocationId = cmd.getCommandTracker().getId();
         CLog.d("starting invocation for command id %d", invocationId);
         // Name invocation with first device serial
-        final String invocationName = String.format("Invocation-%s",
-                context.getSerials().get(0));
+        final String invocationName = String.format("Invocation-%s", context.getSerials().get(0));
         if (getFeatureServer() != null) {
             getFeatureServer().registerInvocation(cmd.getConfiguration(), Arrays.asList(listeners));
         }
-        InvocationThread invocationThread = new InvocationThread(invocationName, context, cmd,
-                listeners);
+        InvocationThread invocationThread =
+                new InvocationThread(invocationName, context, cmd, listeners);
         // Link context and command
         context.addInvocationAttribute(
                 IInvocationContext.INVOCATION_ID, Integer.toString(invocationId));
@@ -1916,9 +1924,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    /**
-     * Adds a {@link InvocationThread} to the active list.
-     */
+    /** Adds a {@link InvocationThread} to the active list. */
     private synchronized void addInvocationThread(InvocationThread invThread) {
         mInvocationThreadMap.put(invThread.getInvocationContext(), invThread);
     }
@@ -1960,9 +1966,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public synchronized void shutdownOnEmpty() {
         if (!mStarted) {
@@ -1977,9 +1981,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public synchronized void removeAllCommands() {
         assertStarted();
@@ -2001,6 +2003,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     /**
      * Remove commands originally added via the given command file
+     *
      * @param cmdFile
      */
     private synchronized void removeCommandsFromFile(File cmdFile) {
@@ -2008,8 +2011,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         while (cmdIter.hasNext()) {
             ExecutableCommand cmd = cmdIter.next();
             String path = cmd.getCommandFilePath();
-            if (path != null &&
-                    path.equals(cmdFile.getAbsolutePath())) {
+            if (path != null && path.equals(cmdFile.getAbsolutePath())) {
                 cmdIter.remove();
             }
         }
@@ -2017,8 +2019,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         while (cmdIter.hasNext()) {
             ExecutableCommand cmd = cmdIter.next();
             String path = cmd.getCommandFilePath();
-            if (path != null &&
-                    path.equals(cmdFile.getAbsolutePath())) {
+            if (path != null && path.equals(cmdFile.getAbsolutePath())) {
                 cmdIter.remove();
             }
         }
@@ -2028,8 +2029,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     /**
-     * @return the list of active {@link CommandTracker}. 'Active' here means all commands added
-     * to the scheduler that are either executing, waiting for a device to execute on, or looping.
+     * @return the list of active {@link CommandTracker}. 'Active' here means all commands added to
+     *     the scheduler that are either executing, waiting for a device to execute on, or looping.
      */
     List<CommandTracker> getCommandTrackers() {
         List<ExecutableCommandState> cmdCopy = getAllCommands();
@@ -2040,9 +2041,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return new ArrayList<CommandTracker>(cmdTrackers);
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public synchronized void shutdownHard() {
         shutdownHard(true);
@@ -2101,7 +2100,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             return;
         }
         List<InvocationThread> copy = new ArrayList<InvocationThread>();
-        synchronized(this) {
+        synchronized (this) {
             copy.addAll(mInvocationThreadMap.values());
         }
         ArrayList<List<String>> displayRows = new ArrayList<List<String>>();
@@ -2109,11 +2108,12 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         long curTime = System.currentTimeMillis();
 
         for (InvocationThread invThread : copy) {
-            displayRows.add(Arrays.asList(
-                    Integer.toString(invThread.mCmd.getCommandTracker().getId()),
-                    getTimeString(curTime - invThread.getStartTime()),
-                    invThread.getInvocationContext().getSerials().toString(),
-                    invThread.getInvocation().toString()));
+            displayRows.add(
+                    Arrays.asList(
+                            Integer.toString(invThread.mCmd.getCommandTracker().getId()),
+                            getTimeString(curTime - invThread.getStartTime()),
+                            invThread.getInvocationContext().getSerials().toString(),
+                            invThread.getInvocation().toString()));
         }
         new TableFormatter().displayTable(displayRows, printWriter);
     }
@@ -2132,9 +2132,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return time;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public synchronized boolean stopInvocation(ITestInvocation invocation) {
         for (InvocationThread thread : mInvocationThreadMap.values()) {
@@ -2163,9 +2161,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return false;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public synchronized String getInvocationInfo(int invocationId) {
         for (InvocationThread thread : mInvocationThreadMap.values()) {
@@ -2178,9 +2174,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return null;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public void displayCommandsInfo(PrintWriter printWriter, String regex) {
         assertStarted();
@@ -2194,16 +2188,16 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         for (CommandTracker cmd : cmds) {
             String argString = getArgString(cmd.getArgs());
             if (regexPattern == null || regexPattern.matcher(argString).find()) {
-                String cmdDesc = String.format("Command %d: [%s] %s", cmd.getId(),
-                        getTimeString(cmd.getTotalExecTime()), argString);
+                String cmdDesc =
+                        String.format(
+                                "Command %d: [%s] %s",
+                                cmd.getId(), getTimeString(cmd.getTotalExecTime()), argString);
                 printWriter.println(cmdDesc);
             }
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public void dumpCommandsXml(PrintWriter printWriter, String regex) {
         assertStarted();
@@ -2243,8 +2237,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     File xmlFile = FileUtil.createTempFile(xmlPrefix, ".xml");
                     PrintWriter writer = new PrintWriter(xmlFile);
                     cmd.cmd.getConfiguration().dumpXml(writer);
-                    printWriter.println(String.format("Saved command dump to %s",
-                            xmlFile.getAbsolutePath()));
+                    printWriter.println(
+                            String.format("Saved command dump to %s", xmlFile.getAbsolutePath()));
                 } catch (IOException e) {
                     // Log exception and continue
                     CLog.e("Could not dump config xml");
@@ -2254,9 +2248,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public void displayCommandQueue(PrintWriter printWriter) {
         assertStarted();
@@ -2265,8 +2257,16 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             return;
         }
         ArrayList<List<String>> displayRows = new ArrayList<List<String>>();
-        displayRows.add(Arrays.asList("Id", "Config", "Created", "Exec time", "State", "Sleep time",
-                "Rescheduled", "Loop"));
+        displayRows.add(
+                Arrays.asList(
+                        "Id",
+                        "Config",
+                        "Created",
+                        "Exec time",
+                        "State",
+                        "Sleep time",
+                        "Rescheduled",
+                        "Loop"));
         long curTime = System.currentTimeMillis();
         for (ExecutableCommandState cmd : cmdCopy) {
             dumpCommand(curTime, cmd, displayRows);
@@ -2274,19 +2274,20 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         new TableFormatter().displayTable(displayRows, printWriter);
     }
 
-    private void dumpCommand(long curTime, ExecutableCommandState cmdAndState,
-            ArrayList<List<String>> displayRows) {
+    private void dumpCommand(
+            long curTime, ExecutableCommandState cmdAndState, ArrayList<List<String>> displayRows) {
         ExecutableCommand cmd = cmdAndState.cmd;
         String sleepTime = cmd.getSleepTime() == null ? "N/A" : getTimeString(cmd.getSleepTime());
-        displayRows.add(Arrays.asList(
-                Integer.toString(cmd.getCommandTracker().getId()),
-                cmd.getCommandTracker().getArgs()[0],
-                getTimeString(curTime - cmd.getCreationTime()),
-                getTimeString(cmd.mCmdTracker.getTotalExecTime()),
-                cmdAndState.state.getDisplayName(),
-                sleepTime,
-                Boolean.toString(cmd.isRescheduled()),
-                Boolean.toString(cmd.isLoopMode())));
+        displayRows.add(
+                Arrays.asList(
+                        Integer.toString(cmd.getCommandTracker().getId()),
+                        cmd.getCommandTracker().getArgs()[0],
+                        getTimeString(curTime - cmd.getCreationTime()),
+                        getTimeString(cmd.mCmdTracker.getTotalExecTime()),
+                        cmdAndState.state.getDisplayName(),
+                        sleepTime,
+                        Boolean.toString(cmd.isRescheduled()),
+                        Boolean.toString(cmd.isLoopMode())));
     }
 
     /**
@@ -2300,6 +2301,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
         /**
          * Wait for signal for a max of given ms.
+         *
          * @return true if event received before time elapsed, false otherwise
          */
         public synchronized boolean waitForEvent(long maxWaitTime) {
@@ -2321,6 +2323,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
         /**
          * Wait for signal indefinitely or until interrupted.
+         *
          * @return true if event received, false otherwise
          */
         public synchronized boolean waitForEvent() {
@@ -2334,9 +2337,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             return mEventReceived;
         }
 
-        /**
-         * Reset the event received flag.
-         */
+        /** Reset the event received flag. */
         public synchronized void reset() {
             mEventReceived = false;
         }
@@ -2350,9 +2351,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             reset();
         }
 
-        /**
-         * Notify listeners that event was received.
-         */
+        /** Notify listeners that event was received. */
         public synchronized void signalEventReceived() {
             mEventReceived = true;
             notifyAll();
@@ -2360,14 +2359,16 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     private synchronized void assertStarted() {
-        if(!mStarted) {
+        if (!mStarted) {
             throw new IllegalStateException("start() must be called before this method");
         }
     }
 
     @Override
     public void notifyFileChanged(File cmdFile, List<String> extraArgs) {
-        CLog.logAndDisplay(LogLevel.INFO, "Detected update for cmdfile '%s'. Reloading",
+        CLog.logAndDisplay(
+                LogLevel.INFO,
+                "Detected update for cmdfile '%s'. Reloading",
                 cmdFile.getAbsolutePath());
         removeCommandsFromFile(cmdFile);
         try {
@@ -2375,14 +2376,14 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             // don't want to remove the registration here in case file fails to load
             internalAddCommandFile(cmdFile, extraArgs);
         } catch (ConfigurationException e) {
-            CLog.wtf(String.format("Failed to automatically reload cmdfile %s",
-                    cmdFile.getAbsolutePath()), e);
+            CLog.wtf(
+                    String.format(
+                            "Failed to automatically reload cmdfile %s", cmdFile.getAbsolutePath()),
+                    e);
         }
     }
 
-    /**
-     * Set the command file reloading flag.
-     */
+    /** Set the command file reloading flag. */
     @VisibleForTesting
     void setCommandFileReload(boolean b) {
         mReloadCmdfiles = b;

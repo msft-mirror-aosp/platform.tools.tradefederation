@@ -74,7 +74,7 @@ public class CloseableTraceScope implements AutoCloseable {
                 category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_END);
         Optional<InvocationMetricKey> optionalKey =
                 Enums.getIfPresent(InvocationMetricKey.class, name);
-        if (optionalKey.isPresent()) {
+        if (optionalKey.isPresent() && Thread.currentThread().getId() == trace.reportingThreadId()) {
             InvocationMetricLogger.addInvocationPairMetrics(
                     optionalKey.get(), startTime, System.currentTimeMillis());
         }

@@ -34,7 +34,6 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
-import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.ZipUtil;
 
@@ -87,6 +86,10 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
     public LocalAndroidVirtualDevice(
             IDevice device, IDeviceStateMonitor stateMonitor, IDeviceMonitor allocationMonitor) {
         super(device, stateMonitor, allocationMonitor);
+        if (getInitialDeviceNumOffset() == null) {
+            throw new IllegalStateException(
+                    "LocalAndroidVirtualDevice requires initial device num offset.");
+        }
     }
 
     /** Execute common setup procedure and launch the virtual device. */
@@ -333,13 +336,14 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
                     getDeviceDescriptor(),
                     InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
-        setIDevice(new StubLocalAndroidVirtualDevice(newSerialNumber));
+        setIDevice(new StubLocalAndroidVirtualDevice(newSerialNumber, getInitialDeviceNumOffset()));
         setFastbootEnabled(false);
     }
 
     /** Restore the {@link StubLocalAndroidVirtualDevice} with the initial serial number. */
     private void restoreStubDevice() {
-        setIDevice(new StubLocalAndroidVirtualDevice(getInitialSerial()));
+        setIDevice(
+                new StubLocalAndroidVirtualDevice(getInitialSerial(), getInitialDeviceNumOffset()));
         setFastbootEnabled(false);
     }
 
@@ -429,6 +433,7 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
                                 acloud.getAbsolutePath(),
                                 "create",
                                 "--local-instance",
+                                Integer.toString(getInitialDeviceNumOffset() + 1),
                                 "--local-instance-dir",
                                 mInstanceDir.getAbsolutePath(),
                                 "--report_file",
@@ -588,10 +593,5 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
                 CLog.w("%s doesn't exist.", file.getAbsolutePath());
             }
         }
-    }
-
-    @VisibleForTesting
-    IRunUtil createRunUtil() {
-        return new RunUtil();
     }
 }

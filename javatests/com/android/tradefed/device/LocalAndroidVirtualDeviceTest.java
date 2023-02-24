@@ -96,7 +96,7 @@ public class LocalAndroidVirtualDeviceTest {
         }
 
         @Override
-        IRunUtil createRunUtil() {
+        protected IRunUtil createRunUtil() {
             Assert.assertNotNull("Unexpected method call to createRunUtil.", currentRunUtil);
             IRunUtil returnValue = currentRunUtil;
             currentRunUtil = null;
@@ -105,6 +105,7 @@ public class LocalAndroidVirtualDeviceTest {
     }
 
     private static final String STUB_SERIAL_NUMBER = "local-virtual-device-0";
+    private static final Integer DEVICE_NUM_OFFSET = 5;
     private static final String IP_ADDRESS = "127.0.0.1";
     private static final String PORT = "6520";
     private static final String ONLINE_SERIAL_NUMBER = IP_ADDRESS + ":" + PORT;
@@ -204,7 +205,7 @@ public class LocalAndroidVirtualDeviceTest {
 
         mLocalAvd =
                 new TestableLocalAndroidVirtualDevice(
-                        new StubLocalAndroidVirtualDevice(STUB_SERIAL_NUMBER),
+                        new StubLocalAndroidVirtualDevice(STUB_SERIAL_NUMBER, DEVICE_NUM_OFFSET),
                         mockDeviceStateMonitor,
                         mockDeviceMonitor);
         TestDeviceOptions options = mLocalAvd.getOptions();
@@ -306,6 +307,7 @@ public class LocalAndroidVirtualDeviceTest {
                         eq(mAcloud.getAbsolutePath()),
                         eq("create"),
                         eq("--local-instance"),
+                        eq(Integer.toString(DEVICE_NUM_OFFSET + 1)),
                         eq("--local-instance-dir"),
                         instanceDir.capture(),
                         eq("--report_file"),
@@ -340,6 +342,7 @@ public class LocalAndroidVirtualDeviceTest {
                         eq(mAcloud.getAbsolutePath()),
                         eq("create"),
                         eq("--local-instance"),
+                        eq(Integer.toString(DEVICE_NUM_OFFSET + 1)),
                         eq("--local-instance-dir"),
                         instanceDir.capture(),
                         eq("--report_file"),
@@ -388,6 +391,7 @@ public class LocalAndroidVirtualDeviceTest {
         Assert.assertTrue(StubLocalAndroidVirtualDevice.class.equals(device.getClass()));
         StubLocalAndroidVirtualDevice stubDevice = (StubLocalAndroidVirtualDevice) device;
         Assert.assertEquals(STUB_SERIAL_NUMBER, stubDevice.getSerialNumber());
+        Assert.assertEquals(DEVICE_NUM_OFFSET, stubDevice.getDeviceNumOffset());
     }
 
     /**

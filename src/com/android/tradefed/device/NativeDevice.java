@@ -168,8 +168,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** The time in ms to wait for a device to become unavailable. Should usually be short */
     private static final int DEFAULT_UNAVAILABLE_TIMEOUT = 20 * 1000;
-    /** The time in ms to wait for a recovery that we skip because of the NONE mode */
-    static final int NONE_RECOVERY_MODE_DELAY = 1000;
 
     private static final String SIM_STATE_PROP = "gsm.sim.state";
     private static final String SIM_OPERATOR_PROP = "gsm.operator.alpha";
@@ -273,11 +271,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         private String[] mCmd;
         private long mTimeout;
         private boolean mIsShellCommand;
+        private Map<String, String> mEnvMap;
 
-        AdbAction(long timeout, String[] cmd, boolean isShell) {
+        AdbAction(long timeout, String[] cmd, boolean isShell, Map<String, String> envMap) {
             mTimeout = timeout;
             mCmd = cmd;
             mIsShellCommand = isShell;
+            mEnvMap = envMap;
         }
 
         private void logExceptionAndOutput(CommandResult result) {
@@ -288,7 +288,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         @Override
         public boolean run() throws TimeoutException, IOException {
-            CommandResult result = getRunUtil().runTimedCmd(mTimeout, mCmd);
+            IRunUtil runUtil = getRunUtil();
+            if (!mEnvMap.isEmpty()) {
+                runUtil = createRunUtil();
+            }
+            for (String key : mEnvMap.keySet()) {
+                runUtil.setEnvVariable(key, mEnvMap.get(key));
+            }
+            CommandResult result = runUtil.runTimedCmd(mTimeout, mCmd);
             // TODO: how to determine device not present with command failing for other reasons
             if (result.getStatus() == CommandStatus.EXCEPTION) {
                 logExceptionAndOutput(result);
@@ -404,6 +411,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @VisibleForTesting
     protected IRunUtil getRunUtil() {
         return RunUtil.getDefault();
+    }
+
+    protected IRunUtil createRunUtil() {
+        return new RunUtil();
     }
 
     /** Set the Clock instance to use. */
@@ -1189,6 +1200,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public boolean isAppEnumerationSupported() throws DeviceNotAvailableException {
         return false;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isBypassLowTargetSdkBlockSupported() throws DeviceNotAvailableException {
+        return checkApiLevelAgainstNextRelease(34);
     }
 
     /**
@@ -2196,8 +2213,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public String executeAdbCommand(long timeout, String... cmdArgs)
             throws DeviceNotAvailableException {
+        return executeAdbCommand(getCommandTimeout(), new HashMap<>(), cmdArgs);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String executeAdbCommand(long timeout, Map<String, String> envMap, String... cmdArgs)
+            throws DeviceNotAvailableException {
         final String[] fullCmd = buildAdbCommand(cmdArgs);
-        AdbAction adbAction = new AdbAction(timeout, fullCmd, "shell".equals(cmdArgs[0]));
+        AdbAction adbAction = new AdbAction(timeout, fullCmd, "shell".equals(cmdArgs[0]), envMap);
         performDeviceAction(String.format("adb %s", cmdArgs[0]), adbAction, MAX_RETRY_ATTEMPTS);
         return adbAction.mOutput;
     }
@@ -2540,7 +2564,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public boolean recoverDevice() throws DeviceNotAvailableException {
         if (mRecoveryMode.equals(RecoveryMode.NONE)) {
             CLog.i("Skipping recovery on %s", getSerialNumber());
-            getRunUtil().sleep(NONE_RECOVERY_MODE_DELAY);
             return false;
         }
         CLog.i("Attempting recovery on %s", getSerialNumber());
@@ -2658,10 +2681,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     public InputStreamSource getLogcat() {
         if (mLogcatReceiver == null) {
             if (!(getIDevice() instanceof StubDevice)) {
-                CLog.w(
-                        "Not capturing logcat for %s in background, returning a logcat dump",
-                        getSerialNumber());
-                return getLogcatDump();
+                TestDeviceState state = getDeviceState();
+                if (!TestDeviceState.ONLINE.equals(state)) {
+                    CLog.w("Skipping logcat capture, no buffer and device state is '%s'", state);
+                } else {
+                    CLog.w(
+                            "Not capturing logcat for %s in background, returning a logcat dump",
+                            getSerialNumber());
+                    return getLogcatDump();
+                }
             }
             return new ByteArrayInputStreamSource(new byte[0]);
         } else {
@@ -2863,7 +2891,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     CLog.d("bugreport entry: %s", name);
                     // Only get left-over zipped data to avoid confusing data types.
                     if (name.endsWith(".zip")) {
-                        File pulledZip = pullFile(BUGREPORTZ_TMP_PATH + name);
+                        // Pull always on user 0 to avoid content provider and
+                        // let the path resolve itself
+                        File pulledZip = pullFile(BUGREPORTZ_TMP_PATH + name, 0);
                         try {
                             // Validate the zip before returning it.
                             if (ZipUtil.isZipFileValid(pulledZip, false)) {
@@ -3066,6 +3096,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (!doesFileExist(ANRS_PATH)) {
             CLog.d("No ANRs at %s", ANRS_PATH);
             return true;
+        }
+        boolean root = enableAdbRoot();
+        if (!root) {
+            CLog.d("Skipping logAnrs, need to be root.");
         }
         File localDir = null;
         long startTime = System.currentTimeMillis();
@@ -3435,7 +3469,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             enableAdbRoot();
             prePostBootSetup();
             for (String command : mOptions.getPostBootCommands()) {
-                executeShellCommand(command);
+                long start = System.currentTimeMillis();
+                try (CloseableTraceScope cmdTrace = new CloseableTraceScope(command)) {
+                    executeShellCommand(command);
+                }
+                if (command.startsWith("sleep")) {
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.host_sleep, start, System.currentTimeMillis());
+                }
             }
         } finally {
             long elapsed = System.currentTimeMillis() - startTime;
@@ -3899,13 +3940,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.ADB_ROOT_ROUTINE_COUNT, 1);
         long startTime = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("adb_root")) {
             CLog.i("adb root on device %s", getSerialNumber());
             int attempts = MAX_RETRY_ATTEMPTS + 1;
             for (int i = 1; i <= attempts; i++) {
                 String output = executeAdbCommand("root");
                 // wait for device to disappear from adb
-                boolean res = waitForDeviceNotAvailable("root", 2 * 1000);
+                boolean res =
+                        waitForDeviceNotAvailable(
+                                "root", getOptions().getAdbRootUnavailableTimeout());
                 if (!res && TestDeviceState.ONLINE.equals(getDeviceState())) {
                     if (isAdbRoot()) {
                         return true;
@@ -4755,6 +4798,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
+    @Override
+    public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
     /** {@inheritDoc} */
     @Override
     public int createUserNoThrow(String name) throws DeviceNotAvailableException {
@@ -4766,6 +4814,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public int createUser(String name) throws DeviceNotAvailableException, IllegalStateException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int createUser(String name, boolean guest, boolean ephemeral, boolean forTesting)
+            throws DeviceNotAvailableException, IllegalStateException {
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
@@ -4800,6 +4855,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
+    @Override
+    public boolean startVisibleBackgroundUser(int userId, int displayId, boolean waitFlag)
+            throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -4817,6 +4878,17 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
+    @Override
+    public boolean isVisibleBackgroundUsersSupported() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isVisibleBackgroundUsersOnDefaultDisplaySupported()
+            throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -4829,6 +4901,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             executeAdbCommand("disable-verity");
             reboot();
         }
+        enableAdbRoot();
         executeAdbCommand("remount");
         waitForDeviceAvailable();
     }
@@ -4843,6 +4916,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             executeAdbCommand("disable-verity");
             reboot();
         }
+        enableAdbRoot();
         executeAdbCommand("remount");
         waitForDeviceAvailable();
     }
@@ -4852,6 +4926,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public Integer getPrimaryUserId() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Integer getMainUserId() throws DeviceNotAvailableException {
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
@@ -4869,6 +4949,17 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public int getCurrentUser() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isUserVisible(int userId) throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isUserVisibleOnDisplay(int userId, int displayId)
+            throws DeviceNotAvailableException {
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
@@ -5698,6 +5789,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public Set<Long> listDisplayIds() throws DeviceNotAvailableException {
         throw new UnsupportedOperationException("dumpsys SurfaceFlinger is not supported.");
+    }
+
+    @Override
+    public Set<Integer> listDisplayIdsForStartingVisibleBackgroundUsers()
+            throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
     }
 
     /** {@inheritDoc} */

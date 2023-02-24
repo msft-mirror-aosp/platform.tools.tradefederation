@@ -80,7 +80,6 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     private ITestsZipInstaller mTestsZipInstaller = null;
 
     private Collection<String> mFlashOptions = new ArrayList<>();
-    private boolean mDisableRamdump = false;
 
     private Collection<String> mDataWipeSkipList = null;
 
@@ -98,7 +97,7 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     private String mSystemBuildFlavor = null;
 
     @VisibleForTesting
-    FuseUtil getFuseUtil() {
+    protected FuseUtil getFuseUtil() {
         return new FuseUtil();
     }
 
@@ -159,10 +158,6 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         // HACK: To workaround TF's command line parsing, options starting with a dash
         // needs to be prepended with a whitespace and trimmed before they are used.
         mFlashOptions = flashOptions.stream().map(String::trim).collect(Collectors.toList());
-    }
-
-    public void setDisableRamdump(boolean disableRamdump) {
-        mDisableRamdump = disableRamdump;
     }
 
     /** {@inheritDoc} */
@@ -682,15 +677,6 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             // that the system had a different ramdisk won't be captured by a simple build check
             flashRamdiskIfNeeded(device, deviceBuild);
             CLog.i("Flashed ramdisk anyways per flasher settings.");
-        }
-        if (mDisableRamdump) {
-            CLog.i("Disabling ramdump.");
-            CommandResult result = device.executeFastbootCommand("oem", "ramdump", "disable");
-            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                CLog.w(
-                        "Failed to run ramdump disable: status: %s\nstdout: %s\nstderr: %s",
-                        result.getStatus(), result.getStdout(), result.getStderr());
-            }
         }
         // reboot
         device.rebootUntilOnline();

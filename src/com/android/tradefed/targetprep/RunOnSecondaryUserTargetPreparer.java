@@ -16,9 +16,6 @@
 
 package com.android.tradefed.targetprep;
 
-import com.android.tradefed.config.ConfigurationException;
-import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -46,16 +43,13 @@ import java.util.Map;
  * running on the device can read this argument to respond to this state.
  */
 @OptionClass(alias = "run-on-secondary-user")
-public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer
-        implements IConfigurationReceiver {
+public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
 
     @VisibleForTesting static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
     @VisibleForTesting static final String TEST_PACKAGE_NAME_OPTION = "test-package-name";
 
     @VisibleForTesting static final String SKIP_TESTS_REASON_KEY = "skip-tests-reason";
-
-    private IConfiguration mConfiguration;
 
     private int userIdToDelete = -1;
     private int originalUserId;
@@ -69,14 +63,6 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer
     private List<String> mTestPackages = new ArrayList<>();
 
     @Override
-    public void setConfiguration(IConfiguration configuration) {
-        if (configuration == null) {
-            throw new NullPointerException("configuration must not be null");
-        }
-        mConfiguration = configuration;
-    }
-
-    @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, DeviceNotAvailableException {
         int secondaryUserId = getSecondaryUserId(testInfo.getDevice());
@@ -85,7 +71,7 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer
             if (!assumeTrue(
                     canCreateAdditionalUsers(testInfo.getDevice(), 1),
                     "Device cannot support additional users",
-                    testInfo.getDevice())) {
+                    testInfo)) {
                 return;
             }
 
@@ -125,11 +111,18 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer
 
     /** Creates a secondary user and returns the new user ID. */
     private static int createSecondaryUser(ITestDevice device) throws DeviceNotAvailableException {
-        return device.createUser("secondary");
+        return device.createUser(
+                "secondary", /* guest= */ false, /* ephemeral= */ false, /* forTesting= */ true);
     }
 
     @Override
     public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
+        String value = testInfo.properties().remove(SKIP_TESTS_REASON_KEY);
+        if (value != null) {
+            // Skip teardown if a skip test reason was set.
+            return;
+        }
+
         testInfo.properties().remove(RUN_TESTS_AS_USER_KEY);
         int currentUser = testInfo.getDevice().getCurrentUser();
         if (currentUser != originalUserId) {
@@ -145,17 +138,9 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer
      *
      * <p>This will return {@code value} and, if it is not true, setup should be skipped.
      */
-    private boolean assumeTrue(boolean value, String reason, ITestDevice device)
-            throws TargetSetupError {
+    private boolean assumeTrue(boolean value, String reason, TestInformation testInfo) {
         if (!value) {
-            setDisableTearDown(true);
-            try {
-                mConfiguration.injectOptionValue(
-                        "instrumentation-arg", SKIP_TESTS_REASON_KEY, reason.replace(" ", "\\ "));
-            } catch (ConfigurationException e) {
-                throw new TargetSetupError(
-                        "Error setting skip-tests-reason", e, device.getDeviceDescriptor());
-            }
+            testInfo.properties().put(SKIP_TESTS_REASON_KEY, reason.replace(" ", "\\ "));
         }
 
         return value;

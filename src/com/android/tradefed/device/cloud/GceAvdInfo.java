@@ -132,6 +132,8 @@ public class GceAvdInfo {
     private HashMap<String, String> mBuildVars;
     private List<LogFileEntry> mLogs;
     private boolean mIsIpPreconfigured = false;
+    private Integer mDeviceOffset = null;
+    private String mInstanceUser = null;
 
     public static enum GceStatus {
         SUCCESS,
@@ -166,6 +168,10 @@ public class GceAvdInfo {
                 + mInstanceName
                 + ", mHostAndPort="
                 + mHostAndPort
+                + ", mDeviceOffset="
+                + mDeviceOffset
+                + ", mInstanceUser="
+                + mInstanceUser
                 + ", mErrorType="
                 + mErrorType
                 + ", mErrors="
@@ -220,6 +226,22 @@ public class GceAvdInfo {
 
     public boolean isIpPreconfigured() {
         return mIsIpPreconfigured;
+    }
+
+    public void setDeviceOffset(Integer deviceOffset) {
+        mDeviceOffset = deviceOffset;
+    }
+
+    public Integer getDeviceOffset() {
+        return mDeviceOffset;
+    }
+
+    public void setInstanceUser(String instanceUser) {
+        mInstanceUser = instanceUser;
+    }
+
+    public String getInstanceUser() {
+        return mInstanceUser;
     }
 
     /**
@@ -375,7 +397,9 @@ public class GceAvdInfo {
         CLog.d("Parsing oxygen client output: %s", output);
 
         Pattern pattern =
-                Pattern.compile("session_id:\"(.*?)\".*?server_url:\"(.*?)\"", Pattern.DOTALL);
+                Pattern.compile(
+                        "session_id:\"(.*?)\".*?server_url:\"(.*?)\".*?oxygen_version:\"(.*?)\"",
+                        Pattern.DOTALL);
         Matcher matcher = pattern.matcher(output);
 
         List<GceAvdInfo> gceAvdInfos = new ArrayList<>();
@@ -383,6 +407,7 @@ public class GceAvdInfo {
         while (matcher.find()) {
             String sessionId = matcher.group(1);
             String serverUrl = matcher.group(2);
+            String oxygenVersion = matcher.group(3);
             gceAvdInfos.add(
                     new GceAvdInfo(
                             sessionId,
@@ -391,6 +416,8 @@ public class GceAvdInfo {
                             null,
                             null,
                             GceStatus.SUCCESS));
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_OXYGEN_VERSION, oxygenVersion);
             deviceOffset++;
         }
         if (gceAvdInfos.isEmpty()) {
