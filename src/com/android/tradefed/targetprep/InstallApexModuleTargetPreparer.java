@@ -419,6 +419,10 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     CLog.i("Reboot finished. Wait for rollback fully propagate.");
                     RunUtil.getDefault().sleep(mApexStagingWaitTime);
                     device.waitForDeviceAvailable();
+                    // TODO(b/262626794): Remove after confirming with framework team about the
+                    // behavior of rollbaking mainline modules.
+                    CLog.i("Clean up staged and active session for mainline test mapping.");
+                    cleanUpStagedAndActiveSession(device);
                 }
             }
         }
