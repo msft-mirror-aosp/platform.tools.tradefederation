@@ -224,6 +224,16 @@ public class CommandOptions implements ICommandOptions {
     )
     private Set<AutoLogCollector> mAutoCollectors = new LinkedHashSet<>();
 
+    @Option(
+            name = "experiment-enabled",
+            description = "A feature flag used to enable experimental flags.")
+    private boolean mExperimentEnabled = false;
+
+    @Option(
+            name = "experimental-flags",
+            description = "Map of experimental flags that can be used for feature gating projects.")
+    private Map<String, String> mExperimentalFlags = new LinkedHashMap<>();
+
     @Deprecated
     @Option(
         name = "logcat-on-failure",
@@ -593,6 +603,18 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public void setAutoLogCollectors(Set<AutoLogCollector> autoLogCollectors) {
         mAutoCollectors = autoLogCollectors;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isExperimentEnabled() {
+        return mExperimentEnabled;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Map<String, String> getExperimentalFlags() {
+        return mExperimentalFlags;
     }
 
     /** {@inheritDoc} */
