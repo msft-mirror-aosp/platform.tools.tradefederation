@@ -20,6 +20,7 @@ import com.android.ddmlib.DdmPreferences;
 import com.android.ddmlib.Log;
 import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.BuildRetrievalError;
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.clearcut.ClearcutClient;
 import com.android.tradefed.command.CommandFileParser.CommandLine;
 import com.android.tradefed.command.CommandFileWatcher.ICommandFileListener;
@@ -37,6 +38,7 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.IGlobalConfiguration;
 import com.android.tradefed.config.Option;
+import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.config.RetryConfigurationFactory;
 import com.android.tradefed.config.SandboxConfigurationFactory;
 import com.android.tradefed.config.proxy.ProxyConfiguration;
@@ -553,6 +555,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         private static final String INVOC_END_EVENT_ID_KEY = "id";
         private static final String INVOC_END_EVENT_ELAPSED_KEY = "elapsed-time";
         private static final String INVOC_END_EVENT_TAG_KEY = "test-tag";
+        private static final String PRESUBMIT_BUILD_REGEX = "^P[0-9]+";
 
         private final IScheduledInvocationListener[] mListeners;
         private final IInvocationContext mInvocationContext;
@@ -597,6 +600,20 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         config.getCommandOptions()
                                 .getInvocationData()
                                 .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME));
+            }
+            // Set experimental flags for non-presubmit builds
+            if (config.getCommandOptions().isExperimentEnabled()
+                    && !isPresubmitBuild(mInvocationContext)) {
+                try {
+                    OptionSetter setter = new OptionSetter(config.getCommandOptions());
+                    for (Map.Entry<String, String> entry :
+                            config.getCommandOptions().getExperimentalFlags().entrySet()) {
+                        setter.setOptionValue(entry.getKey(), entry.getValue());
+                    }
+                } catch (ConfigurationException e) {
+                    CLog.e("Configuration Exception caught while setting experimental flags.");
+                    CLog.e(e);
+                }
             }
             mStartTime = System.currentTimeMillis();
             ITestInvocation instance = getInvocation();
@@ -899,6 +916,18 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     }
                 }
             }
+        }
+
+        /**
+         * Checks if the current Invocation is for a pre-submit build or not.
+         *
+         * @param context {@link IInvocationContext} for the current test.
+         * @return returns true if invocation is for a pre-submit build, false otherwise.
+         */
+        private boolean isPresubmitBuild(IInvocationContext context) {
+            IBuildInfo build = context.getBuildInfo(context.getDevices().get(0));
+            Pattern pattern = Pattern.compile(PRESUBMIT_BUILD_REGEX);
+            return pattern.matcher(build.getBuildId()).matches();
         }
     }
 
