@@ -186,6 +186,12 @@ public interface ICommandOptions {
     /** Sets the set of auto log collectors that should be added to an invocation. */
     public void setAutoLogCollectors(Set<AutoLogCollector> autoLogCollectors);
 
+    /** Whether or not to enable experiments through experimental flags. */
+    public boolean isExperimentEnabled();
+
+    /** Returns the experimental flags map, that can be used to feature gate projects. */
+    public Map<String, String> getExperimentalFlags();
+
     /** Whether or not to capture a screenshot on test case failure */
     public boolean captureScreenshotOnFailure();
 
