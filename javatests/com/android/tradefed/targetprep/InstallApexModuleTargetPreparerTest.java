@@ -234,6 +234,7 @@ public class InstallApexModuleTargetPreparerTest {
         mSetter = new OptionSetter(mInstallApexModuleTargetPreparer);
         mSetter.setOptionValue("cleanup-apks", "true");
         mSetter.setOptionValue("apex-staging-wait-time", APEX_STAGING_WAIT_TIME);
+        mSetter.setOptionValue("apex-rollback-wait-time", APEX_STAGING_WAIT_TIME);
     }
 
     @After
