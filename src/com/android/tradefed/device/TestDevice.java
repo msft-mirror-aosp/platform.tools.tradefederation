@@ -162,7 +162,7 @@ public class TestDevice extends NativeDevice {
     // Then there is time to run the actual task. Set the maximum timeout value big enough.
     private static final long MICRODROID_MAX_LIFETIME_MINUTES = 20;
 
-    private static final long MICRODROID_ADB_CONNECT_TIMEOUT_MINUTES = 5;
+    private static final long MICRODROID_DEFAULT_ADB_CONNECT_TIMEOUT_MINUTES = 5;
 
     private static final String EARLY_REBOOT = "Too early to call shutdown() or reboot()";
 
@@ -2483,7 +2483,7 @@ public class TestDevice extends NativeDevice {
                     forwardFileToLog(logPath, "MicrodroidLog");
                 });
 
-        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort);
+        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
         TestDevice microdroid = (TestDevice) deviceManager.forceAllocateDevice(microdroidSerial);
         if (microdroid == null) {
             process.destroy();
@@ -2507,12 +2507,13 @@ public class TestDevice extends NativeDevice {
      * Establish an adb connection to microdroid by letting Android forward the connection to
      * microdroid. Wait until the connection is established and microdroid is booted.
      */
-    private void adbConnectToMicrodroid(String cid, String microdroidSerial, int vmAdbPort) {
+    private void adbConnectToMicrodroid(
+            String cid, String microdroidSerial, int vmAdbPort, long adbConnectTimeoutMs) {
         MicrodroidHelper microdroidHelper = new MicrodroidHelper();
         IDeviceManager deviceManager = GlobalConfiguration.getDeviceManagerInstance();
 
         long start = System.currentTimeMillis();
-        long timeoutMillis = MICRODROID_ADB_CONNECT_TIMEOUT_MINUTES * 60 * 1000;
+        long timeoutMillis = adbConnectTimeoutMs;
         long elapsed = 0;
 
         final String serial = getSerialNumber();
@@ -2670,6 +2671,7 @@ public class TestDevice extends NativeDevice {
         private boolean mProtectedVm;
         private Map<String, String> mTestDeviceOptions;
         private Map<File, String> mBootFiles;
+        private long mAdbConnectTimeoutMs;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -2684,6 +2686,7 @@ public class TestDevice extends NativeDevice {
             mProtectedVm = false; // Vm is unprotected by default.
             mTestDeviceOptions = new LinkedHashMap<>();
             mBootFiles = new LinkedHashMap<>();
+            mAdbConnectTimeoutMs = MICRODROID_DEFAULT_ADB_CONNECT_TIMEOUT_MINUTES * 60 * 1000;
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -2786,6 +2789,16 @@ public class TestDevice extends NativeDevice {
          */
         public MicrodroidBuilder addBootFile(File localFile, String remoteFileName) {
             mBootFiles.put(localFile, remoteFileName);
+            return this;
+        }
+
+        /**
+         * Sets the timeout for adb connect to microdroid TestDevice in millis.
+         *
+         * @param timeoutMs The timeout in millis
+         */
+        public MicrodroidBuilder setAdbConnectTimeoutMs(long timeoutMs) {
+            mAdbConnectTimeoutMs = timeoutMs;
             return this;
         }
 
