@@ -36,6 +36,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.IDeviceFlasher.UserDataFlashOption;
+import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
@@ -48,6 +49,7 @@ import java.util.concurrent.TimeUnit;
 public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
 
     private static final int BOOT_POLL_TIME_MS = 5 * 1000;
+    private static final long SNAPSHOT_CANCEL_TIMEOUT = 20000L;
 
     @Option(
         name = "device-boot-time",
@@ -118,6 +120,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                     "the partition (such as boot, vendor_boot) that ramdisk image "
                             + "should be flashed to")
     private String mRamdiskPartition = "boot";
+
+    @Option(
+            name = "cancel-ota-snapshot",
+            description = "In case an OTA snapshot is in progress, cancel it.")
+    private boolean mCancelSnapshot = false;
 
     /**
      * Sets the device boot time
@@ -219,6 +226,18 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 }
                 start = System.currentTimeMillis();
                 flasher.preFlashOperations(device, deviceBuild);
+                // After preFlashOperations device should be in bootloader
+                if (mCancelSnapshot && TestDeviceState.FASTBOOT.equals(device.getDeviceState())) {
+                    CommandResult res =
+                            device.executeFastbootCommand(
+                                    SNAPSHOT_CANCEL_TIMEOUT, "snapshot-update", "cancel");
+                    if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
+                        CLog.w(
+                                "Failed to cancel snapshot: %s.\nstdout:%s\nstderr:%s",
+                                res.getStatus(), res.getStdout(), res.getStderr());
+                    }
+                }
+
                 // Only #flash is included in the critical section
                 getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
                 queueTime = System.currentTimeMillis() - start;
