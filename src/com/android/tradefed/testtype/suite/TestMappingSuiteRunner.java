@@ -355,8 +355,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             configFile = null;
         }
         // De-duplicate test infos so that there won't be duplicate test options.
-        testInfos = dedupTestInfos(testInfos);
-        Set<String> duplicateSources = new LinkedHashSet<>();
+        testInfos = dedupTestInfos(configFile, testInfos);
 
         for (TestInfo testInfo : testInfos) {
             // Clean up all the test options injected in SuiteModuleLoader.
@@ -381,16 +380,8 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                 if (mRemoteTestTimeOut != null) {
                     addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
                 }
-                duplicateSources.addAll(testInfo.getSources());
                 tests.addAll(remoteTests);
             }
-        }
-        // If size above 1 that means we have duplicated modules with different options
-        if (duplicateSources.size() > 1) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DUPLICATE_MAPPING_DIFFERENT_OPTIONS,
-                    String.format(
-                            "%s:" + Joiner.on("+").join(duplicateSources), configPath));
         }
         return tests;
     }
@@ -470,21 +461,31 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     /**
      * De-duplicate test infos and aggregate test-mapping sources with the same test options.
      *
+     * @param config the config file being deduplicated
      * @param testInfos A {@code Set<TestInfo>} containing multiple test options.
      * @return A {@code Set<TestInfo>} of tests without duplicated test options.
      */
     @VisibleForTesting
-    Set<TestInfo> dedupTestInfos(Set<TestInfo> testInfos) {
+    Set<TestInfo> dedupTestInfos(File config, Set<TestInfo> testInfos) {
         Set<String> nameOptions = new HashSet<>();
         Set<TestInfo> dedupTestInfos = new HashSet<>();
+        Set<String> duplicateSources = new LinkedHashSet<String>();
         for (TestInfo testInfo : testInfos) {
             String nameOption = testInfo.getNameOption();
             if (!nameOptions.contains(nameOption)) {
                 dedupTestInfos.add(testInfo);
+                duplicateSources.addAll(testInfo.getSources());
                 nameOptions.add(nameOption);
             } else {
                 aggregateTestInfo(testInfo, dedupTestInfos);
             }
+        }
+
+        // If size above 1 that means we have duplicated modules with different options
+        if (dedupTestInfos.size() > 1) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DUPLICATE_MAPPING_DIFFERENT_OPTIONS,
+                    String.format("%s:" + Joiner.on("+").join(duplicateSources), config));
         }
         return dedupTestInfos;
     }
