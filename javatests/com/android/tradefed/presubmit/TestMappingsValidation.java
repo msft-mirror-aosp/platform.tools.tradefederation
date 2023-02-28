@@ -15,8 +15,9 @@
  */
 package com.android.tradefed.presubmit;
 
-import static java.lang.String.format;
 import static org.junit.Assert.fail;
+
+import static java.lang.String.format;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
@@ -27,6 +28,8 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.targetprep.ITargetPreparer;
+import com.android.tradefed.targetprep.PushFilePreparer;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.suite.ITestSuite;
@@ -38,10 +41,16 @@ import com.android.tradefed.util.testmapping.TestOption;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
-
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+
+import org.junit.After;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,14 +60,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.junit.Assume;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 
 /**
  * Validation tests to run against the TEST_MAPPING files in tests_mappings.zip to ensure they
@@ -191,8 +194,9 @@ public class TestMappingsValidation implements IBuildReceiver {
      * targets.
      */
     @Test
-    public void testValidateTestEntry() {
+    public void testValidateTestEntry() throws Exception {
         List<String> errors = new ArrayList<>();
+        Set<String> checkedModule = new HashSet<>();
         for (String testGroup : allTests.keySet()) {
             if (!mTestGroupToValidate.contains(testGroup)) {
                 CLog.d("Skip checking tests with group: %s", testGroup);
@@ -215,6 +219,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                                         testInfo.getName(), testInfo.getSources()));
                     }
                 }
+                checkedModule.add(moduleName);
             }
         }
         if (!errors.isEmpty()) {
@@ -235,6 +240,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                 fail(error);
             }
         }
+        validateConfigsOfSharedPool(checkedModule);
     }
 
     /**
@@ -530,5 +536,61 @@ public class TestMappingsValidation implements IBuildReceiver {
             errors.add(e.getMessage());
         }
         return errors;
+    }
+
+    private void validateConfigsOfSharedPool(Set<String> checkedModule) throws Exception {
+        File configZip = deviceBuildInfo.getFile("general-tests_configs.zip");
+        File deviceConfigZip = deviceBuildInfo.getFile("device-tests_configs.zip");
+        Assume.assumeTrue(configZip != null);
+        List<String> testConfigs = new ArrayList<>();
+        List<File> dirToLoad = new ArrayList<>();
+        File testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+        File deviceTestConfigDir = null;
+        dirToLoad.add(testConfigDir);
+        if (deviceConfigZip != null) {
+            deviceTestConfigDir =
+                    ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+            dirToLoad.add(deviceTestConfigDir);
+        }
+        try {
+            testConfigs.addAll(ConfigurationUtil.getConfigNamesFromDirs(null, dirToLoad));
+            CLog.d("Checking modules: %s. And configs: %s", checkedModule, testConfigs);
+            List<String> errors = new ArrayList<>();
+            for (String configName : testConfigs) {
+                String fileName = FileUtil.getBaseName(new File(configName).getName());
+                if (!checkedModule.contains(fileName)) {
+                    continue;
+                }
+                try {
+                    IConfiguration config =
+                            mConfigFactory.createConfigurationFromArgs(new String[] {configName});
+                    for (ITargetPreparer prep : config.getTargetPreparers()) {
+                        if (prep instanceof PushFilePreparer) {
+                            PushFilePreparer pushPreparer = (PushFilePreparer) prep;
+                            if (pushPreparer.shouldRemountSystem()
+                                    || pushPreparer.shouldRemountVendor()) {
+                                // TODO: Throw exception instead
+                                CLog.e(
+                                        // throw new ConfigurationException(
+                                        String.format(
+                                                "%s: Shouldn't use 'remount-system' or"
+                                                        + " 'remount-vendor' in shared test mapping"
+                                                        + " pools.",
+                                                fileName));
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    errors.add(e.toString());
+                }
+            }
+
+            if (!errors.isEmpty()) {
+                fail(Joiner.on("\n").join(errors));
+            }
+        } finally {
+            FileUtil.recursiveDelete(testConfigDir);
+            FileUtil.recursiveDelete(deviceTestConfigDir);
+        }
     }
 }
