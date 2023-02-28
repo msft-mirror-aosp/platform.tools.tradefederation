@@ -179,7 +179,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     private boolean mInstantMode = false;
 
     @Option(name = "aapt-version", description = "The version of AAPT for APK parsing.")
-    private AaptVersion mAaptVersion = AaptVersion.AAPT;
+    private AaptVersion mAaptVersion = AaptVersion.AAPT2;
 
     @Option(
             name = "force-install-mode",
