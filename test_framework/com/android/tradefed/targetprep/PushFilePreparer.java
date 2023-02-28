@@ -490,4 +490,12 @@ public class PushFilePreparer extends BaseTargetPreparer
         }
         return deps;
     }
+
+    public boolean shouldRemountSystem() {
+        return mRemountSystem;
+    }
+
+    public boolean shouldRemountVendor() {
+        return mRemountVendor;
+    }
 }
