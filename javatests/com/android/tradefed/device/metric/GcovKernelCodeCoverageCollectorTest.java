@@ -20,9 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertTrue;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.doReturn;
@@ -70,7 +68,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 /** Unit tests for {@link GcovKernelCodeCoverageCollector}. */
 @RunWith(JUnit4.class)
@@ -152,9 +149,25 @@ public class GcovKernelCodeCoverageCollectorTest {
                         GcovKernelCodeCoverageCollector.MAKE_TEMP_DIR_COMMAND))
                 .thenReturn(successResultWithDir);
 
-        // collectGcovDebugfsCoverage() gather coverage happy path: success
+        // collectGcovDebugfsCoverage() make gcda temp dir happy path: success
         when(mMockDevice.executeShellV2Command(
-                        startsWith("find /d/gcov"), anyLong(), any(TimeUnit.class)))
+                        startsWith(
+                                GcovKernelCodeCoverageCollector.MAKE_GCDA_TEMP_DIR_COMMAND_FMT
+                                        .substring(0, 8))))
+                .thenReturn(mSuccessResult);
+
+        // collectGcovDebugfsCoverage() copy gcov data happy path: success
+        when(mMockDevice.executeShellV2Command(
+                        startsWith(
+                                GcovKernelCodeCoverageCollector.COPY_GCOV_DATA_COMMAND_FMT
+                                        .substring(0, 6))))
+                .thenReturn(mSuccessResult);
+
+        // collectGcovDebugfsCoverage() tar gcov data happy path: success
+        when(mMockDevice.executeShellV2Command(
+                        startsWith(
+                                GcovKernelCodeCoverageCollector.TAR_GCOV_DATA_COMMAND_FMT.substring(
+                                        0, 8))))
                 .thenReturn(mSuccessResult);
 
         // device.pullFile() happy path: always return a file with the given name
@@ -266,7 +279,7 @@ public class GcovKernelCodeCoverageCollectorTest {
     public void resetGcovCountsFail_noTar() throws Exception {
         var moduleName = name.getMethodName();
 
-        // Set mount command to fail
+        // Set reset command to fail
         when(mMockDevice.executeShellV2Command(
                         GcovKernelCodeCoverageCollector.RESET_GCOV_COUNTS_COMMAND))
                 .thenReturn(mFailedResult);
@@ -279,7 +292,7 @@ public class GcovKernelCodeCoverageCollectorTest {
     public void makeTempDirFail_noTar() throws Exception {
         var moduleName = name.getMethodName();
 
-        // Set mount command to fail
+        // Set make temp dir command to fail
         when(mMockDevice.executeShellV2Command(
                         GcovKernelCodeCoverageCollector.MAKE_TEMP_DIR_COMMAND))
                 .thenReturn(mFailedResult);
@@ -289,12 +302,44 @@ public class GcovKernelCodeCoverageCollectorTest {
     }
 
     @Test
-    public void gatherCoverageFail_noTar() throws Exception {
+    public void makeGcdaTempDirFail_noTar() throws Exception {
         var moduleName = name.getMethodName();
 
-        // Set mount command to fail
+        // Set make gcda temp dir command to fail
         when(mMockDevice.executeShellV2Command(
-                        startsWith("find /d/gcov"), anyLong(), any(TimeUnit.class)))
+                        startsWith(
+                                GcovKernelCodeCoverageCollector.MAKE_GCDA_TEMP_DIR_COMMAND_FMT
+                                        .substring(0, 8))))
+                .thenReturn(mFailedResult);
+
+        configuredRun(List.of(moduleName), 1, false);
+        assertThat(mFakeListener.getLogs()).hasSize(0);
+    }
+
+    @Test
+    public void copyGcovDataFail_noTar() throws Exception {
+        var moduleName = name.getMethodName();
+
+        // Set copy gcov data command to fail
+        when(mMockDevice.executeShellV2Command(
+                        startsWith(
+                                GcovKernelCodeCoverageCollector.COPY_GCOV_DATA_COMMAND_FMT
+                                        .substring(0, 6))))
+                .thenReturn(mFailedResult);
+
+        configuredRun(List.of(moduleName), 1, false);
+        assertThat(mFakeListener.getLogs()).hasSize(0);
+    }
+
+    @Test
+    public void tarGcovDataFail_noTar() throws Exception {
+        var moduleName = name.getMethodName();
+
+        // Set tar gcov data command to fail
+        when(mMockDevice.executeShellV2Command(
+                        startsWith(
+                                GcovKernelCodeCoverageCollector.TAR_GCOV_DATA_COMMAND_FMT.substring(
+                                        0, 8))))
                 .thenReturn(mFailedResult);
 
         configuredRun(List.of(moduleName), 1, false);
