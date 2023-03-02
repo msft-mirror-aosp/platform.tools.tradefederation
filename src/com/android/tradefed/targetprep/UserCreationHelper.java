@@ -16,9 +16,11 @@
 
 package com.android.tradefed.targetprep;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.UserInfo;
+import com.android.tradefed.log.LogUtil.CLog;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -27,8 +29,16 @@ import java.util.Map;
 final class UserCreationHelper {
 
     private static final String TF_CREATED_USER = "tf_created_user";
+    // TODO(b/270604218): remove constant (and usage) if we decide to not automatically set it
+    @VisibleForTesting static final String USER_SETUP_COMPLETE = "user_setup_complete";
 
+    // TODO(b/270604218): merge both methods if CreateUserPreparer also provisions it
     public static int createUser(ITestDevice device, boolean reuseTestUser)
+            throws DeviceNotAvailableException, TargetSetupError {
+        return createUser(device, reuseTestUser, /* provisionUser= */ false);
+    }
+
+    public static int createUser(ITestDevice device, boolean reuseTestUser, boolean provisionUser)
             throws DeviceNotAvailableException, TargetSetupError {
         if (reuseTestUser) {
             Integer existingTFUser = findExistingTradefedUser(device);
@@ -40,7 +50,12 @@ final class UserCreationHelper {
         cleanupOldUsersIfLimitReached(device);
 
         try {
-            return device.createUser(TF_CREATED_USER);
+            int userId = device.createUser(TF_CREATED_USER);
+            if (provisionUser) {
+                CLog.d("Marking user %d as setup complete", userId);
+                device.setSetting(userId, "secure", USER_SETUP_COMPLETE, "1");
+            }
+            return userId;
         } catch (IllegalStateException e) {
             throw new TargetSetupError("Failed to create user.", e, device.getDeviceDescriptor());
         }
