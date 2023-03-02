@@ -29,12 +29,16 @@ java_library_host {
     static_libs: [
         "jna-prebuilt",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_test_host {
     name: "aoa-helper-test",
     visibility: ["//visibility:private"],
     srcs: ["javatests/**/*.java"],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
     test_options: {
         unit_test: true,
     },

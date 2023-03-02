@@ -15,12 +15,11 @@
  */
 package com.android.tradefed.targetprep;
 
-import static org.junit.Assert.fail;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import static com.google.common.truth.Truth.assertThat;
 
+import static org.junit.Assert.assertThrows;
+
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NativeDevice;
@@ -28,27 +27,35 @@ import com.android.tradefed.device.UserInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.util.ITestDeviceMockHelper;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.mockito.Mockito;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Map;
 
 /** Unit tests for {@link CreateUserPreparer}. */
-@RunWith(JUnit4.class)
-public class CreateUserPreparerTest {
+@RunWith(MockitoJUnitRunner.class)
+public final class CreateUserPreparerTest {
 
+    @Mock private ITestDevice mMockDevice;
+
+    private OptionSetter mSetter;
+
+    private ITestDeviceMockHelper mTestDeviceMockHelper;
     private CreateUserPreparer mPreparer;
-    private ITestDevice mMockDevice;
     private TestInformation mTestInfo;
 
     @Before
-    public void setUp() {
-        mMockDevice = Mockito.mock(ITestDevice.class);
+    public void setFixtures() throws Exception {
+        mTestDeviceMockHelper = new ITestDeviceMockHelper(mMockDevice);
         mPreparer = new CreateUserPreparer();
+        mSetter = new OptionSetter(mPreparer);
+
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockDevice);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
@@ -56,23 +63,23 @@ public class CreateUserPreparerTest {
 
     @Test
     public void testSetUp_tearDown() throws Exception {
-        doReturn(10).when(mMockDevice).getCurrentUser();
-        doReturn(5).when(mMockDevice).createUser(Mockito.any());
-        doReturn(true).when(mMockDevice).switchUser(5);
-        doReturn(true).when(mMockDevice).startUser(5, true);
+        mockGetCurrentUser(10);
+        mockCreateUser(5);
+        mockSwitchUser(5);
+        mockStartUser(5);
         mPreparer.setUp(mTestInfo);
+        verifyUserCreated();
+        verifyUserSwitched(5);
 
-        doReturn(true).when(mMockDevice).removeUser(5);
-        doReturn(true).when(mMockDevice).switchUser(10);
-        mPreparer.tearDown(mTestInfo, null);
+        mockSwitchUser(10);
+        mPreparer.tearDown(mTestInfo, /* e= */ null);
+        verifyUserRemoved(5);
+        verifyUserSwitched(10);
     }
 
     @Test
     public void testSetUp_tearDown_reuseTestUser() throws Exception {
-        // Set the reuse-test-user to true.
-        CreateUserPreparer preparer = new CreateUserPreparer();
-        OptionSetter setter = new OptionSetter(preparer);
-        setter.setOptionValue("reuse-test-user", "true");
+        setParam("reuse-test-user", "true");
 
         Map<Integer, UserInfo> existingUsers = Map.of(
                 0, new UserInfo(
@@ -86,29 +93,26 @@ public class CreateUserPreparerTest {
                     /* flags= */ 0,
                     /* isRunning= */ false));
 
-        doReturn(existingUsers).when(mMockDevice).getUserInfos();
-        doReturn(0).when(mMockDevice).getCurrentUser();
-        doReturn(true).when(mMockDevice).switchUser(13);
-        doReturn(true).when(mMockDevice).startUser(13, true);
-        doReturn(true).when(mMockDevice).switchUser(0);
+        mockGetUserInfos(existingUsers);
+        mockGetCurrentUser(0);
+        mockSwitchUser(13);
+        mockStartUser(13);
+        mockSwitchUser(0);
 
-        preparer.setUp(mTestInfo);
+        mPreparer.setUp(mTestInfo);
         // We should reuse the existing, not create a new user.
-        verify(mMockDevice, never()).createUser(Mockito.any());
-        verify(mMockDevice).switchUser(13);
+        verifyNoUserCreated();
+        verifyUserSwitched(13);
 
-        preparer.tearDown(mTestInfo, null);
+        mPreparer.tearDown(mTestInfo, /* e= */ null);
         // We should keep the user for the next module to reuse.
-        verify(mMockDevice, never()).removeUser(13);
-        verify(mMockDevice).switchUser(0);
+        verifyUserNotRemoved(13);
+        verifyUserSwitched(0);
     }
 
     @Test
     public void testSetUp_tearDown_reuseTestUser_noExistingTestUser() throws Exception {
-        // Set the reuse-test-user to true.
-        CreateUserPreparer preparer = new CreateUserPreparer();
-        OptionSetter setter = new OptionSetter(preparer);
-        setter.setOptionValue("reuse-test-user", "true");
+        setParam("reuse-test-user", "true");
 
         Map<Integer, UserInfo> existingUsers = Map.of(
                 0, new UserInfo(
@@ -117,36 +121,32 @@ public class CreateUserPreparerTest {
                     /* flags= */ 0x00000013,
                     /* isRunning= */ true));
 
-        doReturn(existingUsers).when(mMockDevice).getUserInfos();
-        doReturn(0).when(mMockDevice).getCurrentUser();
-        doReturn(12).when(mMockDevice).createUser(Mockito.any());
-        doReturn(true).when(mMockDevice).switchUser(12);
-        doReturn(true).when(mMockDevice).startUser(12, true);
-        doReturn(true).when(mMockDevice).switchUser(0);
+        mockGetUserInfos(existingUsers);
+        mockGetCurrentUser(0);
+        mockCreateUser(12);
+        mockSwitchUser(12);
+        mockStartUser(12);
+        mockSwitchUser(0);
 
-        preparer.setUp(mTestInfo);
-        verify(mMockDevice).createUser(Mockito.any());
-        verify(mMockDevice).switchUser(12);
+        mPreparer.setUp(mTestInfo);
+        verifyUserCreated();
+        verifyUserSwitched(12);
 
-        preparer.tearDown(mTestInfo, null);
+        mPreparer.tearDown(mTestInfo, /* e= */ null);
         // Newly created user is kept to reuse it in the next run.
-        verify(mMockDevice, never()).removeUser(12);
-        verify(mMockDevice).switchUser(0);
+        verifyUserNotRemoved(12);
+        verifyUserSwitched(0);
     }
 
     @Test
     public void testSetUp_tearDown_noCurrent() throws Exception {
-        doReturn(NativeDevice.INVALID_USER_ID).when(mMockDevice).getCurrentUser();
-        try {
-            mPreparer.setUp(mTestInfo);
-            fail("Should have thrown an exception.");
-        } catch (TargetSetupError expected) {
-            // Expected
-        }
+        mockGetCurrentUser(NativeDevice.INVALID_USER_ID);
+
+        assertThrows(TargetSetupError.class, () -> mPreparer.setUp(mTestInfo));
 
         mPreparer.tearDown(mTestInfo, null);
-        verify(mMockDevice, never()).removeUser(Mockito.anyInt());
-        verify(mMockDevice, never()).switchUser(Mockito.anyInt());
+        verifyNoUserRemoved();
+        verifyNoUserSwitched();
     }
 
     @Test
@@ -168,41 +168,92 @@ public class CreateUserPreparerTest {
                     /* flags= */ 0,
                     /* isRunning= */ false));
 
-        doReturn(3).when(mMockDevice).getMaxNumberOfUsersSupported();
-        doReturn(existingUsers).when(mMockDevice).getUserInfos();
-        doThrow(new IllegalStateException("failed to create"))
-                .when(mMockDevice)
-                .createUser(Mockito.any());
+        mockGetMaxNumberOfUsersSupported(3);
+        mockGetUserInfos(existingUsers);
+        Exception cause = mockCreateUserFailure("D'OH!");
 
-        try {
-            mPreparer.setUp(mTestInfo);
-            fail("Should have thrown an exception.");
-        } catch (TargetSetupError expected) {
-            // Expected
-        }
+        TargetSetupError e = assertThrows(TargetSetupError.class, () -> mPreparer.setUp(mTestInfo));
+        assertThat(e).hasCauseThat().isSameInstanceAs(cause);
+
         // verify that it removed the existing tradefed users.
-        verify(mMockDevice).removeUser(11);
-        verify(mMockDevice).removeUser(13);
+        verifyUserRemoved(11);
+        verifyUserRemoved(13);
     }
 
     @Test
-    public void testSetUp_failed() throws Exception {
-        doThrow(new IllegalStateException("failed to create"))
-                .when(mMockDevice)
-                .createUser(Mockito.any());
+    public void testSetUp_createUserfailed() throws Exception {
+        Exception cause = mockCreateUserFailure("D'OH!");
 
-        try {
-            mPreparer.setUp(mTestInfo);
-            fail("Should have thrown an exception.");
-        } catch (TargetSetupError expected) {
-            // Expected
-        }
+        TargetSetupError e = assertThrows(TargetSetupError.class, () -> mPreparer.setUp(mTestInfo));
+
+        assertThat(e).hasCauseThat().isSameInstanceAs(cause);
     }
 
     @Test
     public void testTearDown_only() throws Exception {
-        mPreparer.tearDown(mTestInfo, null);
+        mPreparer.tearDown(mTestInfo, /* e= */ null);
 
-        verify(mMockDevice, never()).removeUser(Mockito.anyInt());
+        verifyNoUserRemoved();
+    }
+
+    private void setParam(String key, String value) throws ConfigurationException {
+        CLog.i("Setting param: '%s'='%s'", key, value);
+        mSetter.setOptionValue(key, value);
+    }
+
+    private void mockGetCurrentUser(int userId) throws Exception {
+        mTestDeviceMockHelper.mockGetCurrentUser(userId);
+    }
+
+    private void mockGetUserInfos(Map<Integer, UserInfo> existingUsers) throws Exception {
+        mTestDeviceMockHelper.mockGetUserInfos(existingUsers);
+    }
+
+    private void mockGetMaxNumberOfUsersSupported(int max) throws Exception {
+        mTestDeviceMockHelper.mockGetMaxNumberOfUsersSupported(max);
+    }
+
+    private void mockSwitchUser(int userId) throws Exception {
+        mTestDeviceMockHelper.mockSwitchUser(userId);
+    }
+
+    private void mockStartUser(int userId) throws Exception {
+        mTestDeviceMockHelper.mockStartUser(userId);
+    }
+
+    private void mockCreateUser(int userId) throws Exception {
+        mTestDeviceMockHelper.mockCreateUser(userId);
+    }
+
+    private IllegalStateException mockCreateUserFailure(String message) throws Exception {
+        return mTestDeviceMockHelper.mockCreateUserFailure(message);
+    }
+
+    private void verifyNoUserCreated() throws Exception {
+        mTestDeviceMockHelper.verifyNoUserCreated();
+    }
+
+    private void verifyUserCreated() throws Exception {
+        mTestDeviceMockHelper.verifyUserCreated();
+    }
+
+    private void verifyNoUserSwitched() throws Exception {
+        mTestDeviceMockHelper.verifyNoUserSwitched();
+    }
+
+    private void verifyUserSwitched(int userId) throws Exception {
+        mTestDeviceMockHelper.verifyUserSwitched(userId);
+    }
+
+    private void verifyNoUserRemoved() throws Exception {
+        mTestDeviceMockHelper.verifyNoUserRemoved();
+    }
+
+    private void verifyUserRemoved(int userId) throws Exception {
+        mTestDeviceMockHelper.verifyUserRemoved(userId);
+    }
+
+    private void verifyUserNotRemoved(int userId) throws Exception {
+        mTestDeviceMockHelper.verifyUserNotRemoved(userId);
     }
 }

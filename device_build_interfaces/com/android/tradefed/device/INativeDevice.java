@@ -476,15 +476,32 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
-     * Helper method which executes a fastboot command as a system command with a default timeout
-     * of 2 minutes.
-     * <p/>
-     * Expected to be used when device is already in fastboot mode.
+     * Helper method which executes a adb command as a system command with a specified timeout.
+     *
+     * <p>{@link #executeShellCommand(String)} should be used instead wherever possible, as that
+     * method provides better failure detection and performance.
+     *
+     * @param timeout the time in milliseconds before the device is considered unresponsive, 0L for
+     *     no timeout
+     * @param envMap environment to set for the command
+     * @param commandArgs the adb command and arguments to run
+     * @return the stdout from command. <code>null</code> if command failed to execute.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public String executeAdbCommand(long timeout, Map<String, String> envMap, String... commandArgs)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Helper method which executes a fastboot command as a system command with a default timeout of
+     * 2 minutes.
+     *
+     * <p>Expected to be used when device is already in fastboot mode.
      *
      * @param commandArgs the fastboot command and arguments to run
      * @return the CommandResult containing output of command
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
-     * recovered.
+     *     recovered.
      */
     public CommandResult executeFastbootCommand(String... commandArgs)
             throws DeviceNotAvailableException;

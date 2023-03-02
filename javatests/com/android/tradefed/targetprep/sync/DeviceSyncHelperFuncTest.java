@@ -18,6 +18,7 @@ package com.android.tradefed.targetprep.sync;
 import static org.junit.Assert.assertTrue;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4Test;
@@ -37,6 +38,7 @@ public class DeviceSyncHelperFuncTest extends BaseHostJUnit4Test {
     public void testSyncDevice() throws DeviceNotAvailableException {
         String buildId = getDevice().getProperty("ro.system.build.version.incremental");
         CLog.d("%s / buildid: %s", getDevice().getProperty("ro.build.fingerprint"), buildId);
+        printBuildProp(getDevice());
 
         File targetFiles = getBuild().getFile("target_files");
         if (targetFiles == null || !targetFiles.exists() || !targetFiles.isDirectory()) {
@@ -50,7 +52,14 @@ public class DeviceSyncHelperFuncTest extends BaseHostJUnit4Test {
         String afterBuildId = getDevice().getProperty("ro.system.build.version.incremental");
         CLog.d("Initial build: %s. Final build: %s", buildId, afterBuildId);
         CLog.d("%s", getDevice().getProperty("ro.build.fingerprint"));
+        printBuildProp(getDevice());
 
         Truth.assertThat(buildId).isNotEqualTo(afterBuildId);
+    }
+
+    private void printBuildProp(ITestDevice device) throws DeviceNotAvailableException {
+        String output = device.executeAdbCommand("shell", "cat", "/system/build.prop");
+        CLog.e("================ build.prop");
+        CLog.e(output);
     }
 }

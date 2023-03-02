@@ -16,6 +16,8 @@
 
 package com.android.tradefed.targetprep;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
@@ -83,6 +85,8 @@ public class RunCommandTargetPreparerTest {
         when(mMockDevice.executeShellV2Command(Mockito.eq(command))).thenReturn(res);
 
         mPreparer.setUp(mTestInfo);
+
+        assertThat(mPreparer.getCommands()).containsExactly(command);
     }
 
     /**
