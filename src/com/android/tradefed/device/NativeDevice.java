@@ -36,6 +36,9 @@ import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.device.IWifiHelper.WifiConnectionResult;
+import com.android.tradefed.device.connection.AbstractConnection;
+import com.android.tradefed.device.connection.DefaultConnection;
+import com.android.tradefed.device.connection.DefaultConnection.ConnectionBuilder;
 import com.android.tradefed.device.contentprovider.ContentProviderHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
@@ -243,6 +246,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     private String mFastbootSerialNumber = null;
     private File mUnpackedFastbootDir = null;
+    // Connection for the device.
+    private final AbstractConnection mConnection;
 
     /**
      * Interface for a generic device communication attempt.
@@ -405,6 +410,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         mIDevice = device;
         mStateMonitor = stateMonitor;
         mAllocationMonitor = allocationMonitor;
+
+        // TODO: Move the connection to the constructor interface
+        mConnection =
+                DefaultConnection.createConnection(
+                        new ConnectionBuilder().setRunUtil(getRunUtil()));
     }
 
     /** Get the {@link RunUtil} instance to use. */
@@ -3865,6 +3875,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (!notAvailable) {
             CLog.w("Did not detect device %s becoming unavailable after reboot", getSerialNumber());
         }
+        getConnection().reconnect(getSerialNumber());
     }
 
     /**
@@ -4013,7 +4024,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * @throws DeviceNotAvailableException
      */
     public void postAdbRootAction() throws DeviceNotAvailableException {
-        // Empty on purpose.
+        getConnection().reconnect(getSerialNumber());
     }
 
     /**
@@ -4024,7 +4035,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * @throws DeviceNotAvailableException
      */
     public void postAdbUnrootAction() throws DeviceNotAvailableException {
-        // Empty on purpose.
+        getConnection().reconnect(getSerialNumber());
     }
 
     /**
@@ -5160,6 +5171,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         FileUtil.deleteFile(mExecuteShellCommandLogs);
         mExecuteShellCommandLogs = null;
         FileUtil.recursiveDelete(mUnpackedFastbootDir);
+        getConnection().tearDownConnection();
         // Default implementation
         if (getIDevice() instanceof StubDevice) {
             return;
@@ -5934,5 +5946,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             mFastbootLock.unlock();
         }
         return result;
+    }
+
+    /** The current connection associated with the device. */
+    protected AbstractConnection getConnection() {
+        return mConnection;
     }
 }
