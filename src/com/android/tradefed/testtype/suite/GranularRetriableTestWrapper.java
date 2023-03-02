@@ -99,6 +99,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
 
     // Tracking of the metrics
     private RetryStatistics mRetryStats = null;
+    private int mCountRetryUsed = 0;
 
     public GranularRetriableTestWrapper(
             IRemoteTest test,
@@ -311,6 +312,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
                     }
                 }
                 firstCheck = false;
+                mCountRetryUsed++;
                 CLog.d("Intra-module retry attempt number %s", attemptNumber);
                 // Run the tests again
                 intraModuleRun(testInfo, allListeners, attemptNumber);
@@ -439,6 +441,10 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     /** Returns the listener containing all the results. */
     public ModuleListener getResultListener() {
         return mMainGranularRunListener;
+    }
+
+    public int getRetryCount() {
+        return mCountRetryUsed;
     }
 
     @Override
