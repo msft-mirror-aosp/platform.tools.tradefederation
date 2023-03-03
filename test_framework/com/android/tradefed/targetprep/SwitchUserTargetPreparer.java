@@ -42,13 +42,16 @@ public class SwitchUserTargetPreparer extends BaseTargetPreparer {
 
     private int mPreExecutionCurrentUser;
 
+    private ITestDevice mDevice;
+
     @Override
     public void setUp(TestInformation testInformation)
             throws TargetSetupError, DeviceNotAvailableException {
-        ITestDevice device = testInformation.getDevice();
+        mDevice = testInformation.getDevice();
+        setUserToSwitchToMainUserWhenSystemUserIsNotSwitchable();
 
-        mPreExecutionCurrentUser = device.getCurrentUser();
-        Map<Integer, UserInfo> userInfos = device.getUserInfos();
+        mPreExecutionCurrentUser = mDevice.getCurrentUser();
+        Map<Integer, UserInfo> userInfos = mDevice.getUserInfos();
 
         if (userInfos
                 .get(mPreExecutionCurrentUser)
@@ -64,10 +67,10 @@ public class SwitchUserTargetPreparer extends BaseTargetPreparer {
                 CLog.i(
                         "User %d is user type %s, switching from %d",
                         userInfo.userId(), mUserToSwitchTo.toString(), mPreExecutionCurrentUser);
-                if (!device.switchUser(userInfo.userId())) {
+                if (!mDevice.switchUser(userInfo.userId())) {
                     throw new TargetSetupError(
                             String.format("Device failed to switch to user %d", userInfo.userId()),
-                            device.getDeviceDescriptor());
+                            mDevice.getDeviceDescriptor());
                 }
                 return;
             }
@@ -77,7 +80,7 @@ public class SwitchUserTargetPreparer extends BaseTargetPreparer {
                 String.format(
                         "Failed switch to user type %s, no user of that type exists",
                         mUserToSwitchTo),
-                device.getDeviceDescriptor());
+                mDevice.getDeviceDescriptor());
     }
 
     @Override
@@ -88,6 +91,20 @@ public class SwitchUserTargetPreparer extends BaseTargetPreparer {
             CLog.d("Successfully switched back to user id: %d", mPreExecutionCurrentUser);
         } else {
             CLog.w("Could not switch back to the user id: %d", mPreExecutionCurrentUser);
+        }
+    }
+
+    /**
+     * In some form factors running on headless system user mode, it is restricted to switch to the
+     * {@link UserInfo.UserType#SYSTEM SYSTEM} user. In such cases, change the {@link
+     * #mUserToSwitchTo} to the {@link UserInfo.UserType#MAIN MAIN} user.
+     */
+    private void setUserToSwitchToMainUserWhenSystemUserIsNotSwitchable()
+            throws DeviceNotAvailableException {
+        if (UserInfo.UserType.SYSTEM.equals(mUserToSwitchTo)
+                && mDevice.isHeadlessSystemUserMode()
+                && !mDevice.canSwitchToHeadlessSystemUser()) {
+            mUserToSwitchTo = UserInfo.UserType.MAIN;
         }
     }
 }
