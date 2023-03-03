@@ -36,7 +36,7 @@ public class VisibleBackgroundUserPreparer extends BaseTargetPreparer {
     @VisibleForTesting public static final int DEFAULT_DISPLAY = 0; // same as android.view.Display
 
     // Needed when running tests on background user on visible display
-    @VisibleForTesting protected static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
+    @VisibleForTesting static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
     @Option(
             name = "reuse-test-user",
@@ -60,7 +60,7 @@ public class VisibleBackgroundUserPreparer extends BaseTargetPreparer {
         }
         CLog.i("setUp(): mReuseTestUser=%b, mDisplayId=%d", mReuseTestUser, mDisplayId);
 
-        mUserId = UserCreationHelper.createUser(device, mReuseTestUser);
+        mUserId = UserCreationHelper.createUser(device, mReuseTestUser, /* provisionUser= */ true);
 
         startUserVisibleOnBackground(testInfo, device, mUserId);
 
