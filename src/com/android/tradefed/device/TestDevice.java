@@ -1411,6 +1411,21 @@ public class TestDevice extends NativeDevice {
                 : getBooleanProperty("ro.fw.mu.headless_system_user", false);
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("canSwitchToHeadlessSystemUser", 34);
+        return executeShellV2CommandThatReturnsBoolean(
+                "cmd user can-switch-to-headless-system-user");
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("isMainUserPermanentAdmin", 34);
+        return executeShellV2CommandThatReturnsBoolean("cmd user is-main-user-permanent-admin");
+    }
+
     /**
      * {@inheritDoc}
      */
