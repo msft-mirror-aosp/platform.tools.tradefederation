@@ -318,7 +318,7 @@ public class InstrumentationTestTest {
                 (RemoteAndroidTestRunner)
                         mInstrumentationTest.createRemoteAndroidTestRunner(
                                 "", "", mMockIDevice, mTestInfo);
-        assertThat(runner.getRunOptions()).contains("--instrument-sdk-sandbox");
+        assertThat(runner.getRunOptions()).contains("--instrument-sdk-in-sandbox");
     }
 
     /** Test normal run scenario with a test class specified. */
