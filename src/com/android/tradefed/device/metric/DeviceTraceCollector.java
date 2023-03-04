@@ -34,28 +34,24 @@ import java.util.Map;
  * Collector that will start perfetto trace when a test run starts and log trace file at the end.
  */
 public class DeviceTraceCollector extends BaseDeviceMetricCollector {
-    private static final String NAME_FORMAT = "device-trace_%s_";
+    // Format of the trace name should be: device-trace_<device-serial>_<trace-count>_<event-name>.
+    private static final String NAME_FORMAT = "device-trace_%s_%d_%s";
     private PerfettoTraceRecorder mPerfettoTraceRecorder = new PerfettoTraceRecorder();
     // package name for an instrumentation test, null otherwise.
     private String mInstrumentationPkgName;
+
+    private Map<ITestDevice, Integer> mTraceCountMap = new LinkedHashMap<>();
+
+    public DeviceTraceCollector() {
+        setDisableReceiver(false);
+    }
 
     @Override
     public void extraInit(IInvocationContext context, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         super.extraInit(context, listener);
         for (ITestDevice device : getRealDevices()) {
-            try {
-                Map<String, String> extraConfigs = new LinkedHashMap<>();
-                if (mInstrumentationPkgName != null) {
-                    extraConfigs.put(
-                            "atrace_apps", String.format("\"%s\"", mInstrumentationPkgName));
-                }
-                mPerfettoTraceRecorder.startTrace(device, extraConfigs);
-            } catch (IOException e) {
-                CLog.d(
-                        "Failed to start perfetto trace on %s with error: %s",
-                        device.getSerialNumber(), e.getMessage());
-            }
+            startTraceOnDevice(device);
         }
     }
 
@@ -63,24 +59,61 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
     public void onTestRunEnd(
             DeviceMetricData runData, Map<String, MetricMeasurement.Metric> currentRunMetrics)
             throws DeviceNotAvailableException {
-        logTraceFile();
+        for (ITestDevice device : getRealDevices()) {
+            logTraceFileFromDevice(device, "testRunEnded");
+        }
     }
 
-    private void logTraceFile() {
-        for (ITestDevice device : getRealDevices()) {
-            File traceFile = mPerfettoTraceRecorder.stopTrace(device);
-            if (traceFile == null) {
-                CLog.d("Failed to collect device trace from %s.", device.getSerialNumber());
-                continue;
+    private void startTraceOnDevice(ITestDevice device) {
+        // count should be increased even if no trace file collected to make missing traces visible.
+        mTraceCountMap.put(device, mTraceCountMap.getOrDefault(device, 0) + 1);
+        try {
+            Map<String, String> extraConfigs = new LinkedHashMap<>();
+            if (mInstrumentationPkgName != null) {
+                extraConfigs.put("atrace_apps", String.format("\"%s\"", mInstrumentationPkgName));
             }
-            String name = String.format(NAME_FORMAT, device.getSerialNumber());
-            try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
-                super.testLog(name, LogDataType.PERFETTO, source);
-            }
+            mPerfettoTraceRecorder.startTrace(device, extraConfigs);
+        } catch (IOException e) {
+            CLog.d(
+                    "Failed to start perfetto trace on %s trace-count:%d with error: %s",
+                    device.getSerialNumber(), mTraceCountMap.get(device), e.getMessage());
+        }
+    }
+
+    private void logTraceFileFromDevice(ITestDevice device, String eventName) {
+        File traceFile = mPerfettoTraceRecorder.stopTrace(device);
+        if (traceFile == null) {
+            CLog.d(
+                    "Failed to collect device trace from %s on event:%s trace-count:%d.",
+                    device.getSerialNumber(), eventName, mTraceCountMap.get(device));
+            return;
+        }
+        String name =
+                String.format(
+                        NAME_FORMAT,
+                        device.getSerialNumber(),
+                        mTraceCountMap.get(device),
+                        eventName);
+        try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
+            super.testLog(name, LogDataType.PERFETTO, source);
         }
     }
 
     public void setInstrumentationPkgName(String packageName) {
         mInstrumentationPkgName = packageName;
+    }
+
+    @Override
+    public void rebootStarted(ITestDevice device) throws DeviceNotAvailableException {
+        super.rebootStarted(device);
+        // save previous trace running on this device.
+        logTraceFileFromDevice(device, "rebootStarted");
+    }
+
+    @Override
+    public void rebootEnded(ITestDevice device) throws DeviceNotAvailableException {
+        super.rebootEnded(device);
+        // start new trace running on this device
+        startTraceOnDevice(device);
     }
 }
