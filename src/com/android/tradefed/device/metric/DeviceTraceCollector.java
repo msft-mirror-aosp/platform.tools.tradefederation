@@ -41,6 +41,8 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
     private String mInstrumentationPkgName;
 
     private Map<ITestDevice, Integer> mTraceCountMap = new LinkedHashMap<>();
+    // Map of trace files and the proper name it should be logged with
+    private Map<File, String> mTraceFilesMap = new LinkedHashMap();
 
     public DeviceTraceCollector() {
         setDisableReceiver(false);
@@ -60,8 +62,9 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
             DeviceMetricData runData, Map<String, MetricMeasurement.Metric> currentRunMetrics)
             throws DeviceNotAvailableException {
         for (ITestDevice device : getRealDevices()) {
-            logTraceFileFromDevice(device, "testRunEnded");
+            collectTraceFileFromDevice(device, "testRunEnded");
         }
+        logTraceFiles();
     }
 
     private void startTraceOnDevice(ITestDevice device) {
@@ -80,7 +83,7 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
         }
     }
 
-    private void logTraceFileFromDevice(ITestDevice device, String eventName) {
+    private void collectTraceFileFromDevice(ITestDevice device, String eventName) {
         File traceFile = mPerfettoTraceRecorder.stopTrace(device);
         if (traceFile == null) {
             CLog.d(
@@ -94,8 +97,14 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
                         device.getSerialNumber(),
                         mTraceCountMap.get(device),
                         eventName);
-        try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
-            super.testLog(name, LogDataType.PERFETTO, source);
+        mTraceFilesMap.put(traceFile, name);
+    }
+
+    private void logTraceFiles() {
+        for (Map.Entry<File, String> entry : mTraceFilesMap.entrySet()) {
+            try (FileInputStreamSource source = new FileInputStreamSource(entry.getKey(), true)) {
+                super.testLog(entry.getValue(), LogDataType.PERFETTO, source);
+            }
         }
     }
 
@@ -107,7 +116,7 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
     public void rebootStarted(ITestDevice device) throws DeviceNotAvailableException {
         super.rebootStarted(device);
         // save previous trace running on this device.
-        logTraceFileFromDevice(device, "rebootStarted");
+        collectTraceFileFromDevice(device, "rebootStarted");
     }
 
     @Override
