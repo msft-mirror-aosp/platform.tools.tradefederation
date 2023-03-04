@@ -80,10 +80,8 @@ public class PerfettoTraceRecorder {
                     PerfettoTraceRecorder.class.getResourceAsStream(
                             "/perfetto/record_android_trace");
             FileUtil.writeToFile(script, perfettoExecutable);
-            deviceTraceMetadata.setPerfettoScript(perfettoExecutable, true);
-        } else {
-            deviceTraceMetadata.setPerfettoScript(perfettoExecutable, false);
         }
+        deviceTraceMetadata.setPerfettoScript(perfettoExecutable, false);
 
         // Make the script executable
         RunUtil.getDefault()
