@@ -4814,6 +4814,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
+    @Override
+    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
     /** {@inheritDoc} */
     @Override
     public int createUserNoThrow(String name) throws DeviceNotAvailableException {
