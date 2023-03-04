@@ -100,6 +100,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -248,6 +249,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private File mUnpackedFastbootDir = null;
     // Connection for the device.
     private final AbstractConnection mConnection;
+    private List<IDeviceActionReceiver> mDeviceActionReceivers = new LinkedList<>();
+    /**
+     * Whether callback for reboot is currently executing or not. Use this flag to avoid dead loop
+     * scenarios like calling reboot inside a callback happening for reboot.
+     */
+    private boolean inRebootCallback = false;
 
     /**
      * Interface for a generic device communication attempt.
@@ -258,13 +265,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
          * Execute the device operation.
          *
          * @return <code>true</code> if operation is performed successfully, <code>false</code>
-         *         otherwise
+         *     otherwise
          * @throws IOException, TimeoutException, AdbCommandRejectedException,
-         *         ShellCommandUnresponsiveException, InstallException,
-         *         SyncException if operation terminated abnormally
+         *     ShellCommandUnresponsiveException, InstallException, SyncException if operation
+         *     terminated abnormally
          */
-        public boolean run() throws IOException, TimeoutException, AdbCommandRejectedException,
-                ShellCommandUnresponsiveException, InstallException, SyncException;
+        public boolean run()
+                throws IOException, TimeoutException, AdbCommandRejectedException,
+                        ShellCommandUnresponsiveException, InstallException, SyncException,
+                        DeviceNotAvailableException;
     }
 
     /**
@@ -389,7 +398,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
 
         @Override
-        public boolean run() throws TimeoutException, IOException, AdbCommandRejectedException {
+        public boolean run()
+                throws TimeoutException, IOException, AdbCommandRejectedException,
+                        DeviceNotAvailableException {
+            // Notify of reboot started for all modes
+            notifyRebootStarted();
             getIDevice().reboot(mRebootMode.formatRebootCommand(mReason));
             return true;
         }
@@ -1560,6 +1573,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DOES_FILE_EXISTS_COUNT, 1);
         }
+    }
+
+    @Override
+    public void registerDeviceActionReceiver(IDeviceActionReceiver deviceActionReceiver) {
+        mDeviceActionReceivers.add(deviceActionReceiver);
+    }
+
+    @Override
+    public void deregisterDeviceActionReceiver(IDeviceActionReceiver deviceActionReceiver) {
+        mDeviceActionReceivers.remove(deviceActionReceiver);
     }
 
     /** {@inheritDoc} */
@@ -3566,6 +3589,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public void rebootIntoBootloader()
             throws DeviceNotAvailableException, UnsupportedOperationException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot into Bootloader");
+            return;
+        }
         rebootIntoFastbootInternal(true);
     }
 
@@ -3573,6 +3602,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public void rebootIntoFastbootd()
             throws DeviceNotAvailableException, UnsupportedOperationException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot into Fastbootd");
+            return;
+        }
         rebootIntoFastbootInternal(false);
     }
 
@@ -3667,7 +3702,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void reboot(@Nullable String reason) throws DeviceNotAvailableException {
-        rebootUntilOnline(reason);
+        if (isInRebootCallback()) {
+            CLog.d("'%s' action is disabled during reboot callback. Ignoring.", "Reboot");
+            return;
+        }
+        internalRebootUntilOnline(reason);
 
         RecoveryMode cachedRecoveryMode = getRecoveryMode();
         setRecoveryMode(RecoveryMode.ONLINE);
@@ -3684,10 +3723,17 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
         postBootSetup();
         postBootWifiSetup();
+        // notify of reboot end here. Full reboots will end here as well as reboots from Bootloader
+        // or Fastboot mode.
+        notifyRebootEnded();
     }
 
     @Override
     public void rebootUserspace() throws DeviceNotAvailableException {
+        if (isInRebootCallback()) {
+            CLog.d("'%s' action is disabled during reboot callback. Ignoring.", "Reboot Userspace");
+            return;
+        }
         rebootUserspaceUntilOnline();
 
         RecoveryMode cachedRecoveryMode = getRecoveryMode();
@@ -3709,12 +3755,45 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     @Override
     public void rebootUntilOnline() throws DeviceNotAvailableException {
-        rebootUntilOnline(null);
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot Until Online");
+            return;
+        }
+        try {
+            internalRebootUntilOnline(null);
+        } finally {
+            if (!mDeviceActionReceivers.isEmpty()) {
+                CLog.d(
+                        "DeviceActionReceivers were not notified after rebootUntilOnline on %s.",
+                        getSerialNumber());
+            }
+        }
     }
 
     /** {@inheritDoc} */
     @Override
     public void rebootUntilOnline(@Nullable String reason) throws DeviceNotAvailableException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot Until Online");
+            return;
+        }
+        try {
+            internalRebootUntilOnline(reason);
+        } finally {
+            if (!mDeviceActionReceivers.isEmpty()) {
+                CLog.d(
+                        "DeviceActionReceivers were not notified after rebootUntilOnline on %s.",
+                        getSerialNumber());
+            }
+        }
+    }
+
+    private void internalRebootUntilOnline(@Nullable String reason)
+            throws DeviceNotAvailableException {
         long rebootStart = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("rebootUntilOnline")) {
             doReboot(RebootMode.REBOOT_FULL, reason);
@@ -3733,6 +3812,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     @Override
     public void rebootUserspaceUntilOnline() throws DeviceNotAvailableException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot Userspace Until Online");
+            return;
+        }
         doReboot(RebootMode.REBOOT_USERSPACE, null);
         RecoveryMode cachedRecoveryMode = getRecoveryMode();
         setRecoveryMode(RecoveryMode.ONLINE);
@@ -3746,10 +3831,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public void rebootIntoRecovery() throws DeviceNotAvailableException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot into Recovery");
+            return;
+        }
         if (isStateBootloaderOrFastbootd()) {
             CLog.w("device %s in fastboot when requesting boot to recovery. " +
                     "Rebooting to userspace first.", getSerialNumber());
-            rebootUntilOnline();
+            internalRebootUntilOnline(null);
         }
         doAdbReboot(RebootMode.REBOOT_INTO_RECOVERY, null);
         if (!waitForDeviceInRecovery(mOptions.getAdbRecoveryTimeout())) {
@@ -3766,12 +3857,18 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void rebootIntoSideload(boolean autoReboot) throws DeviceNotAvailableException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot into Sideload");
+            return;
+        }
         if (isStateBootloaderOrFastbootd()) {
             CLog.w(
                     "device %s in fastboot when requesting boot to sideload. "
                             + "Rebooting to userspace first.",
                     getSerialNumber());
-            rebootUntilOnline();
+            internalRebootUntilOnline(null);
         }
         final RebootMode rebootMode;
         if (autoReboot) {
@@ -3791,7 +3888,21 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public void nonBlockingReboot() throws DeviceNotAvailableException {
-        doReboot(RebootMode.REBOOT_FULL, null);
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Non Blocking Reboot");
+            return;
+        }
+        try {
+            doReboot(RebootMode.REBOOT_FULL, null);
+        } finally {
+            if (!mDeviceActionReceivers.isEmpty()) {
+                CLog.d(
+                        "DeviceActionReceivers were not notified after nonBlockingReboot on %s.",
+                        getSerialNumber());
+            }
+        }
     }
 
     /**
@@ -5182,6 +5293,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         mExecuteShellCommandLogs = null;
         FileUtil.recursiveDelete(mUnpackedFastbootDir);
         getConnection().tearDownConnection();
+        mDeviceActionReceivers.clear();
         // Default implementation
         if (getIDevice() instanceof StubDevice) {
             return;
@@ -5961,5 +6073,58 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** The current connection associated with the device. */
     protected AbstractConnection getConnection() {
         return mConnection;
+    }
+    /**
+     * Notifies all {@link IDeviceActionReceiver} about reboot start event.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    protected void notifyRebootStarted() throws DeviceNotAvailableException {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("rebootStartedCallbacks")) {
+            for (IDeviceActionReceiver dar : mDeviceActionReceivers) {
+                try {
+                    inRebootCallback = true;
+                    dar.rebootStarted(this);
+                } catch (DeviceNotAvailableException dnae) {
+                    inRebootCallback = false;
+                    throw dnae;
+                } catch (Exception e) {
+                    logDeviceActionException("notifyRebootStarted", e, true);
+                } finally {
+                    inRebootCallback = false;
+                }
+            }
+        }
+    }
+
+    /**
+     * Notifies all {@link IDeviceActionReceiver} about reboot end event.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    protected void notifyRebootEnded() throws DeviceNotAvailableException {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("rebootEndedCallbacks")) {
+            for (IDeviceActionReceiver dar : mDeviceActionReceivers) {
+                try {
+                    inRebootCallback = true;
+                    dar.rebootEnded(this);
+                } catch (DeviceNotAvailableException dnae) {
+                    inRebootCallback = false;
+                    throw dnae;
+                } catch (Exception e) {
+                    logDeviceActionException("notifyRebootEnded", e, true);
+                } finally {
+                    inRebootCallback = false;
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns whether reboot callbacks is currently being executed or not. All public api's for
+     * reboot should be disabled if true.
+     */
+    protected boolean isInRebootCallback() {
+        return inRebootCallback;
     }
 }
