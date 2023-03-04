@@ -356,6 +356,9 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         }
         // De-duplicate test infos so that there won't be duplicate test options.
         testInfos = dedupTestInfos(configFile, testInfos);
+        if (testInfos.size() > 1) {
+            moduleConfig.getConfigurationDescription().setIRemoteTestShardable(false);
+        }
 
         for (TestInfo testInfo : testInfos) {
             // Clean up all the test options injected in SuiteModuleLoader.
