@@ -637,7 +637,7 @@ public class InstrumentationTest
                         .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
                         .map(value -> Boolean.TRUE.toString().equals(value))
                         .orElse(false)) {
-            runOptions += "--instrument-sdk-sandbox ";
+            runOptions += "--instrument-sdk-in-sandbox ";
         }
 
         if (abiName != null && getDevice().getApiLevel() > 20) {

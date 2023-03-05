@@ -1061,6 +1061,7 @@ public class TestDevice extends NativeDevice {
                     CLog.v("framework reboot: can't detect framework running");
                     return false;
                 }
+                notifyRebootStarted();
                 String command = "svc power reboot " + rebootMode.formatRebootCommand(reason);
                 CommandResult result = executeShellV2Command(command);
                 if (result.getStdout().contains(EARLY_REBOOT)
@@ -1068,6 +1069,8 @@ public class TestDevice extends NativeDevice {
                     CLog.e(
                             "Reboot was called too early: stdout: %s.\nstderr: %s.",
                             result.getStdout(), result.getStderr());
+                    // notify of this reboot end, since reboot will be retried again at later stage.
+                    notifyRebootEnded();
                     return false;
                 }
             } catch (DeviceUnresponsiveException due) {
@@ -1409,6 +1412,21 @@ public class TestDevice extends NativeDevice {
         return checkApiLevelAgainstNextRelease(34)
                 ? executeShellV2CommandThatReturnsBoolean("cmd user is-headless-system-user-mode")
                 : getBooleanProperty("ro.fw.mu.headless_system_user", false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("canSwitchToHeadlessSystemUser", 34);
+        return executeShellV2CommandThatReturnsBoolean(
+                "cmd user can-switch-to-headless-system-user");
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("isMainUserPermanentAdmin", 34);
+        return executeShellV2CommandThatReturnsBoolean("cmd user is-main-user-permanent-admin");
     }
 
     /**

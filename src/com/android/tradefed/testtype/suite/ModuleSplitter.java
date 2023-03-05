@@ -124,6 +124,22 @@ public class ModuleSplitter {
         // Get rid of the IRemoteTest reference on the shared configuration. It will not be used
         // to run.
         config.setTests(new ArrayList<>());
+
+        if (config.getConfigurationDescription().isNotIRemoteTestShardable()) {
+            // If it cannot be sharded at all, then put all the tests together.
+            ModuleDefinition module =
+                    new ModuleDefinition(
+                            moduleName,
+                            tests,
+                            clonePreparersMap(config),
+                            clonePreparersMap(suitePreparersPerDevice),
+                            clonePreparers(config.getMultiTargetPreparers()),
+                            config);
+            currentList.add(module);
+            clearPreparersFromConfig(config);
+            return;
+        }
+
         // If this particular configuration module is declared as 'not shardable' we take it whole
         // but still split the individual IRemoteTest in a pool.
         if (!intraModuleSharding

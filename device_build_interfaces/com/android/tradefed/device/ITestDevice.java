@@ -702,6 +702,15 @@ public interface ITestDevice extends INativeDevice {
     /** Returns whether the device uses headless system user mode. */
     public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException;
 
+    /** Returns whether it's allowed to switch to the headless SYSTEM user. */
+    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException;
+
+    /**
+     * Returns whether the main user is a permanent admin and can't be deleted or downgraded to
+     * non-admin status.
+     */
+    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException;
+
     /**
      * Create a user with a given name and default flags 0.
      *
@@ -1122,4 +1131,21 @@ public interface ITestDevice extends INativeDevice {
      */
     public boolean doesFileExist(String deviceFilePath, int userId)
             throws DeviceNotAvailableException;
+
+    /**
+     * Registers a {@link IDeviceActionReceiver} for this device.
+     *
+     * <p>All registered {@link IDeviceActionReceiver}s will be notified before a device action
+     * starts and after the device action ends.
+     *
+     * @param deviceActionReceiver A {@link IDeviceActionReceiver} which will be registered.
+     */
+    public void registerDeviceActionReceiver(IDeviceActionReceiver deviceActionReceiver);
+
+    /**
+     * Removes the registered {@link IDeviceActionReceiver}.
+     *
+     * @param deviceActionReceiver A {@link IDeviceActionReceiver} which will be removed.
+     */
+    public void deregisterDeviceActionReceiver(IDeviceActionReceiver deviceActionReceiver);
 }
