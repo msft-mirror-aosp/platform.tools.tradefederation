@@ -80,6 +80,12 @@ public final class CoverageOptions {
                             + " \"foo.*\\.profraw\".  Default: \".*\\.profraw\"")
     private String mProfrawFilter = ".*\\.profraw";
 
+    @Option(
+            name = "pull-timeout",
+            isTimeVal = true,
+            description = "Timeout in milliseconds to pull coverage metrics from the device.")
+    private long mPullTimeout = 20 * 60 * 1000;
+
     /**
      * Returns whether coverage measurements should be collected from this run.
      *
@@ -149,5 +155,14 @@ public final class CoverageOptions {
      */
     public String getProfrawFilter() {
         return mProfrawFilter;
+    }
+
+    /**
+     * Returns the timeout in milliseconds for pulling coverage metrics from the device.
+     *
+     * @return a {@link long} as timeout in milliseconds.
+     */
+    public long getPullTimeout() {
+        return mPullTimeout;
     }
 }

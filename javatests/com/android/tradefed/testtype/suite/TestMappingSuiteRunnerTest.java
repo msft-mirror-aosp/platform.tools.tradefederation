@@ -775,20 +775,34 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#dedupTestInfos(Set)} that tests with the same test
-     * options would be filtered out.
+     * Test for {@link TestMappingSuiteRunner#dedupTestInfos(File, Set)} that tests with the same
+     * test options would be filtered out.
      */
     @Test
     public void testDedupTestInfos() throws Exception {
         Set<TestInfo> testInfos = new HashSet<>();
         testInfos.add(createTestInfo("test", "path"));
         testInfos.add(createTestInfo("test", "path2"));
-        assertEquals(1, mRunner.dedupTestInfos(testInfos).size());
+        assertEquals(1, mRunner.dedupTestInfos(new File("anything"), testInfos).size());
 
         TestInfo anotherInfo = new TestInfo("test", "folder3", false);
         anotherInfo.addOption(new TestOption("include-filter", "value1"));
         testInfos.add(anotherInfo);
-        assertEquals(2, mRunner.dedupTestInfos(testInfos).size());
+        assertEquals(2, mRunner.dedupTestInfos(new File("anything"), testInfos).size());
+
+        // Aggregate the test-mapping sources with the same test options.
+        TestInfo anotherInfo2 = new TestInfo("test", "folder4", false);
+        anotherInfo2.addOption(new TestOption("include-filter", "value1"));
+        TestInfo anotherInfo3 = new TestInfo("test", "folder5", false);
+        anotherInfo3.addOption(new TestOption("include-filter", "value1"));
+        testInfos.clear();
+        testInfos = new HashSet<>(Arrays.asList(anotherInfo, anotherInfo2, anotherInfo3));
+        Set<TestInfo> dedupTestInfos = mRunner.dedupTestInfos(new File("anything"), testInfos);
+        assertEquals(1, dedupTestInfos.size());
+        TestInfo dedupTestInfo = dedupTestInfos.iterator().next();
+        Set<String> expected_sources =
+                new HashSet<>(Arrays.asList("folder3", "folder4", "folder5"));
+        assertEquals(expected_sources, dedupTestInfo.getSources());
     }
 
     /**

@@ -46,6 +46,7 @@ import com.android.tradefed.retry.RetryStatistics;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestCollector;
 import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -98,6 +99,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
 
     // Tracking of the metrics
     private RetryStatistics mRetryStats = null;
+    private int mCountRetryUsed = 0;
 
     public GranularRetriableTestWrapper(
             IRemoteTest test,
@@ -117,7 +119,11 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             int maxRunLimit) {
         mTest = test;
         mModule = module;
-        initializeGranularRunListener(mainListener);
+        IInvocationContext context = null;
+        if (module != null) {
+            context = module.getModuleInvocationContext();
+        }
+        initializeGranularRunListener(mainListener, context);
         mFailureListener = failureListener;
         mModuleLevelListeners = moduleLevelListeners;
         mMaxRunLimit = maxRunLimit;
@@ -187,14 +193,14 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     }
 
     /**
-     * Initialize granular run listener with {@link RemoteTestTimeOutEnforcer} if timeout is
-     * set.
+     * Initialize granular run listener with {@link RemoteTestTimeOutEnforcer} if timeout is set.
      *
      * @param listener The listener for each test run should be wrapped.
-     *
+     * @param moduleContext the invocation context of the module
      */
-    private void initializeGranularRunListener(ITestInvocationListener listener) {
-        mMainGranularRunListener = new ModuleListener(listener);
+    private void initializeGranularRunListener(
+            ITestInvocationListener listener, IInvocationContext moduleContext) {
+        mMainGranularRunListener = new ModuleListener(listener, moduleContext);
         if (mModule != null) {
             ConfigurationDescriptor configDesc =
                     mModule.getModuleInvocationContext().getConfigurationDescriptor();
@@ -306,6 +312,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
                     }
                 }
                 firstCheck = false;
+                mCountRetryUsed++;
                 CLog.d("Intra-module retry attempt number %s", attemptNumber);
                 // Run the tests again
                 intraModuleRun(testInfo, allListeners, attemptNumber);
@@ -436,6 +443,10 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
         return mMainGranularRunListener;
     }
 
+    public int getRetryCount() {
+        return mCountRetryUsed;
+    }
+
     @Override
     public void setCollectTestsOnly(boolean shouldCollectTest) {
         mCollectTestsOnly = shouldCollectTest;
@@ -444,7 +455,9 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     private FailureDescription createFromException(Throwable exception) {
         String message =
                 (exception.getMessage() == null)
-                        ? String.format("No error message reported for: %s", exception)
+                        ? String.format(
+                                "No error message reported for: %s",
+                                StreamUtil.getStackTrace(exception))
                         : exception.getMessage();
         FailureDescription failure =
                 CurrentInvocation.createFailure(message, null).setCause(exception);

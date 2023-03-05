@@ -23,6 +23,7 @@ import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
@@ -318,11 +319,14 @@ public class GceManager {
                             InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE);
                 }
             }
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.CF_OXYGEN_SESSION_ID, oxygenDeviceInfo.instanceName());
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.CF_OXYGEN_SERVER_URL,
-                    oxygenDeviceInfo.hostAndPort().getHost());
+            // Lease may timeout and skip logging metrics if host is not set.
+            if (oxygenDeviceInfo.hostAndPort() != null) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_OXYGEN_SESSION_ID, oxygenDeviceInfo.instanceName());
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_OXYGEN_SERVER_URL,
+                        oxygenDeviceInfo.hostAndPort().getHost());
+            }
             return oxygenDeviceInfo;
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
@@ -953,6 +957,30 @@ public class GceManager {
             remoteFile =
                     RemoteFileUtil.fetchRemoteDir(
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
+
+            // Search log files for known failures for devices hosted by Oxygen
+            if (options.useOxygenProxy()) {
+                try (CloseableTraceScope ignore =
+                        new CloseableTraceScope("avd:collectErrorSignature")) {
+                    List<String> signatures = OxygenUtil.collectErrorSignatures(remoteFile);
+                    if (signatures.size() > 0) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.DEVICE_ERROR_SIGNATURES,
+                                String.join(",", signatures));
+                    }
+                }
+                try (CloseableTraceScope ignore =
+                        new CloseableTraceScope("avd:collectDeviceLaunchMetrics")) {
+                    long[] launchMetrics = OxygenUtil.collectDeviceLaunchMetrics(remoteFile);
+                    if (launchMetrics[0] > 0) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.CF_FETCH_ARTIFACT_TIME, launchMetrics[0]);
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.CF_LAUNCH_CVD_TIME, launchMetrics[1]);
+                    }
+                }
+            }
+
             // Default files under a directory to be CUTTLEFISH_LOG to avoid compression.
             type = LogDataType.CUTTLEFISH_LOG;
             if (remoteFile != null) {

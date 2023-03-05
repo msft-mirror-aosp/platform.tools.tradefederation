@@ -21,6 +21,7 @@ import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
@@ -180,7 +181,7 @@ public class DeviceJUnit4ClassRunner extends BlockJUnit4ClassRunner
     }
 
     private Set<File> resolveRemoteFileForObject(Object obj) {
-        try {
+        try (CloseableTraceScope ignore = new CloseableTraceScope("junit4:resolveRemoteFiles")) {
             OptionSetter setter = new OptionSetter(obj);
             return setter.validateRemoteFilePath(createResolver());
         } catch (BuildRetrievalError | ConfigurationException e) {

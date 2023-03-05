@@ -119,7 +119,7 @@ public class TestRunResult {
     }
 
     /** Gets the set of tests in given statuses. */
-    private Set<TestDescription> getTestsInState(List<TestStatus> statuses) {
+    public Set<TestDescription> getTestsInState(List<TestStatus> statuses) {
         Set<TestDescription> tests = new LinkedHashSet<>();
         for (Map.Entry<TestDescription, TestResult> testEntry : getTestResults().entrySet()) {
             TestStatus status = testEntry.getValue().getStatus();

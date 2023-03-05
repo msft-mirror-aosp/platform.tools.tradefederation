@@ -70,21 +70,20 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
     public static final String COMPRESS_COVERAGE_FILES =
             String.format("%s | tar -czf - -T - 2>/dev/null", FIND_COVERAGE_FILES);
 
-    // Timeout for pulling coverage files from the device, in minutes.
-    private static final long TIMEOUT_MINUTES = 20;
-
     private ExecFileLoader mExecFileLoader;
 
     private JavaCodeCoverageFlusher mFlusher;
     private IConfiguration mConfiguration;
+    // Timeout for pulling coverage files from the device, in milliseconds.
+    private long mTimeoutMilli = 20 * 60 * 1000;
 
     @Override
-    public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener)
+    public void extraInit(IInvocationContext context, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        super.init(context, listener);
+        super.extraInit(context, listener);
 
         verifyNotNull(mConfiguration);
+        setCoverageOptions(mConfiguration.getCoverageOptions());
 
         if (isJavaCoverageEnabled()
                 && mConfiguration.getCoverageOptions().shouldResetCoverageBeforeTest()) {
@@ -94,8 +93,6 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                 }
             }
         }
-
-        return this;
     }
 
     @Override
@@ -170,8 +167,8 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                                     COMPRESS_COVERAGE_FILES,
                                     null,
                                     out,
-                                    TIMEOUT_MINUTES,
-                                    TimeUnit.MINUTES,
+                                    mTimeoutMilli,
+                                    TimeUnit.MILLISECONDS,
                                     1);
                     if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
                         CLog.e(
@@ -292,5 +289,9 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
 
     private boolean shouldMergeCoverage() {
         return mConfiguration != null && mConfiguration.getCoverageOptions().shouldMergeCoverage();
+    }
+
+    private void setCoverageOptions(CoverageOptions coverageOptions) {
+        mTimeoutMilli = coverageOptions.getPullTimeout();
     }
 }

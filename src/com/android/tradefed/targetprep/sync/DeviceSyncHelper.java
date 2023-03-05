@@ -16,19 +16,21 @@
 package com.android.tradefed.targetprep.sync;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
-import com.android.tradefed.device.IFileEntry;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.RunUtil;
 
+import com.google.common.collect.ImmutableSet;
+
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -39,6 +41,10 @@ public class DeviceSyncHelper {
 
     private final ITestDevice mDevice;
     private final File mTargetFilesFolder;
+
+    // Partitions known by adb in "adb sync"
+    private static final Set<String> ADB_PARTITIONS =
+            ImmutableSet.of("data", "odm", "oem", "product", "system", "system_ext", "vendor");
 
     public DeviceSyncHelper(ITestDevice device, File targetFilesFolder) {
         mDevice = device;
@@ -62,7 +68,7 @@ public class DeviceSyncHelper {
     private Set<String> getPartitions(File rootFolder) throws IOException {
         File abPartitions = new File(rootFolder, "META/ab_partitions.txt");
         String partitionString = FileUtil.readStringFromFile(abPartitions);
-        return new HashSet<>(Arrays.asList(partitionString.split("\n")));
+        return new LinkedHashSet<>(Arrays.asList(partitionString.split("\n")));
     }
 
     private void lowerCaseDirectory(File rootFolder) {
@@ -86,12 +92,28 @@ public class DeviceSyncHelper {
         device.executeAdbCommand("shell", "stop");
         RunUtil.getDefault().sleep(20000L);
 
+        device.setRecoveryMode(RecoveryMode.NONE);
+        // Use adb sync when supported
+        try (CloseableTraceScope push = new CloseableTraceScope("sync all")) {
+            Map<String, String> env = new HashMap<>();
+            env.put("ANDROID_PRODUCT_OUT", mTargetFilesFolder.getAbsolutePath());
+            String output = device.executeAdbCommand(0L, env, "sync", "all");
+            if (output == null) {
+                throw new IOException("Failed to sync all");
+            }
+            CLog.d("%s", output);
+        }
+
         for (String partition : partitions) {
             File localToPush = new File(mTargetFilesFolder, partition);
             if (!localToPush.exists()) {
                 CLog.w("%s is in the partition but doesn't exist", partition);
                 continue;
             }
+            if (ADB_PARTITIONS.contains(partition)) {
+                continue;
+            }
+            // Push after deleting to ensure shell is fine
             try (CloseableTraceScope push = new CloseableTraceScope("push " + partition)) {
                 String output =
                         device.executeAdbCommand(0L, "push", localToPush.getAbsolutePath(), "/");
@@ -99,57 +121,15 @@ public class DeviceSyncHelper {
                     throw new IOException("Failed to push " + localToPush);
                 }
             }
-            try (CloseableTraceScope delete = new CloseableTraceScope("delete_extra_files")) {
-                List<String> removeFiles = syncFiles(device, localToPush, "/" + partition);
-                CLog.d("Files to be removed from device: %s", removeFiles);
-                for (String deviceFile : removeFiles) {
-                    device.executeShellCommand(String.format("rm -rf %s", deviceFile));
-                }
-            }
         }
 
         try (CloseableTraceScope reboot = new CloseableTraceScope("reboot")) {
-            device.executeAdbCommand("reboot");
-            device.waitForDeviceAvailable();
+            String output = device.executeAdbCommand("reboot");
+            CLog.d("reboot output: %s", output);
+            device.waitForDeviceNotAvailable(30 * 1000L);
+            device.waitForDeviceAvailable(15 * 60 * 1000);
         }
         device.enableAdbRoot();
     }
 
-    private List<String> syncFiles(ITestDevice device, File localFileDir, String deviceFilePath)
-            throws DeviceNotAvailableException {
-        CLog.i(
-                "Syncing %s to %s on device %s",
-                localFileDir.getAbsolutePath(), deviceFilePath, device.getSerialNumber());
-        IFileEntry remoteFileEntry = device.getFileEntry(deviceFilePath);
-        if (remoteFileEntry == null) {
-            CLog.e("Could not find remote file entry %s ", deviceFilePath);
-            remoteFileEntry = device.getFileEntry(deviceFilePath);
-            if (remoteFileEntry == null) {
-                CLog.e(
-                        "Could not find remote file entry %s a second time. doesExist: %s",
-                        deviceFilePath, device.doesFileExist(deviceFilePath, 0));
-                return new ArrayList<String>();
-            }
-        }
-        return syncFiles(device, localFileDir, remoteFileEntry);
-    }
-
-    private List<String> syncFiles(
-            ITestDevice device, File localFileDir, final IFileEntry remoteFileEntry)
-            throws DeviceNotAvailableException {
-        // find newer files to sync
-        // File[] localFiles = localFileDir.listFiles(new NoHiddenFilesFilter());
-        List<String> filePathsToRemove = new ArrayList<>();
-        for (IFileEntry entry : remoteFileEntry.getChildren(false)) {
-            File local = new File(localFileDir, entry.getName());
-            if (!local.exists()) {
-                filePathsToRemove.add(entry.getFullPath());
-            } else {
-                if (local.isDirectory()) {
-                    filePathsToRemove.addAll(syncFiles(device, local, entry));
-                }
-            }
-        }
-        return filePathsToRemove;
-    }
 }

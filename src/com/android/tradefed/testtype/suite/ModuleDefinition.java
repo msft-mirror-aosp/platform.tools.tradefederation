@@ -132,6 +132,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String TEST_TIME = "TEST_TIME";
     public static final String MODULE_TEST_COUNT = "MODULE_TEST_COUNT";
     public static final String RETRY_TIME = "MODULE_RETRY_TIME";
+    public static final String ISOLATION_COST = "ISOLATION_COST";
     public static final String RETRY_SUCCESS_COUNT = "MODULE_RETRY_SUCCESS";
     public static final String RETRY_FAIL_COUNT = "MODULE_RETRY_FAILED";
 
@@ -515,6 +516,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         // Run the tests
         try {
             mStartTestTime = getCurrentTime();
+            int perModuleRetryQuota = mMaxRetry;
             while (true) {
                 IRemoteTest test = poll();
                 if (test == null) {
@@ -563,7 +565,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                                 failureListener,
                                 moduleLevelListeners,
                                 skipTestCases,
-                                maxRunLimit);
+                                perModuleRetryQuota);
                 mCurrentTestWrapper.setCollectTestsOnly(mCollectTestsOnly);
                 // Resolve the dynamic options for that one test.
                 preparationException =
@@ -605,6 +607,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                         // Keep track of each listener for attempts
                         mRunListenersResults.add(mCurrentTestWrapper.getResultListener());
                     }
+                    // Limit escalating retries across all sub-IRemoteTests
+                    perModuleRetryQuota -= mCurrentTestWrapper.getRetryCount();
 
                     mExpectedTests += mCurrentTestWrapper.getExpectedTestsCount();
                     // Get information about retry
@@ -811,15 +815,25 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         metricsProto.put(MODULE_TEST_COUNT, TfMetricProtoUtil.createSingleValue(numResults, "int"));
         // Report all the retry informations
         if (!mRetryStats.isEmpty()) {
-            RetryStatistics agg = RetryStatistics.aggregateStatistics(mRetryStats);
-            metricsProto.put(
-                    RETRY_TIME,
-                    TfMetricProtoUtil.createSingleValue(agg.mRetryTime, "milliseconds"));
-            metricsProto.put(
-                    RETRY_SUCCESS_COUNT,
-                    TfMetricProtoUtil.createSingleValue(agg.mRetrySuccess, ""));
-            metricsProto.put(
-                    RETRY_FAIL_COUNT, TfMetricProtoUtil.createSingleValue(agg.mRetryFailure, ""));
+            if (attempt != null) {
+                long cost = RetryStatistics.isolationCostPerAttempt(attempt, mRetryStats);
+                if (cost != 0L) {
+                    metricsProto.put(
+                            ISOLATION_COST,
+                            TfMetricProtoUtil.createSingleValue(cost, "milliseconds"));
+                }
+            } else {
+                RetryStatistics agg = RetryStatistics.aggregateStatistics(mRetryStats);
+                metricsProto.put(
+                        RETRY_TIME,
+                        TfMetricProtoUtil.createSingleValue(agg.mRetryTime, "milliseconds"));
+                metricsProto.put(
+                        RETRY_SUCCESS_COUNT,
+                        TfMetricProtoUtil.createSingleValue(agg.mRetrySuccess, ""));
+                metricsProto.put(
+                        RETRY_FAIL_COUNT,
+                        TfMetricProtoUtil.createSingleValue(agg.mRetryFailure, ""));
+            }
         }
 
         // Only report the mismatch if there were no error during the run.

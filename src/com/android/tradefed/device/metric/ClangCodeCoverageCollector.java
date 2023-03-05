@@ -34,6 +34,7 @@ import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.AdbRootElevator;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -70,9 +71,6 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
 
     private static final String NATIVE_COVERAGE_DEVICE_PATH = "/data/misc/trace";
 
-    // Timeout for pulling coverage measurements from the device, in minutes.
-    private static final long TIMEOUT = 20;
-
     // Maximum number of profile files before writing the list to a file. Beyond this value,
     // llvm-profdata will use the -f option to read the list from a file to prevent exceeding
     // the command line length limit.
@@ -91,17 +89,19 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
 
     private IConfiguration mConfiguration;
     private IRunUtil mRunUtil = RunUtil.getDefault();
+    // Timeout for pulling coverage measurements from the device, in milliseconds.
+    private long mTimeoutMilli = 20 * 60 * 1000;
     private File mLlvmProfileTool;
 
     private NativeCodeCoverageFlusher mFlusher;
 
     @Override
-    public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener)
+    public void extraInit(IInvocationContext context, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        super.init(context, listener);
+        super.extraInit(context, listener);
 
         verifyNotNull(mConfiguration);
+        setCoverageOptions(mConfiguration.getCoverageOptions());
 
         if (isClangCoverageEnabled()
                 && mConfiguration.getCoverageOptions().shouldResetCoverageBeforeTest()) {
@@ -112,8 +112,6 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
                 }
             }
         }
-
-        return this;
     }
 
     @Override
@@ -180,8 +178,8 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
                         ZIP_CLANG_FILES_COMMAND, // Command
                         null, // File pipe as input
                         out, // OutputStream to write to
-                        TIMEOUT, // Timeout in minutes
-                        TimeUnit.MINUTES, // Timeout units
+                        mTimeoutMilli, // Timeout in milliseconds
+                        TimeUnit.MILLISECONDS, // Timeout units
                         1); // Retry count
             }
 
@@ -317,5 +315,9 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
         } finally {
             FileUtil.deleteFile(profileToolZip);
         }
+    }
+
+    private void setCoverageOptions(CoverageOptions coverageOptions) {
+        mTimeoutMilli = coverageOptions.getPullTimeout();
     }
 }

@@ -39,6 +39,15 @@ public class SandboxInvocationRunner {
         return runSandbox(info, config, listener);
     }
 
+    public static void teardownSandbox(IConfiguration config) {
+        ISandbox sandbox =
+                (ISandbox) config.getConfigurationObject(Configuration.SANDBOX_TYPE_NAME);
+        if (sandbox == null) {
+            throw new RuntimeException("Couldn't find the sandbox object.");
+        }
+        sandbox.tearDown();
+    }
+
     /** Preparation step of the sandbox */
     public static void prepareSandbox(
             TestInformation info, IConfiguration config, ITestInvocationListener listener)
@@ -49,7 +58,13 @@ public class SandboxInvocationRunner {
             throw new RuntimeException("Couldn't find the sandbox object.");
         }
         PrettyPrintDelimiter.printStageDelimiter("Starting Sandbox Environment Setup");
-        Exception res = sandbox.prepareEnvironment(info.getContext(), config, listener);
+        Exception res = null;
+        try {
+            res = sandbox.prepareEnvironment(info.getContext(), config, listener);
+        } catch (RuntimeException e) {
+            sandbox.tearDown();
+            throw e;
+        }
         if (res != null) {
             CLog.w("Sandbox prepareEnvironment threw an Exception.");
             sandbox.tearDown();

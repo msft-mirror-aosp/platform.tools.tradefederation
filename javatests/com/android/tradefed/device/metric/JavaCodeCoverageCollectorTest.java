@@ -28,6 +28,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -168,6 +169,7 @@ public class JavaCodeCoverageCollectorTest {
     @Test
     public void testRunEnded_rootEnabled_logsCoverageMeasurement() throws Exception {
         enableJavaCoverage();
+        mCoverageOptionsSetter.setOptionValue("pull-timeout", "314159");
 
         // Setup mocks.
         HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
@@ -180,6 +182,16 @@ public class JavaCodeCoverageCollectorTest {
         mCodeCoverageCollector.init(mMockContext, mFakeListener);
         mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
         mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, runMetrics);
+
+        // Verify timeout is set.
+        verify(mMockDevice, times(1))
+                .executeShellV2Command(
+                        eq("find /data/misc/trace -name '*.ec' | tar -czf - -T - 2>/dev/null"),
+                        any(),
+                        any(),
+                        eq(314159L),
+                        eq(TimeUnit.MILLISECONDS),
+                        eq(1));
 
         // Verify testLog(..) was called with the coverage file.
         verify(mFakeListener)

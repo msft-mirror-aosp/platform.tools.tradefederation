@@ -72,10 +72,9 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
     private IRunUtil mRunUtil = RunUtil.getDefault();
 
     @Override
-    public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener)
+    public void extraInit(IInvocationContext context, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        super.init(context, listener);
+        super.extraInit(context, listener);
 
         if (isGcovCoverageEnabled()) {
             for (ITestDevice device : getRealDevices()) {
@@ -85,8 +84,6 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
                 }
             }
         }
-
-        return this;
     }
 
     @VisibleForTesting

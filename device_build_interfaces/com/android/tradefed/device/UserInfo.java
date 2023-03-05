@@ -30,6 +30,7 @@ public final class UserInfo {
     public static final int FLAG_EPHEMERAL = 0x00000100;
     public static final int FLAG_MANAGED_PROFILE = 0x00000020;
     public static final int USER_SYSTEM = 0;
+    public static final int FLAG_MAIN = 0x00004000;
 
     public static final int FLAGS_NOT_SECONDARY =
             FLAG_PRIMARY | FLAG_MANAGED_PROFILE | FLAG_GUEST | FLAG_RESTRICTED;
@@ -51,6 +52,11 @@ public final class UserInfo {
         PRIMARY,
         /** system user = user 0 */
         SYSTEM,
+        /**
+         * user flagged as main user on the device; on non-hsum main user = system user = user 0 on
+         * hsum main user = first human user.
+         */
+        MAIN,
         /** secondary user, i.e. non-primary and non-system. */
         SECONDARY,
         /** managed profile user, e.g. work profile. */
@@ -70,6 +76,10 @@ public final class UserInfo {
 
         public boolean isSystem() {
             return this == SYSTEM;
+        }
+
+        public boolean isMain() {
+            return this == MAIN;
         }
 
         public boolean isSecondary() {
@@ -120,6 +130,10 @@ public final class UserInfo {
         return mUserId == USER_SYSTEM;
     }
 
+    public boolean isMain() {
+        return (mFlag & FLAG_MAIN) == FLAG_MAIN;
+    }
+
     public boolean isManagedProfile() {
         return (mFlag & FLAG_MANAGED_PROFILE) == FLAG_MANAGED_PROFILE;
     }
@@ -139,6 +153,8 @@ public final class UserInfo {
                 return isPrimary();
             case SYSTEM:
                 return isSystem();
+            case MAIN:
+                return isMain();
             case SECONDARY:
                 return isSecondary();
             case MANAGED_PROFILE:
