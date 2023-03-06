@@ -195,6 +195,11 @@ public class TestDeviceOptions {
             isTimeVal = true)
     private long mBugreportzTimeout = 5 * 60 * 1000;
 
+    @Option(
+            name = "enable-device-connection",
+            description = "Use the new Connection descriptor for devices.")
+    private boolean mEnableConnectionFeature = false;
+
     // ====================== Options Related to Virtual Devices ======================
     @Option(
             name = INSTANCE_TYPE_OPTION,
@@ -917,6 +922,11 @@ public class TestDeviceOptions {
     /** Returns the timeout value to be applied to bugreportz capture. */
     public long getBugreportzTimeout() {
         return mBugreportzTimeout;
+    }
+
+    /** Return whether or not we should use the new connection feature. */
+    public boolean shouldUseConnection() {
+        return mEnableConnectionFeature;
     }
 }
 

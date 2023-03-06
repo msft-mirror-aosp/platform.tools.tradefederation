@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.device.connection;
 
+import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.util.IRunUtil;
 
 /**
@@ -27,18 +29,24 @@ public class DefaultConnection extends AbstractConnection {
 
     /** Create the requested connection. */
     public static DefaultConnection createConnection(ConnectionBuilder builder) {
+        if (builder.device != null && builder.device instanceof RemoteAndroidDevice) {
+            return new AdbTcpConnection(builder);
+        }
         return new DefaultConnection(builder);
     }
 
     /** Builder used to described the connection. */
     public static class ConnectionBuilder {
 
+        ITestDevice device;
         IRunUtil runUtil;
 
-        public ConnectionBuilder() {}
-
-        public ConnectionBuilder setRunUtil(IRunUtil runUtil) {
+        public ConnectionBuilder(IRunUtil runUtil) {
             this.runUtil = runUtil;
+        }
+
+        public ConnectionBuilder setDevice(ITestDevice device) {
+            this.device = device;
             return this;
         }
     }
