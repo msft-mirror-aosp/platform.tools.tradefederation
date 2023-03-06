@@ -859,27 +859,35 @@ public class InstrumentationTest
                 CountTestCasesCollector counter = new CountTestCasesCollector(this);
                 copyList.add(counter);
             }
-            // TODO: Convert to device-side collectors when possible.
-            if (testInfo != null) {
-                for (IMetricCollector collector : copyList) {
-                    if (collector.isDisabled()) {
-                        CLog.d("%s has been disabled. Skipping.", collector);
-                    } else {
-                        try (CloseableTraceScope ignored =
-                                new CloseableTraceScope(
-                                        "init_for_inst_" + collector.getClass().getSimpleName())) {
-                            CLog.d(
-                                    "Initializing %s for instrumentation.",
-                                    collector.getClass().getCanonicalName());
-                            if (collector instanceof IConfigurationReceiver) {
-                                ((IConfigurationReceiver) collector)
-                                        .setConfiguration(mConfiguration);
+            if (testsToRun != null && testsToRun.isEmpty()) {
+                // Do not initialize collectors when collection was successful with no tests to run.
+                CLog.d(
+                        "No tests were collected for %s. Skipping initializing collectors.",
+                        mPackageName);
+            } else {
+                // TODO: Convert to device-side collectors when possible.
+                if (testInfo != null) {
+                    for (IMetricCollector collector : copyList) {
+                        if (collector.isDisabled()) {
+                            CLog.d("%s has been disabled. Skipping.", collector);
+                        } else {
+                            try (CloseableTraceScope ignored =
+                                    new CloseableTraceScope(
+                                            "init_for_inst_"
+                                                    + collector.getClass().getSimpleName())) {
+                                CLog.d(
+                                        "Initializing %s for instrumentation.",
+                                        collector.getClass().getCanonicalName());
+                                if (collector instanceof IConfigurationReceiver) {
+                                    ((IConfigurationReceiver) collector)
+                                            .setConfiguration(mConfiguration);
+                                }
+                                if (collector instanceof DeviceTraceCollector) {
+                                    ((DeviceTraceCollector) collector)
+                                            .setInstrumentationPkgName(mPackageName);
+                                }
+                                listener = collector.init(testInfo.getContext(), listener);
                             }
-                            if (collector instanceof DeviceTraceCollector) {
-                                ((DeviceTraceCollector) collector)
-                                        .setInstrumentationPkgName(mPackageName);
-                            }
-                            listener = collector.init(testInfo.getContext(), listener);
                         }
                     }
                 }
