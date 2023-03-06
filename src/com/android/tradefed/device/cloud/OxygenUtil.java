@@ -291,4 +291,25 @@ public class OxygenUtil {
         }
         return metrics;
     }
+
+    /**
+     * Collect oxygen version info from oxygeen_version.txt.
+     *
+     * @param logDir directory of logs pulled from remote host.
+     */
+    public static String collectOxygenVersion(File logDir) {
+        CLog.d("Collect Oxygen version from logs under: %s.", logDir);
+        try {
+            Set<String> files = FileUtil.findFiles(logDir, "^oxygen_version\\.txt.*");
+            if (files.size() == 0) {
+                CLog.d("There is no oxygen_version.txt found.");
+                return null;
+            }
+            return FileUtil.readStringFromFile(new File(files.iterator().next()));
+        } catch (Exception e) {
+            CLog.e("Failed to read oxygen_version.txt .");
+            CLog.e(e);
+            return null;
+        }
+    }
 }
