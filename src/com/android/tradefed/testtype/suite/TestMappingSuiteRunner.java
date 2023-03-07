@@ -42,12 +42,14 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -471,7 +473,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     @VisibleForTesting
     Set<TestInfo> dedupTestInfos(File config, Set<TestInfo> testInfos) {
         Set<String> nameOptions = new HashSet<>();
-        Set<TestInfo> dedupTestInfos = new HashSet<>();
+        Set<TestInfo> dedupTestInfos = new TreeSet<TestInfo>(new TestInfoComparator());
         Set<String> duplicateSources = new LinkedHashSet<String>();
         for (TestInfo testInfo : testInfos) {
             String nameOption = testInfo.getNameOption();
@@ -490,7 +492,33 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                     InvocationMetricKey.DUPLICATE_MAPPING_DIFFERENT_OPTIONS,
                     String.format("%s:" + Joiner.on("+").join(duplicateSources), config));
         }
+
         return dedupTestInfos;
+    }
+
+    private class TestInfoComparator implements Comparator<TestInfo> {
+
+        @Override
+        public int compare(TestInfo a, TestInfo b) {
+            if (a.getNameOption().equals(b.getNameOption())) {
+                return 0;
+            }
+            // If a is subset of b
+            if (createComparableNames(a).equals(b.getNameOption())) {
+                return -1;
+            }
+            // If b is subset of a
+            if (a.getNameOption().equals(createComparableNames(b))) {
+                return 1;
+            }
+            return 1;
+        }
+    }
+
+    private static String createComparableNames(TestInfo a) {
+        List<TestOption> copyOptions = new ArrayList<>(a.getOptions());
+        copyOptions.removeIf(o -> (o.isExclusive() || (!o.isExclusive() && !o.isInclusive())));
+        return String.format("%s%s", a.getName(), copyOptions.toString());
     }
 
     /**
