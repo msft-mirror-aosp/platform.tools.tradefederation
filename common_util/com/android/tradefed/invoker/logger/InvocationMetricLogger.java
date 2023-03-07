@@ -277,6 +277,7 @@ public class InvocationMetricLogger {
         log_and_release_device("log_and_release_device", true),
         invocation_events_processing("invocation_events_processing", true),
         stage_suite_test_artifacts("stage_suite_test_artifacts", true),
+        wait_for_results_update("wait_for_results_update", true),
         ;
 
         private final String mKeyName;
