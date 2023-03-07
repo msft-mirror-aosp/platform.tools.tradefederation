@@ -979,6 +979,14 @@ public class GceManager {
                                 InvocationMetricKey.CF_LAUNCH_CVD_TIME, launchMetrics[1]);
                     }
                 }
+                try (CloseableTraceScope ignore =
+                        new CloseableTraceScope("avd:collectOxygenVersion")) {
+                    String oxygenVersion = OxygenUtil.collectOxygenVersion(remoteFile);
+                    if (!Strings.isNullOrEmpty(oxygenVersion)) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.CF_OXYGEN_VERSION, oxygenVersion);
+                    }
+                }
             }
 
             // Default files under a directory to be CUTTLEFISH_LOG to avoid compression.
