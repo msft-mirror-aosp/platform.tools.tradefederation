@@ -332,6 +332,7 @@ public class FileDownloadCache {
                     "remote path was null.", InfraErrorIdentifier.ARTIFACT_REMOTE_PATH_NULL);
         }
 
+        long start = System.currentTimeMillis();
         lockFile(remotePath);
         try {
             mCacheMapLock.lock();
@@ -367,6 +368,9 @@ public class FileDownloadCache {
                 } else {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.CACHE_HIT_COUNT, 1);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.CACHE_WAIT_FOR_LOCK,
+                            System.currentTimeMillis() - start);
                     CLog.d(
                             "Retrieved remote file %s from cached file %s",
                             remotePath, cachedFile.getAbsolutePath());
