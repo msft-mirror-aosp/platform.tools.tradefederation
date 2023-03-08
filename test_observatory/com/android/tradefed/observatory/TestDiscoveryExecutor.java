@@ -63,17 +63,23 @@ public class TestDiscoveryExecutor {
      * <p>Expected arguments: [commands options] (config to run)
      */
     public static void main(String[] args) {
+        DiscoveryExitCode exitCode = DiscoveryExitCode.SUCCESS;
         TestDiscoveryExecutor testDiscoveryExecutor = new TestDiscoveryExecutor();
         try {
             String testModules = testDiscoveryExecutor.discoverDependencies(args);
             System.out.print(testModules);
-            // Exit with code 0 to signal success discovery
-            System.exit(0);
-        } catch (Exception e) {
-            // Exit with code 1 when any exception happened
+        } catch (TestDiscoveryException e) {
             System.err.print(e.getMessage());
-            System.exit(1);
+            if (e.exitCode() != null) {
+                exitCode = e.exitCode();
+            } else {
+                exitCode = DiscoveryExitCode.ERROR;
+            }
+        } catch (Exception e) {
+            System.err.print(e.getMessage());
+            exitCode = DiscoveryExitCode.ERROR;
         }
+        System.exit(exitCode.exitCode());
     }
 
     /**
@@ -82,7 +88,8 @@ public class TestDiscoveryExecutor {
      * @param args the command line args of the test.
      * @return A JSON string with one test module names array and one other test dependency array.
      */
-    public String discoverDependencies(String[] args) throws Exception {
+    public String discoverDependencies(String[] args)
+            throws TestDiscoveryException, ConfigurationException {
         // Create IConfiguration base on command line args.
         IConfiguration config = getConfiguration(args);
 
@@ -93,7 +100,9 @@ public class TestDiscoveryExecutor {
         if (tests == null || tests.isEmpty()) {
             throw new TestDiscoveryException(
                     "Tradefed Observatory discovered no tests from the IConfiguration created from"
-                            + " command line args.");
+                            + " command line args.",
+                    null,
+                    DiscoveryExitCode.ERROR);
         }
 
         List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));
@@ -150,12 +159,16 @@ public class TestDiscoveryExecutor {
                 } else if (!moduleMetadataIncludeFilters.isEmpty()) {
                     throw new TestDiscoveryException(
                             "Tradefed Observatory can't do test discovery because the existence of"
-                                    + " metadata include filter option.");
+                                    + " metadata include filter option.",
+                            null,
+                            DiscoveryExitCode.COMPONENT_METADATA);
                 }
             } else {
                 throw new TestDiscoveryException(
                         "Tradefed Observatory can't do test discovery on non suite-based test"
-                                + " runner.");
+                                + " runner.",
+                        null,
+                        DiscoveryExitCode.ERROR);
             }
         }
         // Extract test module names from included filters.
