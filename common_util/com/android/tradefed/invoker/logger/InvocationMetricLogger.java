@@ -242,6 +242,7 @@ public class InvocationMetricLogger {
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
+        CACHE_WAIT_FOR_LOCK("cache_wait_for_lock", true),
 
         // CF Cache metrics
         CF_CACHE_WAIT_TIME("cf_cache_wait_time_sec", false),
