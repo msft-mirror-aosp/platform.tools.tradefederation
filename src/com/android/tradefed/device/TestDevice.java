@@ -162,7 +162,7 @@ public class TestDevice extends NativeDevice {
     // Then there is time to run the actual task. Set the maximum timeout value big enough.
     private static final long MICRODROID_MAX_LIFETIME_MINUTES = 20;
 
-    private static final long MICRODROID_ADB_CONNECT_TIMEOUT_MINUTES = 5;
+    private static final long MICRODROID_DEFAULT_ADB_CONNECT_TIMEOUT_MINUTES = 5;
 
     private static final String EARLY_REBOOT = "Too early to call shutdown() or reboot()";
 
@@ -219,36 +219,9 @@ public class TestDevice extends NativeDevice {
                                                 INSTALL_TIMEOUT_TO_OUTPUT_MINUTES,
                                                 TimeUnit.MINUTES,
                                                 args.toArray(new String[] {}));
-                                if (receiver.isSuccessfullyCompleted()) {
-                                    response[0] = null;
-                                } else if (receiver.getErrorMessage() == null) {
-                                    response[0] =
-                                            String.format(
-                                                    "Installation of %s timed out",
-                                                    packageFile.getAbsolutePath());
-                                } else {
-                                    response[0] = receiver.getErrorMessage();
-                                    if (response[0].contains(
-                                            "cmd: Failure calling service package")) {
-                                        String message =
-                                                String.format(
-                                                        "Failed to install '%s'. Device might have"
-                                                                + " crashed, it returned: %s",
-                                                        packageFile.getName(), response[0]);
-                                        throw new DeviceRuntimeException(
-                                                message, DeviceErrorIdentifier.DEVICE_CRASHED);
-                                    }
-                                }
+                                response[0] = handleInstallReceiver(receiver, packageFile);
                             } catch (InstallException e) {
-                                String message = e.getMessage();
-                                if (message == null) {
-                                    message =
-                                            String.format(
-                                                    "InstallException during package installation. "
-                                                            + "cause: %s",
-                                                    StreamUtil.getStackTrace(e));
-                                }
-                                response[0] = message;
+                                response[0] = handleInstallationError(e);
                             }
                             return response[0] == null;
                         }
@@ -348,26 +321,9 @@ public class TestDevice extends NativeDevice {
                                                 INSTALL_TIMEOUT_TO_OUTPUT_MINUTES,
                                                 TimeUnit.MINUTES,
                                                 newExtraArgs);
-                                if (receiver.isSuccessfullyCompleted()) {
-                                    response[0] = null;
-                                } else if (receiver.getErrorMessage() == null) {
-                                    response[0] =
-                                            String.format(
-                                                    "Installation of %s timed out.",
-                                                    packageFile.getAbsolutePath());
-                                } else {
-                                    response[0] = receiver.getErrorMessage();
-                                }
+                                response[0] = handleInstallReceiver(receiver, packageFile);
                             } catch (InstallException e) {
-                                String message = e.getMessage();
-                                if (message == null) {
-                                    message =
-                                            String.format(
-                                                    "InstallException during package installation. "
-                                                            + "cause: %s",
-                                                    StreamUtil.getStackTrace(e));
-                                }
-                                response[0] = message;
+                                response[0] = handleInstallationError(e);
                             } finally {
                                 getIDevice().removeRemotePackage(remotePackagePath);
                                 getIDevice().removeRemotePackage(remoteCertPath);
@@ -499,13 +455,7 @@ public class TestDevice extends NativeDevice {
                                 response[0] = null;
                                 return true;
                             } catch (InstallException e) {
-                                response[0] = e.getMessage();
-                                if (response[0] == null) {
-                                    response[0] =
-                                            String.format(
-                                                    "InstallException: %s",
-                                                    StreamUtil.getStackTrace(e));
-                                }
+                                response[0] = handleInstallationError(e);
                                 return false;
                             }
                         }
@@ -671,12 +621,7 @@ public class TestDevice extends NativeDevice {
                             response[0] = null;
                             return true;
                         } catch (InstallException e) {
-                            response[0] = e.getMessage();
-                            if (response[0] == null) {
-                                response[0] = String.format(
-                                    "InstallException during package installation. cause: %s",
-                                    StreamUtil.getStackTrace(e));
-                            }
+                            response[0] = handleInstallationError(e);
                             return false;
                         }
                     }
@@ -1061,6 +1006,7 @@ public class TestDevice extends NativeDevice {
                     CLog.v("framework reboot: can't detect framework running");
                     return false;
                 }
+                notifyRebootStarted();
                 String command = "svc power reboot " + rebootMode.formatRebootCommand(reason);
                 CommandResult result = executeShellV2Command(command);
                 if (result.getStdout().contains(EARLY_REBOOT)
@@ -1068,6 +1014,8 @@ public class TestDevice extends NativeDevice {
                     CLog.e(
                             "Reboot was called too early: stdout: %s.\nstderr: %s.",
                             result.getStdout(), result.getStderr());
+                    // notify of this reboot end, since reboot will be retried again at later stage.
+                    notifyRebootEnded();
                     return false;
                 }
             } catch (DeviceUnresponsiveException due) {
@@ -2483,7 +2431,7 @@ public class TestDevice extends NativeDevice {
                     forwardFileToLog(logPath, "MicrodroidLog");
                 });
 
-        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort);
+        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
         TestDevice microdroid = (TestDevice) deviceManager.forceAllocateDevice(microdroidSerial);
         if (microdroid == null) {
             process.destroy();
@@ -2507,12 +2455,13 @@ public class TestDevice extends NativeDevice {
      * Establish an adb connection to microdroid by letting Android forward the connection to
      * microdroid. Wait until the connection is established and microdroid is booted.
      */
-    private void adbConnectToMicrodroid(String cid, String microdroidSerial, int vmAdbPort) {
+    private void adbConnectToMicrodroid(
+            String cid, String microdroidSerial, int vmAdbPort, long adbConnectTimeoutMs) {
         MicrodroidHelper microdroidHelper = new MicrodroidHelper();
         IDeviceManager deviceManager = GlobalConfiguration.getDeviceManagerInstance();
 
         long start = System.currentTimeMillis();
-        long timeoutMillis = MICRODROID_ADB_CONNECT_TIMEOUT_MINUTES * 60 * 1000;
+        long timeoutMillis = adbConnectTimeoutMs;
         long elapsed = 0;
 
         final String serial = getSerialNumber();
@@ -2670,6 +2619,7 @@ public class TestDevice extends NativeDevice {
         private boolean mProtectedVm;
         private Map<String, String> mTestDeviceOptions;
         private Map<File, String> mBootFiles;
+        private long mAdbConnectTimeoutMs;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -2684,6 +2634,7 @@ public class TestDevice extends NativeDevice {
             mProtectedVm = false; // Vm is unprotected by default.
             mTestDeviceOptions = new LinkedHashMap<>();
             mBootFiles = new LinkedHashMap<>();
+            mAdbConnectTimeoutMs = MICRODROID_DEFAULT_ADB_CONNECT_TIMEOUT_MINUTES * 60 * 1000;
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -2782,10 +2733,20 @@ public class TestDevice extends NativeDevice {
          *
          * @param localFile The local file on the host
          * @param remoteFileName The remote file name on the device
-         * @param the microdroid builder.
+         * @return the microdroid builder.
          */
         public MicrodroidBuilder addBootFile(File localFile, String remoteFileName) {
             mBootFiles.put(localFile, remoteFileName);
+            return this;
+        }
+
+        /**
+         * Sets the timeout for adb connect to microdroid TestDevice in millis.
+         *
+         * @param timeoutMs The timeout in millis
+         */
+        public MicrodroidBuilder setAdbConnectTimeoutMs(long timeoutMs) {
+            mAdbConnectTimeoutMs = timeoutMs;
             return this;
         }
 
@@ -2819,5 +2780,36 @@ public class TestDevice extends NativeDevice {
 
             return device.startMicrodroid(this);
         }
+    }
+
+    private String handleInstallationError(InstallException e) {
+        String message = e.getMessage();
+        if (message == null) {
+            message =
+                    String.format(
+                            "InstallException during package installation. " + "cause: %s",
+                            StreamUtil.getStackTrace(e));
+        }
+        return message;
+    }
+
+    private String handleInstallReceiver(InstallReceiver receiver, File packageFile) {
+        if (receiver.isSuccessfullyCompleted()) {
+            return null;
+        }
+        if (receiver.getErrorMessage() == null) {
+            return String.format("Installation of %s timed out", packageFile.getAbsolutePath());
+        }
+        String error = receiver.getErrorMessage();
+        if (error.contains("cmd: Failure calling service package")
+                || error.contains("Can't find service: package")) {
+            String message =
+                    String.format(
+                            "Failed to install '%s'. Device might have"
+                                    + " crashed, it returned: %s",
+                            packageFile.getName(), error);
+            throw new DeviceRuntimeException(message, DeviceErrorIdentifier.DEVICE_CRASHED);
+        }
+        return error;
     }
 }

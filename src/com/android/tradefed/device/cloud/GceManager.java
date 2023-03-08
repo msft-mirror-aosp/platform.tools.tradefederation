@@ -319,11 +319,14 @@ public class GceManager {
                             InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE);
                 }
             }
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.CF_OXYGEN_SESSION_ID, oxygenDeviceInfo.instanceName());
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.CF_OXYGEN_SERVER_URL,
-                    oxygenDeviceInfo.hostAndPort().getHost());
+            // Lease may timeout and skip logging metrics if host is not set.
+            if (oxygenDeviceInfo.hostAndPort() != null) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_OXYGEN_SESSION_ID, oxygenDeviceInfo.instanceName());
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_OXYGEN_SERVER_URL,
+                        oxygenDeviceInfo.hostAndPort().getHost());
+            }
             return oxygenDeviceInfo;
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
@@ -974,6 +977,14 @@ public class GceManager {
                                 InvocationMetricKey.CF_FETCH_ARTIFACT_TIME, launchMetrics[0]);
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.CF_LAUNCH_CVD_TIME, launchMetrics[1]);
+                    }
+                }
+                try (CloseableTraceScope ignore =
+                        new CloseableTraceScope("avd:collectOxygenVersion")) {
+                    String oxygenVersion = OxygenUtil.collectOxygenVersion(remoteFile);
+                    if (!Strings.isNullOrEmpty(oxygenVersion)) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.CF_OXYGEN_VERSION, oxygenVersion);
                     }
                 }
             }

@@ -516,6 +516,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         // Run the tests
         try {
             mStartTestTime = getCurrentTime();
+            int perModuleRetryQuota = mMaxRetry;
             while (true) {
                 IRemoteTest test = poll();
                 if (test == null) {
@@ -564,7 +565,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                                 failureListener,
                                 moduleLevelListeners,
                                 skipTestCases,
-                                maxRunLimit);
+                                perModuleRetryQuota);
                 mCurrentTestWrapper.setCollectTestsOnly(mCollectTestsOnly);
                 // Resolve the dynamic options for that one test.
                 preparationException =
@@ -606,6 +607,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                         // Keep track of each listener for attempts
                         mRunListenersResults.add(mCurrentTestWrapper.getResultListener());
                     }
+                    // Limit escalating retries across all sub-IRemoteTests
+                    perModuleRetryQuota -= mCurrentTestWrapper.getRetryCount();
 
                     mExpectedTests += mCurrentTestWrapper.getExpectedTestsCount();
                     // Get information about retry

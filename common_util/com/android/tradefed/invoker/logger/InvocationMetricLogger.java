@@ -242,6 +242,7 @@ public class InvocationMetricLogger {
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
+        CACHE_WAIT_FOR_LOCK("cache_wait_for_lock", true),
 
         // CF Cache metrics
         CF_CACHE_WAIT_TIME("cf_cache_wait_time_sec", false),
@@ -256,7 +257,7 @@ public class InvocationMetricLogger {
         TOTAL_TEST_COUNT("total_test_count", true),
 
         // Metrics to store Device failure signatures
-        DEVICE_ERROR_SIGNATURES("device_failure_signatures", true),
+        DEVICE_ERROR_SIGNATURES("device_failure_signatures", false),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
@@ -277,6 +278,7 @@ public class InvocationMetricLogger {
         log_and_release_device("log_and_release_device", true),
         invocation_events_processing("invocation_events_processing", true),
         stage_suite_test_artifacts("stage_suite_test_artifacts", true),
+        wait_for_results_update("wait_for_results_update", true),
         ;
 
         private final String mKeyName;

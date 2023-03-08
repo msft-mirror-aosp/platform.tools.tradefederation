@@ -318,7 +318,7 @@ public class InstrumentationTestTest {
                 (RemoteAndroidTestRunner)
                         mInstrumentationTest.createRemoteAndroidTestRunner(
                                 "", "", mMockIDevice, mTestInfo);
-        assertThat(runner.getRunOptions()).contains("--instrument-sdk-sandbox");
+        assertThat(runner.getRunOptions()).contains("--instrument-sdk-in-sandbox");
     }
 
     /** Test normal run scenario with a test class specified. */
@@ -406,8 +406,7 @@ public class InstrumentationTestTest {
 
         // Report an empty run since nothing had to be run.
         InOrder inOrder = Mockito.inOrder(mMockListener);
-        inOrder.verify(mMockListener)
-                .testRunStarted(eq(TEST_PACKAGE_VALUE), eq(0), eq(0), anyLong());
+        inOrder.verify(mMockListener).testRunStarted(eq(TEST_PACKAGE_VALUE), eq(0));
         inOrder.verify(mMockListener).testRunEnded(0, new HashMap<String, Metric>());
         inOrder.verifyNoMoreInteractions();
         Mockito.verifyNoMoreInteractions(mMockListener);

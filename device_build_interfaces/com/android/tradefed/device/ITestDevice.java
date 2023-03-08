@@ -1122,4 +1122,21 @@ public interface ITestDevice extends INativeDevice {
      */
     public boolean doesFileExist(String deviceFilePath, int userId)
             throws DeviceNotAvailableException;
+
+    /**
+     * Registers a {@link IDeviceActionReceiver} for this device.
+     *
+     * <p>All registered {@link IDeviceActionReceiver}s will be notified before a device action
+     * starts and after the device action ends.
+     *
+     * @param deviceActionReceiver A {@link IDeviceActionReceiver} which will be registered.
+     */
+    public void registerDeviceActionReceiver(IDeviceActionReceiver deviceActionReceiver);
+
+    /**
+     * Removes the registered {@link IDeviceActionReceiver}.
+     *
+     * @param deviceActionReceiver A {@link IDeviceActionReceiver} which will be removed.
+     */
+    public void deregisterDeviceActionReceiver(IDeviceActionReceiver deviceActionReceiver);
 }

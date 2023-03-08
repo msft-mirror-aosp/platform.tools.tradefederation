@@ -102,7 +102,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             name = "apex-staging-wait-time",
             description = "The time in ms to wait for apex staged session ready.",
             isTimeVal = true)
-    private long mApexStagingWaitTime = 1 * 60 * 1000;
+    private long mApexStagingWaitTime = 0;
+
+    @Option(
+            name = "apex-rollback-wait-time",
+            description = "The time in ms to wait for apex rollback success.",
+            isTimeVal = true)
+    private long mApexRollbackWaitTime = 1 * 60 * 1000;
 
     @Option(
             name="extra-booting-wait-time",
@@ -203,7 +209,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * @throws DeviceNotAvailableException if reboot fails.
      */
     private void activateStagedInstall(ITestDevice device) throws DeviceNotAvailableException {
-        RunUtil.getDefault().sleep(mApexStagingWaitTime);
+        if (mApexStagingWaitTime > 0) {
+            RunUtil.getDefault().sleep(mApexStagingWaitTime);
+        }
         device.reboot();
         // Some devices need extra waiting time after reboot to get fully ready.
         if (mExtraBootingWaitTime > 0) {
@@ -413,11 +421,11 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                         }
                     }
                     CLog.i("Wait for rollback fully done.");
-                    RunUtil.getDefault().sleep(mApexStagingWaitTime);
+                    RunUtil.getDefault().sleep(mApexRollbackWaitTime);
                     CLog.i("Device Rebooting");
                     device.reboot();
                     CLog.i("Reboot finished. Wait for rollback fully propagate.");
-                    RunUtil.getDefault().sleep(mApexStagingWaitTime);
+                    RunUtil.getDefault().sleep(mApexRollbackWaitTime);
                     device.waitForDeviceAvailable();
                     // TODO(b/262626794): Remove after confirming with framework team about the
                     // behavior of rollbaking mainline modules.
@@ -633,8 +641,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     device.getDeviceDescriptor(),
                     DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
             }
-            RunUtil.getDefault().sleep(mApexStagingWaitTime);
-
+            if (mApexStagingWaitTime > 0) {
+                RunUtil.getDefault().sleep(mApexStagingWaitTime);
+            }
             if (log.contains("Success")) {
                 CLog.d(
                     "Train is staged successfully. Cmd: %s, Output: %s.",
