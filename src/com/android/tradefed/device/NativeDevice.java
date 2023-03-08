@@ -4307,6 +4307,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return true;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public boolean waitForDeviceAvailableInRecoverPath(final long waitTime)
+            throws DeviceNotAvailableException {
+        return mStateMonitor.waitForDeviceAvailableInRecoverPath(waitTime) != null;
+    }
+
     /**
      * {@inheritDoc}
      */
