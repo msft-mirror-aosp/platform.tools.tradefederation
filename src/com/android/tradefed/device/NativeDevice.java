@@ -248,7 +248,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private String mFastbootSerialNumber = null;
     private File mUnpackedFastbootDir = null;
     // Connection for the device.
-    private final AbstractConnection mConnection;
+    private AbstractConnection mConnection;
+
     private List<IDeviceActionReceiver> mDeviceActionReceivers = new LinkedList<>();
     /**
      * Whether callback for reboot is currently executing or not. Use this flag to avoid dead loop
@@ -423,11 +424,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         mIDevice = device;
         mStateMonitor = stateMonitor;
         mAllocationMonitor = allocationMonitor;
-
-        // TODO: Move the connection to the constructor interface
-        mConnection =
-                DefaultConnection.createConnection(
-                        new ConnectionBuilder().setRunUtil(getRunUtil()));
     }
 
     /** Get the {@link RunUtil} instance to use. */
@@ -2595,6 +2591,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public boolean recoverDevice() throws DeviceNotAvailableException {
+        getConnection().reconnect(getSerialNumber());
         if (mRecoveryMode.equals(RecoveryMode.NONE)) {
             CLog.i("Skipping recovery on %s", getSerialNumber());
             return false;
@@ -4925,16 +4922,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
-    @Override
-    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException {
-        throw new UnsupportedOperationException("No support for user's feature.");
-    }
-
-    @Override
-    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException {
-        throw new UnsupportedOperationException("No support for user's feature.");
-    }
-
     /** {@inheritDoc} */
     @Override
     public int createUserNoThrow(String name) throws DeviceNotAvailableException {
@@ -5281,6 +5268,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     e,
                     getDeviceDescriptor(),
                     InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+        }
+        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil());
+        if (getOptions().shouldUseConnection()) {
+            mConnection = DefaultConnection.createConnection(builder.setDevice(this));
+        } else {
+            // Use default inop connection
+            mConnection = DefaultConnection.createConnection(builder);
         }
     }
 
@@ -6072,6 +6066,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** The current connection associated with the device. */
     protected AbstractConnection getConnection() {
+        if (mConnection == null) {
+            mConnection = DefaultConnection.createConnection(new ConnectionBuilder(getRunUtil()));
+        }
         return mConnection;
     }
     /**

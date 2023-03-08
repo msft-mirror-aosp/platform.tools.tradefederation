@@ -219,36 +219,9 @@ public class TestDevice extends NativeDevice {
                                                 INSTALL_TIMEOUT_TO_OUTPUT_MINUTES,
                                                 TimeUnit.MINUTES,
                                                 args.toArray(new String[] {}));
-                                if (receiver.isSuccessfullyCompleted()) {
-                                    response[0] = null;
-                                } else if (receiver.getErrorMessage() == null) {
-                                    response[0] =
-                                            String.format(
-                                                    "Installation of %s timed out",
-                                                    packageFile.getAbsolutePath());
-                                } else {
-                                    response[0] = receiver.getErrorMessage();
-                                    if (response[0].contains(
-                                            "cmd: Failure calling service package")) {
-                                        String message =
-                                                String.format(
-                                                        "Failed to install '%s'. Device might have"
-                                                                + " crashed, it returned: %s",
-                                                        packageFile.getName(), response[0]);
-                                        throw new DeviceRuntimeException(
-                                                message, DeviceErrorIdentifier.DEVICE_CRASHED);
-                                    }
-                                }
+                                response[0] = handleInstallReceiver(receiver, packageFile);
                             } catch (InstallException e) {
-                                String message = e.getMessage();
-                                if (message == null) {
-                                    message =
-                                            String.format(
-                                                    "InstallException during package installation. "
-                                                            + "cause: %s",
-                                                    StreamUtil.getStackTrace(e));
-                                }
-                                response[0] = message;
+                                response[0] = handleInstallationError(e);
                             }
                             return response[0] == null;
                         }
@@ -348,26 +321,9 @@ public class TestDevice extends NativeDevice {
                                                 INSTALL_TIMEOUT_TO_OUTPUT_MINUTES,
                                                 TimeUnit.MINUTES,
                                                 newExtraArgs);
-                                if (receiver.isSuccessfullyCompleted()) {
-                                    response[0] = null;
-                                } else if (receiver.getErrorMessage() == null) {
-                                    response[0] =
-                                            String.format(
-                                                    "Installation of %s timed out.",
-                                                    packageFile.getAbsolutePath());
-                                } else {
-                                    response[0] = receiver.getErrorMessage();
-                                }
+                                response[0] = handleInstallReceiver(receiver, packageFile);
                             } catch (InstallException e) {
-                                String message = e.getMessage();
-                                if (message == null) {
-                                    message =
-                                            String.format(
-                                                    "InstallException during package installation. "
-                                                            + "cause: %s",
-                                                    StreamUtil.getStackTrace(e));
-                                }
-                                response[0] = message;
+                                response[0] = handleInstallationError(e);
                             } finally {
                                 getIDevice().removeRemotePackage(remotePackagePath);
                                 getIDevice().removeRemotePackage(remoteCertPath);
@@ -499,13 +455,7 @@ public class TestDevice extends NativeDevice {
                                 response[0] = null;
                                 return true;
                             } catch (InstallException e) {
-                                response[0] = e.getMessage();
-                                if (response[0] == null) {
-                                    response[0] =
-                                            String.format(
-                                                    "InstallException: %s",
-                                                    StreamUtil.getStackTrace(e));
-                                }
+                                response[0] = handleInstallationError(e);
                                 return false;
                             }
                         }
@@ -671,12 +621,7 @@ public class TestDevice extends NativeDevice {
                             response[0] = null;
                             return true;
                         } catch (InstallException e) {
-                            response[0] = e.getMessage();
-                            if (response[0] == null) {
-                                response[0] = String.format(
-                                    "InstallException during package installation. cause: %s",
-                                    StreamUtil.getStackTrace(e));
-                            }
+                            response[0] = handleInstallationError(e);
                             return false;
                         }
                     }
@@ -1412,21 +1357,6 @@ public class TestDevice extends NativeDevice {
         return checkApiLevelAgainstNextRelease(34)
                 ? executeShellV2CommandThatReturnsBoolean("cmd user is-headless-system-user-mode")
                 : getBooleanProperty("ro.fw.mu.headless_system_user", false);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException {
-        checkApiLevelAgainst("canSwitchToHeadlessSystemUser", 34);
-        return executeShellV2CommandThatReturnsBoolean(
-                "cmd user can-switch-to-headless-system-user");
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException {
-        checkApiLevelAgainst("isMainUserPermanentAdmin", 34);
-        return executeShellV2CommandThatReturnsBoolean("cmd user is-main-user-permanent-admin");
     }
 
     /**
@@ -2803,7 +2733,7 @@ public class TestDevice extends NativeDevice {
          *
          * @param localFile The local file on the host
          * @param remoteFileName The remote file name on the device
-         * @param the microdroid builder.
+         * @return the microdroid builder.
          */
         public MicrodroidBuilder addBootFile(File localFile, String remoteFileName) {
             mBootFiles.put(localFile, remoteFileName);
@@ -2850,5 +2780,36 @@ public class TestDevice extends NativeDevice {
 
             return device.startMicrodroid(this);
         }
+    }
+
+    private String handleInstallationError(InstallException e) {
+        String message = e.getMessage();
+        if (message == null) {
+            message =
+                    String.format(
+                            "InstallException during package installation. " + "cause: %s",
+                            StreamUtil.getStackTrace(e));
+        }
+        return message;
+    }
+
+    private String handleInstallReceiver(InstallReceiver receiver, File packageFile) {
+        if (receiver.isSuccessfullyCompleted()) {
+            return null;
+        }
+        if (receiver.getErrorMessage() == null) {
+            return String.format("Installation of %s timed out", packageFile.getAbsolutePath());
+        }
+        String error = receiver.getErrorMessage();
+        if (error.contains("cmd: Failure calling service package")
+                || error.contains("Can't find service: package")) {
+            String message =
+                    String.format(
+                            "Failed to install '%s'. Device might have"
+                                    + " crashed, it returned: %s",
+                            packageFile.getName(), error);
+            throw new DeviceRuntimeException(message, DeviceErrorIdentifier.DEVICE_CRASHED);
+        }
+        return error;
     }
 }
