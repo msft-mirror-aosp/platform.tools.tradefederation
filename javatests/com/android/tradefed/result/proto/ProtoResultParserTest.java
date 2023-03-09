@@ -629,7 +629,7 @@ public class ProtoResultParserTest {
             inOrder.verify(mMockListener)
                     .testLog(
                             Mockito.eq("subprocess-host_log_zip"),
-                            Mockito.eq(LogDataType.ZIP),
+                            Mockito.eq(LogDataType.TEXT),
                             Mockito.any());
 
             // Check capture
