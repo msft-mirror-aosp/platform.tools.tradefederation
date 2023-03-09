@@ -144,6 +144,58 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsPermission3TestCases",
                     "CtsMediaAudioTestCases");
 
+    private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST = ImmutableSet.of(
+                    "binderRpcTestNoKernel",
+                    "CtsTelecomTestCases",
+                    "CtsAppTestCases",
+                    "binderRpcTestSingleThreadedNoKernel",
+                    "CtsSuspendAppsPermissionTestCases",
+                    "CtsAppSecurityHostTestCases",
+                    "FrameworksServicesTests",
+                    "NeuralNetworksTest_static",
+                    "CtsNNAPITestCases",
+                    "CtsLibcoreTestCases",
+                    "OverlayRemountedTest",
+                    "CtsPermission3TestCases",
+                    "sharedlibs_host_tests",
+                    "CtsDevicePolicyManagerTestCases",
+                    "CtsMediaAudioTestCases",
+                    "CtsScopedStoragePublicVolumeHostTest",
+                    "CtsContentTestCases",
+                    "CtsHostsideNetworkTests",
+                    "vm-tests-tf",
+                    "CtsStatsdAtomHostTestCases",
+                    "CtsMediaPlayerTestCases",
+                    "CtsMediaDecoderTestCases",
+                    "CtsQuickAccessWalletTestCases",
+                    "CtsMediaMiscTestCases",
+                    "NetworkStagedRollbackTest",
+                    "CtsUsesNativeLibraryTest",
+                    "RollbackTest",
+                    "CtsLibcoreOjTestCases",
+                    "CtsMultiUserHostTestCases",
+                    "binderRpcTestSingleThreaded",
+                    "sdkextensions_e2e_tests",
+                    "StagedRollbackTest",
+                    "CtsMediaEncoderTestCases",
+                    "CtsRootRollbackManagerHostTestCases",
+                    "StagedInstallInternalTest",
+                    "FrameworksWifiTests",
+                    "MultiUserRollbackTest",
+                    "binderRpcTest",
+                    "CtsMediaCodecTestCases",
+                    "CtsRollbackManagerHostTestCases",
+                    "CtsAutoFillServiceTestCases",
+                    "CtsOsTestCases",
+                    "CtsDynamicMimeHostTestCases",
+                    "VtsHalNeuralnetworksTargetTest",
+                    "CtsWifiTestCases",
+                    "SystemUITests",
+                    "CellBroadcastReceiverComplianceTests",
+                    "InputMethodStressTest",
+                    "SystemUIClocksTests",
+                    "GtsStagedInstallHostTestCases");
+
     @Override
     public void setBuild(IBuildInfo buildInfo) {
         mBuild = buildInfo;
@@ -649,6 +701,17 @@ public class TestMappingsValidation implements IBuildReceiver {
                                     + "Make sure your tests meet presubmit SLO "
                                     + "and use 'presubmit' group.",
                             dual));
+        }
+        presubmitLarge.removeAll(PRESUBMIT_LARGE_ALLOWLIST);
+        if (!presubmitLarge.isEmpty()) {
+            throw new ConfigurationException(
+                    String.format(
+                            "Adding new modules to presubmit-large "
+                                    + "isn't allowed. Those tests: %s. Do not use "
+                                    + "presubmit-large group to run larger tests. Make sure"
+                                    + " your tests meet presubmit SLO and use 'presubmit'"
+                                    + "group.",
+                            presubmitLarge));
         }
     }
 }
