@@ -80,7 +80,7 @@ public class ConfigurationDescriptor implements Serializable, Cloneable {
                     "A metadata to allows a suite configuration to specify that it cannot be"
                             + " sharded in a strict context (independent shards). If a config is"
                             + " already not-shardable, it will be not-strict-shardable.")
-    private boolean mNotIRemoTestShardable = false;
+    private boolean mNotIRemoteTestShardable = false;
 
     @Option(
         name = "use-sandboxing",
@@ -170,11 +170,11 @@ public class ConfigurationDescriptor implements Serializable, Cloneable {
 
     /** Returns if the configuration should split the IRemoteTest into different modules. */
     public boolean isNotIRemoteTestShardable() {
-        return mNotIRemoTestShardable;
+        return mNotIRemoteTestShardable;
     }
 
-    public void setIRemoteTestShardable(boolean notIRemoteTestShardable) {
-        mNotIRemoTestShardable = notIRemoteTestShardable;
+    public void setNotIRemoteTestShardable(boolean notIRemoteTestShardable) {
+        mNotIRemoteTestShardable = notIRemoteTestShardable;
     }
 
     /** Sets the abi the configuration is going to run against. */
