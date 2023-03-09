@@ -20,14 +20,9 @@ import com.android.tradefed.error.HarnessException;
 import com.android.tradefed.result.error.ErrorIdentifier;
 
 public class TestDiscoveryException extends HarnessException {
-    /**
-     * Creates a {@link TestDiscoveryException}.
-     *
-     * @param message a meaningful error message
-     */
-    protected TestDiscoveryException(String message) {
-        super(message, null);
-    }
+
+    private DiscoveryExitCode exitCode;
+
     /**
      * Creates a {@link TestDiscoveryException}.
      *
@@ -36,5 +31,21 @@ public class TestDiscoveryException extends HarnessException {
      */
     protected TestDiscoveryException(String message, ErrorIdentifier error) {
         super(message, error);
+    }
+
+    /**
+     * Creates a {@link TestDiscoveryException}.
+     *
+     * @param message a meaningful error message
+     * @param error The {@link ErrorIdentifier} associated with the exception
+     */
+    protected TestDiscoveryException(
+            String message, ErrorIdentifier error, DiscoveryExitCode exitCode) {
+        super(message, error);
+        this.exitCode = exitCode;
+    }
+
+    public DiscoveryExitCode exitCode() {
+        return exitCode;
     }
 }
