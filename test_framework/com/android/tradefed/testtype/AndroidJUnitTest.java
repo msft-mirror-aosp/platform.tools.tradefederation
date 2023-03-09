@@ -382,6 +382,8 @@ public class AndroidJUnitTest extends InstrumentationTest
                                 "/test-services-1.4.2.apk", testServices);
                 if (extracted) {
                     serviceInstaller = new TestAppInstallSetup();
+                    // Service apk needs force-queryable
+                    serviceInstaller.setForceQueryable(true);
                     serviceInstaller.addTestFile(testServices);
                     serviceInstaller.setUp(testInfo);
                 } else {
