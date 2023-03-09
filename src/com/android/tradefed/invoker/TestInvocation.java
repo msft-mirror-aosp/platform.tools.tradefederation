@@ -1692,6 +1692,16 @@ public class TestInvocation implements ITestInvocation {
             if (device.getIDevice() instanceof StubDevice) {
                 continue;
             }
+            if (device.isStateBootloaderOrFastbootd()) {
+                dnae =
+                        new DeviceNotAvailableException(
+                                "Device was left in fastboot state after tests",
+                                device.getSerialNumber(),
+                                DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                reportFailure(
+                        createFailureFromException(dnae, FailureStatus.INFRA_FAILURE), listener);
+                continue;
+            }
             RecoveryMode current = device.getRecoveryMode();
             device.setRecoveryMode(RecoveryMode.NONE);
             try {
