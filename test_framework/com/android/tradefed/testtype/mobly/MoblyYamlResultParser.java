@@ -102,11 +102,14 @@ public class MoblyYamlResultParser {
                                         TestRecordProto.FailureStatus.TEST_FAILURE);
                         if (MoblyYamlResultRecordHandler.RecordResult.ERROR.equals(
                                 record.getResult())) {
-                            for (ITestInvocationListener listener : listeners) {
-                                listener.testRunFailed(failureDescription);
+                            // Setup_class indicates some early failure so we stop parsing
+                            if (testDescription.getTestName().equals("setup_class")) {
+                                for (ITestInvocationListener listener : listeners) {
+                                    listener.testRunFailed(failureDescription);
+                                }
+                                abort = true;
+                                break;
                             }
-                            abort = true;
-                            break;
                         }
                         mRunStartTime =
                                 mRunStartTime == 0L
