@@ -22,6 +22,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
@@ -43,6 +44,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -56,7 +58,8 @@ public abstract class ExecutableBaseTest
                 ITestCollector,
                 IShardableTest,
                 IAbiReceiver,
-                ITestFilterReceiver {
+                ITestFilterReceiver,
+                IDiscoverDependencies {
 
     public static final String NO_BINARY_ERROR = "Binary %s does not exist.";
 
@@ -166,7 +169,7 @@ public abstract class ExecutableBaseTest
                         ? context.getAttributes().getUniqueMap().get(ModuleDefinition.MODULE_ID)
                         : getClass().getName();
 
-        var nonSkippedTestDescriptions =
+        TestDescription[] nonSkippedTestDescriptions =
                 testCommands.keySet().stream()
                         .map(testName -> new TestDescription(testName, testName))
                         .filter(description -> !shouldSkipCurrentTest(description))
@@ -185,7 +188,7 @@ public abstract class ExecutableBaseTest
         try {
             listener.testRunStarted(testRunName, nonSkippedTestDescriptions.length);
 
-            for (var description : nonSkippedTestDescriptions) {
+            for (TestDescription description : nonSkippedTestDescriptions) {
                 String testName = description.getTestName();
                 String cmd = testCommands.get(testName);
                 String path = findBinary(cmd);
@@ -358,5 +361,12 @@ public abstract class ExecutableBaseTest
             testCommands.put(new File(binary).getName(), binary);
         }
         return testCommands;
+    }
+
+    @Override
+    public Set<String> reportDependencies() {
+        Set<String> deps = new HashSet<String>();
+        deps.addAll(mBinaryPaths);
+        return deps;
     }
 }
