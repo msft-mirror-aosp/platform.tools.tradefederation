@@ -723,6 +723,10 @@ public class InstrumentationTest
         checkArgument(mPackageName != null, "Package name has not been set.");
         // Install the apk before checking the runner
         if (mInstallFile != null) {
+            if (mDevice.isBypassLowTargetSdkBlockSupported()) {
+                mInstallArgs.add("--bypass-low-target-sdk-block");
+            }
+
             String installOutput =
                     mDevice.installPackage(
                             mInstallFile, true, mInstallArgs.toArray(new String[] {}));
