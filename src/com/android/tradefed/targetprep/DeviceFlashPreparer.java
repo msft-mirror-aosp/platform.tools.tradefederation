@@ -290,8 +290,15 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             // Once critical operation is done, we re-enable interruptable
             getRunUtil().allowInterrupt(true);
             try {
-                device.setRecoveryMode(RecoveryMode.AVAILABLE);
-                device.waitForDeviceAvailable(mDeviceBootTime);
+                boolean available = device.waitForDeviceAvailableInRecoverPath(mDeviceBootTime);
+                if (!available) {
+                    throw new DeviceFailedToBootError(
+                            String.format(
+                                    "Device %s did not become available after flashing %s",
+                                    device.getSerialNumber(), deviceBuild.getDeviceBuildId()),
+                            device.getDeviceDescriptor(),
+                            DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
+                }
             } catch (DeviceNotAvailableException e) {
                 // Assume this is a build problem
                 throw new DeviceFailedToBootError(
@@ -304,6 +311,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             }
             device.postBootSetup();
         } finally {
+            device.setRecoveryMode(RecoveryMode.AVAILABLE);
             // Allow interruption at the end no matter what.
             getRunUtil().allowInterrupt(true);
         }
