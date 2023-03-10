@@ -61,6 +61,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.util.Arrays;
@@ -207,6 +208,31 @@ public class MoblyBinaryHostTestTest {
         verify(mockListener, times(1)).testRunStarted(eq(mMoblyBinary2.getName()), eq(0));
         verify(mockListener, times(1)).testRunFailed(any(FailureDescription.class));
         verify(mockListener, times(1)).testRunEnded(eq(0L), eq(new HashMap<String, Metric>()));
+    }
+
+    @Test
+    public void testRun_withStdLogOption() throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-std-log", "true");
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        // Mimics the behavior of a successful test run.
+        Mockito.when(
+                        mMockRunUtil.runTimedCmd(
+                                anyLong(), any(OutputStream.class), any(OutputStream.class), any()))
+                .thenAnswer(
+                        new Answer<CommandResult>() {
+                            @Override
+                            public CommandResult answer(InvocationOnMock invocation)
+                                    throws Throwable {
+                                FileUtils.createFile(testResult, "");
+                                FileUtils.createFile(
+                                        new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                        "log content");
+                                return new CommandResult(CommandStatus.SUCCESS);
+                            }
+                        });
+
+        mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
     }
 
     @Test
@@ -392,7 +418,7 @@ public class MoblyBinaryHostTestTest {
         Mockito.doReturn(DEVICE_SERIAL).when(mMockDevice).getSerialNumber();
         Mockito.doReturn(LOG_PATH).when(mSpyTest).getLogDirAbsolutePath();
         mIncludeFilters.addAll(
-            Arrays.asList("ExampleTest#test_print_addresses", "ExampleTest#test_le_connect"));
+                Arrays.asList("ExampleTest#test_print_addresses", "ExampleTest#test_le_connect"));
         mSpyTest.addAllIncludeFilters(mIncludeFilters);
         String[] cmdArray = mSpyTest.buildCommandLineArray(BINARY_PATH, "path");
         Truth.assertThat(cmdArray)
