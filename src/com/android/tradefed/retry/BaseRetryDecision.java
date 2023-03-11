@@ -98,6 +98,11 @@ public class BaseRetryDecision
     private RetryStrategy mRetryStrategy = RetryStrategy.NO_RETRY;
 
     @Option(
+            name = "skip-retry-in-presubmit",
+            description = "Skip retry attempts specifically in presubmit builds")
+    private boolean mSkipRetryInPresubmit = false;
+
+    @Option(
         name = "auto-retry",
         description =
                 "Whether or not to enable the new auto-retry. This is a feature flag for testing."
@@ -179,6 +184,10 @@ public class BaseRetryDecision
             // No need to retry if it reaches the maximum retry count.
             return decision;
         }
+        if (mSkipRetryInPresubmit && "WORK_NODE".equals(mContext.getAttribute("trigger"))) {
+            CLog.d("Skipping retry due to --skip-retry-in-presubmit");
+            return decision;
+        }
 
         // Resetting the device only happends when FULLY_ISOLATED is set, and that cleans up the
         // device to pure state and re-run suite-level or module-level setup. Besides, it doesn't
@@ -241,6 +250,11 @@ public class BaseRetryDecision
             mCurrentlyConsideredTest = test;
             mStatistics = new RetryStatsHelper();
             mPreviouslyFailing = new HashSet<>();
+        }
+
+        if (mSkipRetryInPresubmit && "WORK_NODE".equals(mContext.getAttribute("trigger"))) {
+            CLog.d("Skipping retry due to --skip-retry-in-presubmit");
+            return false;
         }
 
         switch (mRetryStrategy) {
