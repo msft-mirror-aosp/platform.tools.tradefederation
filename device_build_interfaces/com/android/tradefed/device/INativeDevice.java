@@ -1230,6 +1230,16 @@ public interface INativeDevice {
     public boolean waitForDeviceAvailable() throws DeviceNotAvailableException;
 
     /**
+     * Waits for the device to be responsive and available without considering recovery path.
+     *
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     * @return True if device is available, False if unavailable.
+     */
+    public boolean waitForDeviceAvailableInRecoverPath(final long waitTime)
+            throws DeviceNotAvailableException;
+
+    /**
      * Blocks until device is visible via adb.
      * <p/>
      * Note the device may not necessarily be responsive to commands on completion. Use

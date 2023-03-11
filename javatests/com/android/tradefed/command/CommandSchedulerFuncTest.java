@@ -509,6 +509,17 @@ public class CommandSchedulerFuncTest {
                 }
             }
         }
+
+        @Override
+        public void notifyInvocationForceStopped(String message, ErrorIdentifier errorId) {
+            runInterrupted = true;
+            CLog.d("#notifyInvocationForceStopped");
+        }
+
+        @Override
+        public void notifyInvocationStopped(String message) {
+            CLog.d("#notifyInvocationStopped");
+        }
     }
 
     /**
