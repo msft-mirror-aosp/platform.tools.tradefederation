@@ -174,6 +174,7 @@ public class InvocationMetricLogger {
         UNCAUGHT_TEST_CRASH_FAILURES("uncaught_test_crash_failures", true),
         DEVICE_RESET_COUNT("device_reset_count", true),
         DEVICE_RESET_MODULES("device_reset_modules", true),
+        DEVICE_POWREWASH_DURATIONS("device_powerwash_durations", true),
         DEVICE_RESET_MODULES_FOR_TARGET_PREPARER("device_reset_modules_for_target_preparer", true),
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
