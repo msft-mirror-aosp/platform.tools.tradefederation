@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.device.internal;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -26,6 +27,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.util.SerializationUtil;
 
@@ -103,5 +105,25 @@ public class DeviceResetHandlerTest {
             // Expected
             assertTrue(expected.getCause() instanceof RuntimeException);
         }
+    }
+
+    @Test
+    public void testReset_parseDuration() throws Exception {
+        FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
+        responseBuilder.setResponse(
+                "Attempting device reset on device-1.  Powerwash finished in 999 ms.");
+        when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
+
+        InvocationMetricLogger.clearInvocationMetrics();
+        assertTrue(mHandler.resetDevice(mMockDevice));
+        assertTrue(mHandler.resetDevice(mMockDevice));
+        String durations =
+                InvocationMetricLogger.getInvocationMetrics()
+                        .getOrDefault(
+                                InvocationMetricLogger.InvocationMetricKey
+                                        .DEVICE_POWREWASH_DURATIONS
+                                        .toString(),
+                                "0");
+        assertEquals("999,999", durations);
     }
 }
