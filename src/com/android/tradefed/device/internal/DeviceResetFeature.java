@@ -101,6 +101,7 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
                 }
                 Integer offset = info.getDeviceOffset();
                 String user = info.getInstanceUser();
+                long startTime = System.currentTimeMillis();
                 CommandResult powerwashResult =
                         ((RemoteAndroidVirtualDevice) mTestInformation.getDevice())
                                 .powerwashGce(user, offset);
@@ -117,6 +118,10 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
                             mTestInformation.getDevice().getSerialNumber(),
                             DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
                 }
+                response +=
+                        String.format(
+                                " Powerwash finished in %d ms.",
+                                System.currentTimeMillis() - startTime);
             } else if (mTestInformation.getDevice() instanceof RemoteAndroidDevice) {
                 response += " RemoteAndroidDevice has no powerwash support.";
             } else if (mTestInformation.getDevice() instanceof NestedRemoteDevice) {
