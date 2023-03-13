@@ -26,7 +26,6 @@ import static com.android.tradefed.testtype.suite.params.ModuleParameters.NOT_SE
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.NOT_SECONDARY_USER_ON_DEFAULT_DISPLAY;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.NOT_SECONDARY_USER_ON_SECONDARY_DISPLAY;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.NO_FOLDABLE_STATES;
-import static com.android.tradefed.testtype.suite.params.ModuleParameters.RUN_ON_CLONE_PROFILE;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.RUN_ON_SDK_SANDBOX;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.RUN_ON_SECONDARY_USER;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.RUN_ON_WORK_PROFILE;
@@ -34,7 +33,6 @@ import static com.android.tradefed.testtype.suite.params.ModuleParameters.SECOND
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.SECONDARY_USER_ON_DEFAULT_DISPLAY;
 import static com.android.tradefed.testtype.suite.params.ModuleParameters.SECONDARY_USER_ON_SECONDARY_DISPLAY;
 
-import com.android.tradefed.testtype.suite.params.multiuser.RunOnCloneProfileParameterHandler;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnSecondaryUserParameterHandler;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnWorkProfileParameterHandler;
 
@@ -58,11 +56,10 @@ public final class ModuleParametersHelper {
                     RUN_ON_SECONDARY_USER, new RunOnSecondaryUserParameterHandler(),
                     // line separator
                     NO_FOLDABLE_STATES, new NegativeHandler(),
-                    ALL_FOLDABLE_STATES, new FoldableExpandingHandler(),
-                    RUN_ON_CLONE_PROFILE, new RunOnCloneProfileParameterHandler());
+                    ALL_FOLDABLE_STATES, new FoldableExpandingHandler());
 
     private static final Map<ModuleParameters, Set<ModuleParameters>> sGroupMap =
-            Map.of(MULTIUSER, Set.of(RUN_ON_WORK_PROFILE, RUN_ON_SECONDARY_USER, RUN_ON_CLONE_PROFILE));
+            Map.of(MULTIUSER, Set.of(RUN_ON_WORK_PROFILE, RUN_ON_SECONDARY_USER));
 
     /**
      * Optional parameters are params that will not automatically be created when the module

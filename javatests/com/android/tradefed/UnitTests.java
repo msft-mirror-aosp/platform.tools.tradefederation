@@ -272,7 +272,6 @@ import com.android.tradefed.targetprep.RootTargetPreparerTest;
 import com.android.tradefed.targetprep.RunCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostScriptTargetPreparerTest;
-import com.android.tradefed.targetprep.RunOnCloneProfileTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSdkSandboxTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSystemUserTargetPreparerTest;
@@ -373,7 +372,6 @@ import com.android.tradefed.testtype.suite.params.ModuleParametersHelperTest;
 import com.android.tradefed.testtype.suite.params.RunOnSdkSandboxHandlerTest;
 import com.android.tradefed.testtype.suite.params.SecondaryUserHandlerTest;
 import com.android.tradefed.testtype.suite.params.SecondaryUserOnSecondaryDisplayHandlerTest;
-import com.android.tradefed.testtype.suite.params.multiuser.RunOnCloneProfileParameterHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnSecondaryUserParameterHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnWorkProfileParameterHandlerTest;
 import com.android.tradefed.testtype.suite.retry.ResultsPlayerTest;
@@ -790,7 +788,6 @@ import org.junit.runners.Suite.SuiteClasses;
     TestFilePushSetupTest.class,
     SwitchUserTargetPreparerTest.class,
     UserCleanerTest.class,
-    RunOnCloneProfileTargetPreparerTest.class,
 
     // targetprep.adb
     AdbStopServerPreparerTest.class,
@@ -937,7 +934,6 @@ import org.junit.runners.Suite.SuiteClasses;
     RunOnWorkProfileParameterHandlerTest.class,
     SecondaryUserHandlerTest.class,
     SecondaryUserOnSecondaryDisplayHandlerTest.class,
-    RunOnCloneProfileParameterHandlerTest.class,
 
     // testtype/suite/retry
     ResultsPlayerTest.class,
