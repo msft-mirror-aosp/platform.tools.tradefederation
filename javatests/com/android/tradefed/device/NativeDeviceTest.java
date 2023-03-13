@@ -2675,15 +2675,15 @@ public class NativeDeviceTest {
         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
         res.setStdout("\n");
         when(mMockRunUtil.runTimedCmd(
-                        100,
-                        (OutputStream) null,
-                        null,
-                        "adb",
-                        "-s",
-                        "serial",
-                        "shell",
-                        "getprop",
-                        "test"))
+                        Mockito.anyLong(),
+                        (OutputStream) Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq("adb"),
+                        Mockito.eq("-s"),
+                        Mockito.eq("serial"),
+                        Mockito.eq("shell"),
+                        Mockito.eq("getprop"),
+                        Mockito.eq("test")))
                 .thenReturn(res);
 
         assertNull(mTestDevice.getProperty("test"));
