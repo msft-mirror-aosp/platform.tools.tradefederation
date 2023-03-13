@@ -2818,12 +2818,11 @@ public class TestDeviceTest {
     /** Test that a single user is handled by {@link TestDevice#listUsers()}. */
     @Test
     public void testListUsers_oneUser() throws Exception {
-        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
         final String listUsersCommand = "pm list users";
         injectShellResponse(
                 listUsersCommand, ArrayUtil.join("\r\n", "Users:", "UserInfo{0:Foo:13} running"));
 
-        ArrayList<Integer> actual = testDevice.listUsers();
+        ArrayList<Integer> actual = mTestDevice.listUsers();
         assertNotNull(actual);
         assertEquals(1, actual.size());
         assertEquals(0, actual.get(0).intValue());
@@ -2832,13 +2831,12 @@ public class TestDeviceTest {
     /** Test that invalid output is handled by {@link TestDevice#listUsers()}. */
     @Test
     public void testListUsers_invalidOutput() throws Exception {
-        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
         final String listUsersCommand = "pm list users";
         final String output = "not really what we are looking for";
         injectShellResponse(listUsersCommand, output);
 
         try {
-            testDevice.listUsers();
+            mTestDevice.listUsers();
             fail("Failed to throw DeviceRuntimeException.");
         } catch (DeviceRuntimeException expected) {
             // expected
@@ -2851,13 +2849,12 @@ public class TestDeviceTest {
     /** Test that invalid format of users is handled by {@link TestDevice#listUsers()}. */
     @Test
     public void testListUsers_unparsableOutput() throws Exception {
-        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
         final String listUsersCommand = "pm list users";
         final String output = "Users:\n" + "\tUserInfo{0:Ownertooshort}";
         injectShellResponse(listUsersCommand, output);
 
         try {
-            testDevice.listUsers();
+            mTestDevice.listUsers();
             fail("Failed to throw DeviceRuntimeException.");
         } catch (DeviceRuntimeException expected) {
             // expected
@@ -2874,14 +2871,13 @@ public class TestDeviceTest {
     /** Test that multiple user is handled by {@link TestDevice#listUsers()}. */
     @Test
     public void testListUsers_multiUsers() throws Exception {
-        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
         final String listUsersCommand = "pm list users";
         injectShellResponse(
                 listUsersCommand,
                 ArrayUtil.join(
                         "\r\n", "Users:", "UserInfo{0:Foo:13} running", "UserInfo{3:FooBar:14}"));
 
-        ArrayList<Integer> actual = testDevice.listUsers();
+        ArrayList<Integer> actual = mTestDevice.listUsers();
         assertNotNull(actual);
         assertEquals(2, actual.size());
         assertEquals(0, actual.get(0).intValue());
@@ -2890,13 +2886,12 @@ public class TestDeviceTest {
 
     /** Test that a single user is handled by {@link TestDevice#listUsers()}. */
     @Test
-    public void testListUsersInfo_oneUser_preQ() throws Exception {
-        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
+    public void testListUsersInfo_oneUser() throws Exception {
         final String listUsersCommand = "pm list users";
         injectShellResponse(
                 listUsersCommand, ArrayUtil.join("\r\n", "Users:", "UserInfo{0:Foo:13} running"));
 
-        Map<Integer, UserInfo> actual = testDevice.getUserInfos();
+        Map<Integer, UserInfo> actual = mTestDevice.getUserInfos();
         assertNotNull(actual);
         assertEquals(1, actual.size());
         UserInfo user0 = actual.get(0);
@@ -2906,42 +2901,16 @@ public class TestDeviceTest {
         assertEquals(true, user0.isRunning());
     }
 
-    /** Test that a single user is handled by {@link TestDevice#listUsers()}. */
-    @Test
-    public void testListUsersInfo_oneUser_postQ() throws Exception {
-
-        TestDevice testDevice = newTestDeviceForReleaseApiLevel(30);
-        final String listUsersCommand = "cmd user list -v";
-        injectShellResponse(
-                listUsersCommand,
-                ArrayUtil.join(
-                        "\r\n",
-                        "1 users:",
-                        "0: id=0, name=Owner, type=full.SYSTEM, "
-                                + "flags=ADMIN|FULL|INITIALIZED|MAIN|PRIMARY|SYSTEM "
-                                + "(running) (current) (visible)"));
-
-        Map<Integer, UserInfo> actual = testDevice.getUserInfos();
-        assertNotNull(actual);
-        assertEquals(1, actual.size());
-        UserInfo user0 = actual.get(0);
-        assertEquals(0, user0.userId());
-        assertEquals("Owner", user0.userName());
-        assertEquals(Integer.parseInt("4c13", 16), user0.flag());
-        assertEquals(true, user0.isRunning());
-    }
-
     /** Test that multiple user is handled by {@link TestDevice#listUsers()}. */
     @Test
     public void testListUsersInfo_multiUsers() throws Exception {
-        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
         final String listUsersCommand = "pm list users";
         injectShellResponse(
                 listUsersCommand,
                 ArrayUtil.join(
                         "\r\n", "Users:", "UserInfo{0:Foo:13} running", "UserInfo{10:FooBar:14}"));
 
-        Map<Integer, UserInfo> actual = testDevice.getUserInfos();
+        Map<Integer, UserInfo> actual = mTestDevice.getUserInfos();
         assertNotNull(actual);
         assertEquals(2, actual.size());
         UserInfo user0 = actual.get(0);
