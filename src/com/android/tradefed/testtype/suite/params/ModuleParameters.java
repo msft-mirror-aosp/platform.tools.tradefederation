@@ -47,6 +47,7 @@ public enum ModuleParameters {
     MULTIUSER("multiuser", ModuleParameters.MULTIUSER_FAMILY),
     RUN_ON_WORK_PROFILE("run_on_work_profile", ModuleParameters.RUN_ON_WORK_PROFILE_FAMILY),
     RUN_ON_SECONDARY_USER("run_on_secondary_user", ModuleParameters.RUN_ON_SECONDARY_USER_FAMILY),
+    RUN_ON_CLONE_PROFILE("run_on_clone_profile", ModuleParameters.RUN_ON_CLONE_PROFILE_FAMILY),
 
     // Foldable mode
     ALL_FOLDABLE_STATES("all_foldable_states", ModuleParameters.FOLDABLE_STATES_FAMILY),
@@ -68,6 +69,7 @@ public enum ModuleParameters {
     public static final String RUN_ON_SDK_SANDBOX_FAMILY = "run_on_sdk_sandbox_family";
     public static final String RUN_ON_WORK_PROFILE_FAMILY = "run_on_work_profile_family";
     public static final String RUN_ON_SECONDARY_USER_FAMILY = "run_on_secondary_user_family";
+    public static final String RUN_ON_CLONE_PROFILE_FAMILY = "run_on_clone_profile_family";
 
     private final String mName;
     /** Defines whether several module parameters are associated and mutually exclusive. */
