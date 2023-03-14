@@ -16,6 +16,7 @@
 
 package com.android.tradefed.testtype.suite;
 
+import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
@@ -37,6 +38,7 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ResultAndLogForwarder;
+import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.retry.IRetryDecision;
@@ -52,10 +54,13 @@ import com.google.common.annotations.VisibleForTesting;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A wrapper class works on the {@link IRemoteTest} to granulate the IRemoteTest in testcase level.
@@ -436,6 +441,19 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
      */
     public final int getExpectedTestsCount() {
         return mMainGranularRunListener.getExpectedTests();
+    }
+
+    public final Set<TestDescription> getPassedTests() {
+        Set<TestDescription> nonFailedTests = new LinkedHashSet<>();
+        for (TestRunResult runResult : mMainGranularRunListener.getMergedTestRunResults()) {
+            nonFailedTests.addAll(
+                    runResult.getTestsInState(
+                            Arrays.asList(
+                                    TestStatus.PASSED,
+                                    TestStatus.IGNORED,
+                                    TestStatus.ASSUMPTION_FAILURE)));
+        }
+        return nonFailedTests;
     }
 
     /** Returns the listener containing all the results. */
