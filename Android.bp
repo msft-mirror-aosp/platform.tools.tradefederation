@@ -131,7 +131,9 @@ java_library_host {
         "grpc-java",
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
-    ]
+    ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 // Main Target to build tradefed jar
