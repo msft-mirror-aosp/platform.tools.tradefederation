@@ -1069,7 +1069,8 @@ public class InstrumentationTest
             runner.setDebug(false);
             // try to collect tests multiple times, in case device is temporarily not available
             // on first attempt
-            try (CloseableTraceScope ignored = new CloseableTraceScope("collect_tests")) {
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(InvocationMetricKey.instru_collect_tests.toString())) {
                 Collection<TestDescription> tests =
                         collectTestsAndRetry(testInfo, runner, listener);
                 // done with "logOnly" mode, restore proper test timeout before real test execution
