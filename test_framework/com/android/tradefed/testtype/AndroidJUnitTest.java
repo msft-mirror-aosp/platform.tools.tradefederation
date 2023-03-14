@@ -161,10 +161,10 @@ public class AndroidJUnitTest extends InstrumentationTest
     private boolean mUseTestStorage = false;
 
     @Option(
-        name = "ajur-max-shard",
-        description = "The maximum number of shard we want to allow the AJUR test to shard into"
-    )
-    private Integer mMaxShard = null;
+            name = "ajur-max-shard",
+            description =
+                    "The maximum number of shard we want to allow the AJUR test to shard into")
+    private Integer mMaxShard = 4;
 
     @Option(
         name = "device-listeners",
@@ -613,6 +613,17 @@ public class AndroidJUnitTest extends InstrumentationTest
     public Collection<IRemoteTest> split(int shardCount) {
         if (!isShardable()) {
             return null;
+        }
+        if (mIncludeTestFile != null && mIncludeTestFile.exists()) {
+            try {
+                String lines = FileUtil.readStringFromFile(mIncludeTestFile);
+                // Avoid sharding overly small set of include filters
+                if (lines.split("\n").length < 3) {
+                    return null;
+                }
+            } catch (IOException e) {
+                CLog.e(e);
+            }
         }
         if (mMaxShard != null) {
             shardCount = Math.min(shardCount, mMaxShard);
