@@ -214,6 +214,33 @@ public class TestDeviceTest {
         }
 
         @Override
+        public CommandResult executeShellV2Command(
+                String command, long maxTimeoutForCommand, TimeUnit timeUnit, int retryAttempts)
+                throws DeviceNotAvailableException {
+            Pair<String, Object> injectedCommand = mShellV2Commands.get(command);
+            if (injectedCommand == null) {
+                CLog.i("Command '%s' not injected; returning error");
+                return new CommandResult(CommandStatus.FAILED);
+            }
+            Object injectedResult = injectedCommand.second;
+            if (injectedResult instanceof CommandStatus) {
+                return new CommandResult((CommandStatus) injectedResult);
+            }
+            if (injectedResult instanceof String) {
+                CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                res.setStdout((String) injectedResult);
+                return res;
+            }
+            // Shouldn't happen
+            throw new IllegalStateException(
+                    "Object of invalid class inject as response of "
+                            + "command '"
+                            + command
+                            + "': "
+                            + injectedCommand);
+        }
+
+        @Override
         public CommandResult executeShellV2Command(String command)
                 throws DeviceNotAvailableException {
             Pair<String, Object> injectedCommand = mShellV2Commands.get(command);
@@ -3293,7 +3320,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3322,7 +3353,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3603,7 +3638,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3635,7 +3674,11 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String cmd,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("not found.");
@@ -3671,7 +3714,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("REL");
@@ -3986,7 +4033,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -4021,7 +4072,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -4065,7 +4120,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -4115,7 +4174,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -4166,7 +4229,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -4205,7 +4272,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -4243,7 +4314,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String cmd,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("Error:");
