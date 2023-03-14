@@ -874,13 +874,7 @@ public interface ITestDevice extends INativeDevice {
      * @return the userId of the primary user if there is one, and null if there is no primary user.
      * @throws DeviceNotAvailableException
      * @throws DeviceRuntimeException if the output from the device is not as expected.
-     * @deprecated The concept of primary user doesn't make sense anymore because some devices (like
-     *     automotive infotainment head units) use headless system user mode, where there is no
-     *     primary or secondary users. The system user (which is the primary user) runs in the
-     *     background, while the "real" user runs in the foreground. Callers should use {@link
-     *     #getCurrentUser()} or {@link #getMainUserId()} instead.
      */
-    @Deprecated
     public Integer getPrimaryUserId() throws DeviceNotAvailableException;
 
     /**
