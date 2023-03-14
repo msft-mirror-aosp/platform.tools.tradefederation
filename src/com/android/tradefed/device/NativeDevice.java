@@ -195,9 +195,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** Path of the device containing the tombstones */
     private static final String TOMBSTONE_PATH = "/data/tombstones/";
 
+    private static final long PROPERTY_GET_TIMEOUT = 45 * 1000L;
+
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
+
+    
     /**
      * The delimiter that separates the actual shell output and the exit status.
      *
@@ -599,7 +603,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
         }
         String cmd = String.format("getprop %s", name);
-        CommandResult result = executeShellV2Command(cmd);
+        CommandResult result =
+                executeShellV2Command(cmd, PROPERTY_GET_TIMEOUT, TimeUnit.MILLISECONDS, 0);
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             CLog.e(
                     "Failed to run '%s' returning null. stdout: %s\nstderr: %s\nexit code: %s",
