@@ -15,8 +15,6 @@
  */
 package com.android.tradefed.device.metric;
 
-import static java.util.Map.entry;
-
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -24,6 +22,8 @@ import com.android.tradefed.metrics.proto.MetricMeasurement;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+
+import com.google.common.collect.ImmutableSet;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -33,10 +33,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 /**
  * Base implementation of {@link FilePullerDeviceMetricCollector} that allows pulling the showmap
@@ -49,29 +52,13 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
     private static final String METRIC_START_END_TEXT = "------";
     private static final String METRIC_VALUE_SEPARATOR = "_";
     private static final String METRIC_UNIT = "bytes";
+    private static final Set<String> SKIP_COLUMNS = ImmutableSet.of("flags", "object", "locked");
+
     private Boolean processFound = false;
     private String processName = null;
     private Map<String, Long> mGranularInfo = new HashMap<>();
     private Set<String> mProcessObjInfo = new HashSet<>();
-    private final Map<String, Integer> mIndexMemoryMap =
-            Map.ofEntries(
-                    entry("virtualsize", 0),
-                    entry("rss", 1),
-                    entry("pss", 2),
-                    entry("sharedclean", 3),
-                    entry("shareddirty", 4),
-                    entry("privateclean", 5),
-                    entry("privatedirty", 6),
-                    entry("swap", 7),
-                    entry("swappss", 8),
-                    entry("anonhugepages", 9),
-                    entry("shmempmdmapped", 10),
-                    entry("filepmdmapped", 11),
-                    entry("sharedhugetlb", 12),
-                    entry("privatehugetlb", 13),
-                    // entry("locked", 14),
-                    // entry("flags", 15),
-                    entry("object", 16));
+    private Map<String, Integer> mColumnNameToColumnIndex = new HashMap<>();
 
     @Option(
             name = "showmap-metric-prefix",
@@ -96,6 +83,7 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
         Boolean metricFound = false;
 
         if (metricFile != null) {
+            List<String> headerList = new ArrayList<>();
             try (BufferedReader mBufferReader = new BufferedReader(new FileReader(metricFile))) {
                 while ((line = mBufferReader.readLine()) != null) {
                     if (!processFound) {
@@ -106,6 +94,18 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
                             metricFound
                                     ? computeGranularMetrics(line, processName)
                                     : isMetricParsingStartEnd(line);
+                    // We found the process name but have not found the headers
+                    if (mColumnNameToColumnIndex.isEmpty()) {
+                        if (!metricFound) {
+                            // We have not reached the "----" line yet.
+                            // Save the multi-line headers for later.
+                            headerList.add(line);
+                        } else if (metricFound) {
+                            // we reach the "----" line, and the mColumnNameToColumnIndex is empty
+                            // So we can get the headers now.
+                            extractHeaders(line, headerList);
+                        }
+                    }
                 }
             } catch (IOException e) {
                 CLog.e("Error parsing showmap granular metrics");
@@ -159,7 +159,7 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
 
         String[] metricLine = line.trim().split("\\s+");
         try {
-            objectName = metricLine[mIndexMemoryMap.get("object")];
+            objectName = metricLine[mColumnNameToColumnIndex.get("object")];
         } catch (ArrayIndexOutOfBoundsException e) {
             CLog.e("Error parsing granular metrics for %s", processName);
             computeObjectsPerProcess(processName);
@@ -167,13 +167,14 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
             return false;
         }
 
-        for (Map.Entry<String, Integer> entry : mIndexMemoryMap.entrySet()) {
+        for (Map.Entry<String, Integer> entry : mColumnNameToColumnIndex.entrySet()) {
             String memName = entry.getKey();
-            if (memName.equals("object")) {
+            if (SKIP_COLUMNS.contains(memName)) {
                 continue;
             }
             try {
-                mGranularValue = Long.parseLong(metricLine[mIndexMemoryMap.get(memName)]) * 1024;
+                mGranularValue =
+                        Long.parseLong(metricLine[mColumnNameToColumnIndex.get(memName)]) * 1024;
             } catch (NumberFormatException e) {
                 CLog.e("Error parsing granular metrics for %s", processName);
                 computeObjectsPerProcess(processName);
@@ -226,6 +227,45 @@ public class ShowmapPullerMetricCollector extends FilePullerDeviceMetricCollecto
     private void uploadMetricFile(File uploadFile) {
         try (InputStreamSource source = new FileInputStreamSource(uploadFile, true)) {
             testLog(getShowmapFileName(uploadFile.getName()), LogDataType.TEXT, source);
+        }
+    }
+
+    /**
+     * Extract the showmap column header used for computeGranularMetrics
+     *
+     * <p>We first get each hyphens lengths in a row first which indicates the length of the column.
+     * and then we split the header string by hyphens length including the empty space. At the end,
+     * we concat the split string among multiple rows as a machine-readable header.
+     *
+     * <p>In the showmap output file, the hyphens/dashes give the most predictable delineation of
+     * columns. The showmap output format was meant to be human-readable, not machine-readable, so
+     * there will always be some levels of hackiness involved.
+     *
+     * @param hyphens expect to extract headers when reaching ----
+     * @param headerList multi-line headers in a list
+     */
+    private void extractHeaders(String hyphens, List<String> headerList) {
+        List<Integer> steps =
+                Stream.of(hyphens.trim().split("\\s"))
+                        .map(s -> s.length())
+                        .collect(Collectors.toList());
+        // For each segment of hyphens, calculate its column's start and end indices.
+        int columnStart = 0;
+        for (int i = 0; i < steps.size(); i++) {
+            int columnEnd = columnStart + steps.get(i) + 1;
+            String header = "";
+            // Then, for each header row, get the header part with the start and end indices.
+            for (String row : headerList) {
+                String h = row.toLowerCase();
+                header =
+                        header.concat(
+                                h.substring(
+                                                columnStart > h.length() ? h.length() : columnStart,
+                                                columnEnd > h.length() ? h.length() : columnEnd)
+                                        .trim());
+            }
+            columnStart = columnEnd;
+            mColumnNameToColumnIndex.put(header, i);
         }
     }
 
