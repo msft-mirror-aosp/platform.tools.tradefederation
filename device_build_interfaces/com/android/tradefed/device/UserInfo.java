@@ -29,19 +29,16 @@ public final class UserInfo {
     public static final int FLAG_RESTRICTED = 0x00000008;
     public static final int FLAG_EPHEMERAL = 0x00000100;
     public static final int FLAG_MANAGED_PROFILE = 0x00000020;
-    public static final int FLAG_PROFILE = 0x00001000;
     public static final int USER_SYSTEM = 0;
     public static final int FLAG_MAIN = 0x00004000;
 
     public static final int FLAGS_NOT_SECONDARY =
             FLAG_PRIMARY | FLAG_MANAGED_PROFILE | FLAG_GUEST | FLAG_RESTRICTED;
-    public static final String CLONE_PROFILE_TYPE = "profile.CLONE";
 
     private final int mUserId;
     private final String mUserName;
     private final int mFlag;
     private final boolean mIsRunning;
-    private String mUserType;
 
     /** Supported variants of a user's type in external APIs. */
     public enum UserType {
@@ -63,9 +60,7 @@ public final class UserInfo {
         /** secondary user, i.e. non-primary and non-system. */
         SECONDARY,
         /** managed profile user, e.g. work profile. */
-        MANAGED_PROFILE,
-        /** clone profile user */
-        CLONE_PROFILE;
+        MANAGED_PROFILE;
 
         public boolean isCurrent() {
             return this == CURRENT;
@@ -94,16 +89,6 @@ public final class UserInfo {
         public boolean isManagedProfile() {
             return this == MANAGED_PROFILE;
         }
-
-        public boolean isCloneProfile() {
-            return this == CLONE_PROFILE;
-        }
-
-        /** Return whether this instance is of profile type. */
-        public boolean isProfile() {
-            // Other types are not supported
-            return isManagedProfile() || isCloneProfile();
-        }
     }
 
     public UserInfo(int userId, String userName, int flag, boolean isRunning) {
@@ -111,11 +96,6 @@ public final class UserInfo {
         mUserName = userName;
         mFlag = flag;
         mIsRunning = isRunning;
-    }
-
-    public UserInfo(int userId, String userName, int flag, boolean isRunning, String userType) {
-        this(userId, userName, flag, isRunning);
-        mUserType = userType;
     }
 
     public int userId() {
@@ -158,10 +138,6 @@ public final class UserInfo {
         return (mFlag & FLAG_MANAGED_PROFILE) == FLAG_MANAGED_PROFILE;
     }
 
-    public boolean isCloneProfile() {
-        return CLONE_PROFILE_TYPE.equals(mUserType);
-    }
-
     public boolean isEphemeral() {
         return (mFlag & FLAG_EPHEMERAL) == FLAG_EPHEMERAL;
     }
@@ -183,8 +159,6 @@ public final class UserInfo {
                 return isSecondary();
             case MANAGED_PROFILE:
                 return isManagedProfile();
-            case CLONE_PROFILE:
-                return isCloneProfile();
             default:
                 throw new RuntimeException("Variant not covered: " + userType);
         }
