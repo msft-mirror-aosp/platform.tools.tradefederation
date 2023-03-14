@@ -121,4 +121,10 @@ public interface IHostOptions {
 
     /** Return maximum allowed size(bytes) of the local file cache. */
     public Long getCacheSizeLimit();
+
+    /** Returns whether flashing should be done with flashstation. */
+    public boolean isFlashstationEnabled();
+
+    /** Returns the remote cl_flashstation script file. */
+    public File getClFlashstation();
 }
