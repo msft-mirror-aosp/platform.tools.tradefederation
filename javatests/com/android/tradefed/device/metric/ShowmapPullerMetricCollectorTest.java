@@ -71,6 +71,108 @@ public class ShowmapPullerMetricCollectorTest {
     }
 
     @Test
+    public void test16ColumnHeaders() throws Exception {
+        OptionSetter setter = new OptionSetter(mShowmapMetricCollector);
+        setter.setOptionValue("collect-on-run-ended-only", "false");
+        setter.setOptionValue("pull-pattern-keys", "showmap_output_file");
+        setter.setOptionValue("showmap-process-name", "system_server");
+        setter.setOptionValue("showmap-process-name", "netd");
+        FileWriter writer = new FileWriter(mTmpFile);
+        String log =
+                String.join(
+                        "\n",
+                        ">>> system_server (6910) <<<",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb flags "
+                                + " object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------------------------------",
+                        "     128        4        0        0        4        0        0        0   "
+                                + "     0         0         0         0        0        0    rw-"
+                                + " /dev/__properties__/properties_serial",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------------------------------");
+        writer.write(log);
+        writer.close();
+        TestDescription testDesc = new TestDescription("xyz", "abc");
+        mShowmapMetricCollector.testStarted(testDesc);
+
+        HashMap<String, Metric> currentMetrics = new HashMap<>();
+        currentMetrics.put(
+                "showmap_output_file",
+                TfMetricProtoUtil.stringToMetric("/sdcard/test_results/showmap.txt"));
+        Mockito.when(
+                        mMockDevice.pullFile(
+                                Mockito.eq("/sdcard/test_results/showmap.txt"), Mockito.eq(0)))
+                .thenReturn(mTmpFile);
+
+        mShowmapMetricCollector.testEnded(testDesc, currentMetrics);
+
+        Assert.assertEquals(16, currentMetrics.size());
+        Assert.assertEquals(
+                1,
+                currentMetrics
+                        .get("showmap_granular_system_server_total_object_count")
+                        .getMeasurements()
+                        .getSingleInt());
+    }
+
+    @Test
+    public void test17ColumnHeaders() throws Exception {
+        OptionSetter setter = new OptionSetter(mShowmapMetricCollector);
+        setter.setOptionValue("collect-on-run-ended-only", "false");
+        setter.setOptionValue("pull-pattern-keys", "showmap_output_file");
+        setter.setOptionValue("showmap-process-name", "system_server");
+        setter.setOptionValue("showmap-process-name", "netd");
+        FileWriter writer = new FileWriter(mTmpFile);
+        String log =
+                String.join(
+                        "\n",
+                        ">>> system_server (6910) <<<",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
+                        "     128        4        0        0        4        0        0        0   "
+                            + "     0         0         0         0        0        0      0    rw-"
+                            + " /dev/__properties__/properties_serial",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------");
+        writer.write(log);
+        writer.close();
+        TestDescription testDesc = new TestDescription("xyz", "abc");
+        mShowmapMetricCollector.testStarted(testDesc);
+
+        HashMap<String, Metric> currentMetrics = new HashMap<>();
+        currentMetrics.put(
+                "showmap_output_file",
+                TfMetricProtoUtil.stringToMetric("/sdcard/test_results/showmap.txt"));
+        Mockito.when(
+                        mMockDevice.pullFile(
+                                Mockito.eq("/sdcard/test_results/showmap.txt"), Mockito.eq(0)))
+                .thenReturn(mTmpFile);
+
+        mShowmapMetricCollector.testEnded(testDesc, currentMetrics);
+
+        Assert.assertEquals(16, currentMetrics.size());
+        Assert.assertEquals(
+                1,
+                currentMetrics
+                        .get("showmap_granular_system_server_total_object_count")
+                        .getMeasurements()
+                        .getSingleInt());
+    }
+
+    @Test
     public void testOneObjectTwiceFlow() throws Exception {
         OptionSetter setter = new OptionSetter(mShowmapMetricCollector);
         setter.setOptionValue("collect-on-run-ended-only", "false");
@@ -81,8 +183,14 @@ public class ShowmapPullerMetricCollectorTest {
                 String.join(
                         "\n",
                         ">>> system_server (6910) <<<",
-                        "size      RSS      PSS    clean    dirty    clean    dirty",
-                        "-------- -------- --------",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
                         "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
                         "11 21 31 41 51 61 71 81 91  101 111 121  131 141 15 r-- obj1",
                         "-------- -------- --------");
@@ -120,8 +228,14 @@ public class ShowmapPullerMetricCollectorTest {
                 String.join(
                         "\n",
                         ">>> system_server (6910) <<<",
-                        "size      RSS      PSS    clean    dirty    clean    dirty",
-                        "-------- -------- --------",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
                         "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
                         "11 21 31 41 51 61 71 81 91  101 111 121  131 141 15 r-- obj2",
                         "-------- -------- --------");
@@ -160,9 +274,15 @@ public class ShowmapPullerMetricCollectorTest {
                 String.join(
                         "\n",
                         ">>> system_server (6910) <<<",
-                        "size      RSS      PSS    clean    dirty    clean    dirty",
-                        "-------- -------- --------",
-                        "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
+                        "10 20 30 40 50 60 70 80 90  100 110 120  130 140 15 rw- obj1",
                         "11 21 31 41 51 61 71 81 91  101 111 121  131 141 15 r-- obj2",
                         "87 32 96 87 11 05 23 48 100 000 121 1 13 1991 15 rwx obj3./apex",
                         "-------- -------- --------");
@@ -202,13 +322,25 @@ public class ShowmapPullerMetricCollectorTest {
                 String.join(
                         "\n",
                         ">>> system_server (6910) <<<",
-                        "size      RSS      PSS    clean    dirty    clean    dirty",
-                        "-------- -------- --------",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
                         "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
                         "-------- -------- --------",
                         "   >>> netd (7038) <<<   ",
-                        "size      RSS      PSS    clean    dirty    clean    dirty",
-                        "-------- -------- --------",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
                         "100 2021 3033 4092 500 6 7  8 9 100 110 120 130 140 15 rw- obj123",
                         "-------- -------- --------");
         writer.write(log);
@@ -252,13 +384,25 @@ public class ShowmapPullerMetricCollectorTest {
                 String.join(
                         "\n",
                         ">>> system_server (6910) <<<",
-                        "size      RSS      PSS    clean    dirty    clean    dirty",
-                        "-------- -------- --------",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
                         "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
                         "-------- -------- --------",
                         "   >>> netd (7038) <<<   ",
-                        "size      RSS      PSS    clean    dirty    clean    dirty",
-                        "-------- -------- --------",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
                         "100 2021 3033 4092 500 6 7  8 9 100 110 120 130 140 15 rw- obj123",
                         "-------- -------- --------");
         writer.write(log);
@@ -290,13 +434,25 @@ public class ShowmapPullerMetricCollectorTest {
                 String.join(
                         "\n",
                         ">>> system_server (6910) <<<",
-                        "size      RSS      PSS    clean    dirty    clean    dirty",
-                        "-------- -------- --------",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
                         "10 20 30 40 50 60 70 80 90    100   110  120  130 140 15 rw- obj1",
                         "-------- -------- --------",
                         "   >>> netd (7038) <<<   ",
-                        "size      RSS      PSS    clean    dirty    clean    dirty",
-                        "-------- -------- --------",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
                         "100 2021 3033 4092 500 6 7  8 9 100 110 120 130 140 15 rw- obj123",
                         "-------- -------- --------");
         writer.write(log);
@@ -329,14 +485,26 @@ public class ShowmapPullerMetricCollectorTest {
                 String.join(
                         "\n",
                         ">>> system_server (6910) <<<",
-                        "size      RSS      PSS    clean    dirty    clean    dirty",
-                        "-------- -------- --------",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
                         "10 20 30 40 50 60 70    100   110  120  130 140 15 rw- obj1",
                         "100 2021 3033 4092 500 6 7  8 9 100 110 120 130 140 15 rw- obj123",
                         "-------- -------- --------",
                         "   >>> netd (7038) <<<   ",
-                        "size      RSS      PSS    clean    dirty    clean    dirty",
-                        "-------- -------- --------",
+                        " virtual                     shared   shared  private  private            "
+                                + "       Anon      Shmem     File       Shared   Private",
+                        "    size      RSS      PSS    clean    dirty    clean    dirty     swap "
+                                + " swapPSS HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb locked"
+                                + " flags  object",
+                        "-------- -------- -------- -------- -------- -------- -------- --------"
+                                + " -------- --------- --------- --------- -------- -------- ------"
+                                + " ------ ------------------------------",
                         "zzz abc 4%d -md 5,g --c 0sd  asd 9# 1*0 1! 1ew qqq 14: 15. rw- obj123",
                         "-------- -------- --------");
         writer.write(log);

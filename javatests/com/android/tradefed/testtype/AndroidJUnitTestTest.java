@@ -534,4 +534,22 @@ public class AndroidJUnitTestTest {
         assertNull(((AndroidJUnitTest) res.get(0)).split(2));
         assertNull(((AndroidJUnitTest) res.get(0)).split());
     }
+
+    @Test
+    public void testSplit_smallIncludeFilter() throws Exception {
+        mAndroidJUnitTest = new AndroidJUnitTest();
+        mAndroidJUnitTest.setRunnerName(AJUR);
+        assertEquals(AJUR, mAndroidJUnitTest.getRunnerName());
+        File includeFilterFile = FileUtil.createTempFile("include-filter-unit", ".txt");
+        try {
+            FileUtil.writeToFile("class.subclass\nclass.subclass2\n", includeFilterFile);
+            mAndroidJUnitTest.setIncludeTestFile(includeFilterFile);
+            OptionSetter setter = new OptionSetter(mAndroidJUnitTest);
+            setter.setOptionValue("runtime-hint", "60s");
+            List<IRemoteTest> res = (List<IRemoteTest>) mAndroidJUnitTest.split(3);
+            assertNull(res);
+        } finally {
+            FileUtil.deleteFile(includeFilterFile);
+        }
+    }
 }

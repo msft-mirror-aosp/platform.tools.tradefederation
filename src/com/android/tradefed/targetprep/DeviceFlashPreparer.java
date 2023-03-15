@@ -32,6 +32,7 @@ import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -238,14 +239,17 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                     }
                 }
 
-                // Only #flash is included in the critical section
-                getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
-                queueTime = System.currentTimeMillis() - start;
-                CLog.v(
-                        "Flashing permit obtained after %ds",
-                        TimeUnit.MILLISECONDS.toSeconds(queueTime));
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope("wait_for_flashing_permit")) {
+                    // Only #flash is included in the critical section
+                    getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                    queueTime = System.currentTimeMillis() - start;
+                    CLog.v(
+                            "Flashing permit obtained after %ds",
+                            TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
+                }
                 // Don't allow interruptions during flashing operations.
                 getRunUtil().allowInterrupt(false);
                 start = System.currentTimeMillis();
