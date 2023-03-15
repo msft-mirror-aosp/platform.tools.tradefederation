@@ -3448,6 +3448,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void postBootSetup() throws DeviceNotAvailableException {
+        if (getOptions().shouldDisableReboot()) {
+            return;
+        }
+        getConnection().reconnect(getSerialNumber());
         CLog.d("postBootSetup started");
         long startTime = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("postBootSetup")) {
