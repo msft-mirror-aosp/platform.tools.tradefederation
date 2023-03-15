@@ -362,6 +362,7 @@ import com.android.tradefed.testtype.suite.module.ArchModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.BaseModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.CarModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.DeviceFeatureModuleControllerTest;
+import com.android.tradefed.testtype.suite.module.MaxSdkModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.MinApiLevelModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.NativeBridgeModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.PackageInstalledModuleControllerTest;
@@ -920,6 +921,7 @@ import org.junit.runners.Suite.SuiteClasses;
     BaseModuleControllerTest.class,
     CarModuleControllerTest.class,
     DeviceFeatureModuleControllerTest.class,
+    MaxSdkModuleControllerTest.class,
     MinApiLevelModuleControllerTest.class,
     NativeBridgeModuleControllerTest.class,
     PackageInstalledModuleControllerTest.class,
