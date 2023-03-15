@@ -66,6 +66,10 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
     private boolean mTestRunStartFail;
     private int mTestCount;
 
+    public GcovKernelCodeCoverageCollector() {
+        setDisableReceiver(false);
+    }
+
     @Override
     public void setConfiguration(IConfiguration config) {
         mConfiguration = config;
@@ -122,6 +126,18 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
             collectGcovDebugfsCoverage(device, getTarBasename());
             unmountDebugfs(device);
         }
+    }
+
+    @Override
+    public void rebootStarted(ITestDevice device) throws DeviceNotAvailableException {
+        super.rebootStarted(device);
+        collectGcovDebugfsCoverage(device, getTarBasename());
+    }
+
+    @Override
+    public void rebootEnded(ITestDevice device) throws DeviceNotAvailableException {
+        super.rebootEnded(device);
+        mountDebugfs(device);
     }
 
     /* Gets the name to be used for the collected coverage tar file.
