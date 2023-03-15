@@ -497,7 +497,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      *
      * @param delay the delay in ms
      */
-    protected void setLogStartDelay(int delay) {
+    public void setLogStartDelay(int delay) {
         mLogStartDelay = delay;
     }
 
@@ -5231,13 +5231,22 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     getDeviceDescriptor(),
                     InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
-        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil());
+        initializeConnection(info, attributes);
+    }
+
+    protected void initializeConnection(IBuildInfo info, MultiMap<String, String> attributes)
+            throws DeviceNotAvailableException, TargetSetupError {
+        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil(), this, info);
+        if (attributes != null) {
+            builder.addAttributes(attributes);
+        }
         if (getOptions().shouldUseConnection()) {
-            mConnection = DefaultConnection.createConnection(builder.setDevice(this));
+            mConnection = DefaultConnection.createConnection(builder);
         } else {
             // Use default inop connection
-            mConnection = DefaultConnection.createConnection(builder);
+            mConnection = DefaultConnection.createInopConnection(builder);
         }
+        mConnection.initializeConnection();
     }
 
     /** {@inheritDoc} */
@@ -6029,7 +6038,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** The current connection associated with the device. */
     protected AbstractConnection getConnection() {
         if (mConnection == null) {
-            mConnection = DefaultConnection.createConnection(new ConnectionBuilder(getRunUtil()));
+            mConnection =
+                    DefaultConnection.createInopConnection(
+                            new ConnectionBuilder(getRunUtil(), this, null));
         }
         return mConnection;
     }
