@@ -99,6 +99,10 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     public void preInvocationSetup(IBuildInfo info, MultiMap<String, String> attributes)
             throws TargetSetupError, DeviceNotAvailableException {
         super.preInvocationSetup(info, attributes);
+        if (getOptions().shouldUseConnection()) {
+            // Connection should be initialized at this point
+            return;
+        }
         try {
             mGceSshMonitor = null;
             mTunnelInitFailed = null;
@@ -202,6 +206,11 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     /** {@inheritDoc} */
     @Override
     public void postInvocationTearDown(Throwable exception) {
+        if (getOptions().shouldUseConnection()) {
+            // Ensure parent postInvocationTearDown is always called.
+            super.postInvocationTearDown(exception);
+            return;
+        }
         try {
             CLog.i("Invocation tear down for device %s", getSerialNumber());
             // Just clear the logcat, we don't need the teardown logcat
