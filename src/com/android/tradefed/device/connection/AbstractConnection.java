@@ -16,9 +16,14 @@
 package com.android.tradefed.device.connection;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.targetprep.TargetSetupError;
 
 /** Abstract connection representation. */
 public abstract class AbstractConnection {
+
+    public void initializeConnection() throws TargetSetupError, DeviceNotAvailableException {
+        // Empty by default
+    }
 
     /**
      * Reconnect the connection to the device.
