@@ -75,7 +75,6 @@ import com.android.tradefed.util.SizeLimitedOutputStream;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.StringEscapeUtils;
 import com.android.tradefed.util.TimeUtil;
-import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -131,7 +130,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private static final int BUGREPORT_TIMEOUT = 2 * 60 * 1000;
     private static final String BUGREPORT_CMD = "bugreport";
     private static final String BUGREPORTZ_CMD = "bugreportz";
-    private static final String BUGREPORTZ_TMP_PATH = "/bugreports/";
 
     /** On-device path where we expect ANRs to be generated. */
     private static final String ANRS_PATH = "/data/anr";
@@ -197,9 +195,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** Path of the device containing the tombstones */
     private static final String TOMBSTONE_PATH = "/data/tombstones/";
 
+    private static final long PROPERTY_GET_TIMEOUT = 45 * 1000L;
+
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
+
+    
     /**
      * The delimiter that separates the actual shell output and the exit status.
      *
@@ -601,7 +603,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
         }
         String cmd = String.format("getprop %s", name);
-        CommandResult result = executeShellV2Command(cmd);
+        CommandResult result =
+                executeShellV2Command(cmd, PROPERTY_GET_TIMEOUT, TimeUnit.MILLISECONDS, 0);
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             CLog.e(
                     "Failed to run '%s' returning null. stdout: %s\nstderr: %s\nexit code: %s",
@@ -2880,9 +2883,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         try {
             bugreportzFile = getBugreportzInternal();
             if (bugreportzFile == null) {
-                bugreportzFile = bugreportzFallback();
-            }
-            if (bugreportzFile == null) {
                 // return empty buffer
                 return new ByteArrayInputStreamSource("".getBytes());
             }
@@ -2905,48 +2905,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             FileUtil.deleteFile(bugreportzFile);
             FileUtil.deleteFile(mainEntry);
         }
-    }
-
-    /**
-     * If first bugreportz collection was interrupted for any reasons, the temporary file where the
-     * dumpstate is redirected could exists if it started. We attempt to get it to have some partial
-     * data.
-     */
-    private File bugreportzFallback() {
-        try {
-            IFileEntry entries = getFileEntry(BUGREPORTZ_TMP_PATH);
-            if (entries != null) {
-                for (IFileEntry f : entries.getChildren(false)) {
-                    String name = f.getName();
-                    CLog.d("bugreport entry: %s", name);
-                    // Only get left-over zipped data to avoid confusing data types.
-                    if (name.endsWith(".zip")) {
-                        // Pull always on user 0 to avoid content provider and
-                        // let the path resolve itself
-                        File pulledZip = pullFile(BUGREPORTZ_TMP_PATH + name, 0);
-                        try {
-                            // Validate the zip before returning it.
-                            if (ZipUtil.isZipFileValid(pulledZip, false)) {
-                                return pulledZip;
-                            }
-                        } catch (IOException e) {
-                            CLog.e(e);
-                        }
-                        CLog.w("Failed to get a valid bugreportz.");
-                        // if zip validation failed, delete it and return null.
-                        FileUtil.deleteFile(pulledZip);
-                        return null;
-
-                    }
-                }
-                CLog.w("Could not find a tmp bugreport file in the directory.");
-            } else {
-                CLog.w("Could not find the file entry: '%s' on the device.", BUGREPORTZ_TMP_PATH);
-            }
-        } catch (DeviceNotAvailableException e) {
-            CLog.e(e);
-        }
-        return null;
     }
 
     /**
@@ -3034,9 +2992,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         long startTime = System.currentTimeMillis();
         try {
             File bugreportZip = getBugreportzInternal();
-            if (bugreportZip == null) {
-                bugreportZip = bugreportzFallback();
-            }
             if (bugreportZip != null) {
                 return new FileInputStreamSource(bugreportZip, true);
             }
@@ -4305,6 +4260,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             return recoverDevice();
         }
         return true;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean waitForDeviceAvailableInRecoverPath(final long waitTime)
+            throws DeviceNotAvailableException {
+        return mStateMonitor.waitForDeviceAvailableInRecoverPath(waitTime) != null;
     }
 
     /**

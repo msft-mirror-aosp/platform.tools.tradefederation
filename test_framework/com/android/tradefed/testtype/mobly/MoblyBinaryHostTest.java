@@ -121,6 +121,9 @@ public class MoblyBinaryHostTest
                             + "running binary.")
     private String mTestBed;
 
+    @Option(name = "mobly-std-log", description = "Print mobly logs to standard outputs")
+    private boolean mStdLog = false;
+
     private ITestDevice mDevice;
     private IBuildInfo mBuildInfo;
     private File mLogDir;
@@ -265,10 +268,22 @@ public class MoblyBinaryHostTest
                         "Couldn't find Mobly config file " + mConfigFileName);
             }
         }
-        CommandResult result =
-                getRunUtil()
-                        .runTimedCmd(
-                                getTestTimeout(), buildCommandLineArray(parFilePath, configPath));
+        CommandResult result;
+        if (isStdLogging()) {
+            result =
+                    getRunUtil()
+                            .runTimedCmd(
+                                    getTestTimeout(),
+                                    System.out,
+                                    System.err,
+                                    buildCommandLineArray(parFilePath, configPath));
+        } else {
+            result =
+                    getRunUtil()
+                            .runTimedCmd(
+                                    getTestTimeout(),
+                                    buildCommandLineArray(parFilePath, configPath));
+        }
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             CLog.e(
                     "Something went wrong when running the python binary:\nstdout: "
@@ -467,6 +482,11 @@ public class MoblyBinaryHostTest
     @VisibleForTesting
     String getTestBed() {
         return mTestBed;
+    }
+
+    @VisibleForTesting
+    boolean isStdLogging() {
+        return mStdLog;
     }
 
     @VisibleForTesting

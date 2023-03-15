@@ -1612,9 +1612,12 @@ public class TestInvocation implements ITestInvocation {
             }
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.ATTEMPT_RECOVERY_LOG_COUNT, 1);
+            RecoveryMode mode = device.getRecoveryMode();
             try {
+                device.setRecoveryMode(RecoveryMode.NONE);
                 // We need root to access the recovery logs so attempt to set it
-                device.enableAdbRoot();
+                String output = device.executeAdbCommand("root");
+                CLog.d("adb recovery root output: %s", output);
                 File recovery_log = device.pullFile(RECOVERY_LOG_DEVICE_PATH);
                 if (recovery_log == null) {
                     return;
@@ -1627,6 +1630,8 @@ public class TestInvocation implements ITestInvocation {
                 }
             } catch (DeviceNotAvailableException e) {
                 CLog.i("Device unavailable, can't pull recovery.log");
+            } finally {
+                device.setRecoveryMode(mode);
             }
         }
     }
@@ -1690,6 +1695,26 @@ public class TestInvocation implements ITestInvocation {
                 continue;
             }
             if (device.getIDevice() instanceof StubDevice) {
+                continue;
+            }
+            if (device.isStateBootloaderOrFastbootd()) {
+                dnae =
+                        new DeviceNotAvailableException(
+                                "Device was left in fastboot state after tests",
+                                device.getSerialNumber(),
+                                DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                reportFailure(
+                        createFailureFromException(dnae, FailureStatus.INFRA_FAILURE), listener);
+                continue;
+            }
+            if (TestDeviceState.RECOVERY.equals(device.getDeviceState())) {
+                dnae =
+                        new DeviceNotAvailableException(
+                                "Device was left in recovery state after tests",
+                                device.getSerialNumber(),
+                                DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                reportFailure(
+                        createFailureFromException(dnae, FailureStatus.INFRA_FAILURE), listener);
                 continue;
             }
             RecoveryMode current = device.getRecoveryMode();

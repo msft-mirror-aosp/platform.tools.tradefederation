@@ -59,25 +59,23 @@ public class OxygenUtil {
                                     LogDataType.TOMBSTONEZ))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-    private static final Map<Pattern, Pair<Pattern, String>>
+    private static final Map<Pattern, Pair<String, String>>
             REMOTE_LOG_NAME_PATTERN_TO_ERROR_SIGNATURE_MAP =
                     Stream.of(
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile("^launcher\\.log.*"),
                                             Pair.create(
-                                                    Pattern.compile(".*Address already in use.*"),
+                                                    "Address already in use",
                                                     "launch_cvd_port_collision")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile("^launcher\\.log.*"),
                                             Pair.create(
-                                                    Pattern.compile(".*vcpu hw run failure: 0x7.*"),
+                                                    "vcpu hw run failure: 0x7",
                                                     "crosvm_vcpu_hw_run_failure_7")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile("^launcher\\.log.*"),
                                             Pair.create(
-                                                    Pattern.compile(
-                                                            ".*Unable to connect to vsock"
-                                                                    + " server.*"),
+                                                    "Unable to connect to vsock server",
                                                     "unable_to_connect_to_vsock_server")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
@@ -187,8 +185,8 @@ public class OxygenUtil {
                     continue;
                 }
                 String fileName = file.getName();
-                List<Pair<Pattern, String>> pairs = new ArrayList<>();
-                for (Map.Entry<Pattern, Pair<Pattern, String>> entry :
+                List<Pair<String, String>> pairs = new ArrayList<>();
+                for (Map.Entry<Pattern, Pair<String, String>> entry :
                         REMOTE_LOG_NAME_PATTERN_TO_ERROR_SIGNATURE_MAP.entrySet()) {
                     Matcher matcher = entry.getKey().matcher(fileName);
                     if (matcher.find()) {
@@ -199,11 +197,11 @@ public class OxygenUtil {
                     continue;
                 }
                 try (Scanner scanner = new Scanner(file)) {
-                    List<Pair<Pattern, String>> pairsToRemove = new ArrayList<>();
+                    List<Pair<String, String>> pairsToRemove = new ArrayList<>();
                     while (scanner.hasNextLine()) {
                         String line = scanner.nextLine();
-                        for (Pair<Pattern, String> pair : pairs) {
-                            if (pair.first.matcher(line).find()) {
+                        for (Pair<String, String> pair : pairs) {
+                            if (line.indexOf(pair.first) != -1) {
                                 pairsToRemove.add(pair);
                                 signatures.add(pair.second);
                             }
