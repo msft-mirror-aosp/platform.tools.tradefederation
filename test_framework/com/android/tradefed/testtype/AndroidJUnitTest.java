@@ -380,7 +380,7 @@ public class AndroidJUnitTest extends InstrumentationTest
             pushedFile = true;
         }
         TestAppInstallSetup serviceInstaller = null;
-        if (pushedFile && mUseTestStorage) {
+        if (mUseTestStorage) {
             File testServices = null;
             try {
                 testServices = FileUtil.createTempFile("services", ".apk");
