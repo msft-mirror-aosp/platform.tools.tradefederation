@@ -158,7 +158,7 @@ public class AndroidJUnitTest extends InstrumentationTest
             name = "use-test-storage",
             description =
                     "If set to true, we will push filters to the test storage instead of disk.")
-    private boolean mUseTestStorage = false;
+    private boolean mUseTestStorage = true;
 
     @Option(
             name = "ajur-max-shard",
@@ -348,6 +348,13 @@ public class AndroidJUnitTest extends InstrumentationTest
         if (getDevice() == null) {
             throw new IllegalArgumentException("Device has not been set");
         }
+        if (mUseTestStorage) {
+            mUseTestStorage = getDevice().checkApiLevelAgainstNextRelease(34);
+            if (!mUseTestStorage) {
+                CLog.d("Disabled test storage as it's not supported on that branch.");
+            }
+        }
+
         boolean pushedFile = false;
         // if mIncludeTestFile is set, perform filtering with this file
         if (mIncludeTestFile != null && mIncludeTestFile.length() > 0) {

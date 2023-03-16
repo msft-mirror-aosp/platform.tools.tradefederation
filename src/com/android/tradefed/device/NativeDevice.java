@@ -195,9 +195,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** Path of the device containing the tombstones */
     private static final String TOMBSTONE_PATH = "/data/tombstones/";
 
+    private static final long PROPERTY_GET_TIMEOUT = 45 * 1000L;
+
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
+
+    
     /**
      * The delimiter that separates the actual shell output and the exit status.
      *
@@ -493,7 +497,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      *
      * @param delay the delay in ms
      */
-    protected void setLogStartDelay(int delay) {
+    public void setLogStartDelay(int delay) {
         mLogStartDelay = delay;
     }
 
@@ -599,7 +603,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
         }
         String cmd = String.format("getprop %s", name);
-        CommandResult result = executeShellV2Command(cmd);
+        CommandResult result =
+                executeShellV2Command(cmd, PROPERTY_GET_TIMEOUT, TimeUnit.MILLISECONDS, 0);
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             CLog.e(
                     "Failed to run '%s' returning null. stdout: %s\nstderr: %s\nexit code: %s",
@@ -5226,13 +5231,22 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     getDeviceDescriptor(),
                     InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
-        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil());
+        initializeConnection(info, attributes);
+    }
+
+    protected void initializeConnection(IBuildInfo info, MultiMap<String, String> attributes)
+            throws DeviceNotAvailableException, TargetSetupError {
+        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil(), this, info);
+        if (attributes != null) {
+            builder.addAttributes(attributes);
+        }
         if (getOptions().shouldUseConnection()) {
-            mConnection = DefaultConnection.createConnection(builder.setDevice(this));
+            mConnection = DefaultConnection.createConnection(builder);
         } else {
             // Use default inop connection
-            mConnection = DefaultConnection.createConnection(builder);
+            mConnection = DefaultConnection.createInopConnection(builder);
         }
+        mConnection.initializeConnection();
     }
 
     /** {@inheritDoc} */
@@ -6024,7 +6038,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** The current connection associated with the device. */
     protected AbstractConnection getConnection() {
         if (mConnection == null) {
-            mConnection = DefaultConnection.createConnection(new ConnectionBuilder(getRunUtil()));
+            mConnection =
+                    DefaultConnection.createInopConnection(
+                            new ConnectionBuilder(getRunUtil(), this, null));
         }
         return mConnection;
     }
