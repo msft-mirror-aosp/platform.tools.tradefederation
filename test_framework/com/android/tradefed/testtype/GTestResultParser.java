@@ -786,6 +786,10 @@ public class GTestResultParser extends MultiLineReceiver {
     @Override
     public void done() {
         super.done();
+        if (mMethodScope != null) {
+            mMethodScope.close();
+            mMethodScope = null;
+        }
         // To make sure the test fail run will only be reported for this run.
         if (mTestRunStartReported && (mNumTestsExpected > mNumTestsRun)) {
             handleTestRunFailed(
