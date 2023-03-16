@@ -23,6 +23,8 @@ import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
@@ -31,6 +33,7 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ResourceUtil;
 
@@ -146,6 +149,29 @@ public class IsolatedHostTestTest {
         assertFalse(commandArgs.contains("-Drobolectric.resourcesMode=binary"));
         assertFalse(
                 commandArgs.stream().anyMatch(s -> s.contains("-Drobolectric.dependency.dir=")));
+    }
+
+    @Test
+    public void testCoverageArgsAreAdded_whenCoverageIsTurnedOn() throws Exception {
+        CoverageOptions coverageOptions = new CoverageOptions();
+        OptionSetter setter = new OptionSetter(coverageOptions);
+        setter.setOptionValue("coverage", "true");
+        setter.setOptionValue("jacocoagent-path", "path/to/jacocoagent.jar");
+        IConfiguration config = new Configuration("config", "Test config");
+        config.setCoverageOptions(coverageOptions);
+        mHostTest.setConfiguration(config);
+        doReturn(mMockTestDir).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
+        doReturn(36000).when(mMockServer).getLocalPort();
+        doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
+
+        List<String> commandArgs = mHostTest.compileCommandArgs("");
+
+        String javaAgent =
+                String.format(
+                        "-javaagent:path/to/jacocoagent.jar=destfile=%s",
+                        mHostTest.getCoverageExecFile().getAbsolutePath());
+        assertTrue(commandArgs.contains(javaAgent));
+        FileUtil.deleteFile(mHostTest.getCoverageExecFile());
     }
 
     /**
