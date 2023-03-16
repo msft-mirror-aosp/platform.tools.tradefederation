@@ -394,15 +394,17 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     @Override
     public void postBootSetup() throws DeviceNotAvailableException {
         if (!getOptions().shouldDisableReboot()) {
-            CLog.v("Performing post boot setup for GCE AVD %s", getSerialNumber());
-            // Should already be connected at this point, but if something is
-            // missing, restart the tunnel
-            if (!getGceSshMonitor().isTunnelAlive()) {
-                getGceSshMonitor().closeConnection();
-                getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
-                waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
+            if (!getOptions().shouldUseConnection()) {
+                CLog.v("Performing post boot setup for GCE AVD %s", getSerialNumber());
+                // Should already be connected at this point, but if something is
+                // missing, restart the tunnel
+                if (!getGceSshMonitor().isTunnelAlive()) {
+                    getGceSshMonitor().closeConnection();
+                    getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
+                    waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
+                }
+                waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
             }
-            waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
         }
         super.postBootSetup();
     }
@@ -469,15 +471,18 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         // We catch that adb reboot is called to expect it from the tunnel.
         getGceSshMonitor().isAdbRebootCalled(true);
         super.doAdbReboot(rebootMode, reason);
-        // After the reboot we wait for tunnel to be online and device to be reconnected
-        getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
-        waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
-        waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
     }
 
     @Override
     protected void postAdbReboot() throws DeviceNotAvailableException {
-        // Ignore super on purpose, since doAdbReboot already handle reconnect
+        if (!getOptions().shouldUseConnection()) {
+            // After the reboot we wait for tunnel to be online and device to be reconnected
+            getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
+            waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
+            waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
+        } else {
+            super.postAdbReboot();
+        }
     }
 
     /**

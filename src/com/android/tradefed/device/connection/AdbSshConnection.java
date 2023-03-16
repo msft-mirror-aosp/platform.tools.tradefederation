@@ -63,6 +63,7 @@ public class AdbSshConnection extends AdbTcpConnection {
     private DeviceNotAvailableException mTunnelInitFailed = null;
 
     private static final int WAIT_TIME_DIVISION = 4;
+    private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
     private static final long WAIT_FOR_TUNNEL_ONLINE = 2 * 60 * 1000;
 
     public AdbSshConnection(ConnectionBuilder builder) {
@@ -170,6 +171,16 @@ public class AdbSshConnection extends AdbTcpConnection {
         if (getDevice().getOptions().isLogcatCaptureEnabled()) {
             getDevice().startLogcat();
         }
+    }
+
+    @Override
+    public void reconnect(String serial) throws DeviceNotAvailableException {
+        if (!getGceSshMonitor().isTunnelAlive()) {
+            getGceSshMonitor().closeConnection();
+            getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
+            waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
+        }
+        super.reconnect(serial);
     }
 
     @Override
