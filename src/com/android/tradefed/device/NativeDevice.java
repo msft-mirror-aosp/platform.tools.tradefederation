@@ -2442,7 +2442,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     }
 
     /** Builds the OS command for the given adb shell command session and args */
-    private String[] buildAdbShellCommand(String command, boolean forceExitStatusDetection) {
+    protected String[] buildAdbShellCommand(String command, boolean forceExitStatusDetection) {
         // TODO: implement the shell v2 support in ddmlib itself.
         String[] commandArgs =
                 QuotationAwareTokenizer.tokenizeLine(
