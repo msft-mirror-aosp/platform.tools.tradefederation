@@ -178,7 +178,7 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
         try {
             mBgCommandLogs = createBgCommandLogs();
             replaceSerialNumber(mBgCommands, device);
-            replaceExtraFile(mSetUpCommands, buildInfo);
+            replaceExtraFile(mBgCommands, buildInfo);
             runBgCommandList(mBgCommands, mBgCommandLogs);
         } catch (IOException e) {
             throw new TargetSetupError(
