@@ -70,6 +70,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private static final int R_SDK_INT = 30;
     // Pattern used to identify the package names from adb shell pm path.
     private static final Pattern PACKAGE_REGEX = Pattern.compile("package:(.*)");
+    private static final String MODULE_VERSION_PROP_SUFFIX = "_version_used";
     protected static final String APEX_SUFFIX = ".apex";
     protected static final String APK_SUFFIX = ".apk";
     protected static final String SPLIT_APKS_SUFFIX = ".apks";
@@ -184,6 +185,18 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                 // the mainline modules are the same as the previous ones.
                 CLog.i("All required modules are installed");
                 return;
+            }
+        }
+
+        // Store the version info of each module for updatiing mainline invocation property in ATI.
+        // Supported for non test mapping runs which has invocation level module installation.
+        if (!mOptimizeMainlineTest && !containsApks(testAppFiles)) {
+            for (File f : testAppFiles) {
+                ApexInfo apexInfo = retrieveApexInfo(f, testInfo.getDevice().getDeviceDescriptor());
+                testInfo.getBuildInfo()
+                        .addBuildAttribute(
+                                apexInfo.name + MODULE_VERSION_PROP_SUFFIX,
+                                String.valueOf(apexInfo.versionCode));
             }
         }
 
