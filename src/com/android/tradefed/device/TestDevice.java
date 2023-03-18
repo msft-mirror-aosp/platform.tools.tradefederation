@@ -2384,7 +2384,7 @@ public class TestDevice extends NativeDevice {
                             + " | sed \\'s/^/"
                             + tag
                             + ": /g\\''\""; // add tags in front of lines
-
+            getRunUtil().allowInterrupt(true);
             // Manually execute the adb action to avoid any kind of recovery
             // since it hard to interrupt the forwarding
             final String[] fullCmd = buildAdbShellCommand(logwrapperCmd, false);
@@ -2698,9 +2698,10 @@ public class TestDevice extends NativeDevice {
         GlobalConfiguration.getDeviceManagerInstance()
                 .freeDevice(microdroidDevice, FreeDeviceState.AVAILABLE);
         MicrodroidTracker tracker = mStartedMicrodroids.remove(process);
+        getRunUtil().allowInterrupt(true);
         try {
             tracker.executor.shutdownNow();
-            tracker.executor.awaitTermination(2L, TimeUnit.MINUTES);
+            tracker.executor.awaitTermination(1L, TimeUnit.MINUTES);
         } catch (InterruptedException e) {
             CLog.e(e);
         }
