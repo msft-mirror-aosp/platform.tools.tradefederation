@@ -28,6 +28,7 @@ import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -44,7 +45,7 @@ import com.android.tradefed.util.StreamUtil;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 
-import java.awt.*;
+import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -151,8 +152,8 @@ public class TestDevice extends NativeDevice {
 
     /** If the device is a Microdroid, this refers to the VM process. Otherwise, it is null. */
     private Process mMicrodroidProcess = null;
-    /** Contains a set of Microdroid instances running in this TestDevice, and their CIDs. */
-    private Map<Process, String> mStartedMicrodroids = new HashMap<>();
+    /** Contains a set of Microdroid instances running in this TestDevice, and their resources. */
+    private Map<Process, MicrodroidTracker> mStartedMicrodroids = new HashMap<>();
 
     private static final String TEST_ROOT = "/data/local/tmp/virt/";
     private static final String VIRT_APEX = "/apex/com.android.virt/";
@@ -165,6 +166,11 @@ public class TestDevice extends NativeDevice {
     private static final long MICRODROID_DEFAULT_ADB_CONNECT_TIMEOUT_MINUTES = 5;
 
     private static final String EARLY_REBOOT = "Too early to call shutdown() or reboot()";
+
+    /** Track microdroid and its resources */
+    private class MicrodroidTracker {
+        ExecutorService executor;
+    }
 
     /**
      * @param device
@@ -1277,31 +1283,6 @@ public class TestDevice extends NativeDevice {
         return result;
     }
 
-    private String getUserType(int userId) throws DeviceNotAvailableException {
-        String command = "dumpsys user --user " + userId;
-        String commandOutput = executeShellCommand(command);
-        // Extract the id of all existing users.
-        String[] lines = commandOutput.split("\\r?\\n");
-        if (!lines[0].contains("UserInfo{" + userId)) {
-            throw new DeviceRuntimeException(
-                    String.format("'%s' in not a valid output for 'pm list users'", commandOutput),
-                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
-        }
-
-        String userType = lines[1];
-        // Type: android.os.userType.PROFILE.xxx format
-        String[] tokens = userType.split(":");
-        if (tokens.length < 2) {
-            throw new DeviceRuntimeException(
-                    String.format(
-                            "device output: '%s' \nline: '%s' was not in the expected "
-                                    + "format for user info.",
-                            commandOutput, lines[0]),
-                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
-        }
-        return tokens[1].trim();
-    }
-
     /**
      * Tokenizes the output of 'pm list users'.
      * The returned tokens for each user have the form: {"\tUserInfo", Integer.toString(id), name,
@@ -1354,7 +1335,8 @@ public class TestDevice extends NativeDevice {
                     // output: [AAA, BBB, XXX (running) (current) (visible)]
                     String[] flagsArr = flags_and_status.split("\\|");
                     // XXX (running) (current) (visible)
-                    String last_flag_and_status = flagsArr.length > 0 ? flagsArr[flagsArr.length - 1] : "";
+                    String last_flag_and_status =
+                            flagsArr.length > 0 ? flagsArr[flagsArr.length - 1] : "";
                     String[] arr = last_flag_and_status.split("\\s", 2);
                     if (arr.length > 0) {
                         flags = Integer.toHexString(convertToHex(flagsArr, arr[0]));
@@ -2392,11 +2374,7 @@ public class TestDevice extends NativeDevice {
      * and log outputs to the host device's log.
      */
     private void forwardFileToLog(String logPath, String tag) {
-        try {
-            // Keep redirecting as long as the expecting maximum test time. When an adb
-            // command times out, it may trigger the device recovery process, which
-            // disconnect adb, which terminates any live adb commands. See an example at
-            // b/194974010#comment25.
+        try (CloseableTraceScope ignored = new CloseableTraceScope("forward_to_log:" + tag)) {
             String logwrapperCmd =
                     "logwrapper "
                             + "sh "
@@ -2406,16 +2384,18 @@ public class TestDevice extends NativeDevice {
                             + " | sed \\'s/^/"
                             + tag
                             + ": /g\\''\""; // add tags in front of lines
-            CommandResult logwrapperResult =
-                    executeShellV2Command(
-                            logwrapperCmd,
-                            MICRODROID_MAX_LIFETIME_MINUTES * 60 * 1000,
-                            java.util.concurrent.TimeUnit.MILLISECONDS);
-            if (logwrapperResult.getStatus() != CommandStatus.SUCCESS) {
-                throw new DeviceRuntimeException(
-                        logwrapperCmd + " has failed: " + logwrapperResult,
-                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
-            }
+            getRunUtil().allowInterrupt(true);
+            // Manually execute the adb action to avoid any kind of recovery
+            // since it hard to interrupt the forwarding
+            final String[] fullCmd = buildAdbShellCommand(logwrapperCmd, false);
+            AdbShellAction adbActionV2 =
+                    new AdbShellAction(
+                            fullCmd,
+                            null,
+                            null,
+                            null,
+                            TimeUnit.MINUTES.toMillis(MICRODROID_MAX_LIFETIME_MINUTES));
+            adbActionV2.run();
         } catch (Exception e) {
             // Consume
         }
@@ -2587,6 +2567,8 @@ public class TestDevice extends NativeDevice {
             process.destroy();
             try {
                 process.waitFor();
+                executor.shutdownNow();
+                executor.awaitTermination(2L, TimeUnit.MINUTES);
             } catch (InterruptedException ex) {
             }
             throw new DeviceRuntimeException(
@@ -2597,7 +2579,9 @@ public class TestDevice extends NativeDevice {
         microdroid.getOptions().setAdbRootUnavailableTimeout(4 * 1000);
         setTestDeviceOptions(microdroid, builder.mTestDeviceOptions);
         microdroid.setMicrodroidProcess(process);
-        mStartedMicrodroids.put(process, cid);
+        MicrodroidTracker tracker = new MicrodroidTracker();
+        tracker.executor = executor;
+        mStartedMicrodroids.put(process, tracker);
         return microdroid;
     }
 
@@ -2713,7 +2697,14 @@ public class TestDevice extends NativeDevice {
 
         GlobalConfiguration.getDeviceManagerInstance()
                 .freeDevice(microdroidDevice, FreeDeviceState.AVAILABLE);
-        mStartedMicrodroids.remove(process);
+        MicrodroidTracker tracker = mStartedMicrodroids.remove(process);
+        getRunUtil().allowInterrupt(true);
+        try {
+            tracker.executor.shutdownNow();
+            tracker.executor.awaitTermination(1L, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            CLog.e(e);
+        }
     }
 
     /**
