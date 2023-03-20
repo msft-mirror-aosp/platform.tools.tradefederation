@@ -22,10 +22,10 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
-import com.android.tradefed.device.TestDeviceOptions.InstanceType;
+import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
+import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.CommonLogRemoteFileUtil;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
@@ -33,7 +33,6 @@ import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
 import com.android.tradefed.device.cloud.OxygenUtil;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
-import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
@@ -56,7 +55,6 @@ import java.util.concurrent.TimeUnit;
 public class AdbSshConnection extends AdbTcpConnection {
 
     private GceAvdInfo mGceAvd = null;
-    private ITestLogger mTestLogger;
 
     private GceManager mGceHandler = null;
     private GceSshTunnelMonitor mGceSshMonitor;
@@ -192,7 +190,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             getDevice().stopLogcat();
             // Terminate SSH tunnel process.
             if (getGceSshMonitor() != null) {
-                getGceSshMonitor().logSshTunnelLogs(mTestLogger);
+                getGceSshMonitor().logSshTunnelLogs(getLogger());
                 getGceSshMonitor().shutdown();
                 try {
                     getGceSshMonitor().joinMonitor();
@@ -216,7 +214,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getSshBugreport();
                     }
                     // Log the serial output of the instance.
-                    getGceHandler().logSerialOutput(mGceAvd, mTestLogger);
+                    getGceHandler().logSerialOutput(mGceAvd, getLogger());
 
                     // Test if an SSH connection can be established. If can't, skip all collection.
                     boolean isGceReachable =
@@ -226,11 +224,11 @@ public class AdbSshConnection extends AdbTcpConnection {
                     if (isGceReachable) {
                         // Fetch remote files
                         CommonLogRemoteFileUtil.fetchCommonFiles(
-                                mTestLogger, mGceAvd, getDevice().getOptions(), getRunUtil());
+                                getLogger(), mGceAvd, getDevice().getOptions(), getRunUtil());
 
                         // Fetch all tombstones if any.
                         CommonLogRemoteFileUtil.fetchTombstones(
-                                mTestLogger, mGceAvd, getDevice().getOptions(), getRunUtil());
+                                getLogger(), mGceAvd, getDevice().getOptions(), getRunUtil());
                     } else {
                         CLog.e(
                                 "Failed to establish ssh connect to remote file host, skipping"
@@ -240,7 +238,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     // Fetch host kernel log by running `dmesg` for Oxygen hosts
                     if (getDevice().getOptions().useOxygen()) {
                         CommonLogRemoteFileUtil.logRemoteCommandOutput(
-                                mTestLogger,
+                                getLogger(),
                                 mGceAvd,
                                 getDevice().getOptions(),
                                 getRunUtil(),
@@ -290,7 +288,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                                         getInitialUser(),
                                         getInitialDeviceNumOffset(),
                                         attributes,
-                                        mTestLogger);
+                                        getLogger());
                 if (mGceAvd != null) {
                     break;
                 }
@@ -302,7 +300,7 @@ public class AdbSshConnection extends AdbTcpConnection {
 
                 if (getDevice().getOptions().useOxygen()) {
                     OxygenUtil util = new OxygenUtil();
-                    util.downloadLaunchFailureLogs(tse, mTestLogger);
+                    util.downloadLaunchFailureLogs(tse, getLogger());
                 }
             }
         }
@@ -392,7 +390,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
             if (bugreportFile != null) {
                 InputStreamSource bugreport = new FileInputStreamSource(bugreportFile);
-                mTestLogger.testLog("bugreportz-ssh", LogDataType.BUGREPORTZ, bugreport);
+                getLogger().testLog("bugreportz-ssh", LogDataType.BUGREPORTZ, bugreport);
                 StreamUtil.cancel(bugreport);
             }
         } catch (IOException e) {
