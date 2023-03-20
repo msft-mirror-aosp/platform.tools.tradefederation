@@ -6040,7 +6040,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     }
 
     /** The current connection associated with the device. */
-    protected AbstractConnection getConnection() {
+    public AbstractConnection getConnection() {
         if (mConnection == null) {
             mConnection =
                     DefaultConnection.createInopConnection(
@@ -6048,6 +6048,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
         return mConnection;
     }
+
     /**
      * Notifies all {@link IDeviceActionReceiver} about reboot start event.
      *

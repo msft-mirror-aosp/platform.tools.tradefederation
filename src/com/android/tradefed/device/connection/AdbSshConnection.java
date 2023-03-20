@@ -401,4 +401,12 @@ public class AdbSshConnection extends AdbTcpConnection {
             FileUtil.deleteFile(bugreportFile);
         }
     }
+
+    /**
+     * Returns the {@link GceAvdInfo} from the created remote VM. Returns regardless of the status
+     * so we can inspect the info.
+     */
+    public GceAvdInfo getAvdInfo() {
+        return mGceAvd;
+    }
 }
