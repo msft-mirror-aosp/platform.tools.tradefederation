@@ -21,6 +21,7 @@ import com.android.tradefed.device.IConfigurableVirtualDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 
@@ -38,6 +39,7 @@ public class DefaultConnection extends AbstractConnection {
     private final String mInitialUser;
     private final Integer mInitialDeviceNumOffset;
     private final String mInitialSerial;
+    private final ITestLogger mTestLogger;
 
     public static DefaultConnection createInopConnection(ConnectionBuilder builder) {
         return new DefaultConnection(builder);
@@ -63,11 +65,14 @@ public class DefaultConnection extends AbstractConnection {
         IBuildInfo buildInfo;
         MultiMap<String, String> attributes;
         IRunUtil runUtil;
+        ITestLogger logger;
 
-        public ConnectionBuilder(IRunUtil runUtil, ITestDevice device, IBuildInfo buildInfo) {
+        public ConnectionBuilder(
+                IRunUtil runUtil, ITestDevice device, IBuildInfo buildInfo, ITestLogger logger) {
             this.runUtil = runUtil;
             this.device = device;
             this.buildInfo = buildInfo;
+            this.logger = logger;
             attributes = new MultiMap<String, String>();
         }
 
@@ -85,6 +90,7 @@ public class DefaultConnection extends AbstractConnection {
         mAttributes = builder.attributes;
         IDevice idevice = mDevice.getIDevice();
         mInitialSerial = mDevice.getSerialNumber();
+        mTestLogger = builder.logger;
         if (idevice instanceof IConfigurableVirtualDevice) {
             mInitialIpDevice = ((IConfigurableVirtualDevice) idevice).getKnownDeviceIp();
             mInitialUser = ((IConfigurableVirtualDevice) idevice).getKnownUser();
@@ -133,5 +139,10 @@ public class DefaultConnection extends AbstractConnection {
     /** Returns the initial serial name of the device. */
     public String getInitialSerial() {
         return mInitialSerial;
+    }
+
+    /** Returns the {@link ITestLogger} to log files. */
+    public ITestLogger getLogger() {
+        return mTestLogger;
     }
 }
