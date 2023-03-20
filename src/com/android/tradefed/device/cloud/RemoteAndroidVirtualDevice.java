@@ -549,6 +549,18 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         return mGceAvd;
     }
 
+    /**
+     * Returns the {@link GceAvdInfo} from the created remote VM. Returns regardless of the status
+     * so we can inspect the info.
+     */
+    public @Nullable GceAvdInfo getAvdInfoAnyState() {
+        if (mGceAvd == null) {
+            CLog.w("Requested getAvdInfo() but GceAvdInfo is null.");
+            return null;
+        }
+        return mGceAvd;
+    }
+
     @VisibleForTesting
     boolean fetchRemoteDir(File localDir, String remotePath) {
         return RemoteFileUtil.fetchRemoteDir(
