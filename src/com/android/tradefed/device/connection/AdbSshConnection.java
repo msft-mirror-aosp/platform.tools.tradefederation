@@ -33,6 +33,8 @@ import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
 import com.android.tradefed.device.cloud.OxygenUtil;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
@@ -60,6 +62,7 @@ public class AdbSshConnection extends AdbTcpConnection {
     private GceSshTunnelMonitor mGceSshMonitor;
     private DeviceNotAvailableException mTunnelInitFailed = null;
 
+    private static final long CHECK_WAIT_DEVICE_AVAIL_MS = 30 * 1000;
     private static final int WAIT_TIME_DIVISION = 4;
     private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
     private static final long WAIT_FOR_TUNNEL_ONLINE = 2 * 60 * 1000;
@@ -179,6 +182,43 @@ public class AdbSshConnection extends AdbTcpConnection {
             waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
         }
         super.reconnect(serial);
+    }
+
+    @Override
+    public void reconnectForRecovery(String serial) throws DeviceNotAvailableException {
+        if (getGceSshMonitor() == null) {
+            if (mTunnelInitFailed != null) {
+                // We threw before but was not reported, so throw the root cause here.
+                throw mTunnelInitFailed;
+            }
+            waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
+        }
+        // Check that shell is available before resetting the bridge
+        if (!getDevice().waitForDeviceShell(CHECK_WAIT_DEVICE_AVAIL_MS)) {
+            long startTime = System.currentTimeMillis();
+            try {
+                // Re-init tunnel when attempting recovery
+                CLog.i("Attempting recovery on GCE AVD %s", serial);
+                getGceSshMonitor().closeConnection();
+                getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
+                waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
+                waitForAdbConnect(serial, WAIT_FOR_ADB_CONNECT);
+            } catch (Exception e) {
+                // Log the entrance in recovery here to avoid double counting with
+                // super.recoverDevice.
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.RECOVERY_ROUTINE_COUNT, 1);
+                throw e;
+            } finally {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.RECOVERY_TIME, System.currentTimeMillis() - startTime);
+            }
+        }
+    }
+
+    @Override
+    public void notifyAdbRebootCalled() {
+        getGceSshMonitor().isAdbRebootCalled(true);
     }
 
     @Override
@@ -375,7 +415,11 @@ public class AdbSshConnection extends AdbTcpConnection {
     }
 
     /** Capture a remote bugreport by ssh-ing into the device directly. */
-    private void getSshBugreport() {
+    public void getSshBugreport() {
+        if (mGceAvd == null) {
+            CLog.w("No GceAvdInfo to fetch bugreport from.");
+            return;
+        }
         InstanceType type = getDevice().getOptions().getInstanceType();
         File bugreportFile = null;
         try {

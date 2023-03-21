@@ -1046,6 +1046,7 @@ public class TestDevice extends NativeDevice {
     @Override
     protected void doAdbReboot(RebootMode rebootMode, @Nullable final String reason)
             throws DeviceNotAvailableException {
+        getConnection().notifyAdbRebootCalled();
         if (!TestDeviceState.ONLINE.equals(getDeviceState())
                 || !doAdbFrameworkReboot(rebootMode, reason)) {
             super.doAdbReboot(rebootMode, reason);
