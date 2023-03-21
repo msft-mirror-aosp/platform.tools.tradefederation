@@ -26,11 +26,14 @@ import java.util.ArrayList;
 import java.util.Map;
 
 // Not directly unit tested, but its clients are
-final class UserCreationHelper {
+final class UserHelper {
 
     private static final String TF_CREATED_USER = "tf_created_user";
     // TODO(b/270604218): remove constant (and usage) if we decide to not automatically set it
     @VisibleForTesting static final String USER_SETUP_COMPLETE = "user_setup_complete";
+
+    /** System property used to indicate which Android user is running the test. */
+    static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
     // TODO(b/270604218): merge both methods if CreateUserPreparer also provisions it
     public static int createUser(ITestDevice device, boolean reuseTestUser)
@@ -98,7 +101,7 @@ final class UserCreationHelper {
         return null;
     }
 
-    private UserCreationHelper() {
+    private UserHelper() {
         throw new UnsupportedOperationException("provide only static methods");
     }
 }

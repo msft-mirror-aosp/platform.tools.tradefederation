@@ -16,12 +16,12 @@
 
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
+
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
-
-import com.google.common.annotations.VisibleForTesting;
 
 /**
  * An {@link ITargetPreparer} that marks that tests should be run on the user (rather than the
@@ -34,8 +34,6 @@ import com.google.common.annotations.VisibleForTesting;
  */
 @OptionClass(alias = "run-on-system-user")
 public class RunOnSystemUserTargetPreparer extends BaseTargetPreparer {
-
-    @VisibleForTesting static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
     private Integer mUserToSwitchTo;
 
