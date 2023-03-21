@@ -33,10 +33,8 @@ import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
-import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
-import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -66,10 +64,9 @@ import javax.annotation.Nullable;
  * Google Compute Engine (Gce). Assume the device serial will be in the format
  * <hostname>:<portnumber> in adb.
  */
-public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements ITestLoggerReceiver {
+public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
 
     private GceAvdInfo mGceAvd = null;
-    private ITestLogger mTestLogger;
 
     private GceManager mGceHandler = null;
     private GceSshTunnelMonitor mGceSshMonitor;
@@ -218,7 +215,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             stopLogcat();
             // Terminate SSH tunnel process.
             if (getGceSshMonitor() != null) {
-                getGceSshMonitor().logSshTunnelLogs(mTestLogger);
+                getGceSshMonitor().logSshTunnelLogs(getLogger());
                 getGceSshMonitor().shutdown();
                 try {
                     getGceSshMonitor().joinMonitor();
@@ -241,7 +238,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                         getSshBugreport();
                     }
                     // Log the serial output of the instance.
-                    getGceHandler().logSerialOutput(mGceAvd, mTestLogger);
+                    getGceHandler().logSerialOutput(mGceAvd, getLogger());
 
                     // Test if an SSH connection can be established. If can't, skip all collection.
                     boolean isGceReachable =
@@ -251,11 +248,11 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                     if (isGceReachable) {
                         // Fetch remote files
                         CommonLogRemoteFileUtil.fetchCommonFiles(
-                                mTestLogger, mGceAvd, getOptions(), getRunUtil());
+                                getLogger(), mGceAvd, getOptions(), getRunUtil());
 
                         // Fetch all tombstones if any.
                         CommonLogRemoteFileUtil.fetchTombstones(
-                                mTestLogger, mGceAvd, getOptions(), getRunUtil());
+                                getLogger(), mGceAvd, getOptions(), getRunUtil());
                     } else {
                         CLog.e(
                                 "Failed to establish ssh connect to remote file host, skipping"
@@ -265,7 +262,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                     // Fetch host kernel log by running `dmesg` for Oxygen hosts
                     if (getOptions().useOxygen()) {
                         CommonLogRemoteFileUtil.logRemoteCommandOutput(
-                                mTestLogger,
+                                getLogger(),
                                 mGceAvd,
                                 getOptions(),
                                 getRunUtil(),
@@ -317,7 +314,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             }
             if (bugreportFile != null) {
                 InputStreamSource bugreport = new FileInputStreamSource(bugreportFile);
-                mTestLogger.testLog("bugreportz-ssh", LogDataType.BUGREPORTZ, bugreport);
+                getLogger().testLog("bugreportz-ssh", LogDataType.BUGREPORTZ, bugreport);
                 StreamUtil.cancel(bugreport);
             }
         } catch (IOException e) {
@@ -340,7 +337,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
                                         getInitialUser(),
                                         getInitialDeviceNumOffset(),
                                         attributes,
-                                        mTestLogger);
+                                        getLogger());
                 if (mGceAvd != null) {
                     break;
                 }
@@ -352,7 +349,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
 
                 if (getOptions().useOxygen()) {
                     OxygenUtil util = new OxygenUtil();
-                    util.downloadLaunchFailureLogs(tse, mTestLogger);
+                    util.downloadLaunchFailureLogs(tse, getLogger());
                 }
             }
         }
@@ -383,11 +380,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
             TestDeviceOptions deviceOptions) {
         mGceSshMonitor = new GceSshTunnelMonitor(device, buildInfo, hostAndPort, deviceOptions);
         mGceSshMonitor.start();
-    }
-
-    @Override
-    public void setTestLogger(ITestLogger testLogger) {
-        mTestLogger = testLogger;
     }
 
     /** {@inherit} */
@@ -469,7 +461,9 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
     protected void doAdbReboot(RebootMode rebootMode, @Nullable final String reason)
             throws DeviceNotAvailableException {
         // We catch that adb reboot is called to expect it from the tunnel.
-        getGceSshMonitor().isAdbRebootCalled(true);
+        if (getGceSshMonitor() != null) {
+            getGceSshMonitor().isAdbRebootCalled(true);
+        }
         super.doAdbReboot(rebootMode, reason);
     }
 
@@ -544,6 +538,18 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice implements I
         }
         if (!GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
             CLog.w("Requested getAvdInfo() but the bring up was not successful, returning null.");
+            return null;
+        }
+        return mGceAvd;
+    }
+
+    /**
+     * Returns the {@link GceAvdInfo} from the created remote VM. Returns regardless of the status
+     * so we can inspect the info.
+     */
+    public @Nullable GceAvdInfo getAvdInfoAnyState() {
+        if (mGceAvd == null) {
+            CLog.w("Requested getAvdInfo() but GceAvdInfo is null.");
             return null;
         }
         return mGceAvd;

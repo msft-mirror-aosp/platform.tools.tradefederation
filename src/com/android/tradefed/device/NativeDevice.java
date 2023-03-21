@@ -51,6 +51,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
+import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.SnapshotInputStreamSource;
@@ -117,7 +118,8 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /** Default implementation of a {@link ITestDevice} Non-full stack android devices. */
-public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver {
+public class NativeDevice
+        implements IManagedTestDevice, IConfigurationReceiver, ITestLoggerReceiver {
 
     protected static final String SD_CARD = "/sdcard/";
     protected static final String STORAGE_EMULATED = "/storage/emulated/";
@@ -251,6 +253,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private File mUnpackedFastbootDir = null;
     // Connection for the device.
     private AbstractConnection mConnection;
+
+    private ITestLogger mTestLogger;
 
     private List<IDeviceActionReceiver> mDeviceActionReceivers = new LinkedList<>();
     /**
@@ -5240,7 +5244,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     protected void initializeConnection(IBuildInfo info, MultiMap<String, String> attributes)
             throws DeviceNotAvailableException, TargetSetupError {
-        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil(), this, info);
+        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil(), this, info, getLogger());
         if (attributes != null) {
             builder.addAttributes(attributes);
         }
@@ -6040,14 +6044,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     }
 
     /** The current connection associated with the device. */
-    protected AbstractConnection getConnection() {
+    public AbstractConnection getConnection() {
         if (mConnection == null) {
             mConnection =
                     DefaultConnection.createInopConnection(
-                            new ConnectionBuilder(getRunUtil(), this, null));
+                            new ConnectionBuilder(getRunUtil(), this, null, getLogger()));
         }
         return mConnection;
     }
+
     /**
      * Notifies all {@link IDeviceActionReceiver} about reboot start event.
      *
@@ -6100,5 +6105,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     protected boolean isInRebootCallback() {
         return inRebootCallback;
+    }
+
+    @Override
+    public void setTestLogger(ITestLogger testLogger) {
+        mTestLogger = testLogger;
+    }
+
+    protected ITestLogger getLogger() {
+        return mTestLogger;
     }
 }
