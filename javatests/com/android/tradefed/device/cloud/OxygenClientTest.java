@@ -231,7 +231,9 @@ public class OxygenClientTest {
                                         mOxygenBinaryFile.getAbsolutePath()
                                                 + " -arg1 value1 -release -server_url 10.0.80.227"
                                                 + " -session_id"
-                                                + " 6a6a744e-0653-4926-b7b8-535d121a2fc9";
+                                                + " 6a6a744e-0653-4926-b7b8-535d121a2fc9"
+                                                + " -accounting_user"
+                                                + " random1234@space.com";
                                 assertEquals(timeout, 900000);
                                 assertEquals(expectedCmdString, cmdString);
 
