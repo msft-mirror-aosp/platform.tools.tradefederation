@@ -23,6 +23,7 @@ import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
@@ -42,6 +43,8 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
@@ -442,6 +445,86 @@ public class AdbSshConnection extends AdbTcpConnection {
         } finally {
             FileUtil.deleteFile(bugreportFile);
         }
+    }
+
+    /**
+     * Attempt to powerwash a GCE instance
+     *
+     * @return returns CommandResult of the powerwash attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult powerwash() throws TargetSetupError {
+        return powerwashGce(null, null);
+    }
+
+    /**
+     * Attempt to powerwash a GCE instance
+     *
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @return returns CommandResult of the powerwash attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult powerwashGce(String user, Integer offset) throws TargetSetupError {
+        if (mGceAvd == null) {
+            String errorMsg = String.format("Can not get GCE AVD Info. launch GCE first?");
+            throw new TargetSetupError(
+                    errorMsg,
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+        }
+        // Get the user from options instance-user if user is null.
+        if (user == null) {
+            user = getDevice().getOptions().getInstanceUser();
+        }
+
+        String powerwashCommand = String.format("/home/%s/bin/powerwash_cvd", user);
+
+        if (offset != null) {
+            powerwashCommand =
+                    String.format(
+                            "HOME=/home/%s/acloud_cf_%d acloud_cf_%d/bin/powerwash_cvd"
+                                    + " -instance_num %d",
+                            user, offset + 1, offset + 1, offset + 1);
+        }
+
+        if (getDevice().getOptions().useOxygen()) {
+            // TODO(dshi): Simplify the logic after Oxygen creates symlink of the tmp dir.
+            CommandResult result =
+                    GceManager.remoteSshCommandExecution(
+                            mGceAvd,
+                            getDevice().getOptions(),
+                            getRunUtil(),
+                            10000L,
+                            "toybox find /tmp -name powerwash_cvd".split(" "));
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                CLog.e("Failed to locate powerwash_cvd: %s", result.getStderr());
+                return result;
+            }
+            String powerwashPath = result.getStdout();
+            // Remove tailing `/bin/powerwash_cvd`
+            String tmpDir = powerwashPath.substring(0, powerwashPath.length() - 18);
+            powerwashCommand = String.format("HOME=%s %s", tmpDir, powerwashPath);
+        }
+        CommandResult powerwashRes =
+                GceManager.remoteSshCommandExecution(
+                        mGceAvd,
+                        getDevice().getOptions(),
+                        getRunUtil(),
+                        Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
+                        powerwashCommand.split(" "));
+        if (!CommandStatus.SUCCESS.equals(powerwashRes.getStatus())) {
+            CLog.e("%s", powerwashRes.getStderr());
+            // Log 'adb devices' to confirm device is gone
+            CommandResult printAdbDevices = getRunUtil().runTimedCmd(60000L, "adb", "devices");
+            CLog.e("%s\n%s", printAdbDevices.getStdout(), printAdbDevices.getStderr());
+            // Proceed here, device could have been already gone.
+            return powerwashRes;
+        }
+        ((NativeDevice) getDevice()).getMonitor().waitForDeviceAvailable();
+        ((NativeDevice) getDevice()).resetContentProviderSetup();
+        return powerwashRes;
     }
 
     /**
