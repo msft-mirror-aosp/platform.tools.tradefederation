@@ -123,10 +123,10 @@ public class TestDiscoveryInvoker {
         if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
             DiscoveryExitCode exitCode = null;
             if (res.getExitCode() != null) {
-                try {
-                    exitCode = DiscoveryExitCode.valueOf(res.getExitCode().toString());
-                } catch (RuntimeException e) {
-                    CLog.e(e);
+                for (DiscoveryExitCode code : DiscoveryExitCode.values()) {
+                    if (code.exitCode() == res.getExitCode()) {
+                        exitCode = code;
+                    }
                 }
             }
             throw new TestDiscoveryException(
