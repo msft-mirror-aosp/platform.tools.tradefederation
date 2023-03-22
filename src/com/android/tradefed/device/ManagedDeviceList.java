@@ -31,6 +31,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -52,7 +53,8 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
     // Ip that are associated with special use cases and shouldn't look up the
     // serial number. Usually because those are virtual devices and not wifi
     // connected devices
-    private static final Set<String> RESERVED_IP = ImmutableSet.of("127.0.0.1", "0.0.0.0", "localhost");
+    private static final Set<String> RESERVED_IP =
+            ImmutableSet.of("127.0.0.1", "0.0.0.0", "localhost");
 
     /**
      * A {@link IMatcher} for finding a {@link IManagedTestDevice} that can be allocated.
@@ -81,7 +83,7 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
                             .put(
                                     "already_allocated",
                                     String.format(
-                                            "Device %s is matching but " + "already allocated.",
+                                            "Device %s is matching but already allocated.",
                                             element.getIDevice().getSerialNumber()));
                 }
                 return res;
@@ -240,6 +242,16 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
                 if (m.matches(d)) {
                     iterator.remove();
                     mList.add(d);
+                    if (options.getBaseDeviceTypeRequested() != null) {
+                        String rand = UUID.randomUUID().toString();
+                        String serial =
+                                String.format("%s%s", NullDevice.TEMP_NULL_DEVICE_PREFIX, rand);
+                        IManagedTestDevice specificDevice =
+                                mDeviceFactory.createRequestedDevice(
+                                        new NullDevice(serial, true), options);
+                        mList.add(specificDevice);
+                        return specificDevice;
+                    }
                     return d;
                 }
             }

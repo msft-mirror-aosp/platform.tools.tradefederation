@@ -31,6 +31,9 @@ public interface IManagedTestDeviceFactory {
      */
     IManagedTestDevice createDevice(IDevice stubDevice);
 
+    /** Specifically create a device matching the specification */
+    public IManagedTestDevice createRequestedDevice(IDevice idevice, IDeviceSelection options);
+
     /**
      * Enable or not fastboot support for the device created.
      * @param enable value set the support.

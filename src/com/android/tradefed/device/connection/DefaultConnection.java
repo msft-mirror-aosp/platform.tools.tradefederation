@@ -19,7 +19,9 @@ import com.android.ddmlib.IDevice;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.IConfigurableVirtualDevice;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
+import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.util.IRunUtil;
@@ -48,12 +50,20 @@ public class DefaultConnection extends AbstractConnection {
     /** Create the requested connection. */
     public static DefaultConnection createConnection(ConnectionBuilder builder) {
         if (builder.device != null && builder.device instanceof RemoteAndroidVirtualDevice) {
-            ((RemoteAndroidVirtualDevice) builder.device).setLogStartDelay(0);
-            ((RemoteAndroidVirtualDevice) builder.device).setFastbootEnabled(false);
+            ((NativeDevice) builder.device).setLogStartDelay(0);
+            ((NativeDevice) builder.device).setFastbootEnabled(false);
             return new AdbSshConnection(builder);
         }
         if (builder.device != null && builder.device instanceof RemoteAndroidDevice) {
             return new AdbTcpConnection(builder);
+        }
+        if (builder.device != null) {
+            InstanceType type = builder.device.getOptions().getInstanceType();
+            if (InstanceType.REMOTE_AVD.equals(type) || InstanceType.GCE.equals(type)) {
+                ((NativeDevice) builder.device).setLogStartDelay(0);
+                ((NativeDevice) builder.device).setFastbootEnabled(false);
+                return new AdbSshConnection(builder);
+            }
         }
         return new DefaultConnection(builder);
     }
