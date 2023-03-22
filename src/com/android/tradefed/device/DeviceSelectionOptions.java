@@ -115,6 +115,12 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
     @Option(name = "device-type", description = "The type of the device requested to be allocated.")
     private DeviceRequestedType mRequestedType = null;
+
+    @Option(
+            name = "base-device-type-request",
+            description =
+                    "Explicitly request a device type which will use device-type for connection.")
+    private BaseDeviceType mBaseDeviceType = null;
     // ============================ END DEVICE TYPE Related Options ============================
 
     @Option(
@@ -370,6 +376,11 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
     public DeviceRequestedType getDeviceTypeRequested() {
         return mRequestedType;
+    }
+
+    @Override
+    public BaseDeviceType getBaseDeviceTypeRequested() {
+        return mBaseDeviceType;
     }
 
     /**
