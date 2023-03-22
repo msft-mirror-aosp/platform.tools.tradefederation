@@ -265,13 +265,6 @@ public class IsolatedHostTest
                 listener.testRunEnded(0L, new HashMap<String, Metric>());
             }
         } finally {
-            if (mCoverageExecFile != null && mCoverageExecFile.length() > 0) {
-                try (FileInputStreamSource source =
-                        new FileInputStreamSource(mCoverageExecFile, true)) {
-                    listener.testLog("coverage", LogDataType.COVERAGE, source);
-                }
-                FileUtil.deleteFile(mCoverageExecFile);
-            }
             try {
                 // Ensure the subprocess finishes
                 if (isolationRunner != null) {
@@ -306,6 +299,7 @@ public class IsolatedHostTest
                         InfraErrorIdentifier.INTERRUPTED_DURING_SUBPROCESS_SHUTDOWN);
             }
 
+            logCoverageExecFile(listener);
             FileUtil.deleteFile(mIsolationJar);
         }
     }
@@ -337,7 +331,7 @@ public class IsolatedHostTest
                             String.format(
                                     "-javaagent:%s=destfile=%s",
                                     mConfig.getCoverageOptions().getJaCoCoAgentPath(),
-                                    mCoverageExecFile);
+                                    mCoverageExecFile.getAbsolutePath());
                     cmdArgs.add(javaAgent);
                 } catch (IOException e) {
                     CLog.e(e);
@@ -776,6 +770,20 @@ public class IsolatedHostTest
             }
         }
         return null;
+    }
+
+    private void logCoverageExecFile(ITestInvocationListener listener) {
+        if (mCoverageExecFile == null) {
+            CLog.e("Coverage execution file is null.");
+            return;
+        }
+        if (mCoverageExecFile.length() == 0) {
+            CLog.e("Coverage execution file has 0 length.");
+            return;
+        }
+        try (FileInputStreamSource source = new FileInputStreamSource(mCoverageExecFile, true)) {
+            listener.testLog("coverage", LogDataType.COVERAGE, source);
+        }
     }
 
     /** {@inheritDoc} */
