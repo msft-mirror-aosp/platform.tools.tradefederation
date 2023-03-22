@@ -28,6 +28,11 @@ import java.util.Map;
  */
 public interface IDeviceSelection extends IMatcher<IDevice> {
 
+    public enum BaseDeviceType {
+        NATIVE_DEVICE,
+        FULL_DEVICE;
+    }
+
     /**
      * Gets a copy of the serial numbers
      *
@@ -122,4 +127,6 @@ public interface IDeviceSelection extends IMatcher<IDevice> {
      * @return a Map of serial number to reason for which it wasn't allocated
      */
     public Map<String, String> getNoMatchReason();
+
+    public BaseDeviceType getBaseDeviceTypeRequested();
 }
