@@ -41,20 +41,28 @@ public class ManagedDeviceListTest {
 
     @Before
     public void setUp() {
-        mManagedDeviceList = new ManagedDeviceList(new IManagedTestDeviceFactory() {
+        mManagedDeviceList =
+                new ManagedDeviceList(
+                        new IManagedTestDeviceFactory() {
 
-            @Override
-            public IManagedTestDevice createDevice(IDevice stubDevice) {
-                // use real TestDevice to get allocation state machine
-                return new TestDevice(stubDevice, Mockito.mock(
-                        IDeviceStateMonitor.class), null);
-            }
+                            @Override
+                            public IManagedTestDevice createDevice(IDevice stubDevice) {
+                                // use real TestDevice to get allocation state machine
+                                return new TestDevice(
+                                        stubDevice, Mockito.mock(IDeviceStateMonitor.class), null);
+                            }
 
-            @Override
-            public void setFastbootEnabled(boolean enable) {
-                // ignore
-            }
-        });
+                            @Override
+                            public IManagedTestDevice createRequestedDevice(
+                                    IDevice idevice, IDeviceSelection options) {
+                                return null;
+                            }
+
+                            @Override
+                            public void setFastbootEnabled(boolean enable) {
+                                // ignore
+                            }
+                        });
     }
 
     /**
