@@ -260,6 +260,9 @@ public class InvocationMetricLogger {
         // Metrics to store Device failure signatures
         DEVICE_ERROR_SIGNATURES("device_failure_signatures", false),
 
+        DEVICE_IMAGE_NOT_CHANGED("device_image_not_changed", false),
+        TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
+
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
         dynamic_download("dynamic_download", true),
