@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
+
 import com.android.annotations.VisibleForTesting;
 import com.android.incfs.install.adb.ddmlib.DeviceConnection;
 import com.android.incfs.install.adb.ddmlib.DeviceLogger;
@@ -86,8 +88,6 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         FULL,
         INSTANT,
     }
-
-    public static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
     // An error message that occurs when a test APK is already present on the DUT,
     // but cannot be updated. When this occurs, the package is removed from the

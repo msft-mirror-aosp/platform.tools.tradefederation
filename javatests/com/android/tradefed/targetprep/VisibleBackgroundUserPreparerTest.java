@@ -15,8 +15,8 @@
  */
 package com.android.tradefed.targetprep;
 
-import static com.android.tradefed.targetprep.VisibleBackgroundUserPreparer.RUN_TESTS_AS_USER_KEY;
-import static com.android.tradefed.targetprep.UserCreationHelper.USER_SETUP_COMPLETE;
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
+import static com.android.tradefed.targetprep.UserHelper.USER_SETUP_COMPLETE;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;

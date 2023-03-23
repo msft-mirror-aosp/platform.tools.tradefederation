@@ -2598,7 +2598,7 @@ public class NativeDevice
      */
     @Override
     public boolean recoverDevice() throws DeviceNotAvailableException {
-        getConnection().reconnect(getSerialNumber());
+        getConnection().reconnectForRecovery(getSerialNumber());
         if (mRecoveryMode.equals(RecoveryMode.NONE)) {
             CLog.i("Skipping recovery on %s", getSerialNumber());
             return false;
@@ -3958,6 +3958,7 @@ public class NativeDevice
      */
     protected void doAdbReboot(RebootMode rebootMode, @Nullable final String reason)
             throws DeviceNotAvailableException {
+        getConnection().notifyAdbRebootCalled();
         DeviceAction rebootAction = createRebootDeviceAction(rebootMode, reason);
         performDeviceAction("reboot", rebootAction, MAX_RETRY_ATTEMPTS);
     }
@@ -5254,6 +5255,7 @@ public class NativeDevice
             // Use default inop connection
             mConnection = DefaultConnection.createInopConnection(builder);
         }
+        CLog.d("Using connection: %s", mConnection);
         mConnection.initializeConnection();
     }
 
@@ -6044,6 +6046,7 @@ public class NativeDevice
     }
 
     /** The current connection associated with the device. */
+    @Override
     public AbstractConnection getConnection() {
         if (mConnection == null) {
             mConnection =
