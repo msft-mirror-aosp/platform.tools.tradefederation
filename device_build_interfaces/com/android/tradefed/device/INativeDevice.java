@@ -23,6 +23,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.ITestDevice.MountPointInfo;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.device.connection.AbstractConnection;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.InputStreamSource;
@@ -1675,5 +1676,6 @@ public interface INativeDevice {
      */
     public List<File> getTombstones() throws DeviceNotAvailableException;
 
-
+    /** Returns the connection associated with the device. */
+    public AbstractConnection getConnection();
 }

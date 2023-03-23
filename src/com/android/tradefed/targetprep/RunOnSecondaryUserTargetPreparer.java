@@ -16,6 +16,8 @@
 
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
+
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -44,8 +46,6 @@ import java.util.Map;
  */
 @OptionClass(alias = "run-on-secondary-user")
 public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
-
-    @VisibleForTesting static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
     @VisibleForTesting static final String TEST_PACKAGE_NAME_OPTION = "test-package-name";
 

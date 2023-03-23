@@ -16,10 +16,12 @@
 
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,6 +34,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.RunUtil;
@@ -44,6 +47,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /** Unit Tests for {@link RunCommandTargetPreparer} */
@@ -87,6 +91,7 @@ public class RunCommandTargetPreparerTest {
         mPreparer.setUp(mTestInfo);
 
         assertThat(mPreparer.getCommands()).containsExactly(command);
+        assertThat(mPreparer.getExecutedCommands()).containsExactly(command);
     }
 
     /**
@@ -165,6 +170,40 @@ public class RunCommandTargetPreparerTest {
         mPreparer.tearDown(mTestInfo, null);
     }
 
+    @Test
+    public void testTeardown_withTestUserToken() throws Exception {
+        String rawCommand = "say %MAGIC_TOKEN%";
+        String actualCommand = "say abracadabra";
+
+        OptionSetter setter = new OptionSetter(mPreparer);
+        setter.setOptionValue("teardown-command", rawCommand);
+        setter.setOptionValue("test-user-token", "%MAGIC_TOKEN%");
+        mTestInfo.properties().put(RUN_TESTS_AS_USER_KEY, "abracadabra");
+        mPreparer.setUp(mTestInfo);
+
+        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+        when(mMockDevice.executeShellV2Command(actualCommand)).thenReturn(result);
+
+        mPreparer.tearDown(mTestInfo, null);
+    }
+
+    @Test
+    public void testTeardown_withTestUserToken_propertyNotSet() throws Exception {
+        final String rawCommand = "self-destruct %MAGIC_TOKEN%";
+        final String actualCommand = "self-destruct 42";
+
+        OptionSetter setter = new OptionSetter(mPreparer);
+        setter.setOptionValue("teardown-command", rawCommand);
+        setter.setOptionValue("test-user-token", "%MAGIC_TOKEN%");
+        when(mMockDevice.getCurrentUser()).thenReturn(42);
+        mPreparer.setUp(mTestInfo);
+
+        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+        when(mMockDevice.executeShellV2Command(actualCommand)).thenReturn(result);
+
+        mPreparer.tearDown(mTestInfo, null);
+    }
+
     /**
      * Test that {@link RunCommandTargetPreparer#setUp(TestInformation)} and {@link
      * RunCommandTargetPreparer#tearDown(TestInformation, Throwable)} is properly going through
@@ -175,17 +214,136 @@ public class RunCommandTargetPreparerTest {
         final String command = "mkdir test";
         OptionSetter setter = new OptionSetter(mPreparer);
         setter.setOptionValue("run-bg-command", command);
+
         IDevice mMockIDevice = mock(IDevice.class);
         when(mMockIDevice.getSerialNumber()).thenReturn("SERIAL");
         IShellOutputReceiver mMockReceiver = mock(IShellOutputReceiver.class);
         mMockReceiver.addOutput((byte[]) Mockito.any(), Mockito.anyInt(), Mockito.anyInt());
         when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
         when(mMockDevice.getSerialNumber()).thenReturn("SERIAL");
-        mMockIDevice.executeShellCommand(
-                Mockito.eq(command),
-                Mockito.same(mMockReceiver),
-                Mockito.anyLong(),
-                Mockito.eq(TimeUnit.MILLISECONDS));
+
+        CountDownLatch latch = new CountDownLatch(1);
+        doAnswer(
+                        (inv) -> {
+                            String cmd = inv.getArgument(0);
+                            CLog.i("Mocking execution of %s", cmd);
+                            latch.countDown();
+                            return null;
+                        })
+                .when(mMockIDevice)
+                .executeShellCommand(
+                        Mockito.eq(command),
+                        Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.eq(TimeUnit.MILLISECONDS));
+        when(mMockDevice.getDeviceState()).thenReturn(ONLINE_STATE);
+
+        mPreparer.setUp(mTestInfo);
+        RunUtil.getDefault().sleep(LONG_WAIT_TIME_MS);
+
+        if (!latch.await(LONG_WAIT_TIME_MS, TimeUnit.MILLISECONDS)) {
+            throw new IllegalStateException("Timed out waiting for bg command: " + command);
+        }
+
+        mPreparer.tearDown(mTestInfo, null);
+        verify(mMockDevice, atLeastOnce()).getIDevice();
+        verify(mMockDevice, atLeastOnce()).getSerialNumber();
+        verify(mMockDevice, atLeastOnce()).getDeviceState();
+
+        verify(mMockIDevice, atLeastOnce())
+                .executeShellCommand(
+                        Mockito.eq(command),
+                        Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.eq(TimeUnit.MILLISECONDS));
+
+        assertThat(mPreparer.getExecutedCommands()).containsExactly(command);
+    }
+
+    @Test
+    public void testBgCmd_withTestUserToken_propertyNotSet() throws Exception {
+        final String rawCommand = "self-destruct %MAGIC_TOKEN%";
+        final String actualCommand = "self-destruct 42";
+        OptionSetter setter = new OptionSetter(mPreparer);
+        setter.setOptionValue("run-bg-command", rawCommand);
+        setter.setOptionValue("test-user-token", "%MAGIC_TOKEN%");
+        when(mMockDevice.getCurrentUser()).thenReturn(42);
+
+        IDevice mMockIDevice = mock(IDevice.class);
+        when(mMockIDevice.getSerialNumber()).thenReturn("SERIAL");
+        IShellOutputReceiver mMockReceiver = mock(IShellOutputReceiver.class);
+        mMockReceiver.addOutput((byte[]) Mockito.any(), Mockito.anyInt(), Mockito.anyInt());
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.getSerialNumber()).thenReturn("SERIAL");
+
+        CountDownLatch latch = new CountDownLatch(1);
+        doAnswer(
+                        (inv) -> {
+                            String cmd = inv.getArgument(0);
+                            CLog.i("Mocking execution of %s", cmd);
+                            latch.countDown();
+                            return null;
+                        })
+                .when(mMockIDevice)
+                .executeShellCommand(
+                        Mockito.eq(actualCommand),
+                        Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.eq(TimeUnit.MILLISECONDS));
+        when(mMockDevice.getDeviceState()).thenReturn(ONLINE_STATE);
+
+        mPreparer.setUp(mTestInfo);
+        RunUtil.getDefault().sleep(LONG_WAIT_TIME_MS);
+
+        if (!latch.await(LONG_WAIT_TIME_MS, TimeUnit.MILLISECONDS)) {
+            throw new IllegalStateException("Timed out waiting for bg command: " + actualCommand);
+        }
+
+        mPreparer.tearDown(mTestInfo, null);
+        verify(mMockDevice, atLeastOnce()).getIDevice();
+        verify(mMockDevice, atLeastOnce()).getSerialNumber();
+        verify(mMockDevice, atLeastOnce()).getDeviceState();
+
+        verify(mMockIDevice, atLeastOnce())
+                .executeShellCommand(
+                        Mockito.eq(actualCommand),
+                        Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.eq(TimeUnit.MILLISECONDS));
+
+        assertThat(mPreparer.getExecutedCommands()).containsExactly(actualCommand);
+    }
+
+    @Test
+    public void testBgCmd_withTestUserToken() throws Exception {
+        String rawCommand = "say %MAGIC_TOKEN%";
+        String actualCommand = "say abracadabra";
+        OptionSetter setter = new OptionSetter(mPreparer);
+        setter.setOptionValue("run-bg-command", rawCommand);
+        setter.setOptionValue("test-user-token", "%MAGIC_TOKEN%");
+        mTestInfo.properties().put(RUN_TESTS_AS_USER_KEY, "abracadabra");
+
+        IDevice mMockIDevice = mock(IDevice.class);
+        when(mMockIDevice.getSerialNumber()).thenReturn("SERIAL");
+        IShellOutputReceiver mMockReceiver = mock(IShellOutputReceiver.class);
+        mMockReceiver.addOutput((byte[]) Mockito.any(), Mockito.anyInt(), Mockito.anyInt());
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.getSerialNumber()).thenReturn("SERIAL");
+
+        CountDownLatch latch = new CountDownLatch(1);
+        doAnswer(
+                        (inv) -> {
+                            String cmd = inv.getArgument(0);
+                            CLog.i("Mocking execution of %s", cmd);
+                            latch.countDown();
+                            return null;
+                        })
+                .when(mMockIDevice)
+                .executeShellCommand(
+                        Mockito.eq(actualCommand),
+                        Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.eq(TimeUnit.MILLISECONDS));
         when(mMockDevice.getDeviceState()).thenReturn(ONLINE_STATE);
 
         mPreparer.setUp(mTestInfo);
@@ -194,5 +352,55 @@ public class RunCommandTargetPreparerTest {
         verify(mMockDevice, atLeastOnce()).getIDevice();
         verify(mMockDevice, atLeastOnce()).getSerialNumber();
         verify(mMockDevice, atLeastOnce()).getDeviceState();
+
+        verify(mMockIDevice, atLeastOnce())
+                .executeShellCommand(
+                        Mockito.eq(actualCommand),
+                        Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.eq(TimeUnit.MILLISECONDS));
+
+        assertThat(mPreparer.getExecutedCommands()).containsExactly(actualCommand);
+    }
+
+    @Test
+    public void testCmd_withTestUserToken_propertyNotSet() throws Exception {
+        String rawCommand = "say %MAGIC_TOKEN%";
+        String actualCommand = "say 42";
+        OptionSetter setter = new OptionSetter(mPreparer);
+        setter.setOptionValue("test-user-token", "%MAGIC_TOKEN%");
+        setter.setOptionValue("run-command", rawCommand);
+        when(mMockDevice.getCurrentUser()).thenReturn(42);
+
+        CommandResult res = new CommandResult();
+        res.setStatus(CommandStatus.SUCCESS);
+        res.setStdout("");
+        when(mMockDevice.executeShellV2Command(actualCommand)).thenReturn(res);
+
+        mPreparer.setUp(mTestInfo);
+
+        assertThat(mPreparer.getCommands()).containsExactly(rawCommand);
+        assertThat(mPreparer.getExecutedCommands()).containsExactly(actualCommand);
+    }
+
+    @Test
+    public void testCmd_withTestUserToken() throws Exception {
+        String rawCommand = "say %MAGIC_TOKEN%";
+        String actualCommand = "say abracadabra";
+        OptionSetter setter = new OptionSetter(mPreparer);
+        setter.setOptionValue("test-user-token", "%MAGIC_TOKEN%");
+        setter.setOptionValue("run-command", rawCommand);
+
+        mTestInfo.properties().put(RUN_TESTS_AS_USER_KEY, "abracadabra");
+
+        CommandResult res = new CommandResult();
+        res.setStatus(CommandStatus.SUCCESS);
+        res.setStdout("");
+        when(mMockDevice.executeShellV2Command(actualCommand)).thenReturn(res);
+
+        mPreparer.setUp(mTestInfo);
+
+        assertThat(mPreparer.getCommands()).containsExactly(rawCommand);
+        assertThat(mPreparer.getExecutedCommands()).containsExactly(actualCommand);
     }
 }
