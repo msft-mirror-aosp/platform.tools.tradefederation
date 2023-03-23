@@ -37,6 +37,7 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.PythonVirtualenvHelper;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -100,6 +101,15 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
             description = "Acquire a flashing permit before running commands.")
     private boolean mUseFlashingPermit = false;
 
+    @Option(
+            name = "python-virtualenv",
+            description =
+                "Activate existing python virtualenv created by"
+                          + "PythonVirtualenvPreparer if set to True."
+                          + "Do not activate otherwise"
+    )
+    private boolean mUseVenv = false;
+
     private List<Process> mBgProcesses = new ArrayList<>();
     private List<BgCommandLog> mBgCommandLogs = new ArrayList<>();
     private ITestLogger mLogger;
@@ -161,6 +171,15 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
         }
         ITestDevice device = testInfo.getDevice();
         IBuildInfo buildInfo = testInfo.getBuildInfo();
+
+        if (mUseVenv) {
+            File venvDir = buildInfo.getFile("VIRTUAL_ENV");
+            if (venvDir != null && venvDir.exists()) {
+                PythonVirtualenvHelper.activate(getRunUtil(), venvDir);
+            } else {
+                CLog.d("No virtualenv configured.");
+            }
+        }
 
         replaceSerialNumber(mSetUpCommands, device);
         replaceExtraFile(mSetUpCommands, buildInfo);
