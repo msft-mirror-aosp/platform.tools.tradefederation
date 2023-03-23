@@ -621,18 +621,6 @@ public class AndroidJUnitTest extends InstrumentationTest
         if (!isShardable()) {
             return null;
         }
-        // The file always exists so make sure it's not empty
-        if (mIncludeTestFile != null && mIncludeTestFile.exists() && mIncludeTestFile.length() > 0) {
-            try {
-                String lines = FileUtil.readStringFromFile(mIncludeTestFile);
-                // Avoid sharding overly small set of include filters
-                if (lines.split("\n").length < 3) {
-                    return null;
-                }
-            } catch (IOException e) {
-                CLog.e(e);
-            }
-        }
         if (mMaxShard != null) {
             shardCount = Math.min(shardCount, mMaxShard);
         }
