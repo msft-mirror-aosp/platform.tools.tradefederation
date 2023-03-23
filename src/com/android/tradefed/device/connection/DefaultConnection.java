@@ -59,7 +59,8 @@ public class DefaultConnection extends AbstractConnection {
         }
         if (builder.device != null) {
             InstanceType type = builder.device.getOptions().getInstanceType();
-            if (InstanceType.REMOTE_AVD.equals(type) || InstanceType.GCE.equals(type)) {
+            if (InstanceType.CUTTLEFISH.equals(type)
+                    || InstanceType.REMOTE_NESTED_AVD.equals(type)) {
                 ((NativeDevice) builder.device).setLogStartDelay(0);
                 ((NativeDevice) builder.device).setFastbootEnabled(false);
                 return new AdbSshConnection(builder);
