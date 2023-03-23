@@ -16,9 +16,25 @@
 package com.android.tradefed.device.connection;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.targetprep.TargetSetupError;
 
 /** Abstract connection representation. */
 public abstract class AbstractConnection {
+
+    /**
+     * Initialize the connection of the device.
+     *
+     * @throws TargetSetupError
+     * @throws DeviceNotAvailableException
+     */
+    public void initializeConnection() throws TargetSetupError, DeviceNotAvailableException {
+        // Empty by default
+    }
+
+    /** Notify when doAdbReboot is called. */
+    public void notifyAdbRebootCalled() {
+        // Empty by default
+    }
 
     /**
      * Reconnect the connection to the device.
@@ -28,6 +44,16 @@ public abstract class AbstractConnection {
      */
     public void reconnect(String serial) throws DeviceNotAvailableException {
         // Empty by default
+    }
+
+    /**
+     * Reconnect the connection to the device for the recovery routine.
+     *
+     * @param serial The device serial number.
+     * @throws DeviceNotAvailableException
+     */
+    public void reconnectForRecovery(String serial) throws DeviceNotAvailableException {
+        reconnect(serial);
     }
 
     /** Clean up the connection. */

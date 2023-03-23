@@ -319,6 +319,8 @@ public class OxygenClient {
         oxygenClientArgs.add(gceAvdInfo.hostAndPort().getHost());
         oxygenClientArgs.add("-session_id");
         oxygenClientArgs.add(gceAvdInfo.instanceName());
+        oxygenClientArgs.add("-accounting_user");
+        oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
         CLog.i("Releasing device from oxygen client with command %s", oxygenClientArgs.toString());
         CommandResult res =
                 runOxygenTimedCmd(

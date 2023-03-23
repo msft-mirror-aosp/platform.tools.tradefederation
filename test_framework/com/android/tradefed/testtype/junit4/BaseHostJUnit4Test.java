@@ -829,12 +829,22 @@ public abstract class BaseHostJUnit4Test implements IAbiReceiver, ITestInformati
         } else if (testClassName != null) {
             testRunner.setClassName(testClassName);
         }
-
         if (testTimeoutMs != null) {
             testRunner.addInstrumentationArg("timeout_msec", Long.toString(testTimeoutMs));
         } else {
+            testTimeoutMs = DEFAULT_TEST_TIMEOUT_MS;
             testRunner.addInstrumentationArg(
                     "timeout_msec", Long.toString(DEFAULT_TEST_TIMEOUT_MS));
+        }
+        if (maxTimeToOutputMs != null && maxTimeToOutputMs < testTimeoutMs) {
+            // Similar logic as InstrumentationTest
+            maxTimeToOutputMs = testTimeoutMs + testTimeoutMs / 10;
+            CLog.w(
+                    String.format(
+                            "maxTimeToOutputMs should be larger than testtimeout %d; NOTE:"
+                                    + " extending maxTimeToOutputMs to %d, please consider fixing"
+                                    + " this!",
+                            testTimeoutMs, maxTimeToOutputMs));
         }
         if (maxTimeToOutputMs != null) {
             testRunner.setMaxTimeToOutputResponse(maxTimeToOutputMs, TimeUnit.MILLISECONDS);

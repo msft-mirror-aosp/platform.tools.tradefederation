@@ -30,6 +30,7 @@ import com.android.tradefed.device.FreeDeviceState;
 import com.android.tradefed.device.IDeviceManager;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NoDeviceException;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.battery.BatteryController;
 import com.android.tradefed.device.battery.IBatteryInfo;
 import com.android.tradefed.device.battery.IBatteryInfo.BatteryState;
@@ -568,6 +569,11 @@ public class ClusterCommandScheduler extends CommandScheduler {
         final MultiMap<String, DeviceDescriptor> devices = new MultiMap<>();
         for (final DeviceDescriptor device : manager.listAllDevices()) {
             if (availableOnly && device.getState() != DeviceAllocationState.Available) {
+                continue;
+            }
+            TestDeviceState deviceState = device.getTestDeviceState();
+            if (TestDeviceState.FASTBOOT.equals(deviceState)
+                    || TestDeviceState.FASTBOOTD.equals(deviceState)) {
                 continue;
             }
             if (ClusterHostUtil.isLocalhostIpPort(device.getSerial())) {

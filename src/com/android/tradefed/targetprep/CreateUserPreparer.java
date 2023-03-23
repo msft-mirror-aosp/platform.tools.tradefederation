@@ -50,7 +50,7 @@ public class CreateUserPreparer extends BaseTargetPreparer {
         }
         CLog.i("setUp(): mOriginalUser=%d, mReuseTestUser=%b", mOriginalUser, mReuseTestUser);
 
-        mCreatedUserId = UserCreationHelper.createUser(device, mReuseTestUser);
+        mCreatedUserId = UserHelper.createUser(device, mReuseTestUser);
 
         switchCurrentUser(device, mCreatedUserId);
 

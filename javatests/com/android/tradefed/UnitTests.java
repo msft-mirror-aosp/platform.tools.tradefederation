@@ -26,6 +26,7 @@ import com.android.tradefed.build.DeviceFolderBuildInfoTest;
 import com.android.tradefed.build.FileDownloadCacheTest;
 import com.android.tradefed.build.LocalDeviceBuildProviderTest;
 import com.android.tradefed.build.OtaZipfileBuildProviderTest;
+import com.android.tradefed.cache.ModifiedFilesParserTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
 import com.android.tradefed.cluster.ClusterCommandConfigBuilderTest;
@@ -272,6 +273,7 @@ import com.android.tradefed.targetprep.RootTargetPreparerTest;
 import com.android.tradefed.targetprep.RunCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostScriptTargetPreparerTest;
+import com.android.tradefed.targetprep.RunOnCloneProfileTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSdkSandboxTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSystemUserTargetPreparerTest;
@@ -373,6 +375,7 @@ import com.android.tradefed.testtype.suite.params.ModuleParametersHelperTest;
 import com.android.tradefed.testtype.suite.params.RunOnSdkSandboxHandlerTest;
 import com.android.tradefed.testtype.suite.params.SecondaryUserHandlerTest;
 import com.android.tradefed.testtype.suite.params.SecondaryUserOnSecondaryDisplayHandlerTest;
+import com.android.tradefed.testtype.suite.params.multiuser.RunOnCloneProfileParameterHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnSecondaryUserParameterHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnWorkProfileParameterHandlerTest;
 import com.android.tradefed.testtype.suite.retry.ResultsPlayerTest;
@@ -484,6 +487,9 @@ import org.junit.runners.Suite.SuiteClasses;
     FileDownloadCacheTest.class,
     LocalDeviceBuildProviderTest.class,
     OtaZipfileBuildProviderTest.class,
+
+    // cache
+    ModifiedFilesParserTest.class,
 
     // clearcut
     ClearcutClientTest.class,
@@ -789,6 +795,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TestFilePushSetupTest.class,
     SwitchUserTargetPreparerTest.class,
     UserCleanerTest.class,
+    RunOnCloneProfileTargetPreparerTest.class,
 
     // targetprep.adb
     AdbStopServerPreparerTest.class,
@@ -936,6 +943,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RunOnWorkProfileParameterHandlerTest.class,
     SecondaryUserHandlerTest.class,
     SecondaryUserOnSecondaryDisplayHandlerTest.class,
+    RunOnCloneProfileParameterHandlerTest.class,
 
     // testtype/suite/retry
     ResultsPlayerTest.class,

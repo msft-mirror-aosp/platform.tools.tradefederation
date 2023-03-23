@@ -51,6 +51,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
+import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.SnapshotInputStreamSource;
@@ -117,7 +118,8 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /** Default implementation of a {@link ITestDevice} Non-full stack android devices. */
-public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver {
+public class NativeDevice
+        implements IManagedTestDevice, IConfigurationReceiver, ITestLoggerReceiver {
 
     protected static final String SD_CARD = "/sdcard/";
     protected static final String STORAGE_EMULATED = "/storage/emulated/";
@@ -251,6 +253,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private File mUnpackedFastbootDir = null;
     // Connection for the device.
     private AbstractConnection mConnection;
+
+    private ITestLogger mTestLogger;
 
     private List<IDeviceActionReceiver> mDeviceActionReceivers = new LinkedList<>();
     /**
@@ -497,7 +501,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      *
      * @param delay the delay in ms
      */
-    protected void setLogStartDelay(int delay) {
+    public void setLogStartDelay(int delay) {
         mLogStartDelay = delay;
     }
 
@@ -2442,7 +2446,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     }
 
     /** Builds the OS command for the given adb shell command session and args */
-    private String[] buildAdbShellCommand(String command, boolean forceExitStatusDetection) {
+    protected String[] buildAdbShellCommand(String command, boolean forceExitStatusDetection) {
         // TODO: implement the shell v2 support in ddmlib itself.
         String[] commandArgs =
                 QuotationAwareTokenizer.tokenizeLine(
@@ -2594,7 +2598,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public boolean recoverDevice() throws DeviceNotAvailableException {
-        getConnection().reconnect(getSerialNumber());
+        getConnection().reconnectForRecovery(getSerialNumber());
         if (mRecoveryMode.equals(RecoveryMode.NONE)) {
             CLog.i("Skipping recovery on %s", getSerialNumber());
             return false;
@@ -3448,6 +3452,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void postBootSetup() throws DeviceNotAvailableException {
+        if (getOptions().shouldDisableReboot()) {
+            return;
+        }
+        getConnection().reconnect(getSerialNumber());
         CLog.d("postBootSetup started");
         long startTime = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("postBootSetup")) {
@@ -3950,6 +3958,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     protected void doAdbReboot(RebootMode rebootMode, @Nullable final String reason)
             throws DeviceNotAvailableException {
+        getConnection().notifyAdbRebootCalled();
         DeviceAction rebootAction = createRebootDeviceAction(rebootMode, reason);
         performDeviceAction("reboot", rebootAction, MAX_RETRY_ATTEMPTS);
     }
@@ -5231,13 +5240,23 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     getDeviceDescriptor(),
                     InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
-        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil());
+        initializeConnection(info, attributes);
+    }
+
+    protected void initializeConnection(IBuildInfo info, MultiMap<String, String> attributes)
+            throws DeviceNotAvailableException, TargetSetupError {
+        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil(), this, info, getLogger());
+        if (attributes != null) {
+            builder.addAttributes(attributes);
+        }
         if (getOptions().shouldUseConnection()) {
-            mConnection = DefaultConnection.createConnection(builder.setDevice(this));
+            mConnection = DefaultConnection.createConnection(builder);
         } else {
             // Use default inop connection
-            mConnection = DefaultConnection.createConnection(builder);
+            mConnection = DefaultConnection.createInopConnection(builder);
         }
+        CLog.d("Using connection: %s", mConnection);
+        mConnection.initializeConnection();
     }
 
     /** {@inheritDoc} */
@@ -6027,12 +6046,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     }
 
     /** The current connection associated with the device. */
-    protected AbstractConnection getConnection() {
+    @Override
+    public AbstractConnection getConnection() {
         if (mConnection == null) {
-            mConnection = DefaultConnection.createConnection(new ConnectionBuilder(getRunUtil()));
+            mConnection =
+                    DefaultConnection.createInopConnection(
+                            new ConnectionBuilder(getRunUtil(), this, null, getLogger()));
         }
         return mConnection;
     }
+
     /**
      * Notifies all {@link IDeviceActionReceiver} about reboot start event.
      *
@@ -6085,5 +6108,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     protected boolean isInRebootCallback() {
         return inRebootCallback;
+    }
+
+    @Override
+    public void setTestLogger(ITestLogger testLogger) {
+        mTestLogger = testLogger;
+    }
+
+    protected ITestLogger getLogger() {
+        return mTestLogger;
     }
 }

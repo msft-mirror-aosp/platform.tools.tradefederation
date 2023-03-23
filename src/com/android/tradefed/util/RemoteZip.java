@@ -18,6 +18,7 @@ package com.android.tradefed.util;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IFileDownloader;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 import com.android.tradefed.util.zip.CentralDirectoryInfo;
 import com.android.tradefed.util.zip.EndCentralDirectoryInfo;
 import com.android.tradefed.util.zip.LocalFileHeader;
@@ -26,11 +27,15 @@ import com.android.tradefed.util.zip.MergedZipEntryCollection;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
 /** Utilities to unzip individual files inside a remote zip file. */
 public class RemoteZip {
 
+    private static final int POOL_MAX_SIZE = 30;
     private String mRemoteFilePath;
     private List<CentralDirectoryInfo> mZipEntries;
     private long mFileSize;
@@ -149,7 +154,6 @@ public class RemoteZip {
      */
     public void downloadFiles(File destDir, List<CentralDirectoryInfo> files)
             throws BuildRetrievalError, IOException {
-        long totalDownloadedSize = 0;
         long startTime = System.currentTimeMillis();
 
         // Merge the entries into sections to minimize the download attempts.
@@ -158,48 +162,63 @@ public class RemoteZip {
         CLog.d(
                 "Downloading %d files from remote zip file %s in %d sections.",
                 files.size(), mRemoteFilePath, collections.size());
-        for (MergedZipEntryCollection collection : collections) {
-            File partialZipFile = null;
-            try {
-                partialZipFile = FileUtil.createTempFileForRemote(mRemoteFilePath, null);
-                // Delete it so name is available
-                partialZipFile.delete();
-                // End offset is based on the maximum guess of local file header size (2KB). So it
-                // can exceed the file size.
-                long downloadedSize = collection.getEndOffset() - collection.getStartOffset();
-                if (collection.getStartOffset() + downloadedSize > mFileSize) {
-                    downloadedSize = mFileSize - collection.getStartOffset();
-                }
-                mDownloader.downloadFile(
-                        mRemoteFilePath,
-                        partialZipFile,
-                        collection.getStartOffset(),
-                        downloadedSize);
-                totalDownloadedSize += downloadedSize;
+        ParallelDeviceExecutor<Long> executor =
+                new ParallelDeviceExecutor<>(Math.min(collections.size(), POOL_MAX_SIZE));
+        List<Callable<Long>> callableTasks = new ArrayList<>();
 
-                // Extract each file from the partial download.
-                for (CentralDirectoryInfo entry : collection.getZipEntries()) {
-                    File targetFile =
-                            new File(Paths.get(destDir.toString(), entry.getFileName()).toString());
-                    LocalFileHeader localFileHeader =
-                            new LocalFileHeader(
+        for (MergedZipEntryCollection collection : collections) {
+            Callable<Long> callableTask =
+                    () -> {
+                        File partialZipFile = null;
+                        long downloadedSize = 0;
+                        try {
+                            partialZipFile =
+                                    FileUtil.createTempFileForRemote(mRemoteFilePath, null);
+                            // Delete it so name is available
+                            partialZipFile.delete();
+                            // End offset is based on the maximum guess of local file header size
+                            // (2KB). So it can exceed the file size.
+                            downloadedSize =
+                                    collection.getEndOffset() - collection.getStartOffset();
+                            if (collection.getStartOffset() + downloadedSize > mFileSize) {
+                                downloadedSize = mFileSize - collection.getStartOffset();
+                            }
+                            mDownloader.downloadFile(
+                                    mRemoteFilePath,
                                     partialZipFile,
-                                    entry.getLocalHeaderOffset() - collection.getStartOffset());
-                    ZipUtil.unzipPartialZipFile(
-                            partialZipFile,
-                            targetFile,
-                            entry,
-                            localFileHeader,
-                            entry.getLocalHeaderOffset() - collection.getStartOffset());
-                }
-            } finally {
-                FileUtil.deleteFile(partialZipFile);
-            }
+                                    collection.getStartOffset(),
+                                    downloadedSize);
+
+                            // Extract each file from the partial download.
+                            for (CentralDirectoryInfo entry : collection.getZipEntries()) {
+                                File targetFile =
+                                        new File(
+                                                Paths.get(destDir.toString(), entry.getFileName())
+                                                        .toString());
+                                LocalFileHeader localFileHeader =
+                                        new LocalFileHeader(
+                                                partialZipFile,
+                                                entry.getLocalHeaderOffset()
+                                                        - collection.getStartOffset());
+                                ZipUtil.unzipPartialZipFile(
+                                        partialZipFile,
+                                        targetFile,
+                                        entry,
+                                        localFileHeader,
+                                        entry.getLocalHeaderOffset() - collection.getStartOffset());
+                            }
+                        } finally {
+                            FileUtil.deleteFile(partialZipFile);
+                        }
+                        return downloadedSize;
+                    };
+            callableTasks.add(callableTask);
         }
+        List<Long> downloadSizes = executor.invokeAll(callableTasks, 0L, TimeUnit.MINUTES);
         CLog.d(
                 "%d files downloaded from remote zip file in %s. Total download size: %,d bytes.",
                 files.size(),
                 TimeUtil.formatElapsedTime(System.currentTimeMillis() - startTime),
-                totalDownloadedSize);
+                downloadSizes.stream().mapToLong(Long::longValue).sum());
     }
 }
