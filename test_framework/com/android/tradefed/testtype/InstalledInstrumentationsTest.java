@@ -208,7 +208,7 @@ public class InstalledInstrumentationsTest
             name = "use-test-storage",
             description =
                     "If set to true, we will push filters to the test storage instead of disk.")
-    private boolean mUseTestStorage = false;
+    private boolean mUseTestStorage = true;
 
     private int mTotalShards = 0;
     private int mShardIndex = 0;
