@@ -69,7 +69,7 @@ public class AdbTcpConnection extends DefaultConnection {
      * @param port the port number of a tcp/ip device
      * @return true if we successfully connected to the device, false otherwise.
      */
-    private boolean adbTcpConnect(String host, String port) {
+    public boolean adbTcpConnect(String host, String port) {
         for (int i = 0; i < MAX_RETRIES; i++) {
             CommandResult result = adbConnect(host, port);
             if (CommandStatus.SUCCESS.equals(result.getStatus())
@@ -153,6 +153,24 @@ public class AdbTcpConnection extends DefaultConnection {
             }
         }
         return result;
+    }
+
+    /**
+     * Helper method to adb disconnect from a given tcp ip Android device
+     *
+     * @param host the hostname/ip of a tcp/ip Android device
+     * @param port the port number of a tcp/ip device
+     * @return true if we successfully disconnected to the device, false otherwise.
+     */
+    public boolean adbTcpDisconnect(String host, String port) {
+        CommandResult result =
+                getRunUtil()
+                        .runTimedCmd(
+                                DEFAULT_SHORT_CMD_TIMEOUT,
+                                "adb",
+                                "disconnect",
+                                String.format("%s:%s", host, port));
+        return CommandStatus.SUCCESS.equals(result.getStatus());
     }
 
     /** Return the hostname associated with the device. Extracted from the serial. */
