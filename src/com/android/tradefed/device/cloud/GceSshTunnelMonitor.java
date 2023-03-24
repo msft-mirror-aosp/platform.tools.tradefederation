@@ -159,7 +159,7 @@ public class GceSshTunnelMonitor extends Thread {
             if (mDevice.getOptions().shouldUseConnection()) {
                 AbstractConnection conn = mDevice.getConnection();
                 if (conn instanceof AdbTcpConnection) {
-                    if (((AdbTcpConnection) conn)
+                    if (!((AdbTcpConnection) conn)
                             .adbTcpDisconnect(
                                     mLocalHostAndPort.getHost(),
                                     Integer.toString(mLocalHostAndPort.getPort()))) {
@@ -311,7 +311,7 @@ public class GceSshTunnelMonitor extends Thread {
                 if (mDevice.getOptions().shouldUseConnection()) {
                     AbstractConnection conn = mDevice.getConnection();
                     if (conn instanceof AdbTcpConnection) {
-                        if (((AdbTcpConnection) conn)
+                        if (!((AdbTcpConnection) conn)
                                 .adbTcpConnect(
                                         mLocalHostAndPort.getHost(),
                                         Integer.toString(mLocalHostAndPort.getPort()))) {
