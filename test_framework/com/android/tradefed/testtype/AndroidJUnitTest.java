@@ -17,6 +17,7 @@
 package com.android.tradefed.testtype;
 
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -34,6 +35,7 @@ import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.targetprep.TestAppInstallSetup;
+import com.android.tradefed.testtype.suite.params.InstantAppHandler;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ListInstrumentationParser;
@@ -349,9 +351,19 @@ public class AndroidJUnitTest extends InstrumentationTest
             throw new IllegalArgumentException("Device has not been set");
         }
         if (mUseTestStorage) {
-            mUseTestStorage = getDevice().checkApiLevelAgainstNextRelease(34);
-            if (!mUseTestStorage) {
-                CLog.d("Disabled test storage as it's not supported on that branch.");
+            // Check if we are a parameterized module
+            List<String> params =
+                    getConfiguration()
+                            .getConfigurationDescription()
+                            .getMetaData(ConfigurationDescriptor.ACTIVE_PARAMETER_KEY);
+            if (params != null && params.contains(InstantAppHandler.INSTANT_APP_ID)) {
+                mUseTestStorage = false;
+                CLog.d("Disable test storage on instant app module.");
+            } else {
+                mUseTestStorage = getDevice().checkApiLevelAgainstNextRelease(34);
+                if (!mUseTestStorage) {
+                    CLog.d("Disabled test storage as it's not supported on that branch.");
+                }
             }
         }
 
@@ -392,6 +404,11 @@ public class AndroidJUnitTest extends InstrumentationTest
                     // Service apk needs force-queryable
                     serviceInstaller.setForceQueryable(true);
                     serviceInstaller.addTestFile(testServices);
+                    if (testInfo != null
+                            && testInfo.properties().containsKey(RUN_TESTS_AS_USER_KEY)) {
+                        serviceInstaller.setUserId(
+                                Integer.parseInt(testInfo.properties().get(RUN_TESTS_AS_USER_KEY)));
+                    }
                     serviceInstaller.setUp(testInfo);
                 } else {
                     throw new IOException("Failed to extract test-services.apk");
