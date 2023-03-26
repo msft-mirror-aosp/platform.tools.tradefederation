@@ -236,22 +236,24 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
         // allocations among devices
         mListLock.lock();
         try {
+            if (options.getBaseDeviceTypeRequested() != null) {
+                String rand = UUID.randomUUID().toString();
+                String serial = String.format("%s%s", NullDevice.TEMP_NULL_DEVICE_PREFIX, rand);
+                // TODO: Currently ignore any capacity from placeholder
+                IManagedTestDevice specificDevice =
+                        mDeviceFactory.createRequestedDevice(new NullDevice(serial, true), options);
+                handleDeviceEvent(specificDevice, DeviceEvent.FORCE_AVAILABLE);
+                specificDevice.handleAllocationEvent(DeviceEvent.FORCE_ALLOCATE_REQUEST);
+                mList.add(specificDevice);
+                return specificDevice;
+            }
+
             Iterator<IManagedTestDevice> iterator = mList.iterator();
             while (iterator.hasNext()) {
                 IManagedTestDevice d = iterator.next();
                 if (m.matches(d)) {
                     iterator.remove();
                     mList.add(d);
-                    if (options.getBaseDeviceTypeRequested() != null) {
-                        String rand = UUID.randomUUID().toString();
-                        String serial =
-                                String.format("%s%s", NullDevice.TEMP_NULL_DEVICE_PREFIX, rand);
-                        IManagedTestDevice specificDevice =
-                                mDeviceFactory.createRequestedDevice(
-                                        new NullDevice(serial, true), options);
-                        mList.add(specificDevice);
-                        return specificDevice;
-                    }
                     return d;
                 }
             }
