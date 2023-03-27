@@ -1040,7 +1040,7 @@ public class TestMappingTest {
                                     Paths.get(tempDir.getAbsolutePath()),
                                     matchedPatternPaths)
                             .getTests("presubmit", null, false, null);
-            assertEquals(1, tests.size());
+            assertEquals(2, tests.size());
 
             // test with no matched file.
             matchedPatternPaths.clear();
@@ -1061,7 +1061,7 @@ public class TestMappingTest {
                                     Paths.get(tempDir.getAbsolutePath()),
                                     matchedPatternPaths)
                             .getTests("presubmit", null, false, null);
-            assertEquals(1, tests.size());
+            assertEquals(2, tests.size());
         } finally {
             FileUtil.recursiveDelete(tempDir);
         }
