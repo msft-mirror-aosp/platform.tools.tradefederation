@@ -398,7 +398,7 @@ public class AndroidJUnitTest extends InstrumentationTest
                 testServices = FileUtil.createTempFile("services", ".apk");
                 boolean extracted =
                         ResourceUtil.extractResourceAsFile(
-                                "/test-services-1.4.2.apk", testServices);
+                                "/test-services-normalized.apk", testServices);
                 if (extracted) {
                     serviceInstaller = new TestAppInstallSetup();
                     // Service apk needs force-queryable
