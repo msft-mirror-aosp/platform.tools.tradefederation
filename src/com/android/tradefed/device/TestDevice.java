@@ -23,9 +23,7 @@ import com.android.ddmlib.RawImage;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.TimeoutException;
-import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
-import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
@@ -150,8 +148,6 @@ public class TestDevice extends NativeDevice {
     private static final String APEX_SUFFIX = ".apex";
     private static final String APEX_ARG = "--apex";
 
-    /** If the device is a Microdroid, this refers to the VM process. Otherwise, it is null. */
-    private Process mMicrodroidProcess = null;
     /** Contains a set of Microdroid instances running in this TestDevice, and their resources. */
     private Map<Process, MicrodroidTracker> mStartedMicrodroids = new HashMap<>();
 
@@ -2418,18 +2414,6 @@ public class TestDevice extends NativeDevice {
         }
     }
 
-    private void setTestDeviceOptions(
-            TestDevice microdroidDevice, Map<String, String> deviceOptions) {
-        try {
-            OptionSetter setter = new OptionSetter(microdroidDevice.getOptions());
-            for (Map.Entry<String, String> optionsKeyValue : deviceOptions.entrySet()) {
-                setter.setOptionValue(optionsKeyValue.getKey(), optionsKeyValue.getValue());
-            }
-        } catch (ConfigurationException e) {
-            CLog.w(e);
-        }
-    }
-
     /**
      * Starts a Microdroid TestDevice.
      *
@@ -2594,7 +2578,7 @@ public class TestDevice extends NativeDevice {
         }
         // microdroid can be slow to become unavailable after root. (b/259208275)
         microdroid.getOptions().setAdbRootUnavailableTimeout(4 * 1000);
-        setTestDeviceOptions(microdroid, builder.mTestDeviceOptions);
+        microdroid.setTestDeviceOptions(builder.mTestDeviceOptions);
         microdroid.setMicrodroidProcess(process);
         MicrodroidTracker tracker = new MicrodroidTracker();
         tracker.executor = executor;
@@ -2722,23 +2706,6 @@ public class TestDevice extends NativeDevice {
         } catch (InterruptedException e) {
             CLog.e(e);
         }
-    }
-
-    /**
-     * Marks the TestDevice as microdroid and sets its CID.
-     *
-     * @param process Process of the Microdroid VM.
-     */
-    private void setMicrodroidProcess(Process process) {
-        mMicrodroidProcess = process;
-    }
-
-    /**
-     * @return Returns the Process of the Microdroid VM. If TestDevice is not a Microdroid, returns
-     *     null.
-     */
-    public Process getMicrodroidProcess() {
-        return mMicrodroidProcess;
     }
 
     // TODO (b/274941025): remove when shell commands using this method are merged in AOSP
