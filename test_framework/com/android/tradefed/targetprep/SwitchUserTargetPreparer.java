@@ -46,6 +46,7 @@ public class SwitchUserTargetPreparer extends BaseTargetPreparer {
     public void setUp(TestInformation testInformation)
             throws TargetSetupError, DeviceNotAvailableException {
         ITestDevice device = testInformation.getDevice();
+        setUserToSwitchToMainUserWhenSystemUserIsNotSwitchable(device);
 
         mPreExecutionCurrentUser = device.getCurrentUser();
         Map<Integer, UserInfo> userInfos = device.getUserInfos();
@@ -88,6 +89,20 @@ public class SwitchUserTargetPreparer extends BaseTargetPreparer {
             CLog.d("Successfully switched back to user id: %d", mPreExecutionCurrentUser);
         } else {
             CLog.w("Could not switch back to the user id: %d", mPreExecutionCurrentUser);
+        }
+    }
+
+    /**
+     * In some form factors running on headless system user mode, it is restricted to switch to the
+     * {@link UserInfo.UserType#SYSTEM SYSTEM} user. In such cases, change the {@link
+     * #mUserToSwitchTo} to the {@link UserInfo.UserType#MAIN MAIN} user.
+     */
+    private void setUserToSwitchToMainUserWhenSystemUserIsNotSwitchable(ITestDevice device)
+            throws DeviceNotAvailableException {
+        if (UserInfo.UserType.SYSTEM.equals(mUserToSwitchTo)
+                && device.isHeadlessSystemUserMode()
+                && !device.canSwitchToHeadlessSystemUser()) {
+            mUserToSwitchTo = UserInfo.UserType.MAIN;
         }
     }
 }
