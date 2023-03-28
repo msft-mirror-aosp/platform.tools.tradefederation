@@ -242,10 +242,10 @@ public class ManagedTestDeviceFactory implements IManagedTestDeviceFactory {
     }
 
     /**
-     * Helper to device if it's a serial from a remotely connected device.
-     * serial format of tcp device is <ip or locahost>:<port>
+     * Helper to device if it's a serial from a remotely connected device. serial format of tcp
+     * device is <ip or locahost>:<port>
      */
-    protected boolean isTcpDeviceSerial(String serial) {
+    public static boolean isTcpDeviceSerial(String serial) {
         final String remotePattern = IPADDRESS_PATTERN + "(:)([0-9]{2,5})(\\b)";
         Pattern pattern = Pattern.compile(remotePattern);
         Matcher match = pattern.matcher(serial.trim());
