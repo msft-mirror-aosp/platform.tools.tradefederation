@@ -245,7 +245,9 @@ public class TestMapping {
         for (String matchedPatternPath : matchedPatternPaths) {
             if (matchedPatternPath.matches(
                     String.join(File.separator, new String[] {testMappingDir, ".*"}))) {
-                matchedPatternPathsInSource.add(matchedPatternPath);
+                Path relativePath =
+                        Paths.get(testMappingDir).relativize(Paths.get(matchedPatternPath));
+                matchedPatternPathsInSource.add(relativePath.toString());
             }
         }
         // For POSTSUBMIT runs, Test Mapping should run the full tests, so return true when

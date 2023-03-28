@@ -26,6 +26,8 @@ import com.android.tradefed.util.GCSFileDownloader;
 import com.android.tradefed.util.Pair;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.nio.file.Files;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,6 +42,9 @@ import java.util.stream.Stream;
 
 /** Utility to interact with Oxygen service. */
 public class OxygenUtil {
+
+    // Maximum size of tailing part of a file to search for error signature.
+    private static final long MAX_FILE_SIZE_FOR_ERROR = 10 * 1024 * 1024;
 
     private GCSFileDownloader mDownloader;
 
@@ -196,20 +201,26 @@ public class OxygenUtil {
                 if (pairs.size() == 0) {
                     continue;
                 }
-                try (Scanner scanner = new Scanner(file)) {
-                    List<Pair<String, String>> pairsToRemove = new ArrayList<>();
-                    while (scanner.hasNextLine()) {
-                        String line = scanner.nextLine();
-                        for (Pair<String, String> pair : pairs) {
-                            if (line.indexOf(pair.first) != -1) {
-                                pairsToRemove.add(pair);
-                                signatures.add(pair.second);
+                try (FileInputStream stream = new FileInputStream(file)) {
+                    long skipSize = Files.size(file.toPath()) - MAX_FILE_SIZE_FOR_ERROR;
+                    if (skipSize > 0) {
+                        stream.skip(skipSize);
+                    }
+                    try (Scanner scanner = new Scanner(stream)) {
+                        List<Pair<String, String>> pairsToRemove = new ArrayList<>();
+                        while (scanner.hasNextLine()) {
+                            String line = scanner.nextLine();
+                            for (Pair<String, String> pair : pairs) {
+                                if (line.indexOf(pair.first) != -1) {
+                                    pairsToRemove.add(pair);
+                                    signatures.add(pair.second);
+                                }
                             }
-                        }
-                        if (pairsToRemove.size() > 0) {
-                            pairs.removeAll(pairsToRemove);
-                            if (pairs.size() == 0) {
-                                break;
+                            if (pairsToRemove.size() > 0) {
+                                pairs.removeAll(pairsToRemove);
+                                if (pairs.size() == 0) {
+                                    break;
+                                }
                             }
                         }
                     }
