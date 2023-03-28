@@ -59,6 +59,8 @@ public class GceAvdInfo {
                             "UNAVAILABLE: HTTP status code 502",
                     InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT, "DeadlineExceeded",
                     InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED, "RESOURCE_EXHAUSTED",
+                    InfraErrorIdentifier.OXYGEN_NOT_ENOUGH_RESOURCE,
+                            "Oxygen currently doesn't have enough resources to fulfil this request",
                     InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "502:Bad Gateway",
                     InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR, "OxygenClient");
 
