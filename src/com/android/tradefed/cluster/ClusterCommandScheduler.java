@@ -83,6 +83,10 @@ import java.util.concurrent.TimeUnit;
  */
 public class ClusterCommandScheduler extends CommandScheduler {
 
+    // Errors that should not be retried.
+    private static final Set<InfraErrorIdentifier> NONE_RETRIABLE_CONFIG_ERRORS =
+            new HashSet<>(Arrays.asList(InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR));
+
     /** The {@link ScheduledThreadPoolExecutor} used to manage heartbeats. */
     private ScheduledThreadPoolExecutor mHeartbeatThreadPool = null;
 
@@ -401,6 +405,10 @@ public class ClusterCommandScheduler extends CommandScheduler {
                                     ClusterCommandEvent.DATA_KEY_FAILED_TEST_RUN_COUNT,
                                     Integer.toString(getNumAllFailedTestRuns()));
             if (errorId != null) {
+                // Report ConfigurationError for known errors to prevent test retry.
+                if (NONE_RETRIABLE_CONFIG_ERRORS.contains(errorId)) {
+                    eventBuilder.setType(ClusterCommandEvent.Type.ConfigurationError);
+                }
                 eventBuilder.setData(ClusterCommandEvent.DATA_KEY_ERROR_ID_NAME, errorId.name());
                 eventBuilder.setData(ClusterCommandEvent.DATA_KEY_ERROR_ID_CODE, errorId.code());
                 eventBuilder.setData(
