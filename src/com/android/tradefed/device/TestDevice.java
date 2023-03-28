@@ -1488,8 +1488,24 @@ public class TestDevice extends NativeDevice {
     public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException {
         checkApiLevelAgainst("isHeadlessSystemUserMode", 29);
         return checkApiLevelAgainstNextRelease(34)
-                ? executeShellV2CommandThatReturnsBoolean("cmd user is-headless-system-user-mode")
+                ? executeShellV2CommandThatReturnsBooleanSafe(
+                        "cmd user is-headless-system-user-mode")
                 : getBooleanProperty("ro.fw.mu.headless_system_user", false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("canSwitchToHeadlessSystemUser", 34);
+        return executeShellV2CommandThatReturnsBooleanSafe(
+                "cmd user can-switch-to-headless-system-user");
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("isMainUserPermanentAdmin", 34);
+        return executeShellV2CommandThatReturnsBooleanSafe("cmd user is-main-user-permanent-admin");
     }
 
     /**
@@ -2723,6 +2739,17 @@ public class TestDevice extends NativeDevice {
      */
     public Process getMicrodroidProcess() {
         return mMicrodroidProcess;
+    }
+
+    // TODO (b/274941025): remove when shell commands using this method are merged in AOSP
+    private boolean executeShellV2CommandThatReturnsBooleanSafe(
+            String cmdFormat, Object... cmdArgs) {
+        try {
+            return executeShellV2CommandThatReturnsBoolean(cmdFormat, cmdArgs);
+        } catch (Exception e) {
+            CLog.e(e);
+            return false;
+        }
     }
 
     private boolean executeShellV2CommandThatReturnsBoolean(String cmdFormat, Object... cmdArgs)

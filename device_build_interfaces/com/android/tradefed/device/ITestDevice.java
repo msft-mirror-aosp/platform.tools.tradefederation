@@ -702,6 +702,15 @@ public interface ITestDevice extends INativeDevice {
     /** Returns whether the device uses headless system user mode. */
     public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException;
 
+    /** Returns whether it's allowed to switch to the headless SYSTEM user. */
+    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException;
+
+    /**
+     * Returns whether the main user is a permanent admin and can't be deleted or downgraded to
+     * non-admin status.
+     */
+    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException;
+
     /**
      * Create a user with a given name and default flags 0.
      *
