@@ -24,7 +24,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -34,8 +33,6 @@ import com.android.tradefed.testtype.mobly.MoblyYamlResultControllerInfoHandler.
 import com.android.tradefed.testtype.mobly.MoblyYamlResultRecordHandler.Record;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultSummaryHandler.Summary;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultUserDataHandler.UserData;
-import com.android.tradefed.util.FileUtil;
-import com.android.tradefed.util.ResourceUtil;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -45,12 +42,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -63,7 +57,7 @@ public class MoblyYamlResultParserTest {
     private static final String DEFAULT_BEGIN_TIME = "1571681517464";
     private static final String DEFAULT_END_TIME = "1571681520407";
     private static final String DEFAULT_TEST_CLASS = "DefaultTestClass";
-    private static final String DEFAULT_TEST_NAME = "default_test_name";
+    private static final String DEFAULT_TEST_NAME = "test_default_name";
     private static final String TEST_ERROR_YAML = "/testtype/test_summary_error.yaml";
     private static final String SAMPLE_STACK_TRACE =
             "\"Traceback (most recent call last):\\n"
@@ -137,16 +131,12 @@ public class MoblyYamlResultParserTest {
     private MoblyYamlResultParser mParser;
     private ITestInvocationListener mMockListener;
     private ImmutableList<ITestInvocationListener> mListeners;
-    private String mRunName;
-    private ArgumentCaptor<String> mRunNameCaptor;
-    private ArgumentCaptor<Integer> mCountCaptor;
     private ArgumentCaptor<TestDescription> mStartedDescCaptor;
     private ArgumentCaptor<Long> mBeginTimeCaptor;
     private ArgumentCaptor<TestDescription> mFailedDescCaptor;
     private ArgumentCaptor<FailureDescription> mFailureDescriptionCaptor;
     private ArgumentCaptor<TestDescription> mEndDescCaptor;
     private ArgumentCaptor<Long> mEndTimeCaptor;
-    private ArgumentCaptor<Long> mElapseTimeCaptor;
 
     @Before
     public void setUp() throws Exception {
@@ -156,12 +146,6 @@ public class MoblyYamlResultParserTest {
     }
 
     private void setUpArgumentCaptors() {
-        // Setup testRunStarted
-        mRunNameCaptor = ArgumentCaptor.forClass(String.class);
-        mCountCaptor = ArgumentCaptor.forClass(Integer.class);
-        Mockito.doNothing()
-                .when(mMockListener)
-                .testRunStarted(mRunNameCaptor.capture(), mCountCaptor.capture());
         // Setup testStarted
         mStartedDescCaptor = ArgumentCaptor.forClass(TestDescription.class);
         mBeginTimeCaptor = ArgumentCaptor.forClass(Long.class);
@@ -180,17 +164,11 @@ public class MoblyYamlResultParserTest {
         Mockito.doNothing()
                 .when(mMockListener)
                 .testEnded(mEndDescCaptor.capture(), mEndTimeCaptor.capture(), any(Map.class));
-        // Setup testRunEnded
-        mElapseTimeCaptor = ArgumentCaptor.forClass(Long.class);
-        Mockito.doNothing()
-                .when(mMockListener)
-                .testRunEnded(mElapseTimeCaptor.capture(), any(Map.class));
     }
 
     @Test
     public void testReportToListenersPassRecord() {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        mParser = new MoblyYamlResultParser(mMockListener);
         IMoblyYamlResultHandler.ITestResult passRecord =
                 new Record.Builder()
                         .setTestName(DEFAULT_TEST_NAME)
@@ -202,8 +180,6 @@ public class MoblyYamlResultParserTest {
         List<IMoblyYamlResultHandler.ITestResult> resultCache = ImmutableList.of(passRecord);
         mParser.reportToListeners(mListeners, resultCache);
 
-        assertEquals(mRunName, mRunNameCaptor.getValue());
-        assertEquals(0, (int) mCountCaptor.getValue());
         assertEquals(DEFAULT_TEST_CLASS, mStartedDescCaptor.getValue().getClassName());
         assertEquals(DEFAULT_TEST_NAME, mStartedDescCaptor.getValue().getTestName());
         assertEquals(Long.parseLong(DEFAULT_BEGIN_TIME), (long) mBeginTimeCaptor.getValue());
@@ -211,15 +187,11 @@ public class MoblyYamlResultParserTest {
         assertEquals(DEFAULT_TEST_CLASS, mEndDescCaptor.getValue().getClassName());
         assertEquals(DEFAULT_TEST_NAME, mEndDescCaptor.getValue().getTestName());
         assertEquals(Long.parseLong(DEFAULT_END_TIME), (long) mEndTimeCaptor.getValue());
-        assertEquals(
-                Long.parseLong(DEFAULT_END_TIME) - Long.parseLong(DEFAULT_BEGIN_TIME),
-                (long) mElapseTimeCaptor.getValue());
     }
 
     @Test
     public void testReportToListenersFailRecord() {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        mParser = new MoblyYamlResultParser(mMockListener);
         IMoblyYamlResultHandler.ITestResult failRecord =
                 new Record.Builder()
                         .setTestName(DEFAULT_TEST_NAME)
@@ -232,8 +204,6 @@ public class MoblyYamlResultParserTest {
         List<IMoblyYamlResultHandler.ITestResult> resultCache = ImmutableList.of(failRecord);
         mParser.reportToListeners(mListeners, resultCache);
 
-        assertEquals(mRunName, mRunNameCaptor.getValue());
-        assertEquals(0, (int) mCountCaptor.getValue());
         assertEquals(DEFAULT_TEST_CLASS, mStartedDescCaptor.getValue().getClassName());
         assertEquals(DEFAULT_TEST_NAME, mStartedDescCaptor.getValue().getTestName());
         assertEquals(Long.parseLong(DEFAULT_BEGIN_TIME), (long) mBeginTimeCaptor.getValue());
@@ -252,46 +222,34 @@ public class MoblyYamlResultParserTest {
         assertEquals(DEFAULT_TEST_CLASS, mEndDescCaptor.getValue().getClassName());
         assertEquals(DEFAULT_TEST_NAME, mEndDescCaptor.getValue().getTestName());
         assertEquals(Long.parseLong(DEFAULT_END_TIME), (long) mEndTimeCaptor.getValue());
-        assertEquals(
-                Long.parseLong(DEFAULT_END_TIME) - Long.parseLong(DEFAULT_BEGIN_TIME),
-                (long) mElapseTimeCaptor.getValue());
     }
 
     @Test
     public void testReportToListenersUserData() {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        mParser = new MoblyYamlResultParser(mMockListener);
         List<IMoblyYamlResultHandler.ITestResult> resultCache =
                 ImmutableList.of(new UserData.Builder().setTimestamp(DEFAULT_BEGIN_TIME).build());
         mParser.reportToListeners(mListeners, resultCache);
 
-        assertEquals(mRunName, mRunNameCaptor.getValue());
-        assertEquals(0, (int) mCountCaptor.getValue());
         verify(mMockListener, never()).testStarted(any(), anyLong());
         verify(mMockListener, never()).testFailed(any(), anyString());
-        assertEquals(0L - Long.parseLong(DEFAULT_BEGIN_TIME), (long) mElapseTimeCaptor.getValue());
     }
 
     @Test
     public void testReportToListenersControllerInfo() {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        mParser = new MoblyYamlResultParser(mMockListener);
         List<IMoblyYamlResultHandler.ITestResult> resultCache =
                 ImmutableList.of(
                         new ControllerInfo.Builder().setTimestamp("1571681322.791003").build());
         mParser.reportToListeners(mListeners, resultCache);
 
-        assertEquals(mRunName, mRunNameCaptor.getValue());
-        assertEquals(0, (int) mCountCaptor.getValue());
         verify(mMockListener, never()).testStarted(any(), anyLong());
         verify(mMockListener, never()).testFailed(any(), anyString());
-        assertEquals(1571681322791L, (long) mElapseTimeCaptor.getValue());
     }
 
     @Test
     public void testParseDocumentMapRecordPass() throws Exception {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        mParser = new MoblyYamlResultParser(mMockListener);
         Map<String, Object> detailMap = new HashMap<>();
         detailMap.put("Result", "PASS");
         detailMap.put("Stacktrace", "null");
@@ -307,8 +265,7 @@ public class MoblyYamlResultParserTest {
 
     @Test
     public void testParseDocumentMapRecordFail() throws Exception {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        mParser = new MoblyYamlResultParser(mMockListener);
         Map<String, Object> detailMap = new HashMap<>();
         detailMap.put("Stacktrace", SAMPLE_STACK_TRACE);
         detailMap.put("Result", "FAIL");
@@ -325,8 +282,7 @@ public class MoblyYamlResultParserTest {
 
     @Test
     public void testParseDocumentMapSummary() throws Exception {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        mParser = new MoblyYamlResultParser(mMockListener);
         Map<String, Object> docMap = new HashMap<>();
         docMap.put("Type", "Summary");
         docMap.put("Executed", "10");
@@ -339,8 +295,7 @@ public class MoblyYamlResultParserTest {
 
     @Test
     public void testParseDocumentMapControllerInfo() throws Exception {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        mParser = new MoblyYamlResultParser(mMockListener);
         Map<String, Object> docMap = new HashMap<>();
         docMap.put("Type", "ControllerInfo");
         docMap.put("Timestamp", "1571681322.791003");
@@ -352,8 +307,7 @@ public class MoblyYamlResultParserTest {
 
     @Test
     public void testParseDocumentMapUserData() throws Exception {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        mParser = new MoblyYamlResultParser(mMockListener);
         Map<String, Object> docMap = new HashMap<>();
         docMap.put("Type", "UserData");
         docMap.put("timestamp", DEFAULT_BEGIN_TIME);
@@ -364,8 +318,7 @@ public class MoblyYamlResultParserTest {
 
     @Test
     public void testParseDocumentMapTestNameList() throws Exception {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        mParser = new MoblyYamlResultParser(mMockListener);
         Map<String, Object> docMap = new HashMap<>();
         docMap.put("Type", "TestNameList");
         IMoblyYamlResultHandler.ITestResult result = mParser.parseDocumentMap(docMap);
@@ -374,8 +327,7 @@ public class MoblyYamlResultParserTest {
 
     @Test
     public void testParse() throws Exception {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
+        mParser = new MoblyYamlResultParser(mMockListener);
         MoblyYamlResultParser spyParser = Mockito.spy(mParser);
 
         String passRecord = buildTestRecordString(new HashMap<>());
@@ -387,41 +339,22 @@ public class MoblyYamlResultParserTest {
         StringBuilder strBuilder = new StringBuilder();
         strBuilder.append("---\n");
         strBuilder.append(TESTNAME_LIST);
-        strBuilder.append("\n---\n");
+        strBuilder.append("\n...\n---\n");
         strBuilder.append(USER_DATA);
-        strBuilder.append("\n---\n");
+        strBuilder.append("\n...\n---\n");
         strBuilder.append(passRecord);
-        strBuilder.append("\n---\n");
+        strBuilder.append("\n...\n---\n");
         strBuilder.append(failRecord);
-        strBuilder.append("\n---\n");
+        strBuilder.append("\n...\n---\n");
         strBuilder.append(CONTROLLER_INFO);
-        strBuilder.append("\n--- ");
+        strBuilder.append("\n...\n---\n");
         strBuilder.append(SUMMARY);
+        strBuilder.append("\n...\n");
         InputStream inputStream = new ByteArrayInputStream(strBuilder.toString().getBytes());
 
         spyParser.parse(inputStream);
         verify(spyParser, times(6)).parseDocumentMap(any(Map.class));
-        verify(spyParser, times(1)).reportToListeners(any(), any());
-    }
-
-    @Test
-    public void testParseError() throws Exception {
-        mRunName = new Object() {}.getClass().getEnclosingMethod().getName();
-        mParser = new MoblyYamlResultParser(mMockListener, mRunName);
-        File testErrorYaml = FileUtil.createTempFile("test_summary", "yaml");
-        ResourceUtil.extractResourceAsFile(TEST_ERROR_YAML, testErrorYaml);
-        try (FileInputStream inputStream = new FileInputStream(testErrorYaml)) {
-            mParser.parse(inputStream);
-        } finally {
-            FileUtil.deleteFile(testErrorYaml);
-        }
-        InOrder inOrder = Mockito.inOrder(mMockListener);
-        inOrder.verify(mMockListener).testRunStarted(mRunName, 1);
-        inOrder.verify(mMockListener).testRunFailed((FailureDescription) any());
-        inOrder.verify(mMockListener).testRunEnded(anyLong(), any(Map.class));
-
-        inOrder.verifyNoMoreInteractions();
-        verifyNoMoreInteractions(mMockListener);
+        verify(spyParser, times(6)).reportToListeners(any(), any());
     }
 
     private ImmutableMap<String, Object> buildTestRecordDocMap(Map<String, Object> propertyMap) {
