@@ -23,7 +23,6 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto;
 import com.android.tradefed.testtype.mobly.IMoblyYamlResultHandler.ITestResult;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultHandlerFactory.InvalidResultTypeException;
-import com.android.tradefed.testtype.mobly.MoblyYamlResultSummaryHandler.Summary;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -31,7 +30,11 @@ import com.google.common.collect.ImmutableList;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,122 +44,122 @@ public class MoblyYamlResultParser {
     private static final String TYPE = "Type";
     private ImmutableList.Builder<ITestInvocationListener> mListenersBuilder =
             new ImmutableList.Builder<>();
-    private final String mRunName;
     private ImmutableList.Builder<ITestResult> mResultCacheBuilder = new ImmutableList.Builder<>();
-    private int mTestCount;
     private long mRunStartTime;
     private long mRunEndTime;
+    private boolean mEnded;
+    private boolean mRunFailed;
 
-    public MoblyYamlResultParser(ITestInvocationListener listener, String runName) {
+    public MoblyYamlResultParser(ITestInvocationListener listener) {
         mListenersBuilder.add(listener);
-        mRunName = runName;
     }
 
-    public void parse(InputStream inputStream)
-            throws InvalidResultTypeException, IllegalAccessException, InstantiationException {
-        Yaml yaml = new Yaml(new SafeConstructor());
-        for (Object doc : yaml.loadAll(inputStream)) {
-            Map<String, Object> docMap = (Map<String, Object>) doc;
-            mResultCacheBuilder.add(parseDocumentMap(docMap));
+    public boolean parse(InputStream inputStream)
+            throws InvalidResultTypeException,
+                    IllegalAccessException,
+                    InstantiationException,
+                    IOException {
+        InputStreamReader isr = new InputStreamReader(inputStream);
+        BufferedReader in = new BufferedReader(isr);
+        while (in.ready() == true) {
+            String line = null;
+            String yaml_string = "";
+            while (true) {
+                line = in.readLine();
+                if (line == null) continue;
+                if (line.equals("...")) break;
+                yaml_string = yaml_string + line + "\n";
+            }
+            Yaml yaml = new Yaml(new SafeConstructor());
+            ArrayList<ITestResult> resultCache = new ArrayList<ITestResult>();
+            for (Object doc : yaml.loadAll(yaml_string)) {
+                Map<String, Object> docMap = (Map<String, Object>) doc;
+                resultCache.add(parseDocumentMap(docMap));
+            }
+            reportToListeners(mListenersBuilder.build(), resultCache);
         }
-        reportToListeners(mListenersBuilder.build(), mResultCacheBuilder.build());
+        return mEnded;
+    }
+
+    public boolean getRunFailed() {
+        return mRunFailed;
     }
 
     @VisibleForTesting
     protected ITestResult parseDocumentMap(Map<String, Object> docMap)
             throws InvalidResultTypeException, IllegalAccessException, InstantiationException {
-        LogUtil.CLog.i("Parsed object: %s", docMap.toString());
+        LogUtil.CLog.d("Parsed object: %s", docMap.toString());
         String docType = String.valueOf(docMap.get(TYPE));
-        LogUtil.CLog.d("Parsing result type: %s", docType);
+        LogUtil.CLog.v("Parsing result type: %s", docType);
         IMoblyYamlResultHandler resultHandler =
                 new MoblyYamlResultHandlerFactory().getHandler(docType);
-        ITestResult testResult = resultHandler.handle(docMap);
-        if ("Summary".equals(docType)) {
-            mTestCount = ((Summary) testResult).getExecuted() + ((Summary) testResult).getSkipped();
-        }
-        return testResult;
+        return resultHandler.handle(docMap);
     }
 
     @VisibleForTesting
     protected void reportToListeners(
             List<ITestInvocationListener> listeners,
             List<IMoblyYamlResultHandler.ITestResult> resultCache) {
-        for (ITestInvocationListener listener : listeners) {
-            listener.testRunStarted(mRunName, mTestCount);
-        }
-        try {
-            boolean abort = false;
-            for (IMoblyYamlResultHandler.ITestResult result : resultCache) {
-                if (abort) {
-                    break;
-                }
-                switch (result.getType()) {
-                    case RECORD:
-                        MoblyYamlResultRecordHandler.Record record =
-                                (MoblyYamlResultRecordHandler.Record) result;
-                        TestDescription testDescription =
-                                new TestDescription(record.getTestClass(), record.getTestName());
-                        FailureDescription failureDescription =
-                                FailureDescription.create(
-                                        record.getStackTrace(),
-                                        TestRecordProto.FailureStatus.TEST_FAILURE);
-                        if (MoblyYamlResultRecordHandler.RecordResult.ERROR.equals(
+        for (IMoblyYamlResultHandler.ITestResult result : resultCache) {
+            switch (result.getType()) {
+                case RECORD:
+                    MoblyYamlResultRecordHandler.Record record =
+                            (MoblyYamlResultRecordHandler.Record) result;
+                    TestDescription testDescription =
+                            new TestDescription(record.getTestClass(), record.getTestName());
+                    FailureDescription failureDescription =
+                            FailureDescription.create(
+                                    record.getStackTrace(),
+                                    TestRecordProto.FailureStatus.TEST_FAILURE);
+                    if (MoblyYamlResultRecordHandler.RecordResult.ERROR.equals(
+                            record.getResult())) {
+                        // Non-test failure reports indicates some early failure so we fail the run
+                        if (!testDescription.getTestName().startsWith("test_")) {
+                            for (ITestInvocationListener listener : listeners) {
+                                listener.testRunFailed(failureDescription);
+                            }
+                            mRunFailed = true;
+                            continue;
+                        }
+                    }
+                    mRunStartTime =
+                            mRunStartTime == 0L
+                                    ? record.getBeginTime()
+                                    : Math.min(mRunStartTime, record.getBeginTime());
+                    mRunEndTime = Math.max(mRunEndTime, record.getEndTime());
+                    for (ITestInvocationListener listener : listeners) {
+                        listener.testStarted(testDescription, record.getBeginTime());
+                        if (MoblyYamlResultRecordHandler.RecordResult.SKIP.equals(
                                 record.getResult())) {
-                            // Setup_class indicates some early failure so we stop parsing
-                            if (testDescription.getTestName().equals("setup_class")) {
-                                for (ITestInvocationListener listener : listeners) {
-                                    listener.testRunFailed(failureDescription);
-                                }
-                                abort = true;
-                                break;
-                            }
+                            listener.testIgnored(testDescription);
+                        } else if (!MoblyYamlResultRecordHandler.RecordResult.PASS.equals(
+                                record.getResult())) {
+                            listener.testFailed(testDescription, failureDescription);
                         }
-                        mRunStartTime =
-                                mRunStartTime == 0L
-                                        ? record.getBeginTime()
-                                        : Math.min(mRunStartTime, record.getBeginTime());
-                        mRunEndTime = Math.max(mRunEndTime, record.getEndTime());
-                        for (ITestInvocationListener listener : listeners) {
-                            listener.testStarted(testDescription, record.getBeginTime());
-                            if (MoblyYamlResultRecordHandler.RecordResult.SKIP.equals(
-                                    record.getResult())) {
-                                listener.testIgnored(testDescription);
-                            } else if (!MoblyYamlResultRecordHandler.RecordResult.PASS.equals(
-                                    record.getResult())) {
-                                listener.testFailed(testDescription, failureDescription);
-                            }
-                            listener.testEnded(
-                                    testDescription,
-                                    record.getEndTime(),
-                                    new HashMap<String, String>());
-                        }
-                        break;
-                    case USER_DATA:
-                        long timestamp =
-                                ((MoblyYamlResultUserDataHandler.UserData) result).getTimeStamp();
-                        mRunStartTime =
-                                mRunStartTime == 0L
-                                        ? timestamp
-                                        : Math.min(mRunStartTime, timestamp);
-                        break;
-                    case CONTROLLER_INFO:
-                        mRunEndTime =
-                                Math.max(
-                                        mRunEndTime,
-                                        ((MoblyYamlResultControllerInfoHandler.ControllerInfo)
-                                                        result)
-                                                .getTimeStamp());
-                        break;
-                    case TEST_NAME_LIST:
-                        // Do nothing
-                        break;
-                    default:
-                        // Do nothing
-                }
-            }
-        } finally {
-            for (ITestInvocationListener listener : listeners) {
-                listener.testRunEnded(mRunEndTime - mRunStartTime, new HashMap<String, String>());
+                        listener.testEnded(
+                                testDescription,
+                                record.getEndTime(),
+                                new HashMap<String, String>());
+                    }
+                    break;
+                case USER_DATA:
+                    long timestamp =
+                            ((MoblyYamlResultUserDataHandler.UserData) result).getTimeStamp();
+                    mRunStartTime =
+                            mRunStartTime == 0L ? timestamp : Math.min(mRunStartTime, timestamp);
+                    break;
+                case CONTROLLER_INFO:
+                    mRunEndTime =
+                            Math.max(
+                                    mRunEndTime,
+                                    ((MoblyYamlResultControllerInfoHandler.ControllerInfo) result)
+                                            .getTimeStamp());
+                    break;
+                case SUMMARY:
+                    mEnded = true;
+                    break;
+                default:
+                    // Do nothing
             }
         }
     }
