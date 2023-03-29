@@ -132,7 +132,7 @@ public class TradefedSandbox implements ISandbox {
             // In test mode, re-add the --use-sandbox to trigger a sandbox run again in the process
             mCmdArgs.add("--" + CommandOptions.USE_SANDBOX);
         }
-        if (sandboxOptions.shouldUseNewFlagOrder() && sandboxOptions.startAvdInParent()) {
+        if (sandboxOptions.startAvdInParent()) {
             for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
                 if (deviceConfig.getDeviceRequirements().gceDeviceRequested()) {
                     // Turn off the gce-device option and force the serial instead to use the
