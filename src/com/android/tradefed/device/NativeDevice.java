@@ -2922,10 +2922,12 @@ public class NativeDevice
             bugreport = getBugreportz();
             type = LogDataType.BUGREPORTZ;
             // Limit fallback to older devices
-            if (bugreport == null && getApiLevelSafe() < 24) {
-                CLog.d("Bugreportz failed, attempting bugreport collection instead.");
-                bugreport = getBugreportInternal();
-                type = LogDataType.BUGREPORT;
+            if (!TestDeviceState.RECOVERY.equals(getDeviceState())) {
+                if (bugreport == null && getApiLevelSafe() < 24) {
+                    CLog.d("Bugreportz failed, attempting bugreport collection instead.");
+                    bugreport = getBugreportInternal();
+                    type = LogDataType.BUGREPORT;
+                }
             }
             // log what we managed to capture.
             if (bugreport != null && bugreport.size() > 0L) {
@@ -3040,6 +3042,7 @@ public class NativeDevice
                     }
                     // Create a placeholder to replace the file
                     zipFile = FileUtil.createTempFile("bugreportz", ".zip");
+                    // pull
                     pullFile(remoteFilePath, zipFile);
                     String bugreportDir =
                             remoteFilePath.substring(0, remoteFilePath.lastIndexOf('/'));
