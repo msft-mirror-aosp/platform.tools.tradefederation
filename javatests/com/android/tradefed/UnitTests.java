@@ -438,6 +438,7 @@ import com.android.tradefed.util.SubprocessTestResultsParserTest;
 import com.android.tradefed.util.TableBuilderTest;
 import com.android.tradefed.util.TableFormatterTest;
 import com.android.tradefed.util.TarUtilTest;
+import com.android.tradefed.util.TargetFileUtilsTest;
 import com.android.tradefed.util.TestRunnerUtilTest;
 import com.android.tradefed.util.TimeUtilTest;
 import com.android.tradefed.util.TimeValTest;
@@ -570,6 +571,7 @@ import org.junit.runners.Suite.SuiteClasses;
     NativeDeviceTest.class,
     RemoteAndroidDeviceTest.class,
     PropertyChangerTest.class,
+    TargetFileUtilsTest.class,
     TestDeviceTest.class,
     WaitDeviceRecoveryTest.class,
     WifiHelperTest.class,
