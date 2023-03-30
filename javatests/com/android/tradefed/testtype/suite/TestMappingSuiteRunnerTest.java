@@ -1271,8 +1271,6 @@ public class TestMappingSuiteRunnerTest {
             mOptionSetter.setOptionValue("test-mapping-path", "a");
             mOptionSetter.setOptionValue("test-mapping-path", "b");
             mOptionSetter.setOptionValue("test-mapping-matched-pattern-paths", "a/b.java");
-            mOptionSetter.setOptionValue(
-                    "test-mapping-matched-pattern-paths", "a/BroadcastQueueImpl.java");
 
             tempDir = FileUtil.createTempDir("test_mapping");
             File subDir_a = new File(tempDir.getAbsolutePath() + File.separator + "a");
@@ -1305,9 +1303,8 @@ public class TestMappingSuiteRunnerTest {
             mRunner.setBuild(mockBuildInfo);
 
             LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
-            assertEquals(3, mRunner.getIncludeFilter().size());
+            assertEquals(2, mRunner.getIncludeFilter().size());
             assertTrue(mRunner.getIncludeFilter().contains("test_java"));
-            assertTrue(mRunner.getIncludeFilter().contains("Broadcast_java"));
             assertTrue(mRunner.getIncludeFilter().contains("test_no_pattern"));
 
         } finally {

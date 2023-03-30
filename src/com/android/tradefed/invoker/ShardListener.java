@@ -219,8 +219,7 @@ public class ShardListener extends CollectingTestListener implements ISupportGra
                 for (TestRunResult runResult : getMergedTestRunResults()) {
                     // Forward the run level results
                     forwardRunResults(runResult, 0);
-                    // Release memory right away
-                    clearResultsForName(runResult.getName());
+                    resultNames.add(runResult.getName());
                 }
             }
 

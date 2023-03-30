@@ -123,7 +123,8 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
             "======================================================================";
     static final String DASH_LINE =
             "----------------------------------------------------------------------";
-    static final String TRACEBACK_LINE = "Traceback (most recent call last):";
+    static final String TRACEBACK_LINE =
+            "Traceback (most recent call last):";
 
     static final Pattern PATTERN_TEST_SUCCESS = Pattern.compile("ok|expected failure");
     static final Pattern PATTERN_TEST_FAILURE = Pattern.compile("FAIL|ERROR");
@@ -134,7 +135,8 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
             Pattern.compile(
                     "(\\S*) \\((\\S*)\\) \\.\\.\\. "
                             + "(ok|expected failure|FAIL|ERROR|skipped '.*'|unexpected success)?");
-    static final Pattern PATTERN_TWO_LINE_RESULT_FIRST = Pattern.compile("(\\S*) \\((\\S*)\\)");
+    static final Pattern PATTERN_TWO_LINE_RESULT_FIRST = Pattern.compile(
+            "(\\S*) \\((\\S*)\\)");
     static final Pattern PATTERN_TWO_LINE_RESULT_SECOND =
             Pattern.compile(
                     "(.*) \\.\\.\\. "
@@ -155,17 +157,6 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
 
     static final Pattern MULTILINE_FINAL_RESULT_WITH_WARNING =
             Pattern.compile("(.*) \\.\\.\\. (.*)ok(.*)", Pattern.DOTALL);
-
-    /** Unexpected (multiline) text between ... and test status - likely corrupted */
-    static final Pattern PATTERN_MULTILINE_RESULT_FIRST =
-            Pattern.compile("(\\S*) \\((\\S*)\\) \\.\\.\\. .+");
-
-    static final Pattern PATTERN_MULTILINE_RESULT_FIRST_NEGATIVE =
-            Pattern.compile(
-                    "(\\S*) \\((\\S*)\\) \\.\\.\\. (ok|expected failure|FAIL|ERROR|error|skipped"
-                            + " '.*'|unexpected success).*");
-    static final Pattern PATTERN_MULTILINE_RESULT_LAST =
-            Pattern.compile("(ok|expected failure|FAIL|ERROR|skipped '.*'|unexpected success)");
 
     static final Pattern PATTERN_RUN_RESULT = Pattern.compile("(OK|FAILED).*");
 
@@ -308,13 +299,6 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
 
             int lastMatchEnd = matchResults.get(matchResults.size() - 1).end();
             if (lastMatchEnd != line.length()) {
-                boolean canBeMultiline =
-                        !lineMatchesPattern(line, PATTERN_MULTILINE_RESULT_FIRST_NEGATIVE);
-                if (canBeMultiline && lineMatchesPattern(line, PATTERN_MULTILINE_RESULT_FIRST)) {
-                    mCurrentTestName = mCurrentMatcher.group(1);
-                    mCurrentTestClass = mCurrentMatcher.group(2);
-                    mCurrentTestCaseString = null;
-                }
                 return; // The entire line doesn't match so just ignore it.
             }
 
@@ -334,10 +318,6 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
                 reportNonFailureTestResult();
             }
 
-            mCurrentTestCaseString = null;
-        } else if (lineMatchesPattern(line, PATTERN_MULTILINE_RESULT_LAST)) {
-            mCurrentTestStatus = mCurrentMatcher.group(1);
-            reportNonFailureTestResult();
             mCurrentTestCaseString = null;
         } else if (lineMatchesPattern(line, PATTERN_TWO_LINE_RESULT_FIRST)) {
             mCurrentTestName = mCurrentMatcher.group(1);

@@ -46,7 +46,6 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.IRunUtil.EnvPriority;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
-import com.android.tradefed.util.StringEscapeUtils;
 import com.android.tradefed.util.SubprocessExceptionParser;
 import com.android.tradefed.util.SubprocessTestResultsParser;
 import com.android.tradefed.util.SystemUtil;
@@ -139,10 +138,6 @@ public abstract class SubprocessTfLauncher
                             "java.base/java.nio",
                             "java.base/sun.reflect.annotation",
                             "java.base/java.io"));
-
-    // Represents all the args to be passed to the sub process
-    @Option(name = "sub-params", description = "Parameters to feed the subprocess.")
-    private List<String> mSubParams = new ArrayList<String>();
 
     // Temp global configuration filtered from the parent process.
     private String mFilteredGlobalConfig = null;
@@ -275,10 +270,6 @@ public abstract class SubprocessTfLauncher
         if (mLocalShardingMode && shardCount != null & shardCount > 1) {
             mCmdArgs.add("--shard-count");
             mCmdArgs.add(Integer.toString(shardCount));
-        }
-
-        if (!mSubParams.isEmpty()) {
-            mCmdArgs.addAll(StringEscapeUtils.paramsToArgs(mSubParams));
         }
 
         // clear the TF_GLOBAL_CONFIG env, so another tradefed will not reuse the global config file

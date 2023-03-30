@@ -480,30 +480,6 @@ public class PythonUnitTestResultParserTest {
     }
 
     @Test
-    public void testParseSingleTestPassWithCorruptedOutput() throws Exception {
-        String[] output = {
-            "b (a) ... text(not-status)",
-            "text(not-status)",
-            "ok",
-            "",
-            PythonUnitTestResultParser.DASH_LINE,
-            "Ran 1 test in 1s",
-            "",
-            "OK"
-        };
-        TestDescription id = new TestDescription("a", "b");
-
-        mParser.processNewLines(output);
-
-        InOrder inOrder = Mockito.inOrder(mMockListener);
-        inOrder.verify(mMockListener, times(1)).testRunStarted("test", 1);
-        inOrder.verify(mMockListener, times(1)).testStarted(Mockito.eq(id));
-        inOrder.verify(mMockListener, times(1))
-                .testEnded(Mockito.eq(id), Mockito.<HashMap<String, Metric>>any());
-        inOrder.verify(mMockListener, times(1)).testRunEnded(1000L, new HashMap<String, Metric>());
-    }
-
-    @Test
     public void testParseOneWithEverything() throws Exception {
         String[] output = {
             "testError (foo.testFoo) ... ERROR",

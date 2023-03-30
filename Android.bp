@@ -136,14 +136,6 @@ java_library_host {
     java_version: "11",
 }
 
-// Avoid version number in apk file name
-genrule(
-    name = "test-services-normalized.apk",
-    srcs = [":test-services.apk"],
-    out = ["test-services-normalized.apk"],
-    cmd = "cp $(in) $(out)",
-)
-
 // Main Target to build tradefed jar
 tradefed_java_library_host {
     name: "tradefed",
@@ -155,7 +147,7 @@ tradefed_java_library_host {
         ":TradefedContentProvider",
         ":TelephonyUtility",
         ":WifiUtil",
-        ":test-services-normalized.apk",
+        ":test-services.apk",
     ],
     static_libs: [
         "tradefed-lib-core",

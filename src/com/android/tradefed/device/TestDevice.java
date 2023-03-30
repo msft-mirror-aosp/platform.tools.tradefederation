@@ -1385,14 +1385,14 @@ public class TestDevice extends NativeDevice {
         int res = 0;
 
         for (int i = 0; i < arr.length - 1; i++) {
-            res |= getHexaDecimalValue(arr[i]);
+            res |= getHexaDecmialValue(arr[i]);
         }
-        res |= getHexaDecimalValue(str);
+        res |= getHexaDecmialValue(str);
 
         return res;
     }
 
-    private int getHexaDecimalValue(String flag) {
+    private int getHexaDecmialValue(String flag) {
         switch (flag) {
             case "PRIMARY":
                 return 0x00000001;

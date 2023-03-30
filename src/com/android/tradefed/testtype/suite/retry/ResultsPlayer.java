@@ -40,11 +40,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 
 /** Special runner that replays the results given to it. */
 public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver {
@@ -89,12 +87,8 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
         LogLevel originalLevel = mConfiguration.getLogOutput().getLogLevel();
         mConfiguration.getLogOutput().setLogLevel(LogLevel.WARN);
 
-        Set<Entry<TestRunResult, ReplayModuleHolder>> entries = mModuleResult.entrySet();
-        for (Entry<TestRunResult, ReplayModuleHolder> e : new LinkedHashSet<>(entries)) {
-            TestRunResult module = e.getKey();
-            ReplayModuleHolder holder = e.getValue();
-            // Remove tracking to free memory
-            mModuleResult.remove(module);
+        for (TestRunResult module : mModuleResult.keySet()) {
+            ReplayModuleHolder holder = mModuleResult.get(module);
 
             IInvocationContext moduleContext = holder.mModuleContext;
             if (moduleContext != null) {
@@ -123,7 +117,6 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
             // So we need to clean up the entries when we are done with them to free up the
             // memory early
             holder.mResults.clear();
-            module.getTestResults().clear();
         }
         // Restore the original log level to continue execution with the requested log level.
         mConfiguration.getLogOutput().setLogLevel(originalLevel);
