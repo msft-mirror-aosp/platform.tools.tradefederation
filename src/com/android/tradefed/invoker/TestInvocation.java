@@ -291,7 +291,10 @@ public class TestInvocation implements ITestInvocation {
             exception = e;
             CLog.e("Caught exception while running invocation");
             CLog.e(e);
-            bugreportName = TARGET_SETUP_ERROR_BUGREPORT_NAME;
+            // We let parent process capture the bugreport
+            if (!isSubprocess(config)) {
+                bugreportName = TARGET_SETUP_ERROR_BUGREPORT_NAME;
+            }
             if (e.getDeviceSerial() != null) {
                 badDevice = context.getDeviceBySerial(e.getDeviceSerial());
             }
