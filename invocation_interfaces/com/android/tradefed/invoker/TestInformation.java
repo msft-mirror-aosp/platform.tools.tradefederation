@@ -61,7 +61,9 @@ public class TestInformation {
             IInvocationContext moduleContext,
             boolean copyExecFile) {
         mContext = moduleContext;
-        mProperties = invocationInfo.mProperties;
+        // Copy properties so each shard has its own
+        mProperties = new ExecutionProperties();
+        mProperties.putAll(invocationInfo.mProperties.getAll());
         mDependenciesFolder = invocationInfo.mDependenciesFolder;
         if (copyExecFile) {
             mExecutionFiles = new ExecutionFiles();

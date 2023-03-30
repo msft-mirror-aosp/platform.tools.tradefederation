@@ -1028,7 +1028,7 @@ public class TestInvocation implements ITestInvocation {
             TestInformation sharedTestInfo = null;
             if (sharedInfoObject != null) {
                 sharedTestInfo = (TestInformation) sharedInfoObject;
-                // During sharding we share everything except the invocation context
+                // During sharding we share everything except the invocation context & properties
                 info = TestInformation.createModuleTestInfo(sharedTestInfo, context);
             }
             if (info == null) {
