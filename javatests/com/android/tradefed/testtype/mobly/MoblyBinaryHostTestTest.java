@@ -20,6 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -306,7 +307,7 @@ public class MoblyBinaryHostTestTest {
         verify(mSpyTest.getRunUtil(), times(3)).runTimedCmd(anyLong(), any());
         verify(mSpyTest.getRunUtil(), times(1))
                 .setEnvVariable(eq("VIRTUAL_ENV"), eq(mVenvDir.getAbsolutePath()));
-        assertFalse(mVenvDir.exists());
+        assertTrue(mVenvDir.exists());
     }
 
     @Test

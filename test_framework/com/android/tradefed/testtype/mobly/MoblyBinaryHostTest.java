@@ -229,10 +229,6 @@ public class MoblyBinaryHostTest
                 reportLogs(getLogDir(), listener);
             }
         }
-        if (venvDir != null
-                && venvDir.getAbsolutePath().startsWith(System.getProperty("java.io.tmpdir"))) {
-            FileUtil.recursiveDelete(venvDir);
-        }
     }
 
     private List<File> findParFiles(ITestInvocationListener listener) {
