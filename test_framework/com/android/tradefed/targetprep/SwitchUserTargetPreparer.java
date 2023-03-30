@@ -21,6 +21,7 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.UserInfo;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 
@@ -46,7 +47,7 @@ public class SwitchUserTargetPreparer extends BaseTargetPreparer {
     public void setUp(TestInformation testInformation)
             throws TargetSetupError, DeviceNotAvailableException {
         ITestDevice device = testInformation.getDevice();
-        setUserToSwitchToMainUserWhenSystemUserIsNotSwitchable(device);
+        setUserToSwitchTo(device);
 
         mPreExecutionCurrentUser = device.getCurrentUser();
         Map<Integer, UserInfo> userInfos = device.getUserInfos();
@@ -97,12 +98,16 @@ public class SwitchUserTargetPreparer extends BaseTargetPreparer {
      * {@link UserInfo.UserType#SYSTEM SYSTEM} user. In such cases, change the {@link
      * #mUserToSwitchTo} to the {@link UserInfo.UserType#MAIN MAIN} user.
      */
-    private void setUserToSwitchToMainUserWhenSystemUserIsNotSwitchable(ITestDevice device)
-            throws DeviceNotAvailableException {
-        if (UserInfo.UserType.SYSTEM.equals(mUserToSwitchTo)
-                && device.isHeadlessSystemUserMode()
-                && !device.canSwitchToHeadlessSystemUser()) {
-            mUserToSwitchTo = UserInfo.UserType.MAIN;
+    private void setUserToSwitchTo(ITestDevice device) throws DeviceNotAvailableException {
+        try {
+            if (UserInfo.UserType.SYSTEM.equals(mUserToSwitchTo)
+                    && device.isHeadlessSystemUserMode()
+                    && !device.canSwitchToHeadlessSystemUser()) {
+                mUserToSwitchTo = UserInfo.UserType.MAIN;
+                CLog.i("SwitchUserTargetPreparer is configured to switch to the MAIN user.");
+            }
+        } catch (HarnessRuntimeException e) {
+            CLog.w("Unable to get the main user switch-ability. Error: ", e);
         }
     }
 }
