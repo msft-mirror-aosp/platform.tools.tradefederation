@@ -612,7 +612,7 @@ public class MoblyBinaryHostTestTest {
     }
 
     @Test
-    public void testRun_withPrefixIncludeFiltersPrefix() throws Exception {
+    public void testRun_withIncludeFiltersPrefix() throws Exception {
         Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
         OptionSetter setter = new OptionSetter(mSpyTest);
         setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
@@ -803,13 +803,12 @@ public class MoblyBinaryHostTestTest {
     }
 
     @Test
-    public void testBuildCommandLineArrayWithIncludeFilter() throws Exception {
+    public void testBuildCommandLineArrayWithTests() throws Exception {
         Mockito.doReturn(DEVICE_SERIAL).when(mMockDevice).getSerialNumber();
         Mockito.doReturn(LOG_PATH).when(mSpyTest).getLogDirAbsolutePath();
-        mIncludeFilters.addAll(
-                Arrays.asList("ExampleTest#test_print_addresses", "ExampleTest#test_le_connect"));
-        mSpyTest.addAllIncludeFilters(mIncludeFilters);
-        String[] cmdArray = mSpyTest.buildCommandLineArray(BINARY_PATH, "path");
+        List<String> tests =
+                Arrays.asList("ExampleTest#test_print_addresses", "ExampleTest#test_le_connect");
+        String[] cmdArray = mSpyTest.buildCommandLineArray(BINARY_PATH, "path", tests);
         Truth.assertThat(cmdArray)
                 .isEqualTo(
                         new String[] {
