@@ -172,6 +172,8 @@ public class OxygenClient {
         oxygenClientArgs.add("-lease");
         // Add options from GceDriverParams
         int i = 0;
+        String branch = null;
+        Boolean buildIdSet = false;
         while (i < gceDriverParams.size()) {
             String gceDriverOption = gceDriverParams.get(i);
             if (sGceDeviceParamsToOxygenMap.containsKey(gceDriverOption)) {
@@ -179,9 +181,22 @@ public class OxygenClient {
                 oxygenClientArgs.add(sGceDeviceParamsToOxygenMap.get(gceDriverOption));
                 // add option's value
                 oxygenClientArgs.add(gceDriverParams.get(i + 1));
+                if (gceDriverOption.equals("--branch")) {
+                    branch = gceDriverParams.get(i + 1);
+                } else if (!buildIdSet
+                        && sGceDeviceParamsToOxygenMap.get(gceDriverOption).equals("-build_id")) {
+                    buildIdSet = true;
+                }
                 i++;
             }
             i++;
+        }
+
+        // In case branch is set through gce-driver-param, but not build-id, set the name of
+        // branch to option `-build-id`, so LKGB will be used.
+        if (branch != null && !buildIdSet) {
+            oxygenClientArgs.add("-build_id");
+            oxygenClientArgs.add(branch);
         }
 
         // check if build info exists after added from GceDriverParams
