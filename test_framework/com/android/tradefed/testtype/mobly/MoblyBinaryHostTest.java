@@ -632,6 +632,9 @@ public class MoblyBinaryHostTest
                     if (cleanName.contains("logcat")) {
                         type = LogDataType.LOGCAT;
                     }
+                    if (cleanName.contains("btsnoop")) {
+                        type = LogDataType.BT_SNOOP_LOG;
+                    }
                     listener.testLog(cleanName, type, dataStream);
                 }
             }
