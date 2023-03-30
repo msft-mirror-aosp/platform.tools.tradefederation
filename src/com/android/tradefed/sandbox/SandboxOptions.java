@@ -137,6 +137,7 @@ public final class SandboxOptions {
             description = "Execute the sandbox setup step in parallel")
     private boolean mParallelSandboxSetup = true;
 
+    /** Deprecated */
     @Option(name = UPDATED_FLAG_ORDER, description = "Feature flag to test safely new flags order")
     private boolean mNewFlagOrder = true;
 
@@ -231,11 +232,6 @@ public final class SandboxOptions {
     /** Returns whether or not to execute the sandbox setup in parallel. */
     public boolean shouldParallelSetup() {
         return mParallelSandboxSetup;
-    }
-
-    /** Returns whether or not to use the new flag order */
-    public boolean shouldUseNewFlagOrder() {
-        return mNewFlagOrder;
     }
 
     /** Returns whether or not to use tradefed observatory to optimize jar staging */
