@@ -1254,7 +1254,7 @@ public class TestDevice extends NativeDevice {
         ArrayList<String[]> lines = tokenizeListUsers();
         Map<Integer, UserInfo> result = new HashMap<Integer, UserInfo>(lines.size());
         for (String[] tokens : lines) {
-            if (getApiLevel() < 29) {
+            if (getApiLevel() < 33) {
                 UserInfo userInfo =
                         new UserInfo(
                                 /* userId= */ Integer.parseInt(tokens[1]),
@@ -1281,21 +1281,28 @@ public class TestDevice extends NativeDevice {
     }
 
     /**
-     * Tokenizes the output of 'pm list users'.
-     * The returned tokens for each user have the form: {"\tUserInfo", Integer.toString(id), name,
-     * Integer.toHexString(flag), "[running]"}; (the last one being optional)
-     * @return a list of arrays of strings, each element of the list representing the tokens
-     * for a user, or {@code null} if there was an error while tokenizing the adb command output.
+     * Tokenizes the output of 'pm list users' pre-T and 'cmd user list -v' post-T.
+     *
+     * <p>Pre-T: The returned tokens for each user have the form: {"\tUserInfo",
+     * Integer.toString(id), name, Integer.toHexString(flag), "[running]"}; (the last one being
+     * optional)
+     *
+     * <p>Post-T: The returned tokens for each user have the form: {"\tUserInfo", Integer
+     * .toString(id), name, Integer.toHexString(flag), "[running]", type}; (the last two being
+     * optional)
+     *
+     * @return a list of arrays of strings, each element of the list representing the tokens for a
+     *     user, or {@code null} if there was an error while tokenizing the adb command output.
      */
     private ArrayList<String[]> tokenizeListUsers() throws DeviceNotAvailableException {
-        if (getApiLevel() < 29) { // Android-Q
-            return tokenizeListUsersPreQ();
+        if (getApiLevel() < 33) { // Android-T
+            return tokenizeListUsersPreT();
         } else {
-            return tokenizeListUserPostQ();
+            return tokenizeListUserPostT();
         }
     }
 
-    private ArrayList<String[]> tokenizeListUserPostQ() throws DeviceNotAvailableException {
+    private ArrayList<String[]> tokenizeListUserPostT() throws DeviceNotAvailableException {
         String command = "cmd user list -v";
         String commandOutput = executeShellCommand(command);
         // Extract the id of all existing users.
@@ -1349,7 +1356,7 @@ public class TestDevice extends NativeDevice {
         return users;
     }
 
-    private ArrayList<String[]> tokenizeListUsersPreQ() throws DeviceNotAvailableException {
+    private ArrayList<String[]> tokenizeListUsersPreT() throws DeviceNotAvailableException {
         String command = "pm list users";
         String commandOutput = executeShellCommand(command);
         // Extract the id of all existing users.
