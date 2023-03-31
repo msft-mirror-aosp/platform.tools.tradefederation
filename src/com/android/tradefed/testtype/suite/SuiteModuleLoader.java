@@ -45,7 +45,6 @@ import com.android.tradefed.testtype.suite.params.NotMultiAbiHandler;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.StreamUtil;
-import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 
 import com.google.common.base.Strings;
 import com.google.common.net.UrlEscapers;
@@ -66,9 +65,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -175,34 +171,11 @@ public class SuiteModuleLoader {
     public LinkedHashMap<String, IConfiguration> loadConfigsFromSpecifiedPaths(
             List<File> listConfigFiles, Set<IAbi> abis, String suiteTag) {
         LinkedHashMap<String, IConfiguration> toRun = new LinkedHashMap<>();
-        if (listConfigFiles.isEmpty()) {
-            return toRun;
-        }
-
-        ConcurrentHashMap<File, LinkedHashMap<String, IConfiguration>> fileToConfigMap =
-                new ConcurrentHashMap<>();
-        int poolSize = Math.min(Runtime.getRuntime().availableProcessors(), listConfigFiles.size());
-        ParallelDeviceExecutor<Boolean> executor = new ParallelDeviceExecutor<>(poolSize);
-        List<Callable<Boolean>> callableTasks = new ArrayList<>();
         for (File configFile : listConfigFiles) {
-            Callable<Boolean> callableTask =
-                    () -> {
-                        fileToConfigMap.put(
-                                configFile,
-                                loadOneConfig(
-                                        configFile.getName(),
-                                        configFile.getAbsolutePath(),
-                                        abis,
-                                        suiteTag));
-                        return true;
-                    };
-            callableTasks.add(callableTask);
+            toRun.putAll(
+                    loadOneConfig(
+                            configFile.getName(), configFile.getAbsolutePath(), abis, suiteTag));
         }
-        executor.invokeAll(callableTasks, 5, TimeUnit.MINUTES);
-
-        // Order configs by config file, same order as in listConfigFiles.
-        listConfigFiles.stream()
-                .forEach(configFile -> toRun.putAll(fileToConfigMap.get(configFile)));
         return toRun;
     }
 
