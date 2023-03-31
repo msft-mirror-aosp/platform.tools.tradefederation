@@ -351,9 +351,13 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
      * @param waitTime time in ms to wait before giving up
      * @return <code>true</code> if checks are successful before waitTime expires. <code>false
      *     </code> otherwise
+     * @throws DeviceNotAvailableException
      */
     protected boolean postOnlineCheck(final long waitTime) throws DeviceNotAvailableException {
-        return waitForStoreMount(waitTime);
+        // Until we have clarity on storage requirements, move the check to
+        // full device only.
+        // return waitForStoreMount(waitTime);
+        return true;
     }
 
     /**
