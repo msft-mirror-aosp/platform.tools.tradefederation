@@ -91,7 +91,7 @@ public final class RunOnCloneProfileTargetPreparerTest {
 
     @Test
     public void setUp_doesNotSupportCloneUser_setsArgumentToSkipTests() throws Exception {
-        when(mTestInfo.getDevice().getApiLevel()).thenReturn(30);
+        when(mTestInfo.getDevice().getApiLevel()).thenReturn(32);
 
         mPreparer.setUp(mTestInfo);
 
@@ -117,7 +117,7 @@ public final class RunOnCloneProfileTargetPreparerTest {
                         + " android.os.usertype.profile.CLONE user";
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
-        when(mTestInfo.getDevice().getApiLevel()).thenReturn(31).thenReturn(28);
+        when(mTestInfo.getDevice().getApiLevel()).thenReturn(33).thenReturn(28);
 
         mPreparer.setUp(mTestInfo);
 

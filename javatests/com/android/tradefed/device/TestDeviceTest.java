@@ -2918,8 +2918,8 @@ public class TestDeviceTest {
 
     /** Test that a single user is handled by {@link TestDevice#listUsers()}. */
     @Test
-    public void testListUsersInfo_oneUser_preQ() throws Exception {
-        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
+    public void testListUsersInfo_oneUser_preT() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(32);
         final String listUsersCommand = "pm list users";
         injectShellResponse(
                 listUsersCommand, ArrayUtil.join("\r\n", "Users:", "UserInfo{0:Foo:13} running"));
@@ -2936,9 +2936,9 @@ public class TestDeviceTest {
 
     /** Test that a single user is handled by {@link TestDevice#listUsers()}. */
     @Test
-    public void testListUsersInfo_oneUser_postQ() throws Exception {
+    public void testListUsersInfo_oneUser_postT() throws Exception {
 
-        TestDevice testDevice = newTestDeviceForReleaseApiLevel(30);
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
         final String listUsersCommand = "cmd user list -v";
         injectShellResponse(
                 listUsersCommand,
