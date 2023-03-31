@@ -282,6 +282,7 @@ import com.android.tradefed.targetprep.StopServicesSetupTest;
 import com.android.tradefed.targetprep.SwitchUserTargetPreparerTest;
 import com.android.tradefed.targetprep.SystemUpdaterDeviceFlasherTest;
 import com.android.tradefed.targetprep.TargetSetupErrorTest;
+import com.android.tradefed.targetprep.TemperatureThrottlingWaiterTest;
 import com.android.tradefed.targetprep.TestAppInstallSetupTest;
 import com.android.tradefed.targetprep.TestFilePushSetupTest;
 import com.android.tradefed.targetprep.UserCleanerTest;
@@ -793,6 +794,7 @@ import org.junit.runners.Suite.SuiteClasses;
     StopServicesSetupTest.class,
     SystemUpdaterDeviceFlasherTest.class,
     TargetSetupErrorTest.class,
+    TemperatureThrottlingWaiterTest.class,
     TestAppInstallSetupTest.class,
     TestFilePushSetupTest.class,
     SwitchUserTargetPreparerTest.class,
