@@ -130,11 +130,10 @@ public class OxygenClient {
     }
 
     /**
-     * Check if no_wait_for_boot is specified in Oxygen lease request
+     * Adds invocation attributes to the given list of arguments.
      *
      * @param args command line args to call Oxygen client
-     * @param attributes attributes associated with current invocation
-     * @return true if no_wait_for_boot is specified
+     * @param attributes the map of attributes to add
      */
     private void addInvocationAttributes(List<String> args, MultiMap<String, String> attributes) {
         if (attributes == null) {
