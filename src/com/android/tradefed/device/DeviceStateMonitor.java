@@ -77,6 +77,9 @@ public class DeviceStateMonitor extends NativeDeviceStateMonitor {
             return false;
         }
         long elapsedTime = System.currentTimeMillis() - startTime;
+        if (!waitForStoreMount(waitTime - elapsedTime)) {
+            return false;
+        }
         return super.postOnlineCheck(waitTime - elapsedTime);
     }
 }
