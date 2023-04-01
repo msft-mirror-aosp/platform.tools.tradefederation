@@ -229,10 +229,6 @@ public class MoblyBinaryHostTest
                 reportLogs(getLogDir(), listener);
             }
         }
-        if (venvDir != null
-                && venvDir.getAbsolutePath().startsWith(System.getProperty("java.io.tmpdir"))) {
-            FileUtil.recursiveDelete(venvDir);
-        }
     }
 
     private List<File> findParFiles(ITestInvocationListener listener) {
@@ -349,7 +345,7 @@ public class MoblyBinaryHostTest
                                             .anyMatch(filter -> test.equals(filter)));
         }
         // Collect final filtered tests list.
-        Set<String> tests = includedTests.collect(Collectors.toSet());
+        List<String> tests = includedTests.collect(Collectors.toList());
         // Start run.
         long startTime = System.currentTimeMillis();
         listener.testRunStarted(runName, tests.size());
@@ -557,7 +553,7 @@ public class MoblyBinaryHostTest
         listener.testRunEnded(0L, new HashMap<String, Metric>());
     }
 
-    private Set<String> cleanFilters(Set<String> filters) {
+    private Set<String> cleanFilters(List<String> filters) {
         Set<String> new_filters = new LinkedHashSet<String>();
         for (String filter : filters) {
             new_filters.add(filter.replace("#", "."));
@@ -592,11 +588,11 @@ public class MoblyBinaryHostTest
 
     @VisibleForTesting
     protected String[] buildCommandLineArray(String filePath, String configPath) {
-        return buildCommandLineArray(filePath, configPath, getIncludeFilters());
+        return buildCommandLineArray(filePath, configPath, new ArrayList<>());
     }
 
     protected String[] buildCommandLineArray(
-            String filePath, String configPath, Set<String> tests) {
+            String filePath, String configPath, List<String> tests) {
         List<String> commandLine = new ArrayList<>();
         commandLine.add(filePath);
         // TODO(b/166468397): some test binaries are actually a wrapper of Mobly runner and need --
@@ -635,6 +631,9 @@ public class MoblyBinaryHostTest
                     LogDataType type = LogDataType.TEXT;
                     if (cleanName.contains("logcat")) {
                         type = LogDataType.LOGCAT;
+                    }
+                    if (cleanName.contains("btsnoop")) {
+                        type = LogDataType.BT_SNOOP_LOG;
                     }
                     listener.testLog(cleanName, type, dataStream);
                 }

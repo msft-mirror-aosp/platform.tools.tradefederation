@@ -32,9 +32,11 @@ import com.android.ddmlib.testrunner.ITestRunListener;
 import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.IWifiHelper.WifiConnectionResult;
 import com.android.tradefed.device.connection.AbstractConnection;
 import com.android.tradefed.device.connection.DefaultConnection;
@@ -262,6 +264,9 @@ public class NativeDevice
      * scenarios like calling reboot inside a callback happening for reboot.
      */
     private boolean inRebootCallback = false;
+
+    /** If the device is a Microdroid, this refers to the VM process. Otherwise, it is null. */
+    private Process mMicrodroidProcess = null;
 
     /**
      * Interface for a generic device communication attempt.
@@ -2922,10 +2927,12 @@ public class NativeDevice
             bugreport = getBugreportz();
             type = LogDataType.BUGREPORTZ;
             // Limit fallback to older devices
-            if (bugreport == null && getApiLevelSafe() < 24) {
-                CLog.d("Bugreportz failed, attempting bugreport collection instead.");
-                bugreport = getBugreportInternal();
-                type = LogDataType.BUGREPORT;
+            if (!TestDeviceState.RECOVERY.equals(getDeviceState())) {
+                if (bugreport == null && getApiLevelSafe() < 24) {
+                    CLog.d("Bugreportz failed, attempting bugreport collection instead.");
+                    bugreport = getBugreportInternal();
+                    type = LogDataType.BUGREPORT;
+                }
             }
             // log what we managed to capture.
             if (bugreport != null && bugreport.size() > 0L) {
@@ -3040,6 +3047,7 @@ public class NativeDevice
                     }
                     // Create a placeholder to replace the file
                     zipFile = FileUtil.createTempFile("bugreportz", ".zip");
+                    // pull
                     pullFile(remoteFilePath, zipFile);
                     String bugreportDir =
                             remoteFilePath.substring(0, remoteFilePath.lastIndexOf('/'));
@@ -6127,5 +6135,33 @@ public class NativeDevice
 
     protected ITestLogger getLogger() {
         return mTestLogger;
+    }
+
+    /**
+     * Marks the TestDevice as microdroid and sets its CID.
+     *
+     * @param process Process of the Microdroid VM.
+     */
+    protected void setMicrodroidProcess(Process process) {
+        mMicrodroidProcess = process;
+    }
+
+    /**
+     * @return Returns the Process of the Microdroid VM. If TestDevice is not a Microdroid, returns
+     *     null.
+     */
+    public Process getMicrodroidProcess() {
+        return mMicrodroidProcess;
+    }
+
+    protected void setTestDeviceOptions(Map<String, String> deviceOptions) {
+        try {
+            OptionSetter setter = new OptionSetter(this.getOptions());
+            for (Map.Entry<String, String> optionsKeyValue : deviceOptions.entrySet()) {
+                setter.setOptionValue(optionsKeyValue.getKey(), optionsKeyValue.getValue());
+            }
+        } catch (ConfigurationException e) {
+            CLog.w(e);
+        }
     }
 }

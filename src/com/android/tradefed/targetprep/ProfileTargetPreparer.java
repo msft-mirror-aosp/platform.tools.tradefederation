@@ -110,15 +110,14 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
 
     private boolean checkIfUserTypeIsNotSupported(TestInformation testInfo)
             throws TargetSetupError, DeviceNotAvailableException {
-        if (mTradefedUserType.isManagedProfile()) {
-            if (!requireFeatures(testInfo, "android.software.managed_users")) {
-                return true;
-            }
-        } else if (mTradefedUserType.isCloneProfile()) {
-            // Clone profile type was introduced in Android S.
-            if (!matchesApiLevel(testInfo, 31)) { // Android S = 31
-                return true;
-            }
+        if (mTradefedUserType.isManagedProfile()
+                && !requireFeatures(testInfo, "android.software.managed_users")) {
+            return true;
+        } else if (mTradefedUserType.isCloneProfile() && !matchesApiLevel(testInfo, 33)) {
+            // Clone profile type was introduced in Android S(api 31).
+            // However, adb support to get usertype was added in 33.
+            // Android T = 33
+            return true;
         }
         return false;
     }
@@ -169,7 +168,8 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
         try {
             return Integer.parseInt(createUserOutput.split(" id ")[1].trim());
         } catch (RuntimeException e) {
-            throw commandError("Error creating profile", command, createUserOutput, e, SHELL_COMMAND_ERROR);
+            throw commandError(
+                    "Error creating profile", command, createUserOutput, e, SHELL_COMMAND_ERROR);
         }
     }
 
@@ -202,7 +202,12 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
                             deviceOwnerOnwards.split("User ID: ", 2)[1].split("\n", 2)[0].trim());
             return new DeviceOwner(componentName, userId);
         } catch (RuntimeException e) {
-            throw commandError("Error reading device owner information", command, dumpsysOutput, e, SHELL_COMMAND_ERROR);
+            throw commandError(
+                    "Error reading device owner information",
+                    command,
+                    dumpsysOutput,
+                    e,
+                    SHELL_COMMAND_ERROR);
         }
     }
 
@@ -216,7 +221,8 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
 
         String commandOutput = device.executeShellCommand(command);
         if (!commandOutput.startsWith("Success")) {
-            throw commandError("Error removing device owner", command, commandOutput, SHELL_COMMAND_ERROR);
+            throw commandError(
+                    "Error removing device owner", command, commandOutput, SHELL_COMMAND_ERROR);
         }
     }
 

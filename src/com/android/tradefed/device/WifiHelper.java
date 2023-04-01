@@ -129,6 +129,14 @@ public class WifiHelper implements IWifiHelper {
                 // Installed successfully; good to go.
                 return;
             } else {
+                if (error.contains("cmd: Failure calling service package")
+                    || error.contains("Can't find service: package")) {
+                    String message =
+                        String.format(
+                                "Failed to install WifiUtil utility. Device might have"
+                                        + " crashed, it returned: %s", error);
+                    throw new DeviceRuntimeException(message, DeviceErrorIdentifier.DEVICE_CRASHED);
+                }
                 throw new HarnessRuntimeException(
                         String.format(
                                 "Unable to install WifiUtil utility: %s on %s",

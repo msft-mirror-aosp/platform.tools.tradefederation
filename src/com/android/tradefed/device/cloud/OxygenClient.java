@@ -126,20 +126,14 @@ public class OxygenClient {
      * @return true if no_wait_for_boot is specified
      */
     public Boolean noWaitForBootSpecified(TestDeviceOptions deviceOptions) {
-        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
-            if (arg.getKey().equals("no_wait_for_boot")) {
-                return true;
-            }
-        }
-        return false;
+        return deviceOptions.getExtraOxygenArgs().containsKey("no_wait_for_boot");
     }
 
     /**
-     * Check if no_wait_for_boot is specified in Oxygen lease request
+     * Adds invocation attributes to the given list of arguments.
      *
      * @param args command line args to call Oxygen client
-     * @param attributes attributes associated with current invocation
-     * @return true if no_wait_for_boot is specified
+     * @param attributes the map of attributes to add
      */
     private void addInvocationAttributes(List<String> args, MultiMap<String, String> attributes) {
         if (attributes == null) {
@@ -172,6 +166,8 @@ public class OxygenClient {
         oxygenClientArgs.add("-lease");
         // Add options from GceDriverParams
         int i = 0;
+        String branch = null;
+        Boolean buildIdSet = false;
         while (i < gceDriverParams.size()) {
             String gceDriverOption = gceDriverParams.get(i);
             if (sGceDeviceParamsToOxygenMap.containsKey(gceDriverOption)) {
@@ -179,9 +175,22 @@ public class OxygenClient {
                 oxygenClientArgs.add(sGceDeviceParamsToOxygenMap.get(gceDriverOption));
                 // add option's value
                 oxygenClientArgs.add(gceDriverParams.get(i + 1));
+                if (gceDriverOption.equals("--branch")) {
+                    branch = gceDriverParams.get(i + 1);
+                } else if (!buildIdSet
+                        && sGceDeviceParamsToOxygenMap.get(gceDriverOption).equals("-build_id")) {
+                    buildIdSet = true;
+                }
                 i++;
             }
             i++;
+        }
+
+        // In case branch is set through gce-driver-param, but not build-id, set the name of
+        // branch to option `-build-id`, so LKGB will be used.
+        if (branch != null && !buildIdSet) {
+            oxygenClientArgs.add("-build_id");
+            oxygenClientArgs.add(branch);
         }
 
         // check if build info exists after added from GceDriverParams
