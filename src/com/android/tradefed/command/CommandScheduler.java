@@ -1215,7 +1215,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             // potentially create more invocations.
             manager.terminateDeviceRecovery();
             manager.terminateDeviceMonitor();
-            CLog.i("Waiting for invocation threads to complete");
+            CLog.logAndDisplay(LogLevel.INFO, "Waiting for invocation threads to complete");
             waitForAllInvocationThreads();
             waitForTerminatingInvocationThreads();
             exit(manager);
@@ -2067,6 +2067,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             mCommandProcessWait.signalEventReceived();
         }
+        CLog.logAndDisplay(LogLevel.INFO, "Received shutdown request.");
     }
 
     /** {@inheritDoc} */
