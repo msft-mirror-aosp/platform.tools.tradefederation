@@ -299,7 +299,9 @@ public class IsolatedHostTest
                         InfraErrorIdentifier.INTERRUPTED_DURING_SUBPROCESS_SHUTDOWN);
             }
 
-            logCoverageExecFile(listener);
+            if (isCoverageEnabled()) {
+                logCoverageExecFile(listener);
+            }
             FileUtil.deleteFile(mIsolationJar);
         }
     }
@@ -323,7 +325,7 @@ public class IsolatedHostTest
             cmdArgs.add(javaPath);
             CLog.v("Using java executable at %s", javaPath);
         }
-        if (mConfig != null && mConfig.getCoverageOptions().isCoverageEnabled()) {
+        if (isCoverageEnabled()) {
             if (mConfig.getCoverageOptions().getJaCoCoAgentPath() != null) {
                 try {
                     mCoverageExecFile = FileUtil.createTempFile("coverage", ".exec");
@@ -784,6 +786,10 @@ public class IsolatedHostTest
         try (FileInputStreamSource source = new FileInputStreamSource(mCoverageExecFile, true)) {
             listener.testLog("coverage", LogDataType.COVERAGE, source);
         }
+    }
+
+    private boolean isCoverageEnabled() {
+        return mConfig != null && mConfig.getCoverageOptions().isCoverageEnabled();
     }
 
     /** {@inheritDoc} */
