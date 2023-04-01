@@ -126,12 +126,7 @@ public class OxygenClient {
      * @return true if no_wait_for_boot is specified
      */
     public Boolean noWaitForBootSpecified(TestDeviceOptions deviceOptions) {
-        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
-            if (arg.getKey().equals("no_wait_for_boot")) {
-                return true;
-            }
-        }
-        return false;
+        return deviceOptions.getExtraOxygenArgs().containsKey("no_wait_for_boot");
     }
 
     /**
