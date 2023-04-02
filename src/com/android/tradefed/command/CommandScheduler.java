@@ -128,9 +128,11 @@ import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * A scheduler for running TradeFederation commands across all available devices.
@@ -796,14 +798,20 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 // No stray thread detected at the end of invocation
                 return;
             }
+            // After calling parallelStream(), Some ForkJoinWorkerThreads stay around.
+            // They are common pool workers and shouldn't be counted as stray threads.
+            List<Thread> listThreads = getListOfThreadsExcludingForkJoinWorkers(numThread);
+            numThread = listThreads.size();
+            if (numThread == EXPECTED_THREAD_COUNT) {
+                return;
+            }
+
             List<String> cmd = Arrays.asList(mCmd.getCommandTracker().getArgs());
             CLog.e(
                     "Stray thread detected for command %d, %s. %d threads instead of %d",
                     mCmd.getCommandTracker().getId(), cmd, numThread, EXPECTED_THREAD_COUNT);
-            // This is the best we have for debug, it prints to std out.
-            Thread[] listThreads = new Thread[numThread];
-            this.getThreadGroup().enumerate(listThreads);
-            CLog.e("List of remaining threads: %s", Arrays.asList(listThreads));
+            // This is the best we have for debug, it prints to stdout.
+            CLog.e("List of remaining threads: %s", listThreads);
             List<IHostMonitor> hostMonitors = GlobalConfiguration.getHostMonitorInstances();
             if (hostMonitors != null) {
                 for (IHostMonitor hm : hostMonitors) {
@@ -816,7 +824,16 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     String.format(
                             "We have %s threads instead of 1: %s. Check the logs for list of "
                                     + "threads.",
-                            numThread, Arrays.asList(listThreads)));
+                            numThread, listThreads));
+        }
+
+        private List<Thread> getListOfThreadsExcludingForkJoinWorkers(int numThread) {
+            Thread[] listThreads = new Thread[numThread];
+            this.getThreadGroup().enumerate(listThreads);
+
+            return Arrays.asList(listThreads).stream()
+                    .filter(t -> !(t instanceof ForkJoinWorkerThread))
+                    .collect(Collectors.toList());
         }
 
         /** Helper to log an invocation ended event. */
