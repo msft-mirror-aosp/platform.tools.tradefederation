@@ -123,6 +123,10 @@ public class WifiPreparer extends BaseTargetPreparer implements IExternalDepende
             CLog.d("boot failure: skipping wifi teardown");
             return;
         }
+        if (e instanceof DeviceNotAvailableException) {
+            CLog.d("device is not available. skipping wifi teardown");
+            return;
+        }
 
         if (mMonitorNetwork) {
             device.disableNetworkMonitor();
