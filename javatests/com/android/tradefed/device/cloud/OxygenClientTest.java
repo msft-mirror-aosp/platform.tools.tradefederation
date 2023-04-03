@@ -18,6 +18,7 @@ package com.android.tradefed.device.cloud;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.android.tradefed.build.BuildInfo;
@@ -321,5 +322,15 @@ public class OxygenClientTest {
         OptionSetter setter = new OptionSetter(mTestDeviceOptions);
         setter.setOptionValue("extra-oxygen-args", "no_wait_for_boot", "");
         assertTrue(mOxygenClient.noWaitForBootSpecified(mTestDeviceOptions));
+    }
+
+    /** Test fetch cvd path override. */
+    @Test
+    public void testFetchCvdOverride() throws Exception {
+        assertNull(mOxygenClient.getOverrideFetchCvdPath(mTestDeviceOptions));
+        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
+        setter.setOptionValue("extra-oxygen-args", "override_fetch_cvd_path", "gs://abc/fetch_cvd");
+        assertEquals(
+                mOxygenClient.getOverrideFetchCvdPath(mTestDeviceOptions), "gs://abc/fetch_cvd");
     }
 }
