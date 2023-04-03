@@ -969,7 +969,8 @@ public class InvocationExecution implements IInvocationExecution {
                 ((ITestLoggerReceiver) preparer).setTestLogger(logger);
             }
             long startTime = System.currentTimeMillis();
-            try {
+            try (CloseableTraceScope remoteTest =
+                    new CloseableTraceScope(preparer.getClass().getSimpleName())) {
                 CLog.d(
                         "starting tearDown '%s' on device: '%s'",
                         preparer, device.getSerialNumber());
