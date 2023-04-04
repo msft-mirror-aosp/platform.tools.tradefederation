@@ -402,6 +402,93 @@ public class MoblyBinaryHostTestTest {
     }
 
     @Test
+    public void testRun_testListWithOnlyBadTestNames() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("abc\nClassTest.\ntest");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
+    }
+
+    @Test
+    public void testRun_testListWithOnlyGoodTestNames() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("test_foo\ntest_baz\nClassTest.test_bar");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(3));
+    }
+
+    @Test
+    public void testRun_testListWithBadTestNames() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("test_foo\nabc\ntest_baz\nClassTest.test_bar\nClassTest.\ntest");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(3));
+    }
+
+    @Test
     public void testRun_withoutTests() throws Exception {
         Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
         OptionSetter setter = new OptionSetter(mSpyTest);
@@ -426,10 +513,14 @@ public class MoblyBinaryHostTestTest {
                             return new CommandResult(CommandStatus.SUCCESS);
                         });
 
-        mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
 
         // Verify no tests where run.
         verify(mSpyTest.getRunUtil()).runTimedCmd(anyLong(), any(), eq("--"), eq("--list_tests"));
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
     }
 
     @Test
