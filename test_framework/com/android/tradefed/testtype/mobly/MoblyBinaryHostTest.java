@@ -289,7 +289,7 @@ public class MoblyBinaryHostTest
         // Compute all tests.
         final String[] all_tests =
                 Arrays.stream(list_result.getStdout().split(System.lineSeparator()))
-                        .filter(line -> !line.startsWith("==========>"))
+                        .filter(line -> line.startsWith("test_") || line.contains(".test_"))
                         .toArray(String[]::new);
         Stream<String> includedTests = Arrays.stream(all_tests);
         // Process include filters.
