@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.targetprep;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -22,7 +23,9 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -116,10 +119,10 @@ public class TemperatureThrottlingWaiter extends BaseTargetPreparer {
                 }
                 break; // while loop
             }
-            RunUtil.getDefault().sleep(intervalMs);
+            getRunUtil().sleep(intervalMs);
         }
         // extra idle time after reaching the targetl to stable the system
-        RunUtil.getDefault().sleep(mPostIdleWaitSecs * 1000);
+        getRunUtil().sleep(mPostIdleWaitSecs * 1000);
         CLog.d("Done waiting, total time elapsed: %ds",
                 (System.currentTimeMillis() - start) / 1000);
     }
@@ -170,5 +173,10 @@ public class TemperatureThrottlingWaiter extends BaseTargetPreparer {
         throw new TargetSetupError(
             String.format("result content is not as expected. Content : %s", result),
                 device.getDeviceDescriptor());
+    }
+
+    @VisibleForTesting
+    protected IRunUtil getRunUtil() {
+        return RunUtil.getDefault();
     }
 }
