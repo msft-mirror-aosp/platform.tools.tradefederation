@@ -1020,6 +1020,8 @@ public class GceManager {
                     name = remoteFile.getName();
                 }
                 logger.testLog(name, type, remoteFileStream);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_LOG_SIZE, remoteFileStream.size());
             }
     }
 
