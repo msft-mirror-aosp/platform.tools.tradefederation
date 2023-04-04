@@ -165,6 +165,7 @@ public class InvocationMetricLogger {
         CF_GCE_CREATE_TIME("cf_gce_create_time_ms", false),
         CF_LAUNCH_CVD_TIME("cf_launch_cvd_time_ms", false),
         CF_INSTANCE_COUNT("cf_instance_count", false),
+        CF_LOG_SIZE("cf_log_size_bytes", true),
         CF_OXYGEN_SERVER_URL("cf_oxygen_server_url", false),
         CF_OXYGEN_SESSION_ID("cf_oxygen_session_id", false),
         CF_OXYGEN_VERSION("cf_oxygen_version", false),
