@@ -41,6 +41,7 @@ import com.android.tradefed.log.LogUtil;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.proto.TestRecordProto;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -336,6 +337,167 @@ public class MoblyBinaryHostTestTest {
 
         verify(mSpyTest.getRunUtil(), never())
                 .setEnvVariable(eq("VIRTUAL_ENV"), eq(mVenvDir.getAbsolutePath()));
+    }
+
+    @Test
+    public void testRun_exitSuccess_withTestResultFileComplete() throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        String testResultContent =
+                "---\n" +
+                "{Executed: 0, Skipped: 0, Type: Summary}\n" +
+                "...";
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("test_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, testResultContent);
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+        verify(mockListener, never()).testRunFailed(any(FailureDescription.class));
+        verify(mockListener, never()).testRunFailed(anyString());
+        verify(mockListener, times(1)).testRunEnded(anyLong(), eq(new HashMap<String, String>()));
+    }
+
+    @Test
+    public void testRun_exitSuccess_withTestResultFileIncomplete() throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        String testResultContent = "";
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("test_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, testResultContent);
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+        verify(mockListener, never()).testRunFailed(any(FailureDescription.class));
+        verify(mockListener, never()).testRunFailed(anyString());
+        verify(mockListener, times(1)).testRunEnded(anyLong(), eq(new HashMap<String, String>()));
+    }
+
+    @Test
+    public void testRun_exitFailed_withTestResultFileComplete() throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        String testResultContent =
+                "---\n" +
+                "{Executed: 0, Skipped: 0, Type: Summary}\n" +
+                "...";
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("test_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, testResultContent);
+                            return new CommandResult(CommandStatus.FAILED);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+        verify(mockListener, never()).testRunFailed(any(FailureDescription.class));
+        verify(mockListener, never()).testRunFailed(anyString());
+        verify(mockListener, times(1)).testRunEnded(anyLong(), eq(new HashMap<String, String>()));
+    }
+
+    @Test
+    public void testRun_exitFailed_withTestResultFileIncomplete() throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        String testResultContent = "";
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("test_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, testResultContent);
+                            CommandResult res = new CommandResult(CommandStatus.FAILED);
+                            res.setStderr("Some error message");
+                            return res;
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+        verify(mockListener, times(1)).testRunFailed(eq("Some error message"));
+        verify(mockListener, times(1)).testRunEnded(anyLong(), eq(new HashMap<String, String>()));
+    }
+
+    @Test
+    public void testRun_exitFailed_withTestResultFileIncomplete_whenAlreadyFailed() throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        String testResultContent =
+                "---\n" +
+                "{Result: ERROR, Stacktrace: 'Some other error message', Test Name: setup_test, Type: Record}\n" +
+                "...";
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("test_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, testResultContent);
+                            CommandResult res = new CommandResult(CommandStatus.FAILED);
+                            res.setStderr("Some error message");
+                            return res;
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        FailureDescription failureDescription =
+                FailureDescription.create(
+                        "Some other error message",
+                        TestRecordProto.FailureStatus.TEST_FAILURE);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+        verify(mockListener, times(1)).testRunFailed(eq(failureDescription));
+        verify(mockListener, times(1)).testRunEnded(anyLong(), eq(new HashMap<String, String>()));
     }
 
     @Test
