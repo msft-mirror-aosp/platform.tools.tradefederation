@@ -387,12 +387,22 @@ public class BaseTestSuite extends ITestSuite {
                                                 Map.Entry::getValue,
                                                 (x, y) -> y,
                                                 LinkedHashMap::new));
-                throw new HarnessRuntimeException(
+                String errorMessage =
                         String.format(
-                                "Include filter '%s' was specified"
-                                        + " but resulted in an empty test set.",
-                                includeFiltersCleaned.toString()),
-                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                                "Include filter '%s' was specified but resulted in an empty test"
+                                        + " set.",
+                                includeFiltersCleaned.toString());
+                if (errorMessage.length() > 1000) {
+                    CLog.e(errorMessage);
+                    errorMessage =
+                            String.format(
+                                    "Include filter was specified for %d modules but resulted in an"
+                                            + " empty test set. Check host log for complete list of"
+                                            + " include filters.",
+                                    includeFiltersCleaned.size());
+                }
+                throw new HarnessRuntimeException(
+                        errorMessage, InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             return loadedTests;
         } catch (DeviceNotAvailableException e) {
