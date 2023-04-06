@@ -32,6 +32,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
@@ -194,6 +195,27 @@ public class ModuleListenerTest {
                         + "attempt 1. This is a placeholder for the missing attempt.\n"
                         + "  test.apex did not report any run.",
                 results.get(1).getRunFailureMessage());
+    }
+
+    /** Test that writes test-mapping sources in test run results. */
+    @Test
+    public void testRecordTestMappingSourcesIntoMetrics() {
+        mListener.setTestMappingSources(Arrays.asList("source1", "source2"));
+        mListener.testRunStarted("run1", 1);
+        TestDescription tid = new TestDescription("class", "test1");
+        mListener.testStarted(tid);
+        mListener.testEnded(tid, new HashMap<String, Metric>());
+        mListener.testRunEnded(0, new HashMap<String, Metric>());
+        List<TestRunResult> results = mListener.getMergedTestRunResults();
+        assertEquals(
+                "[source1, source2]",
+                results.get(0)
+                        .getTestResults()
+                        .get(tid)
+                        .getProtoMetrics()
+                        .get("test_mapping_source")
+                        .getMeasurements()
+                        .getSingleString());
     }
 
     private boolean hasRunCrashed(List<TestRunResult> results) {
