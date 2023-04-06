@@ -289,7 +289,7 @@ public class MoblyBinaryHostTest
         // Compute all tests.
         final String[] all_tests =
                 Arrays.stream(list_result.getStdout().split(System.lineSeparator()))
-                        .filter(line -> !line.startsWith("==========>"))
+                        .filter(line -> line.startsWith("test_") || line.contains(".test_"))
                         .toArray(String[]::new);
         Stream<String> includedTests = Arrays.stream(all_tests);
         // Process include filters.
@@ -374,7 +374,7 @@ public class MoblyBinaryHostTest
         MoblyYamlResultParser parser = new MoblyYamlResultParser(listener);
         File yamlSummaryFile = null;
         InputStream inputStream = null;
-        boolean runFailed = false;
+        boolean reportRunFailed = true;
         while (!future.isDone() && yamlSummaryFile == null) {
             yamlSummaryFile = FileUtil.findFile(getLogDir(), MOBLY_TEST_SUMMARY);
             if (yamlSummaryFile != null) {
@@ -382,20 +382,27 @@ public class MoblyBinaryHostTest
                     inputStream = new FileInputStream(yamlSummaryFile);
                 } catch (FileNotFoundException ex) {
                     listener.testRunFailed(ex.toString());
-                    runFailed = true;
+                    reportRunFailed = false;
                 }
             }
         }
         if (inputStream != null) {
             while (!future.isDone()) processYamlTestResults(inputStream, parser, listener, runName);
-            if (!processYamlTestResults(inputStream, parser, listener, runName))
+            if (processYamlTestResults(inputStream, parser, listener, runName)) {
+                // In case of test failure(s), result will be a non-zero value.
+                // Since we get a complete summary file and that any error(s) had been
+                // already reported, there is no need to report the run as failed.
+                reportRunFailed = false;
+            } else {
                 CLog.e("Did not get a complete summary file from python binary.");
-            runFailed = parser.getRunFailed();
+                // Only report as failed if not already done by the parser.
+                reportRunFailed = !parser.getRunFailed();
+            }
             StreamUtil.close(inputStream);
         }
         try {
             CommandResult result = future.get();
-            if (!CommandStatus.SUCCESS.equals(result.getStatus()) && !runFailed)
+            if (!CommandStatus.SUCCESS.equals(result.getStatus()) && reportRunFailed)
                 listener.testRunFailed(result.getStderr());
         } catch (InterruptedException ex) {
             listener.testRunFailed(ex.toString());
