@@ -199,6 +199,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
 
     /**
      * Initialize granular run listener with {@link RemoteTestTimeOutEnforcer} if timeout is set.
+     * And set the test-mapping sources in granular run listener.
      *
      * @param listener The listener for each test run should be wrapped.
      * @param moduleContext the invocation context of the module
@@ -216,6 +217,11 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
                                 RemoteTestTimeOutEnforcer.REMOTE_TEST_TIMEOUT_OPTION).get(0));
                 mRemoteTestTimeOutEnforcer = new RemoteTestTimeOutEnforcer(
                         mMainGranularRunListener, mModule, mTest, duration);
+            }
+            List<String> testMappingSources =
+                    configDesc.getMetaData(Integer.toString(mTest.hashCode()));
+            if (testMappingSources != null) {
+                mMainGranularRunListener.setTestMappingSources(testMappingSources);
             }
         }
     }
