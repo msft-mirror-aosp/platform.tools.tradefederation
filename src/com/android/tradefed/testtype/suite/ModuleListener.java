@@ -33,7 +33,11 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
+import com.google.common.annotations.VisibleForTesting;
+
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * Listener attached to each {@link IRemoteTest} of each module in order to collect the list of
@@ -54,6 +58,9 @@ public class ModuleListener extends CollectingTestListener {
     /** Track if we are within an isolated run or not */
     private IsolationGrade mAttemptIsolation = IsolationGrade.NOT_ISOLATED;
 
+    private List<String> mTestMappingSources = new ArrayList<String>();
+    private static final String TEST_MAPPING_SOURCE = "test_mapping_source";
+
     /** Constructor. */
     public ModuleListener(ITestInvocationListener listener, IInvocationContext moduleContext) {
         mMainListener = listener;
@@ -70,6 +77,16 @@ public class ModuleListener extends CollectingTestListener {
     /** Sets whether or not we are only collecting the tests. */
     public void setCollectTestsOnly(boolean collectTestsOnly) {
         mCollectTestsOnly = collectTestsOnly;
+    }
+
+    /** Sets test-mapping sources that will be inserted into metrics. */
+    public void setTestMappingSources(List<String> testMappingSources) {
+        mTestMappingSources = testMappingSources;
+    }
+
+    @VisibleForTesting
+    List<String> getTestMappingSources() {
+        return mTestMappingSources;
     }
 
     @Override
@@ -181,6 +198,11 @@ public class ModuleListener extends CollectingTestListener {
     @Override
     public void testEnded(TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
         logTestStatus(test, mTestStatus);
+        if (!mTestMappingSources.isEmpty()) {
+            testMetrics.put(
+                    TEST_MAPPING_SOURCE,
+                    TfMetricProtoUtil.stringToMetric(mTestMappingSources.toString()));
+        }
         super.testEnded(test, endTime, testMetrics);
     }
 
