@@ -1123,6 +1123,24 @@ public class GranularRetriableTestWrapperTest {
         assertFalse(listener.getCurrentRunResults().getRunFailureDescription().isRetriable());
     }
 
+    /** Test to get test-mapping sources when initializing MainGranularRunListener. */
+    @Test
+    public void testInitializeGranularRunListener_GetTestMappingSources() throws Exception {
+        ModuleDefinition module = Mockito.mock(ModuleDefinition.class);
+        Mockito.when(module.getModuleInvocationContext()).thenReturn(mModuleInvocationContext);
+        IRemoteTest mIRemoteTest = new FakeTest();
+        List<String> mTestMappingSources = Arrays.asList("a/b", "c/d");
+        String mModuleName = "module";
+        Mockito.when(module.getId()).thenReturn(mModuleName);
+        mConfigurationDescriptor.addMetadata(
+                Integer.toString(mIRemoteTest.hashCode()), mTestMappingSources);
+
+        GranularRetriableTestWrapper granularTestWrapper =
+                createGranularTestWrapper(mIRemoteTest, 3, new ArrayList<>(), module);
+        ModuleListener listener = granularTestWrapper.getResultListener();
+        assertEquals(listener.getTestMappingSources(), mTestMappingSources);
+    }
+
     /** Collector that track if it was called or not */
     public static class CalledMetricCollector extends BaseDeviceMetricCollector {
 
