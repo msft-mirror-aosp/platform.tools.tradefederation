@@ -222,7 +222,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * @throws DeviceNotAvailableException if reboot fails.
      */
     private void activateStagedInstall(ITestDevice device) throws DeviceNotAvailableException {
-        if (mApexStagingWaitTime > 0) {
+        if (mApexStagingWaitTime > 0 && device.getApiLevel() == 29) {
             RunUtil.getDefault().sleep(mApexStagingWaitTime);
         }
         device.reboot();

@@ -129,7 +129,8 @@ public class SandboxedInvocationExecutionTest {
         mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
 
         doReturn(new ByteArrayInputStreamSource("".getBytes())).when(mMockDevice).getLogcat();
-        when(mMockDevice.waitForDeviceAvailable()).thenReturn(true);
+        when(mMockDevice.waitForDeviceAvailable(TestInvocation.AVAILABILITY_CHECK_TIMEOUT))
+                .thenReturn(true);
 
         mExecution = new SandboxedInvocationExecution();
         mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
