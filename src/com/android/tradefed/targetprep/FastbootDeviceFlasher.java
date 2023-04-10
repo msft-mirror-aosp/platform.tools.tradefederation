@@ -80,7 +80,6 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     private ITestsZipInstaller mTestsZipInstaller = null;
 
     private Collection<String> mFlashOptions = new ArrayList<>();
-    private boolean mDisableRamdump = false;
 
     private Collection<String> mDataWipeSkipList = null;
 
@@ -159,10 +158,6 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         // HACK: To workaround TF's command line parsing, options starting with a dash
         // needs to be prepended with a whitespace and trimmed before they are used.
         mFlashOptions = flashOptions.stream().map(String::trim).collect(Collectors.toList());
-    }
-
-    public void setDisableRamdump(boolean disableRamdump) {
-        mDisableRamdump = disableRamdump;
     }
 
     /** {@inheritDoc} */
@@ -672,7 +667,6 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         if (shouldFlashSystem(systemBuildId, systemBuildFlavor, deviceBuild)) {
             CLog.i("Flashing system %s", deviceBuild.getDeviceBuildId());
             flashSystem(device, deviceBuild);
-            disableRampdump(device);
             return true;
         }
         CLog.i(
@@ -684,22 +678,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             flashRamdiskIfNeeded(device, deviceBuild);
             CLog.i("Flashed ramdisk anyways per flasher settings.");
         }
-        disableRampdump(device);
         // reboot
         device.rebootUntilOnline();
         return false;
-    }
-
-    private void disableRampdump(ITestDevice device) throws DeviceNotAvailableException {
-        if (mDisableRamdump) {
-            CLog.i("Disabling ramdump.");
-            CommandResult result = device.executeFastbootCommand("oem", "ramdump", "disable");
-            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                CLog.w(
-                        "Failed to run ramdump disable: status: %s\nstdout: %s\nstderr: %s",
-                        result.getStatus(), result.getStdout(), result.getStderr());
-            }
-        }
     }
 
     /**

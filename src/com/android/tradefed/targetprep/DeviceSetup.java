@@ -39,7 +39,10 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.BinaryState;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -54,6 +57,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A {@link ITargetPreparer} that configures a device for testing based on provided {@link Option}s.
@@ -463,7 +468,16 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     private boolean mDisableDeviceConfigSync = false;
     // device_config set_sync_disabled_for_tests persistent
 
+    @Option(
+            name = "disable-ramdump",
+            description = "Will set the flag to disable ramdump on the device.")
+    private boolean mDisableRamdump = false;
+
+    @Option(name = "parallelize-core-setup")
+    private boolean mParallelCoreSetup = false;
+
     private static final String PERSIST_PREFIX = "persist.";
+    private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
 
     public ITestDevice getDevice(TestInformation testInfo) {
         return testInfo.getDevice();
@@ -487,23 +501,76 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         processDeprecatedOptions(device);
         // Convert options into settings and run commands
         processOptions(device);
-
         // Change system props (will reboot device)
         changeSystemProps(device);
-        // Handle screen always on setting
-        handleScreenAlwaysOnSetting(device);
         // Run commands designated to be run before changing settings
         runCommands(device, mRunCommandBeforeSettings);
-        // Change settings
-        changeSettings(device);
-        // Connect wifi after settings since this may take a while
-        connectWifi(device);
-        // Sync data after settings since this may take a while
-        syncTestData(device);
+        List<Callable<Boolean>> callableTasks = new ArrayList<>();
+
+        callableTasks.add(
+                () -> {
+                    // Handle screen always on setting
+                    handleScreenAlwaysOnSetting(device);
+                    return true;
+                });
+        callableTasks.add(
+                () -> {
+                    // Change settings
+                    changeSettings(device);
+                    return true;
+                });
+        callableTasks.add(
+                () -> {
+                    // Connect wifi after settings since this may take a while
+                    connectWifi(device);
+                    return true;
+                });
+        callableTasks.add(
+                () -> {
+                    // Sync data after settings since this may take a while
+                    syncTestData(device);
+                    return true;
+                });
+        callableTasks.add(
+                () -> {
+                    // Throw an error if there is not enough storage space
+                    checkExternalStoreSpace(device);
+                    return true;
+                });
+        if (mParallelCoreSetup) {
+            ParallelDeviceExecutor<Boolean> executor =
+                    new ParallelDeviceExecutor<Boolean>(callableTasks.size());
+            executor.invokeAll(callableTasks, 5, TimeUnit.MINUTES);
+            if (executor.hasErrors()) {
+                List<Throwable> errors = executor.getErrors();
+                // TODO: Handle throwing multi-exceptions, right now throw the first one.
+                for (Throwable error : errors) {
+                    if (error instanceof TargetSetupError) {
+                        throw (TargetSetupError) error;
+                    }
+                    if (error instanceof BuildError) {
+                        throw (BuildError) error;
+                    }
+                    if (error instanceof DeviceNotAvailableException) {
+                        throw (DeviceNotAvailableException) error;
+                    }
+                    throw new RuntimeException(error);
+                }
+            }
+        } else {
+            // Handle screen always on setting
+            handleScreenAlwaysOnSetting(device);
+            // Change settings
+            changeSettings(device);
+            // Connect wifi after settings since this may take a while
+            connectWifi(device);
+            // Sync data after settings since this may take a while
+            syncTestData(device);
+            // Throw an error if there is not enough storage space
+            checkExternalStoreSpace(device);
+        }
         // Run commands designated to be run after changing settings
         runCommands(device, mRunCommandAfterSettings);
-        // Throw an error if there is not enough storage space
-        checkExternalStoreSpace(device);
 
         device.clearErrorDialogs();
     }
@@ -796,12 +863,19 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
+        boolean needsReboot = false;
         // Set persistent props and build a map of all the nonpersistent ones
         Map<String, String> nonpersistentProps = new HashMap<String, String>();
         for (Map.Entry<String, String> prop : mSetProps.entrySet()) {
             if (prop.getKey().startsWith(PERSIST_PREFIX)) {
                 // TODO: Check that set was successful
                 device.setProperty(prop.getKey(), prop.getValue());
+            } else if (prop.getKey().equals(MEMTAG_BOOTCTL)) {
+                // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
+                // stores the value in the misc partition, and gets applied and restored on
+                // reboot.
+                device.setProperty(prop.getKey(), prop.getValue());
+                needsReboot = true;
             } else {
                 nonpersistentProps.put(prop.getKey(), prop.getValue());
             }
@@ -847,6 +921,24 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             }
             // Set reasonable permissions for /data/local.prop
             device.executeShellCommand("chmod 644 /data/local.prop");
+
+            if (mDisableRamdump) {
+                device.rebootIntoBootloader();
+                CLog.i("Disabling ramdump.");
+                CommandResult resultRampdump =
+                        device.executeFastbootCommand("oem", "ramdump", "disable");
+                if (!CommandStatus.SUCCESS.equals(resultRampdump.getStatus())) {
+                    CLog.w(
+                            "Failed to run ramdump disable: status: %s\nstdout: %s\nstderr: %s",
+                            resultRampdump.getStatus(),
+                            resultRampdump.getStdout(),
+                            resultRampdump.getStderr());
+                }
+            }
+            needsReboot = true;
+        }
+
+        if (needsReboot) {
             CLog.i("Rebooting %s due to system property change", device.getSerialNumber());
             device.reboot();
         }

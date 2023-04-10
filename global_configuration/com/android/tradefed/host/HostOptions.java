@@ -154,6 +154,16 @@ public class HostOptions implements IHostOptions {
             isTimeVal = true)
     private long mTestPhaseTimeout = 0;
 
+    @Option(
+            name = "enable-flashstation",
+            description = "Feature flag to enable the support for flashstation.")
+    private boolean mEnableFlashstation = false;
+
+    @Option(
+            name = "cl-flashstation",
+            description = "cl_flashstation script stored in remote GCS bucket.")
+    private File mClFlashstation = new File("/tradefed/cl_flashstation");
+
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
     private Map<PermitLimitType, Integer> mInternalConcurrentLimits = new HashMap<>();
 
@@ -378,5 +388,17 @@ public class HostOptions implements IHostOptions {
     @Override
     public boolean shouldFlashWithFuseZip() {
         return mFlashWithFuseZip;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isFlashstationEnabled() {
+        return mEnableFlashstation;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public File getClFlashstation() {
+        return mClFlashstation;
     }
 }

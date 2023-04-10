@@ -51,23 +51,18 @@ public class TestRunnerUtil {
 
         String libs[] = {"lib", "lib64"};
         String androidHostOut = singleton.getEnv("ANDROID_HOST_OUT");
+        String testcasesFolderPath = getTestcasesFolderPath(testFile);
         for (String lib : libs) {
             File libFile = new File(testFile.getParentFile().getAbsolutePath(), lib);
             if (libFile.exists()) {
                 paths.add(libFile.getAbsolutePath());
             }
             // Include `testcases` directory for running tests based on test zip.
-            // Assume test binary path is like
-            // /tmp/tf-workfolder/testsdir/host/testcases/test_name/x86_64/binary_name
-            libFile =
-                    new File(
-                            testFile.getParentFile()
-                                    .getParentFile()
-                                    .getParentFile()
-                                    .getAbsolutePath(),
-                            lib);
-            if (libFile.exists()) {
-                paths.add(libFile.getAbsolutePath());
+            if (testcasesFolderPath != null) {
+                libFile = new File(testcasesFolderPath, lib);
+                if (libFile.exists()) {
+                    paths.add(libFile.getAbsolutePath());
+                }
             }
             // Include ANDROID_HOST_OUT/lib to support local case.
             if (androidHostOut != null) {
@@ -83,5 +78,20 @@ public class TestRunnerUtil {
         String ldLibraryPath = String.join(java.io.File.pathSeparator, paths);
         CLog.d("Identify LD_LIBRARY_PATH to be used: %s", ldLibraryPath);
         return ldLibraryPath;
+    }
+
+    /** Return the path to the testcases folder or null if it doesn't exist. */
+    private static String getTestcasesFolderPath(File testFile) {
+        // Assume test binary path is like
+        // /tmp/tf-workfolder/testsdir/host/testcases/test_name/x86_64/binary_name
+        File folder = testFile.getParentFile();
+        if (folder != null) {
+            folder = folder.getParentFile();
+            if (folder != null) {
+                folder = folder.getParentFile();
+                if (folder != null) return folder.getAbsolutePath();
+            }
+        }
+        return null;
     }
 }

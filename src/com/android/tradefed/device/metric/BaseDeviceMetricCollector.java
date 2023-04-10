@@ -20,6 +20,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.IDeviceActionReceiver;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -55,7 +56,7 @@ import java.util.stream.Collectors;
  * Base implementation of {@link IMetricCollector} that allows to start and stop collection on
  * {@link #onTestRunStart(DeviceMetricData)} and {@link #onTestRunEnd(DeviceMetricData, Map)}.
  */
-public class BaseDeviceMetricCollector implements IMetricCollector {
+public class BaseDeviceMetricCollector implements IMetricCollector, IDeviceActionReceiver {
 
     public static final String TEST_CASE_INCLUDE_GROUP_OPTION = "test-case-include-group";
     public static final String TEST_CASE_EXCLUDE_GROUP_OPTION = "test-case-exclude-group";
@@ -97,9 +98,11 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     private boolean mWasInitDone = false;
     /** Whether or not a DNAE occurred and we should stop collection. */
     private boolean mDeviceNoAvailable = false;
+    /** Whether the {@link IDeviceActionReceiver} should be disabled or not. */
+    private boolean mDisableReceiver = true;
 
     @Override
-    public ITestInvocationListener init(
+    public final ITestInvocationListener init(
             IInvocationContext context, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         mContext = context;
@@ -110,7 +113,30 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         }
         mWasInitDone = true;
         mDeviceNoAvailable = false;
+        // Register this collector for device action events.
+        if (!isDisabledReceiver()) {
+            for (ITestDevice device : getRealDevices()) {
+                device.registerDeviceActionReceiver(this);
+            }
+        }
+        long start = System.currentTimeMillis();
+        try {
+            extraInit(context, listener);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+        }
         return this;
+    }
+
+    /**
+     * @param context
+     * @param listener
+     * @throws DeviceNotAvailableException
+     */
+    public void extraInit(IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
+        // Empty by default
     }
 
     @Override
@@ -257,6 +283,7 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testModuleStarted(IInvocationContext moduleContext) {
+        long start = System.currentTimeMillis();
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("module_start_" + this.getClass().getSimpleName())) {
             onTestModuleStarted();
@@ -266,12 +293,15 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         } catch (Throwable t) {
             CLog.e(t);
         } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
             mForwarder.testModuleStarted(moduleContext);
         }
     }
 
     @Override
     public final void testModuleEnded() {
+        long start = System.currentTimeMillis();
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("module_end_" + this.getClass().getSimpleName())) {
             onTestModuleEnded();
@@ -280,6 +310,14 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         } catch (Throwable t) {
             CLog.e(t);
         } finally {
+            // De-register this collector from device action events
+            if (!isDisabledReceiver()) {
+                for (ITestDevice device : getRealDevices()) {
+                    device.deregisterDeviceActionReceiver(this);
+                }
+            }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
             mForwarder.testModuleEnded();
         }
     }
@@ -378,6 +416,12 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
                 // Prevent exception from messing up the status reporting.
                 CLog.e(t);
             } finally {
+                // De-register this collector from device action events
+                if (!isDisabledReceiver()) {
+                    for (ITestDevice device : getRealDevices()) {
+                        device.deregisterDeviceActionReceiver(this);
+                    }
+                }
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
             }
@@ -720,4 +764,23 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         return src;
     }
 
+    @Override
+    public void rebootStarted(ITestDevice device) throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    @Override
+    public void rebootEnded(ITestDevice device) throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    @Override
+    public void setDisableReceiver(boolean isDisabled) {
+        mDisableReceiver = isDisabled;
+    }
+
+    @Override
+    public boolean isDisabledReceiver() {
+        return mDisableReceiver;
+    }
 }

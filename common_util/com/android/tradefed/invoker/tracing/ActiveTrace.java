@@ -105,6 +105,13 @@ public class ActiveTrace {
     }
 
     /**
+     * thread id of the thread that initiated the tracing.
+     */
+    public long reportingThreadId() {
+        return tid;
+    }
+
+    /**
      * Very basic event reporting to do START / END of traces.
      *
      * @param categories Category associated with event

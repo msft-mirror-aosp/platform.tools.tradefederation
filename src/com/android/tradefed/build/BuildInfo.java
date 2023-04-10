@@ -23,6 +23,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.service.TradefedFeatureClient;
@@ -711,7 +712,8 @@ public class BuildInfo implements IBuildInfo {
                 InvocationMetricKey.STAGE_TESTS_INDIVIDUAL_DOWNLOADS, fileName);
         List<String> includeFilters = Arrays.asList(String.format("/%s?($|/)", fileName));
 
-        try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+        try (CloseableTraceScope stage = new CloseableTraceScope("stageRemoteFile:" + fileName);
+                TradefedFeatureClient client = new TradefedFeatureClient()) {
             Map<String, String> args = new HashMap<>();
             args.put(ResolvePartialDownload.DESTINATION_DIR, workingDir.getAbsolutePath());
             args.put(ResolvePartialDownload.INCLUDE_FILTERS, String.join(";", includeFilters));
@@ -723,9 +725,12 @@ public class BuildInfo implements IBuildInfo {
                             .map(p -> p.toString())
                             .collect(Collectors.joining(";"));
             args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+            long startTime = System.currentTimeMillis();
             FeatureResponse rep =
                     client.triggerFeature(
                             ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.STAGE_REMOTE_TIME, startTime, System.currentTimeMillis());
             if (rep.hasErrorInfo()) {
                 throw new HarnessRuntimeException(
                         rep.getErrorInfo().getErrorTrace(),

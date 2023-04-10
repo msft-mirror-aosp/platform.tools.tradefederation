@@ -28,6 +28,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -43,9 +44,11 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.testtype.coverage.CoverageOptions;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.JavaCodeCoverageFlusher;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
@@ -128,6 +131,9 @@ public class JavaCodeCoverageCollectorTest {
         when(mMockConfiguration.getCoverageOptions()).thenReturn(mCoverageOptions);
 
         when(mMockContext.getDevices()).thenReturn(ImmutableList.of(mMockDevice));
+        when(mMockContext.getAttributes())
+                .thenReturn(
+                        new MultiMap(ImmutableMap.of(ModuleDefinition.MODULE_NAME, "myModule")));
 
         // Mock an unrooted device that has no issues enabling or disabling root.
         when(mMockDevice.isAdbRoot()).thenReturn(false);
@@ -163,11 +169,44 @@ public class JavaCodeCoverageCollectorTest {
     @Test
     public void testRunEnded_rootEnabled_logsCoverageMeasurement() throws Exception {
         enableJavaCoverage();
+        mCoverageOptionsSetter.setOptionValue("pull-timeout", "314159");
 
         // Setup mocks.
         HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
         mockCoverageFileOnDevice(DEVICE_PATH);
         when(mMockDevice.isAdbRoot()).thenReturn(true);
+        doReturn("").when(mMockDevice).executeShellCommand(anyString());
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, runMetrics);
+
+        // Verify timeout is set.
+        verify(mMockDevice, times(1))
+                .executeShellV2Command(
+                        eq("find /data/misc/trace -name '*.ec' | tar -czf - -T - 2>/dev/null"),
+                        any(),
+                        any(),
+                        eq(314159L),
+                        eq(TimeUnit.MILLISECONDS),
+                        eq(1));
+
+        // Verify testLog(..) was called with the coverage file.
+        verify(mFakeListener)
+                .testLog(anyString(), eq(LogDataType.COVERAGE), eq(COVERAGE_MEASUREMENT));
+    }
+
+    @Test
+    public void testRunEnded_rootEnabled_noModuleName_logsCoverageMeasurement() throws Exception {
+        enableJavaCoverage();
+
+        // Setup mocks.
+        HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
+        mockCoverageFileOnDevice(DEVICE_PATH);
+        when(mMockDevice.isAdbRoot()).thenReturn(true);
+        when(mMockContext.getAttributes()).thenReturn(new MultiMap(ImmutableMap.of()));
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
         returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
 

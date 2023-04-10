@@ -62,6 +62,9 @@ public class WifiHelper implements IWifiHelper {
     static final int PACKAGE_VERSION_CODE = 21;
 
     private static final String WIFIUTIL_APK_NAME = "WifiUtil.apk";
+    private static final String WIFIUTIL_APK_RES = "/" + WIFIUTIL_APK_NAME;
+    private static final String WIFIUTIL_APK_RES_FALLBACK =
+            "/com/android/tradefed/utils/wifi/" + WIFIUTIL_APK_NAME;
     /** the default WifiUtil command timeout in minutes */
     private static final long WIFIUTIL_CMD_TIMEOUT_MINUTES = 5;
 
@@ -116,12 +119,24 @@ public class WifiHelper implements IWifiHelper {
         // Attempt to install utility
         try {
             setupWifiUtilApkFile(wifiUtilApkPath);
+            String[] extraArgs = new String[] {};
+            if (mDevice.isBypassLowTargetSdkBlockSupported()) {
+                extraArgs = new String[] {"--bypass-low-target-sdk-block"};
+            }
 
-            final String error = mDevice.installPackage(mWifiUtilApkFile, true);
+            final String error = mDevice.installPackage(mWifiUtilApkFile, true, extraArgs);
             if (error == null) {
                 // Installed successfully; good to go.
                 return;
             } else {
+                if (error.contains("cmd: Failure calling service package")
+                    || error.contains("Can't find service: package")) {
+                    String message =
+                        String.format(
+                                "Failed to install WifiUtil utility. Device might have"
+                                        + " crashed, it returned: %s", error);
+                    throw new DeviceRuntimeException(message, DeviceErrorIdentifier.DEVICE_CRASHED);
+                }
                 throw new HarnessRuntimeException(
                         String.format(
                                 "Unable to install WifiUtil utility: %s on %s",
@@ -161,11 +176,15 @@ public class WifiHelper implements IWifiHelper {
      * Helper method to extract the wifi util apk from the classpath
      */
     public static File extractWifiUtilApk() throws IOException {
-        File apkTempFile;
-        apkTempFile = FileUtil.createTempFile(WIFIUTIL_APK_NAME, ".apk");
-        InputStream apkStream = WifiHelper.class.getResourceAsStream(
-            String.format("/apks/wifiutil/%s", WIFIUTIL_APK_NAME));
-        FileUtil.writeToFile(apkStream, apkTempFile);
+        File apkTempFile = FileUtil.createTempFile(WIFIUTIL_APK_NAME, ".apk");
+        try {
+            InputStream apkStream = WifiHelper.class.getResourceAsStream(WIFIUTIL_APK_RES);
+            FileUtil.writeToFile(apkStream, apkTempFile);
+        } catch (IOException e) {
+            // Fallback to new path
+            InputStream apkStream = WifiHelper.class.getResourceAsStream(WIFIUTIL_APK_RES_FALLBACK);
+            FileUtil.writeToFile(apkStream, apkTempFile);
+        }
         return apkTempFile;
     }
 

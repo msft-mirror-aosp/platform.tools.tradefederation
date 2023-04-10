@@ -45,8 +45,10 @@ public class InvocationMetricLogger {
         AUTO_RETRY_TIME("auto_retry_time_ms", true),
         BACKFILL_BUILD_INFO("backfill_build_info", false),
         STAGE_TESTS_TIME("stage_tests_time_ms", true),
+        STAGE_REMOTE_TIME("stage_remote_time_ms", true),
         STAGE_TESTS_BYTES("stage_tests_bytes", true),
         STAGE_TESTS_INDIVIDUAL_DOWNLOADS("stage_tests_individual_downloads", true),
+        STAGE_UNDEFINED_DEPENDENCY("stage_undefined_dependency", true),
         SERVER_REFERENCE("server_reference", false),
         INSTRUMENTATION_RERUN_FROM_FILE("instrumentation_rerun_from_file", true),
         INSTRUMENTATION_RERUN_SERIAL("instrumentation_rerun_serial", true),
@@ -58,6 +60,7 @@ public class InvocationMetricLogger {
         XTS_PARTIAL_DOWNLOAD_UNSUPPORTED_FILTER_FALLBACK_COUNT(
                 "xts_partial_download_unsupported_filter_fallback_count", true),
         XTS_PARTIAL_DOWNLOAD_FALLBACK_COUNT("xts_partial_download_fallback_count", true),
+        XTS_PARTIAL_DOWNLOAD_UNFOUND_MODULES("xts_partial_download_unfound_modules", true),
         XTS_PARTIAL_DOWNLOAD_TOTAL_COUNT("xts_partial_download_total_count", true),
         SANDBOX_JAR_STAGING_PARTIAL_DOWNLOAD_FEATURE_COUNT(
                 "sandbox_jar_staging_partial_download_FEATURE_count", true),
@@ -162,14 +165,17 @@ public class InvocationMetricLogger {
         CF_GCE_CREATE_TIME("cf_gce_create_time_ms", false),
         CF_LAUNCH_CVD_TIME("cf_launch_cvd_time_ms", false),
         CF_INSTANCE_COUNT("cf_instance_count", false),
+        CF_LOG_SIZE("cf_log_size_bytes", true),
         CF_OXYGEN_SERVER_URL("cf_oxygen_server_url", false),
         CF_OXYGEN_SESSION_ID("cf_oxygen_session_id", false),
+        CF_OXYGEN_VERSION("cf_oxygen_version", false),
         CRASH_FAILURES("crash_failures", true),
         UNCAUGHT_CRASH_FAILURES("uncaught_crash_failures", true),
         TEST_CRASH_FAILURES("test_crash_failures", true),
         UNCAUGHT_TEST_CRASH_FAILURES("uncaught_test_crash_failures", true),
         DEVICE_RESET_COUNT("device_reset_count", true),
         DEVICE_RESET_MODULES("device_reset_modules", true),
+        DEVICE_POWREWASH_DURATIONS("device_powerwash_durations", true),
         DEVICE_RESET_MODULES_FOR_TARGET_PREPARER("device_reset_modules_for_target_preparer", true),
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
@@ -217,6 +223,7 @@ public class InvocationMetricLogger {
 
         MODULE_SETUP_PAIR("tf_module_setup_pair_timestamp", true),
         MODULE_TEARDOWN_PAIR("tf_module_teardown_pair_timestamp", true),
+        STATUS_CHECKER_PAIR("status_checker_pair", true),
 
         LAB_PREPARER_NOT_ILAB("lab_preparer_not_ilab", true),
         TARGET_PREPARER_IS_ILAB("target_preparer_is_ilab", true),
@@ -237,6 +244,7 @@ public class InvocationMetricLogger {
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
+        CACHE_WAIT_FOR_LOCK("cache_wait_for_lock", true),
 
         // CF Cache metrics
         CF_CACHE_WAIT_TIME("cf_cache_wait_time_sec", false),
@@ -245,8 +253,16 @@ public class InvocationMetricLogger {
         // Ab downloader metrics
         AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
 
+        DUPLICATE_MAPPING_DIFFERENT_OPTIONS("duplicate_mapping_different_options", true),
+
         HAS_ANY_RUN_FAILURES("has_any_run_failures", false),
         TOTAL_TEST_COUNT("total_test_count", true),
+
+        // Metrics to store Device failure signatures
+        DEVICE_ERROR_SIGNATURES("device_failure_signatures", false),
+
+        DEVICE_IMAGE_NOT_CHANGED("device_image_not_changed", false),
+        TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
@@ -261,10 +277,14 @@ public class InvocationMetricLogger {
         test_execution("test_execution", true),
         check_device_availability("check_device_availability", true),
         bugreport("bugreport", true),
+        host_sleep("host_sleep", true),
         test_teardown("test_teardown", true),
         test_cleanup("test_cleanup", true),
         log_and_release_device("log_and_release_device", true),
         invocation_events_processing("invocation_events_processing", true),
+        stage_suite_test_artifacts("stage_suite_test_artifacts", true),
+        wait_for_results_update("wait_for_results_update", true),
+        instru_collect_tests("instru_collect_tests", true),
         ;
 
         private final String mKeyName;

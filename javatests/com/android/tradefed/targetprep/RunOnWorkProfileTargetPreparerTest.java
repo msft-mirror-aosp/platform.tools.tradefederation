@@ -16,23 +16,23 @@
 
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.device.UserInfo.UserType.MANAGED_PROFILE;
 import static com.android.tradefed.targetprep.RunOnWorkProfileTargetPreparer.RUN_TESTS_AS_USER_KEY;
 import static com.android.tradefed.targetprep.RunOnWorkProfileTargetPreparer.SKIP_TESTS_REASON_KEY;
 import static com.android.tradefed.targetprep.RunOnWorkProfileTargetPreparer.TEST_PACKAGE_NAME_OPTION;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import static junit.framework.Assert.fail;
-
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.UserInfo;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 
 import org.junit.Before;
@@ -50,16 +50,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RunWith(JUnit4.class)
-public class RunOnWorkProfileTargetPreparerTest {
+public final class RunOnWorkProfileTargetPreparerTest {
     private static final String CREATED_USER_10_MESSAGE = "Created user id 10";
 
     @Rule public final MockitoRule mockito = MockitoJUnit.rule();
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private TestInformation mTestInfo;
-
-    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
-    private IConfiguration mConfiguration;
 
     private RunOnWorkProfileTargetPreparer mPreparer;
     private OptionSetter mOptionSetter;
@@ -83,12 +80,17 @@ public class RunOnWorkProfileTargetPreparerTest {
                     + "    User ID: 0\n"
                     + "\n"
                     + "  Profile Owner (User 49):";
+    public static final String USERTYPE_MANAGED_PROFILE = "android.os.usertype.profile.MANAGED";
+    public static final String CREATE_MANAGED_PROFILE_COMMAND =
+            "pm create-user --profileOf 0 "
+                    + "--user-type android.os.usertype.profile.MANAGED --for-testing user";
 
     @Before
     public void setUp() throws Exception {
         mPreparer = new RunOnWorkProfileTargetPreparer();
         mOptionSetter = new OptionSetter(mPreparer);
-        mPreparer.setConfiguration(mConfiguration);
+        mPreparer.setProfileUserType(USERTYPE_MANAGED_PROFILE);
+        mPreparer.setTradefedUserType(MANAGED_PROFILE);
 
         ArrayList<Integer> userIds = new ArrayList<>();
         userIds.add(0);
@@ -96,15 +98,13 @@ public class RunOnWorkProfileTargetPreparerTest {
         when(mTestInfo.getDevice().hasFeature("android.software.managed_users")).thenReturn(true);
         when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(2);
         when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
-        when(mTestInfo.getDevice().getApiLevel()).thenReturn(30);
         when(mTestInfo.getDevice().executeShellCommand("dumpsys device_policy")).thenReturn("");
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(34); // U
     }
 
     @Test
     public void setUp_createsAndStartsWorkProfile() throws Exception {
-        String expectedCreateUserCommand =
-                "pm create-user --profileOf 0 --managed --for-testing work";
+        String expectedCreateUserCommand = CREATE_MANAGED_PROFILE_COMMAND;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
 
@@ -116,7 +116,9 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void setUp_oldVersion_createsAndStartsWorkProfileWithoutWait() throws Exception {
-        String expectedCreateUserCommand = "pm create-user --profileOf 0 --managed work";
+        String expectedCreateUserCommand =
+                "pm create-user --profileOf 0 "
+                        + "--user-type android.os.usertype.profile.MANAGED user";
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(28);
@@ -129,8 +131,8 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void setup_hasDeviceOwner_removesDeviceOwner() throws Exception {
-        String expectedCreateUserCommand =
-                "pm create-user --profileOf 0 --managed --for-testing work";
+        String expectedCreateUserCommand = CREATE_MANAGED_PROFILE_COMMAND;
+
         String expectedRemoveDeviceOwnerCommand =
                 "dpm remove-active-admin --user 0 " + DEVICE_OWNER_COMPONENT_NAME;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
@@ -148,8 +150,7 @@ public class RunOnWorkProfileTargetPreparerTest {
     @Test
     public void setup_hasDeviceOwner_errorWhenRemovingDeviceOwner_throwsException()
             throws Exception {
-        String expectedCreateUserCommand =
-                "pm create-user --profileOf 0 --managed --for-testing work";
+        String expectedCreateUserCommand = CREATE_MANAGED_PROFILE_COMMAND;
         String expectedRemoveDeviceOwnerCommand =
                 "dpm remove-active-admin --user 0 " + DEVICE_OWNER_COMPONENT_NAME;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
@@ -161,9 +162,9 @@ public class RunOnWorkProfileTargetPreparerTest {
 
         try {
             mPreparer.setUp(mTestInfo);
-            fail();
-        } catch (IllegalStateException expected) {
-
+            fail("Should have thrown exception");
+        } catch (HarnessRuntimeException expected) {
+            // Expected
         }
     }
 
@@ -208,7 +209,8 @@ public class RunOnWorkProfileTargetPreparerTest {
     public void setUp_nonZeroCurrentUser_createsWorkProfileForCorrectUser() throws Exception {
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(1);
         String expectedCreateUserCommand =
-                "pm create-user --profileOf 1 --managed --for-testing work";
+                "pm create-user --profileOf 1 "
+                        + "--user-type android.os.usertype.profile.MANAGED --for-testing user";
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
 
@@ -236,8 +238,7 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void setUp_setsRunTestsAsUser() throws Exception {
-        String expectedCreateUserCommand =
-                "pm create-user --profileOf 0 --managed --for-testing work";
+        String expectedCreateUserCommand = CREATE_MANAGED_PROFILE_COMMAND;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
 
@@ -267,8 +268,7 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void setUp_installsPackagesInWorkUser() throws Exception {
-        String expectedCreateUserCommand =
-                "pm create-user --profileOf 0 --managed --for-testing work";
+        String expectedCreateUserCommand = CREATE_MANAGED_PROFILE_COMMAND;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
         mOptionSetter.setOptionValue(TEST_PACKAGE_NAME_OPTION, "com.android.testpackage");
@@ -299,8 +299,7 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void setUp_doesNotDisableTearDown() throws Exception {
-        String expectedCreateUserCommand =
-                "pm create-user --profileOf 0 --managed --for-testing work";
+        String expectedCreateUserCommand = CREATE_MANAGED_PROFILE_COMMAND;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
         mOptionSetter.setOptionValue("disable-tear-down", "false");
@@ -312,8 +311,7 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void tearDown_removesWorkUser() throws Exception {
-        String expectedCreateUserCommand =
-                "pm create-user --profileOf 0 --managed --for-testing work";
+        String expectedCreateUserCommand = CREATE_MANAGED_PROFILE_COMMAND;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
         mPreparer.setUp(mTestInfo);
@@ -334,8 +332,7 @@ public class RunOnWorkProfileTargetPreparerTest {
 
     @Test
     public void teardown_didRemoveDeviceOwner_setsDeviceOwner() throws Exception {
-        String expectedCreateUserCommand =
-                "pm create-user --profileOf 0 --managed --for-testing work";
+        String expectedCreateUserCommand = CREATE_MANAGED_PROFILE_COMMAND;
         String expectedRemoveDeviceOwnerCommand =
                 "dpm remove-active-admin --user 0 " + DEVICE_OWNER_COMPONENT_NAME;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
@@ -367,17 +364,7 @@ public class RunOnWorkProfileTargetPreparerTest {
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mConfiguration)
-                .injectOptionValue(eq("instrumentation-arg"), eq(SKIP_TESTS_REASON_KEY), any());
-    }
-
-    @Test
-    public void setUp_doesNotSupportManagedUsers_disablesTearDown() throws Exception {
-        when(mTestInfo.getDevice().hasFeature("android.software.managed_users")).thenReturn(false);
-
-        mPreparer.setUp(mTestInfo);
-
-        assertThat(mPreparer.isTearDownDisabled()).isTrue();
+        verify(mTestInfo.properties()).put(eq(SKIP_TESTS_REASON_KEY), any());
     }
 
     @Test
@@ -387,25 +374,7 @@ public class RunOnWorkProfileTargetPreparerTest {
         mPreparer.setUp(mTestInfo);
 
         verify(mTestInfo.properties(), never()).put(eq(RUN_TESTS_AS_USER_KEY), any());
-    }
-
-    @Test
-    public void setUp_doesNotSupportAdditionalUsers_setsArgumentToSkipTests() throws Exception {
-        when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(1);
-
-        mPreparer.setUp(mTestInfo);
-
-        verify(mConfiguration)
-                .injectOptionValue(eq("instrumentation-arg"), eq(SKIP_TESTS_REASON_KEY), any());
-    }
-
-    @Test
-    public void setUp_doesNotSupportAdditionalUsers_disablesTearDown() throws Exception {
-        when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(1);
-
-        mPreparer.setUp(mTestInfo);
-
-        assertThat(mPreparer.isTearDownDisabled()).isTrue();
+        verify(mTestInfo.properties()).put(eq(SKIP_TESTS_REASON_KEY), any());
     }
 
     @Test
@@ -446,7 +415,6 @@ public class RunOnWorkProfileTargetPreparerTest {
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mConfiguration, never())
-                .injectOptionValue(eq("instrumentation-arg"), eq(SKIP_TESTS_REASON_KEY), any());
+        verify(mTestInfo.properties(), never()).put(eq(SKIP_TESTS_REASON_KEY), any());
     }
 }

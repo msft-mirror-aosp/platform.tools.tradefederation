@@ -18,6 +18,8 @@ package com.android.tradefed.util;
 
 import com.android.annotations.Nullable;
 import com.android.tradefed.command.CommandInterrupter;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
 
@@ -25,7 +27,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -526,7 +527,8 @@ public class RunUtil implements IRunUtil {
         if (time <= 0) {
             return;
         }
-        try {
+        try (CloseableTraceScope sleep =
+                new CloseableTraceScope(InvocationMetricKey.host_sleep.toString())) {
             Thread.sleep(time);
         } catch (InterruptedException e) {
             // ignore
@@ -686,8 +688,8 @@ public class RunUtil implements IRunUtil {
 
             // Redirect IO, so that the outputstream for the spawn process does not fill up
             // and cause deadlock.
-            mStdOut = stdoutStream != null ? stdoutStream : new ByteArrayOutputStream();
-            mStdErr = stderrStream != null ? stderrStream : new ByteArrayOutputStream();
+            mStdOut = stdoutStream;
+            mStdErr = stderrStream;
         }
 
         @Override
@@ -710,6 +712,8 @@ public class RunUtil implements IRunUtil {
         public boolean run() throws Exception {
             File stdoutFile = mProcessBuilder.redirectOutput().file();
             File stderrFile = mProcessBuilder.redirectError().file();
+            boolean temporaryStdout = false;
+            boolean temporaryErrOut = false;
             Thread stdoutThread = null;
             Thread stderrThread = null;
             synchronized (mLock) {
@@ -719,7 +723,33 @@ public class RunUtil implements IRunUtil {
                     return false;
                 }
                 mExecutionThread = Thread.currentThread();
-                mProcess = startProcess();
+                if (stdoutFile == null && mStdOut == null) {
+                    temporaryStdout = true;
+                    stdoutFile =
+                            FileUtil.createTempFile(
+                                    String.format("temporary-stdout-%s", mProcessBuilder.command()),
+                                    ".txt");
+                    mProcessBuilder.redirectOutput(Redirect.appendTo(stdoutFile));
+                }
+                if (stderrFile == null && mStdErr == null) {
+                    temporaryErrOut = true;
+                    stderrFile =
+                            FileUtil.createTempFile(
+                                    String.format("temporary-errout-%s", mProcessBuilder.command()),
+                                    ".txt");
+                    mProcessBuilder.redirectError(Redirect.appendTo(stderrFile));
+                }
+                try {
+                    mProcess = startProcess();
+                } catch (IOException | RuntimeException e) {
+                    if (temporaryStdout) {
+                        FileUtil.deleteFile(stdoutFile);
+                    }
+                    if (temporaryErrOut) {
+                        FileUtil.deleteFile(stderrFile);
+                    }
+                    throw e;
+                }
                 if (mInput != null) {
                     BufferedOutputStream processStdin =
                             new BufferedOutputStream(mProcess.getOutputStream());
@@ -727,8 +757,7 @@ public class RunUtil implements IRunUtil {
                     processStdin.flush();
                     processStdin.close();
                 }
-
-                if (stdoutFile == null) {
+                if (mStdOut != null) {
                     stdoutThread =
                             inheritIO(
                                     mProcess.getInputStream(),
@@ -736,7 +765,7 @@ public class RunUtil implements IRunUtil {
                                     String.format(
                                             "inheritio-stdout-%s", mProcessBuilder.command()));
                 }
-                if (stderrFile == null) {
+                if (mStdErr != null) {
                     stderrThread =
                             inheritIO(
                                     mProcess.getErrorStream(),
@@ -744,6 +773,7 @@ public class RunUtil implements IRunUtil {
                                     String.format(
                                             "inheritio-stderr-%s", mProcessBuilder.command()));
                 }
+
             }
             // Wait for process to complete.
             Integer rc = null;
@@ -768,9 +798,8 @@ public class RunUtil implements IRunUtil {
                     mCommandResult.setExitCode(rc);
 
                     // Write out the streams to the result.
-                    if (stdoutFile == null && mStdOut instanceof ByteArrayOutputStream) {
-                        mCommandResult.setStdout(
-                                ((ByteArrayOutputStream) mStdOut).toString("UTF-8"));
+                    if (temporaryStdout) {
+                        mCommandResult.setStdout(FileUtil.readStringFromFile(stdoutFile));
                     } else {
                         final String stdoutDest =
                                 stdoutFile != null
@@ -778,9 +807,8 @@ public class RunUtil implements IRunUtil {
                                         : mStdOut.getClass().getSimpleName();
                         mCommandResult.setStdout("redirected to " + stdoutDest);
                     }
-                    if (stderrFile == null && mStdErr instanceof ByteArrayOutputStream) {
-                        mCommandResult.setStderr(
-                                ((ByteArrayOutputStream) mStdErr).toString("UTF-8"));
+                    if (temporaryErrOut) {
+                        mCommandResult.setStderr(FileUtil.readStringFromFile(stderrFile));
                     } else {
                         final String stderrDest =
                                 stderrFile != null
@@ -790,6 +818,12 @@ public class RunUtil implements IRunUtil {
                     }
                 }
             } finally {
+                if (temporaryStdout) {
+                    FileUtil.deleteFile(stdoutFile);
+                }
+                if (temporaryErrOut) {
+                    FileUtil.deleteFile(stderrFile);
+                }
                 mCountDown.countDown();
             }
 

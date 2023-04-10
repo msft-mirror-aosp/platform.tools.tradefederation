@@ -32,6 +32,7 @@ import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceSelectionOptions;
+import com.android.tradefed.device.DeviceSelectionOptions.DeviceRequestedType;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.cloud.GceAvdInfo;
@@ -145,7 +146,8 @@ public class RemoteInvocationExecution extends InvocationExecution {
         super.customizeDevicePreInvocation(config, context);
 
         if (config.getCommandOptions().getShardCount() != null
-                && config.getCommandOptions().getShardIndex() == null) {
+                && config.getCommandOptions().getShardIndex() == null
+                && !config.getCommandOptions().isRemoteInvocationDeviceless()) {
             ITestDevice device = context.getDevices().get(0);
             TestDeviceOptions options = device.getOptions();
             // Trigger the multi-tenant start in the VM
@@ -703,6 +705,10 @@ public class RemoteInvocationExecution extends InvocationExecution {
             if (deviceConfig.getDeviceRequirements() instanceof DeviceSelectionOptions) {
                 ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
                         .setDeviceTypeRequested(null);
+                if (config.getCommandOptions().isRemoteInvocationDeviceless()) {
+                    ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
+                            .setDeviceTypeRequested(DeviceRequestedType.NULL_DEVICE);
+                }
             }
         }
 

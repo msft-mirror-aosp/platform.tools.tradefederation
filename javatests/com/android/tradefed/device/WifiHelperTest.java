@@ -179,7 +179,7 @@ public class WifiHelperTest {
                         String.format(
                                 "versionCode=%d targetSdk=7", WifiHelper.PACKAGE_VERSION_CODE));
 
-        new WifiHelper(mMockDevice);
+        WifiHelper unused = new WifiHelper(mMockDevice);
     }
 
     @Test
@@ -189,7 +189,7 @@ public class WifiHelperTest {
                 .thenReturn(String.format("versionCode=%d", 10));
         when(mMockDevice.installPackage(any(), eq(true))).thenReturn(null);
 
-        new WifiHelper(mMockDevice);
+        WifiHelper unused = new WifiHelper(mMockDevice);
     }
 
     @Test

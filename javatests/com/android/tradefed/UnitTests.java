@@ -26,6 +26,7 @@ import com.android.tradefed.build.DeviceFolderBuildInfoTest;
 import com.android.tradefed.build.FileDownloadCacheTest;
 import com.android.tradefed.build.LocalDeviceBuildProviderTest;
 import com.android.tradefed.build.OtaZipfileBuildProviderTest;
+import com.android.tradefed.cache.ModifiedFilesParserTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
 import com.android.tradefed.cluster.ClusterCommandConfigBuilderTest;
@@ -108,6 +109,7 @@ import com.android.tradefed.device.metric.AtraceCollectorTest;
 import com.android.tradefed.device.metric.AtraceRunMetricCollectorTest;
 import com.android.tradefed.device.metric.AutoLogCollectorTest;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollectorTest;
+import com.android.tradefed.device.metric.BluetoothHciSnoopLogCollectorTest;
 import com.android.tradefed.device.metric.BugreportzOnFailureCollectorTest;
 import com.android.tradefed.device.metric.BugreportzOnTestCaseFailureCollectorTest;
 import com.android.tradefed.device.metric.ClangCodeCoverageCollectorTest;
@@ -271,6 +273,7 @@ import com.android.tradefed.targetprep.RootTargetPreparerTest;
 import com.android.tradefed.targetprep.RunCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostScriptTargetPreparerTest;
+import com.android.tradefed.targetprep.RunOnCloneProfileTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSdkSandboxTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSystemUserTargetPreparerTest;
@@ -279,9 +282,11 @@ import com.android.tradefed.targetprep.StopServicesSetupTest;
 import com.android.tradefed.targetprep.SwitchUserTargetPreparerTest;
 import com.android.tradefed.targetprep.SystemUpdaterDeviceFlasherTest;
 import com.android.tradefed.targetprep.TargetSetupErrorTest;
+import com.android.tradefed.targetprep.TemperatureThrottlingWaiterTest;
 import com.android.tradefed.targetprep.TestAppInstallSetupTest;
 import com.android.tradefed.targetprep.TestFilePushSetupTest;
 import com.android.tradefed.targetprep.UserCleanerTest;
+import com.android.tradefed.targetprep.VisibleBackgroundUserPreparerTest;
 import com.android.tradefed.targetprep.adb.AdbStopServerPreparerTest;
 import com.android.tradefed.targetprep.app.NoApkTestSkipperTest;
 import com.android.tradefed.targetprep.multi.MergeMultiBuildTargetPreparerTest;
@@ -360,6 +365,7 @@ import com.android.tradefed.testtype.suite.module.ArchModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.BaseModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.CarModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.DeviceFeatureModuleControllerTest;
+import com.android.tradefed.testtype.suite.module.MaxSdkModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.MinApiLevelModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.NativeBridgeModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.PackageInstalledModuleControllerTest;
@@ -369,6 +375,8 @@ import com.android.tradefed.testtype.suite.params.MainlineModuleHandlerTest;
 import com.android.tradefed.testtype.suite.params.ModuleParametersHelperTest;
 import com.android.tradefed.testtype.suite.params.RunOnSdkSandboxHandlerTest;
 import com.android.tradefed.testtype.suite.params.SecondaryUserHandlerTest;
+import com.android.tradefed.testtype.suite.params.SecondaryUserOnSecondaryDisplayHandlerTest;
+import com.android.tradefed.testtype.suite.params.multiuser.RunOnCloneProfileParameterHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnSecondaryUserParameterHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnWorkProfileParameterHandlerTest;
 import com.android.tradefed.testtype.suite.retry.ResultsPlayerTest;
@@ -431,6 +439,7 @@ import com.android.tradefed.util.SubprocessTestResultsParserTest;
 import com.android.tradefed.util.TableBuilderTest;
 import com.android.tradefed.util.TableFormatterTest;
 import com.android.tradefed.util.TarUtilTest;
+import com.android.tradefed.util.TargetFileUtilsTest;
 import com.android.tradefed.util.TestRunnerUtilTest;
 import com.android.tradefed.util.TimeUtilTest;
 import com.android.tradefed.util.TimeValTest;
@@ -452,6 +461,7 @@ import com.android.tradefed.util.statsd.ConfigUtilTest;
 import com.android.tradefed.util.statsd.MetricUtilTest;
 import com.android.tradefed.util.testmapping.TestInfoTest;
 import com.android.tradefed.util.testmapping.TestMappingTest;
+import com.android.tradefed.util.zip.CentralDirectoryInfoTest;
 import com.android.tradefed.util.zip.MergedZipEntryCollectionTest;
 
 import org.junit.runner.RunWith;
@@ -479,6 +489,9 @@ import org.junit.runners.Suite.SuiteClasses;
     FileDownloadCacheTest.class,
     LocalDeviceBuildProviderTest.class,
     OtaZipfileBuildProviderTest.class,
+
+    // cache
+    ModifiedFilesParserTest.class,
 
     // clearcut
     ClearcutClientTest.class,
@@ -559,6 +572,7 @@ import org.junit.runners.Suite.SuiteClasses;
     NativeDeviceTest.class,
     RemoteAndroidDeviceTest.class,
     PropertyChangerTest.class,
+    TargetFileUtilsTest.class,
     TestDeviceTest.class,
     WaitDeviceRecoveryTest.class,
     WifiHelperTest.class,
@@ -594,6 +608,7 @@ import org.junit.runners.Suite.SuiteClasses;
     AtraceRunMetricCollectorTest.class,
     AutoLogCollectorTest.class,
     BaseDeviceMetricCollectorTest.class,
+    BluetoothHciSnoopLogCollectorTest.class,
     BugreportzOnTestCaseFailureCollectorTest.class,
     BugreportzOnFailureCollectorTest.class,
     ClangCodeCoverageCollectorTest.class,
@@ -741,6 +756,7 @@ import org.junit.runners.Suite.SuiteClasses;
     AoaTargetPreparerTest.class,
     AppSetupTest.class,
     BaseTargetPreparerTest.class,
+    VisibleBackgroundUserPreparerTest.class,
     CreateUserPreparerTest.class,
     DefaultTestsZipInstallerTest.class,
     DeviceFlashPreparerTest.class,
@@ -778,10 +794,12 @@ import org.junit.runners.Suite.SuiteClasses;
     StopServicesSetupTest.class,
     SystemUpdaterDeviceFlasherTest.class,
     TargetSetupErrorTest.class,
+    TemperatureThrottlingWaiterTest.class,
     TestAppInstallSetupTest.class,
     TestFilePushSetupTest.class,
     SwitchUserTargetPreparerTest.class,
     UserCleanerTest.class,
+    RunOnCloneProfileTargetPreparerTest.class,
 
     // targetprep.adb
     AdbStopServerPreparerTest.class,
@@ -914,6 +932,7 @@ import org.junit.runners.Suite.SuiteClasses;
     BaseModuleControllerTest.class,
     CarModuleControllerTest.class,
     DeviceFeatureModuleControllerTest.class,
+    MaxSdkModuleControllerTest.class,
     MinApiLevelModuleControllerTest.class,
     NativeBridgeModuleControllerTest.class,
     PackageInstalledModuleControllerTest.class,
@@ -927,6 +946,8 @@ import org.junit.runners.Suite.SuiteClasses;
     RunOnSecondaryUserParameterHandlerTest.class,
     RunOnWorkProfileParameterHandlerTest.class,
     SecondaryUserHandlerTest.class,
+    SecondaryUserOnSecondaryDisplayHandlerTest.class,
+    RunOnCloneProfileParameterHandlerTest.class,
 
     // testtype/suite/retry
     ResultsPlayerTest.class,
@@ -944,6 +965,7 @@ import org.junit.runners.Suite.SuiteClasses;
     BuildTestsZipUtilsTest.class,
     BundletoolUtilTest.class,
     ByteArrayListTest.class,
+    CentralDirectoryInfoTest.class,
     ClassPathScannerTest.class,
     ConditionPriorityBlockingQueueTest.class,
     DirectedGraphTest.class,

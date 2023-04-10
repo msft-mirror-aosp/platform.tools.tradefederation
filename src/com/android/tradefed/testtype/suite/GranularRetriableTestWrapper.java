@@ -16,6 +16,7 @@
 
 package com.android.tradefed.testtype.suite;
 
+import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
@@ -37,6 +38,7 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ResultAndLogForwarder;
+import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.retry.IRetryDecision;
@@ -46,15 +48,19 @@ import com.android.tradefed.retry.RetryStatistics;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestCollector;
 import com.android.tradefed.testtype.ITestFilterReceiver;
+import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A wrapper class works on the {@link IRemoteTest} to granulate the IRemoteTest in testcase level.
@@ -98,6 +104,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
 
     // Tracking of the metrics
     private RetryStatistics mRetryStats = null;
+    private int mCountRetryUsed = 0;
 
     public GranularRetriableTestWrapper(
             IRemoteTest test,
@@ -117,7 +124,11 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             int maxRunLimit) {
         mTest = test;
         mModule = module;
-        initializeGranularRunListener(mainListener);
+        IInvocationContext context = null;
+        if (module != null) {
+            context = module.getModuleInvocationContext();
+        }
+        initializeGranularRunListener(mainListener, context);
         mFailureListener = failureListener;
         mModuleLevelListeners = moduleLevelListeners;
         mMaxRunLimit = maxRunLimit;
@@ -187,14 +198,15 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     }
 
     /**
-     * Initialize granular run listener with {@link RemoteTestTimeOutEnforcer} if timeout is
-     * set.
+     * Initialize granular run listener with {@link RemoteTestTimeOutEnforcer} if timeout is set.
+     * And set the test-mapping sources in granular run listener.
      *
      * @param listener The listener for each test run should be wrapped.
-     *
+     * @param moduleContext the invocation context of the module
      */
-    private void initializeGranularRunListener(ITestInvocationListener listener) {
-        mMainGranularRunListener = new ModuleListener(listener);
+    private void initializeGranularRunListener(
+            ITestInvocationListener listener, IInvocationContext moduleContext) {
+        mMainGranularRunListener = new ModuleListener(listener, moduleContext);
         if (mModule != null) {
             ConfigurationDescriptor configDesc =
                     mModule.getModuleInvocationContext().getConfigurationDescriptor();
@@ -205,6 +217,11 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
                                 RemoteTestTimeOutEnforcer.REMOTE_TEST_TIMEOUT_OPTION).get(0));
                 mRemoteTestTimeOutEnforcer = new RemoteTestTimeOutEnforcer(
                         mMainGranularRunListener, mModule, mTest, duration);
+            }
+            List<String> testMappingSources =
+                    configDesc.getMetaData(Integer.toString(mTest.hashCode()));
+            if (testMappingSources != null) {
+                mMainGranularRunListener.setTestMappingSources(testMappingSources);
             }
         }
     }
@@ -306,6 +323,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
                     }
                 }
                 firstCheck = false;
+                mCountRetryUsed++;
                 CLog.d("Intra-module retry attempt number %s", attemptNumber);
                 // Run the tests again
                 intraModuleRun(testInfo, allListeners, attemptNumber);
@@ -431,9 +449,26 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
         return mMainGranularRunListener.getExpectedTests();
     }
 
+    public final Set<TestDescription> getPassedTests() {
+        Set<TestDescription> nonFailedTests = new LinkedHashSet<>();
+        for (TestRunResult runResult : mMainGranularRunListener.getMergedTestRunResults()) {
+            nonFailedTests.addAll(
+                    runResult.getTestsInState(
+                            Arrays.asList(
+                                    TestStatus.PASSED,
+                                    TestStatus.IGNORED,
+                                    TestStatus.ASSUMPTION_FAILURE)));
+        }
+        return nonFailedTests;
+    }
+
     /** Returns the listener containing all the results. */
     public ModuleListener getResultListener() {
         return mMainGranularRunListener;
+    }
+
+    public int getRetryCount() {
+        return mCountRetryUsed;
     }
 
     @Override
@@ -444,7 +479,9 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     private FailureDescription createFromException(Throwable exception) {
         String message =
                 (exception.getMessage() == null)
-                        ? String.format("No error message reported for: %s", exception)
+                        ? String.format(
+                                "No error message reported for: %s",
+                                StreamUtil.getStackTrace(exception))
                         : exception.getMessage();
         FailureDescription failure =
                 CurrentInvocation.createFailure(message, null).setCause(exception);

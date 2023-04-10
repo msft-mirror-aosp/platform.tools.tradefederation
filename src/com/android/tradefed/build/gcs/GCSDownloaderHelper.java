@@ -16,6 +16,8 @@
 package com.android.tradefed.build.gcs;
 
 import com.android.tradefed.build.BuildRetrievalError;
+import com.android.tradefed.build.FileDownloadCache;
+import com.android.tradefed.build.FileDownloadCacheFactory;
 import com.android.tradefed.build.FileDownloadCacheWrapper;
 import com.android.tradefed.build.IFileDownloader;
 import com.android.tradefed.config.GlobalConfiguration;
@@ -37,7 +39,12 @@ public class GCSDownloaderHelper {
      * @throws BuildRetrievalError
      */
     public File fetchTestResource(String gsPath) throws BuildRetrievalError {
-        return getGCSFileDownloader().downloadFile(gsPath);
+        try {
+            return getGCSFileDownloader().downloadFile(gsPath);
+        } catch (BuildRetrievalError e) {
+            deleteCacheEntry(gsPath);
+            throw e;
+        }
     }
 
     private IFileDownloader getGCSFileDownloader() {
@@ -52,5 +59,14 @@ public class GCSDownloaderHelper {
     /** Gets the {@link IHostOptions} instance to use. */
     private IHostOptions getHostOptions() {
         return GlobalConfiguration.getInstance().getHostOptions();
+    }
+
+    private void deleteCacheEntry(String remoteFilePath) {
+        if (remoteFilePath != null) {
+            FileDownloadCache cache =
+                    FileDownloadCacheFactory.getInstance()
+                            .getCache(getHostOptions().getDownloadCacheDir());
+            cache.deleteCacheEntry(remoteFilePath);
+        }
     }
 }

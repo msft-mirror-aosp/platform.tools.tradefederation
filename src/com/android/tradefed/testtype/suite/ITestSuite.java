@@ -476,59 +476,73 @@ public abstract class ITestSuite
         }
         CLog.i(String.format("Start to stage test artifacts for %d modules.", modules.size()));
         long startTime = System.currentTimeMillis();
-        // Include the file if its path contains a folder name matching any of the module.
-        String moduleRegex =
-                modules.stream()
-                        .map(m -> String.format("/%s/", m))
-                        .collect(Collectors.joining("|"));
-        List<String> includeFilters = Arrays.asList(moduleRegex);
-        // Ignore config file as it's part of config zip artifact that's staged already.
-        List<String> excludeFilters = Arrays.asList("[.]config$");
-        if (mStageArtifactsViaFeature) {
-            try (TradefedFeatureClient client = new TradefedFeatureClient()) {
-                Map<String, String> args = new HashMap<>();
-                args.put(ResolvePartialDownload.DESTINATION_DIR, getTestsDir().getAbsolutePath());
-                args.put(ResolvePartialDownload.INCLUDE_FILTERS, String.join(";", includeFilters));
-                args.put(ResolvePartialDownload.EXCLUDE_FILTERS, String.join(";", excludeFilters));
-                // Pass the remote paths
-                String remotePaths =
-                        mBuildInfo.getRemoteFiles().stream()
-                                .map(p -> p.toString())
-                                .collect(Collectors.joining(";"));
-                args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(
+                        InvocationMetricKey.stage_suite_test_artifacts.toString())) {
+            // Include the file if its path contains a folder name matching any of the module.
+            String moduleRegex =
+                    modules.stream()
+                            .map(m -> String.format("/%s/", m))
+                            .collect(Collectors.joining("|"));
+            List<String> includeFilters = Arrays.asList(moduleRegex);
+            // Ignore config file as it's part of config zip artifact that's staged already.
+            List<String> excludeFilters = Arrays.asList("[.]config$");
+            if (mStageArtifactsViaFeature) {
+                try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+                    Map<String, String> args = new HashMap<>();
+                    args.put(
+                            ResolvePartialDownload.DESTINATION_DIR,
+                            getTestsDir().getAbsolutePath());
+                    args.put(
+                            ResolvePartialDownload.INCLUDE_FILTERS,
+                            String.join(";", includeFilters));
+                    args.put(
+                            ResolvePartialDownload.EXCLUDE_FILTERS,
+                            String.join(";", excludeFilters));
+                    // Pass the remote paths
+                    String remotePaths =
+                            mBuildInfo.getRemoteFiles().stream()
+                                    .map(p -> p.toString())
+                                    .collect(Collectors.joining(";"));
+                    args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
 
-                FeatureResponse rep =
-                        client.triggerFeature(
-                                ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);
-                if (rep.hasErrorInfo()) {
-                    throw new HarnessRuntimeException(
-                            rep.getErrorInfo().getErrorTrace(),
-                            InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
-                }
-            } catch (FileNotFoundException e) {
-                throw new HarnessRuntimeException(
-                        e.getMessage(), e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
-            }
-        } else {
-            mDynamicResolver.setDevice(device);
-            mDynamicResolver.addExtraArgs(
-                    mMainConfiguration.getCommandOptions().getDynamicDownloadArgs());
-            for (File remoteFile : mBuildInfo.getRemoteFiles()) {
-                try {
-                    mDynamicResolver.resolvePartialDownloadZip(
-                            getTestsDir(), remoteFile.toString(), includeFilters, excludeFilters);
-                } catch (BuildRetrievalError | FileNotFoundException e) {
-                    String message =
-                            String.format(
-                                    "Failed to download partial zip from %s for modules: %s",
-                                    remoteFile, String.join(", ", modules));
-                    CLog.e(message);
-                    CLog.e(e);
-                    if (e instanceof IHarnessException) {
-                        throw new HarnessRuntimeException(message, (IHarnessException) e);
+                    FeatureResponse rep =
+                            client.triggerFeature(
+                                    ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME,
+                                    args);
+                    if (rep.hasErrorInfo()) {
+                        throw new HarnessRuntimeException(
+                                rep.getErrorInfo().getErrorTrace(),
+                                InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
                     }
+                } catch (FileNotFoundException e) {
                     throw new HarnessRuntimeException(
-                            message, e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+                            e.getMessage(), e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+                }
+            } else {
+                mDynamicResolver.setDevice(device);
+                mDynamicResolver.addExtraArgs(
+                        mMainConfiguration.getCommandOptions().getDynamicDownloadArgs());
+                for (File remoteFile : mBuildInfo.getRemoteFiles()) {
+                    try {
+                        mDynamicResolver.resolvePartialDownloadZip(
+                                getTestsDir(),
+                                remoteFile.toString(),
+                                includeFilters,
+                                excludeFilters);
+                    } catch (BuildRetrievalError | FileNotFoundException e) {
+                        String message =
+                                String.format(
+                                        "Failed to download partial zip from %s for modules: %s",
+                                        remoteFile, String.join(", ", modules));
+                        CLog.e(message);
+                        CLog.e(e);
+                        if (e instanceof IHarnessException) {
+                            throw new HarnessRuntimeException(message, (IHarnessException) e);
+                        }
+                        throw new HarnessRuntimeException(
+                                message, e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+                    }
                 }
             }
         }
@@ -983,6 +997,8 @@ public abstract class ITestSuite
 
         // We report System checkers like tests.
         reportModuleCheckerResult(MODULE_CHECKER_PRE, moduleName, failures, startTime, listener);
+        InvocationMetricLogger.addInvocationPairMetrics(
+                InvocationMetricKey.STATUS_CHECKER_PAIR, startTime, System.currentTimeMillis());
         return properties;
     }
 
@@ -1044,6 +1060,8 @@ public abstract class ITestSuite
 
         // We report System checkers like tests.
         reportModuleCheckerResult(MODULE_CHECKER_POST, moduleName, failures, startTime, listener);
+        InvocationMetricLogger.addInvocationPairMetrics(
+                InvocationMetricKey.STATUS_CHECKER_PAIR, startTime, System.currentTimeMillis());
         return properties;
     }
 

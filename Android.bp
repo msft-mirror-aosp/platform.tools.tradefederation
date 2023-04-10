@@ -34,6 +34,8 @@ java_library_host {
         include_dirs: ["external/protobuf/src"],
         type: "full",
     },
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -51,6 +53,8 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -73,6 +77,8 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -90,6 +96,8 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -107,7 +115,34 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
+
+java_library_host {
+    name: "tradefed-dynamic-sharding-grpc",
+    srcs: ["proto/dynamicsharding.proto"],
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        plugin: "grpc-java-plugin",
+    },
+    libs: [
+        "tradefed-protos",
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
+    ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+}
+
+// Avoid version number in apk file name
+genrule(
+    name = "test-services-normalized.apk",
+    srcs = [":test-services.apk"],
+    out = ["test-services-normalized.apk"],
+    cmd = "cp $(in) $(out)",
+)
 
 // Main Target to build tradefed jar
 tradefed_java_library_host {
@@ -119,13 +154,16 @@ tradefed_java_library_host {
     java_resources: [
         ":TradefedContentProvider",
         ":TelephonyUtility",
-        ":WifiUtil"
+        ":WifiUtil",
+        ":test-services-normalized.apk",
     ],
     static_libs: [
         "tradefed-lib-core",
         "tradefed-test-framework",
     ],
     manifest: "MANIFEST.mf",
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 // Tradefed build target without the test framework statically linked
@@ -142,6 +180,8 @@ java_library_host {
         "tradefed-test-framework",
     ],
     manifest: "MANIFEST.mf",
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -166,6 +206,7 @@ java_library_host {
         "lab-resource-grpc",
         "tradefed-invocation-grpc",
         "tradefed-device-manager-grpc",
+        "tradefed-dynamic-sharding-grpc",
         "aoa-helper",
         "error_prone_annotations",
         "google-api-java-client-assembly",
@@ -195,6 +236,8 @@ java_library_host {
     libs: [
         "loganalysis",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 // Turn off various doclava warnings when generating

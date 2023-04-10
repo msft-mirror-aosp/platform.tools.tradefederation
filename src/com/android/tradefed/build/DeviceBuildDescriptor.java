@@ -31,6 +31,7 @@ public class DeviceBuildDescriptor {
     public static final String DEVICE_BUILD_ID = "device_build_id";
     public static final String DEVICE_BUILD_ALIAS = "device_build_alias";
     public static final String DEVICE_BUILD_FLAVOR = "device_build_flavor";
+    public static final String DEVICE_BUILD_BRANCH = "device_build_branch";
     public static final String DEVICE_DESC = "device_description";
     public static final String DEVICE_PRODUCT = "device_product";
 
@@ -70,6 +71,13 @@ public class DeviceBuildDescriptor {
      */
     public String getDeviceBuildFlavor() {
         return mBuild.getBuildAttributes().get(DEVICE_BUILD_FLAVOR);
+    }
+
+    /**
+     * Gets the device build branch eg git_master.
+     */
+    public String getDeviceBuildBranch() {
+        return mBuild.getBuildAttributes().get(DEVICE_BUILD_BRANCH);
     }
 
     /**

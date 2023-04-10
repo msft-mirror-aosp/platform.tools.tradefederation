@@ -73,6 +73,9 @@ import java.util.Set;
  */
 public class XmlSuiteResultFormatter implements IFormatterGenerator {
 
+    // The maximum size of a stack trace saved in the report.
+    private static final int STACK_TRACE_MAX_SIZE = 1024 * 1024;
+
     private static final String ENCODING = "UTF-8";
     private static final String TYPE = "org.kxml2.io.KXmlParser,org.kxml2.io.KXmlSerializer";
     public static final String NS = null;
@@ -402,6 +405,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
             }
             ErrorIdentifier errorIdentifier =
                     testResult.getValue().getFailure().getErrorIdentifier();
+            String truncatedStackTrace = getTruncatedStackTrace(fullStack, testResult.getKey());
             serializer.startTag(NS, FAILURE_TAG);
 
             serializer.attribute(NS, MESSAGE_ATTR, sanitizeXmlContent(message));
@@ -410,11 +414,29 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                 serializer.attribute(NS, ERROR_CODE_ATTR, Long.toString(errorIdentifier.code()));
             }
             serializer.startTag(NS, STACK_TAG);
-            serializer.text(sanitizeXmlContent(fullStack));
+            serializer.text(sanitizeXmlContent(truncatedStackTrace));
             serializer.endTag(NS, STACK_TAG);
 
             serializer.endTag(NS, FAILURE_TAG);
         }
+    }
+
+    /** Truncates the full stack trace with maximum {@link STACK_TRACE_MAX_SIZE} characters. */
+    private static String getTruncatedStackTrace(String fullStackTrace, String testCaseName) {
+        if (fullStackTrace == null) {
+            return null;
+        }
+        if (fullStackTrace.length() > STACK_TRACE_MAX_SIZE) {
+            CLog.i(
+                    "The stack trace for test case %s contains %d characters, and has been"
+                            + " truncated to %d characters in %s.",
+                    testCaseName,
+                    fullStackTrace.length(),
+                    STACK_TRACE_MAX_SIZE,
+                    TEST_RESULT_FILE_NAME);
+            return fullStackTrace.substring(0, STACK_TRACE_MAX_SIZE);
+        }
+        return fullStackTrace;
     }
 
     /** Add files captured by {@link TestFailureListener} on test failures. */

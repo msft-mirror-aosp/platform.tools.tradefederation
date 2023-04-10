@@ -46,6 +46,10 @@ public abstract class GCSCommon {
 
     public GCSCommon() {}
 
+    void setJsonKeyFile(File jsonKeyFile) {
+        mJsonKeyFile = jsonKeyFile;
+    }
+
     protected Storage getStorage(Collection<String> scopes) throws IOException {
         Credential credential = null;
         try {

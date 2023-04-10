@@ -258,6 +258,15 @@ public class BaseRetryDecisionTest {
         verify(mMockDevice).reboot();
     }
 
+    @Test
+    public void shouldRetryPreparation_NOT_ISOLATED() throws Exception {
+        ModuleDefinition module1 = Mockito.mock(ModuleDefinition.class);
+        OptionSetter setter = new OptionSetter(mRetryDecision);
+        RetryPreparationDecision res = mRetryDecision.shouldRetryPreparation(module1, 0, 3);
+        assertFalse(res.shouldRetry());
+        assertTrue(res.shouldFailRun());
+    }
+
     private TestRunResult createResult(FailureDescription failure1, FailureDescription failure2) {
         return createResult(failure1, failure2, null);
     }

@@ -17,6 +17,8 @@ package com.android.tradefed.testtype;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
@@ -82,6 +84,7 @@ public class IsolatedHostTest
                 IBuildReceiver,
                 ITestAnnotationFilterReceiver,
                 ITestFilterReceiver,
+                IConfigurationReceiver,
                 ITestCollector {
     @Option(
             name = "class",
@@ -176,6 +179,10 @@ public class IsolatedHostTest
     private File mIsolationJar;
 
     private boolean debug = false;
+
+    private IConfiguration mConfig = null;
+
+    private File mCoverageExecFile;
 
     public void setDebug(boolean debug) {
         this.debug = debug;
@@ -292,6 +299,9 @@ public class IsolatedHostTest
                         InfraErrorIdentifier.INTERRUPTED_DURING_SUBPROCESS_SHUTDOWN);
             }
 
+            if (isCoverageEnabled()) {
+                logCoverageExecFile(listener);
+            }
             FileUtil.deleteFile(mIsolationJar);
         }
     }
@@ -315,6 +325,24 @@ public class IsolatedHostTest
             cmdArgs.add(javaPath);
             CLog.v("Using java executable at %s", javaPath);
         }
+        if (isCoverageEnabled()) {
+            if (mConfig.getCoverageOptions().getJaCoCoAgentPath() != null) {
+                try {
+                    mCoverageExecFile = FileUtil.createTempFile("coverage", ".exec");
+                    String javaAgent =
+                            String.format(
+                                    "-javaagent:%s=destfile=%s",
+                                    mConfig.getCoverageOptions().getJaCoCoAgentPath(),
+                                    mCoverageExecFile.getAbsolutePath());
+                    cmdArgs.add(javaAgent);
+                } catch (IOException e) {
+                    CLog.e(e);
+                }
+            } else {
+                CLog.e("jacocoagent path is not set.");
+            }
+        }
+
         cmdArgs.add("-cp");
         cmdArgs.add(classpath);
 
@@ -322,6 +350,9 @@ public class IsolatedHostTest
 
         if (mRobolectricResources) {
             cmdArgs.addAll(compileRobolectricOptions());
+            // Prevent tradefed from eagerly loading classes, which may not load without shadows
+            // applied.
+            mExcludePaths.add("org/robolectric");
         }
 
         if (this.debug) {
@@ -743,6 +774,24 @@ public class IsolatedHostTest
         return null;
     }
 
+    private void logCoverageExecFile(ITestInvocationListener listener) {
+        if (mCoverageExecFile == null) {
+            CLog.e("Coverage execution file is null.");
+            return;
+        }
+        if (mCoverageExecFile.length() == 0) {
+            CLog.e("Coverage execution file has 0 length.");
+            return;
+        }
+        try (FileInputStreamSource source = new FileInputStreamSource(mCoverageExecFile, true)) {
+            listener.testLog("coverage", LogDataType.COVERAGE, source);
+        }
+    }
+
+    private boolean isCoverageEnabled() {
+        return mConfig != null && mConfig.getCoverageOptions().isCoverageEnabled();
+    }
+
     /** {@inheritDoc} */
     @Override
     public void setBuild(IBuildInfo build) {
@@ -849,6 +898,15 @@ public class IsolatedHostTest
     @Override
     public void clearExcludeAnnotations() {
         mExcludeAnnotations.clear();
+    }
+
+    @Override
+    public void setConfiguration(IConfiguration configuration) {
+        mConfig = configuration;
+    }
+
+    public File getCoverageExecFile() {
+        return mCoverageExecFile;
     }
 
     @VisibleForTesting

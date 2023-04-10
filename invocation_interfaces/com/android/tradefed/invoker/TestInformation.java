@@ -18,6 +18,8 @@ package com.android.tradefed.invoker;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.util.FileUtil;
 
 import java.io.File;
@@ -59,7 +61,9 @@ public class TestInformation {
             IInvocationContext moduleContext,
             boolean copyExecFile) {
         mContext = moduleContext;
-        mProperties = invocationInfo.mProperties;
+        // Copy properties so each shard has its own
+        mProperties = new ExecutionProperties();
+        mProperties.putAll(invocationInfo.mProperties.getAll());
         mDependenciesFolder = invocationInfo.mDependenciesFolder;
         if (copyExecFile) {
             mExecutionFiles = new ExecutionFiles();
@@ -232,6 +236,8 @@ public class TestInformation {
                 // approach to do individual download from remote artifact.
                 // Try to stage the files from remote zip files.
                 file = getBuildInfo().stageRemoteFile(fileName, testsDir);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.STAGE_UNDEFINED_DEPENDENCY, fileName);
             }
             return file;
         }

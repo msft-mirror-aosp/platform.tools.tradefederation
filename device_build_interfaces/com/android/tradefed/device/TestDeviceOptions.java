@@ -17,7 +17,10 @@ package com.android.tradefed.device;
 
 import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.Option;
+import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.ArrayUtil;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 
 import java.io.File;
@@ -194,6 +197,11 @@ public class TestDeviceOptions {
             description = "Timeout applied to bugreportz capture.",
             isTimeVal = true)
     private long mBugreportzTimeout = 5 * 60 * 1000;
+
+    @Option(
+            name = "enable-device-connection",
+            description = "Use the new Connection descriptor for devices.")
+    private boolean mEnableConnectionFeature = false;
 
     // ====================== Options Related to Virtual Devices ======================
     @Option(
@@ -673,6 +681,22 @@ public class TestDeviceOptions {
 
     /** Return the path to the binary to start the Gce Avd instance. */
     public File getAvdDriverBinary() {
+        if (mAvdDriverBinary == null) {
+            throw new HarnessRuntimeException(
+                    "The avd driver binary is not specified.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (!mAvdDriverBinary.exists()) {
+            throw new HarnessRuntimeException(
+                    String.format(
+                            "Could not find the avd driver binary at %s",
+                            mAvdDriverBinary.getAbsolutePath()),
+                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+        }
+        if (!mAvdDriverBinary.canExecute()) {
+            // Set the executable bit if needed
+            FileUtil.chmodGroupRWX(mAvdDriverBinary);
+        }
         return mAvdDriverBinary;
     }
 
@@ -870,7 +894,6 @@ public class TestDeviceOptions {
         return Collections.emptyList();
     }
 
-    /** Returns true if we should block on GCE tear down completion before proceeding. */
     public List<String> getInvocationAttributeToMetadata() {
         return mInvocationAttributeToMetadata;
     }
@@ -918,6 +941,11 @@ public class TestDeviceOptions {
     /** Returns the timeout value to be applied to bugreportz capture. */
     public long getBugreportzTimeout() {
         return mBugreportzTimeout;
+    }
+
+    /** Return whether or not we should use the new connection feature. */
+    public boolean shouldUseConnection() {
+        return mEnableConnectionFeature;
     }
 }
 

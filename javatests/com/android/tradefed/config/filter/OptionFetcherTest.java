@@ -22,15 +22,15 @@ import static org.mockito.Mockito.when;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.testtype.SubprocessTfLauncher;
-
+import com.google.common.truth.Truth;
 import com.proto.tradefed.feature.FeatureResponse;
 import com.proto.tradefed.feature.MultiPartResponse;
 import com.proto.tradefed.feature.PartResponse;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -68,10 +68,18 @@ public class OptionFetcherTest {
         FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
         responseBuilder.setMultiPartResponse(
                 MultiPartResponse.newBuilder()
-                    .addResponsePart(PartResponse.newBuilder()
-                            .setKey("filter-previous-passed").setValue("true"))
-                    .addResponsePart(PartResponse.newBuilder()
-                            .setKey("retry-isolation-grade").setValue("REBOOT_ISOLATED")));
+                        .addResponsePart(
+                                PartResponse.newBuilder()
+                                        .setKey("filter-previous-passed")
+                                        .setValue("true"))
+                        .addResponsePart(
+                                PartResponse.newBuilder()
+                                        .setKey("retry-isolation-grade")
+                                        .setValue("REBOOT_ISOLATED"))
+                        .addResponsePart(
+                                PartResponse.newBuilder()
+                                        .setKey("auto-collect")
+                                        .setValue("DEVICE_TRACE")));
 
         when(mMockClient.triggerFeature(
                 Mockito.eq(CommandOptionsGetter.COMMAND_OPTIONS_GETTER), Mockito.any()))
@@ -81,6 +89,8 @@ public class OptionFetcherTest {
         assertTrue(mConfiguration.getCommandOptions().filterPreviousPassedTests());
         assertEquals(IsolationGrade.REBOOT_ISOLATED,
                 ((BaseRetryDecision) mConfiguration.getRetryDecision()).getIsolationGrade());
+        Truth.assertThat(mConfiguration.getCommandOptions().getAutoLogCollectors())
+                .contains(AutoLogCollector.DEVICE_TRACE);
     }
 
     @Test

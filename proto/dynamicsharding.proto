@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package google.internal.android.engprod.v1;
+
+// Needed for future HTTP mapping, but not right this second:
+// import "google/api/annotations.proto";
+
+option java_multiple_files = true;
+option java_package = "com.google.internal.android.engprod.v1";
+//option java_outer_classname = "DynamicSharding";
+
+service DynamicTestTargetProvider {
+  // Seed the server pool with new work to be completed.
+  rpc ProvideTestTarget(ProvideTestTargetRequest)
+      returns (ProvideTestTargetResponse) {}
+
+  // Request new work from the server, may request more than one work unit at a
+  // time, and reports whether there are more or not.
+  rpc RequestTestTarget(RequestTestTargetRequest)
+      returns (RequestTestTargetResponse) {}
+}
+
+message ProvideTestTargetRequest {
+  // The pool identifier for the targets set
+  string reference_pool_id = 1;
+  // The set of test target to be seeded under the pool id
+  repeated SerializedTestTarget test_targets = 2;
+}
+
+// Placeholder response for providing test targets.
+// The method will raise an error code in the event of an error.
+message ProvideTestTargetResponse {}
+
+message RequestTestTargetRequest {
+  // The pool id we are requesting from
+  string reference_pool_id = 1;
+  // Number of targets we want [default =1]
+  // Future: int32 target_count = 2;
+}
+
+// Response with the requested test targets
+message RequestTestTargetResponse {
+  // List of test targets to be executed
+  repeated SerializedTestTarget test_targets = 1;
+}
+
+message SerializedTestTarget {
+  string target_name = 1;
+}

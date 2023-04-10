@@ -160,7 +160,7 @@ public class DeviceFlashPreparerTest {
         when(mMockDevice.isEncryptionSupported()).thenReturn(Boolean.TRUE);
         when(mMockDevice.isDeviceEncrypted()).thenReturn(Boolean.FALSE);
         mMockDevice.clearLogcat();
-        mMockDevice.waitForDeviceAvailable(Mockito.anyLong());
+        when(mMockDevice.waitForDeviceAvailableInRecoverPath(Mockito.anyLong())).thenReturn(true);
         mMockDevice.setRecoveryMode(RecoveryMode.AVAILABLE);
         mMockDevice.postBootSetup();
     }

@@ -53,7 +53,9 @@ public class RecoveryLogPreparer extends BaseTargetPreparer implements ITestLogg
             // Track when we entered the recovery mode handling
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.AUTO_RECOVERY_MODE_COUNT, 1);
-            device.enableAdbRoot();
+            // Recovery mode root is a bit different
+            String outputRoot = device.executeAdbCommand("root");
+            CLog.d("Root output: %s", outputRoot);
             File recoveryLog = device.pullFile(RECOVERY_LOG);
             if (recoveryLog == null) {
                 CLog.w("Failed to pull recovery.log file.");

@@ -22,18 +22,20 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.retry.ISupportGranularResults;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
+import com.android.tradefed.util.FileUtil;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Joiner;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.Map.Entry;
-import java.util.Set;
 
 /** Report in a file possible filters to exclude passed test. */
-public class ReportPassedTests extends CollectingTestListener implements IConfigurationReceiver {
+public class ReportPassedTests extends CollectingTestListener
+        implements IConfigurationReceiver, ISupportGranularResults {
 
     private static final String PASSED_TEST_LOG = "passed_tests";
     private boolean mInvocationFailed = false;
@@ -41,10 +43,25 @@ public class ReportPassedTests extends CollectingTestListener implements IConfig
     private boolean mModuleInProgress;
     private IInvocationContext mContextForEmptyModule;
     private Integer mShardIndex;
-    private Set<String> mExtraTestCases = new LinkedHashSet<>();
+    private File mPassedTests;
 
     public void setLogger(ITestLogger logger) {
         mLogger = logger;
+    }
+
+    @Override
+    public boolean supportGranularResults() {
+        return false;
+    }
+
+    @Override
+    public void invocationStarted(IInvocationContext context) {
+        super.invocationStarted(context);
+        try {
+            mPassedTests = FileUtil.createTempFile(PASSED_TEST_LOG, ".txt");
+        } catch (IOException e) {
+            CLog.e(e);
+        }
     }
 
     @Override
@@ -66,15 +83,11 @@ public class ReportPassedTests extends CollectingTestListener implements IConfig
         mContextForEmptyModule = null;
         super.testRunEnded(elapsedTime, runMetrics);
         if (!mModuleInProgress) {
-            // Remove right away any run failure they will be excluded
-            if (getCurrentRunResults().isRunFailure() || mInvocationFailed) {
-                gatherPassedTests(
-                        getCurrentRunResults(),
-                        getBaseName(getCurrentRunResults()), mInvocationFailed);
-                clearResultsForName(getCurrentRunResults().getName());
-                // Clear the failure for aggregation
-                getCurrentRunResults().resetRunFailure();
-            }
+            gatherPassedTests(
+                    getCurrentRunResults(), getBaseName(getCurrentRunResults()), mInvocationFailed);
+            clearResultsForName(getCurrentRunResults().getName());
+            // Clear the failure for aggregation
+            getCurrentRunResults().resetRunFailure();
         }
     }
 
@@ -91,14 +104,11 @@ public class ReportPassedTests extends CollectingTestListener implements IConfig
             mContextForEmptyModule = null;
         }
         super.testModuleEnded();
-        // Remove right away any run failure they will be excluded
-        if (getCurrentRunResults().isRunFailure() || mInvocationFailed) {
-            gatherPassedTests(
-                    getCurrentRunResults(), getBaseName(getCurrentRunResults()), mInvocationFailed);
-            clearResultsForName(getCurrentRunResults().getName());
-            // Clear the failure for aggregation
-            getCurrentRunResults().resetRunFailure();
-        }
+        gatherPassedTests(
+                getCurrentRunResults(), getBaseName(getCurrentRunResults()), mInvocationFailed);
+        clearResultsForName(getCurrentRunResults().getName());
+        // Clear the failure for aggregation
+        getCurrentRunResults().resetRunFailure();
         mModuleInProgress = false;
     }
 
@@ -110,33 +120,39 @@ public class ReportPassedTests extends CollectingTestListener implements IConfig
 
     @Override
     public void invocationEnded(long elapsedTime) {
-        super.invocationEnded(elapsedTime);
-        createPassedLog();
+        try {
+            super.invocationEnded(elapsedTime);
+            createPassedLog();
+        } finally {
+            FileUtil.deleteFile(mPassedTests);
+        }
     }
 
     private void createPassedLog() {
-        if (mLogger == null) {
+        if (mLogger == null || mPassedTests == null) {
             return;
         }
         StringBuilder sb = new StringBuilder();
         for (TestRunResult result : getMergedTestRunResults()) {
             sb.append(createFilters(result, getBaseName(result), false));
         }
-        if (!mExtraTestCases.isEmpty()) {
-            sb.append(Joiner.on("\n").join(mExtraTestCases));
-            mExtraTestCases.clear();
+        if (sb.length() > 0) {
+            try {
+                FileUtil.writeToFile(sb.toString(), mPassedTests, true);
+            } catch (IOException e) {
+                CLog.e(e);
+            }
         }
-        if (sb.length() == 0) {
+        if (mPassedTests.length() == 0) {
             CLog.d("No new filter for passed_test");
             return;
         }
-        testLog(sb.toString());
+        testLog(mPassedTests);
     }
 
     @VisibleForTesting
-    void testLog(String toBeLogged) {
-        try (ByteArrayInputStreamSource source =
-                new ByteArrayInputStreamSource(toBeLogged.getBytes())) {
+    void testLog(File toBeLogged) {
+        try (FileInputStreamSource source = new FileInputStreamSource(toBeLogged)) {
             mLogger.testLog(PASSED_TEST_LOG, LogDataType.PASSED_TESTS, source);
         }
     }
@@ -179,6 +195,10 @@ public class ReportPassedTests extends CollectingTestListener implements IConfig
         if (sb.length() == 0L) {
             return;
         }
-        mExtraTestCases.add(sb.toString());
+        try {
+            FileUtil.writeToFile(sb.toString(), mPassedTests, true);
+        } catch (IOException e) {
+            CLog.e(e);
+        }
     }
 }

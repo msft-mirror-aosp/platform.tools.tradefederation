@@ -34,7 +34,6 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
-import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.ZipUtil;
 
@@ -594,10 +593,5 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
                 CLog.w("%s doesn't exist.", file.getAbsolutePath());
             }
         }
-    }
-
-    @VisibleForTesting
-    IRunUtil createRunUtil() {
-        return new RunUtil();
     }
 }

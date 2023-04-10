@@ -216,13 +216,14 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
         Callable<BUSY_WAIT_STATUS> bootComplete =
                 () -> {
                     final CollectingOutputReceiver receiver = createOutputReceiver();
-                    final String cmd = "ls /system/bin/adb";
+                    final String cmd = "id";
                     try {
                         getIDevice()
                                 .executeShellCommand(
                                         cmd, receiver, MAX_OP_TIME, TimeUnit.MILLISECONDS);
                         String output = receiver.getOutput();
-                        if (output.contains("/system/bin/adb")) {
+                        if (output.contains("uid=")) {
+                            CLog.i("shell ready. id output: %s", output);
                             return BUSY_WAIT_STATUS.SUCCESS;
                         }
                     } catch (IOException
@@ -350,9 +351,13 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
      * @param waitTime time in ms to wait before giving up
      * @return <code>true</code> if checks are successful before waitTime expires. <code>false
      *     </code> otherwise
+     * @throws DeviceNotAvailableException
      */
     protected boolean postOnlineCheck(final long waitTime) throws DeviceNotAvailableException {
-        return waitForStoreMount(waitTime);
+        // Until we have clarity on storage requirements, move the check to
+        // full device only.
+        // return waitForStoreMount(waitTime);
+        return true;
     }
 
     /**

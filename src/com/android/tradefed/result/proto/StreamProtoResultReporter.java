@@ -25,6 +25,7 @@ import com.android.tradefed.util.StreamUtil;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** An implementation of {@link ProtoResultReporter} */
 public final class StreamProtoResultReporter extends ProtoResultReporter {
@@ -95,7 +96,7 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
 
     @Override
     public void processFinalInvocationLogs(TestRecord invocationLogs) {
-        if (mResultWriterThread.mCancelled) {
+        if (mResultWriterThread.mCancelled.get()) {
             writeRecordToSocket(invocationLogs);
         } else {
             mToBeSent.add(invocationLogs);
@@ -105,7 +106,7 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
     @Override
     public void processFinalProto(TestRecord finalRecord) {
         try {
-            if (mResultWriterThread.mCancelled) {
+            if (mResultWriterThread.mCancelled.get()) {
                 writeRecordToSocket(finalRecord);
             } else {
                 mToBeSent.add(finalRecord);
@@ -114,7 +115,7 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
             // Upon invocation ended, trigger the end of the socket when the process finishes
             SocketFinisher thread = new SocketFinisher();
             Runtime.getRuntime().addShutdownHook(thread);
-            mResultWriterThread.mCancelled = true;
+            mResultWriterThread.mCancelled.set(true);
             try {
                 mResultWriterThread.join();
             } catch (InterruptedException e) {
@@ -162,7 +163,7 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
     /** Send events from the event queue */
     private class ResultWriterThread extends Thread {
 
-        private boolean mCancelled = false;
+        private AtomicBoolean mCancelled = new AtomicBoolean(false);
 
         public ResultWriterThread() {
             super();
@@ -171,9 +172,9 @@ public final class StreamProtoResultReporter extends ProtoResultReporter {
 
         @Override
         public void run() {
-            while (!mCancelled) {
+            while (!mCancelled.get()) {
                 flushEvents();
-                if (!mCancelled) {
+                if (!mCancelled.get()) {
                     RunUtil.getDefault().sleep(1000);
                 }
             }

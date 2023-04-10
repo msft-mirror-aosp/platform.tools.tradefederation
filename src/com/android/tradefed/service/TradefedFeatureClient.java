@@ -17,6 +17,7 @@ package com.android.tradefed.service;
 
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.StreamUtil;
 
@@ -70,7 +71,8 @@ public class TradefedFeatureClient implements AutoCloseable {
     private FeatureResponse triggerFeature(
             String featureName, String invocationReference, Map<String, String> args) {
         FeatureResponse response;
-        try {
+        try (CloseableTraceScope ignore =
+                new CloseableTraceScope("triggerFeature:" + featureName)) {
             CLog.d("invoking feature '%s'", featureName);
             FeatureRequest.Builder request =
                     FeatureRequest.newBuilder().setName(featureName).putAllArgs(args);
@@ -92,7 +94,17 @@ public class TradefedFeatureClient implements AutoCloseable {
                                             .build())
                             .build();
         }
-        CLog.d("Feature name: %s. response: %s", featureName, response);
+        String message = String.format("Feature name: %s. response: %s", featureName, response);
+        if (response.hasErrorInfo()) {
+            StringBuilder callsite = new StringBuilder();
+            for (StackTraceElement e : Thread.currentThread().getStackTrace()) {
+                callsite.append(e.toString());
+            }
+            message += String.format(". Callsite: %s", callsite);
+            CLog.w(message);
+        } else {
+            CLog.d(message);
+        }
         return response;
     }
 

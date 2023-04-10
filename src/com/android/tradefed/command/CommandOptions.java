@@ -176,6 +176,11 @@ public class CommandOptions implements ICommandOptions {
     )
     private boolean mUseRemoteSandbox = false;
 
+    @Option(
+            name = "deviceless-remote-exec",
+            description = "Whether or not to trigger --null-deviec in the remote invocation.")
+    private boolean mDevicelessRemoteExecution = false;
+
     @Deprecated
     @Option(
             name = "parallel-remote-setup",
@@ -218,6 +223,16 @@ public class CommandOptions implements ICommandOptions {
                         + "to collect logs."
     )
     private Set<AutoLogCollector> mAutoCollectors = new LinkedHashSet<>();
+
+    @Option(
+            name = "experiment-enabled",
+            description = "A feature flag used to enable experimental flags.")
+    private boolean mExperimentEnabled = false;
+
+    @Option(
+            name = "experimental-flags",
+            description = "Map of experimental flags that can be used for feature gating projects.")
+    private Map<String, String> mExperimentalFlags = new LinkedHashMap<>();
 
     @Deprecated
     @Option(
@@ -574,6 +589,12 @@ public class CommandOptions implements ICommandOptions {
 
     /** {@inheritDoc} */
     @Override
+    public boolean isRemoteInvocationDeviceless() {
+        return mDevicelessRemoteExecution;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public Set<AutoLogCollector> getAutoLogCollectors() {
         return mAutoCollectors;
     }
@@ -582,6 +603,18 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public void setAutoLogCollectors(Set<AutoLogCollector> autoLogCollectors) {
         mAutoCollectors = autoLogCollectors;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isExperimentEnabled() {
+        return mExperimentEnabled;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Map<String, String> getExperimentalFlags() {
+        return mExperimentalFlags;
     }
 
     /** {@inheritDoc} */

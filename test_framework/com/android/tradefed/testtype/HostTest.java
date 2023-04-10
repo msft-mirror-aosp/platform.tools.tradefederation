@@ -704,7 +704,9 @@ public class HostTest
                         new TestTimeoutEnforcer(
                                 mTestCaseTimeout.toMillis(), TimeUnit.MILLISECONDS, listener);
             }
-            return JUnitRunUtil.runTest(listener, junitTest, className, mTestInfo);
+            try (CloseableTraceScope ignored = new CloseableTraceScope(className)) {
+                return JUnitRunUtil.runTest(listener, junitTest, className, mTestInfo);
+            }
         }
     }
 
@@ -1381,7 +1383,7 @@ public class HostTest
     }
 
     private Set<File> resolveRemoteFileForObject(Object obj) {
-        try {
+        try (CloseableTraceScope ignore = new CloseableTraceScope("infra:resolveRemoteFiles")) {
             OptionSetter setter = new OptionSetter(obj);
             return setter.validateRemoteFilePath(createResolver());
         } catch (BuildRetrievalError | ConfigurationException e) {

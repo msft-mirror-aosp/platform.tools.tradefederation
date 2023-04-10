@@ -15,12 +15,13 @@
  */
 package com.android.tradefed.testtype.suite.params;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static com.google.common.truth.Truth.assertThat;
 
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.targetprep.CreateUserPreparer;
+import com.android.tradefed.targetprep.ITargetPreparer;
+import com.android.tradefed.targetprep.RunCommandTargetPreparer;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -29,7 +30,7 @@ import org.junit.runners.JUnit4;
 
 /** Unit tests for {@link SecondaryUserHandler}. */
 @RunWith(JUnit4.class)
-public class SecondaryUserHandlerTest {
+public final class SecondaryUserHandlerTest {
 
     private SecondaryUserHandler mHandler;
     private IConfiguration mModuleConfig;
@@ -44,15 +45,14 @@ public class SecondaryUserHandlerTest {
     @Test
     public void testApplySetup() {
         TestFilterable test = new TestFilterable();
-        assertEquals(0, test.getExcludeAnnotations().size());
+        assertThat(test.getExcludeAnnotations()).isEmpty();
         mModuleConfig.setTest(test);
         mHandler.applySetup(mModuleConfig);
 
         // User zero is filtered
-        assertEquals(1, test.getExcludeAnnotations().size());
-        assertEquals(
-                "android.platform.test.annotations.SystemUserOnly",
-                test.getExcludeAnnotations().iterator().next());
+        assertThat(test.getExcludeAnnotations()).hasSize(1);
+        assertThat(test.getExcludeAnnotations().iterator().next())
+                .isEqualTo("android.platform.test.annotations.SystemUserOnly");
     }
 
     /**
@@ -62,6 +62,14 @@ public class SecondaryUserHandlerTest {
     @Test
     public void testAddParameterSpecificConfig() {
         mHandler.addParameterSpecificConfig(mModuleConfig);
-        assertTrue(mModuleConfig.getTargetPreparers().get(0) instanceof CreateUserPreparer);
+        assertThat(mModuleConfig.getTargetPreparers()).hasSize(2);
+
+        ITargetPreparer preparer1 = mModuleConfig.getTargetPreparers().get(0);
+        assertThat(preparer1).isInstanceOf(CreateUserPreparer.class);
+        ITargetPreparer preparer2 = mModuleConfig.getTargetPreparers().get(1);
+        assertThat(preparer2).isInstanceOf(RunCommandTargetPreparer.class);
+        assertThat(((RunCommandTargetPreparer) preparer2).getCommands())
+                .containsExactlyElementsIn(
+                        SecondaryUserOnSecondaryDisplayHandler.LOCATION_COMMANDS);
     }
 }

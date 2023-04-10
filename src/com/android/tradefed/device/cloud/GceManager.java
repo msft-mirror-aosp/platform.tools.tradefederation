@@ -23,6 +23,7 @@ import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
@@ -215,27 +216,39 @@ public class GceManager {
         mSkipSerialLogCollection =
                 (!Strings.isNullOrEmpty(ipDevice) || getTestDeviceOptions().useOxygen());
         if (getTestDeviceOptions().useOxygenProxy()) {
-            return startGceWithOxygenClient(logger);
+            return startGceWithOxygenClient(logger, attributes);
         } else {
             return startGceWithAcloud(ipDevice, user, offset, attributes);
         }
     }
 
     /**
+     * @deprecated Remove this after master branch is updated.
+     */
+    @Deprecated
+    public List<GceAvdInfo> startMultiDevicesGce(List<IBuildInfo> buildInfos)
+            throws TargetSetupError {
+        return startMultiDevicesGce(buildInfos, null);
+    }
+
+    /**
      * Attempt to start multi devices gce instance with Oxygen.
      *
      * @param buildInfos {@link List<IBuildInfo>}
+     * @param attributes attributes associated with current invocation
      * @return a {@link List<GceAvdInfo>} describing the GCE Avd Info.
      */
-    public List<GceAvdInfo> startMultiDevicesGce(List<IBuildInfo> buildInfos)
+    public List<GceAvdInfo> startMultiDevicesGce(
+            List<IBuildInfo> buildInfos, MultiMap<String, String> attributes)
             throws TargetSetupError {
         List<GceAvdInfo> gceAvdInfos;
         long startTime = System.currentTimeMillis();
         try {
-            File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
-            OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
+            OxygenClient oxygenClient =
+                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             CommandResult res =
-                    oxygenClient.leaseMultipleDevices(buildInfos, getTestDeviceOptions());
+                    oxygenClient.leaseMultipleDevices(
+                            buildInfos, getTestDeviceOptions(), attributes);
             gceAvdInfos =
                     GceAvdInfo.parseGceInfoFromOxygenClientOutput(
                             res, mDeviceOptions.getRemoteAdbPort());
@@ -253,14 +266,17 @@ public class GceManager {
      * Attempt to start a gce instance with Oxygen.
      *
      * @param loggger The {@link ITestLogger} where to log the device launch logs.
+     * @param attributes attributes associated with current invocation
      * @return a {@link GceAvdInfo} describing the GCE instance.
      */
-    private GceAvdInfo startGceWithOxygenClient(ITestLogger logger) throws TargetSetupError {
+    private GceAvdInfo startGceWithOxygenClient(
+            ITestLogger logger, MultiMap<String, String> attributes) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
         try {
-            File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
-            OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
-            CommandResult res = oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions());
+            OxygenClient oxygenClient =
+                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
+            CommandResult res =
+                    oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions(), attributes);
             GceAvdInfo oxygenDeviceInfo =
                     GceAvdInfo.parseGceInfoFromOxygenClientOutput(
                                     res, mDeviceOptions.getRemoteAdbPort())
@@ -303,11 +319,14 @@ public class GceManager {
                             InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE);
                 }
             }
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.CF_OXYGEN_SESSION_ID, oxygenDeviceInfo.instanceName());
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.CF_OXYGEN_SERVER_URL,
-                    oxygenDeviceInfo.hostAndPort().getHost());
+            // Lease may timeout and skip logging metrics if host is not set.
+            if (oxygenDeviceInfo.hostAndPort() != null) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_OXYGEN_SESSION_ID, oxygenDeviceInfo.instanceName());
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_OXYGEN_SERVER_URL,
+                        oxygenDeviceInfo.hostAndPort().getHost());
+            }
             return oxygenDeviceInfo;
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
@@ -479,19 +498,8 @@ public class GceManager {
             String user,
             Integer offset,
             MultiMap<String, String> attributes) {
-        File avdDriverFile = getTestDeviceOptions().getAvdDriverBinary();
-        if (!avdDriverFile.exists()) {
-            throw new HarnessRuntimeException(
-                    String.format(
-                            "Could not find the Acloud driver at %s",
-                            avdDriverFile.getAbsolutePath()),
-                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
-        }
-        if (!avdDriverFile.canExecute()) {
-            // Set the executable bit if needed
-            FileUtil.chmodGroupRWX(avdDriverFile);
-        }
-        List<String> gceArgs = ArrayUtil.list(avdDriverFile.getAbsolutePath());
+        List<String> gceArgs =
+                ArrayUtil.list(getTestDeviceOptions().getAvdDriverBinary().getAbsolutePath());
         gceArgs.add(
                 TestDeviceOptions.getCreateCommandByInstanceType(
                         getTestDeviceOptions().getInstanceType()));
@@ -645,8 +653,8 @@ public class GceManager {
      */
     private boolean shutdownGceWithOxygen() {
         try {
-            File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
-            OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
+            OxygenClient oxygenClient =
+                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             return oxygenClient.release(mGceAvdInfo, getTestDeviceOptions());
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
@@ -938,6 +946,38 @@ public class GceManager {
             remoteFile =
                     RemoteFileUtil.fetchRemoteDir(
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
+
+            // Search log files for known failures for devices hosted by Oxygen
+            if (options.useOxygenProxy()) {
+                try (CloseableTraceScope ignore =
+                        new CloseableTraceScope("avd:collectErrorSignature")) {
+                    List<String> signatures = OxygenUtil.collectErrorSignatures(remoteFile);
+                    if (signatures.size() > 0) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.DEVICE_ERROR_SIGNATURES,
+                                String.join(",", signatures));
+                    }
+                }
+                try (CloseableTraceScope ignore =
+                        new CloseableTraceScope("avd:collectDeviceLaunchMetrics")) {
+                    long[] launchMetrics = OxygenUtil.collectDeviceLaunchMetrics(remoteFile);
+                    if (launchMetrics[0] > 0) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.CF_FETCH_ARTIFACT_TIME, launchMetrics[0]);
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.CF_LAUNCH_CVD_TIME, launchMetrics[1]);
+                    }
+                }
+                try (CloseableTraceScope ignore =
+                        new CloseableTraceScope("avd:collectOxygenVersion")) {
+                    String oxygenVersion = OxygenUtil.collectOxygenVersion(remoteFile);
+                    if (!Strings.isNullOrEmpty(oxygenVersion)) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.CF_OXYGEN_VERSION, oxygenVersion);
+                    }
+                }
+            }
+
             // Default files under a directory to be CUTTLEFISH_LOG to avoid compression.
             type = LogDataType.CUTTLEFISH_LOG;
             if (remoteFile != null) {
@@ -980,6 +1020,8 @@ public class GceManager {
                     name = remoteFile.getName();
                 }
                 logger.testLog(name, type, remoteFileStream);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_LOG_SIZE, remoteFileStream.size());
             }
     }
 

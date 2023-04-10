@@ -98,6 +98,11 @@ public class BaseRetryDecision
     private RetryStrategy mRetryStrategy = RetryStrategy.NO_RETRY;
 
     @Option(
+            name = "skip-retry-in-presubmit",
+            description = "Skip retry attempts specifically in presubmit builds")
+    private boolean mSkipRetryInPresubmit = false;
+
+    @Option(
         name = "auto-retry",
         description =
                 "Whether or not to enable the new auto-retry. This is a feature flag for testing."
@@ -179,6 +184,18 @@ public class BaseRetryDecision
             // No need to retry if it reaches the maximum retry count.
             return decision;
         }
+        if (mSkipRetryInPresubmit && "WORK_NODE".equals(mContext.getAttribute("trigger"))) {
+            CLog.d("Skipping retry due to --skip-retry-in-presubmit");
+            return decision;
+        }
+
+        // Resetting the device only happends when FULLY_ISOLATED is set, and that cleans up the
+        // device to pure state and re-run suite-level or module-level setup. Besides, it doesn't
+        // need to retry module for reboot isolation.
+        if (!IsolationGrade.FULLY_ISOLATED.equals(mRetryIsolationGrade)) {
+            CLog.i("Do not proceed on module retry because it's not set FULLY_ISOLATED.");
+            return decision;
+        }
 
         try {
             recoverStateOfDevices(getDevices(), attempt, module);
@@ -235,6 +252,11 @@ public class BaseRetryDecision
             mPreviouslyFailing = new HashSet<>();
         }
 
+        if (mSkipRetryInPresubmit && "WORK_NODE".equals(mContext.getAttribute("trigger"))) {
+            CLog.d("Skipping retry due to --skip-retry-in-presubmit");
+            return false;
+        }
+
         switch (mRetryStrategy) {
             case NO_RETRY:
                 // Return directly if we are not considering retry at all.
@@ -259,25 +281,24 @@ public class BaseRetryDecision
             return false;
         }
 
-        mStatistics.addResultsFromRun(previousResults);
+        boolean shouldRetry = false;
+        long retryStartTime = System.currentTimeMillis();
         if (test instanceof ITestFilterReceiver) {
             // TODO(b/77548917): Right now we only support ITestFilterReceiver. We should expect to
             // support ITestFile*Filter*Receiver in the future.
             ITestFilterReceiver filterableTest = (ITestFilterReceiver) test;
-            boolean shouldRetry = handleRetryFailures(filterableTest, previousResults);
+            shouldRetry = handleRetryFailures(filterableTest, previousResults);
             if (shouldRetry) {
                 // In case of retry, go through the recovery routine
                 recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
             }
-            return shouldRetry;
         } else if (test instanceof IAutoRetriableTest) {
             // Routine for IRemoteTest that don't support filters but still needs retry.
             IAutoRetriableTest autoRetryTest = (IAutoRetriableTest) test;
-            boolean shouldRetry = autoRetryTest.shouldRetry(attemptJustExecuted, previousResults);
+            shouldRetry = autoRetryTest.shouldRetry(attemptJustExecuted, previousResults);
             if (shouldRetry) {
                 recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
             }
-            return shouldRetry;
         } else {
             CLog.d(
                     "%s does not implement ITestFilterReceiver or IAutoRetriableTest, thus "
@@ -285,6 +306,12 @@ public class BaseRetryDecision
                     test);
             return false;
         }
+        long retryCost = System.currentTimeMillis() - retryStartTime;
+        if (!shouldRetry) {
+            retryCost = 0L;
+        }
+        mStatistics.addResultsFromRun(previousResults, retryCost, attemptJustExecuted);
+        return shouldRetry;
     }
 
     @Override

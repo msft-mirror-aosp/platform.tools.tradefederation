@@ -34,6 +34,7 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
 import java.io.File;
+import java.util.List;
 
 /** Unit tests for {@link OxygenUtil}. */
 @RunWith(JUnit4.class)
@@ -87,5 +88,52 @@ public class OxygenUtilTest {
         assertEquals(
                 OxygenUtil.getDefaultLogType("invocation_started_bugreport_123456.txt"),
                 LogDataType.BUGREPORT);
+    }
+
+    /** Test collectErrorSignatures. */
+    @Test
+    public void testCollectErrorSignatures() throws Exception {
+        File tmpDir = null;
+        try {
+            tmpDir = FileUtil.createTempDir("logs");
+            File file1 = FileUtil.createTempFile("launcher.log", ".randomstring", tmpDir);
+            String content =
+                    "some content\n"
+                            + "some Address already in use\n"
+                            + "some vcpu hw run failure: 0x7.\n"
+                            + "tailing string";
+            FileUtil.writeToFile(content, file1);
+            List<String> signatures = OxygenUtil.collectErrorSignatures(tmpDir);
+            assertEquals("crosvm_vcpu_hw_run_failure_7", signatures.get(0));
+            assertEquals("launch_cvd_port_collision", signatures.get(1));
+        } finally {
+            FileUtil.recursiveDelete(tmpDir);
+        }
+    }
+
+    /** Test collectDeviceLaunchMetrics. */
+    @Test
+    public void testCollectDeviceLaunchMetrics() throws Exception {
+        File tmpDir = null;
+        try {
+            tmpDir = FileUtil.createTempDir("logs");
+            File file1 = FileUtil.createTempFile("vdl_stdout.txt", ".randomstring", tmpDir);
+            String content =
+                    "some content\n2023/02/09 21:25:25 launch_cvd exited."
+                            + "2023/02/09 21:25:30   Ended At  | Duration | Event Name\n"
+                            + "2023/02/09 21:25:30      62.21  |    0.00  | SetupDependencies\n"
+                            + "2023/02/09 21:25:30      62.55  |    0.33  | CuttlefishCommon\n"
+                            + "2023/02/09 21:25:30     186.84  |  124.63  | LaunchDevice\n"
+                            + "2023/02/09 21:25:30     186.84  |  186.84  |"
+                            + " CuttlefishLauncherMainstart\n"
+                            + "tailing string";
+            FileUtil.writeToFile(content, file1);
+            long[] metrics = OxygenUtil.collectDeviceLaunchMetrics(tmpDir);
+            assertEquals(61880, metrics[0]);
+            assertEquals(124630, metrics[1]);
+
+        } finally {
+            FileUtil.recursiveDelete(tmpDir);
+        }
     }
 }

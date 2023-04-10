@@ -16,6 +16,7 @@
 
 package com.android.tradefed.result;
 
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 
@@ -40,6 +41,7 @@ import java.util.List;
 public class JUnitToInvocationResultForwarder implements TestListener {
 
     private final List<ITestInvocationListener> mInvocationListeners;
+    private CloseableTraceScope mMethodTrace = null;
 
     public JUnitToInvocationResultForwarder(ITestInvocationListener invocationListener) {
         mInvocationListeners = new ArrayList<ITestInvocationListener>(1);
@@ -77,9 +79,7 @@ public class JUnitToInvocationResultForwarder implements TestListener {
     @Override
     public void endTest(Test test) {
         HashMap<String, Metric> emptyMap = new HashMap<>();
-        for (ITestInvocationListener listener : mInvocationListeners) {
-            listener.testEnded(getTestId(test), emptyMap);
-        }
+        endTest(test, emptyMap);
     }
 
     /**
@@ -89,8 +89,13 @@ public class JUnitToInvocationResultForwarder implements TestListener {
      * @param metrics The metrics in a Map format to be passed to the results callback.
      */
     public void endTest(Test test, HashMap<String, Metric> metrics) {
+        TestDescription description = getTestId(test);
         for (ITestInvocationListener listener : mInvocationListeners) {
-            listener.testEnded(getTestId(test), metrics);
+            listener.testEnded(description, metrics);
+        }
+        if (mMethodTrace != null) {
+            mMethodTrace.close();
+            mMethodTrace = null;
         }
     }
 
@@ -115,8 +120,10 @@ public class JUnitToInvocationResultForwarder implements TestListener {
     /** {@inheritDoc} */
     @Override
     public void startTest(Test test) {
+        TestDescription description = getTestId(test);
+        mMethodTrace = new CloseableTraceScope(description.getTestName());
         for (ITestInvocationListener listener : mInvocationListeners) {
-            listener.testStarted(getTestId(test));
+            listener.testStarted(description);
         }
     }
 

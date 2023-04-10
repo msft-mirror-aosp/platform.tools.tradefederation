@@ -22,13 +22,19 @@ import com.android.tradefed.device.IManagedTestDevice.DeviceEventResponse;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.ConditionPriorityBlockingQueue.IMatcher;
 
+import com.google.api.client.util.Strings;
+import com.google.common.collect.ImmutableSet;
+
 import java.util.ArrayList;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.annotation.concurrent.GuardedBy;
 
@@ -41,6 +47,14 @@ import javax.annotation.concurrent.GuardedBy;
  * will also not reflect the modified contents.
  */
 class ManagedDeviceList implements Iterable<IManagedTestDevice> {
+
+    private static final Pattern IP_PATTERN =
+            Pattern.compile(ManagedTestDeviceFactory.IPADDRESS_PATTERN);
+    // Ip that are associated with special use cases and shouldn't look up the
+    // serial number. Usually because those are virtual devices and not wifi
+    // connected devices
+    private static final Set<String> RESERVED_IP =
+            ImmutableSet.of("127.0.0.1", "0.0.0.0", "localhost");
 
     /**
      * A {@link IMatcher} for finding a {@link IManagedTestDevice} that can be allocated.
@@ -69,7 +83,7 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
                             .put(
                                     "already_allocated",
                                     String.format(
-                                            "Device %s is matching but " + "already allocated.",
+                                            "Device %s is matching but already allocated.",
                                             element.getIDevice().getSerialNumber()));
                 }
                 return res;
@@ -154,6 +168,28 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
         return serial.length() > 1 && !serial.contains("?");
     }
 
+    private boolean isTcpDeviceSerial(String serialString) {
+        String[] serial = serialString.split(":");
+        if (serial.length == 2) {
+            if (RESERVED_IP.contains(serial[0])) {
+                return false;
+            }
+            // Check first part is an IP
+            Matcher match = IP_PATTERN.matcher(serial[0]);
+            if (!match.find()) {
+                return false;
+            }
+            // Check second part if a port
+            try {
+                Integer.parseInt(serial[1]);
+                return true;
+            } catch (NumberFormatException nfe) {
+                return false;
+            }
+        }
+        return false;
+    }
+
     /**
      * Update the {@link TestDevice#getDeviceState()} of devices as appropriate.
      *
@@ -200,6 +236,18 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
         // allocations among devices
         mListLock.lock();
         try {
+            if (options.getBaseDeviceTypeRequested() != null) {
+                String rand = UUID.randomUUID().toString();
+                String serial = String.format("%s%s", NullDevice.TEMP_NULL_DEVICE_PREFIX, rand);
+                // TODO: Currently ignore any capacity from placeholder
+                IManagedTestDevice specificDevice =
+                        mDeviceFactory.createRequestedDevice(new NullDevice(serial, true), options);
+                handleDeviceEvent(specificDevice, DeviceEvent.FORCE_AVAILABLE);
+                specificDevice.handleAllocationEvent(DeviceEvent.FORCE_ALLOCATE_REQUEST);
+                mList.add(specificDevice);
+                return specificDevice;
+            }
+
             Iterator<IManagedTestDevice> iterator = mList.iterator();
             while (iterator.hasNext()) {
                 IManagedTestDevice d = iterator.next();
@@ -237,12 +285,24 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
      * @return the {@link IManagedTestDevice}.
      */
     public IManagedTestDevice findOrCreate(IDevice idevice) {
-        if (!isValidDeviceSerial(idevice.getSerialNumber())) {
+        String serial = idevice.getSerialNumber();
+        if (!isValidDeviceSerial(serial)) {
             return null;
+        }
+        if (isTcpDeviceSerial(serial)) {
+            // Override serial for tcp devices into their real one
+            try {
+                String realSerial = idevice.getProperty("ro.serialno");
+                if (!Strings.isNullOrEmpty(realSerial)) {
+                    serial = realSerial.trim();
+                }
+            } catch (RuntimeException e) {
+                CLog.e(e);
+            }
         }
         mListLock.lock();
         try {
-            IManagedTestDevice d = find(idevice.getSerialNumber());
+            IManagedTestDevice d = find(serial);
             if (d == null || DeviceAllocationState.Unavailable.equals(d.getAllocationState())) {
                 mList.remove(d);
                 d = mDeviceFactory.createDevice(idevice);

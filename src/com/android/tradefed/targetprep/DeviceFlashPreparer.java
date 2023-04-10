@@ -32,10 +32,12 @@ import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.IDeviceFlasher.UserDataFlashOption;
+import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
@@ -48,6 +50,7 @@ import java.util.concurrent.TimeUnit;
 public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
 
     private static final int BOOT_POLL_TIME_MS = 5 * 1000;
+    private static final long SNAPSHOT_CANCEL_TIMEOUT = 20000L;
 
     @Option(
         name = "device-boot-time",
@@ -120,9 +123,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
     private String mRamdiskPartition = "boot";
 
     @Option(
-            name = "disable-ramdump",
-            description = "Will set the flag to disable ramdump on the device.")
-    private boolean mDisableRamdump = false;
+            name = "cancel-ota-snapshot",
+            description = "In case an OTA snapshot is in progress, cancel it.")
+    private boolean mCancelSnapshot = false;
 
     /**
      * Sets the device boot time
@@ -221,18 +224,32 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 }
                 if (flasher instanceof FastbootDeviceFlasher) {
                     ((FastbootDeviceFlasher) flasher).setFlashOptions(mFastbootFlashOptions);
-                    ((FastbootDeviceFlasher) flasher).setDisableRamdump(mDisableRamdump);
                 }
                 start = System.currentTimeMillis();
                 flasher.preFlashOperations(device, deviceBuild);
-                // Only #flash is included in the critical section
-                getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
-                queueTime = System.currentTimeMillis() - start;
-                CLog.v(
-                        "Flashing permit obtained after %ds",
-                        TimeUnit.MILLISECONDS.toSeconds(queueTime));
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
+                // After preFlashOperations device should be in bootloader
+                if (mCancelSnapshot && TestDeviceState.FASTBOOT.equals(device.getDeviceState())) {
+                    CommandResult res =
+                            device.executeFastbootCommand(
+                                    SNAPSHOT_CANCEL_TIMEOUT, "snapshot-update", "cancel");
+                    if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
+                        CLog.w(
+                                "Failed to cancel snapshot: %s.\nstdout:%s\nstderr:%s",
+                                res.getStatus(), res.getStdout(), res.getStderr());
+                    }
+                }
+
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope("wait_for_flashing_permit")) {
+                    // Only #flash is included in the critical section
+                    getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                    queueTime = System.currentTimeMillis() - start;
+                    CLog.v(
+                            "Flashing permit obtained after %ds",
+                            TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
+                }
                 // Don't allow interruptions during flashing operations.
                 getRunUtil().allowInterrupt(false);
                 start = System.currentTimeMillis();
@@ -277,8 +294,15 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             // Once critical operation is done, we re-enable interruptable
             getRunUtil().allowInterrupt(true);
             try {
-                device.setRecoveryMode(RecoveryMode.AVAILABLE);
-                device.waitForDeviceAvailable(mDeviceBootTime);
+                boolean available = device.waitForDeviceAvailableInRecoverPath(mDeviceBootTime);
+                if (!available) {
+                    throw new DeviceFailedToBootError(
+                            String.format(
+                                    "Device %s did not become available after flashing %s",
+                                    device.getSerialNumber(), deviceBuild.getDeviceBuildId()),
+                            device.getDeviceDescriptor(),
+                            DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
+                }
             } catch (DeviceNotAvailableException e) {
                 // Assume this is a build problem
                 throw new DeviceFailedToBootError(
@@ -291,6 +315,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             }
             device.postBootSetup();
         } finally {
+            device.setRecoveryMode(RecoveryMode.AVAILABLE);
             // Allow interruption at the end no matter what.
             getRunUtil().allowInterrupt(true);
         }

@@ -37,4 +37,6 @@ java_library_host {
         "tf-remote-client",
         "tradefed-result-interfaces",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }

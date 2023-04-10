@@ -416,7 +416,7 @@ public class SubprocessTestResultsParser implements Closeable {
                 TestRunEndedEventInfo rei = new TestRunEndedEventInfo(new JSONObject(eventJson));
                 // TODO: Parse directly as proto.
                 mListener.testRunEnded(
-                        rei.mTime, TfMetricProtoUtil.upgradeConvert(rei.mRunMetrics));
+                        rei.mTime, TfMetricProtoUtil.upgradeConvert(rei.mRunMetrics, true));
             } finally {
                 mCurrentRunName = null;
                 mCurrentTestCase = null;

@@ -50,6 +50,8 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
     // Message from ddmlib for ShellCommandUnresponsiveException
     private static final String DDMLIB_SHELL_UNRESPONSIVE =
             "Failed to receive adb shell test output within";
+    private static final String JUNIT4_TIMEOUT =
+            "org.junit.runners.model.TestTimedOutException: test timed out";
     // Message from ddmlib when there is a mismatch of test cases count
     private static final String DDMLIB_UNEXPECTED_COUNT = "Instrumentation reported numtests=";
 
@@ -114,6 +116,15 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
         if (!mTests.add(test)) {
             mDuplicateTests.add(test);
         }
+    }
+
+    @Override
+    public void testFailed(TestDescription test, FailureDescription failure) {
+        String message = failure.getErrorMessage();
+        if (message.startsWith(JUNIT4_TIMEOUT) || message.contains(DDMLIB_SHELL_UNRESPONSIVE)) {
+            failure.setErrorIdentifier(TestErrorIdentifier.TEST_TIMEOUT).setRetriable(false);
+        }
+        super.testFailed(test, failure);
     }
 
     @Override

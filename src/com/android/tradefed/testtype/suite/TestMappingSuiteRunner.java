@@ -20,17 +20,20 @@ import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.testmapping.TestInfo;
 import com.android.tradefed.util.testmapping.TestMapping;
 import com.android.tradefed.util.testmapping.TestOption;
-import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
 import com.google.common.io.Files;
 
 import org.apache.commons.compress.archivers.zip.ZipFile;
@@ -39,11 +42,14 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -287,7 +293,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             IAbi abi = configDescriptor.getAbi();
             // Get the parameterized module name by striping the abi information out.
             String moduleName = entry.getKey().replace(String.format("%s ", abi.getName()), "");
-            String configPath = moduleConfig.getName();
             Set<TestInfo> testInfos = getTestInfos(testInfosToRun, moduleName);
             // Only keep the same matching abi runner
             allTests.addAll(createIndividualTests(testInfos, moduleConfig, abi));
@@ -352,7 +357,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             configFile = null;
         }
         // De-duplicate test infos so that there won't be duplicate test options.
-        testInfos = dedupTestInfos(testInfos);
+        testInfos = dedupTestInfos(configFile, testInfos);
+        if (testInfos.size() > 1) {
+            moduleConfig.getConfigurationDescription().setNotIRemoteTestShardable(true);
+        }
+
         for (TestInfo testInfo : testInfos) {
             // Clean up all the test options injected in SuiteModuleLoader.
             super.cleanUpSuiteSetup();
@@ -455,23 +464,75 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     }
 
     /**
-     * De-duplicate test infos with the same test options.
+     * De-duplicate test infos and aggregate test-mapping sources with the same test options.
      *
+     * @param config the config file being deduplicated
      * @param testInfos A {@code Set<TestInfo>} containing multiple test options.
      * @return A {@code Set<TestInfo>} of tests without duplicated test options.
      */
     @VisibleForTesting
-    Set<TestInfo> dedupTestInfos(Set<TestInfo> testInfos) {
+    Set<TestInfo> dedupTestInfos(File config, Set<TestInfo> testInfos) {
         Set<String> nameOptions = new HashSet<>();
-        Set<TestInfo> dedupTestInfos = new HashSet<>();
+        Set<TestInfo> dedupTestInfos = new TreeSet<TestInfo>(new TestInfoComparator());
+        Set<String> duplicateSources = new LinkedHashSet<String>();
         for (TestInfo testInfo : testInfos) {
-            String nameOption = testInfo.getName() + testInfo.getOptions().toString();
+            String nameOption = testInfo.getNameOption();
             if (!nameOptions.contains(nameOption)) {
                 dedupTestInfos.add(testInfo);
+                duplicateSources.addAll(testInfo.getSources());
                 nameOptions.add(nameOption);
+            } else {
+                aggregateTestInfo(testInfo, dedupTestInfos);
             }
         }
+
+        // If size above 1 that means we have duplicated modules with different options
+        if (dedupTestInfos.size() > 1) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DUPLICATE_MAPPING_DIFFERENT_OPTIONS,
+                    String.format("%s:" + Joiner.on("+").join(duplicateSources), config));
+        }
+
         return dedupTestInfos;
+    }
+
+    private class TestInfoComparator implements Comparator<TestInfo> {
+
+        @Override
+        public int compare(TestInfo a, TestInfo b) {
+            if (a.getNameOption().equals(b.getNameOption())) {
+                return 0;
+            }
+            // If a is subset of b
+            if (createComparableNames(a).equals(b.getNameOption())) {
+                return -1;
+            }
+            // If b is subset of a
+            if (a.getNameOption().equals(createComparableNames(b))) {
+                return 1;
+            }
+            return 1;
+        }
+    }
+
+    private static String createComparableNames(TestInfo a) {
+        List<TestOption> copyOptions = new ArrayList<>(a.getOptions());
+        copyOptions.removeIf(o -> (o.isExclusive() || (!o.isExclusive() && !o.isInclusive())));
+        return String.format("%s%s", a.getName(), copyOptions.toString());
+    }
+
+    /**
+     * Aggregate test-mapping sources of the test info with the same test options
+     *
+     * @param testInfo A {@code TestInfo} of duplicated test to be aggregated.
+     * @param dedupTestInfos A {@code Set<TestInfo>} of tests without duplicated test options.
+     */
+    private void aggregateTestInfo(TestInfo testInfo, Set<TestInfo> dedupTestInfos) {
+        for (TestInfo dedupTestInfo : dedupTestInfos) {
+            if (testInfo.getNameOption().equals(dedupTestInfo.getNameOption())) {
+                dedupTestInfo.addSources(testInfo.getSources());
+            }
+        }
     }
 
     /**

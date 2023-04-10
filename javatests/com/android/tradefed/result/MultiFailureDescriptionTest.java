@@ -49,4 +49,15 @@ public class MultiFailureDescriptionTest {
                 "There were 2 failures:\n  error message 1\n  error message 2",
                 mMultiFailureDesc.toString());
     }
+
+    @Test
+    public void testFormat() {
+        FailureDescription failure1 = FailureDescription.create("error message 1");
+        FailureDescription failure2 = FailureDescription.create("error message 2");
+        MultiFailureDescription nested = new MultiFailureDescription(failure2);
+        mMultiFailureDesc = new MultiFailureDescription(failure1, nested);
+        assertEquals(
+                "There were 2 failures:\n  error message 1\n  error message 2",
+                mMultiFailureDesc.getFormattedErrorMessage());
+    }
 }

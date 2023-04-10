@@ -184,8 +184,7 @@ public class InvocationExecutionTest {
         private boolean mFirstInit = true;
 
         @Override
-        public ITestInvocationListener init(
-                IInvocationContext context, ITestInvocationListener listener)
+        public void extraInit(IInvocationContext context, ITestInvocationListener listener)
                 throws DeviceNotAvailableException {
             if (mFirstInit) {
                 sTotalInit++;
@@ -193,7 +192,6 @@ public class InvocationExecutionTest {
             } else {
                 fail("Init should only be called once per instance.");
             }
-            return super.init(context, listener);
         }
     }
 

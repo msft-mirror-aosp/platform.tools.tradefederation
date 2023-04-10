@@ -71,11 +71,46 @@ public class TfMetricProtoUtil {
      * limitations.
      */
     public static HashMap<String, Metric> upgradeConvert(Map<String, String> metrics) {
+        return upgradeConvert(metrics, false);
+    }
+
+    /**
+     * Conversion from Map<String, String> to HashMap<String, Metric>. In order to go to the new
+     * interface. Information might only be partially populated because of the old format
+     * limitations.
+     *
+     * @param smartNumbers convert numbers to int metrics
+     */
+    public static HashMap<String, Metric> upgradeConvert(
+            Map<String, String> metrics, boolean smartNumbers) {
         HashMap<String, Metric> newFormat = new LinkedHashMap<>();
         for (String key : metrics.keySet()) {
-            newFormat.put(key, stringToMetric(metrics.get(key)));
+            Metric metric = null;
+            String stringMetric = metrics.get(key);
+            if (smartNumbers) {
+                Long numMetric = isLong(stringMetric);
+                if (numMetric != null) {
+                    metric = createSingleValue(numMetric.longValue(), null);
+                }
+            }
+            // Default to String metric
+            if (metric == null) {
+                metric = stringToMetric(stringMetric);
+            }
+            newFormat.put(key, metric);
         }
         return newFormat;
+    }
+
+    private static Long isLong(String strNum) {
+        if (strNum == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(strNum);
+        } catch (NumberFormatException nfe) {
+            return null;
+        }
     }
 
     /**

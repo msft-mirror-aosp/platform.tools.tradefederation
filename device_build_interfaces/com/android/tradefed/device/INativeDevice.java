@@ -23,6 +23,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.ITestDevice.MountPointInfo;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.device.connection.AbstractConnection;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.InputStreamSource;
@@ -476,15 +477,32 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
-     * Helper method which executes a fastboot command as a system command with a default timeout
-     * of 2 minutes.
-     * <p/>
-     * Expected to be used when device is already in fastboot mode.
+     * Helper method which executes a adb command as a system command with a specified timeout.
+     *
+     * <p>{@link #executeShellCommand(String)} should be used instead wherever possible, as that
+     * method provides better failure detection and performance.
+     *
+     * @param timeout the time in milliseconds before the device is considered unresponsive, 0L for
+     *     no timeout
+     * @param envMap environment to set for the command
+     * @param commandArgs the adb command and arguments to run
+     * @return the stdout from command. <code>null</code> if command failed to execute.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public String executeAdbCommand(long timeout, Map<String, String> envMap, String... commandArgs)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Helper method which executes a fastboot command as a system command with a default timeout of
+     * 2 minutes.
+     *
+     * <p>Expected to be used when device is already in fastboot mode.
      *
      * @param commandArgs the fastboot command and arguments to run
      * @return the CommandResult containing output of command
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
-     * recovered.
+     *     recovered.
      */
     public CommandResult executeFastbootCommand(String... commandArgs)
             throws DeviceNotAvailableException;
@@ -633,6 +651,14 @@ public interface INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public boolean isAppEnumerationSupported() throws DeviceNotAvailableException;
+
+    /**
+     * Check whether platform on device supports bypassing low target sdk block on app installs
+     *
+     * @return True if bypass low target sdk block is supported, false otherwise
+     * @throws DeviceNotAvailableException
+     */
+    public boolean isBypassLowTargetSdkBlockSupported() throws DeviceNotAvailableException;
 
     /**
      * Retrieves a file off device.
@@ -1205,6 +1231,16 @@ public interface INativeDevice {
     public boolean waitForDeviceAvailable() throws DeviceNotAvailableException;
 
     /**
+     * Waits for the device to be responsive and available without considering recovery path.
+     *
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     * @return True if device is available, False if unavailable.
+     */
+    public boolean waitForDeviceAvailableInRecoverPath(final long waitTime)
+            throws DeviceNotAvailableException;
+
+    /**
      * Blocks until device is visible via adb.
      * <p/>
      * Note the device may not necessarily be responsive to commands on completion. Use
@@ -1640,5 +1676,6 @@ public interface INativeDevice {
      */
     public List<File> getTombstones() throws DeviceNotAvailableException;
 
-
+    /** Returns the connection associated with the device. */
+    public AbstractConnection getConnection();
 }

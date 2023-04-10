@@ -57,12 +57,18 @@ public class RunOnSdkSandboxHandlerTest {
         SuiteApkInstaller installer = new SuiteApkInstaller();
         assertFalse(installer.isInstantMode());
         TestFilterable test = new TestFilterable();
+        assertEquals(0, test.getIncludeAnnotations().size());
         assertEquals(0, test.getExcludeAnnotations().size());
         mConfiguration.setTest(test);
         mConfiguration.setTargetPreparer(installer);
         mHandler.applySetup(mConfiguration);
 
-        // Full mode is filtered out.
+        // SdkSandbox mode is included.
+        assertEquals(1, test.getIncludeAnnotations().size());
+        assertEquals(
+                "android.platform.test.annotations.AppModeSdkSandbox",
+                test.getIncludeAnnotations().iterator().next());
+        // Full mode is excluded.
         assertEquals(1, test.getExcludeAnnotations().size());
         assertEquals(
                 "android.platform.test.annotations.AppModeFull",

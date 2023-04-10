@@ -30,6 +30,7 @@ import com.android.tradefed.device.FreeDeviceState;
 import com.android.tradefed.device.IDeviceManager;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NoDeviceException;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.battery.BatteryController;
 import com.android.tradefed.device.battery.IBatteryInfo;
 import com.android.tradefed.device.battery.IBatteryInfo.BatteryState;
@@ -81,6 +82,10 @@ import java.util.concurrent.TimeUnit;
  * TFC command-queue and uploads invocation events to TFC command-event-queue.
  */
 public class ClusterCommandScheduler extends CommandScheduler {
+
+    // Errors that should not be retried.
+    private static final Set<InfraErrorIdentifier> NONE_RETRIABLE_CONFIG_ERRORS =
+            new HashSet<>(Arrays.asList(InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR));
 
     /** The {@link ScheduledThreadPoolExecutor} used to manage heartbeats. */
     private ScheduledThreadPoolExecutor mHeartbeatThreadPool = null;
@@ -400,6 +405,10 @@ public class ClusterCommandScheduler extends CommandScheduler {
                                     ClusterCommandEvent.DATA_KEY_FAILED_TEST_RUN_COUNT,
                                     Integer.toString(getNumAllFailedTestRuns()));
             if (errorId != null) {
+                // Report ConfigurationError for known errors to prevent test retry.
+                if (NONE_RETRIABLE_CONFIG_ERRORS.contains(errorId)) {
+                    eventBuilder.setType(ClusterCommandEvent.Type.ConfigurationError);
+                }
                 eventBuilder.setData(ClusterCommandEvent.DATA_KEY_ERROR_ID_NAME, errorId.name());
                 eventBuilder.setData(ClusterCommandEvent.DATA_KEY_ERROR_ID_CODE, errorId.code());
                 eventBuilder.setData(
@@ -568,6 +577,11 @@ public class ClusterCommandScheduler extends CommandScheduler {
         final MultiMap<String, DeviceDescriptor> devices = new MultiMap<>();
         for (final DeviceDescriptor device : manager.listAllDevices()) {
             if (availableOnly && device.getState() != DeviceAllocationState.Available) {
+                continue;
+            }
+            TestDeviceState deviceState = device.getTestDeviceState();
+            if (TestDeviceState.FASTBOOT.equals(deviceState)
+                    || TestDeviceState.FASTBOOTD.equals(deviceState)) {
                 continue;
             }
             if (ClusterHostUtil.isLocalhostIpPort(device.getSerial())) {
@@ -835,7 +849,12 @@ public class ClusterCommandScheduler extends CommandScheduler {
      */
     protected boolean dryRunCommand(final InvocationEventHandler handler, String[] args)
             throws ConfigurationException {
-        IConfiguration config = createConfiguration(args);
+        IConfiguration config = null;
+        try {
+            config = createConfiguration(args);
+        } catch (Throwable e) {
+            throw new ConfigurationException("Failed to create dry-run config", e);
+        }
         if (config.getCommandOptions().isDryRunMode()) {
             IInvocationContext context = new InvocationContext();
             context.addDeviceBuildInfo("stub", new BuildInfo());

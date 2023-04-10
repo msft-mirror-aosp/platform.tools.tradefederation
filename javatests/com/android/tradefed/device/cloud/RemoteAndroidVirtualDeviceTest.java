@@ -32,6 +32,7 @@ import com.android.ddmlib.IDevice.DeviceState;
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -143,6 +144,12 @@ public class RemoteAndroidVirtualDeviceTest {
         mGceHandler = Mockito.mock(GceManager.class);
 
         mMockBuildInfo = new BuildInfo();
+
+        try {
+            GlobalConfiguration.createGlobalConfiguration(new String[] {"empty"});
+        } catch (IllegalStateException e) {
+            // Ignore reinit
+        }
     }
 
     @After

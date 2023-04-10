@@ -81,14 +81,20 @@ import com.android.tradefed.testtype.IInvocationContextReceiver;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.IRuntimeHintProvider;
 import com.android.tradefed.testtype.ITestCollector;
+import com.android.tradefed.testtype.ITestFileFilterReceiver;
+import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.suite.module.BaseModuleController;
 import com.android.tradefed.testtype.suite.module.IModuleController.RunStrategy;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
+import com.google.api.client.util.Joiner;
 import com.google.common.annotations.VisibleForTesting;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -132,6 +138,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String TEST_TIME = "TEST_TIME";
     public static final String MODULE_TEST_COUNT = "MODULE_TEST_COUNT";
     public static final String RETRY_TIME = "MODULE_RETRY_TIME";
+    public static final String ISOLATION_COST = "ISOLATION_COST";
     public static final String RETRY_SUCCESS_COUNT = "MODULE_RETRY_SUCCESS";
     public static final String RETRY_FAIL_COUNT = "MODULE_RETRY_FAILED";
 
@@ -182,6 +189,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     private int mMaxRetry = 1;
     // TODO(b/226453043): Eventually we need to remove this.
     private int mTargetPreparerRetryCount = 0;
+
+    private Set<TestDescription> mPassThroughFilters = new LinkedHashSet<>();
 
     @VisibleForTesting
     public ModuleDefinition() {
@@ -515,6 +524,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         // Run the tests
         try {
             mStartTestTime = getCurrentTime();
+            int perModuleRetryQuota = mMaxRetry;
             while (true) {
                 IRemoteTest test = poll();
                 if (test == null) {
@@ -556,6 +566,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     }
                     ((ITestCollector) test).setCollectTestsOnly(mCollectTestsOnly);
                 }
+                if (!mPassThroughFilters.isEmpty()) {
+                    applyFilterToTest(test, mPassThroughFilters);
+                }
                 mCurrentTestWrapper =
                         prepareGranularRetriableWrapper(
                                 test,
@@ -563,7 +576,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                                 failureListener,
                                 moduleLevelListeners,
                                 skipTestCases,
-                                maxRunLimit);
+                                perModuleRetryQuota);
                 mCurrentTestWrapper.setCollectTestsOnly(mCollectTestsOnly);
                 // Resolve the dynamic options for that one test.
                 preparationException =
@@ -605,6 +618,13 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                         // Keep track of each listener for attempts
                         mRunListenersResults.add(mCurrentTestWrapper.getResultListener());
                     }
+                    if (mModuleConfiguration
+                            .getConfigurationDescription()
+                            .isNotIRemoteTestShardable()) {
+                        mPassThroughFilters.addAll(mCurrentTestWrapper.getPassedTests());
+                    }
+                    // Limit escalating retries across all sub-IRemoteTests
+                    perModuleRetryQuota -= mCurrentTestWrapper.getRetryCount();
 
                     mExpectedTests += mCurrentTestWrapper.getExpectedTestsCount();
                     // Get information about retry
@@ -629,6 +649,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 }
             }
         } finally {
+            mPassThroughFilters.clear();
             // Clean target preparers dynamic files.
             if (mInternalTargetPreparerConfiguration != null) {
                 mInternalTargetPreparerConfiguration.cleanConfigurationData();
@@ -811,15 +832,25 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         metricsProto.put(MODULE_TEST_COUNT, TfMetricProtoUtil.createSingleValue(numResults, "int"));
         // Report all the retry informations
         if (!mRetryStats.isEmpty()) {
-            RetryStatistics agg = RetryStatistics.aggregateStatistics(mRetryStats);
-            metricsProto.put(
-                    RETRY_TIME,
-                    TfMetricProtoUtil.createSingleValue(agg.mRetryTime, "milliseconds"));
-            metricsProto.put(
-                    RETRY_SUCCESS_COUNT,
-                    TfMetricProtoUtil.createSingleValue(agg.mRetrySuccess, ""));
-            metricsProto.put(
-                    RETRY_FAIL_COUNT, TfMetricProtoUtil.createSingleValue(agg.mRetryFailure, ""));
+            if (attempt != null) {
+                long cost = RetryStatistics.isolationCostPerAttempt(attempt, mRetryStats);
+                if (cost != 0L) {
+                    metricsProto.put(
+                            ISOLATION_COST,
+                            TfMetricProtoUtil.createSingleValue(cost, "milliseconds"));
+                }
+            } else {
+                RetryStatistics agg = RetryStatistics.aggregateStatistics(mRetryStats);
+                metricsProto.put(
+                        RETRY_TIME,
+                        TfMetricProtoUtil.createSingleValue(agg.mRetryTime, "milliseconds"));
+                metricsProto.put(
+                        RETRY_SUCCESS_COUNT,
+                        TfMetricProtoUtil.createSingleValue(agg.mRetrySuccess, ""));
+                metricsProto.put(
+                        RETRY_FAIL_COUNT,
+                        TfMetricProtoUtil.createSingleValue(agg.mRetryFailure, ""));
+            }
         }
 
         // Only report the mismatch if there were no error during the run.
@@ -1478,6 +1509,30 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
               return;
             }
             throw (DeviceNotAvailableException) setupException;
+        }
+    }
+
+    private void applyFilterToTest(IRemoteTest test, Set<TestDescription> filters) {
+        Set<String> filterNames =
+                filters.stream().map(f -> f.toString()).collect(Collectors.toSet());
+        if (test instanceof ITestFileFilterReceiver) {
+            File excludeFilterFile = ((ITestFileFilterReceiver) test).getExcludeTestFile();
+            if (excludeFilterFile == null) {
+                try {
+                    excludeFilterFile = FileUtil.createTempFile("exclude-filter", ".txt");
+                } catch (IOException e) {
+                    throw new HarnessRuntimeException(
+                            e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+                }
+                ((ITestFileFilterReceiver) test).setExcludeTestFile(excludeFilterFile);
+            }
+            try {
+                FileUtil.writeToFile(Joiner.on('\n').join(filterNames), excludeFilterFile, true);
+            } catch (IOException e) {
+                CLog.e(e);
+            }
+        } else if (test instanceof ITestFilterReceiver) {
+            ((ITestFilterReceiver) test).addAllExcludeFilters(filterNames);
         }
     }
 }

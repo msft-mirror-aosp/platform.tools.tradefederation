@@ -21,6 +21,8 @@ java_test_host {
     srcs: [
         "src/java/com/android/tradefed/referencetests/SimpleFailingTest.java",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
     static_libs: [
         "junit",
     ],
@@ -34,6 +36,8 @@ java_test_host {
     srcs: [
         "src/java/com/android/tradefed/referencetests/OnePassOneFailParamTest.java",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
     static_libs: [
         "junit",
     ],
@@ -47,6 +51,8 @@ java_test_host {
     srcs: [
         "src/java/com/android/tradefed/referencetests/OnePassingOneFailingTest.java",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
     static_libs: [
         "junit",
     ],
@@ -60,6 +66,8 @@ java_test_host {
     srcs: [
         "src/java/com/android/tradefed/referencetests/SimplePassingTest.java",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
     static_libs: [
         "junit",
     ],
@@ -73,6 +81,8 @@ java_test_host {
     srcs: [
         "src/java/com/android/tradefed/referencetests/PassIgnoreAssumeTest.java",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
     static_libs: [
         "junit",
     ],
@@ -88,6 +98,8 @@ java_test_host {
         "src/java/com/android/tradefed/referencetests/OnePassingOneFailingTest.java",
         "src/java/com/android/tradefed/referencetests/SimpleFailingTest.java",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
     libs: [
         "junit",
     ],

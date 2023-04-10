@@ -84,6 +84,11 @@ public class TestInfo {
         return String.format("%s - %s", mName, mHostOnly);
     }
 
+    /** Get a {@link String} represent the test name and its options. */
+    public String getNameOption() {
+        return String.format("%s%s", mName, mOptions.toString());
+    }
+
     /** Get a {@link Set} of the keywords supported by the test. */
     public Set<String> getKeywords() {
         return new HashSet<>(mKeywords);

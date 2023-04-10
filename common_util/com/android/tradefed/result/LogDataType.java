@@ -15,11 +15,8 @@
  */
 package com.android.tradefed.result;
 
-/**
- * Represents the data type of log data.
- */
+/** Represents the data type of log data. */
 public enum LogDataType {
-
     TEXT("txt", "text/plain", false, true),
     UIX("uix", "text/xml", false, true),
     XML("xml", "text/xml", false, true),
@@ -74,7 +71,7 @@ public enum LogDataType {
     CPU_INFO("txt", "text/plain", false, true), // dumpsys cpuinfo
     JACOCO_CSV("csv", "text/csv", false, true), // JaCoCo coverage report in CSV format
     JACOCO_XML("xml", "text/xml", false, true), // JaCoCo coverage report in XML format
-    JACOCO_EXEC("exec", "application/octet-stream", false, false), //JaCoCo coverage execution file
+    JACOCO_EXEC("exec", "application/octet-stream", false, false), // JaCoCo coverage execution file
     ATRACE("atr", "text/plain", true, false), // atrace -z format
     KERNEL_TRACE("dat", "text/plain", false, false), // raw kernel ftrace buffer
     DIR("", "text/plain", false, false),
@@ -92,6 +89,7 @@ public enum LogDataType {
             true), // ScreenshotTest proto result
     CUTTLEFISH_LOG("txt", "text/plain", true, true), // Log from cuttlefish instance
     TOMBSTONEZ("zip", "application/zip", true, false),
+    BT_SNOOP_LOG("log", "application/octet-stream", false, false), // Bluetooth HCI snoop logs
     /* Unknown file type */
     UNKNOWN("dat", "text/plain", false, false);
 

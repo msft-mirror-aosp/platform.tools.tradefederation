@@ -32,10 +32,15 @@ import com.android.ddmlib.testrunner.ITestRunListener;
 import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.IWifiHelper.WifiConnectionResult;
+import com.android.tradefed.device.connection.AbstractConnection;
+import com.android.tradefed.device.connection.DefaultConnection;
+import com.android.tradefed.device.connection.DefaultConnection.ConnectionBuilder;
 import com.android.tradefed.device.contentprovider.ContentProviderHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
@@ -48,6 +53,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
+import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.SnapshotInputStreamSource;
@@ -72,7 +78,6 @@ import com.android.tradefed.util.SizeLimitedOutputStream;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.StringEscapeUtils;
 import com.android.tradefed.util.TimeUtil;
-import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -97,6 +102,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -114,7 +120,8 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /** Default implementation of a {@link ITestDevice} Non-full stack android devices. */
-public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver {
+public class NativeDevice
+        implements IManagedTestDevice, IConfigurationReceiver, ITestLoggerReceiver {
 
     protected static final String SD_CARD = "/sdcard/";
     protected static final String STORAGE_EMULATED = "/storage/emulated/";
@@ -127,7 +134,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     private static final int BUGREPORT_TIMEOUT = 2 * 60 * 1000;
     private static final String BUGREPORT_CMD = "bugreport";
     private static final String BUGREPORTZ_CMD = "bugreportz";
-    private static final String BUGREPORTZ_TMP_PATH = "/bugreports/";
 
     /** On-device path where we expect ANRs to be generated. */
     private static final String ANRS_PATH = "/data/anr";
@@ -168,8 +174,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     /** The time in ms to wait for a device to become unavailable. Should usually be short */
     private static final int DEFAULT_UNAVAILABLE_TIMEOUT = 20 * 1000;
-    /** The time in ms to wait for a recovery that we skip because of the NONE mode */
-    static final int NONE_RECOVERY_MODE_DELAY = 1000;
 
     private static final String SIM_STATE_PROP = "gsm.sim.state";
     private static final String SIM_OPERATOR_PROP = "gsm.operator.alpha";
@@ -195,9 +199,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** Path of the device containing the tombstones */
     private static final String TOMBSTONE_PATH = "/data/tombstones/";
 
+    private static final long PROPERTY_GET_TIMEOUT = 45 * 1000L;
+
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
+
+    
     /**
      * The delimiter that separates the actual shell output and the exit status.
      *
@@ -245,6 +253,20 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     private String mFastbootSerialNumber = null;
     private File mUnpackedFastbootDir = null;
+    // Connection for the device.
+    private AbstractConnection mConnection;
+
+    private ITestLogger mTestLogger;
+
+    private List<IDeviceActionReceiver> mDeviceActionReceivers = new LinkedList<>();
+    /**
+     * Whether callback for reboot is currently executing or not. Use this flag to avoid dead loop
+     * scenarios like calling reboot inside a callback happening for reboot.
+     */
+    private boolean inRebootCallback = false;
+
+    /** If the device is a Microdroid, this refers to the VM process. Otherwise, it is null. */
+    private Process mMicrodroidProcess = null;
 
     /**
      * Interface for a generic device communication attempt.
@@ -255,13 +277,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
          * Execute the device operation.
          *
          * @return <code>true</code> if operation is performed successfully, <code>false</code>
-         *         otherwise
+         *     otherwise
          * @throws IOException, TimeoutException, AdbCommandRejectedException,
-         *         ShellCommandUnresponsiveException, InstallException,
-         *         SyncException if operation terminated abnormally
+         *     ShellCommandUnresponsiveException, InstallException, SyncException if operation
+         *     terminated abnormally
          */
-        public boolean run() throws IOException, TimeoutException, AdbCommandRejectedException,
-                ShellCommandUnresponsiveException, InstallException, SyncException;
+        public boolean run()
+                throws IOException, TimeoutException, AdbCommandRejectedException,
+                        ShellCommandUnresponsiveException, InstallException, SyncException,
+                        DeviceNotAvailableException;
     }
 
     /**
@@ -273,11 +297,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         private String[] mCmd;
         private long mTimeout;
         private boolean mIsShellCommand;
+        private Map<String, String> mEnvMap;
 
-        AdbAction(long timeout, String[] cmd, boolean isShell) {
+        AdbAction(long timeout, String[] cmd, boolean isShell, Map<String, String> envMap) {
             mTimeout = timeout;
             mCmd = cmd;
             mIsShellCommand = isShell;
+            mEnvMap = envMap;
         }
 
         private void logExceptionAndOutput(CommandResult result) {
@@ -288,7 +314,14 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
         @Override
         public boolean run() throws TimeoutException, IOException {
-            CommandResult result = getRunUtil().runTimedCmd(mTimeout, mCmd);
+            IRunUtil runUtil = getRunUtil();
+            if (!mEnvMap.isEmpty()) {
+                runUtil = createRunUtil();
+            }
+            for (String key : mEnvMap.keySet()) {
+                runUtil.setEnvVariable(key, mEnvMap.get(key));
+            }
+            CommandResult result = runUtil.runTimedCmd(mTimeout, mCmd);
             // TODO: how to determine device not present with command failing for other reasons
             if (result.getStatus() == CommandStatus.EXCEPTION) {
                 logExceptionAndOutput(result);
@@ -377,7 +410,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
 
         @Override
-        public boolean run() throws TimeoutException, IOException, AdbCommandRejectedException {
+        public boolean run()
+                throws TimeoutException, IOException, AdbCommandRejectedException,
+                        DeviceNotAvailableException {
+            // Notify of reboot started for all modes
+            notifyRebootStarted();
             getIDevice().reboot(mRebootMode.formatRebootCommand(mReason));
             return true;
         }
@@ -404,6 +441,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @VisibleForTesting
     protected IRunUtil getRunUtil() {
         return RunUtil.getDefault();
+    }
+
+    protected IRunUtil createRunUtil() {
+        return new RunUtil();
     }
 
     /** Set the Clock instance to use. */
@@ -465,7 +506,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      *
      * @param delay the delay in ms
      */
-    protected void setLogStartDelay(int delay) {
+    public void setLogStartDelay(int delay) {
         mLogStartDelay = delay;
     }
 
@@ -571,7 +612,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             }
         }
         String cmd = String.format("getprop %s", name);
-        CommandResult result = executeShellV2Command(cmd);
+        CommandResult result =
+                executeShellV2Command(cmd, PROPERTY_GET_TIMEOUT, TimeUnit.MILLISECONDS, 0);
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             CLog.e(
                     "Failed to run '%s' returning null. stdout: %s\nstderr: %s\nexit code: %s",
@@ -1191,6 +1233,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         return false;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public boolean isBypassLowTargetSdkBlockSupported() throws DeviceNotAvailableException {
+        return checkApiLevelAgainstNextRelease(34);
+    }
+
     /**
      * helper method to throw exception if runtime permission isn't supported
      * @throws DeviceNotAvailableException
@@ -1533,6 +1581,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DOES_FILE_EXISTS_COUNT, 1);
         }
+    }
+
+    @Override
+    public void registerDeviceActionReceiver(IDeviceActionReceiver deviceActionReceiver) {
+        mDeviceActionReceivers.add(deviceActionReceiver);
+    }
+
+    @Override
+    public void deregisterDeviceActionReceiver(IDeviceActionReceiver deviceActionReceiver) {
+        mDeviceActionReceivers.remove(deviceActionReceiver);
     }
 
     /** {@inheritDoc} */
@@ -2196,8 +2254,15 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public String executeAdbCommand(long timeout, String... cmdArgs)
             throws DeviceNotAvailableException {
+        return executeAdbCommand(getCommandTimeout(), new HashMap<>(), cmdArgs);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String executeAdbCommand(long timeout, Map<String, String> envMap, String... cmdArgs)
+            throws DeviceNotAvailableException {
         final String[] fullCmd = buildAdbCommand(cmdArgs);
-        AdbAction adbAction = new AdbAction(timeout, fullCmd, "shell".equals(cmdArgs[0]));
+        AdbAction adbAction = new AdbAction(timeout, fullCmd, "shell".equals(cmdArgs[0]), envMap);
         performDeviceAction(String.format("adb %s", cmdArgs[0]), adbAction, MAX_RETRY_ATTEMPTS);
         return adbAction.mOutput;
     }
@@ -2386,7 +2451,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     }
 
     /** Builds the OS command for the given adb shell command session and args */
-    private String[] buildAdbShellCommand(String command, boolean forceExitStatusDetection) {
+    protected String[] buildAdbShellCommand(String command, boolean forceExitStatusDetection) {
         // TODO: implement the shell v2 support in ddmlib itself.
         String[] commandArgs =
                 QuotationAwareTokenizer.tokenizeLine(
@@ -2538,9 +2603,9 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public boolean recoverDevice() throws DeviceNotAvailableException {
+        getConnection().reconnectForRecovery(getSerialNumber());
         if (mRecoveryMode.equals(RecoveryMode.NONE)) {
             CLog.i("Skipping recovery on %s", getSerialNumber());
-            getRunUtil().sleep(NONE_RECOVERY_MODE_DELAY);
             return false;
         }
         CLog.i("Attempting recovery on %s", getSerialNumber());
@@ -2827,9 +2892,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         try {
             bugreportzFile = getBugreportzInternal();
             if (bugreportzFile == null) {
-                bugreportzFile = bugreportzFallback();
-            }
-            if (bugreportzFile == null) {
                 // return empty buffer
                 return new ByteArrayInputStreamSource("".getBytes());
             }
@@ -2855,48 +2917,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     }
 
     /**
-     * If first bugreportz collection was interrupted for any reasons, the temporary file where the
-     * dumpstate is redirected could exists if it started. We attempt to get it to have some partial
-     * data.
-     */
-    private File bugreportzFallback() {
-        try {
-            IFileEntry entries = getFileEntry(BUGREPORTZ_TMP_PATH);
-            if (entries != null) {
-                for (IFileEntry f : entries.getChildren(false)) {
-                    String name = f.getName();
-                    CLog.d("bugreport entry: %s", name);
-                    // Only get left-over zipped data to avoid confusing data types.
-                    if (name.endsWith(".zip")) {
-                        // Pull always on user 0 to avoid content provider and
-                        // let the path resolve itself
-                        File pulledZip = pullFile(BUGREPORTZ_TMP_PATH + name, 0);
-                        try {
-                            // Validate the zip before returning it.
-                            if (ZipUtil.isZipFileValid(pulledZip, false)) {
-                                return pulledZip;
-                            }
-                        } catch (IOException e) {
-                            CLog.e(e);
-                        }
-                        CLog.w("Failed to get a valid bugreportz.");
-                        // if zip validation failed, delete it and return null.
-                        FileUtil.deleteFile(pulledZip);
-                        return null;
-
-                    }
-                }
-                CLog.w("Could not find a tmp bugreport file in the directory.");
-            } else {
-                CLog.w("Could not find the file entry: '%s' on the device.", BUGREPORTZ_TMP_PATH);
-            }
-        } catch (DeviceNotAvailableException e) {
-            CLog.e(e);
-        }
-        return null;
-    }
-
-    /**
      * {@inheritDoc}
      */
     @Override
@@ -2907,10 +2927,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             bugreport = getBugreportz();
             type = LogDataType.BUGREPORTZ;
             // Limit fallback to older devices
-            if (bugreport == null && getApiLevelSafe() < 24) {
-                CLog.d("Bugreportz failed, attempting bugreport collection instead.");
-                bugreport = getBugreportInternal();
-                type = LogDataType.BUGREPORT;
+            if (!TestDeviceState.RECOVERY.equals(getDeviceState())) {
+                if (bugreport == null && getApiLevelSafe() < 24) {
+                    CLog.d("Bugreportz failed, attempting bugreport collection instead.");
+                    bugreport = getBugreportInternal();
+                    type = LogDataType.BUGREPORT;
+                }
             }
             // log what we managed to capture.
             if (bugreport != null && bugreport.size() > 0L) {
@@ -2981,9 +3003,6 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         long startTime = System.currentTimeMillis();
         try {
             File bugreportZip = getBugreportzInternal();
-            if (bugreportZip == null) {
-                bugreportZip = bugreportzFallback();
-            }
             if (bugreportZip != null) {
                 return new FileInputStreamSource(bugreportZip, true);
             }
@@ -3028,6 +3047,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     }
                     // Create a placeholder to replace the file
                     zipFile = FileUtil.createTempFile("bugreportz", ".zip");
+                    // pull
                     pullFile(remoteFilePath, zipFile);
                     String bugreportDir =
                             remoteFilePath.substring(0, remoteFilePath.lastIndexOf('/'));
@@ -3073,6 +3093,10 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (!doesFileExist(ANRS_PATH)) {
             CLog.d("No ANRs at %s", ANRS_PATH);
             return true;
+        }
+        boolean root = enableAdbRoot();
+        if (!root) {
+            CLog.d("Skipping logAnrs, need to be root.");
         }
         File localDir = null;
         long startTime = System.currentTimeMillis();
@@ -3436,13 +3460,24 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void postBootSetup() throws DeviceNotAvailableException {
+        if (getOptions().shouldDisableReboot()) {
+            return;
+        }
+        getConnection().reconnect(getSerialNumber());
         CLog.d("postBootSetup started");
         long startTime = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("postBootSetup")) {
             enableAdbRoot();
             prePostBootSetup();
             for (String command : mOptions.getPostBootCommands()) {
-                executeShellCommand(command);
+                long start = System.currentTimeMillis();
+                try (CloseableTraceScope cmdTrace = new CloseableTraceScope(command)) {
+                    executeShellCommand(command);
+                }
+                if (command.startsWith("sleep")) {
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.host_sleep, start, System.currentTimeMillis());
+                }
             }
         } finally {
             long elapsed = System.currentTimeMillis() - startTime;
@@ -3522,6 +3557,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public void rebootIntoBootloader()
             throws DeviceNotAvailableException, UnsupportedOperationException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot into Bootloader");
+            return;
+        }
         rebootIntoFastbootInternal(true);
     }
 
@@ -3529,6 +3570,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     @Override
     public void rebootIntoFastbootd()
             throws DeviceNotAvailableException, UnsupportedOperationException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot into Fastbootd");
+            return;
+        }
         rebootIntoFastbootInternal(false);
     }
 
@@ -3623,7 +3670,11 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void reboot(@Nullable String reason) throws DeviceNotAvailableException {
-        rebootUntilOnline(reason);
+        if (isInRebootCallback()) {
+            CLog.d("'%s' action is disabled during reboot callback. Ignoring.", "Reboot");
+            return;
+        }
+        internalRebootUntilOnline(reason);
 
         RecoveryMode cachedRecoveryMode = getRecoveryMode();
         setRecoveryMode(RecoveryMode.ONLINE);
@@ -3640,10 +3691,17 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
         postBootSetup();
         postBootWifiSetup();
+        // notify of reboot end here. Full reboots will end here as well as reboots from Bootloader
+        // or Fastboot mode.
+        notifyRebootEnded();
     }
 
     @Override
     public void rebootUserspace() throws DeviceNotAvailableException {
+        if (isInRebootCallback()) {
+            CLog.d("'%s' action is disabled during reboot callback. Ignoring.", "Reboot Userspace");
+            return;
+        }
         rebootUserspaceUntilOnline();
 
         RecoveryMode cachedRecoveryMode = getRecoveryMode();
@@ -3665,12 +3723,45 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     @Override
     public void rebootUntilOnline() throws DeviceNotAvailableException {
-        rebootUntilOnline(null);
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot Until Online");
+            return;
+        }
+        try {
+            internalRebootUntilOnline(null);
+        } finally {
+            if (!mDeviceActionReceivers.isEmpty()) {
+                CLog.d(
+                        "DeviceActionReceivers were not notified after rebootUntilOnline on %s.",
+                        getSerialNumber());
+            }
+        }
     }
 
     /** {@inheritDoc} */
     @Override
     public void rebootUntilOnline(@Nullable String reason) throws DeviceNotAvailableException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot Until Online");
+            return;
+        }
+        try {
+            internalRebootUntilOnline(reason);
+        } finally {
+            if (!mDeviceActionReceivers.isEmpty()) {
+                CLog.d(
+                        "DeviceActionReceivers were not notified after rebootUntilOnline on %s.",
+                        getSerialNumber());
+            }
+        }
+    }
+
+    private void internalRebootUntilOnline(@Nullable String reason)
+            throws DeviceNotAvailableException {
         long rebootStart = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("rebootUntilOnline")) {
             doReboot(RebootMode.REBOOT_FULL, reason);
@@ -3689,6 +3780,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
 
     @Override
     public void rebootUserspaceUntilOnline() throws DeviceNotAvailableException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot Userspace Until Online");
+            return;
+        }
         doReboot(RebootMode.REBOOT_USERSPACE, null);
         RecoveryMode cachedRecoveryMode = getRecoveryMode();
         setRecoveryMode(RecoveryMode.ONLINE);
@@ -3702,10 +3799,16 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public void rebootIntoRecovery() throws DeviceNotAvailableException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot into Recovery");
+            return;
+        }
         if (isStateBootloaderOrFastbootd()) {
             CLog.w("device %s in fastboot when requesting boot to recovery. " +
                     "Rebooting to userspace first.", getSerialNumber());
-            rebootUntilOnline();
+            internalRebootUntilOnline(null);
         }
         doAdbReboot(RebootMode.REBOOT_INTO_RECOVERY, null);
         if (!waitForDeviceInRecovery(mOptions.getAdbRecoveryTimeout())) {
@@ -3722,12 +3825,18 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
     /** {@inheritDoc} */
     @Override
     public void rebootIntoSideload(boolean autoReboot) throws DeviceNotAvailableException {
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Reboot into Sideload");
+            return;
+        }
         if (isStateBootloaderOrFastbootd()) {
             CLog.w(
                     "device %s in fastboot when requesting boot to sideload. "
                             + "Rebooting to userspace first.",
                     getSerialNumber());
-            rebootUntilOnline();
+            internalRebootUntilOnline(null);
         }
         final RebootMode rebootMode;
         if (autoReboot) {
@@ -3747,7 +3856,21 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public void nonBlockingReboot() throws DeviceNotAvailableException {
-        doReboot(RebootMode.REBOOT_FULL, null);
+        if (isInRebootCallback()) {
+            CLog.d(
+                    "'%s' action is disabled during reboot callback. Ignoring.",
+                    "Non Blocking Reboot");
+            return;
+        }
+        try {
+            doReboot(RebootMode.REBOOT_FULL, null);
+        } finally {
+            if (!mDeviceActionReceivers.isEmpty()) {
+                CLog.d(
+                        "DeviceActionReceivers were not notified after nonBlockingReboot on %s.",
+                        getSerialNumber());
+            }
+        }
     }
 
     /**
@@ -3831,6 +3954,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         if (!notAvailable) {
             CLog.w("Did not detect device %s becoming unavailable after reboot", getSerialNumber());
         }
+        getConnection().reconnect(getSerialNumber());
     }
 
     /**
@@ -3842,6 +3966,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     protected void doAdbReboot(RebootMode rebootMode, @Nullable final String reason)
             throws DeviceNotAvailableException {
+        getConnection().notifyAdbRebootCalled();
         DeviceAction rebootAction = createRebootDeviceAction(rebootMode, reason);
         performDeviceAction("reboot", rebootAction, MAX_RETRY_ATTEMPTS);
     }
@@ -3906,7 +4031,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         }
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.ADB_ROOT_ROUTINE_COUNT, 1);
         long startTime = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("adb_root")) {
             CLog.i("adb root on device %s", getSerialNumber());
             int attempts = MAX_RETRY_ATTEMPTS + 1;
             for (int i = 1; i <= attempts; i++) {
@@ -3979,7 +4104,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * @throws DeviceNotAvailableException
      */
     public void postAdbRootAction() throws DeviceNotAvailableException {
-        // Empty on purpose.
+        getConnection().reconnect(getSerialNumber());
     }
 
     /**
@@ -3990,7 +4115,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      * @throws DeviceNotAvailableException
      */
     public void postAdbUnrootAction() throws DeviceNotAvailableException {
-        // Empty on purpose.
+        getConnection().reconnect(getSerialNumber());
     }
 
     /**
@@ -4152,6 +4277,13 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             return recoverDevice();
         }
         return true;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean waitForDeviceAvailableInRecoverPath(final long waitTime)
+            throws DeviceNotAvailableException {
+        return mStateMonitor.waitForDeviceAvailableInRecoverPath(waitTime) != null;
     }
 
     /**
@@ -4764,6 +4896,21 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
+    @Override
+    public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
     /** {@inheritDoc} */
     @Override
     public int createUserNoThrow(String name) throws DeviceNotAvailableException {
@@ -4816,6 +4963,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
+    @Override
+    public boolean startVisibleBackgroundUser(int userId, int displayId, boolean waitFlag)
+            throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -4833,6 +4986,17 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
+    @Override
+    public boolean isVisibleBackgroundUsersSupported() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isVisibleBackgroundUsersOnDefaultDisplaySupported()
+            throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -4845,6 +5009,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             executeAdbCommand("disable-verity");
             reboot();
         }
+        enableAdbRoot();
         executeAdbCommand("remount");
         waitForDeviceAvailable();
     }
@@ -4859,6 +5024,7 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             executeAdbCommand("disable-verity");
             reboot();
         }
+        enableAdbRoot();
         executeAdbCommand("remount");
         waitForDeviceAvailable();
     }
@@ -4891,6 +5057,17 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
      */
     @Override
     public int getCurrentUser() throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isUserVisible(int userId) throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
+    @Override
+    public boolean isUserVisibleOnDisplay(int userId, int displayId)
+            throws DeviceNotAvailableException {
         throw new UnsupportedOperationException("No support for user's feature.");
     }
 
@@ -5081,6 +5258,23 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
                     getDeviceDescriptor(),
                     InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
+        initializeConnection(info, attributes);
+    }
+
+    protected void initializeConnection(IBuildInfo info, MultiMap<String, String> attributes)
+            throws DeviceNotAvailableException, TargetSetupError {
+        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil(), this, info, getLogger());
+        if (attributes != null) {
+            builder.addAttributes(attributes);
+        }
+        if (getOptions().shouldUseConnection()) {
+            mConnection = DefaultConnection.createConnection(builder);
+        } else {
+            // Use default inop connection
+            mConnection = DefaultConnection.createInopConnection(builder);
+        }
+        CLog.d("Using connection: %s", mConnection);
+        mConnection.initializeConnection();
     }
 
     /** {@inheritDoc} */
@@ -5091,6 +5285,8 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         FileUtil.deleteFile(mExecuteShellCommandLogs);
         mExecuteShellCommandLogs = null;
         FileUtil.recursiveDelete(mUnpackedFastbootDir);
+        getConnection().tearDownConnection();
+        mDeviceActionReceivers.clear();
         // Default implementation
         if (getIDevice() instanceof StubDevice) {
             return;
@@ -5722,6 +5918,12 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
         throw new UnsupportedOperationException("dumpsys SurfaceFlinger is not supported.");
     }
 
+    @Override
+    public Set<Integer> listDisplayIdsForStartingVisibleBackgroundUsers()
+            throws DeviceNotAvailableException {
+        throw new UnsupportedOperationException("No support for user's feature.");
+    }
+
     /** {@inheritDoc} */
     @Override
     public long getLastExpectedRebootTimeMillis() {
@@ -5859,5 +6061,107 @@ public class NativeDevice implements IManagedTestDevice, IConfigurationReceiver 
             mFastbootLock.unlock();
         }
         return result;
+    }
+
+    /** The current connection associated with the device. */
+    @Override
+    public AbstractConnection getConnection() {
+        if (mConnection == null) {
+            mConnection =
+                    DefaultConnection.createInopConnection(
+                            new ConnectionBuilder(getRunUtil(), this, null, getLogger()));
+        }
+        return mConnection;
+    }
+
+    /**
+     * Notifies all {@link IDeviceActionReceiver} about reboot start event.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    protected void notifyRebootStarted() throws DeviceNotAvailableException {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("rebootStartedCallbacks")) {
+            for (IDeviceActionReceiver dar : mDeviceActionReceivers) {
+                try {
+                    inRebootCallback = true;
+                    dar.rebootStarted(this);
+                } catch (DeviceNotAvailableException dnae) {
+                    inRebootCallback = false;
+                    throw dnae;
+                } catch (Exception e) {
+                    logDeviceActionException("notifyRebootStarted", e, true);
+                } finally {
+                    inRebootCallback = false;
+                }
+            }
+        }
+    }
+
+    /**
+     * Notifies all {@link IDeviceActionReceiver} about reboot end event.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    protected void notifyRebootEnded() throws DeviceNotAvailableException {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("rebootEndedCallbacks")) {
+            for (IDeviceActionReceiver dar : mDeviceActionReceivers) {
+                try {
+                    inRebootCallback = true;
+                    dar.rebootEnded(this);
+                } catch (DeviceNotAvailableException dnae) {
+                    inRebootCallback = false;
+                    throw dnae;
+                } catch (Exception e) {
+                    logDeviceActionException("notifyRebootEnded", e, true);
+                } finally {
+                    inRebootCallback = false;
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns whether reboot callbacks is currently being executed or not. All public api's for
+     * reboot should be disabled if true.
+     */
+    protected boolean isInRebootCallback() {
+        return inRebootCallback;
+    }
+
+    @Override
+    public void setTestLogger(ITestLogger testLogger) {
+        mTestLogger = testLogger;
+    }
+
+    protected ITestLogger getLogger() {
+        return mTestLogger;
+    }
+
+    /**
+     * Marks the TestDevice as microdroid and sets its CID.
+     *
+     * @param process Process of the Microdroid VM.
+     */
+    protected void setMicrodroidProcess(Process process) {
+        mMicrodroidProcess = process;
+    }
+
+    /**
+     * @return Returns the Process of the Microdroid VM. If TestDevice is not a Microdroid, returns
+     *     null.
+     */
+    public Process getMicrodroidProcess() {
+        return mMicrodroidProcess;
+    }
+
+    protected void setTestDeviceOptions(Map<String, String> deviceOptions) {
+        try {
+            OptionSetter setter = new OptionSetter(this.getOptions());
+            for (Map.Entry<String, String> optionsKeyValue : deviceOptions.entrySet()) {
+                setter.setOptionValue(optionsKeyValue.getKey(), optionsKeyValue.getValue());
+            }
+        } catch (ConfigurationException e) {
+            CLog.w(e);
+        }
     }
 }

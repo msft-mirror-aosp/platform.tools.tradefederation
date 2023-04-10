@@ -17,6 +17,8 @@ package com.android.tradefed.postprocessor;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.DataType;
@@ -93,7 +95,10 @@ public abstract class BasePostProcessor implements IPostProcessor {
     /** {@inheritDoc} */
     @Override
     public final ITestInvocationListener init(ITestInvocationListener listener) {
+        long start = System.currentTimeMillis();
         setUp();
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
         mForwarder = listener;
         return this;
     }
@@ -211,6 +216,7 @@ public abstract class BasePostProcessor implements IPostProcessor {
 
     @Override
     public final void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
+        long start = System.currentTimeMillis();
         mIsPostProcessing = true;
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("run_processor_" + this.getClass().getSimpleName())) {
@@ -232,6 +238,8 @@ public abstract class BasePostProcessor implements IPostProcessor {
             // Clear out the stored test and run logs.
             mTestLogs.clear();
             mRunLogs.clear();
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
         }
         mIsPostProcessing = false;
         mForwarder.testRunEnded(elapsedTime, runMetrics);
@@ -284,6 +292,7 @@ public abstract class BasePostProcessor implements IPostProcessor {
     public final void testEnded(
             TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
         mIsPostProcessing = true;
+        long start = System.currentTimeMillis();
         try {
             HashMap<String, Metric> rawValues = getRawMetricsOnly(testMetrics);
             // Store the raw metrics from the test in storedTestMetrics for potential aggregation.
@@ -316,6 +325,9 @@ public abstract class BasePostProcessor implements IPostProcessor {
         } catch (RuntimeException e) {
             // Prevent exception from messing up the status reporting.
             CLog.e(e);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
         }
         mIsPostProcessing = false;
         mCurrentTest = null;

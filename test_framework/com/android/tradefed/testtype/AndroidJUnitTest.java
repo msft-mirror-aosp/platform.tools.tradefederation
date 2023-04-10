@@ -17,6 +17,7 @@
 package com.android.tradefed.testtype;
 
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -31,14 +32,21 @@ import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.targetprep.BuildError;
+import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.targetprep.TestAppInstallSetup;
+import com.android.tradefed.testtype.suite.params.InstantAppHandler;
 import com.android.tradefed.util.ArrayUtil;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ListInstrumentationParser;
+import com.android.tradefed.util.ResourceUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 
 import org.junit.runner.notification.RunListener;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -89,6 +97,8 @@ public class AndroidJUnitTest extends InstrumentationTest
      * device side.
      */
     public static final String NEW_RUN_LISTENER_ORDER_KEY = "newRunListenerMode";
+
+    public static final String USE_TEST_STORAGE_SERVICE = "useTestStorageService";
 
     /** Options from the collector side helper library. */
     public static final String INCLUDE_COLLECTOR_FILTER_KEY = "include-filter-group";
@@ -142,10 +152,21 @@ public class AndroidJUnitTest extends InstrumentationTest
     private String mTestFilterDir = "/data/local/tmp/ajur";
 
     @Option(
-        name = "ajur-max-shard",
-        description = "The maximum number of shard we want to allow the AJUR test to shard into"
-    )
-    private Integer mMaxShard = null;
+            name = "test-storage-dir",
+            description = "The device directory path where test storage read files.")
+    private String mTestStorageInternalDir = "/sdcard/googletest/test_runfiles";
+
+    @Option(
+            name = "use-test-storage",
+            description =
+                    "If set to true, we will push filters to the test storage instead of disk.")
+    private boolean mUseTestStorage = true;
+
+    @Option(
+            name = "ajur-max-shard",
+            description =
+                    "The maximum number of shard we want to allow the AJUR test to shard into")
+    private Integer mMaxShard = 4;
 
     @Option(
         name = "device-listeners",
@@ -329,11 +350,32 @@ public class AndroidJUnitTest extends InstrumentationTest
         if (getDevice() == null) {
             throw new IllegalArgumentException("Device has not been set");
         }
+        if (mUseTestStorage) {
+            // Check if we are a parameterized module
+            List<String> params =
+                    getConfiguration()
+                            .getConfigurationDescription()
+                            .getMetaData(ConfigurationDescriptor.ACTIVE_PARAMETER_KEY);
+            if (params != null && params.contains(InstantAppHandler.INSTANT_APP_ID)) {
+                mUseTestStorage = false;
+                CLog.d("Disable test storage on instant app module.");
+            } else {
+                mUseTestStorage = getDevice().checkApiLevelAgainstNextRelease(34);
+                if (!mUseTestStorage) {
+                    CLog.d("Disabled test storage as it's not supported on that branch.");
+                }
+            }
+        }
+
         boolean pushedFile = false;
         // if mIncludeTestFile is set, perform filtering with this file
         if (mIncludeTestFile != null && mIncludeTestFile.length() > 0) {
             mDeviceIncludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + INCLUDE_FILE;
             pushTestFile(mIncludeTestFile, mDeviceIncludeFile, listener);
+            if (mUseTestStorage) {
+                pushTestFile(
+                        mIncludeTestFile, mTestStorageInternalDir + mDeviceIncludeFile, listener);
+            }
             pushedFile = true;
             // If an explicit include file filter is provided, do not use the package
             setTestPackageName(null);
@@ -343,7 +385,40 @@ public class AndroidJUnitTest extends InstrumentationTest
         if (mExcludeTestFile != null && mExcludeTestFile.length() > 0) {
             mDeviceExcludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + EXCLUDE_FILE;
             pushTestFile(mExcludeTestFile, mDeviceExcludeFile, listener);
+            if (mUseTestStorage) {
+                pushTestFile(
+                        mExcludeTestFile, mTestStorageInternalDir + mDeviceExcludeFile, listener);
+            }
             pushedFile = true;
+        }
+        TestAppInstallSetup serviceInstaller = null;
+        if (mUseTestStorage) {
+            File testServices = null;
+            try {
+                testServices = FileUtil.createTempFile("services", ".apk");
+                boolean extracted =
+                        ResourceUtil.extractResourceAsFile(
+                                "/test-services-normalized.apk", testServices);
+                if (extracted) {
+                    serviceInstaller = new TestAppInstallSetup();
+                    // Service apk needs force-queryable
+                    serviceInstaller.setForceQueryable(true);
+                    serviceInstaller.addTestFile(testServices);
+                    if (testInfo != null
+                            && testInfo.properties().containsKey(RUN_TESTS_AS_USER_KEY)) {
+                        serviceInstaller.setUserId(
+                                Integer.parseInt(testInfo.properties().get(RUN_TESTS_AS_USER_KEY)));
+                    }
+                    serviceInstaller.setUp(testInfo);
+                } else {
+                    throw new IOException("Failed to extract test-services.apk");
+                }
+            } catch (IOException | TargetSetupError | BuildError e) {
+                CLog.e(e);
+                mUseTestStorage = false;
+            } finally {
+                FileUtil.deleteFile(testServices);
+            }
         }
         if (mTotalShards > 0 && !isShardable() && mShardIndex != 0) {
             // If not shardable, only first shard can run.
@@ -351,6 +426,9 @@ public class AndroidJUnitTest extends InstrumentationTest
             return;
         }
         super.run(testInfo, listener);
+        if (serviceInstaller != null) {
+            serviceInstaller.tearDown(testInfo, null);
+        }
         if (pushedFile) {
             // Remove the directory where the files where pushed
             removeTestFilterDir();
@@ -439,6 +517,10 @@ public class AndroidJUnitTest extends InstrumentationTest
         if (mNewRunListenerOrderMode) {
             runner.addInstrumentationArg(
                     NEW_RUN_LISTENER_ORDER_KEY, Boolean.toString(mNewRunListenerOrderMode));
+        }
+        if (mUseTestStorage) {
+            runner.addInstrumentationArg(
+                    USE_TEST_STORAGE_SERVICE, Boolean.toString(mUseTestStorage));
         }
         // Add the listeners received from Options
         addDeviceListeners(mExtraDeviceListeners);

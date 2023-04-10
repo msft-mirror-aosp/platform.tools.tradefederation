@@ -16,12 +16,12 @@
 
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
+
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
-
-import com.google.common.annotations.VisibleForTesting;
 
 /**
  * An {@link ITargetPreparer} that marks that tests should be run on the user (rather than the
@@ -35,17 +35,12 @@ import com.google.common.annotations.VisibleForTesting;
 @OptionClass(alias = "run-on-system-user")
 public class RunOnSystemUserTargetPreparer extends BaseTargetPreparer {
 
-    @VisibleForTesting static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
-
-    @VisibleForTesting
-    static final String HEADLESS_SYSTEM_USER_PROPERTY = "ro.fw.mu.headless_system_user";
-
     private Integer mUserToSwitchTo;
 
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, DeviceNotAvailableException {
-        if (!isHeadless(testInfo.getDevice())) {
+        if (!testInfo.getDevice().isHeadlessSystemUserMode()) {
             ensureSwitchedToUser(testInfo.getDevice(), 0);
         }
 
@@ -58,10 +53,6 @@ public class RunOnSystemUserTargetPreparer extends BaseTargetPreparer {
         if (mUserToSwitchTo != null) {
             ensureSwitchedToUser(testInfo.getDevice(), mUserToSwitchTo);
         }
-    }
-
-    private boolean isHeadless(ITestDevice device) throws DeviceNotAvailableException {
-        return device.getBooleanProperty(HEADLESS_SYSTEM_USER_PROPERTY, false);
     }
 
     private void ensureSwitchedToUser(ITestDevice device, int userId)

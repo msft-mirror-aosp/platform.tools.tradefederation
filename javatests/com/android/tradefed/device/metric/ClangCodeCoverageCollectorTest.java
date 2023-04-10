@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
@@ -41,9 +42,11 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.testtype.coverage.CoverageOptions;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
@@ -62,6 +65,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
@@ -127,6 +131,9 @@ public class ClangCodeCoverageCollectorTest {
         doReturn(mMockBuildInfo).when(mMockBuildProvider).getBuild();
 
         doReturn(ImmutableList.of(mMockDevice)).when(mMockContext).getDevices();
+        when(mMockContext.getAttributes())
+                .thenReturn(
+                        new MultiMap(ImmutableMap.of(ModuleDefinition.MODULE_NAME, "myModule")));
 
         doReturn(PS_OUTPUT).when(mMockDevice).executeShellCommand("ps -e");
 
@@ -192,6 +199,7 @@ public class ClangCodeCoverageCollectorTest {
     public void testRun_logsCoverageFile() throws Exception {
         mCoverageOptionsSetter.setOptionValue("coverage", "true");
         mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
+        mCoverageOptionsSetter.setOptionValue("pull-timeout", "314159");
 
         // Setup mocks.
         doReturn(true).when(mMockDevice).isAdbRoot();
@@ -204,6 +212,55 @@ public class ClangCodeCoverageCollectorTest {
                                 ByteString.copyFromUtf8("coverage2.profraw")));
         returnFileContentsOnShellCommand(mMockDevice, tarGz);
         doReturn(createProfileToolZip()).when(mMockBuildInfo).getFile(anyString());
+
+        // Simulate a test run.
+        mListener.init(mMockContext, mFakeListener);
+        mListener.testRunStarted(RUN_NAME, TEST_COUNT);
+        mListener.testRunEnded(ELAPSED_TIME, mMetrics);
+        mListener.invocationEnded(ELAPSED_TIME);
+
+        // Verify the timeout is set.
+        verify(mMockDevice, times(1))
+                .executeShellV2Command(
+                        eq("find /data/misc/trace -name '*.profraw' | tar -czf - -T - 2>/dev/null"),
+                        any(),
+                        any(),
+                        eq(314159L),
+                        eq(TimeUnit.MILLISECONDS),
+                        eq(1));
+        // Verify that the command line contains the files above.
+        List<String> command = mCommandArgumentCaptor.getCommand();
+        checkListContainsSuffixes(
+                command,
+                ImmutableList.of(
+                        "llvm-profdata",
+                        "path/to/coverage.profraw",
+                        "path/to/.hidden/coverage2.profraw"));
+
+        // Verify testLog(..) was called with a single indexed profile data.
+        List<ByteString> logs = mFakeListener.getLogs();
+        assertThat(logs).hasSize(1);
+
+        FileUtil.deleteFile(tarGz);
+    }
+
+    @Test
+    public void testRun_noModuleName_logsCoverageFile() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage", "true");
+        mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
+
+        // Setup mocks.
+        doReturn(true).when(mMockDevice).isAdbRoot();
+        File tarGz =
+                createTarGz(
+                        ImmutableMap.of(
+                                "path/to/coverage.profraw",
+                                ByteString.copyFromUtf8("coverage.profraw"),
+                                "path/to/.hidden/coverage2.profraw",
+                                ByteString.copyFromUtf8("coverage2.profraw")));
+        returnFileContentsOnShellCommand(mMockDevice, tarGz);
+        doReturn(createProfileToolZip()).when(mMockBuildInfo).getFile(anyString());
+        when(mMockContext.getAttributes()).thenReturn(new MultiMap(ImmutableMap.of()));
 
         // Simulate a test run.
         mListener.init(mMockContext, mFakeListener);
