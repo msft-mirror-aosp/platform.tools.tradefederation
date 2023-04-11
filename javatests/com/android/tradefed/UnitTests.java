@@ -282,6 +282,7 @@ import com.android.tradefed.targetprep.StopServicesSetupTest;
 import com.android.tradefed.targetprep.SwitchUserTargetPreparerTest;
 import com.android.tradefed.targetprep.SystemUpdaterDeviceFlasherTest;
 import com.android.tradefed.targetprep.TargetSetupErrorTest;
+import com.android.tradefed.targetprep.TemperatureThrottlingWaiterTest;
 import com.android.tradefed.targetprep.TestAppInstallSetupTest;
 import com.android.tradefed.targetprep.TestFilePushSetupTest;
 import com.android.tradefed.targetprep.UserCleanerTest;
@@ -438,6 +439,7 @@ import com.android.tradefed.util.SubprocessTestResultsParserTest;
 import com.android.tradefed.util.TableBuilderTest;
 import com.android.tradefed.util.TableFormatterTest;
 import com.android.tradefed.util.TarUtilTest;
+import com.android.tradefed.util.TargetFileUtilsTest;
 import com.android.tradefed.util.TestRunnerUtilTest;
 import com.android.tradefed.util.TimeUtilTest;
 import com.android.tradefed.util.TimeValTest;
@@ -570,6 +572,7 @@ import org.junit.runners.Suite.SuiteClasses;
     NativeDeviceTest.class,
     RemoteAndroidDeviceTest.class,
     PropertyChangerTest.class,
+    TargetFileUtilsTest.class,
     TestDeviceTest.class,
     WaitDeviceRecoveryTest.class,
     WifiHelperTest.class,
@@ -791,6 +794,7 @@ import org.junit.runners.Suite.SuiteClasses;
     StopServicesSetupTest.class,
     SystemUpdaterDeviceFlasherTest.class,
     TargetSetupErrorTest.class,
+    TemperatureThrottlingWaiterTest.class,
     TestAppInstallSetupTest.class,
     TestFilePushSetupTest.class,
     SwitchUserTargetPreparerTest.class,

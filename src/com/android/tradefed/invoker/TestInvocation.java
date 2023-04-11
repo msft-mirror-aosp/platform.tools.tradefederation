@@ -160,6 +160,7 @@ public class TestInvocation implements ITestInvocation {
     static final String RECOVERY_LOG_DEVICE_PATH = "/tmp/recovery.log";
     public static final String INVOCATION_EXTERNAL_DEPENDENCIES =
             "invocation-external-dependencies";
+    public static final long AVAILABILITY_CHECK_TIMEOUT = 180000L; // 3 minutes
 
     public enum Stage {
         ERROR("error"),
@@ -291,7 +292,10 @@ public class TestInvocation implements ITestInvocation {
             exception = e;
             CLog.e("Caught exception while running invocation");
             CLog.e(e);
-            bugreportName = TARGET_SETUP_ERROR_BUGREPORT_NAME;
+            // We let parent process capture the bugreport
+            if (!isSubprocess(config)) {
+                bugreportName = TARGET_SETUP_ERROR_BUGREPORT_NAME;
+            }
             if (e.getDeviceSerial() != null) {
                 badDevice = context.getDeviceBySerial(e.getDeviceSerial());
             }
@@ -1025,7 +1029,7 @@ public class TestInvocation implements ITestInvocation {
             TestInformation sharedTestInfo = null;
             if (sharedInfoObject != null) {
                 sharedTestInfo = (TestInformation) sharedInfoObject;
-                // During sharding we share everything except the invocation context
+                // During sharding we share everything except the invocation context & properties
                 info = TestInformation.createModuleTestInfo(sharedTestInfo, context);
             }
             if (info == null) {
@@ -1720,7 +1724,10 @@ public class TestInvocation implements ITestInvocation {
             RecoveryMode current = device.getRecoveryMode();
             device.setRecoveryMode(RecoveryMode.NONE);
             try {
-                boolean available = device.waitForDeviceAvailable();
+                // Cap availability check at 3 minutes instead of the device
+                // configured one because this is not tied to a reboot, we just
+                // need the device to be still online & reporting.
+                boolean available = device.waitForDeviceAvailable(AVAILABILITY_CHECK_TIMEOUT);
                 if (!available) {
                     throw new DeviceNotAvailableException(
                             String.format(

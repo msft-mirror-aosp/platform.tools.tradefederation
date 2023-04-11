@@ -78,6 +78,7 @@ import com.google.common.truth.Expect;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -2917,8 +2918,8 @@ public class TestDeviceTest {
 
     /** Test that a single user is handled by {@link TestDevice#listUsers()}. */
     @Test
-    public void testListUsersInfo_oneUser_preQ() throws Exception {
-        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
+    public void testListUsersInfo_oneUser_preT() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(32);
         final String listUsersCommand = "pm list users";
         injectShellResponse(
                 listUsersCommand, ArrayUtil.join("\r\n", "Users:", "UserInfo{0:Foo:13} running"));
@@ -2935,9 +2936,9 @@ public class TestDeviceTest {
 
     /** Test that a single user is handled by {@link TestDevice#listUsers()}. */
     @Test
-    public void testListUsersInfo_oneUser_postQ() throws Exception {
+    public void testListUsersInfo_oneUser_postT() throws Exception {
 
-        TestDevice testDevice = newTestDeviceForReleaseApiLevel(30);
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
         final String listUsersCommand = "cmd user list -v";
         injectShellResponse(
                 listUsersCommand,
@@ -3131,6 +3132,7 @@ public class TestDeviceTest {
     }
 
     @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
     public void testIsHeadlessSystemUserMode_cmdError_api34() throws Exception {
         TestDevice testDevice =
                 newTestDeviceForReleaseApiLevel(34)
@@ -3146,6 +3148,7 @@ public class TestDeviceTest {
     }
 
     @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
     public void testIsHeadlessSystemUserMode_invalidOutput_api34() throws Exception {
         TestDevice testDevice =
                 newTestDeviceForReleaseApiLevel(34)
@@ -4696,6 +4699,106 @@ public class TestDeviceTest {
                                 "true");
 
         assertThat(testDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported()).isTrue();
+    }
+
+    @Test
+    public void testCanSwitchToHeadlessSystemUser_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                HarnessRuntimeException.class, () -> testDevice.canSwitchToHeadlessSystemUser());
+    }
+
+    @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
+    public void testCanSwitchToHeadlessSystemUser_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2CommandError(
+                                "cmd user can-switch-to-headless-system-user",
+                                CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.canSwitchToHeadlessSystemUser());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
+    public void testCanSwitchToHeadlessSystemUser_invalidOutput() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2Command(
+                                "cmd user can-switch-to-headless-system-user", "D'OH!");
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.canSwitchToHeadlessSystemUser());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    @Test
+    public void testCanSwitchToHeadlessSystemUser_validOutput() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2Command(
+                                "cmd user can-switch-to-headless-system-user", "false");
+
+        assertThat(testDevice.canSwitchToHeadlessSystemUser()).isFalse();
+    }
+
+    @Test
+    public void testIsMainUserPermanentAdmin_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(HarnessRuntimeException.class, () -> testDevice.isMainUserPermanentAdmin());
+    }
+
+    @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
+    public void testIsMainUserPermanentAdmin_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2CommandError(
+                                "cmd user is-main-user-permanent-admin", CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class, () -> testDevice.isMainUserPermanentAdmin());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
+    public void testIsMainUserPermanentAdmin_invalidOutput() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2Command("cmd user is-main-user-permanent-admin", "D'OH!");
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class, () -> testDevice.isMainUserPermanentAdmin());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    @Test
+    public void testIsMainUserPermanentAdmin_validOutput() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2Command("cmd user is-main-user-permanent-admin", "true");
+
+        assertThat(testDevice.isMainUserPermanentAdmin()).isTrue();
     }
 
     /** Unit test for {@link TestDevice#isUserRunning(int)}. */

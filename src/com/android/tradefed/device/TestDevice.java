@@ -23,9 +23,7 @@ import com.android.ddmlib.RawImage;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.TimeoutException;
-import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
-import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
@@ -150,8 +148,6 @@ public class TestDevice extends NativeDevice {
     private static final String APEX_SUFFIX = ".apex";
     private static final String APEX_ARG = "--apex";
 
-    /** If the device is a Microdroid, this refers to the VM process. Otherwise, it is null. */
-    private Process mMicrodroidProcess = null;
     /** Contains a set of Microdroid instances running in this TestDevice, and their resources. */
     private Map<Process, MicrodroidTracker> mStartedMicrodroids = new HashMap<>();
 
@@ -1258,7 +1254,7 @@ public class TestDevice extends NativeDevice {
         ArrayList<String[]> lines = tokenizeListUsers();
         Map<Integer, UserInfo> result = new HashMap<Integer, UserInfo>(lines.size());
         for (String[] tokens : lines) {
-            if (getApiLevel() < 29) {
+            if (getApiLevel() < 33) {
                 UserInfo userInfo =
                         new UserInfo(
                                 /* userId= */ Integer.parseInt(tokens[1]),
@@ -1285,21 +1281,28 @@ public class TestDevice extends NativeDevice {
     }
 
     /**
-     * Tokenizes the output of 'pm list users'.
-     * The returned tokens for each user have the form: {"\tUserInfo", Integer.toString(id), name,
-     * Integer.toHexString(flag), "[running]"}; (the last one being optional)
-     * @return a list of arrays of strings, each element of the list representing the tokens
-     * for a user, or {@code null} if there was an error while tokenizing the adb command output.
+     * Tokenizes the output of 'pm list users' pre-T and 'cmd user list -v' post-T.
+     *
+     * <p>Pre-T: The returned tokens for each user have the form: {"\tUserInfo",
+     * Integer.toString(id), name, Integer.toHexString(flag), "[running]"}; (the last one being
+     * optional)
+     *
+     * <p>Post-T: The returned tokens for each user have the form: {"\tUserInfo", Integer
+     * .toString(id), name, Integer.toHexString(flag), "[running]", type}; (the last two being
+     * optional)
+     *
+     * @return a list of arrays of strings, each element of the list representing the tokens for a
+     *     user, or {@code null} if there was an error while tokenizing the adb command output.
      */
     private ArrayList<String[]> tokenizeListUsers() throws DeviceNotAvailableException {
-        if (getApiLevel() < 29) { // Android-Q
-            return tokenizeListUsersPreQ();
+        if (getApiLevel() < 33) { // Android-T
+            return tokenizeListUsersPreT();
         } else {
-            return tokenizeListUserPostQ();
+            return tokenizeListUserPostT();
         }
     }
 
-    private ArrayList<String[]> tokenizeListUserPostQ() throws DeviceNotAvailableException {
+    private ArrayList<String[]> tokenizeListUserPostT() throws DeviceNotAvailableException {
         String command = "cmd user list -v";
         String commandOutput = executeShellCommand(command);
         // Extract the id of all existing users.
@@ -1353,7 +1356,7 @@ public class TestDevice extends NativeDevice {
         return users;
     }
 
-    private ArrayList<String[]> tokenizeListUsersPreQ() throws DeviceNotAvailableException {
+    private ArrayList<String[]> tokenizeListUsersPreT() throws DeviceNotAvailableException {
         String command = "pm list users";
         String commandOutput = executeShellCommand(command);
         // Extract the id of all existing users.
@@ -1385,14 +1388,14 @@ public class TestDevice extends NativeDevice {
         int res = 0;
 
         for (int i = 0; i < arr.length - 1; i++) {
-            res |= getHexaDecmialValue(arr[i]);
+            res |= getHexaDecimalValue(arr[i]);
         }
-        res |= getHexaDecmialValue(str);
+        res |= getHexaDecimalValue(str);
 
         return res;
     }
 
-    private int getHexaDecmialValue(String flag) {
+    private int getHexaDecimalValue(String flag) {
         switch (flag) {
             case "PRIMARY":
                 return 0x00000001;
@@ -1488,8 +1491,24 @@ public class TestDevice extends NativeDevice {
     public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException {
         checkApiLevelAgainst("isHeadlessSystemUserMode", 29);
         return checkApiLevelAgainstNextRelease(34)
-                ? executeShellV2CommandThatReturnsBoolean("cmd user is-headless-system-user-mode")
+                ? executeShellV2CommandThatReturnsBooleanSafe(
+                        "cmd user is-headless-system-user-mode")
                 : getBooleanProperty("ro.fw.mu.headless_system_user", false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("canSwitchToHeadlessSystemUser", 34);
+        return executeShellV2CommandThatReturnsBooleanSafe(
+                "cmd user can-switch-to-headless-system-user");
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("isMainUserPermanentAdmin", 34);
+        return executeShellV2CommandThatReturnsBooleanSafe("cmd user is-main-user-permanent-admin");
     }
 
     /**
@@ -2402,18 +2421,6 @@ public class TestDevice extends NativeDevice {
         }
     }
 
-    private void setTestDeviceOptions(
-            TestDevice microdroidDevice, Map<String, String> deviceOptions) {
-        try {
-            OptionSetter setter = new OptionSetter(microdroidDevice.getOptions());
-            for (Map.Entry<String, String> optionsKeyValue : deviceOptions.entrySet()) {
-                setter.setOptionValue(optionsKeyValue.getKey(), optionsKeyValue.getValue());
-            }
-        } catch (ConfigurationException e) {
-            CLog.w(e);
-        }
-    }
-
     /**
      * Starts a Microdroid TestDevice.
      *
@@ -2578,7 +2585,7 @@ public class TestDevice extends NativeDevice {
         }
         // microdroid can be slow to become unavailable after root. (b/259208275)
         microdroid.getOptions().setAdbRootUnavailableTimeout(4 * 1000);
-        setTestDeviceOptions(microdroid, builder.mTestDeviceOptions);
+        microdroid.setTestDeviceOptions(builder.mTestDeviceOptions);
         microdroid.setMicrodroidProcess(process);
         MicrodroidTracker tracker = new MicrodroidTracker();
         tracker.executor = executor;
@@ -2708,21 +2715,15 @@ public class TestDevice extends NativeDevice {
         }
     }
 
-    /**
-     * Marks the TestDevice as microdroid and sets its CID.
-     *
-     * @param process Process of the Microdroid VM.
-     */
-    private void setMicrodroidProcess(Process process) {
-        mMicrodroidProcess = process;
-    }
-
-    /**
-     * @return Returns the Process of the Microdroid VM. If TestDevice is not a Microdroid, returns
-     *     null.
-     */
-    public Process getMicrodroidProcess() {
-        return mMicrodroidProcess;
+    // TODO (b/274941025): remove when shell commands using this method are merged in AOSP
+    private boolean executeShellV2CommandThatReturnsBooleanSafe(
+            String cmdFormat, Object... cmdArgs) {
+        try {
+            return executeShellV2CommandThatReturnsBoolean(cmdFormat, cmdArgs);
+        } catch (Exception e) {
+            CLog.e(e);
+            return false;
+        }
     }
 
     private boolean executeShellV2CommandThatReturnsBoolean(String cmdFormat, Object... cmdArgs)
