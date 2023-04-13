@@ -16,8 +16,6 @@
 
 package com.android.tradefed.targetprep;
 
-import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -36,20 +34,16 @@ import com.google.common.annotations.VisibleForTesting;
  * <p>In teardown, the device owner is removed.
  */
 @OptionClass(alias = "device-owner")
-public class DeviceOwnerTargetPreparer extends BaseTargetPreparer
-        implements IConfigurationReceiver {
+public class DeviceOwnerTargetPreparer extends BaseTargetPreparer {
 
     @VisibleForTesting
     static final String DEVICE_OWNER_COMPONENT_NAME_OPTION = "device-owner-component-name";
 
-    @VisibleForTesting
-    static final String HEADLESS_SYSTEM_USER_PROPERTY = "ro.fw.mu.headless_system_user";
+    @VisibleForTesting static final String UNINSTALL_OPTION = "uninstall";
 
     private static final int USER_SYSTEM = 0;
 
-    private IConfiguration mConfiguration;
     private ITestDevice mDevice;
-    private int mDeviceOwnerUserId;
 
     @Option(
             name = DEVICE_OWNER_COMPONENT_NAME_OPTION,
@@ -59,22 +53,21 @@ public class DeviceOwnerTargetPreparer extends BaseTargetPreparer
             importance = Option.Importance.IF_UNSET)
     private String mDeviceOwnerComponentName;
 
-    @Override
-    public void setConfiguration(IConfiguration configuration) {
-        if (configuration == null) {
-            throw new NullPointerException("configuration must not be null");
-        }
-        mConfiguration = configuration;
-    }
+    @Option(
+            name = UNINSTALL_OPTION,
+            description =
+                    "Whether to uninstall the package that the "
+                            + DEVICE_OWNER_COMPONENT_NAME_OPTION
+                            + " belongs to. This is necessary because device ownership must be"
+                            + " revoked before admin apps can be uninstalled.",
+            importance = Option.Importance.NEVER)
+    private boolean mUninstall = true;
 
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, DeviceNotAvailableException {
         mDevice = testInfo.getDevice();
-        mDeviceOwnerUserId = getDeviceOwnerUserId();
-
         mDevice.removeOwners();
-        switchToDeviceOwnerUser();
         removeSecondaryUsers();
         setDeviceOwner();
     }
@@ -82,37 +75,43 @@ public class DeviceOwnerTargetPreparer extends BaseTargetPreparer
     @Override
     public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
         removeDeviceOwner();
-    }
-
-    private void switchToDeviceOwnerUser() throws DeviceNotAvailableException {
-        mDevice.switchUser(mDeviceOwnerUserId);
-    }
-
-    private boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException {
-        return mDevice.getBooleanProperty(HEADLESS_SYSTEM_USER_PROPERTY, false);
-    }
-
-    private int getDeviceOwnerUserId() throws DeviceNotAvailableException {
-        if (isHeadlessSystemUserMode()) {
-            return mDevice.getPrimaryUserId();
-        } else {
-            return USER_SYSTEM;
+        if (mUninstall) {
+            String packageName = mDeviceOwnerComponentName.split("/")[0];
+            String result = mDevice.uninstallPackage(packageName);
+            if (result == null || !result.startsWith("Success")) {
+                throw new IllegalStateException(
+                        "Failed to uninstall admin package "
+                                + mDeviceOwnerComponentName
+                                + ": "
+                                + result);
+            }
         }
     }
 
     private void removeSecondaryUsers() throws DeviceNotAvailableException {
         for (Integer id : mDevice.listUsers()) {
-            if (id != USER_SYSTEM && id != mDeviceOwnerUserId && !mDevice.removeUser(id)) {
+            if (id != USER_SYSTEM && !mDevice.removeUser(id)) {
                 CLog.w("Failed to remove user %d", id);
             }
         }
     }
 
     private void setDeviceOwner() throws DeviceNotAvailableException {
-        mDevice.setDeviceOwner(mDeviceOwnerComponentName, mDeviceOwnerUserId);
+        String result =
+                mDevice.executeShellCommand(
+                        "dpm set-device-owner --user "
+                                + USER_SYSTEM
+                                + " '"
+                                + mDeviceOwnerComponentName
+                                + "'");
+        if (result == null || !result.startsWith("Success:")) {
+            throw new IllegalStateException("Unable to set device owner: " + result);
+        }
     }
 
     private void removeDeviceOwner() throws DeviceNotAvailableException {
-        mDevice.removeAdmin(mDeviceOwnerComponentName, mDeviceOwnerUserId);
+        for (int userId : mDevice.listUsers()) {
+            mDevice.removeAdmin(mDeviceOwnerComponentName, userId);
+        }
     }
 }
