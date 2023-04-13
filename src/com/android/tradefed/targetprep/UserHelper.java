@@ -29,19 +29,13 @@ import java.util.Map;
 final class UserHelper {
 
     private static final String TF_CREATED_USER = "tf_created_user";
-    // TODO(b/270604218): remove constant (and usage) if we decide to not automatically set it
+
     @VisibleForTesting static final String USER_SETUP_COMPLETE = "user_setup_complete";
 
     /** System property used to indicate which Android user is running the test. */
     static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
-    // TODO(b/270604218): merge both methods if CreateUserPreparer also provisions it
     public static int createUser(ITestDevice device, boolean reuseTestUser)
-            throws DeviceNotAvailableException, TargetSetupError {
-        return createUser(device, reuseTestUser, /* provisionUser= */ false);
-    }
-
-    public static int createUser(ITestDevice device, boolean reuseTestUser, boolean provisionUser)
             throws DeviceNotAvailableException, TargetSetupError {
         if (reuseTestUser) {
             Integer existingTFUser = findExistingTradefedUser(device);
@@ -54,10 +48,8 @@ final class UserHelper {
 
         try {
             int userId = device.createUser(TF_CREATED_USER);
-            if (provisionUser) {
-                CLog.d("Marking user %d as setup complete", userId);
-                device.setSetting(userId, "secure", USER_SETUP_COMPLETE, "1");
-            }
+            CLog.d("Marking user %d as setup complete", userId);
+            device.setSetting(userId, "secure", USER_SETUP_COMPLETE, "1");
             return userId;
         } catch (IllegalStateException e) {
             throw new TargetSetupError("Failed to create user.", e, device.getDeviceDescriptor());
