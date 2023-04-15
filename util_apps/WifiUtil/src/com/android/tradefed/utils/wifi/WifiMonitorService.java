@@ -22,9 +22,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
-
 import com.android.tradefed.utils.wifi.WifiConnector.WifiException;
-
 import java.io.BufferedReader;
 import java.io.Closeable;
 import java.io.File;
@@ -185,8 +183,8 @@ public class WifiMonitorService extends IntentService {
 
         final Intent intent = new Intent(context, WifiMonitorService.class);
         intent.putExtra(EXTRA_URL_TO_CHECK, urlToCheck);
-        final PendingIntent operation = PendingIntent.getService(context, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT);
+        final PendingIntent operation = PendingIntent.getService(
+            context, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         final AlarmManager alarm = (AlarmManager) context.getSystemService(
                 Context.ALARM_SERVICE);
         alarm.setRepeating(AlarmManager.ELAPSED_REALTIME, interval, interval, operation);
@@ -199,7 +197,8 @@ public class WifiMonitorService extends IntentService {
      */
     public static void disable(final Context context) {
         final Intent intent = new Intent(context, WifiMonitorService.class);
-        final PendingIntent operation = PendingIntent.getService(context, 0, intent, 0);
+        final PendingIntent operation = PendingIntent.getService(
+                context, 0, intent, PendingIntent.FLAG_IMMUTABLE);
         final AlarmManager alarm = (AlarmManager) context.getSystemService(
                 Context.ALARM_SERVICE);
         alarm.cancel(operation);
