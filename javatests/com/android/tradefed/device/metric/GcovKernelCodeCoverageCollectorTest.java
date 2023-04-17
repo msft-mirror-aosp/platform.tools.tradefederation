@@ -469,7 +469,9 @@ public class GcovKernelCodeCoverageCollectorTest {
 
     /** An {@link ITestInvocationListener} which reads test log data streams for verification. */
     private static class LogFileReader implements ITestInvocationListener {
-        private Map<String, ByteString> mLogs = new HashMap<String, ByteString>();
+        // Use MultiMap to allow for filename collisions. This is allowed in actual device testing
+        // when saving to disk by the framework adding a unique ID to each saved file.
+        private MultiMap<String, ByteString> mLogs = new MultiMap<String, ByteString>();
 
         /** Reads the contents of the {@code dataStream} and saves it in the logs. */
         @Override
@@ -481,13 +483,13 @@ public class GcovKernelCodeCoverageCollectorTest {
             }
         }
 
-        Map<String, ByteString> getLogs() {
-            return new HashMap<String, ByteString>(mLogs);
+        List<ByteString> getLogs() {
+            return mLogs.values();
         }
 
         List<String> getLogFilenames() {
             List<String> fileNames = new ArrayList<String>();
-            for (Map.Entry<String, ByteString> entry : mLogs.entrySet()) {
+            for (Map.Entry<String, ByteString> entry : mLogs.entries()) {
                 fileNames.add(entry.getKey());
             }
             return fileNames;
