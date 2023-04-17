@@ -370,6 +370,15 @@ public class TestInvocation implements ITestInvocation {
                         bugreportName = INVOCATION_ENDED_BUGREPORT_NAME;
                     }
                 }
+                if (exception == null) {
+                    try (CloseableTraceScope ignore =
+                            new CloseableTraceScope("responsiveness_check")) {
+                        exception = bareMinimumResponsiveness(context.getDevices());
+                    }
+                    if (exception != null) {
+                        bugreportName = null;
+                    }
+                }
                 if (bugreportName != null) {
                     try (CloseableTraceScope ignore =
                             new CloseableTraceScope(InvocationMetricKey.bugreport.name())) {
@@ -1685,6 +1694,33 @@ public class TestInvocation implements ITestInvocation {
             CLog.e(e);
             config.getCommandOptions().setReportInvocationComplete(false);
         }
+    }
+
+    private DeviceNotAvailableException bareMinimumResponsiveness(List<ITestDevice> devices) {
+        for (ITestDevice device : devices) {
+            if (device == null) {
+                continue;
+            }
+            if (device.getIDevice() instanceof StubDevice) {
+                continue;
+            }
+            if (device.isStateBootloaderOrFastbootd()) {
+                return null;
+            }
+            if (TestDeviceState.RECOVERY.equals(device.getDeviceState())) {
+                return null;
+            }
+            RecoveryMode current = device.getRecoveryMode();
+            device.setRecoveryMode(RecoveryMode.NONE);
+            try {
+                device.getApiLevel();
+            } catch (DeviceNotAvailableException e) {
+                return e;
+            } finally {
+                device.setRecoveryMode(current);
+            }
+        }
+        return null;
     }
 
     /**
