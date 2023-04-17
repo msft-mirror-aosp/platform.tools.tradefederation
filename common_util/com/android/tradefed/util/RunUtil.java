@@ -727,7 +727,9 @@ public class RunUtil implements IRunUtil {
                     temporaryStdout = true;
                     stdoutFile =
                             FileUtil.createTempFile(
-                                    String.format("temporary-stdout-%s", mProcessBuilder.command()),
+                                    String.format(
+                                            "temporary-stdout-%s",
+                                            mProcessBuilder.command().get(0)),
                                     ".txt");
                     mProcessBuilder.redirectOutput(Redirect.appendTo(stdoutFile));
                 }
@@ -735,7 +737,9 @@ public class RunUtil implements IRunUtil {
                     temporaryErrOut = true;
                     stderrFile =
                             FileUtil.createTempFile(
-                                    String.format("temporary-errout-%s", mProcessBuilder.command()),
+                                    String.format(
+                                            "temporary-errout-%s",
+                                            mProcessBuilder.command().get(0)),
                                     ".txt");
                     mProcessBuilder.redirectError(Redirect.appendTo(stderrFile));
                 }
