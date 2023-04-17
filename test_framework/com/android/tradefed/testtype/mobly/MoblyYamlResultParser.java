@@ -30,10 +30,9 @@ import com.google.common.collect.ImmutableList;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +48,7 @@ public class MoblyYamlResultParser {
     private long mRunEndTime;
     private boolean mEnded;
     private boolean mRunFailed;
+    private StringBuilder mYamlString = new StringBuilder();
 
     public MoblyYamlResultParser(ITestInvocationListener listener) {
         mListenersBuilder.add(listener);
@@ -59,23 +59,26 @@ public class MoblyYamlResultParser {
                     IllegalAccessException,
                     InstantiationException,
                     IOException {
-        InputStreamReader isr = new InputStreamReader(inputStream);
-        BufferedReader in = new BufferedReader(isr);
-        while (in.ready() == true) {
-            String line = null;
-            String yaml_string = "";
-            while (true) {
-                line = in.readLine();
-                if (line == null) continue;
-                if (line.equals("...")) break;
-                yaml_string = yaml_string + line + "\n";
-            }
-            Yaml yaml = new Yaml(new SafeConstructor());
-            ArrayList<ITestResult> resultCache = new ArrayList<ITestResult>();
-            for (Object doc : yaml.loadAll(yaml_string)) {
+        if (mEnded)
+            return mEnded;
+        int available = inputStream.available();
+        if (available == 0)
+            return false;
+        byte[] bytes = new byte[available];
+        inputStream.read(bytes);
+        mYamlString.append(new String(bytes, 0, available, StandardCharsets.UTF_8));
+        int yamlEnd = mYamlString.lastIndexOf("\n...");
+        if (yamlEnd == -1)
+            return false;
+        ArrayList<ITestResult> resultCache = new ArrayList<>();
+        Yaml yaml = new Yaml(new SafeConstructor());
+        try {
+            for (Object doc : yaml.loadAll(mYamlString.substring(0, yamlEnd))) {
                 Map<String, Object> docMap = (Map<String, Object>) doc;
                 resultCache.add(parseDocumentMap(docMap));
             }
+        } finally {
+            mYamlString.delete(0, yamlEnd + 4);
             reportToListeners(mListenersBuilder.build(), resultCache);
         }
         return mEnded;
