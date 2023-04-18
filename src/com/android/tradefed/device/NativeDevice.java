@@ -75,7 +75,6 @@ import com.android.tradefed.util.ProcessInfo;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.SizeLimitedOutputStream;
-import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.StringEscapeUtils;
 import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.ZipUtil2;
@@ -83,8 +82,6 @@ import com.android.tradefed.util.ZipUtil2;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.errorprone.annotations.FormatMethod;
-
-import org.apache.commons.compress.archivers.zip.ZipFile;
 
 import java.io.File;
 import java.io.FilenameFilter;
@@ -125,15 +122,6 @@ public class NativeDevice
 
     protected static final String SD_CARD = "/sdcard/";
     protected static final String STORAGE_EMULATED = "/storage/emulated/";
-    /**
-     * Allow pauses of up to 2 minutes while receiving bugreport.
-     * <p/>
-     * Note that dumpsys may pause up to a minute while waiting for unresponsive components.
-     * It still should bail after that minute, if it will ever terminate on its own.
-     */
-    private static final int BUGREPORT_TIMEOUT = 2 * 60 * 1000;
-    private static final String BUGREPORT_CMD = "bugreport";
-    private static final String BUGREPORTZ_CMD = "bugreportz";
 
     /** On-device path where we expect ANRs to be generated. */
     private static final String ANRS_PATH = "/data/anr";
@@ -159,7 +147,6 @@ public class NativeDevice
             Pattern.compile(
                     // Fs 1K-blks Used    Available Use%      Mounted on
                     "^/(\\S+)\\s+\\d+\\s+\\d+\\s+(\\d+)\\s+\\d+%\\s+/\\S*$", Pattern.MULTILINE);
-    private static final Pattern BUGREPORTZ_RESPONSE_PATTERN = Pattern.compile("(OK:)(.*)");
 
     protected static final long MAX_HOST_DEVICE_TIME_OFFSET = 5 * 1000;
 
@@ -2877,43 +2864,7 @@ public class NativeDevice
      */
     @Override
     public InputStreamSource getBugreport() {
-        if (getApiLevelSafe() < 24) {
-            InputStreamSource bugreport = getBugreportInternal();
-            if (bugreport == null) {
-                // Safe call so we don't return null but an empty resource.
-                return new ByteArrayInputStreamSource("".getBytes());
-            }
-            return bugreport;
-        }
-        CLog.d("Api level above 24, using bugreportz instead.");
-        File mainEntry = null;
-        File bugreportzFile = null;
-        long startTime = System.currentTimeMillis();
-        try {
-            bugreportzFile = getBugreportzInternal();
-            if (bugreportzFile == null) {
-                // return empty buffer
-                return new ByteArrayInputStreamSource("".getBytes());
-            }
-            try (ZipFile zip = new ZipFile(bugreportzFile)) {
-                // We get the main_entry.txt that contains the bugreport name.
-                mainEntry = ZipUtil2.extractFileFromZip(zip, "main_entry.txt");
-                String bugreportName = FileUtil.readStringFromFile(mainEntry).trim();
-                CLog.d("bugreport name: '%s'", bugreportName);
-                File bugreport = ZipUtil2.extractFileFromZip(zip, bugreportName);
-                return new FileInputStreamSource(bugreport, true);
-            }
-        } catch (IOException e) {
-            CLog.e("Error while unzipping bugreportz");
-            CLog.e(e);
-            return new ByteArrayInputStreamSource("corrupted bugreport.".getBytes());
-        } finally {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
-            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
-            FileUtil.deleteFile(bugreportzFile);
-            FileUtil.deleteFile(mainEntry);
-        }
+        return null;
     }
 
     /**
@@ -2921,32 +2872,7 @@ public class NativeDevice
      */
     @Override
     public boolean logBugreport(String dataName, ITestLogger listener) {
-        InputStreamSource bugreport = null;
-        LogDataType type = null;
-        try {
-            bugreport = getBugreportz();
-            type = LogDataType.BUGREPORTZ;
-            // Limit fallback to older devices
-            if (!TestDeviceState.RECOVERY.equals(getDeviceState())) {
-                if (bugreport == null && getApiLevelSafe() < 24) {
-                    CLog.d("Bugreportz failed, attempting bugreport collection instead.");
-                    bugreport = getBugreportInternal();
-                    type = LogDataType.BUGREPORT;
-                }
-            }
-            // log what we managed to capture.
-            if (bugreport != null && bugreport.size() > 0L) {
-                listener.testLog(dataName, type, bugreport);
-                return true;
-            }
-        } finally {
-            StreamUtil.cancel(bugreport);
-        }
-        CLog.d(
-                "logBugreport() was not successful in collecting and logging the bugreport "
-                        + "for device %s",
-                getSerialNumber());
-        return false;
+        return true;
     }
 
     /**
@@ -2954,41 +2880,7 @@ public class NativeDevice
      */
     @Override
     public Bugreport takeBugreport() {
-        File bugreportFile = null;
-        int apiLevel = getApiLevelSafe();
-        if (apiLevel == UNKNOWN_API_LEVEL) {
-            return null;
-        }
-        long startTime = System.currentTimeMillis();
-        try {
-            if (apiLevel >= 24) {
-                CLog.d("Api level above 24, using bugreportz.");
-                bugreportFile = getBugreportzInternal();
-                if (bugreportFile != null) {
-                    return new Bugreport(bugreportFile, true);
-                }
-                return null;
-            }
-            // fall back to regular bugreport
-            InputStreamSource bugreport = getBugreportInternal();
-            if (bugreport == null) {
-                CLog.e("Error when collecting the bugreport.");
-                return null;
-            }
-            try {
-                bugreportFile = FileUtil.createTempFile("bugreport", ".txt");
-                FileUtil.writeToFile(bugreport.createInputStream(), bugreportFile);
-                return new Bugreport(bugreportFile, false);
-            } catch (IOException e) {
-                CLog.e("Error when writing the bugreport file");
-                CLog.e(e);
-            }
-            return null;
-        } finally {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
-            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
-        }
+        return null;
     }
 
     /**
@@ -2996,95 +2888,7 @@ public class NativeDevice
      */
     @Override
     public InputStreamSource getBugreportz() {
-        if (getApiLevelSafe() < 24) {
-            return null;
-        }
-        CLog.d("Start getBugreportz()");
-        long startTime = System.currentTimeMillis();
-        try {
-            File bugreportZip = getBugreportzInternal();
-            if (bugreportZip != null) {
-                return new FileInputStreamSource(bugreportZip, true);
-            }
-            return null;
-        } finally {
-            CLog.d("Done with getBugreportz()");
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
-            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
-        }
-    }
-
-    /** Internal Helper method to get the bugreportz zip file as a {@link File}. */
-    @VisibleForTesting
-    protected File getBugreportzInternal() {
-        CollectingOutputReceiver receiver = new CollectingOutputReceiver();
-        // Does not rely on {@link ITestDevice#executeAdbCommand(String...)} because it does not
-        // provide a timeout.
-        try {
-            executeShellCommand(
-                    BUGREPORTZ_CMD,
-                    receiver,
-                    getOptions().getBugreportzTimeout(),
-                    TimeUnit.MILLISECONDS,
-                    0 /* don't retry */);
-            String output = receiver.getOutput().trim();
-            Matcher match = BUGREPORTZ_RESPONSE_PATTERN.matcher(output);
-            if (!match.find()) {
-                CLog.e("Something went went wrong during bugreportz collection: '%s'", output);
-                return null;
-            } else {
-                String remoteFilePath = match.group(2);
-                if (Strings.isNullOrEmpty(remoteFilePath)) {
-                    CLog.e("Invalid bugreportz path found from output: %s", output);
-                    return null;
-                }
-                File zipFile = null;
-                try {
-                    if (!doesFileExist(remoteFilePath)) {
-                        CLog.e("Did not find bugreportz at: '%s'", remoteFilePath);
-                        return null;
-                    }
-                    // Create a placeholder to replace the file
-                    zipFile = FileUtil.createTempFile("bugreportz", ".zip");
-                    // pull
-                    pullFile(remoteFilePath, zipFile);
-                    String bugreportDir =
-                            remoteFilePath.substring(0, remoteFilePath.lastIndexOf('/'));
-                    if (!bugreportDir.isEmpty()) {
-                        // clean bugreport files directory on device
-                        deleteFile(String.format("%s/*", bugreportDir));
-                    }
-
-                    return zipFile;
-                } catch (IOException e) {
-                    CLog.e("Failed to create the temporary file.");
-                    return null;
-                }
-            }
-        } catch (DeviceNotAvailableException e) {
-            CLog.e("Device %s became unresponsive while retrieving bugreportz", getSerialNumber());
-            CLog.e(e);
-        }
         return null;
-    }
-
-    protected InputStreamSource getBugreportInternal() {
-        CollectingByteOutputReceiver receiver = new CollectingByteOutputReceiver();
-        try {
-            executeShellCommand(
-                    BUGREPORT_CMD,
-                    receiver,
-                    BUGREPORT_TIMEOUT,
-                    TimeUnit.MILLISECONDS,
-                    0 /* don't retry */);
-        } catch (DeviceNotAvailableException e) {
-            // Log, but don't throw, so the caller can get the bugreport contents even
-            // if the device goes away
-            CLog.e("Device %s became unresponsive while retrieving bugreport", getSerialNumber());
-            return null;
-        }
-        return new ByteArrayInputStreamSource(receiver.getOutput());
     }
 
     /** {@inheritDoc} */
@@ -4718,7 +4522,7 @@ public class NativeDevice
         return true;
     }
 
-    private int getApiLevelSafe() {
+    protected int getApiLevelSafe() {
         try {
             return getApiLevel();
         } catch (DeviceNotAvailableException e) {
