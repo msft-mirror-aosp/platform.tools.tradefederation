@@ -383,6 +383,11 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         return mBaseDeviceType;
     }
 
+    @Override
+    public void setBaseDeviceTypeRequested(BaseDeviceType type) {
+        mBaseDeviceType = type;
+    }
+
     /**
      * Sets the minimum battery level
      */
