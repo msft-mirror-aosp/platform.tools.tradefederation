@@ -545,7 +545,7 @@ public class AndroidJUnitTest extends InstrumentationTest
         try {
             CLog.d("Attempting to push filters to %s", destination);
             boolean filterDirExists = device.doesFileExist(mTestFilterDir);
-            if (!device.pushFile(testFile, destination)) {
+            if (!device.pushFile(testFile, destination, true)) {
                 String message =
                         String.format(
                                 "Failed to push file %s to %s for %s in pushTestFile",
