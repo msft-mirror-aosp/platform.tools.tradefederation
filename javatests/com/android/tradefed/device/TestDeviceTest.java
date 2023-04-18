@@ -58,13 +58,17 @@ import com.android.tradefed.device.contentprovider.ContentProviderHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.HostOptions;
 import com.android.tradefed.host.IHostOptions;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
+import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.ArrayUtil;
+import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -74,6 +78,7 @@ import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.ZipUtil2;
+
 import com.google.common.truth.Expect;
 
 import org.junit.Assert;
@@ -397,11 +402,6 @@ public class TestDeviceTest {
         when(mMockStateMonitor.waitForDeviceNotAvailable(Mockito.anyLong()))
                 .thenReturn(Boolean.TRUE);
         when(mMockStateMonitor.waitForDeviceOnline()).thenReturn(mMockIDevice);
-    }
-
-    /** Verify Mockito expectations for a successful adb root call */
-    private void verifyEnableAdbRootExpectations() throws Exception {
-        verifyShellResponse("id", 2);
     }
 
     /**
@@ -1485,10 +1485,6 @@ public class TestDeviceTest {
     /** Convenience method for setting up mMockIDevice to support runtime permission */
     private void setMockIDeviceRuntimePermissionSupported() {
         setGetPropertyExpectation(SDK_VERSION, "23");
-    }
-
-    private void verifyMockIDeviceRuntimePermissionSupported() {
-        verifyGetPropertyExpectation(SDK_VERSION, "23", 1);
     }
 
     private void verifyMockIDeviceRuntimePermissionSupported(int times) {
@@ -6257,6 +6253,392 @@ public class TestDeviceTest {
         assertThat(testDevice.checkApiLevelAgainstNextRelease(41)).isTrue();
         assertThat(testDevice.checkApiLevelAgainstNextRelease(42)).isTrue();
         assertThat(testDevice.checkApiLevelAgainstNextRelease(43)).isTrue();
+    }
+
+    /** Unit test for {@link TestDevice#getBugreportz()}. */
+    @Test
+    public void testGetBugreportz_fails() {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+
+                    @Override
+                    protected File getBugreportzInternal() {
+                        return null;
+                    }
+
+                    @Override
+                    public IFileEntry getFileEntry(String path) throws DeviceNotAvailableException {
+                        return null;
+                    }
+                };
+        FileInputStreamSource f = null;
+        try {
+            f = (FileInputStreamSource) mTestDevice.getBugreportz();
+            assertNull(f);
+        } finally {
+            StreamUtil.cancel(f);
+            if (f != null) {
+                f.cleanFile();
+            }
+        }
+    }
+
+    @Test
+    public void testGetBugreportz_fallBack_validation() throws Exception {
+        IFileEntry entryMock = mock(IFileEntry.class);
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+
+                    @Override
+                    protected File getBugreportzInternal() {
+                        return null;
+                    }
+
+                    @Override
+                    public IFileEntry getFileEntry(String path) throws DeviceNotAvailableException {
+                        return entryMock;
+                    }
+
+                    @Override
+                    public File pullFile(String remoteFilePath, int userId)
+                            throws DeviceNotAvailableException {
+                        try {
+                            // Return an empty zip file for the partial bugreportz
+                            return FileUtil.createTempFile("bugreportz-test", ".zip");
+                        } catch (IOException e) {
+                            throw new RuntimeException();
+                        }
+                    }
+                };
+        IFileEntry childNode = mock(IFileEntry.class);
+        when(entryMock.getChildren(false)).thenReturn(Arrays.asList(childNode));
+        when(childNode.getName()).thenReturn("bugreport-test-partial.zip");
+        FileInputStreamSource f = null;
+
+        try {
+            f = (FileInputStreamSource) mTestDevice.getBugreportz();
+            assertNull(f);
+        } finally {
+            StreamUtil.cancel(f);
+            if (f != null) {
+                f.cleanFile();
+            }
+        }
+    }
+
+    /** Unit test for {@link NativeDevice#logBugreport(String, ITestLogger)}. */
+    @Test
+    public void testTestLogBugreport() {
+        final String dataName = "test";
+        final InputStreamSource stream = new ByteArrayInputStreamSource("bugreportz".getBytes());
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public InputStreamSource getBugreportz() {
+                        return stream;
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+                };
+        ITestLogger listener = mock(ITestLogger.class);
+
+        assertTrue(mTestDevice.logBugreport(dataName, listener));
+
+        verify(listener).testLog(dataName, LogDataType.BUGREPORTZ, stream);
+    }
+
+    /** Unit test for {@link NativeDevice#logBugreport(String, ITestLogger)}. */
+    @Test
+    public void testTestLogBugreport_oldDevice() {
+        final String dataName = "test";
+        final InputStreamSource stream = new ByteArrayInputStreamSource("bugreport".getBytes());
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public InputStreamSource getBugreportz() {
+                        // Older device do not support bugreportz and return null
+                        return null;
+                    }
+
+                    @Override
+                    public InputStreamSource getBugreportInternal() {
+                        return stream;
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        // no bugreportz support
+                        return 23;
+                    }
+                };
+        ITestLogger listener = mock(ITestLogger.class);
+
+        assertTrue(mTestDevice.logBugreport(dataName, listener));
+
+        verify(listener).testLog(dataName, LogDataType.BUGREPORT, stream);
+    }
+
+    /** Unit test for {@link NativeDevice#logBugreport(String, ITestLogger)}. */
+    @Test
+    public void testTestLogBugreport_fail() {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public InputStreamSource getBugreportz() {
+                        return null;
+                    }
+
+                    @Override
+                    protected InputStreamSource getBugreportInternal() {
+                        return null;
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 23;
+                    }
+                };
+        ITestLogger listener = mock(ITestLogger.class);
+
+        assertFalse(mTestDevice.logBugreport("test", listener));
+    }
+
+    /** Unit test for {@link NativeDevice#takeBugreport()}. */
+    @Test
+    public void testTakeBugreport_apiLevelFail() {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        throw new DeviceNotAvailableException("test", "serial");
+                    }
+                };
+        // If we can't check API level it should return null.
+        assertNull(mTestDevice.takeBugreport());
+    }
+
+    /** Unit test for {@link NativeDevice#takeBugreport()}. */
+    @Test
+    public void testTakeBugreport_oldDevice() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 19;
+                    }
+                };
+        Bugreport report = mTestDevice.takeBugreport();
+        try {
+            assertNotNull(report);
+            // older device report a non zipped bugreport
+            assertFalse(report.isZipped());
+        } finally {
+            report.close();
+        }
+    }
+
+    /** Unit test for {@link NativeDevice#takeBugreport()}. */
+    @Test
+    public void testTakeBugreport() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+
+                    @Override
+                    protected File getBugreportzInternal() {
+                        try {
+                            return FileUtil.createTempFile("bugreportz", ".zip");
+                        } catch (IOException e) {
+                            return null;
+                        }
+                    }
+                };
+        Bugreport report = mTestDevice.takeBugreport();
+        try {
+            assertNotNull(report);
+            assertTrue(report.isZipped());
+        } finally {
+            report.close();
+        }
+    }
+
+    @Test
+    public void testGetBugreport_deviceUnavail() throws Exception {
+        final String expectedOutput = "this is the output\r\n in two lines\r\n";
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputShellResponse,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
+                            throws DeviceNotAvailableException {
+                        String fakeRep = expectedOutput;
+                        receiver.addOutput(fakeRep.getBytes(), 0, fakeRep.getBytes().length);
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 22;
+                    }
+                };
+
+        // FIXME: this isn't actually causing a DeviceNotAvailableException to be thrown
+        doThrow(new DeviceNotAvailableException("test", "serial"))
+                .when(mMockRecovery)
+                .recoverDevice(Mockito.eq(mMockStateMonitor), Mockito.eq(false));
+
+        assertEquals(
+                expectedOutput,
+                StreamUtil.getStringFromStream(mTestDevice.getBugreport().createInputStream()));
+    }
+
+    @Test
+    public void testGetBugreport_compatibility_deviceUnavail() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputShellResponse,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
+                            throws DeviceNotAvailableException {
+                        throw new DeviceNotAvailableException("test", "serial");
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+
+                    @Override
+                    public IFileEntry getFileEntry(String path) throws DeviceNotAvailableException {
+                        return null;
+                    }
+                };
+
+        assertEquals(0, mTestDevice.getBugreport().size());
+    }
+
+    @Test
+    public void testGetBugreport_deviceUnavail_fallback() throws Exception {
+        final IFileEntry fakeEntry = mock(IFileEntry.class);
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputShellResponse,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
+                            throws DeviceNotAvailableException {
+                        throw new DeviceNotAvailableException("test", "serial");
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+
+                    @Override
+                    public IFileEntry getFileEntry(String path) throws DeviceNotAvailableException {
+                        return fakeEntry;
+                    }
+
+                    @Override
+                    public File pullFile(String remoteFilePath) throws DeviceNotAvailableException {
+                        try {
+                            return FileUtil.createTempFile("bugreport", ".txt");
+                        } catch (IOException e) {
+                            return null;
+                        }
+                    }
+                };
+        List<IFileEntry> list = new ArrayList<>();
+        list.add(fakeEntry);
+        when(fakeEntry.getChildren(false)).thenReturn(list);
+        when(fakeEntry.getName()).thenReturn("bugreport-NYC-2016-08-17-10-17-00.tmp");
+
+        InputStreamSource res = null;
+        try {
+            res = mTestDevice.getBugreport();
+            assertNotNull(res);
+        } finally {
+            StreamUtil.cancel(res);
+        }
+    }
+
+    /** Unit test for {@link NativeDevice#getBugreportz()}. */
+    @Test
+    public void testGetBugreportz() throws IOException {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputShellResponse,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
+                            throws DeviceNotAvailableException {
+                        String fakeRep =
+                                "OK:/data/0/com.android.shell/bugreports/bugreport1970-10-27.zip";
+                        receiver.addOutput(fakeRep.getBytes(), 0, fakeRep.getBytes().length);
+                    }
+
+                    @Override
+                    public boolean doesFileExist(String destPath)
+                            throws DeviceNotAvailableException {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean pullFile(String remoteFilePath, File localFile)
+                            throws DeviceNotAvailableException {
+                        return true;
+                    }
+
+                    @Override
+                    public void deleteFile(String deviceFilePath)
+                            throws DeviceNotAvailableException {
+                        assertEquals("/data/0/com.android.shell/bugreports/*", deviceFilePath);
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+                };
+        FileInputStreamSource f = null;
+        try {
+            f = (FileInputStreamSource) mTestDevice.getBugreportz();
+            assertNotNull(f);
+            assertTrue(f.createInputStream().available() == 0);
+        } finally {
+            StreamUtil.cancel(f);
+            if (f != null) {
+                f.cleanFile();
+            }
+        }
     }
 
     private void setGetPropertyExpectation(String property, String value) {
