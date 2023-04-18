@@ -24,6 +24,7 @@ import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.TimeoutException;
 import com.android.tradefed.config.GlobalConfiguration;
+import com.android.tradefed.device.IDeviceSelection.BaseDeviceType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
@@ -35,6 +36,7 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
@@ -2795,8 +2797,11 @@ public class TestDevice extends NativeDevice {
                     forwardFileToLog(logPath, "MicrodroidLog");
                 });
 
-        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
-        TestDevice microdroid = (TestDevice) deviceManager.forceAllocateDevice(microdroidSerial);
+        DeviceSelectionOptions microSelection = new DeviceSelectionOptions();
+        microSelection.setSerial(microdroidSerial);
+        microSelection.setBaseDeviceTypeRequested(BaseDeviceType.NATIVE_DEVICE);
+
+        NativeDevice microdroid = (NativeDevice) deviceManager.allocateDevice(microSelection);
         if (microdroid == null) {
             process.destroy();
             try {
@@ -2811,8 +2816,19 @@ public class TestDevice extends NativeDevice {
         }
         // microdroid can be slow to become unavailable after root. (b/259208275)
         microdroid.getOptions().setAdbRootUnavailableTimeout(4 * 1000);
+        builder.mTestDeviceOptions.put("enable-device-connection", "true");
+        builder.mTestDeviceOptions.put(
+                TestDeviceOptions.INSTANCE_TYPE_OPTION, getOptions().getInstanceType().toString());
         microdroid.setTestDeviceOptions(builder.mTestDeviceOptions);
+        ((IManagedTestDevice) microdroid).setIDevice(new RemoteAvdIDevice(microdroidSerial));
+        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
         microdroid.setMicrodroidProcess(process);
+        try {
+            // TODO: Pass the build info
+            microdroid.initializeConnection(null, null);
+        } catch (DeviceNotAvailableException | TargetSetupError e) {
+            CLog.e(e);
+        }
         MicrodroidTracker tracker = new MicrodroidTracker();
         tracker.executor = executor;
         mStartedMicrodroids.put(process, tracker);
@@ -2906,7 +2922,7 @@ public class TestDevice extends NativeDevice {
      */
     public void shutdownMicrodroid(@Nonnull ITestDevice microdroidDevice)
             throws DeviceNotAvailableException {
-        Process process = ((TestDevice) microdroidDevice).getMicrodroidProcess();
+        Process process = ((NativeDevice) microdroidDevice).getMicrodroidProcess();
         if (process == null) {
             throw new IllegalArgumentException("Process is null. TestDevice is not a Microdroid. ");
         }
