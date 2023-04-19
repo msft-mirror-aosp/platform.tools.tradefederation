@@ -30,8 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.annotation.Nullable;
-
 /**
  * Provides an reliable and slightly higher level API to a ddmlib {@link IDevice}.
  * <p/>
@@ -144,7 +142,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
      *     recovered.
      */
-    @Nullable
     public String installPackage(File packageFile, boolean reinstall, String... extraArgs)
             throws DeviceNotAvailableException;
 
@@ -165,7 +162,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws UnsupportedOperationException if runtime permission is not supported by the platform
      *     on device.
      */
-    @Nullable
     public String installPackage(
             File packageFile, boolean reinstall, boolean grantPermissions, String... extraArgs)
             throws DeviceNotAvailableException;
@@ -182,7 +178,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
      *     recovered.
      */
-    @Nullable
     public String installPackageForUser(
             File packageFile, boolean reinstall, int userId, String... extraArgs)
             throws DeviceNotAvailableException;
@@ -205,7 +200,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws UnsupportedOperationException if runtime permission is not supported by the platform
      *     on device.
      */
-    @Nullable
     public String installPackageForUser(
             File packageFile,
             boolean reinstall,
@@ -222,7 +216,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
      *     recovered.
      */
-    @Nullable
     public String uninstallPackage(String packageName) throws DeviceNotAvailableException;
 
     /**
@@ -234,7 +227,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
      *     recovered.
      */
-    @Nullable
     public String uninstallPackageForUser(String packageName, int userId)
             throws DeviceNotAvailableException;
 
@@ -253,7 +245,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws UnsupportedOperationException if runtime permission is not supported by the platform
      *     on device.
      */
-    @Nullable
     public default String installPackages(
             List<File> packageFiles, boolean reinstall, String... extraArgs)
             throws DeviceNotAvailableException {
@@ -280,7 +271,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws UnsupportedOperationException if runtime permission is not supported by the platform
      *     on device.
      */
-    @Nullable
     public default String installPackages(
             List<File> packageFiles,
             boolean reinstall,
@@ -306,7 +296,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws UnsupportedOperationException if runtime permission is not supported by the platform
      *     on device.
      */
-    @Nullable
     public default String installPackagesForUser(
             List<File> packageFiles, boolean reinstall, int userId, String... extraArgs)
             throws DeviceNotAvailableException {
@@ -333,7 +322,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws UnsupportedOperationException if runtime permission is not supported by the platform
      *     on device.
      */
-    @Nullable
     public default String installPackagesForUser(
             List<File> packageFiles,
             boolean reinstall,
@@ -364,7 +352,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws UnsupportedOperationException if runtime permission is not supported by the platform
      *     on device.
      */
-    @Nullable
     public default String installRemotePackages(
             List<String> remoteApkPaths,
             boolean reinstall,
@@ -390,7 +377,6 @@ public interface ITestDevice extends INativeDevice {
      * @throws UnsupportedOperationException if runtime permission is not supported by the platform
      *     on device.
      */
-    @Nullable
     public default String installRemotePackages(
             List<String> remoteApkPaths, boolean reinstall, String... extraArgs)
             throws DeviceNotAvailableException {
@@ -900,13 +886,7 @@ public interface ITestDevice extends INativeDevice {
      * @return the userId of the primary user if there is one, and null if there is no primary user.
      * @throws DeviceNotAvailableException
      * @throws DeviceRuntimeException if the output from the device is not as expected.
-     * @deprecated The concept of primary user doesn't make sense anymore because some devices (like
-     *     automotive infotainment head units) use headless system user mode, where there is no
-     *     primary or secondary users. The system user (which is the primary user) runs in the
-     *     background, while the "real" user runs in the foreground. Callers should use {@link
-     *     #getCurrentUser()} or {@link #getMainUserId()} instead.
      */
-    @Deprecated
     public Integer getPrimaryUserId() throws DeviceNotAvailableException;
 
     /**
