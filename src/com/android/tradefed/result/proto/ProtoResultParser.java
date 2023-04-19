@@ -584,7 +584,9 @@ public class ProtoResultParser {
                     LogDataType type = file.getType();
                     if (mReportLogs) {
                         try (InputStreamSource source = new FileInputStreamSource(path)) {
-                            log("Logging %s [type: %s]from subprocess: %s ", entry.getKey(), type, file.getPath());
+                            log(
+                                    "Logging %s [type: %s]from subprocess: %s ",
+                                    entry.getKey(), type, file.getPath());
                             logger.testLog(mFilePrefix + entry.getKey(), type, source);
                         }
                     }
@@ -603,8 +605,13 @@ public class ProtoResultParser {
                     }
                     if (mReportLogs) {
                         log(
-                                "Logging %s [type: %s] from subprocess. url: %s, path: %s [exists: %s]",
-                                entry.getKey(),file.getType(), file.getUrl(), file.getPath(), path.exists());
+                                "Logging %s [type: %s] from subprocess. url: %s, path: %s [exists:"
+                                        + " %s]",
+                                entry.getKey(),
+                                file.getType(),
+                                file.getUrl(),
+                                file.getPath(),
+                                path.exists());
                         logger.logAssociation(mFilePrefix + entry.getKey(), file);
                     }
                 }
@@ -738,6 +745,7 @@ public class ProtoResultParser {
                 }
             }
         }
+        CLog.d("Adding following properties: %s", attributes.entries());
         receiverContext.addInvocationAttributes(attributes);
     }
 
