@@ -19,6 +19,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
@@ -121,7 +122,7 @@ public class IsolatedHostTestTest {
         doReturn(36000).when(mMockServer).getLocalPort();
         doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
 
-        List<String> commandArgs = mHostTest.compileCommandArgs("");
+        List<String> commandArgs = mHostTest.compileCommandArgs("", null);
         assertTrue(commandArgs.contains("-Drobolectric.offline=true"));
         assertTrue(commandArgs.contains("-Drobolectric.logging=stdout"));
         assertTrue(commandArgs.contains("-Drobolectric.resourcesMode=binary"));
@@ -136,6 +137,17 @@ public class IsolatedHostTestTest {
     }
 
     @Test
+    public void testUploadReportArtifacts() throws Exception {
+        File artifactsDir =
+                FileUtil.createTempDir("isolatedhosttesttest-robolectric-screenshot-artifacts-dir");
+        File pngFile = FileUtil.createTempFile("test", ".png", artifactsDir);
+        File pbFile = FileUtil.createTempFile("test", ".pb", artifactsDir);
+        mHostTest.uploadTestArtifacts(artifactsDir, mListener);
+        // verify both files were uploaded using testLog
+        verify(mListener, times(2)).testLog((String) Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
     public void testRobolectricResourcesNegative() throws Exception {
         OptionSetter setter = new OptionSetter(mHostTest);
         setter.setOptionValue("use-robolectric-resources", "false");
@@ -143,7 +155,7 @@ public class IsolatedHostTestTest {
         doReturn(36000).when(mMockServer).getLocalPort();
         doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
 
-        List<String> commandArgs = mHostTest.compileCommandArgs("");
+        List<String> commandArgs = mHostTest.compileCommandArgs("", null);
         assertFalse(commandArgs.contains("-Drobolectric.offline=true"));
         assertFalse(commandArgs.contains("-Drobolectric.logging=stdout"));
         assertFalse(commandArgs.contains("-Drobolectric.resourcesMode=binary"));
@@ -164,7 +176,7 @@ public class IsolatedHostTestTest {
         doReturn(36000).when(mMockServer).getLocalPort();
         doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
 
-        List<String> commandArgs = mHostTest.compileCommandArgs("");
+        List<String> commandArgs = mHostTest.compileCommandArgs("", null);
 
         String javaAgent =
                 String.format(
