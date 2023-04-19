@@ -46,6 +46,8 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
 
     @VisibleForTesting static final String SKIP_TESTS_REASON_KEY = "skip-tests-reason";
 
+    private static final int USERTYPE_NOT_SUPPORTED = -2;
+
     private UserType mTradefedUserType;
     private String mProfileUserType;
     private int profileIdToDelete = -1;
@@ -85,14 +87,17 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
         int profileId = getExistingProfileId(testInfo.getDevice());
 
         if (profileId == -1) {
-            if (!assumeTrue(
+            if (!checkTrueOrSkipOnDevice(
                     canCreateAdditionalUsers(testInfo.getDevice(), /* numberOfUsers*/ 1),
                     "Device cannot support additional users",
                     testInfo)) {
                 return;
             }
 
-            profileId = createProfile(testInfo.getDevice());
+            profileId = createProfile(testInfo);
+            if (profileId == USERTYPE_NOT_SUPPORTED) {
+                return;
+            }
             profileIdToDelete = profileId;
         }
 
@@ -124,7 +129,7 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
 
     private boolean matchesApiLevel(TestInformation testInfo, int apiLevel)
             throws DeviceNotAvailableException, TargetSetupError {
-        return assumeTrue(
+        return checkTrueOrSkipOnDevice(
                 (testInfo.getDevice().getApiLevel() >= apiLevel),
                 "Device does not support feature as api level "
                         + apiLevel
@@ -141,8 +146,10 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
         return -1;
     }
 
-    private int createProfile(ITestDevice device) throws DeviceNotAvailableException {
+    private int createProfile(TestInformation testInfo)
+            throws DeviceNotAvailableException, TargetSetupError {
         final String createUserOutput;
+        ITestDevice device = testInfo.getDevice();
         int parentProfile = device.getCurrentUser();
         String command = "";
 
@@ -164,6 +171,13 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
         }
 
         createUserOutput = device.executeShellCommand(command);
+
+        if (!checkTrueOrSkipOnDevice(
+                !createUserOutput.contains("Cannot add a user of disabled type"),
+                "Device does not support " + mProfileUserType,
+                testInfo)) {
+            return USERTYPE_NOT_SUPPORTED;
+        }
 
         try {
             return Integer.parseInt(createUserOutput.split(" id ")[1].trim());
@@ -249,7 +263,7 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
      *
      * <p>This will return {@code value} and, if it is not true, setup should be skipped.
      */
-    private boolean assumeTrue(boolean value, String reason, TestInformation testInfo)
+    private boolean checkTrueOrSkipOnDevice(boolean value, String reason, TestInformation testInfo)
             throws TargetSetupError {
         if (!value) {
             testInfo.properties().put(SKIP_TESTS_REASON_KEY, reason.replace(" ", "\\ "));
@@ -260,7 +274,7 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
     private boolean requireFeatures(TestInformation testInfo, String... features)
             throws TargetSetupError, DeviceNotAvailableException {
         for (String feature : features) {
-            if (!assumeTrue(
+            if (!checkTrueOrSkipOnDevice(
                     testInfo.getDevice().hasFeature(feature),
                     "Device does not have feature " + feature,
                     testInfo)) {
