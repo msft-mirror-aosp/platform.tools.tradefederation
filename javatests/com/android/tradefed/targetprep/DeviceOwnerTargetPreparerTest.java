@@ -16,15 +16,14 @@
 
 package com.android.tradefed.targetprep;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
-import com.android.tradefed.device.UserInfo;
 import com.android.tradefed.invoker.TestInformation;
 
 import org.junit.Before;
@@ -38,8 +37,6 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 @RunWith(JUnit4.class)
 public class DeviceOwnerTargetPreparerTest {
@@ -49,13 +46,11 @@ public class DeviceOwnerTargetPreparerTest {
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private TestInformation mTestInfo;
 
-    private static final String TEST_DEVICE_OWNER_PACKAGE_NAME = "com.android.tradefed.targetprep";
+    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    private IConfiguration mConfiguration;
+
     private static final String TEST_DEVICE_OWNER_COMPONENT_NAME =
-            TEST_DEVICE_OWNER_PACKAGE_NAME + "/.TestOwner";
-
-    private static final String SET_DEVICE_OWNER_COMMAND =
-            "dpm set-device-owner --user 0 '" + TEST_DEVICE_OWNER_COMPONENT_NAME + "'";
-
+            "com.android.tradefed.targetprep/.TestOwner";
     private DeviceOwnerTargetPreparer mPreparer;
     private OptionSetter mOptionSetter;
 
@@ -63,17 +58,17 @@ public class DeviceOwnerTargetPreparerTest {
     public void setUp() throws Exception {
         mPreparer = new DeviceOwnerTargetPreparer();
         mOptionSetter = new OptionSetter(mPreparer);
+        mPreparer.setConfiguration(mConfiguration);
 
         mOptionSetter.setOptionValue(
                 DeviceOwnerTargetPreparer.DEVICE_OWNER_COMPONENT_NAME_OPTION,
                 null,
                 TEST_DEVICE_OWNER_COMPONENT_NAME);
 
-        when(mTestInfo.getDevice().listUsers()).thenReturn(new ArrayList<>(List.of(0)));
-        when(mTestInfo.getDevice().executeShellCommand(SET_DEVICE_OWNER_COMMAND))
-                .thenReturn("Success: test set-device-owner");
-        when(mTestInfo.getDevice().uninstallPackage(TEST_DEVICE_OWNER_PACKAGE_NAME))
-                .thenReturn("Success: test uninstall");
+        ArrayList<Integer> userIds = new ArrayList<>();
+        userIds.add(0, 1);
+
+        when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
     }
 
     @Test
@@ -82,20 +77,35 @@ public class DeviceOwnerTargetPreparerTest {
         verify(mTestInfo.getDevice()).removeOwners();
     }
 
-    /**
-     * The preparer will not switch the user for the target as this can fail on HSUM devices and
-     * it's not clear whether or not the test can succeed. The test should manually switch users
-     * using another preparer like {@link SwitchUserTargetPreparer} or manually during the test.
-     */
     @Test
-    public void testSetUp_neverSwitches() throws Exception {
+    public void testSetUp_switchesToSystemUser() throws Exception {
         mPreparer.setUp(mTestInfo);
-        verify(mTestInfo.getDevice(), never()).switchUser(anyInt());
+
+        verify(mTestInfo.getDevice()).switchUser(0);
+    }
+
+    @Test
+    public void testSetUp_headless_switchesToPrimaryUser() throws Exception {
+        when(mTestInfo
+                        .getDevice()
+                        .getBooleanProperty(
+                                eq(DeviceOwnerTargetPreparer.HEADLESS_SYSTEM_USER_PROPERTY),
+                                anyBoolean()))
+                .thenReturn(true);
+        when(mTestInfo.getDevice().getPrimaryUserId()).thenReturn(10);
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice()).switchUser(10);
     }
 
     @Test
     public void testSetUp_removeSecondaryUsers() throws Exception {
-        when(mTestInfo.getDevice().listUsers()).thenReturn(new ArrayList<>(List.of(0, 10, 11)));
+        ArrayList<Integer> userIds = new ArrayList<>();
+        userIds.add(0);
+        userIds.add(10);
+        userIds.add(11);
+        when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
 
         mPreparer.setUp(mTestInfo);
 
@@ -105,29 +115,47 @@ public class DeviceOwnerTargetPreparerTest {
     }
 
     @Test
+    public void testSetUp_headless_removeSecondaryUsers() throws Exception {
+        when(mTestInfo
+                        .getDevice()
+                        .getBooleanProperty(
+                                eq(DeviceOwnerTargetPreparer.HEADLESS_SYSTEM_USER_PROPERTY),
+                                anyBoolean()))
+                .thenReturn(true);
+        when(mTestInfo.getDevice().getPrimaryUserId()).thenReturn(10);
+        ArrayList<Integer> userIds = new ArrayList<>();
+        userIds.add(0);
+        userIds.add(10);
+        userIds.add(11);
+        when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice(), never()).removeUser(0);
+        verify(mTestInfo.getDevice(), never()).removeUser(10);
+        verify(mTestInfo.getDevice()).removeUser(11);
+    }
+
+    @Test
     public void testSetUp_setsDeviceOwner() throws Exception {
         mPreparer.setUp(mTestInfo);
 
-        verify(mTestInfo.getDevice()).executeShellCommand(SET_DEVICE_OWNER_COMMAND);
+        verify(mTestInfo.getDevice()).setDeviceOwner(TEST_DEVICE_OWNER_COMPONENT_NAME, 0);
     }
 
     @Test
-    public void testSetUp_setsDeviceOwner_failure() throws Exception {
-        when(mTestInfo.getDevice().executeShellCommand(SET_DEVICE_OWNER_COMMAND))
-                .thenReturn("Test failure");
+    public void testSetUp_headless_setsDeviceOwner() throws Exception {
+        when(mTestInfo
+                        .getDevice()
+                        .getBooleanProperty(
+                                eq(DeviceOwnerTargetPreparer.HEADLESS_SYSTEM_USER_PROPERTY),
+                                anyBoolean()))
+                .thenReturn(true);
+        when(mTestInfo.getDevice().getPrimaryUserId()).thenReturn(10);
 
-        Exception exception =
-                assertThrows(IllegalStateException.class, () -> mPreparer.setUp(mTestInfo));
-        assertEquals("Unable to set device owner: Test failure", exception.getMessage());
-    }
+        mPreparer.setUp(mTestInfo);
 
-    @Test
-    public void testSetUp_setsDeviceOwner_nullFailure() throws Exception {
-        when(mTestInfo.getDevice().executeShellCommand(SET_DEVICE_OWNER_COMMAND)).thenReturn(null);
-
-        Exception exception =
-                assertThrows(IllegalStateException.class, () -> mPreparer.setUp(mTestInfo));
-        assertEquals("Unable to set device owner: null", exception.getMessage());
+        verify(mTestInfo.getDevice()).setDeviceOwner(TEST_DEVICE_OWNER_COMPONENT_NAME, 10);
     }
 
     @Test
@@ -139,66 +167,18 @@ public class DeviceOwnerTargetPreparerTest {
     }
 
     @Test
-    public void testTearDown_uninstall_default() throws Exception {
-        mPreparer.setUp(mTestInfo);
-        mPreparer.tearDown(mTestInfo, /* throwable= */ null);
-
-        verify(mTestInfo.getDevice()).uninstallPackage(TEST_DEVICE_OWNER_PACKAGE_NAME);
-    }
-
-    @Test
-    public void testTearDown_uninstall_false() throws Exception {
-        mOptionSetter.setOptionValue(DeviceOwnerTargetPreparer.UNINSTALL_OPTION, null, "false");
+    public void testTearDown_headless_removesDeviceOwner() throws Exception {
+        when(mTestInfo
+                        .getDevice()
+                        .getBooleanProperty(
+                                eq(DeviceOwnerTargetPreparer.HEADLESS_SYSTEM_USER_PROPERTY),
+                                anyBoolean()))
+                .thenReturn(true);
+        when(mTestInfo.getDevice().getPrimaryUserId()).thenReturn(10);
 
         mPreparer.setUp(mTestInfo);
         mPreparer.tearDown(mTestInfo, /* throwable= */ null);
 
-        verify(mTestInfo.getDevice(), never()).uninstallPackage(TEST_DEVICE_OWNER_PACKAGE_NAME);
-    }
-
-    @Test
-    public void testTearDown_uninstall_failure() throws Exception {
-        when(mTestInfo.getDevice().uninstallPackage(TEST_DEVICE_OWNER_PACKAGE_NAME))
-                .thenReturn("Failure: test uninstall");
-
-        mPreparer.setUp(mTestInfo);
-
-        Exception exception =
-                assertThrows(
-                        IllegalStateException.class,
-                        () -> mPreparer.tearDown(mTestInfo, /* throwable= */ null));
-        assertEquals(
-                "Failed to uninstall admin package "
-                        + TEST_DEVICE_OWNER_COMPONENT_NAME
-                        + ": Failure: test uninstall",
-                exception.getMessage());
-    }
-
-    @Test
-    public void testTearDown_uninstall_nullSuccess() throws Exception {
-        when(mTestInfo.getDevice().uninstallPackage(TEST_DEVICE_OWNER_PACKAGE_NAME))
-                .thenReturn(null);
-        mPreparer.setUp(mTestInfo);
-        mPreparer.tearDown(mTestInfo, /* throwable= */ null);
-
-        verify(mTestInfo.getDevice()).uninstallPackage(TEST_DEVICE_OWNER_PACKAGE_NAME);
-    }
-
-    @Test
-    public void testTearDown_multiUser_removesDeviceOwner() throws Exception {
-        when(mTestInfo.getDevice().listUsers()).thenReturn(new ArrayList<>(List.of(0, 10, 11)));
-        when(mTestInfo.getDevice().getUserInfos())
-                .thenReturn(
-                        Map.of(
-                                0, new UserInfo(0, "system", UserInfo.FLAG_PRIMARY, true),
-                                10, new UserInfo(10, "main", UserInfo.FLAG_MAIN, true),
-                                11, new UserInfo(11, "secondary", 0, false)));
-
-        mPreparer.setUp(mTestInfo);
-        mPreparer.tearDown(mTestInfo, /* throwable= */ null);
-
-        verify(mTestInfo.getDevice()).removeAdmin(TEST_DEVICE_OWNER_COMPONENT_NAME, 0);
         verify(mTestInfo.getDevice()).removeAdmin(TEST_DEVICE_OWNER_COMPONENT_NAME, 10);
-        verify(mTestInfo.getDevice()).removeAdmin(TEST_DEVICE_OWNER_COMPONENT_NAME, 11);
     }
 }
