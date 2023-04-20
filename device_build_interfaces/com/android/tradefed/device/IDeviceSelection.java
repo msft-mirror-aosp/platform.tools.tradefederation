@@ -17,6 +17,7 @@
 package com.android.tradefed.device;
 
 import com.android.ddmlib.IDevice;
+import com.android.tradefed.device.IDeviceSelection.BaseDeviceType;
 import com.android.tradefed.util.ConditionPriorityBlockingQueue.IMatcher;
 
 import java.util.Collection;
@@ -128,5 +129,9 @@ public interface IDeviceSelection extends IMatcher<IDevice> {
      */
     public Map<String, String> getNoMatchReason();
 
+    /** Returns the device type we should use. */
     public BaseDeviceType getBaseDeviceTypeRequested();
+
+    /** Sets the device type we should use. */
+    public void setBaseDeviceTypeRequested(BaseDeviceType type);
 }

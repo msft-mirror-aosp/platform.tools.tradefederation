@@ -38,6 +38,7 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -194,13 +195,14 @@ public class IsolatedHostTest
             throws DeviceNotAvailableException {
         mReportedFailure = false;
         Process isolationRunner = null;
+        File artifactsDir = null;
 
         try {
             mServer = new ServerSocket(0);
             mServer.setSoTimeout(mSocketTimeout);
-
+            artifactsDir = FileUtil.createTempDir("robolectric-screenshot-artifacts");
             String classpath = this.compileClassPath();
-            List<String> cmdArgs = this.compileCommandArgs(classpath);
+            List<String> cmdArgs = this.compileCommandArgs(classpath, artifactsDir);
             CLog.v(String.join(" ", cmdArgs));
             RunUtil runner = new RunUtil();
 
@@ -303,11 +305,12 @@ public class IsolatedHostTest
                 logCoverageExecFile(listener);
             }
             FileUtil.deleteFile(mIsolationJar);
+            uploadTestArtifacts(artifactsDir, listener);
         }
     }
 
     /** Assembles the command arguments to execute the subprocess runner. */
-    public List<String> compileCommandArgs(String classpath) {
+    public List<String> compileCommandArgs(String classpath, File artifactsDir) {
         List<String> cmdArgs = new ArrayList<>();
 
         if (mJdkFolder == null) {
@@ -349,7 +352,7 @@ public class IsolatedHostTest
         cmdArgs.addAll(mJavaFlags);
 
         if (mRobolectricResources) {
-            cmdArgs.addAll(compileRobolectricOptions());
+            cmdArgs.addAll(compileRobolectricOptions(artifactsDir));
             // Prevent tradefed from eagerly loading classes, which may not load without shadows
             // applied.
             mExcludePaths.add("org/robolectric");
@@ -404,6 +407,34 @@ public class IsolatedHostTest
             return testsDir;
         }
         throw new IllegalArgumentException("Test directory not found, cannot proceed");
+    }
+
+    public void uploadTestArtifacts(File logDir, ITestInvocationListener listener) {
+        try {
+            for (File subFile : logDir.listFiles()) {
+                if (subFile.isDirectory()) {
+                    uploadTestArtifacts(subFile, listener);
+                } else {
+                    if (!subFile.exists()) {
+                        continue;
+                    }
+                    try (InputStreamSource dataStream = new FileInputStreamSource(subFile, true)) {
+                        String cleanName = subFile.getName().replace(",", "_");
+                        LogDataType type = LogDataType.TEXT;
+                        if (cleanName.endsWith(".png")) {
+                            type = LogDataType.PNG;
+                        } else if (cleanName.endsWith(".jpg") || cleanName.endsWith(".jpeg")) {
+                            type = LogDataType.JPEG;
+                        } else if (cleanName.endsWith(".pb")) {
+                            type = LogDataType.PB;
+                        }
+                        listener.testLog(cleanName, type, dataStream);
+                    }
+                }
+            }
+        } finally {
+            FileUtil.recursiveDelete(logDir);
+        }
     }
 
     /**
@@ -505,7 +536,7 @@ public class IsolatedHostTest
         return String.join(java.io.File.pathSeparator, paths);
     }
 
-    private List<String> compileRobolectricOptions() {
+    private List<String> compileRobolectricOptions(File artifactsDir) {
         List<String> options = new ArrayList<>();
         File testDir = findTestDirectory();
         File androidAllDir = FileUtil.findFile(testDir, "android-all");
@@ -514,8 +545,12 @@ public class IsolatedHostTest
         }
         String dependencyDir =
                 "-Drobolectric.dependency.dir=" + androidAllDir.getAbsolutePath() + "/";
-
         options.add(dependencyDir);
+        if (artifactsDir != null) {
+            String artifactsDirFull =
+                    "-Drobolectric.artifacts.dir=" + artifactsDir.getAbsolutePath() + "/";
+            options.add(artifactsDirFull);
+        }
         options.add("-Drobolectric.offline=true");
         options.add("-Drobolectric.logging=stdout");
         options.add("-Drobolectric.resourcesMode=binary");

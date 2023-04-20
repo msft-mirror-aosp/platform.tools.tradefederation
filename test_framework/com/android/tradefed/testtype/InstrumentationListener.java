@@ -62,6 +62,7 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
     private boolean mReportUnexecutedTests = false;
     private ProcessInfo mSystemServerProcess = null;
     private String runLevelError = null;
+    private TestDescription mLastTest = null;
 
     private CloseableTraceScope mMethodScope = null;
 
@@ -129,6 +130,7 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
 
     @Override
     public void testEnded(TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
+        mLastTest = test;
         super.testEnded(test, endTime, testMetrics);
         if (mMethodScope != null) {
             mMethodScope.close();
@@ -185,8 +187,9 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
             error.setFailureStatus(FailureStatus.TEST_FAILURE);
             error.setErrorIdentifier(InfraErrorIdentifier.EXPECTED_TESTS_MISMATCH);
         }
-        super.testRunFailed(error);
+        // Use error before injecting the crashes
         runLevelError = error.getErrorMessage();
+        super.testRunFailed(error);
     }
 
     @Override
@@ -210,12 +213,16 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
             missingTests.removeAll(mTests);
             for (TestDescription miss : missingTests) {
                 super.testStarted(miss);
+                String lastExecutedLog = "";
+                if (mLastTest != null) {
+                    lastExecutedLog = "Last executed test was " + mLastTest.toString() + ".";
+                }
                 FailureDescription failure =
                         FailureDescription.create(
                                 String.format(
-                                        "Test did not run due to instrumentation issue. Run level "
-                                                + "error reported reason: '%s'",
-                                        runLevelError),
+                                        "Test did not run due to instrumentation issue. %sRun level"
+                                                + " error reported reason: '%s'",
+                                        lastExecutedLog, runLevelError),
                                 FailureStatus.NOT_EXECUTED);
                 super.testFailed(miss, failure);
                 super.testEnded(miss, new HashMap<String, Metric>());

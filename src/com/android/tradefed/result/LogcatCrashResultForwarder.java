@@ -17,6 +17,7 @@ package com.android.tradefed.result;
 
 import com.android.loganalysis.item.JavaCrashItem;
 import com.android.loganalysis.item.LogcatItem;
+import com.android.loganalysis.item.MiscLogcatItem;
 import com.android.loganalysis.item.NativeCrashItem;
 import com.android.loganalysis.parser.LogcatParser;
 import com.android.tradefed.device.ITestDevice;
@@ -39,6 +40,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Special listener: on failures (instrumentation process crashing) it will attempt to extract from
@@ -66,14 +68,21 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
     private static final String FILTER_NOT_READ =
             "java.lang.IllegalArgumentException: Could not read test file";
 
+    private static final String LOW_MEMORY_KILLER_TAG = "lowmemorykiller";
+
     private Long mStartTime = null;
     private Long mLastStartTime = null;
     private ITestDevice mDevice;
     private LogcatItem mLogcatItem = null;
+    private String mPackageName = null;
 
     public LogcatCrashResultForwarder(ITestDevice device, ITestInvocationListener... listeners) {
         super(listeners);
         mDevice = device;
+    }
+
+    public void setPackageName(String packageName) {
+        mPackageName = packageName;
     }
 
     public ITestDevice getDevice() {
@@ -99,7 +108,9 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
         }
         // If the test case was detected as crashing the instrumentation, we add the crash to it.
         String trace = extractCrashAndAddToMessage(failure.getErrorMessage(), mStartTime);
-        if (isCrash(failure.getErrorMessage())) {
+        if (trace.contains(LOW_MEMORY_KILLER_TAG)) {
+            failure.setErrorIdentifier(DeviceErrorIdentifier.INSTRUMENTATION_LOWMEMORYKILLER);
+        } else if (isCrash(failure.getErrorMessage())) {
             failure.setErrorIdentifier(DeviceErrorIdentifier.INSTRUMENTATION_CRASH);
         } else if (isTimeout(failure.getErrorMessage())) {
             failure.setErrorIdentifier(TestErrorIdentifier.INSTRUMENTATION_TIMED_OUT);
@@ -215,6 +226,13 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
                 return null;
             }
             LogcatParser parser = new LogcatParser();
+            if (mPackageName != null) {
+                parser.addPattern(
+                        Pattern.compile(String.format("Kill '%s'.*", mPackageName)),
+                        null,
+                        LOW_MEMORY_KILLER_TAG,
+                        LOW_MEMORY_KILLER_TAG);
+            }
             LogcatItem result = null;
             try (BufferedReader reader =
                     new BufferedReader(new InputStreamReader(logSource.createInputStream()))) {
@@ -256,6 +274,15 @@ public class LogcatCrashResultForwarder extends ResultForwarder {
                 errorMsg = String.format("%s%s\n", errorMsg, nativeCrashes.get(i));
             }
         }
+
+        List<MiscLogcatItem> lowMemKiller = item.getMiscEvents(LOW_MEMORY_KILLER_TAG);
+        if (!lowMemKiller.isEmpty()) {
+            errorMsg =
+                    String.format(
+                            "%s\nInstrumentation was killed by lowmemorykiller: %s",
+                            errorMsg, lowMemKiller.get(0).getStack());
+        }
+
         return errorMsg;
     }
 
