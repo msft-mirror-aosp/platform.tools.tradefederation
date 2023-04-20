@@ -78,6 +78,11 @@ public class TradefedSandboxTest {
                     IRunUtil createRunUtil() {
                         return mMockRunUtil;
                     }
+
+                    @Override
+                    protected String getJava() {
+                        return "jdk/java";
+                    }
                 };
 
         doReturn(new SandboxOptions())
