@@ -126,20 +126,30 @@ public class OxygenClient {
      * @return true if no_wait_for_boot is specified
      */
     public Boolean noWaitForBootSpecified(TestDeviceOptions deviceOptions) {
-        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
-            if (arg.getKey().equals("no_wait_for_boot")) {
-                return true;
-            }
-        }
-        return false;
+        return deviceOptions.getExtraOxygenArgs().containsKey("no_wait_for_boot");
     }
 
     /**
-     * Check if no_wait_for_boot is specified in Oxygen lease request
+     * Returns the value of the 'override_fetch_cvd_path' argument in the given TestDeviceOptions.
+     *
+     * @param deviceOptions {@link TestDeviceOptions}
+     * @return the value of 'override_fetch_cvd_path', or null if it is not present
+     */
+    public String getOverrideFetchCvdPath(TestDeviceOptions deviceOptions) {
+        if (!deviceOptions.getExtraOxygenArgs().containsKey("override_fetch_cvd_path")) {
+            return null;
+        }
+
+        String path = deviceOptions.getExtraOxygenArgs().get("override_fetch_cvd_path");
+        // An empty string is used to represent fetch_cvd from the build being tested.
+        return path == null ? "" : path;
+    }
+
+    /**
+     * Adds invocation attributes to the given list of arguments.
      *
      * @param args command line args to call Oxygen client
-     * @param attributes attributes associated with current invocation
-     * @return true if no_wait_for_boot is specified
+     * @param attributes the map of attributes to add
      */
     private void addInvocationAttributes(List<String> args, MultiMap<String, String> attributes) {
         if (attributes == null) {
@@ -172,6 +182,8 @@ public class OxygenClient {
         oxygenClientArgs.add("-lease");
         // Add options from GceDriverParams
         int i = 0;
+        String branch = null;
+        Boolean buildIdSet = false;
         while (i < gceDriverParams.size()) {
             String gceDriverOption = gceDriverParams.get(i);
             if (sGceDeviceParamsToOxygenMap.containsKey(gceDriverOption)) {
@@ -179,9 +191,22 @@ public class OxygenClient {
                 oxygenClientArgs.add(sGceDeviceParamsToOxygenMap.get(gceDriverOption));
                 // add option's value
                 oxygenClientArgs.add(gceDriverParams.get(i + 1));
+                if (gceDriverOption.equals("--branch")) {
+                    branch = gceDriverParams.get(i + 1);
+                } else if (!buildIdSet
+                        && sGceDeviceParamsToOxygenMap.get(gceDriverOption).equals("-build_id")) {
+                    buildIdSet = true;
+                }
                 i++;
             }
             i++;
+        }
+
+        // In case branch is set through gce-driver-param, but not build-id, set the name of
+        // branch to option `-build-id`, so LKGB will be used.
+        if (branch != null && !buildIdSet) {
+            oxygenClientArgs.add("-build_id");
+            oxygenClientArgs.add(branch);
         }
 
         // check if build info exists after added from GceDriverParams
@@ -206,6 +231,19 @@ public class OxygenClient {
         oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
         oxygenClientArgs.add("-lease_length_secs");
         oxygenClientArgs.add(Long.toString(deviceOptions.getOxygenLeaseLength() / 1000));
+
+        // Check if there is a new fetch CVD path to override
+        String override_fetch_cvd_path = getOverrideFetchCvdPath(deviceOptions);
+        if (override_fetch_cvd_path != null) {
+            oxygenClientArgs.add("-override_fetch_cvd_path");
+            // If the path is not specified, use the fetch_cvd in BuildInfo.
+            if (override_fetch_cvd_path.isEmpty()) {
+                String build_target =
+                        b.getBuildAttributes().getOrDefault("build_target", b.getBuildFlavor());
+                override_fetch_cvd_path = String.format("ab/%s/%s", b.getBuildId(), build_target);
+            }
+            oxygenClientArgs.add(override_fetch_cvd_path);
+        }
 
         for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
             oxygenClientArgs.add("-" + arg.getKey());
@@ -319,6 +357,8 @@ public class OxygenClient {
         oxygenClientArgs.add(gceAvdInfo.hostAndPort().getHost());
         oxygenClientArgs.add("-session_id");
         oxygenClientArgs.add(gceAvdInfo.instanceName());
+        oxygenClientArgs.add("-accounting_user");
+        oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
         CLog.i("Releasing device from oxygen client with command %s", oxygenClientArgs.toString());
         CommandResult res =
                 runOxygenTimedCmd(

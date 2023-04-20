@@ -119,6 +119,31 @@ java_library_host {
     java_version: "11",
 }
 
+java_library_host {
+    name: "tradefed-dynamic-sharding-grpc",
+    srcs: ["proto/dynamicsharding.proto"],
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        plugin: "grpc-java-plugin",
+    },
+    libs: [
+        "tradefed-protos",
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
+    ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+}
+
+// Avoid version number in apk file name
+genrule(
+    name = "test-services-normalized.apk",
+    srcs = [":test-services.apk"],
+    out = ["test-services-normalized.apk"],
+    cmd = "cp $(in) $(out)",
+)
+
 // Main Target to build tradefed jar
 tradefed_java_library_host {
     name: "tradefed",
@@ -130,7 +155,7 @@ tradefed_java_library_host {
         ":TradefedContentProvider",
         ":TelephonyUtility",
         ":WifiUtil",
-        ":test-services.apk",
+        ":test-services-normalized.apk",
     ],
     static_libs: [
         "tradefed-lib-core",
@@ -181,6 +206,7 @@ java_library_host {
         "lab-resource-grpc",
         "tradefed-invocation-grpc",
         "tradefed-device-manager-grpc",
+        "tradefed-dynamic-sharding-grpc",
         "aoa-helper",
         "error_prone_annotations",
         "google-api-java-client-assembly",

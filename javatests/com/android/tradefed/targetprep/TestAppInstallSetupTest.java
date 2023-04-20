@@ -16,8 +16,8 @@
 
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
 import static com.android.tradefed.targetprep.TestAppInstallSetup.CHECK_MIN_SDK_OPTION;
-import static com.android.tradefed.targetprep.TestAppInstallSetup.RUN_TESTS_AS_USER_KEY;
 import static com.android.tradefed.targetprep.TestAppInstallSetup.TEST_FILE_NAME_OPTION;
 import static com.android.tradefed.targetprep.TestAppInstallSetup.THROW_IF_NOT_FOUND_OPTION;
 

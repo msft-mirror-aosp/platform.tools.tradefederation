@@ -121,12 +121,21 @@ public class TestDiscoveryInvoker {
         String[] subprocessArgs = args.toArray(new String[args.size()]);
         CommandResult res = getRunUtil().runTimedCmd(20000, subprocessArgs);
         if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
+            DiscoveryExitCode exitCode = null;
+            if (res.getExitCode() != null) {
+                for (DiscoveryExitCode code : DiscoveryExitCode.values()) {
+                    if (code.exitCode() == res.getExitCode()) {
+                        exitCode = code;
+                    }
+                }
+            }
             throw new TestDiscoveryException(
                     String.format(
                             "Tradefed observatory error, unable to discover test module names."
                                     + " command used: %s error: %s",
                             Joiner.on(" ").join(subprocessArgs), res.getStderr()),
-                    null);
+                    null,
+                    exitCode);
         }
         String stdout = res.getStdout();
         CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
@@ -169,7 +178,8 @@ public class TestDiscoveryInvoker {
         } else {
             throw new TestDiscoveryException(
                     "The TestDiscoveryInvoker need test directory to be set to do test mapping"
-                            + " discovery.");
+                            + " discovery.",
+                    null);
         }
         CommandResult res = getRunUtil().runTimedCmd(30000, subprocessArgs);
         if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
@@ -194,7 +204,6 @@ public class TestDiscoveryInvoker {
      * Build java cmd for invoking a subprocess to discover test mapping test module names.
      *
      * @return A list of java command args.
-     * @throws ConfigurationException
      */
     private List<String> buildJavaCmdForTestMappingDiscovery(String classpath) {
         List<String> fullCommandLineArgs =

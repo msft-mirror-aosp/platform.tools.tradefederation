@@ -165,6 +165,7 @@ public class InvocationMetricLogger {
         CF_GCE_CREATE_TIME("cf_gce_create_time_ms", false),
         CF_LAUNCH_CVD_TIME("cf_launch_cvd_time_ms", false),
         CF_INSTANCE_COUNT("cf_instance_count", false),
+        CF_LOG_SIZE("cf_log_size_bytes", true),
         CF_OXYGEN_SERVER_URL("cf_oxygen_server_url", false),
         CF_OXYGEN_SESSION_ID("cf_oxygen_session_id", false),
         CF_OXYGEN_VERSION("cf_oxygen_version", false),
@@ -174,6 +175,7 @@ public class InvocationMetricLogger {
         UNCAUGHT_TEST_CRASH_FAILURES("uncaught_test_crash_failures", true),
         DEVICE_RESET_COUNT("device_reset_count", true),
         DEVICE_RESET_MODULES("device_reset_modules", true),
+        DEVICE_POWREWASH_DURATIONS("device_powerwash_durations", true),
         DEVICE_RESET_MODULES_FOR_TARGET_PREPARER("device_reset_modules_for_target_preparer", true),
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
@@ -242,6 +244,7 @@ public class InvocationMetricLogger {
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
+        CACHE_WAIT_FOR_LOCK("cache_wait_for_lock", true),
 
         // CF Cache metrics
         CF_CACHE_WAIT_TIME("cf_cache_wait_time_sec", false),
@@ -256,7 +259,10 @@ public class InvocationMetricLogger {
         TOTAL_TEST_COUNT("total_test_count", true),
 
         // Metrics to store Device failure signatures
-        DEVICE_ERROR_SIGNATURES("device_failure_signatures", true),
+        DEVICE_ERROR_SIGNATURES("device_failure_signatures", false),
+
+        DEVICE_IMAGE_NOT_CHANGED("device_image_not_changed", false),
+        TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
@@ -277,6 +283,8 @@ public class InvocationMetricLogger {
         log_and_release_device("log_and_release_device", true),
         invocation_events_processing("invocation_events_processing", true),
         stage_suite_test_artifacts("stage_suite_test_artifacts", true),
+        wait_for_results_update("wait_for_results_update", true),
+        instru_collect_tests("instru_collect_tests", true),
         ;
 
         private final String mKeyName;

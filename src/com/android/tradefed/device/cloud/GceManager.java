@@ -244,8 +244,8 @@ public class GceManager {
         List<GceAvdInfo> gceAvdInfos;
         long startTime = System.currentTimeMillis();
         try {
-            File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
-            OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
+            OxygenClient oxygenClient =
+                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             CommandResult res =
                     oxygenClient.leaseMultipleDevices(
                             buildInfos, getTestDeviceOptions(), attributes);
@@ -273,8 +273,8 @@ public class GceManager {
             ITestLogger logger, MultiMap<String, String> attributes) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
         try {
-            File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
-            OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
+            OxygenClient oxygenClient =
+                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             CommandResult res =
                     oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions(), attributes);
             GceAvdInfo oxygenDeviceInfo =
@@ -498,19 +498,8 @@ public class GceManager {
             String user,
             Integer offset,
             MultiMap<String, String> attributes) {
-        File avdDriverFile = getTestDeviceOptions().getAvdDriverBinary();
-        if (!avdDriverFile.exists()) {
-            throw new HarnessRuntimeException(
-                    String.format(
-                            "Could not find the Acloud driver at %s",
-                            avdDriverFile.getAbsolutePath()),
-                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
-        }
-        if (!avdDriverFile.canExecute()) {
-            // Set the executable bit if needed
-            FileUtil.chmodGroupRWX(avdDriverFile);
-        }
-        List<String> gceArgs = ArrayUtil.list(avdDriverFile.getAbsolutePath());
+        List<String> gceArgs =
+                ArrayUtil.list(getTestDeviceOptions().getAvdDriverBinary().getAbsolutePath());
         gceArgs.add(
                 TestDeviceOptions.getCreateCommandByInstanceType(
                         getTestDeviceOptions().getInstanceType()));
@@ -664,8 +653,8 @@ public class GceManager {
      */
     private boolean shutdownGceWithOxygen() {
         try {
-            File oxygenClientBinary = getTestDeviceOptions().getAvdDriverBinary();
-            OxygenClient oxygenClient = new OxygenClient(oxygenClientBinary);
+            OxygenClient oxygenClient =
+                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             return oxygenClient.release(mGceAvdInfo, getTestDeviceOptions());
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
@@ -979,6 +968,14 @@ public class GceManager {
                                 InvocationMetricKey.CF_LAUNCH_CVD_TIME, launchMetrics[1]);
                     }
                 }
+                try (CloseableTraceScope ignore =
+                        new CloseableTraceScope("avd:collectOxygenVersion")) {
+                    String oxygenVersion = OxygenUtil.collectOxygenVersion(remoteFile);
+                    if (!Strings.isNullOrEmpty(oxygenVersion)) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.CF_OXYGEN_VERSION, oxygenVersion);
+                    }
+                }
             }
 
             // Default files under a directory to be CUTTLEFISH_LOG to avoid compression.
@@ -1023,6 +1020,8 @@ public class GceManager {
                     name = remoteFile.getName();
                 }
                 logger.testLog(name, type, remoteFileStream);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_LOG_SIZE, remoteFileStream.size());
             }
     }
 

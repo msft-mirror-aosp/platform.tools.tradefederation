@@ -16,17 +16,24 @@
 
 package com.android.tradefed.targetprep;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.UserInfo;
+import com.android.tradefed.log.LogUtil.CLog;
 
 import java.util.ArrayList;
 import java.util.Map;
 
 // Not directly unit tested, but its clients are
-final class UserCreationHelper {
+final class UserHelper {
 
     private static final String TF_CREATED_USER = "tf_created_user";
+
+    @VisibleForTesting static final String USER_SETUP_COMPLETE = "user_setup_complete";
+
+    /** System property used to indicate which Android user is running the test. */
+    static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
     public static int createUser(ITestDevice device, boolean reuseTestUser)
             throws DeviceNotAvailableException, TargetSetupError {
@@ -40,7 +47,10 @@ final class UserCreationHelper {
         cleanupOldUsersIfLimitReached(device);
 
         try {
-            return device.createUser(TF_CREATED_USER);
+            int userId = device.createUser(TF_CREATED_USER);
+            CLog.d("Marking user %d as setup complete", userId);
+            device.setSetting(userId, "secure", USER_SETUP_COMPLETE, "1");
+            return userId;
         } catch (IllegalStateException e) {
             throw new TargetSetupError("Failed to create user.", e, device.getDeviceDescriptor());
         }
@@ -83,7 +93,7 @@ final class UserCreationHelper {
         return null;
     }
 
-    private UserCreationHelper() {
+    private UserHelper() {
         throw new UnsupportedOperationException("provide only static methods");
     }
 }

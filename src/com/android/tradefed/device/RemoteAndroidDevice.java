@@ -86,6 +86,10 @@ public class RemoteAndroidDevice extends TestDevice {
      */
     @Override
     public void postAdbRootAction() throws DeviceNotAvailableException {
+        if (getOptions().shouldUseConnection()) {
+            super.postAdbRootAction();
+            return;
+        }
         // attempt to reconnect first to make sure we didn't loose the connection because of
         // adb root.
         adbTcpConnect(getHostName(), getPortNum());
@@ -97,6 +101,10 @@ public class RemoteAndroidDevice extends TestDevice {
      */
     @Override
     public void postAdbUnrootAction() throws DeviceNotAvailableException {
+        if (getOptions().shouldUseConnection()) {
+            super.postAdbUnrootAction();
+            return;
+        }
         // attempt to reconnect first to make sure we didn't loose the connection because of
         // adb unroot.
         adbTcpConnect(getHostName(), getPortNum());
@@ -110,25 +118,29 @@ public class RemoteAndroidDevice extends TestDevice {
         super.postAdbReboot();
         // A remote nested device does not loose the ssh bridge when rebooted only adb connect is
         // required.
-        InstanceType type = mOptions.getInstanceType();
-        if (InstanceType.CUTTLEFISH.equals(type)
-                || InstanceType.REMOTE_NESTED_AVD.equals(type)
-                || InstanceType.EMULATOR.equals(type)) {
-            adbTcpConnect(getHostName(), getPortNum());
-            waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
+        if (!getOptions().shouldUseConnection()) {
+            InstanceType type = mOptions.getInstanceType();
+            if (InstanceType.CUTTLEFISH.equals(type)
+                    || InstanceType.REMOTE_NESTED_AVD.equals(type)
+                    || InstanceType.EMULATOR.equals(type)) {
+                adbTcpConnect(getHostName(), getPortNum());
+                waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
+            }
         }
     }
 
     /** {@inheritDoc} */
     @Override
     public boolean recoverDevice() throws DeviceNotAvailableException {
-        // If device is not in use (TcpDevice) do not attempt reconnection, it will fail
-        // device in use will not be of the TcpDevice type.
-        if (!(getIDevice() instanceof TcpDevice)) {
-            // Before attempting standard recovery, reconnect the device.
-            CLog.i("Reconnecting to %s:%s for recovery", getHostName(), getPortNum());
-            adbTcpConnect(getHostName(), getPortNum());
-            waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
+        if (!getOptions().shouldUseConnection()) {
+            // If device is not in use (TcpDevice) do not attempt reconnection, it will fail
+            // device in use will not be of the TcpDevice type.
+            if (!(getIDevice() instanceof TcpDevice)) {
+                // Before attempting standard recovery, reconnect the device.
+                CLog.i("Reconnecting to %s:%s for recovery", getHostName(), getPortNum());
+                adbTcpConnect(getHostName(), getPortNum());
+                waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
+            }
         }
         // Standard recovery
         return super.recoverDevice();

@@ -23,26 +23,34 @@ import com.android.ddmlib.RawImage;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.TimeoutException;
-import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
-import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.IDeviceSelection.BaseDeviceType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.AaptParser;
+import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.KeyguardControllerState;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
+
+import org.apache.commons.compress.archivers.zip.ZipFile;
 
 import java.awt.Image;
 import java.awt.image.BufferedImage;
@@ -149,10 +157,8 @@ public class TestDevice extends NativeDevice {
     private static final String APEX_SUFFIX = ".apex";
     private static final String APEX_ARG = "--apex";
 
-    /** If the device is a Microdroid, this refers to the VM process. Otherwise, it is null. */
-    private Process mMicrodroidProcess = null;
-    /** Contains a set of Microdroid instances running in this TestDevice, and their CIDs. */
-    private Map<Process, String> mStartedMicrodroids = new HashMap<>();
+    /** Contains a set of Microdroid instances running in this TestDevice, and their resources. */
+    private Map<Process, MicrodroidTracker> mStartedMicrodroids = new HashMap<>();
 
     private static final String TEST_ROOT = "/data/local/tmp/virt/";
     private static final String VIRT_APEX = "/apex/com.android.virt/";
@@ -165,6 +171,23 @@ public class TestDevice extends NativeDevice {
     private static final long MICRODROID_DEFAULT_ADB_CONNECT_TIMEOUT_MINUTES = 5;
 
     private static final String EARLY_REBOOT = "Too early to call shutdown() or reboot()";
+
+    /**
+     * Allow pauses of up to 2 minutes while receiving bugreport.
+     *
+     * <p>Note that dumpsys may pause up to a minute while waiting for unresponsive components. It
+     * still should bail after that minute, if it will ever terminate on its own.
+     */
+    private static final int BUGREPORT_TIMEOUT = 2 * 60 * 1000;
+
+    private static final String BUGREPORT_CMD = "bugreport";
+    private static final String BUGREPORTZ_CMD = "bugreportz";
+    private static final Pattern BUGREPORTZ_RESPONSE_PATTERN = Pattern.compile("(OK:)(.*)");
+
+    /** Track microdroid and its resources */
+    private class MicrodroidTracker {
+        ExecutorService executor;
+    }
 
     /**
      * @param device
@@ -219,36 +242,9 @@ public class TestDevice extends NativeDevice {
                                                 INSTALL_TIMEOUT_TO_OUTPUT_MINUTES,
                                                 TimeUnit.MINUTES,
                                                 args.toArray(new String[] {}));
-                                if (receiver.isSuccessfullyCompleted()) {
-                                    response[0] = null;
-                                } else if (receiver.getErrorMessage() == null) {
-                                    response[0] =
-                                            String.format(
-                                                    "Installation of %s timed out",
-                                                    packageFile.getAbsolutePath());
-                                } else {
-                                    response[0] = receiver.getErrorMessage();
-                                    if (response[0].contains(
-                                            "cmd: Failure calling service package")) {
-                                        String message =
-                                                String.format(
-                                                        "Failed to install '%s'. Device might have"
-                                                                + " crashed, it returned: %s",
-                                                        packageFile.getName(), response[0]);
-                                        throw new DeviceRuntimeException(
-                                                message, DeviceErrorIdentifier.DEVICE_CRASHED);
-                                    }
-                                }
+                                response[0] = handleInstallReceiver(receiver, packageFile);
                             } catch (InstallException e) {
-                                String message = e.getMessage();
-                                if (message == null) {
-                                    message =
-                                            String.format(
-                                                    "InstallException during package installation. "
-                                                            + "cause: %s",
-                                                    StreamUtil.getStackTrace(e));
-                                }
-                                response[0] = message;
+                                response[0] = handleInstallationError(e);
                             }
                             return response[0] == null;
                         }
@@ -280,6 +276,213 @@ public class TestDevice extends NativeDevice {
     @VisibleForTesting
     InstallReceiver createInstallReceiver() {
         return new InstallReceiver();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public InputStreamSource getBugreport() {
+        if (getApiLevelSafe() < 24) {
+            InputStreamSource bugreport = getBugreportInternal();
+            if (bugreport == null) {
+                // Safe call so we don't return null but an empty resource.
+                return new ByteArrayInputStreamSource("".getBytes());
+            }
+            return bugreport;
+        }
+        CLog.d("Api level above 24, using bugreportz instead.");
+        File mainEntry = null;
+        File bugreportzFile = null;
+        long startTime = System.currentTimeMillis();
+        try {
+            bugreportzFile = getBugreportzInternal();
+            if (bugreportzFile == null) {
+                // return empty buffer
+                return new ByteArrayInputStreamSource("".getBytes());
+            }
+            try (ZipFile zip = new ZipFile(bugreportzFile)) {
+                // We get the main_entry.txt that contains the bugreport name.
+                mainEntry = ZipUtil2.extractFileFromZip(zip, "main_entry.txt");
+                String bugreportName = FileUtil.readStringFromFile(mainEntry).trim();
+                CLog.d("bugreport name: '%s'", bugreportName);
+                File bugreport = ZipUtil2.extractFileFromZip(zip, bugreportName);
+                return new FileInputStreamSource(bugreport, true);
+            }
+        } catch (IOException e) {
+            CLog.e("Error while unzipping bugreportz");
+            CLog.e(e);
+            return new ByteArrayInputStreamSource("corrupted bugreport.".getBytes());
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
+            FileUtil.deleteFile(bugreportzFile);
+            FileUtil.deleteFile(mainEntry);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean logBugreport(String dataName, ITestLogger listener) {
+        InputStreamSource bugreport = null;
+        LogDataType type = null;
+        try {
+            bugreport = getBugreportz();
+            type = LogDataType.BUGREPORTZ;
+            // Limit fallback to older devices
+            if (!TestDeviceState.RECOVERY.equals(getDeviceState())) {
+                if (bugreport == null && getApiLevelSafe() < 24) {
+                    CLog.d("Bugreportz failed, attempting bugreport collection instead.");
+                    bugreport = getBugreportInternal();
+                    type = LogDataType.BUGREPORT;
+                }
+            }
+            // log what we managed to capture.
+            if (bugreport != null && bugreport.size() > 0L) {
+                listener.testLog(dataName, type, bugreport);
+                return true;
+            }
+        } finally {
+            StreamUtil.cancel(bugreport);
+        }
+        CLog.d(
+                "logBugreport() was not successful in collecting and logging the bugreport "
+                        + "for device %s",
+                getSerialNumber());
+        return false;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Bugreport takeBugreport() {
+        File bugreportFile = null;
+        int apiLevel = getApiLevelSafe();
+        if (apiLevel == UNKNOWN_API_LEVEL) {
+            return null;
+        }
+        long startTime = System.currentTimeMillis();
+        try {
+            if (apiLevel >= 24) {
+                CLog.d("Api level above 24, using bugreportz.");
+                bugreportFile = getBugreportzInternal();
+                if (bugreportFile != null) {
+                    return new Bugreport(bugreportFile, true);
+                }
+                return null;
+            }
+            // fall back to regular bugreport
+            InputStreamSource bugreport = getBugreportInternal();
+            if (bugreport == null) {
+                CLog.e("Error when collecting the bugreport.");
+                return null;
+            }
+            try {
+                bugreportFile = FileUtil.createTempFile("bugreport", ".txt");
+                FileUtil.writeToFile(bugreport.createInputStream(), bugreportFile);
+                return new Bugreport(bugreportFile, false);
+            } catch (IOException e) {
+                CLog.e("Error when writing the bugreport file");
+                CLog.e(e);
+            }
+            return null;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public InputStreamSource getBugreportz() {
+        if (getApiLevelSafe() < 24) {
+            return null;
+        }
+        CLog.d("Start getBugreportz()");
+        long startTime = System.currentTimeMillis();
+        try {
+            File bugreportZip = getBugreportzInternal();
+            if (bugreportZip != null) {
+                return new FileInputStreamSource(bugreportZip, true);
+            }
+            return null;
+        } finally {
+            CLog.d("Done with getBugreportz()");
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
+        }
+    }
+
+    /** Internal Helper method to get the bugreportz zip file as a {@link File}. */
+    @VisibleForTesting
+    protected File getBugreportzInternal() {
+        CollectingOutputReceiver receiver = new CollectingOutputReceiver();
+        // Does not rely on {@link ITestDevice#executeAdbCommand(String...)} because it does not
+        // provide a timeout.
+        try {
+            executeShellCommand(
+                    BUGREPORTZ_CMD,
+                    receiver,
+                    getOptions().getBugreportzTimeout(),
+                    TimeUnit.MILLISECONDS,
+                    0 /* don't retry */);
+            String output = receiver.getOutput().trim();
+            Matcher match = BUGREPORTZ_RESPONSE_PATTERN.matcher(output);
+            if (!match.find()) {
+                CLog.e("Something went went wrong during bugreportz collection: '%s'", output);
+                return null;
+            } else {
+                String remoteFilePath = match.group(2);
+                if (Strings.isNullOrEmpty(remoteFilePath)) {
+                    CLog.e("Invalid bugreportz path found from output: %s", output);
+                    return null;
+                }
+                File zipFile = null;
+                try {
+                    if (!doesFileExist(remoteFilePath)) {
+                        CLog.e("Did not find bugreportz at: '%s'", remoteFilePath);
+                        return null;
+                    }
+                    // Create a placeholder to replace the file
+                    zipFile = FileUtil.createTempFile("bugreportz", ".zip");
+                    // pull
+                    pullFile(remoteFilePath, zipFile);
+                    String bugreportDir =
+                            remoteFilePath.substring(0, remoteFilePath.lastIndexOf('/'));
+                    if (!bugreportDir.isEmpty()) {
+                        // clean bugreport files directory on device
+                        deleteFile(String.format("%s/*", bugreportDir));
+                    }
+
+                    return zipFile;
+                } catch (IOException e) {
+                    CLog.e("Failed to create the temporary file.");
+                    return null;
+                }
+            }
+        } catch (DeviceNotAvailableException e) {
+            CLog.e("Device %s became unresponsive while retrieving bugreportz", getSerialNumber());
+            CLog.e(e);
+        }
+        return null;
+    }
+
+    protected InputStreamSource getBugreportInternal() {
+        CollectingByteOutputReceiver receiver = new CollectingByteOutputReceiver();
+        try {
+            executeShellCommand(
+                    BUGREPORT_CMD,
+                    receiver,
+                    BUGREPORT_TIMEOUT,
+                    TimeUnit.MILLISECONDS,
+                    0 /* don't retry */);
+        } catch (DeviceNotAvailableException e) {
+            // Log, but don't throw, so the caller can get the bugreport contents even
+            // if the device goes away
+            CLog.e("Device %s became unresponsive while retrieving bugreport", getSerialNumber());
+            return null;
+        }
+        return new ByteArrayInputStreamSource(receiver.getOutput());
     }
 
     /**
@@ -348,26 +551,9 @@ public class TestDevice extends NativeDevice {
                                                 INSTALL_TIMEOUT_TO_OUTPUT_MINUTES,
                                                 TimeUnit.MINUTES,
                                                 newExtraArgs);
-                                if (receiver.isSuccessfullyCompleted()) {
-                                    response[0] = null;
-                                } else if (receiver.getErrorMessage() == null) {
-                                    response[0] =
-                                            String.format(
-                                                    "Installation of %s timed out.",
-                                                    packageFile.getAbsolutePath());
-                                } else {
-                                    response[0] = receiver.getErrorMessage();
-                                }
+                                response[0] = handleInstallReceiver(receiver, packageFile);
                             } catch (InstallException e) {
-                                String message = e.getMessage();
-                                if (message == null) {
-                                    message =
-                                            String.format(
-                                                    "InstallException during package installation. "
-                                                            + "cause: %s",
-                                                    StreamUtil.getStackTrace(e));
-                                }
-                                response[0] = message;
+                                response[0] = handleInstallationError(e);
                             } finally {
                                 getIDevice().removeRemotePackage(remotePackagePath);
                                 getIDevice().removeRemotePackage(remoteCertPath);
@@ -499,13 +685,7 @@ public class TestDevice extends NativeDevice {
                                 response[0] = null;
                                 return true;
                             } catch (InstallException e) {
-                                response[0] = e.getMessage();
-                                if (response[0] == null) {
-                                    response[0] =
-                                            String.format(
-                                                    "InstallException: %s",
-                                                    StreamUtil.getStackTrace(e));
-                                }
+                                response[0] = handleInstallationError(e);
                                 return false;
                             }
                         }
@@ -671,12 +851,7 @@ public class TestDevice extends NativeDevice {
                             response[0] = null;
                             return true;
                         } catch (InstallException e) {
-                            response[0] = e.getMessage();
-                            if (response[0] == null) {
-                                response[0] = String.format(
-                                    "InstallException during package installation. cause: %s",
-                                    StreamUtil.getStackTrace(e));
-                            }
+                            response[0] = handleInstallationError(e);
                             return false;
                         }
                     }
@@ -1061,6 +1236,7 @@ public class TestDevice extends NativeDevice {
                     CLog.v("framework reboot: can't detect framework running");
                     return false;
                 }
+                notifyRebootStarted();
                 String command = "svc power reboot " + rebootMode.formatRebootCommand(reason);
                 CommandResult result = executeShellV2Command(command);
                 if (result.getStdout().contains(EARLY_REBOOT)
@@ -1068,6 +1244,8 @@ public class TestDevice extends NativeDevice {
                     CLog.e(
                             "Reboot was called too early: stdout: %s.\nstderr: %s.",
                             result.getStdout(), result.getStderr());
+                    // notify of this reboot end, since reboot will be retried again at later stage.
+                    notifyRebootEnded();
                     return false;
                 }
             } catch (DeviceUnresponsiveException due) {
@@ -1092,6 +1270,7 @@ public class TestDevice extends NativeDevice {
     @Override
     protected void doAdbReboot(RebootMode rebootMode, @Nullable final String reason)
             throws DeviceNotAvailableException {
+        getConnection().notifyAdbRebootCalled();
         if (!TestDeviceState.ONLINE.equals(getDeviceState())
                 || !doAdbFrameworkReboot(rebootMode, reason)) {
             super.doAdbReboot(rebootMode, reason);
@@ -1303,27 +1482,109 @@ public class TestDevice extends NativeDevice {
         ArrayList<String[]> lines = tokenizeListUsers();
         Map<Integer, UserInfo> result = new HashMap<Integer, UserInfo>(lines.size());
         for (String[] tokens : lines) {
-            UserInfo userInfo =
-                    new UserInfo(
-                            /* userId= */ Integer.parseInt(tokens[1]),
-                            /* userName= */ tokens[2],
-                            /* flag= */ Integer.parseInt(tokens[3], 16),
-                            /* isRunning= */ tokens.length >= 5
-                                    ? tokens[4].contains("running")
-                                    : false);
-            result.put(userInfo.userId(), userInfo);
+            if (getApiLevel() < 33) {
+                UserInfo userInfo =
+                        new UserInfo(
+                                /* userId= */ Integer.parseInt(tokens[1]),
+                                /* userName= */ tokens[2],
+                                /* flag= */ Integer.parseInt(tokens[3], 16),
+                                /* isRunning= */ tokens.length >= 5
+                                        ? tokens[4].contains("running")
+                                        : false);
+                result.put(userInfo.userId(), userInfo);
+            } else {
+                UserInfo userInfo =
+                        new UserInfo(
+                                /* userId= */ Integer.parseInt(tokens[1]),
+                                /* userName= */ tokens[2],
+                                /* flag= */ Integer.parseInt(tokens[3], 16),
+                                /* isRunning= */ tokens.length >= 5
+                                        ? tokens[4].contains("running")
+                                        : false,
+                                /* userType= */ tokens[5]);
+                result.put(userInfo.userId(), userInfo);
+            }
         }
         return result;
     }
 
     /**
-     * Tokenizes the output of 'pm list users'.
-     * The returned tokens for each user have the form: {"\tUserInfo", Integer.toString(id), name,
-     * Integer.toHexString(flag), "[running]"}; (the last one being optional)
-     * @return a list of arrays of strings, each element of the list representing the tokens
-     * for a user, or {@code null} if there was an error while tokenizing the adb command output.
+     * Tokenizes the output of 'pm list users' pre-T and 'cmd user list -v' post-T.
+     *
+     * <p>Pre-T: The returned tokens for each user have the form: {"\tUserInfo",
+     * Integer.toString(id), name, Integer.toHexString(flag), "[running]"}; (the last one being
+     * optional)
+     *
+     * <p>Post-T: The returned tokens for each user have the form: {"\tUserInfo", Integer
+     * .toString(id), name, Integer.toHexString(flag), "[running]", type}; (the last two being
+     * optional)
+     *
+     * @return a list of arrays of strings, each element of the list representing the tokens for a
+     *     user, or {@code null} if there was an error while tokenizing the adb command output.
      */
     private ArrayList<String[]> tokenizeListUsers() throws DeviceNotAvailableException {
+        if (getApiLevel() < 33) { // Android-T
+            return tokenizeListUsersPreT();
+        } else {
+            return tokenizeListUserPostT();
+        }
+    }
+
+    private ArrayList<String[]> tokenizeListUserPostT() throws DeviceNotAvailableException {
+        String command = "cmd user list -v";
+        String commandOutput = executeShellCommand(command);
+        // Extract the id of all existing users.
+        List<String> lines =
+                Arrays.stream(commandOutput.split("\\r?\\n"))
+                        .filter(line -> line != null && line.trim().length() != 0)
+                        .collect(Collectors.toList());
+
+        if (!lines.get(0).contains("users:")) {
+            throw new DeviceRuntimeException(
+                    String.format("'%s' in not a valid output for 'user list -v'", commandOutput),
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+        ArrayList<String[]> users = new ArrayList<String[]>(lines.size() - 1);
+
+        String pattern = ".id=(.*), name=(.*), type=(.*), flags=(.*)";
+        Pattern r = Pattern.compile(pattern);
+        for (int i = 1; i < lines.size(); i++) {
+            // Individual user is printed out like this:
+            // idx: id=$id, name=$name, type=$type, flags=AAA|BBB|XXX (running) (current) (visible)
+            Matcher m = r.matcher(lines.get(i));
+            if (m.find()) {
+                String id = m.group(1);
+                String name = m.group(2);
+                // example: full.SYSTEM, profile.XXX
+                String type = m.group(3);
+                // AAA|BBB|XXX (running) (current) (visible)
+                String flags_and_status = m.group(4);
+
+                String flags = "";
+                String status = "";
+                if (flags_and_status != null) {
+                    // Split flags and convert to hex
+                    // output: [AAA, BBB, XXX (running) (current) (visible)]
+                    String[] flagsArr = flags_and_status.split("\\|");
+                    // XXX (running) (current) (visible)
+                    String last_flag_and_status =
+                            flagsArr.length > 0 ? flagsArr[flagsArr.length - 1] : "";
+                    String[] arr = last_flag_and_status.split("\\s", 2);
+                    if (arr.length > 0) {
+                        flags = Integer.toHexString(convertToHex(flagsArr, arr[0]));
+                    }
+                    if (arr.length > 1) {
+                        status = arr[1] != null ? arr[1] : "";
+                    }
+                }
+                // Maintain same sequence as per-Q output, add type at the end.
+                users.add(new String[] {"", id, name, flags, status, type});
+            }
+        }
+        return users;
+    }
+
+    private ArrayList<String[]> tokenizeListUsersPreT() throws DeviceNotAvailableException {
         String command = "pm list users";
         String commandOutput = executeShellCommand(command);
         // Extract the id of all existing users.
@@ -1349,6 +1610,57 @@ public class TestDevice extends NativeDevice {
             users.add(tokens);
         }
         return users;
+    }
+
+    private int convertToHex(String[] arr, String str) {
+        int res = 0;
+
+        for (int i = 0; i < arr.length - 1; i++) {
+            res |= getHexaDecimalValue(arr[i]);
+        }
+        res |= getHexaDecimalValue(str);
+
+        return res;
+    }
+
+    private int getHexaDecimalValue(String flag) {
+        switch (flag) {
+            case "PRIMARY":
+                return 0x00000001;
+            case "ADMIN":
+                return 0x00000002;
+            case "GUEST":
+                return 0x00000004;
+            case "RESTRICTED":
+                return 0x00000008;
+            case "INITIALIZED":
+                return 0x00000010;
+            case "MANAGED_PROFILE":
+                return 0x00000020;
+            case "DISABLED":
+                return 0x00000040;
+            case "QUIET_MODE":
+                return 0x00000080;
+            case "EPHEMERAL":
+                return 0x00000100;
+            case "DEMO":
+                return 0x00000200;
+            case "FULL":
+                return 0x00000400;
+            case "SYSTEM":
+                return 0x00000800;
+            case "PROFILE":
+                return 0x00001000;
+            case "EPHEMERAL_ON_CREATE":
+                return 0x00002000;
+            case "MAIN":
+                return 0x00004000;
+            case "FOR_TESTING":
+                return 0x00008000;
+            default:
+                CLog.e("Flag %s not found.", flag);
+                return 0;
+        }
     }
 
     /**
@@ -1407,8 +1719,24 @@ public class TestDevice extends NativeDevice {
     public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException {
         checkApiLevelAgainst("isHeadlessSystemUserMode", 29);
         return checkApiLevelAgainstNextRelease(34)
-                ? executeShellV2CommandThatReturnsBoolean("cmd user is-headless-system-user-mode")
+                ? executeShellV2CommandThatReturnsBooleanSafe(
+                        "cmd user is-headless-system-user-mode")
                 : getBooleanProperty("ro.fw.mu.headless_system_user", false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("canSwitchToHeadlessSystemUser", 34);
+        return executeShellV2CommandThatReturnsBooleanSafe(
+                "cmd user can-switch-to-headless-system-user");
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("isMainUserPermanentAdmin", 34);
+        return executeShellV2CommandThatReturnsBooleanSafe("cmd user is-main-user-permanent-admin");
     }
 
     /**
@@ -2294,11 +2622,7 @@ public class TestDevice extends NativeDevice {
      * and log outputs to the host device's log.
      */
     private void forwardFileToLog(String logPath, String tag) {
-        try {
-            // Keep redirecting as long as the expecting maximum test time. When an adb
-            // command times out, it may trigger the device recovery process, which
-            // disconnect adb, which terminates any live adb commands. See an example at
-            // b/194974010#comment25.
+        try (CloseableTraceScope ignored = new CloseableTraceScope("forward_to_log:" + tag)) {
             String logwrapperCmd =
                     "logwrapper "
                             + "sh "
@@ -2308,30 +2632,20 @@ public class TestDevice extends NativeDevice {
                             + " | sed \\'s/^/"
                             + tag
                             + ": /g\\''\""; // add tags in front of lines
-            CommandResult logwrapperResult =
-                    executeShellV2Command(
-                            logwrapperCmd,
-                            MICRODROID_MAX_LIFETIME_MINUTES * 60 * 1000,
-                            java.util.concurrent.TimeUnit.MILLISECONDS);
-            if (logwrapperResult.getStatus() != CommandStatus.SUCCESS) {
-                throw new DeviceRuntimeException(
-                        logwrapperCmd + " has failed: " + logwrapperResult,
-                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
-            }
+            getRunUtil().allowInterrupt(true);
+            // Manually execute the adb action to avoid any kind of recovery
+            // since it hard to interrupt the forwarding
+            final String[] fullCmd = buildAdbShellCommand(logwrapperCmd, false);
+            AdbShellAction adbActionV2 =
+                    new AdbShellAction(
+                            fullCmd,
+                            null,
+                            null,
+                            null,
+                            TimeUnit.MINUTES.toMillis(MICRODROID_MAX_LIFETIME_MINUTES));
+            adbActionV2.run();
         } catch (Exception e) {
             // Consume
-        }
-    }
-
-    private void setTestDeviceOptions(
-            TestDevice microdroidDevice, Map<String, String> deviceOptions) {
-        try {
-            OptionSetter setter = new OptionSetter(microdroidDevice.getOptions());
-            for (Map.Entry<String, String> optionsKeyValue : deviceOptions.entrySet()) {
-                setter.setOptionValue(optionsKeyValue.getKey(), optionsKeyValue.getValue());
-            }
-        } catch (ConfigurationException e) {
-            CLog.w(e);
         }
     }
 
@@ -2483,12 +2797,17 @@ public class TestDevice extends NativeDevice {
                     forwardFileToLog(logPath, "MicrodroidLog");
                 });
 
-        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
-        TestDevice microdroid = (TestDevice) deviceManager.forceAllocateDevice(microdroidSerial);
+        DeviceSelectionOptions microSelection = new DeviceSelectionOptions();
+        microSelection.setSerial(microdroidSerial);
+        microSelection.setBaseDeviceTypeRequested(BaseDeviceType.NATIVE_DEVICE);
+
+        NativeDevice microdroid = (NativeDevice) deviceManager.allocateDevice(microSelection);
         if (microdroid == null) {
             process.destroy();
             try {
                 process.waitFor();
+                executor.shutdownNow();
+                executor.awaitTermination(2L, TimeUnit.MINUTES);
             } catch (InterruptedException ex) {
             }
             throw new DeviceRuntimeException(
@@ -2497,9 +2816,22 @@ public class TestDevice extends NativeDevice {
         }
         // microdroid can be slow to become unavailable after root. (b/259208275)
         microdroid.getOptions().setAdbRootUnavailableTimeout(4 * 1000);
-        setTestDeviceOptions(microdroid, builder.mTestDeviceOptions);
+        builder.mTestDeviceOptions.put("enable-device-connection", "true");
+        builder.mTestDeviceOptions.put(
+                TestDeviceOptions.INSTANCE_TYPE_OPTION, getOptions().getInstanceType().toString());
+        microdroid.setTestDeviceOptions(builder.mTestDeviceOptions);
+        ((IManagedTestDevice) microdroid).setIDevice(new RemoteAvdIDevice(microdroidSerial));
+        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
         microdroid.setMicrodroidProcess(process);
-        mStartedMicrodroids.put(process, cid);
+        try {
+            // TODO: Pass the build info
+            microdroid.initializeConnection(null, null);
+        } catch (DeviceNotAvailableException | TargetSetupError e) {
+            CLog.e(e);
+        }
+        MicrodroidTracker tracker = new MicrodroidTracker();
+        tracker.executor = executor;
+        mStartedMicrodroids.put(process, tracker);
         return microdroid;
     }
 
@@ -2590,7 +2922,7 @@ public class TestDevice extends NativeDevice {
      */
     public void shutdownMicrodroid(@Nonnull ITestDevice microdroidDevice)
             throws DeviceNotAvailableException {
-        Process process = ((TestDevice) microdroidDevice).getMicrodroidProcess();
+        Process process = ((NativeDevice) microdroidDevice).getMicrodroidProcess();
         if (process == null) {
             throw new IllegalArgumentException("Process is null. TestDevice is not a Microdroid. ");
         }
@@ -2615,24 +2947,25 @@ public class TestDevice extends NativeDevice {
 
         GlobalConfiguration.getDeviceManagerInstance()
                 .freeDevice(microdroidDevice, FreeDeviceState.AVAILABLE);
-        mStartedMicrodroids.remove(process);
+        MicrodroidTracker tracker = mStartedMicrodroids.remove(process);
+        getRunUtil().allowInterrupt(true);
+        try {
+            tracker.executor.shutdownNow();
+            tracker.executor.awaitTermination(1L, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            CLog.e(e);
+        }
     }
 
-    /**
-     * Marks the TestDevice as microdroid and sets its CID.
-     *
-     * @param process Process of the Microdroid VM.
-     */
-    private void setMicrodroidProcess(Process process) {
-        mMicrodroidProcess = process;
-    }
-
-    /**
-     * @return Returns the Process of the Microdroid VM. If TestDevice is not a Microdroid, returns
-     *     null.
-     */
-    public Process getMicrodroidProcess() {
-        return mMicrodroidProcess;
+    // TODO (b/274941025): remove when shell commands using this method are merged in AOSP
+    private boolean executeShellV2CommandThatReturnsBooleanSafe(
+            String cmdFormat, Object... cmdArgs) {
+        try {
+            return executeShellV2CommandThatReturnsBoolean(cmdFormat, cmdArgs);
+        } catch (Exception e) {
+            CLog.e(e);
+            return false;
+        }
     }
 
     private boolean executeShellV2CommandThatReturnsBoolean(String cmdFormat, Object... cmdArgs)
@@ -2785,7 +3118,7 @@ public class TestDevice extends NativeDevice {
          *
          * @param localFile The local file on the host
          * @param remoteFileName The remote file name on the device
-         * @param the microdroid builder.
+         * @return the microdroid builder.
          */
         public MicrodroidBuilder addBootFile(File localFile, String remoteFileName) {
             mBootFiles.put(localFile, remoteFileName);
@@ -2832,5 +3165,36 @@ public class TestDevice extends NativeDevice {
 
             return device.startMicrodroid(this);
         }
+    }
+
+    private String handleInstallationError(InstallException e) {
+        String message = e.getMessage();
+        if (message == null) {
+            message =
+                    String.format(
+                            "InstallException during package installation. " + "cause: %s",
+                            StreamUtil.getStackTrace(e));
+        }
+        return message;
+    }
+
+    private String handleInstallReceiver(InstallReceiver receiver, File packageFile) {
+        if (receiver.isSuccessfullyCompleted()) {
+            return null;
+        }
+        if (receiver.getErrorMessage() == null) {
+            return String.format("Installation of %s timed out", packageFile.getAbsolutePath());
+        }
+        String error = receiver.getErrorMessage();
+        if (error.contains("cmd: Failure calling service package")
+                || error.contains("Can't find service: package")) {
+            String message =
+                    String.format(
+                            "Failed to install '%s'. Device might have"
+                                    + " crashed, it returned: %s",
+                            packageFile.getName(), error);
+            throw new DeviceRuntimeException(message, DeviceErrorIdentifier.DEVICE_CRASHED);
+        }
+        return error;
     }
 }

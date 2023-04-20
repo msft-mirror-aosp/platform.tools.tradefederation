@@ -637,7 +637,7 @@ public class InstrumentationTest
                         .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
                         .map(value -> Boolean.TRUE.toString().equals(value))
                         .orElse(false)) {
-            runOptions += "--instrument-sdk-sandbox ";
+            runOptions += "--instrument-sdk-in-sandbox ";
         }
 
         if (abiName != null && getDevice().getApiLevel() > 20) {
@@ -723,6 +723,10 @@ public class InstrumentationTest
         checkArgument(mPackageName != null, "Package name has not been set.");
         // Install the apk before checking the runner
         if (mInstallFile != null) {
+            if (mDevice.isBypassLowTargetSdkBlockSupported()) {
+                mInstallArgs.add("--bypass-low-target-sdk-block");
+            }
+
             String installOutput =
                     mDevice.installPackage(
                             mInstallFile, true, mInstallArgs.toArray(new String[] {}));
@@ -859,27 +863,35 @@ public class InstrumentationTest
                 CountTestCasesCollector counter = new CountTestCasesCollector(this);
                 copyList.add(counter);
             }
-            // TODO: Convert to device-side collectors when possible.
-            if (testInfo != null) {
-                for (IMetricCollector collector : copyList) {
-                    if (collector.isDisabled()) {
-                        CLog.d("%s has been disabled. Skipping.", collector);
-                    } else {
-                        try (CloseableTraceScope ignored =
-                                new CloseableTraceScope(
-                                        "init_for_inst_" + collector.getClass().getSimpleName())) {
-                            CLog.d(
-                                    "Initializing %s for instrumentation.",
-                                    collector.getClass().getCanonicalName());
-                            if (collector instanceof IConfigurationReceiver) {
-                                ((IConfigurationReceiver) collector)
-                                        .setConfiguration(mConfiguration);
+            if (testsToRun != null && testsToRun.isEmpty()) {
+                // Do not initialize collectors when collection was successful with no tests to run.
+                CLog.d(
+                        "No tests were collected for %s. Skipping initializing collectors.",
+                        mPackageName);
+            } else {
+                // TODO: Convert to device-side collectors when possible.
+                if (testInfo != null) {
+                    for (IMetricCollector collector : copyList) {
+                        if (collector.isDisabled()) {
+                            CLog.d("%s has been disabled. Skipping.", collector);
+                        } else {
+                            try (CloseableTraceScope ignored =
+                                    new CloseableTraceScope(
+                                            "init_for_inst_"
+                                                    + collector.getClass().getSimpleName())) {
+                                CLog.d(
+                                        "Initializing %s for instrumentation.",
+                                        collector.getClass().getCanonicalName());
+                                if (collector instanceof IConfigurationReceiver) {
+                                    ((IConfigurationReceiver) collector)
+                                            .setConfiguration(mConfiguration);
+                                }
+                                if (collector instanceof DeviceTraceCollector) {
+                                    ((DeviceTraceCollector) collector)
+                                            .setInstrumentationPkgName(mPackageName);
+                                }
+                                listener = collector.init(testInfo.getContext(), listener);
                             }
-                            if (collector instanceof DeviceTraceCollector) {
-                                ((DeviceTraceCollector) collector)
-                                        .setInstrumentationPkgName(mPackageName);
-                            }
-                            listener = collector.init(testInfo.getContext(), listener);
                         }
                     }
                 }
@@ -893,6 +905,7 @@ public class InstrumentationTest
 
         InstrumentationListener instrumentationListener =
                 new InstrumentationListener(getDevice(), testsToRun, listener);
+        instrumentationListener.setPackageName(mPackageName);
         instrumentationListener.setDisableDuplicateCheck(mDisableDuplicateCheck);
         if (mEnableSoftRestartCheck) {
             instrumentationListener.setOriginalSystemServer(
@@ -1057,7 +1070,8 @@ public class InstrumentationTest
             runner.setDebug(false);
             // try to collect tests multiple times, in case device is temporarily not available
             // on first attempt
-            try (CloseableTraceScope ignored = new CloseableTraceScope("collect_tests")) {
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(InvocationMetricKey.instru_collect_tests.toString())) {
                 Collection<TestDescription> tests =
                         collectTestsAndRetry(testInfo, runner, listener);
                 // done with "logOnly" mode, restore proper test timeout before real test execution

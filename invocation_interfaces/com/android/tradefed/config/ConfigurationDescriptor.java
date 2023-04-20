@@ -75,6 +75,14 @@ public class ConfigurationDescriptor implements Serializable, Cloneable {
     private boolean mNotStrictShardable = false;
 
     @Option(
+            name = "not-iremotetest-shardable",
+            description =
+                    "A metadata to allows a suite configuration to specify that it cannot be"
+                            + " sharded in a strict context (independent shards). If a config is"
+                            + " already not-shardable, it will be not-strict-shardable.")
+    private boolean mNotIRemoteTestShardable = false;
+
+    @Option(
         name = "use-sandboxing",
         description = "Option used to notify an invocation that it is running in a sandbox."
     )
@@ -158,6 +166,15 @@ public class ConfigurationDescriptor implements Serializable, Cloneable {
     /** Returns if the configuration is strict shardable or not as part of a suite */
     public boolean isNotStrictShardable() {
         return mNotStrictShardable;
+    }
+
+    /** Returns if the configuration should split the IRemoteTest into different modules. */
+    public boolean isNotIRemoteTestShardable() {
+        return mNotIRemoteTestShardable;
+    }
+
+    public void setNotIRemoteTestShardable(boolean notIRemoteTestShardable) {
+        mNotIRemoteTestShardable = notIRemoteTestShardable;
     }
 
     /** Sets the abi the configuration is going to run against. */

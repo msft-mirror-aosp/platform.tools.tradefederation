@@ -351,8 +351,10 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
         } catch (RuntimeException e) {
             StringBuilder message = new StringBuilder();
             String stderr = "";
-            if (result != null) {
-                stderr = result.getStderr();
+            try {
+                stderr = FileUtil.readStringFromFile(stderrFile);
+            } catch (IOException ioe) {
+                CLog.e(ioe);
             }
             message.append(
                     String.format(

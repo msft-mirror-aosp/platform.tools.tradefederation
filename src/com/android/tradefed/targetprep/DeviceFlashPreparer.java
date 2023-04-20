@@ -32,6 +32,7 @@ import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -238,14 +239,17 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                     }
                 }
 
-                // Only #flash is included in the critical section
-                getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
-                queueTime = System.currentTimeMillis() - start;
-                CLog.v(
-                        "Flashing permit obtained after %ds",
-                        TimeUnit.MILLISECONDS.toSeconds(queueTime));
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope("wait_for_flashing_permit")) {
+                    // Only #flash is included in the critical section
+                    getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                    queueTime = System.currentTimeMillis() - start;
+                    CLog.v(
+                            "Flashing permit obtained after %ds",
+                            TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
+                }
                 // Don't allow interruptions during flashing operations.
                 getRunUtil().allowInterrupt(false);
                 start = System.currentTimeMillis();
@@ -290,8 +294,15 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             // Once critical operation is done, we re-enable interruptable
             getRunUtil().allowInterrupt(true);
             try {
-                device.setRecoveryMode(RecoveryMode.AVAILABLE);
-                device.waitForDeviceAvailable(mDeviceBootTime);
+                boolean available = device.waitForDeviceAvailableInRecoverPath(mDeviceBootTime);
+                if (!available) {
+                    throw new DeviceFailedToBootError(
+                            String.format(
+                                    "Device %s did not become available after flashing %s",
+                                    device.getSerialNumber(), deviceBuild.getDeviceBuildId()),
+                            device.getDeviceDescriptor(),
+                            DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
+                }
             } catch (DeviceNotAvailableException e) {
                 // Assume this is a build problem
                 throw new DeviceFailedToBootError(
@@ -304,6 +315,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             }
             device.postBootSetup();
         } finally {
+            device.setRecoveryMode(RecoveryMode.AVAILABLE);
             // Allow interruption at the end no matter what.
             getRunUtil().allowInterrupt(true);
         }

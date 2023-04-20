@@ -41,6 +41,7 @@ import com.android.tradefed.util.testmapping.TestOption;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableSet;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -62,6 +63,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Validation tests to run against the TEST_MAPPING files in tests_mappings.zip to ensure they
@@ -101,6 +103,10 @@ public class TestMappingsValidation implements IBuildReceiver {
     private static final String MODULE_NAME = "module_name";
     private static final String MAINLINE = "mainline";
 
+    // Pair that shouldn't be overlapping. Test can only exists in one or the other.
+    private static final Set<String> INCOMPATIBLE_PAIRS =
+            ImmutableSet.of("presubmit", "presubmit-large");
+
     // Check the mainline parameter configured in a test config must end with .apk, .apks, or .apex.
     private static final Set<String> MAINLINE_PARAMETERS_TO_VALIDATE =
             new HashSet<>(Arrays.asList(".apk", ".apks", ".apex"));
@@ -121,6 +127,74 @@ public class TestMappingsValidation implements IBuildReceiver {
         // Test option is package format.
         PACKAGE
     }
+
+    // TODO: Evaluate those modules if they can be moved out.
+    private static final Set<String> EXEMPTED_DUPLICATION_PRESUBMIT_LARGE =
+            ImmutableSet.of(
+                    "CtsLibcoreOjTestCases",
+                    "FrameworksCoreTests",
+                    "CtsAppTestCases",
+                    "CtsAppSecurityHostTestCases",
+                    "FrameworksServicesTests",
+                    "CtsLibcoreTestCases",
+                    "CtsDevicePolicyManagerTestCases",
+                    "CtsAutoFillServiceTestCases",
+                    "CtsOsTestCases",
+                    "CtsStatsdAtomHostTestCases",
+                    "CtsPermission3TestCases",
+                    "CtsMediaAudioTestCases");
+
+    private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST = ImmutableSet.of(
+                    "binderRpcTestNoKernel",
+                    "CtsTelecomTestCases",
+                    "CtsAppTestCases",
+                    "binderRpcTestSingleThreadedNoKernel",
+                    "CtsSuspendAppsPermissionTestCases",
+                    "CtsAppSecurityHostTestCases",
+                    "FrameworksServicesTests",
+                    "NeuralNetworksTest_static",
+                    "CtsNNAPITestCases",
+                    "CtsLibcoreTestCases",
+                    "OverlayRemountedTest",
+                    "CtsPermission3TestCases",
+                    "sharedlibs_host_tests",
+                    "CtsDevicePolicyManagerTestCases",
+                    "CtsMediaAudioTestCases",
+                    "CtsScopedStoragePublicVolumeHostTest",
+                    "CtsContentTestCases",
+                    "CtsHostsideNetworkTests",
+                    "vm-tests-tf",
+                    "CtsStatsdAtomHostTestCases",
+                    "CtsMediaPlayerTestCases",
+                    "CtsMediaDecoderTestCases",
+                    "CtsQuickAccessWalletTestCases",
+                    "CtsMediaMiscTestCases",
+                    "NetworkStagedRollbackTest",
+                    "CtsUsesNativeLibraryTest",
+                    "RollbackTest",
+                    "CtsLibcoreOjTestCases",
+                    "CtsMultiUserHostTestCases",
+                    "binderRpcTestSingleThreaded",
+                    "sdkextensions_e2e_tests",
+                    "StagedRollbackTest",
+                    "CtsMediaEncoderTestCases",
+                    "CtsRootRollbackManagerHostTestCases",
+                    "StagedInstallInternalTest",
+                    "FrameworksWifiTests",
+                    "MultiUserRollbackTest",
+                    "binderRpcTest",
+                    "CtsMediaCodecTestCases",
+                    "CtsRollbackManagerHostTestCases",
+                    "CtsAutoFillServiceTestCases",
+                    "CtsOsTestCases",
+                    "CtsDynamicMimeHostTestCases",
+                    "VtsHalNeuralnetworksTargetTest",
+                    "CtsWifiTestCases",
+                    "SystemUITests",
+                    "CellBroadcastReceiverComplianceTests",
+                    "InputMethodStressTest",
+                    "SystemUIClocksTests",
+                    "GtsStagedInstallHostTestCases");
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
@@ -197,6 +271,12 @@ public class TestMappingsValidation implements IBuildReceiver {
     public void testValidateTestEntry() throws Exception {
         List<String> errors = new ArrayList<>();
         Set<String> checkedModule = new HashSet<>();
+
+        Map<String, Set<String>> incompatiblePairsTracking = new HashMap<>();
+        for (String s : INCOMPATIBLE_PAIRS) {
+            incompatiblePairsTracking.put(s, new HashSet<>());
+        }
+
         for (String testGroup : allTests.keySet()) {
             if (!mTestGroupToValidate.contains(testGroup)) {
                 CLog.d("Skip checking tests with group: %s", testGroup);
@@ -220,6 +300,9 @@ public class TestMappingsValidation implements IBuildReceiver {
                     }
                 }
                 checkedModule.add(moduleName);
+                if (incompatiblePairsTracking.containsKey(testGroup)) {
+                    incompatiblePairsTracking.get(testGroup).add(moduleName);
+                }
             }
         }
         if (!errors.isEmpty()) {
@@ -240,6 +323,9 @@ public class TestMappingsValidation implements IBuildReceiver {
                 fail(error);
             }
         }
+        // Validate incompatible pairs
+        validateIncompatiblePairs(incompatiblePairsTracking);
+        // Validate basic configuration in shared pools
         validateConfigsOfSharedPool(checkedModule);
     }
 
@@ -591,6 +677,41 @@ public class TestMappingsValidation implements IBuildReceiver {
         } finally {
             FileUtil.recursiveDelete(testConfigDir);
             FileUtil.recursiveDelete(deviceTestConfigDir);
+        }
+    }
+
+    private void validateIncompatiblePairs(Map<String, Set<String>> incompatiblePairsTracking)
+            throws ConfigurationException {
+        Set<String> presubmitLarge = incompatiblePairsTracking.get("presubmit-large");
+        Set<String> presubmit = incompatiblePairsTracking.get("presubmit");
+
+        Set<String> dual =
+                presubmitLarge.stream()
+                        .filter(e -> presubmit.contains(e))
+                        .collect(Collectors.toSet());
+
+        dual.removeIf(e -> EXEMPTED_DUPLICATION_PRESUBMIT_LARGE.contains(e));
+
+        if (!dual.isEmpty()) {
+            throw new ConfigurationException(
+                    String.format(
+                            "the following entries exist in both presubmit and "
+                                    + "presubmit-large groups: %s. Do not use "
+                                    + "presubmit-large group to run larger tests. "
+                                    + "Make sure your tests meet presubmit SLO "
+                                    + "and use 'presubmit' group.",
+                            dual));
+        }
+        presubmitLarge.removeAll(PRESUBMIT_LARGE_ALLOWLIST);
+        if (!presubmitLarge.isEmpty()) {
+            throw new ConfigurationException(
+                    String.format(
+                            "Adding new modules to presubmit-large "
+                                    + "isn't allowed. Those tests: %s. Do not use "
+                                    + "presubmit-large group to run larger tests. Make sure"
+                                    + " your tests meet presubmit SLO and use 'presubmit'"
+                                    + "group.",
+                            presubmitLarge));
         }
     }
 }

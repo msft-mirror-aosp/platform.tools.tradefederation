@@ -163,7 +163,7 @@ public class TestDiscoveryExecutorTest {
             mTestDiscoveryExecutor.discoverDependencies(new String[0]);
             fail("Should throw an TestDiscoveryException");
         } catch (TestDiscoveryException e) {
-            // Pass
+            assertEquals(DiscoveryExitCode.ERROR, e.exitCode());
         }
     }
 
@@ -198,6 +198,7 @@ public class TestDiscoveryExecutorTest {
                             .equals(
                                     "Tradefed Observatory can't do test discovery because the"
                                             + " existence of metadata include filter option."));
+            assertEquals(DiscoveryExitCode.COMPONENT_METADATA, e.exitCode());
         }
     }
 

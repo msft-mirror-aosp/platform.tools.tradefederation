@@ -86,6 +86,9 @@ public final class CoverageOptions {
             description = "Timeout in milliseconds to pull coverage metrics from the device.")
     private long mPullTimeout = 20 * 60 * 1000;
 
+    @Option(name = "jacocoagent-path", description = "Path to jacocoagent.jar.")
+    private File mJaCoCoAgentPath = null;
+
     /**
      * Returns whether coverage measurements should be collected from this run.
      *
@@ -164,5 +167,14 @@ public final class CoverageOptions {
      */
     public long getPullTimeout() {
         return mPullTimeout;
+    }
+
+    /**
+     * Returns jacocoagent.jar.
+     *
+     * @return a {@link File} pointing to jacocoagent.jar.
+     */
+    public File getJaCoCoAgentPath() {
+        return mJaCoCoAgentPath;
     }
 }
