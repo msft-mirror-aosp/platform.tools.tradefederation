@@ -26,6 +26,7 @@ import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.ConfigurationUtil;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.ITargetPreparer;
@@ -195,6 +196,14 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "InputMethodStressTest",
                     "SystemUIClocksTests",
                     "GtsStagedInstallHostTestCases");
+
+    private static final Set<String> REMOUNT_MODULES =
+            ImmutableSet.of(
+                    "libnativeloader_e2e_tests",
+                    "BugreportManagerTestCases",
+                    "CtsRootBugreportTestCases",
+                    "ApexServiceTestCases",
+                    "OverlayDeviceTests");
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
@@ -650,19 +659,22 @@ public class TestMappingsValidation implements IBuildReceiver {
                 try {
                     IConfiguration config =
                             mConfigFactory.createConfigurationFromArgs(new String[] {configName});
-                    for (ITargetPreparer prep : config.getTargetPreparers()) {
-                        if (prep instanceof PushFilePreparer) {
-                            PushFilePreparer pushPreparer = (PushFilePreparer) prep;
-                            if (pushPreparer.shouldRemountSystem()
-                                    || pushPreparer.shouldRemountVendor()) {
-                                // TODO: Throw exception instead
-                                CLog.e(
-                                        // throw new ConfigurationException(
-                                        String.format(
-                                                "%s: Shouldn't use 'remount-system' or"
+                    for (IDeviceConfiguration dConfig : config.getDeviceConfig()) {
+                        for (ITargetPreparer prep : dConfig.getTargetPreparers()) {
+                            if (prep instanceof PushFilePreparer) {
+                                PushFilePreparer pushPreparer = (PushFilePreparer) prep;
+                                if (pushPreparer.shouldRemountSystem()
+                                        || pushPreparer.shouldRemountVendor()) {
+                                    if (REMOUNT_MODULES.contains(fileName)) {
+                                        continue;
+                                    }
+                                    throw new ConfigurationException(
+                                            String.format(
+                                                    "%s: Shouldn't use 'remount-system' or"
                                                         + " 'remount-vendor' in shared test mapping"
                                                         + " pools.",
-                                                fileName));
+                                                    fileName));
+                                }
                             }
                         }
                     }
