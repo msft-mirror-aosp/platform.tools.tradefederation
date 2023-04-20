@@ -30,6 +30,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.UserInfo;
 import com.android.tradefed.invoker.TestInformation;
 
@@ -65,6 +66,14 @@ public final class RunOnCloneProfileTargetPreparerTest {
 
     private ProfileTargetPreparer mPreparer;
 
+    public static final String CLONE_USERTYPE_DISABLED_MESSAGE =
+            "RUNNER ERROR:"
+                + " com.android.tradefed.error.HarnessRuntimeException[SHELL_COMMAND_ERROR|520100|DEPENDENCY_ISSUE]:"
+                + " Error creating profile. Command was 'pm create-user --profileOf 10 --user-type"
+                + " android.os.usertype.profile.CLONE user', output was 'Error:"
+                + " android.os.ServiceSpecificException: Cannot add a user of disabled type"
+                + " android.os.usertype.profile.CLONE.";
+
     @Before
     public void setUp() throws Exception {
         mPreparer = new RunOnCloneProfileTargetPreparer();
@@ -91,7 +100,7 @@ public final class RunOnCloneProfileTargetPreparerTest {
 
     @Test
     public void setUp_doesNotSupportCloneUser_setsArgumentToSkipTests() throws Exception {
-        when(mTestInfo.getDevice().getApiLevel()).thenReturn(30);
+        when(mTestInfo.getDevice().getApiLevel()).thenReturn(32);
 
         mPreparer.setUp(mTestInfo);
 
@@ -117,7 +126,7 @@ public final class RunOnCloneProfileTargetPreparerTest {
                         + " android.os.usertype.profile.CLONE user";
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
-        when(mTestInfo.getDevice().getApiLevel()).thenReturn(31).thenReturn(28);
+        when(mTestInfo.getDevice().getApiLevel()).thenReturn(33).thenReturn(28);
 
         mPreparer.setUp(mTestInfo);
 
@@ -281,6 +290,18 @@ public final class RunOnCloneProfileTargetPreparerTest {
 
         verify(mTestInfo.getDevice())
                 .executeShellCommand("pm install-existing --user 11 com.android.testpackage");
+    }
+
+    @Test
+    public void setUp_cloneUserTypeNotSupportedOnDevice_setsArgumentToSkipTests()
+            throws DeviceNotAvailableException, TargetSetupError {
+        String expectedCreateUserCommand = CREATE_CLONE_PROFILE_COMMAND;
+        when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
+                .thenReturn(CLONE_USERTYPE_DISABLED_MESSAGE);
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.properties()).put(eq(SKIP_TESTS_REASON_KEY), any());
     }
 
     @Test

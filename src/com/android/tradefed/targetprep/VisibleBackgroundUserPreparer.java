@@ -58,7 +58,7 @@ public class VisibleBackgroundUserPreparer extends BaseTargetPreparer {
         }
         CLog.i("setUp(): mReuseTestUser=%b, mDisplayId=%d", mReuseTestUser, mDisplayId);
 
-        mUserId = UserHelper.createUser(device, mReuseTestUser, /* provisionUser= */ true);
+        mUserId = UserHelper.createUser(device, mReuseTestUser);
 
         startUserVisibleOnBackground(testInfo, device, mUserId);
 

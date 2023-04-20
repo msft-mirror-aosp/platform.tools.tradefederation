@@ -165,6 +165,7 @@ public class InvocationMetricLogger {
         CF_GCE_CREATE_TIME("cf_gce_create_time_ms", false),
         CF_LAUNCH_CVD_TIME("cf_launch_cvd_time_ms", false),
         CF_INSTANCE_COUNT("cf_instance_count", false),
+        CF_LOG_SIZE("cf_log_size_bytes", true),
         CF_OXYGEN_SERVER_URL("cf_oxygen_server_url", false),
         CF_OXYGEN_SESSION_ID("cf_oxygen_session_id", false),
         CF_OXYGEN_VERSION("cf_oxygen_version", false),
@@ -259,6 +260,9 @@ public class InvocationMetricLogger {
 
         // Metrics to store Device failure signatures
         DEVICE_ERROR_SIGNATURES("device_failure_signatures", false),
+
+        DEVICE_IMAGE_NOT_CHANGED("device_image_not_changed", false),
+        TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),

@@ -19,6 +19,7 @@ import com.android.ddmlib.IDevice;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.IConfigurableVirtualDevice;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.ManagedTestDeviceFactory;
 import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
@@ -59,10 +60,16 @@ public class DefaultConnection extends AbstractConnection {
         }
         if (builder.device != null) {
             InstanceType type = builder.device.getOptions().getInstanceType();
-            if (InstanceType.REMOTE_AVD.equals(type) || InstanceType.GCE.equals(type)) {
-                ((NativeDevice) builder.device).setLogStartDelay(0);
-                ((NativeDevice) builder.device).setFastbootEnabled(false);
-                return new AdbSshConnection(builder);
+            if (InstanceType.CUTTLEFISH.equals(type)
+                    || InstanceType.REMOTE_NESTED_AVD.equals(type)) {
+                if (ManagedTestDeviceFactory.isTcpDeviceSerial(builder.device.getSerialNumber())) {
+                    // If the device is already started just go for TcpConnection
+                    return new AdbTcpConnection(builder);
+                } else {
+                    ((NativeDevice) builder.device).setLogStartDelay(0);
+                    ((NativeDevice) builder.device).setFastbootEnabled(false);
+                    return new AdbSshConnection(builder);
+                }
             }
         }
         return new DefaultConnection(builder);

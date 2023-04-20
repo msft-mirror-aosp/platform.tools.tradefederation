@@ -272,7 +272,7 @@ public class AndroidJUnitTestTest {
     public void testRun_includeFile() throws Exception {
 
         setRunTestExpectations();
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenReturn(Boolean.TRUE);
         when(mMockTestDevice.executeShellCommand(Mockito.<String>any())).thenReturn("");
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(true);
@@ -296,7 +296,7 @@ public class AndroidJUnitTestTest {
     public void testRun_includeFileWithChown() throws Exception {
 
         setRunTestExpectations();
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenReturn(Boolean.TRUE);
         when(mMockTestDevice.executeShellCommand(Mockito.<String>any())).thenReturn("");
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(false);
@@ -320,7 +320,7 @@ public class AndroidJUnitTestTest {
     public void testRun_excludeFile() throws Exception {
 
         setRunTestExpectations();
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenReturn(Boolean.TRUE);
         when(mMockTestDevice.executeShellCommand(Mockito.<String>any())).thenReturn("");
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(true);
@@ -346,7 +346,7 @@ public class AndroidJUnitTestTest {
     public void testRun_testFileAndFilters() throws Exception {
 
         setRunTestExpectations();
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenReturn(Boolean.TRUE);
         when(mMockTestDevice.executeShellCommand(Mockito.<String>any())).thenReturn("");
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(true);
@@ -361,7 +361,8 @@ public class AndroidJUnitTestTest {
             mAndroidJUnitTest.setIncludeTestFile(tmpFileInclude);
             mAndroidJUnitTest.setExcludeTestFile(tmpFileExclude);
             mAndroidJUnitTest.run(mTestInfo, mMockListener);
-            verify(mMockTestDevice, times(2)).pushFile(Mockito.<File>any(), Mockito.<String>any());
+            verify(mMockTestDevice, times(2))
+                    .pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true));
             verify(mMockRemoteRunner)
                     .addInstrumentationArg(Mockito.eq("testFile"), Mockito.<String>any());
             verify(mMockRemoteRunner)
@@ -383,7 +384,7 @@ public class AndroidJUnitTestTest {
     @Test
     public void testRun_testFileAndFilters_fails() throws Exception {
         mMockRemoteRunner = mock(IRemoteAndroidTestRunner.class);
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenThrow(new DeviceNotAvailableException("failed to push", "device1"));
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(true);
 
@@ -418,7 +419,7 @@ public class AndroidJUnitTestTest {
     public void testRun_setTestFileOptions() throws Exception {
 
         setRunTestExpectations();
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenReturn(Boolean.TRUE);
         when(mMockTestDevice.executeShellCommand(Mockito.<String>any())).thenReturn("");
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(true);
@@ -432,7 +433,8 @@ public class AndroidJUnitTestTest {
             setter.setOptionValue("test-file-include-filter", tmpFileInclude.getAbsolutePath());
             setter.setOptionValue("test-file-exclude-filter", tmpFileExclude.getAbsolutePath());
             mAndroidJUnitTest.run(mTestInfo, mMockListener);
-            verify(mMockTestDevice, times(2)).pushFile(Mockito.<File>any(), Mockito.<String>any());
+            verify(mMockTestDevice, times(2))
+                    .pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true));
             verify(mMockRemoteRunner)
                     .addInstrumentationArg(Mockito.eq("testFile"), Mockito.<String>any());
             verify(mMockRemoteRunner)
@@ -533,23 +535,5 @@ public class AndroidJUnitTestTest {
         // Make sure shards cannot be re-sharded
         assertNull(((AndroidJUnitTest) res.get(0)).split(2));
         assertNull(((AndroidJUnitTest) res.get(0)).split());
-    }
-
-    @Test
-    public void testSplit_smallIncludeFilter() throws Exception {
-        mAndroidJUnitTest = new AndroidJUnitTest();
-        mAndroidJUnitTest.setRunnerName(AJUR);
-        assertEquals(AJUR, mAndroidJUnitTest.getRunnerName());
-        File includeFilterFile = FileUtil.createTempFile("include-filter-unit", ".txt");
-        try {
-            FileUtil.writeToFile("class.subclass\nclass.subclass2\n", includeFilterFile);
-            mAndroidJUnitTest.setIncludeTestFile(includeFilterFile);
-            OptionSetter setter = new OptionSetter(mAndroidJUnitTest);
-            setter.setOptionValue("runtime-hint", "60s");
-            List<IRemoteTest> res = (List<IRemoteTest>) mAndroidJUnitTest.split(3);
-            assertNull(res);
-        } finally {
-            FileUtil.deleteFile(includeFilterFile);
-        }
     }
 }

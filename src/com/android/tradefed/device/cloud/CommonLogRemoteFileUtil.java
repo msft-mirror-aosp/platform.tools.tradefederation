@@ -58,6 +58,9 @@ public class CommonLogRemoteFileUtil {
      */
     public static final String OXYGEN_RUNTIME_LOG_DIR = "/tmp/cfbase/3/cuttlefish_runtime/";
 
+    /** The directory where to find goldfish logs from Oxygen service. */
+    public static final String OXYGEN_GOLDFISH_LOG_DIR = "/tmp/android_platform_gf*/logs/";
+
     public static final List<KnownLogFileEntry> OXYGEN_LOG_FILES = new ArrayList<>();
     /** For older version of cuttlefish, log files only exists in cuttlefish_runtime directory. */
     public static final List<KnownLogFileEntry> OXYGEN_LOG_FILES_FALLBACK = new ArrayList<>();
@@ -133,6 +136,7 @@ public class CommonLogRemoteFileUtil {
         OXYGEN_LOG_FILES.add(new KnownLogFileEntry(OXYGEN_EMULATOR_LOG_DIR, null, LogDataType.DIR));
         OXYGEN_LOG_FILES.add(
                 new KnownLogFileEntry(OXYGEN_CUTTLEFISH_LOG_DIR, null, LogDataType.DIR));
+        OXYGEN_LOG_FILES.add(new KnownLogFileEntry(OXYGEN_GOLDFISH_LOG_DIR, null, LogDataType.DIR));
         OXYGEN_LOG_FILES_FALLBACK.add(
                 new KnownLogFileEntry(
                         OXYGEN_RUNTIME_LOG_DIR + "launcher.log", null, LogDataType.CUTTLEFISH_LOG));

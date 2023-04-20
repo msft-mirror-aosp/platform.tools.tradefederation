@@ -905,6 +905,7 @@ public class InstrumentationTest
 
         InstrumentationListener instrumentationListener =
                 new InstrumentationListener(getDevice(), testsToRun, listener);
+        instrumentationListener.setPackageName(mPackageName);
         instrumentationListener.setDisableDuplicateCheck(mDisableDuplicateCheck);
         if (mEnableSoftRestartCheck) {
             instrumentationListener.setOriginalSystemServer(

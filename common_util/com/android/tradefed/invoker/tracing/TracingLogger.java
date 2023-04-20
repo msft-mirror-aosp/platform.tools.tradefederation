@@ -20,6 +20,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 /** Class that helps to manage tracing for each test invocation. */
 public class TracingLogger {
 
@@ -38,6 +40,21 @@ public class TracingLogger {
             ActiveTrace trace = new ActiveTrace(pid, tid);
             mPerGroupActiveTrace.put(group, trace);
             return trace;
+        }
+    }
+
+    /**
+     * Sets the currently active trace for an invocation.
+     *
+     * @param pid Current process id
+     * @param tid Current thread id
+     * @return the previous active trace or {@code null} if there was none.
+     */
+    @Nullable
+    static ActiveTrace setActiveTrace(ActiveTrace trace) {
+        ThreadGroup group = Thread.currentThread().getThreadGroup();
+        synchronized (mPerGroupActiveTrace) {
+            return mPerGroupActiveTrace.put(group, trace);
         }
     }
 

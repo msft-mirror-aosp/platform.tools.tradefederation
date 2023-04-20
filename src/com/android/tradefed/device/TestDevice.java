@@ -23,27 +23,34 @@ import com.android.ddmlib.RawImage;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SyncException;
 import com.android.ddmlib.TimeoutException;
-import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
-import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.IDeviceSelection.BaseDeviceType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.AaptParser;
+import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.KeyguardControllerState;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
+
+import org.apache.commons.compress.archivers.zip.ZipFile;
 
 import java.awt.Image;
 import java.awt.image.BufferedImage;
@@ -150,8 +157,6 @@ public class TestDevice extends NativeDevice {
     private static final String APEX_SUFFIX = ".apex";
     private static final String APEX_ARG = "--apex";
 
-    /** If the device is a Microdroid, this refers to the VM process. Otherwise, it is null. */
-    private Process mMicrodroidProcess = null;
     /** Contains a set of Microdroid instances running in this TestDevice, and their resources. */
     private Map<Process, MicrodroidTracker> mStartedMicrodroids = new HashMap<>();
 
@@ -166,6 +171,18 @@ public class TestDevice extends NativeDevice {
     private static final long MICRODROID_DEFAULT_ADB_CONNECT_TIMEOUT_MINUTES = 5;
 
     private static final String EARLY_REBOOT = "Too early to call shutdown() or reboot()";
+
+    /**
+     * Allow pauses of up to 2 minutes while receiving bugreport.
+     *
+     * <p>Note that dumpsys may pause up to a minute while waiting for unresponsive components. It
+     * still should bail after that minute, if it will ever terminate on its own.
+     */
+    private static final int BUGREPORT_TIMEOUT = 2 * 60 * 1000;
+
+    private static final String BUGREPORT_CMD = "bugreport";
+    private static final String BUGREPORTZ_CMD = "bugreportz";
+    private static final Pattern BUGREPORTZ_RESPONSE_PATTERN = Pattern.compile("(OK:)(.*)");
 
     /** Track microdroid and its resources */
     private class MicrodroidTracker {
@@ -259,6 +276,213 @@ public class TestDevice extends NativeDevice {
     @VisibleForTesting
     InstallReceiver createInstallReceiver() {
         return new InstallReceiver();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public InputStreamSource getBugreport() {
+        if (getApiLevelSafe() < 24) {
+            InputStreamSource bugreport = getBugreportInternal();
+            if (bugreport == null) {
+                // Safe call so we don't return null but an empty resource.
+                return new ByteArrayInputStreamSource("".getBytes());
+            }
+            return bugreport;
+        }
+        CLog.d("Api level above 24, using bugreportz instead.");
+        File mainEntry = null;
+        File bugreportzFile = null;
+        long startTime = System.currentTimeMillis();
+        try {
+            bugreportzFile = getBugreportzInternal();
+            if (bugreportzFile == null) {
+                // return empty buffer
+                return new ByteArrayInputStreamSource("".getBytes());
+            }
+            try (ZipFile zip = new ZipFile(bugreportzFile)) {
+                // We get the main_entry.txt that contains the bugreport name.
+                mainEntry = ZipUtil2.extractFileFromZip(zip, "main_entry.txt");
+                String bugreportName = FileUtil.readStringFromFile(mainEntry).trim();
+                CLog.d("bugreport name: '%s'", bugreportName);
+                File bugreport = ZipUtil2.extractFileFromZip(zip, bugreportName);
+                return new FileInputStreamSource(bugreport, true);
+            }
+        } catch (IOException e) {
+            CLog.e("Error while unzipping bugreportz");
+            CLog.e(e);
+            return new ByteArrayInputStreamSource("corrupted bugreport.".getBytes());
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
+            FileUtil.deleteFile(bugreportzFile);
+            FileUtil.deleteFile(mainEntry);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean logBugreport(String dataName, ITestLogger listener) {
+        InputStreamSource bugreport = null;
+        LogDataType type = null;
+        try {
+            bugreport = getBugreportz();
+            type = LogDataType.BUGREPORTZ;
+            // Limit fallback to older devices
+            if (!TestDeviceState.RECOVERY.equals(getDeviceState())) {
+                if (bugreport == null && getApiLevelSafe() < 24) {
+                    CLog.d("Bugreportz failed, attempting bugreport collection instead.");
+                    bugreport = getBugreportInternal();
+                    type = LogDataType.BUGREPORT;
+                }
+            }
+            // log what we managed to capture.
+            if (bugreport != null && bugreport.size() > 0L) {
+                listener.testLog(dataName, type, bugreport);
+                return true;
+            }
+        } finally {
+            StreamUtil.cancel(bugreport);
+        }
+        CLog.d(
+                "logBugreport() was not successful in collecting and logging the bugreport "
+                        + "for device %s",
+                getSerialNumber());
+        return false;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Bugreport takeBugreport() {
+        File bugreportFile = null;
+        int apiLevel = getApiLevelSafe();
+        if (apiLevel == UNKNOWN_API_LEVEL) {
+            return null;
+        }
+        long startTime = System.currentTimeMillis();
+        try {
+            if (apiLevel >= 24) {
+                CLog.d("Api level above 24, using bugreportz.");
+                bugreportFile = getBugreportzInternal();
+                if (bugreportFile != null) {
+                    return new Bugreport(bugreportFile, true);
+                }
+                return null;
+            }
+            // fall back to regular bugreport
+            InputStreamSource bugreport = getBugreportInternal();
+            if (bugreport == null) {
+                CLog.e("Error when collecting the bugreport.");
+                return null;
+            }
+            try {
+                bugreportFile = FileUtil.createTempFile("bugreport", ".txt");
+                FileUtil.writeToFile(bugreport.createInputStream(), bugreportFile);
+                return new Bugreport(bugreportFile, false);
+            } catch (IOException e) {
+                CLog.e("Error when writing the bugreport file");
+                CLog.e(e);
+            }
+            return null;
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public InputStreamSource getBugreportz() {
+        if (getApiLevelSafe() < 24) {
+            return null;
+        }
+        CLog.d("Start getBugreportz()");
+        long startTime = System.currentTimeMillis();
+        try {
+            File bugreportZip = getBugreportzInternal();
+            if (bugreportZip != null) {
+                return new FileInputStreamSource(bugreportZip, true);
+            }
+            return null;
+        } finally {
+            CLog.d("Done with getBugreportz()");
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.BUGREPORT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.BUGREPORT_COUNT, 1);
+        }
+    }
+
+    /** Internal Helper method to get the bugreportz zip file as a {@link File}. */
+    @VisibleForTesting
+    protected File getBugreportzInternal() {
+        CollectingOutputReceiver receiver = new CollectingOutputReceiver();
+        // Does not rely on {@link ITestDevice#executeAdbCommand(String...)} because it does not
+        // provide a timeout.
+        try {
+            executeShellCommand(
+                    BUGREPORTZ_CMD,
+                    receiver,
+                    getOptions().getBugreportzTimeout(),
+                    TimeUnit.MILLISECONDS,
+                    0 /* don't retry */);
+            String output = receiver.getOutput().trim();
+            Matcher match = BUGREPORTZ_RESPONSE_PATTERN.matcher(output);
+            if (!match.find()) {
+                CLog.e("Something went went wrong during bugreportz collection: '%s'", output);
+                return null;
+            } else {
+                String remoteFilePath = match.group(2);
+                if (Strings.isNullOrEmpty(remoteFilePath)) {
+                    CLog.e("Invalid bugreportz path found from output: %s", output);
+                    return null;
+                }
+                File zipFile = null;
+                try {
+                    if (!doesFileExist(remoteFilePath)) {
+                        CLog.e("Did not find bugreportz at: '%s'", remoteFilePath);
+                        return null;
+                    }
+                    // Create a placeholder to replace the file
+                    zipFile = FileUtil.createTempFile("bugreportz", ".zip");
+                    // pull
+                    pullFile(remoteFilePath, zipFile);
+                    String bugreportDir =
+                            remoteFilePath.substring(0, remoteFilePath.lastIndexOf('/'));
+                    if (!bugreportDir.isEmpty()) {
+                        // clean bugreport files directory on device
+                        deleteFile(String.format("%s/*", bugreportDir));
+                    }
+
+                    return zipFile;
+                } catch (IOException e) {
+                    CLog.e("Failed to create the temporary file.");
+                    return null;
+                }
+            }
+        } catch (DeviceNotAvailableException e) {
+            CLog.e("Device %s became unresponsive while retrieving bugreportz", getSerialNumber());
+            CLog.e(e);
+        }
+        return null;
+    }
+
+    protected InputStreamSource getBugreportInternal() {
+        CollectingByteOutputReceiver receiver = new CollectingByteOutputReceiver();
+        try {
+            executeShellCommand(
+                    BUGREPORT_CMD,
+                    receiver,
+                    BUGREPORT_TIMEOUT,
+                    TimeUnit.MILLISECONDS,
+                    0 /* don't retry */);
+        } catch (DeviceNotAvailableException e) {
+            // Log, but don't throw, so the caller can get the bugreport contents even
+            // if the device goes away
+            CLog.e("Device %s became unresponsive while retrieving bugreport", getSerialNumber());
+            return null;
+        }
+        return new ByteArrayInputStreamSource(receiver.getOutput());
     }
 
     /**
@@ -1258,7 +1482,7 @@ public class TestDevice extends NativeDevice {
         ArrayList<String[]> lines = tokenizeListUsers();
         Map<Integer, UserInfo> result = new HashMap<Integer, UserInfo>(lines.size());
         for (String[] tokens : lines) {
-            if (getApiLevel() < 29) {
+            if (getApiLevel() < 33) {
                 UserInfo userInfo =
                         new UserInfo(
                                 /* userId= */ Integer.parseInt(tokens[1]),
@@ -1285,21 +1509,28 @@ public class TestDevice extends NativeDevice {
     }
 
     /**
-     * Tokenizes the output of 'pm list users'.
-     * The returned tokens for each user have the form: {"\tUserInfo", Integer.toString(id), name,
-     * Integer.toHexString(flag), "[running]"}; (the last one being optional)
-     * @return a list of arrays of strings, each element of the list representing the tokens
-     * for a user, or {@code null} if there was an error while tokenizing the adb command output.
+     * Tokenizes the output of 'pm list users' pre-T and 'cmd user list -v' post-T.
+     *
+     * <p>Pre-T: The returned tokens for each user have the form: {"\tUserInfo",
+     * Integer.toString(id), name, Integer.toHexString(flag), "[running]"}; (the last one being
+     * optional)
+     *
+     * <p>Post-T: The returned tokens for each user have the form: {"\tUserInfo", Integer
+     * .toString(id), name, Integer.toHexString(flag), "[running]", type}; (the last two being
+     * optional)
+     *
+     * @return a list of arrays of strings, each element of the list representing the tokens for a
+     *     user, or {@code null} if there was an error while tokenizing the adb command output.
      */
     private ArrayList<String[]> tokenizeListUsers() throws DeviceNotAvailableException {
-        if (getApiLevel() < 29) { // Android-Q
-            return tokenizeListUsersPreQ();
+        if (getApiLevel() < 33) { // Android-T
+            return tokenizeListUsersPreT();
         } else {
-            return tokenizeListUserPostQ();
+            return tokenizeListUserPostT();
         }
     }
 
-    private ArrayList<String[]> tokenizeListUserPostQ() throws DeviceNotAvailableException {
+    private ArrayList<String[]> tokenizeListUserPostT() throws DeviceNotAvailableException {
         String command = "cmd user list -v";
         String commandOutput = executeShellCommand(command);
         // Extract the id of all existing users.
@@ -1353,7 +1584,7 @@ public class TestDevice extends NativeDevice {
         return users;
     }
 
-    private ArrayList<String[]> tokenizeListUsersPreQ() throws DeviceNotAvailableException {
+    private ArrayList<String[]> tokenizeListUsersPreT() throws DeviceNotAvailableException {
         String command = "pm list users";
         String commandOutput = executeShellCommand(command);
         // Extract the id of all existing users.
@@ -1385,14 +1616,14 @@ public class TestDevice extends NativeDevice {
         int res = 0;
 
         for (int i = 0; i < arr.length - 1; i++) {
-            res |= getHexaDecmialValue(arr[i]);
+            res |= getHexaDecimalValue(arr[i]);
         }
-        res |= getHexaDecmialValue(str);
+        res |= getHexaDecimalValue(str);
 
         return res;
     }
 
-    private int getHexaDecmialValue(String flag) {
+    private int getHexaDecimalValue(String flag) {
         switch (flag) {
             case "PRIMARY":
                 return 0x00000001;
@@ -1488,8 +1719,24 @@ public class TestDevice extends NativeDevice {
     public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException {
         checkApiLevelAgainst("isHeadlessSystemUserMode", 29);
         return checkApiLevelAgainstNextRelease(34)
-                ? executeShellV2CommandThatReturnsBoolean("cmd user is-headless-system-user-mode")
+                ? executeShellV2CommandThatReturnsBooleanSafe(
+                        "cmd user is-headless-system-user-mode")
                 : getBooleanProperty("ro.fw.mu.headless_system_user", false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("canSwitchToHeadlessSystemUser", 34);
+        return executeShellV2CommandThatReturnsBooleanSafe(
+                "cmd user can-switch-to-headless-system-user");
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException {
+        checkApiLevelAgainst("isMainUserPermanentAdmin", 34);
+        return executeShellV2CommandThatReturnsBooleanSafe("cmd user is-main-user-permanent-admin");
     }
 
     /**
@@ -2402,18 +2649,6 @@ public class TestDevice extends NativeDevice {
         }
     }
 
-    private void setTestDeviceOptions(
-            TestDevice microdroidDevice, Map<String, String> deviceOptions) {
-        try {
-            OptionSetter setter = new OptionSetter(microdroidDevice.getOptions());
-            for (Map.Entry<String, String> optionsKeyValue : deviceOptions.entrySet()) {
-                setter.setOptionValue(optionsKeyValue.getKey(), optionsKeyValue.getValue());
-            }
-        } catch (ConfigurationException e) {
-            CLog.w(e);
-        }
-    }
-
     /**
      * Starts a Microdroid TestDevice.
      *
@@ -2562,8 +2797,11 @@ public class TestDevice extends NativeDevice {
                     forwardFileToLog(logPath, "MicrodroidLog");
                 });
 
-        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
-        TestDevice microdroid = (TestDevice) deviceManager.forceAllocateDevice(microdroidSerial);
+        DeviceSelectionOptions microSelection = new DeviceSelectionOptions();
+        microSelection.setSerial(microdroidSerial);
+        microSelection.setBaseDeviceTypeRequested(BaseDeviceType.NATIVE_DEVICE);
+
+        NativeDevice microdroid = (NativeDevice) deviceManager.allocateDevice(microSelection);
         if (microdroid == null) {
             process.destroy();
             try {
@@ -2578,8 +2816,19 @@ public class TestDevice extends NativeDevice {
         }
         // microdroid can be slow to become unavailable after root. (b/259208275)
         microdroid.getOptions().setAdbRootUnavailableTimeout(4 * 1000);
-        setTestDeviceOptions(microdroid, builder.mTestDeviceOptions);
+        builder.mTestDeviceOptions.put("enable-device-connection", "true");
+        builder.mTestDeviceOptions.put(
+                TestDeviceOptions.INSTANCE_TYPE_OPTION, getOptions().getInstanceType().toString());
+        microdroid.setTestDeviceOptions(builder.mTestDeviceOptions);
+        ((IManagedTestDevice) microdroid).setIDevice(new RemoteAvdIDevice(microdroidSerial));
+        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
         microdroid.setMicrodroidProcess(process);
+        try {
+            // TODO: Pass the build info
+            microdroid.initializeConnection(null, null);
+        } catch (DeviceNotAvailableException | TargetSetupError e) {
+            CLog.e(e);
+        }
         MicrodroidTracker tracker = new MicrodroidTracker();
         tracker.executor = executor;
         mStartedMicrodroids.put(process, tracker);
@@ -2673,7 +2922,7 @@ public class TestDevice extends NativeDevice {
      */
     public void shutdownMicrodroid(@Nonnull ITestDevice microdroidDevice)
             throws DeviceNotAvailableException {
-        Process process = ((TestDevice) microdroidDevice).getMicrodroidProcess();
+        Process process = ((NativeDevice) microdroidDevice).getMicrodroidProcess();
         if (process == null) {
             throw new IllegalArgumentException("Process is null. TestDevice is not a Microdroid. ");
         }
@@ -2708,21 +2957,15 @@ public class TestDevice extends NativeDevice {
         }
     }
 
-    /**
-     * Marks the TestDevice as microdroid and sets its CID.
-     *
-     * @param process Process of the Microdroid VM.
-     */
-    private void setMicrodroidProcess(Process process) {
-        mMicrodroidProcess = process;
-    }
-
-    /**
-     * @return Returns the Process of the Microdroid VM. If TestDevice is not a Microdroid, returns
-     *     null.
-     */
-    public Process getMicrodroidProcess() {
-        return mMicrodroidProcess;
+    // TODO (b/274941025): remove when shell commands using this method are merged in AOSP
+    private boolean executeShellV2CommandThatReturnsBooleanSafe(
+            String cmdFormat, Object... cmdArgs) {
+        try {
+            return executeShellV2CommandThatReturnsBoolean(cmdFormat, cmdArgs);
+        } catch (Exception e) {
+            CLog.e(e);
+            return false;
+        }
     }
 
     private boolean executeShellV2CommandThatReturnsBoolean(String cmdFormat, Object... cmdArgs)
