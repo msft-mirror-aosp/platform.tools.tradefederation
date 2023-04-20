@@ -82,6 +82,7 @@ import java.util.Set;
 public class TradefedSandbox implements ISandbox {
 
     private static final String SANDBOX_PREFIX = "sandbox-";
+    public static final String SANDBOX_ENABLED = "SANDBOX_ENABLED";
 
     private File mStdoutFile = null;
     private File mStderrFile = null;
@@ -99,11 +100,16 @@ public class TradefedSandbox implements ISandbox {
 
     private IRunUtil mRunUtil;
 
+    @VisibleForTesting
+    protected String getJava() {
+        return SystemUtil.getRunningJavaBinaryPath().getAbsolutePath();
+    }
+
     @Override
     public CommandResult run(TestInformation info, IConfiguration config, ITestLogger logger)
             throws Throwable {
         List<String> mCmdArgs = new ArrayList<>();
-        mCmdArgs.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
+        mCmdArgs.add(getJava());
         mCmdArgs.add(String.format("-Djava.io.tmpdir=%s", mSandboxTmpFolder.getAbsolutePath()));
         mCmdArgs.add(String.format("-DTF_JAR_DIR=%s", mRootFolder.getAbsolutePath()));
         // Setup heap dump collection
@@ -281,6 +287,8 @@ public class TradefedSandbox implements ISandbox {
             mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
             mRunUtil.unsetEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT);
             mRunUtil.unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
+            // Mark subprocess for sandbox
+            mRunUtil.setEnvVariable(SANDBOX_ENABLED, "true");
 
             if (getSandboxOptions(config).shouldEnableDebugThread()) {
                 mRunUtil.setEnvVariable(TradefedSandboxRunner.DEBUG_THREAD_KEY, "true");
