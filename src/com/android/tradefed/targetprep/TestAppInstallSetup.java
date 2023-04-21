@@ -382,6 +382,8 @@ public class TestAppInstallSetup extends BaseTargetPreparer
             if (!testInfo.getDevice().getUserInfos().containsKey(mUserId)) {
                 CLog.w("User requested: %s doesn't exist on device. Ignoring it.", mUserId);
                 mUserId = null;
+            } else {
+                CLog.d("Using user %s from testInfo properties.", mUserId);
             }
         }
 
