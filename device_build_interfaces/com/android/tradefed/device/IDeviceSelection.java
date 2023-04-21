@@ -17,6 +17,7 @@
 package com.android.tradefed.device;
 
 import com.android.ddmlib.IDevice;
+import com.android.tradefed.device.IDeviceSelection.BaseDeviceType;
 import com.android.tradefed.util.ConditionPriorityBlockingQueue.IMatcher;
 
 import java.util.Collection;
@@ -27,6 +28,11 @@ import java.util.Map;
  * Interface for device selection criteria.
  */
 public interface IDeviceSelection extends IMatcher<IDevice> {
+
+    public enum BaseDeviceType {
+        NATIVE_DEVICE,
+        FULL_DEVICE;
+    }
 
     /**
      * Gets a copy of the serial numbers
@@ -122,4 +128,10 @@ public interface IDeviceSelection extends IMatcher<IDevice> {
      * @return a Map of serial number to reason for which it wasn't allocated
      */
     public Map<String, String> getNoMatchReason();
+
+    /** Returns the device type we should use. */
+    public BaseDeviceType getBaseDeviceTypeRequested();
+
+    /** Sets the device type we should use. */
+    public void setBaseDeviceTypeRequested(BaseDeviceType type);
 }

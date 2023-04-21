@@ -56,12 +56,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** Host test meant to run a mobly python binary file from the Android Build system (Soong) */
 @OptionClass(alias = "mobly-host")
@@ -120,6 +127,9 @@ public class MoblyBinaryHostTest
                             + "If set, will append '--test_bed=<test bed name>' to the command for "
                             + "running binary.")
     private String mTestBed;
+
+    @Option(name = "mobly-std-log", description = "Print mobly logs to standard outputs")
+    private boolean mStdLog = false;
 
     private ITestDevice mDevice;
     private IBuildInfo mBuildInfo;
@@ -214,15 +224,10 @@ public class MoblyBinaryHostTest
             }
             parFile.setExecutable(true);
             try {
-                runSingleParFile(parFile.getAbsolutePath(), listener);
-                processTestResults(listener, parFile.getName());
+                runSingleParFile(parFile.getAbsolutePath(), parFile.getName(), listener);
             } finally {
                 reportLogs(getLogDir(), listener);
             }
-        }
-        if (venvDir != null
-                && venvDir.getAbsolutePath().startsWith(System.getProperty("java.io.tmpdir"))) {
-            FileUtil.recursiveDelete(venvDir);
         }
     }
 
@@ -244,7 +249,8 @@ public class MoblyBinaryHostTest
         return files;
     }
 
-    private void runSingleParFile(String parFilePath, ITestInvocationListener listener) {
+    private void runSingleParFile(
+            String parFilePath, String runName, ITestInvocationListener listener) {
         if (mInjectAndroidSerialVar) {
             getRunUtil().setEnvVariable(ANDROID_SERIAL_VAR, getDevice().getSerialNumber());
         }
@@ -260,48 +266,152 @@ public class MoblyBinaryHostTest
                 configPath = updateTemplateConfigFile(configFile, mWildcardConfig);
             } catch (FileNotFoundException e) {
                 reportFailure(
-                        listener,
-                        mConfigFileName,
-                        "Couldn't find Mobly config file " + mConfigFileName);
+                        listener, runName, "Couldn't find Mobly config file " + mConfigFileName);
+                return;
             }
         }
-        CommandResult result =
-                getRunUtil()
-                        .runTimedCmd(
-                                getTestTimeout(), buildCommandLineArray(parFilePath, configPath));
-        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-            CLog.e(
-                    "Something went wrong when running the python binary:\nstdout: "
-                            + "%s\nstderr:%s\nStatus:%s",
-                    result.getStdout(), result.getStderr(), result.getStatus());
+        CommandResult list_result =
+                getRunUtil().runTimedCmd(6000, parFilePath, "--", "--list_tests");
+        if (!CommandStatus.SUCCESS.equals(list_result.getStatus())) {
+            String message;
+            if (CommandStatus.TIMED_OUT.equals(list_result.getStatus())) {
+                message = "Unable to list tests from the python binary: Timed out";
+            } else {
+                message =
+                        "Unable to list tests from the python binary\nstdout: "
+                                + list_result.getStdout()
+                                + "\nstderr: "
+                                + list_result.getStderr();
+            }
+            reportFailure(listener, runName, message);
+            return;
         }
-    }
-
-    private void processTestResults(ITestInvocationListener listener, String runName)
-            throws HarnessRuntimeException {
-        // Convert yaml test summary to xml.
-        File yamlSummaryFile = FileUtil.findFile(getLogDir(), MOBLY_TEST_SUMMARY);
-        if (yamlSummaryFile == null) {
-            throw new HarnessRuntimeException(
-                    String.format(
-                            "Fail to find test summary file %s under directory %s",
-                            MOBLY_TEST_SUMMARY, getLogDir()),
-                    TestErrorIdentifier.UNEXPECTED_MOBLY_BEHAVIOR);
+        // Compute all tests.
+        final String[] all_tests =
+                Arrays.stream(list_result.getStdout().split(System.lineSeparator()))
+                        .filter(line -> line.startsWith("test_") || line.contains(".test_"))
+                        .toArray(String[]::new);
+        Stream<String> includedTests = Arrays.stream(all_tests);
+        // Process include filters.
+        String[] includeFilters =
+                getIncludeFilters().stream()
+                        .map(filter -> filter.replace("#", "."))
+                        .toArray(String[]::new);
+        if (includeFilters.length > 0) {
+            String invalidIncludeFilters =
+                    Arrays.stream(includeFilters)
+                            .filter(
+                                    filter ->
+                                            !Arrays.stream(all_tests)
+                                                    .anyMatch(test -> test.startsWith(filter)))
+                            .collect(Collectors.joining(", "));
+            if (!invalidIncludeFilters.isEmpty()) {
+                reportFailure(
+                        listener,
+                        runName,
+                        "Invalid include filters: [" + invalidIncludeFilters + "]");
+                return;
+            }
+            includedTests =
+                    includedTests.filter(
+                            test ->
+                                    Arrays.stream(includeFilters)
+                                            .anyMatch(filter -> test.startsWith(filter)));
         }
-
-        MoblyYamlResultParser parser = new MoblyYamlResultParser(listener, runName);
+        // Process exclude filters.
+        String[] excludeFilters =
+                getExcludeFilters().stream()
+                        .map(filter -> filter.replace("#", "."))
+                        .toArray(String[]::new);
+        if (excludeFilters.length > 0) {
+            String invalidExcludeFilters =
+                    Arrays.stream(excludeFilters)
+                            .filter(
+                                    filter ->
+                                            !Arrays.stream(all_tests)
+                                                    .anyMatch(test -> test.equals(filter)))
+                            .collect(Collectors.joining(", "));
+            if (!invalidExcludeFilters.isEmpty()) {
+                reportFailure(
+                        listener,
+                        runName,
+                        "Invalid exclude filters: [" + invalidExcludeFilters + "]");
+                return;
+            }
+            includedTests =
+                    includedTests.filter(
+                            test ->
+                                    !Arrays.stream(excludeFilters)
+                                            .anyMatch(filter -> test.equals(filter)));
+        }
+        // Collect final filtered tests list.
+        List<String> tests = includedTests.collect(Collectors.toList());
+        // Start run.
+        long startTime = System.currentTimeMillis();
+        listener.testRunStarted(runName, tests.size());
+        // No test to run, abort early.
+        if (tests.isEmpty()) {
+            listener.testRunEnded(0, new HashMap<String, String>());
+            return;
+        }
+        // Do not pass tests to command line if all included.
+        if (tests.size() == all_tests.length) {
+            tests.clear();
+        }
+        String[] command = buildCommandLineArray(parFilePath, configPath, tests);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        CompletableFuture<CommandResult> future =
+                CompletableFuture.supplyAsync(
+                        () -> {
+                            if (isStdLogging()) {
+                                return getRunUtil()
+                                        .runTimedCmd(
+                                                getTestTimeout(), System.out, System.err, command);
+                            }
+                            return getRunUtil().runTimedCmd(getTestTimeout(), command);
+                        },
+                        executor);
+        MoblyYamlResultParser parser = new MoblyYamlResultParser(listener);
+        File yamlSummaryFile = null;
         InputStream inputStream = null;
-        try {
-            inputStream = new FileInputStream(yamlSummaryFile);
-            processYamlTestResults(inputStream, parser, listener, runName);
-        } catch (FileNotFoundException ex) {
-            reportFailure(
-                    listener,
-                    runName,
-                    "Fail processing test results, result file not found.\n" + ex);
-        } finally {
+        boolean reportRunFailed = true;
+        while (!future.isDone() && yamlSummaryFile == null) {
+            yamlSummaryFile = FileUtil.findFile(getLogDir(), MOBLY_TEST_SUMMARY);
+            if (yamlSummaryFile != null) {
+                try {
+                    inputStream = new FileInputStream(yamlSummaryFile);
+                } catch (FileNotFoundException ex) {
+                    listener.testRunFailed(ex.toString());
+                    reportRunFailed = false;
+                }
+            }
+        }
+        if (inputStream != null) {
+            while (!future.isDone()) processYamlTestResults(inputStream, parser, listener, runName);
+            if (processYamlTestResults(inputStream, parser, listener, runName)) {
+                // In case of test failure(s), result will be a non-zero value.
+                // Since we get a complete summary file and that any error(s) had been
+                // already reported, there is no need to report the run as failed.
+                reportRunFailed = false;
+            } else {
+                CLog.e("Did not get a complete summary file from python binary.");
+                // Only report as failed if not already done by the parser.
+                reportRunFailed = !parser.getRunFailed();
+            }
             StreamUtil.close(inputStream);
         }
+        try {
+            CommandResult result = future.get();
+            if (!CommandStatus.SUCCESS.equals(result.getStatus()) && reportRunFailed)
+                listener.testRunFailed(result.getStderr());
+        } catch (InterruptedException ex) {
+            listener.testRunFailed(ex.toString());
+        } catch (ExecutionException ex) {
+            listener.testRunFailed(ex.toString());
+        }
+        executor.shutdownNow();
+        listener.testRunEnded(
+                System.currentTimeMillis() - startTime, new HashMap<String, String>());
     }
 
     /**
@@ -313,17 +423,19 @@ public class MoblyBinaryHostTest
      * @param runName str, the name of the Mobly test binary run.
      */
     @VisibleForTesting
-    protected void processYamlTestResults(
+    protected boolean processYamlTestResults(
             InputStream inputStream,
             MoblyYamlResultParser parser,
             ITestInvocationListener listener,
             String runName) {
         try {
-            parser.parse(inputStream);
+            return parser.parse(inputStream);
         } catch (MoblyYamlResultHandlerFactory.InvalidResultTypeException
+                | IOException
                 | IllegalAccessException
                 | InstantiationException ex) {
-            reportFailure(listener, runName, "Failed to parse the result file.\n" + ex);
+            CLog.e("Failed to parse the result file.\n" + ex);
+            return false;
         }
     }
 
@@ -408,6 +520,8 @@ public class MoblyBinaryHostTest
                 androidDeviceList.add(deviceMap);
                 deviceMap.put("serial", devices.get(index).getSerialNumber());
             }
+        } else if (androidDeviceValue == null) {
+            CLog.d("No Android device provided.");
         } else {
             throw new HarnessRuntimeException(
                     String.format("Unsupported value for AndroidDevice: %s", androidDeviceValue),
@@ -446,7 +560,7 @@ public class MoblyBinaryHostTest
         listener.testRunEnded(0L, new HashMap<String, Metric>());
     }
 
-    private Set<String> cleanFilters(Set<String> filters) {
+    private Set<String> cleanFilters(List<String> filters) {
         Set<String> new_filters = new LinkedHashSet<String>();
         for (String filter : filters) {
             new_filters.add(filter.replace("#", "."));
@@ -470,12 +584,22 @@ public class MoblyBinaryHostTest
     }
 
     @VisibleForTesting
+    boolean isStdLogging() {
+        return mStdLog;
+    }
+
+    @VisibleForTesting
     TestInformation getTestInfo() {
         return mTestInfo;
     }
 
     @VisibleForTesting
     protected String[] buildCommandLineArray(String filePath, String configPath) {
+        return buildCommandLineArray(filePath, configPath, new ArrayList<>());
+    }
+
+    protected String[] buildCommandLineArray(
+            String filePath, String configPath, List<String> tests) {
         List<String> commandLine = new ArrayList<>();
         commandLine.add(filePath);
         // TODO(b/166468397): some test binaries are actually a wrapper of Mobly runner and need --
@@ -491,9 +615,9 @@ public class MoblyBinaryHostTest
             commandLine.add("--device_serial=" + device.getSerialNumber());
         }
         commandLine.add("--log_path=" + getLogDirAbsolutePath());
-        if (!mIncludeFilters.isEmpty()) {
+        if (!tests.isEmpty()) {
             commandLine.add("--tests");
-            commandLine.addAll(cleanFilters(mIncludeFilters));
+            commandLine.addAll(cleanFilters(tests));
         }
         // Add all the other options
         commandLine.addAll(getTestOptions());
@@ -514,6 +638,9 @@ public class MoblyBinaryHostTest
                     LogDataType type = LogDataType.TEXT;
                     if (cleanName.contains("logcat")) {
                         type = LogDataType.LOGCAT;
+                    }
+                    if (cleanName.contains("btsnoop")) {
+                        type = LogDataType.BT_SNOOP_LOG;
                     }
                     listener.testLog(cleanName, type, dataStream);
                 }

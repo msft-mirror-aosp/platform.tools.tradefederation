@@ -23,11 +23,11 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.ITestDevice.MountPointInfo;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.device.connection.AbstractConnection;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.targetprep.TargetSetupError;
-import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.ProcessInfo;
@@ -36,7 +36,6 @@ import com.android.tradefed.util.TimeUtil;
 import com.google.errorprone.annotations.MustBeClosed;
 
 import java.io.File;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Collection;
 import java.util.Date;
@@ -1230,6 +1229,16 @@ public interface INativeDevice {
     public boolean waitForDeviceAvailable() throws DeviceNotAvailableException;
 
     /**
+     * Waits for the device to be responsive and available without considering recovery path.
+     *
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     * @return True if device is available, False if unavailable.
+     */
+    public boolean waitForDeviceAvailableInRecoverPath(final long waitTime)
+            throws DeviceNotAvailableException;
+
+    /**
      * Blocks until device is visible via adb.
      * <p/>
      * Note the device may not necessarily be responsive to commands on completion. Use
@@ -1447,46 +1456,6 @@ public interface INativeDevice {
     public String getBuildSigningKeys() throws DeviceNotAvailableException;
 
     /**
-     * Retrieves a bugreport from the device.
-     * <p/>
-     * The implementation of this is guaranteed to continue to work on a device without an sdcard
-     * (or where the sdcard is not yet mounted).
-     *
-     * @return An {@link InputStreamSource} which will produce the bugreport contents on demand.  In
-     *         case of failure, the {@code InputStreamSource} will produce an empty
-     *         {@link InputStream}.
-     */
-    public InputStreamSource getBugreport();
-
-    /**
-     * Retrieves a bugreportz from the device. Zip format bugreport contains the main bugreport
-     * and other log files that are useful for debugging.
-     * <p/>
-     * Only supported for 'adb version' > 1.0.36
-     *
-     * @return a {@link InputStreamSource} of the zip file containing the bugreportz, return null
-     *         in case of failure.
-     */
-    public InputStreamSource getBugreportz();
-
-    /**
-     * Helper method to take a bugreport and log it to the reporters.
-     *
-     * @param dataName name under which the bugreport will be reported.
-     * @param listener an {@link ITestLogger} to log the bugreport.
-     * @return True if the logging was successful, false otherwise.
-     */
-    public boolean logBugreport(String dataName, ITestLogger listener);
-
-    /**
-     * Take a bugreport and returns it inside a {@link Bugreport} object to handle it. Return null
-     * in case of issue.
-     * </p>
-     * File referenced in the Bugreport object need to be cleaned via {@link Bugreport#close()}.
-     */
-    public Bugreport takeBugreport();
-
-    /**
      * Collects and log ANRs from the device.
      *
      * @param logger an {@link ITestLogger} to log the ANRs.
@@ -1665,5 +1634,6 @@ public interface INativeDevice {
      */
     public List<File> getTombstones() throws DeviceNotAvailableException;
 
-
+    /** Returns the connection associated with the device. */
+    public AbstractConnection getConnection();
 }

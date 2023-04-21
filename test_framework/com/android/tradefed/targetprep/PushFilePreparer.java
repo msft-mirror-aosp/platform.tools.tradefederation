@@ -123,10 +123,12 @@ public class PushFilePreparer extends BaseTargetPreparer
             "After pushing files, trigger a media scan of external storage on device.")
     private boolean mTriggerMediaScan = false;
 
-    @Option(name="cleanup", description = "Whether files pushed onto device should be cleaned up "
-            + "after test. Note that the preparer does not verify that files/directories have "
-            + "been deleted.")
-    private boolean mCleanup = false;
+    @Option(
+            name = "cleanup",
+            description =
+                    "Whether files pushed onto device should be cleaned up after test. Note that"
+                        + " the preparer does not verify that files/directories have been deleted.")
+    private boolean mCleanup = true;
 
     @Option(
             name = "remount-system",
@@ -489,5 +491,17 @@ public class PushFilePreparer extends BaseTargetPreparer
             CLog.e(e);
         }
         return deps;
+    }
+
+    public boolean shouldRemountSystem() {
+        return mRemountSystem;
+    }
+
+    public boolean shouldRemountVendor() {
+        return mRemountVendor;
+    }
+
+    public boolean isCleanUpEnabled() {
+        return mCleanup;
     }
 }

@@ -22,6 +22,7 @@ import com.android.ddmlib.IDevice.DeviceState;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.TimeoutException;
 import com.android.tradefed.device.DeviceManager.FastbootDevice;
+import com.android.tradefed.device.IDeviceSelection.BaseDeviceType;
 import com.android.tradefed.device.cloud.ManagedRemoteDevice;
 import com.android.tradefed.device.cloud.NestedDeviceStateMonitor;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
@@ -62,6 +63,28 @@ public class ManagedTestDeviceFactory implements IManagedTestDeviceFactory {
         mFastbootEnabled = fastbootEnabled;
         mDeviceManager = deviceManager;
         mAllocationMonitor = allocationMonitor;
+    }
+
+    @Override
+    public IManagedTestDevice createRequestedDevice(IDevice idevice, IDeviceSelection options) {
+        IManagedTestDevice testDevice = null;
+        if (BaseDeviceType.NATIVE_DEVICE.equals(options.getBaseDeviceTypeRequested())) {
+            testDevice =
+                    new NativeDevice(
+                            idevice,
+                            new NativeDeviceStateMonitor(mDeviceManager, idevice, mFastbootEnabled),
+                            mAllocationMonitor);
+            testDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
+        } else {
+            // Default to-go device is Android full stack device.
+            testDevice =
+                    new TestDevice(
+                            idevice,
+                            new DeviceStateMonitor(mDeviceManager, idevice, mFastbootEnabled),
+                            mAllocationMonitor);
+            testDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
+        }
+        return testDevice;
     }
 
     /**
@@ -219,10 +242,10 @@ public class ManagedTestDeviceFactory implements IManagedTestDeviceFactory {
     }
 
     /**
-     * Helper to device if it's a serial from a remotely connected device.
-     * serial format of tcp device is <ip or locahost>:<port>
+     * Helper to device if it's a serial from a remotely connected device. serial format of tcp
+     * device is <ip or locahost>:<port>
      */
-    protected boolean isTcpDeviceSerial(String serial) {
+    public static boolean isTcpDeviceSerial(String serial) {
         final String remotePattern = IPADDRESS_PATTERN + "(:)([0-9]{2,5})(\\b)";
         Pattern pattern = Pattern.compile(remotePattern);
         Matcher match = pattern.matcher(serial.trim());

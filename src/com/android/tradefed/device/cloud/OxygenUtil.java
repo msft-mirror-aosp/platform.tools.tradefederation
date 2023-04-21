@@ -26,6 +26,8 @@ import com.android.tradefed.util.GCSFileDownloader;
 import com.android.tradefed.util.Pair;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.nio.file.Files;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,6 +42,9 @@ import java.util.stream.Stream;
 
 /** Utility to interact with Oxygen service. */
 public class OxygenUtil {
+
+    // Maximum size of tailing part of a file to search for error signature.
+    private static final long MAX_FILE_SIZE_FOR_ERROR = 10 * 1024 * 1024;
 
     private GCSFileDownloader mDownloader;
 
@@ -59,25 +64,23 @@ public class OxygenUtil {
                                     LogDataType.TOMBSTONEZ))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-    private static final Map<Pattern, Pair<Pattern, String>>
+    private static final Map<Pattern, Pair<String, String>>
             REMOTE_LOG_NAME_PATTERN_TO_ERROR_SIGNATURE_MAP =
                     Stream.of(
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile("^launcher\\.log.*"),
                                             Pair.create(
-                                                    Pattern.compile(".*Address already in use.*"),
+                                                    "Address already in use",
                                                     "launch_cvd_port_collision")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile("^launcher\\.log.*"),
                                             Pair.create(
-                                                    Pattern.compile(".*vcpu hw run failure: 0x7.*"),
+                                                    "vcpu hw run failure: 0x7",
                                                     "crosvm_vcpu_hw_run_failure_7")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile("^launcher\\.log.*"),
                                             Pair.create(
-                                                    Pattern.compile(
-                                                            ".*Unable to connect to vsock"
-                                                                    + " server.*"),
+                                                    "Unable to connect to vsock server",
                                                     "unable_to_connect_to_vsock_server")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
@@ -187,8 +190,8 @@ public class OxygenUtil {
                     continue;
                 }
                 String fileName = file.getName();
-                List<Pair<Pattern, String>> pairs = new ArrayList<>();
-                for (Map.Entry<Pattern, Pair<Pattern, String>> entry :
+                List<Pair<String, String>> pairs = new ArrayList<>();
+                for (Map.Entry<Pattern, Pair<String, String>> entry :
                         REMOTE_LOG_NAME_PATTERN_TO_ERROR_SIGNATURE_MAP.entrySet()) {
                     Matcher matcher = entry.getKey().matcher(fileName);
                     if (matcher.find()) {
@@ -198,20 +201,26 @@ public class OxygenUtil {
                 if (pairs.size() == 0) {
                     continue;
                 }
-                try (Scanner scanner = new Scanner(file)) {
-                    List<Pair<Pattern, String>> pairsToRemove = new ArrayList<>();
-                    while (scanner.hasNextLine()) {
-                        String line = scanner.nextLine();
-                        for (Pair<Pattern, String> pair : pairs) {
-                            if (pair.first.matcher(line).find()) {
-                                pairsToRemove.add(pair);
-                                signatures.add(pair.second);
+                try (FileInputStream stream = new FileInputStream(file)) {
+                    long skipSize = Files.size(file.toPath()) - MAX_FILE_SIZE_FOR_ERROR;
+                    if (skipSize > 0) {
+                        stream.skip(skipSize);
+                    }
+                    try (Scanner scanner = new Scanner(stream)) {
+                        List<Pair<String, String>> pairsToRemove = new ArrayList<>();
+                        while (scanner.hasNextLine()) {
+                            String line = scanner.nextLine();
+                            for (Pair<String, String> pair : pairs) {
+                                if (line.indexOf(pair.first) != -1) {
+                                    pairsToRemove.add(pair);
+                                    signatures.add(pair.second);
+                                }
                             }
-                        }
-                        if (pairsToRemove.size() > 0) {
-                            pairs.removeAll(pairsToRemove);
-                            if (pairs.size() == 0) {
-                                break;
+                            if (pairsToRemove.size() > 0) {
+                                pairs.removeAll(pairsToRemove);
+                                if (pairs.size() == 0) {
+                                    break;
+                                }
                             }
                         }
                     }
@@ -290,5 +299,26 @@ public class OxygenUtil {
             CLog.e(e);
         }
         return metrics;
+    }
+
+    /**
+     * Collect oxygen version info from oxygeen_version.txt.
+     *
+     * @param logDir directory of logs pulled from remote host.
+     */
+    public static String collectOxygenVersion(File logDir) {
+        CLog.d("Collect Oxygen version from logs under: %s.", logDir);
+        try {
+            Set<String> files = FileUtil.findFiles(logDir, "^oxygen_version\\.txt.*");
+            if (files.size() == 0) {
+                CLog.d("There is no oxygen_version.txt found.");
+                return null;
+            }
+            return FileUtil.readStringFromFile(new File(files.iterator().next()));
+        } catch (Exception e) {
+            CLog.e("Failed to read oxygen_version.txt .");
+            CLog.e(e);
+            return null;
+        }
     }
 }

@@ -16,6 +16,7 @@
 package com.android.tradefed.testtype;
 
 import com.android.tradefed.device.CollectingOutputReceiver;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.FailureDescription;
@@ -98,37 +99,39 @@ public class GoogleBenchmarkResultParser {
                 String name = testRes.getString("name");
                 TestDescription testId = new TestDescription(mTestClassName, name);
                 mTestListener.testStarted(testId);
-                try {
-                    testResults = parseJsonToMap(testRes);
-                } catch (JSONException e) {
-                    CLog.e(e);
-                    mTestListener.testFailed(
-                            testId,
-                            String.format(
-                                    "Test failed to generate " + "proper results: %s",
-                                    e.getMessage()));
-                }
-                // Check iterations to make sure it actual ran
-                String iterations = testResults.get("iterations");
-                if (iterations != null && "0".equals(iterations.trim())) {
-                    mTestListener.testIgnored(testId);
-                }
+                try (CloseableTraceScope ignore = new CloseableTraceScope(testId.toString())) {
+                    try {
+                        testResults = parseJsonToMap(testRes);
+                    } catch (JSONException e) {
+                        CLog.e(e);
+                        mTestListener.testFailed(
+                                testId,
+                                String.format(
+                                        "Test failed to generate proper results: %s",
+                                        e.getMessage()));
+                    }
+                    // Check iterations to make sure it actual ran
+                    String iterations = testResults.get("iterations");
+                    if (iterations != null && "0".equals(iterations.trim())) {
+                        mTestListener.testIgnored(testId);
+                    }
 
-                if (testRes.has("error_occurred")) {
-                    boolean errorOccurred = testRes.getBoolean("error_occurred");
-                    if (errorOccurred) {
-                        String errorMessage = testResults.get("error_message");
-                        if (Strings.isNullOrEmpty(errorMessage)) {
-                            mTestListener.testFailed(
-                                    testId, "Benchmark reported an unspecified error");
-                        } else {
-                            mTestListener.testFailed(
-                                    testId,
-                                    String.format("Benchmark reported an error: %s", errorMessage));
+                    if (testRes.has("error_occurred")) {
+                        boolean errorOccurred = testRes.getBoolean("error_occurred");
+                        if (errorOccurred) {
+                            String errorMessage = testResults.get("error_message");
+                            if (Strings.isNullOrEmpty(errorMessage)) {
+                                mTestListener.testFailed(
+                                        testId, "Benchmark reported an unspecified error");
+                            } else {
+                                mTestListener.testFailed(
+                                        testId,
+                                        String.format(
+                                                "Benchmark reported an error: %s", errorMessage));
+                            }
                         }
                     }
                 }
-
                 mTestListener.testEnded(testId, TfMetricProtoUtil.upgradeConvert(testResults));
             }
             results.put("Pass", Integer.toString(benchmarks.length()));

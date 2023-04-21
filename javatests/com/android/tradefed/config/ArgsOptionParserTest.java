@@ -91,13 +91,14 @@ public class ArgsOptionParserTest {
     }
 
     /** An option source with boolean {@link Option} specified. */
+    @OptionClass(alias = "boolean-option-source", global_namespace = true)
     private static class BooleanOptionSource {
 
         private static final boolean DEFAULT_BOOL = false;
         private static final String DEFAULT_VALUE = "default";
 
         @Option(name = "my_boolean", shortName = 'b')
-        private boolean mMyBool = DEFAULT_BOOL;
+        boolean mMyBool = DEFAULT_BOOL;
 
         @Option(name = "my_option", shortName = 'o')
         protected String mMyOption = DEFAULT_VALUE;
@@ -556,6 +557,18 @@ public class ArgsOptionParserTest {
         parser.parse(new String[] {"-bo", expectedValue});
         assertTrue(object.mMyBool);
         assertEquals(expectedValue, object.mMyOption);
+    }
+
+    @Test
+    public void testParse_boolLong_namespace() throws ConfigurationException {
+        BooleanOptionSource object = new BooleanOptionSource();
+        object.mMyBool = true;
+        BooleanOptionSource object2 = new BooleanOptionSource();
+        object2.mMyBool = true;
+        ArgsOptionParser parser = new ArgsOptionParser(object, object2);
+        parser.parse(new String[] {"--boolean-option-source:1:no-my_boolean"});
+        assertFalse(object.mMyBool);
+        assertTrue(object2.mMyBool);
     }
 
     /**

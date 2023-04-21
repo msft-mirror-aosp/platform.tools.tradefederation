@@ -40,7 +40,6 @@ import com.google.common.base.Strings;
 
 import java.io.File;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * A {@link com.android.tradefed.device.metric.BaseDeviceMetricCollector} that will pull gcov kernel
@@ -59,10 +58,17 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
     public static final String RESET_GCOV_COUNTS_COMMAND =
             String.format("echo 1 > %s/gcov/reset", DEBUGFS_PATH);
     public static final String MAKE_TEMP_DIR_COMMAND = "mktemp -d -p /data/local/tmp/";
+    public static final String MAKE_GCDA_TEMP_DIR_COMMAND_FMT = "mkdir -p %s";
+    public static final String COPY_GCOV_DATA_COMMAND_FMT = "cp -rf %s/* %s";
+    public static final String TAR_GCOV_DATA_COMMAND_FMT = "tar -czf %s -C %s %s";
 
     private IConfiguration mConfiguration;
     private boolean mTestRunStartFail;
     private int mTestCount;
+
+    public GcovKernelCodeCoverageCollector() {
+        setDisableReceiver(false);
+    }
 
     @Override
     public void setConfiguration(IConfiguration config) {
@@ -120,6 +126,18 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
             collectGcovDebugfsCoverage(device, getTarBasename());
             unmountDebugfs(device);
         }
+    }
+
+    @Override
+    public void rebootStarted(ITestDevice device) throws DeviceNotAvailableException {
+        super.rebootStarted(device);
+        collectGcovDebugfsCoverage(device, getTarBasename());
+    }
+
+    @Override
+    public void rebootEnded(ITestDevice device) throws DeviceNotAvailableException {
+        super.rebootEnded(device);
+        mountDebugfs(device);
     }
 
     /* Gets the name to be used for the collected coverage tar file.
@@ -185,9 +203,17 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
     }
 
     /**
-     * Gather overage data files off of the device. This logic is taken directly from the
-     * `gather_on_test.sh` script detailed here:
+     * Gather overage data files off of the device. This logic is was originally taken directly from
+     * the `gather_on_test.sh` script detailed here:
      * https://www.kernel.org/doc/html/v4.15/dev-tools/gcov.html#appendix-b-gather-on-test-sh
+     * However, in practice the `find` + `cat` approach ended up taking a lot of time. The reasoning
+     * given for this approach was because of issues with the `seq_file` interface. It turns out
+     * this issue no longer applies to the `cp` command (it still applies to the `tar`). Discussion
+     * on this can b e found here:
+     * https://github.com/linux-test-project/lcov/discussions/199#discussion-4895422
+     *
+     * <p>TODO: Revert this summary back to the original text, once upstream patch lands that
+     * updates `gather_on_test.sh` `cp` instead of `find` + `cat`.
      */
     private void collectGcovDebugfsCoverage(INativeDevice device, String name)
             throws DeviceNotAvailableException {
@@ -208,31 +234,40 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
                         DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
             }
             String tempDir = result.getStdout().strip();
+
+            String gcda = "/d/gcov";
+            String gcdaTempDir = tempDir + gcda;
+            String makeGcdaTempDirCommand =
+                    String.format(MAKE_GCDA_TEMP_DIR_COMMAND_FMT, gcdaTempDir);
+            result = device.executeShellV2Command(makeGcdaTempDirCommand);
+            if (result.getStatus() != CommandStatus.SUCCESS) {
+                CLog.e("Failed to create gcda temp directory %s. %s", gcdaTempDir, result);
+                throw new DeviceRuntimeException(
+                        "'" + makeGcdaTempDirCommand + "' has failed: " + result,
+                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+            }
+
             String tarName = String.format("%s.tar.gz", name);
             String tarFullPath = String.format("%s/%s", tempDir, tarName);
-            String gcda = "/d/gcov";
 
-            String gatherCommand =
-                    String.format(
-                            "find %s -type d -exec sh -c 'mkdir -p %s/$0' {} \\;; find %s -name"
-                                + " '*.gcda' -exec sh -c 'cat < $0 > '%s'/$0' {} \\;; find %s -name"
-                                + " '*.gcno' -exec sh -c 'cp -d $0 '%s'/$0' {} \\;; tar -czf %s -C"
-                                + " %s %s",
-                            gcda,
-                            tempDir,
-                            gcda,
-                            tempDir,
-                            gcda,
-                            tempDir,
-                            tarFullPath,
-                            tempDir,
-                            gcda.substring(1));
-
-            result = device.executeShellV2Command(gatherCommand, 10, TimeUnit.MINUTES);
+            String copyGcovDataCommand =
+                    String.format(COPY_GCOV_DATA_COMMAND_FMT, gcda, gcdaTempDir);
+            result = device.executeShellV2Command(copyGcovDataCommand);
             if (result.getStatus() != CommandStatus.SUCCESS) {
                 CLog.e("Failed to collect coverage files for %s. %s", name, result);
                 throw new DeviceRuntimeException(
-                        "'" + gatherCommand + "' has failed: " + result,
+                        "'" + copyGcovDataCommand + "' has failed: " + result,
+                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+            }
+
+            String tarCommand =
+                    String.format(
+                            TAR_GCOV_DATA_COMMAND_FMT, tarFullPath, tempDir, gcda.substring(1));
+            result = device.executeShellV2Command(tarCommand);
+            if (result.getStatus() != CommandStatus.SUCCESS) {
+                CLog.e("Failed to tar collected files for %s. %s", name, result);
+                throw new DeviceRuntimeException(
+                        "'" + tarCommand + "' has failed: " + result,
                         DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
             }
 

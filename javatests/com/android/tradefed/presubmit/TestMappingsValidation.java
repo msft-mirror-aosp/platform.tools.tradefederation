@@ -15,8 +15,9 @@
  */
 package com.android.tradefed.presubmit;
 
-import static java.lang.String.format;
 import static org.junit.Assert.fail;
+
+import static java.lang.String.format;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
@@ -25,8 +26,11 @@ import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.ConfigurationUtil;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.targetprep.ITargetPreparer;
+import com.android.tradefed.targetprep.PushFilePreparer;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.suite.ITestSuite;
@@ -38,10 +42,17 @@ import com.android.tradefed.util.testmapping.TestOption;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
-
+import com.google.common.collect.ImmutableSet;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+
+import org.junit.After;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,14 +62,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.junit.Assume;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import java.util.stream.Collectors;
 
 /**
  * Validation tests to run against the TEST_MAPPING files in tests_mappings.zip to ensure they
@@ -98,6 +104,10 @@ public class TestMappingsValidation implements IBuildReceiver {
     private static final String MODULE_NAME = "module_name";
     private static final String MAINLINE = "mainline";
 
+    // Pair that shouldn't be overlapping. Test can only exists in one or the other.
+    private static final Set<String> INCOMPATIBLE_PAIRS =
+            ImmutableSet.of("presubmit", "presubmit-large");
+
     // Check the mainline parameter configured in a test config must end with .apk, .apks, or .apex.
     private static final Set<String> MAINLINE_PARAMETERS_TO_VALIDATE =
             new HashSet<>(Arrays.asList(".apk", ".apks", ".apex"));
@@ -118,6 +128,82 @@ public class TestMappingsValidation implements IBuildReceiver {
         // Test option is package format.
         PACKAGE
     }
+
+    // TODO: Evaluate those modules if they can be moved out.
+    private static final Set<String> EXEMPTED_DUPLICATION_PRESUBMIT_LARGE =
+            ImmutableSet.of(
+                    "CtsLibcoreOjTestCases",
+                    "FrameworksCoreTests",
+                    "CtsAppTestCases",
+                    "CtsAppSecurityHostTestCases",
+                    "FrameworksServicesTests",
+                    "CtsLibcoreTestCases",
+                    "CtsDevicePolicyManagerTestCases",
+                    "CtsAutoFillServiceTestCases",
+                    "CtsOsTestCases",
+                    "CtsStatsdAtomHostTestCases",
+                    "CtsPermission3TestCases",
+                    "CtsMediaAudioTestCases");
+
+    private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST = ImmutableSet.of(
+                    "binderRpcTestNoKernel",
+                    "CtsTelecomTestCases",
+                    "CtsAppTestCases",
+                    "binderRpcTestSingleThreadedNoKernel",
+                    "CtsSuspendAppsPermissionTestCases",
+                    "CtsAppSecurityHostTestCases",
+                    "FrameworksServicesTests",
+                    "NeuralNetworksTest_static",
+                    "CtsNNAPITestCases",
+                    "CtsLibcoreTestCases",
+                    "OverlayRemountedTest",
+                    "CtsPermission3TestCases",
+                    "sharedlibs_host_tests",
+                    "CtsDevicePolicyManagerTestCases",
+                    "CtsMediaAudioTestCases",
+                    "CtsScopedStoragePublicVolumeHostTest",
+                    "CtsContentTestCases",
+                    "CtsHostsideNetworkTests",
+                    "vm-tests-tf",
+                    "CtsStatsdAtomHostTestCases",
+                    "CtsMediaPlayerTestCases",
+                    "CtsMediaDecoderTestCases",
+                    "CtsQuickAccessWalletTestCases",
+                    "CtsMediaMiscTestCases",
+                    "NetworkStagedRollbackTest",
+                    "CtsUsesNativeLibraryTest",
+                    "RollbackTest",
+                    "CtsLibcoreOjTestCases",
+                    "CtsMultiUserHostTestCases",
+                    "binderRpcTestSingleThreaded",
+                    "sdkextensions_e2e_tests",
+                    "StagedRollbackTest",
+                    "CtsMediaEncoderTestCases",
+                    "CtsRootRollbackManagerHostTestCases",
+                    "StagedInstallInternalTest",
+                    "FrameworksWifiTests",
+                    "MultiUserRollbackTest",
+                    "binderRpcTest",
+                    "CtsMediaCodecTestCases",
+                    "CtsRollbackManagerHostTestCases",
+                    "CtsAutoFillServiceTestCases",
+                    "CtsOsTestCases",
+                    "CtsDynamicMimeHostTestCases",
+                    "VtsHalNeuralnetworksTargetTest",
+                    "CtsWifiTestCases",
+                    "SystemUITests",
+                    "CellBroadcastReceiverComplianceTests",
+                    "InputMethodStressTest",
+                    "SystemUIClocksTests",
+                    "GtsStagedInstallHostTestCases");
+
+    private static final Set<String> REMOUNT_MODULES =
+            ImmutableSet.of(
+                    "libnativeloader_e2e_tests",
+                    "BugreportManagerTestCases",
+                    "CtsRootBugreportTestCases",
+                    "ApexServiceTestCases",
+                    "OverlayDeviceTests");
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
@@ -191,8 +277,15 @@ public class TestMappingsValidation implements IBuildReceiver {
      * targets.
      */
     @Test
-    public void testValidateTestEntry() {
+    public void testValidateTestEntry() throws Exception {
         List<String> errors = new ArrayList<>();
+        Set<String> checkedModule = new HashSet<>();
+
+        Map<String, Set<String>> incompatiblePairsTracking = new HashMap<>();
+        for (String s : INCOMPATIBLE_PAIRS) {
+            incompatiblePairsTracking.put(s, new HashSet<>());
+        }
+
         for (String testGroup : allTests.keySet()) {
             if (!mTestGroupToValidate.contains(testGroup)) {
                 CLog.d("Skip checking tests with group: %s", testGroup);
@@ -215,6 +308,10 @@ public class TestMappingsValidation implements IBuildReceiver {
                                         testInfo.getName(), testInfo.getSources()));
                     }
                 }
+                checkedModule.add(moduleName);
+                if (incompatiblePairsTracking.containsKey(testGroup)) {
+                    incompatiblePairsTracking.get(testGroup).add(moduleName);
+                }
             }
         }
         if (!errors.isEmpty()) {
@@ -235,6 +332,10 @@ public class TestMappingsValidation implements IBuildReceiver {
                 fail(error);
             }
         }
+        // Validate incompatible pairs
+        validateIncompatiblePairs(incompatiblePairsTracking);
+        // Validate basic configuration in shared pools
+        validateConfigsOfSharedPool(checkedModule);
     }
 
     /**
@@ -530,5 +631,99 @@ public class TestMappingsValidation implements IBuildReceiver {
             errors.add(e.getMessage());
         }
         return errors;
+    }
+
+    private void validateConfigsOfSharedPool(Set<String> checkedModule) throws Exception {
+        File configZip = deviceBuildInfo.getFile("general-tests_configs.zip");
+        File deviceConfigZip = deviceBuildInfo.getFile("device-tests_configs.zip");
+        Assume.assumeTrue(configZip != null);
+        List<String> testConfigs = new ArrayList<>();
+        List<File> dirToLoad = new ArrayList<>();
+        File testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+        File deviceTestConfigDir = null;
+        dirToLoad.add(testConfigDir);
+        if (deviceConfigZip != null) {
+            deviceTestConfigDir =
+                    ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+            dirToLoad.add(deviceTestConfigDir);
+        }
+        try {
+            testConfigs.addAll(ConfigurationUtil.getConfigNamesFromDirs(null, dirToLoad));
+            CLog.d("Checking modules: %s. And configs: %s", checkedModule, testConfigs);
+            List<String> errors = new ArrayList<>();
+            for (String configName : testConfigs) {
+                String fileName = FileUtil.getBaseName(new File(configName).getName());
+                if (!checkedModule.contains(fileName)) {
+                    continue;
+                }
+                try {
+                    IConfiguration config =
+                            mConfigFactory.createConfigurationFromArgs(new String[] {configName});
+                    for (IDeviceConfiguration dConfig : config.getDeviceConfig()) {
+                        for (ITargetPreparer prep : dConfig.getTargetPreparers()) {
+                            if (prep instanceof PushFilePreparer) {
+                                PushFilePreparer pushPreparer = (PushFilePreparer) prep;
+                                if (pushPreparer.shouldRemountSystem()
+                                        || pushPreparer.shouldRemountVendor()) {
+                                    if (REMOUNT_MODULES.contains(fileName)) {
+                                        continue;
+                                    }
+                                    throw new ConfigurationException(
+                                            String.format(
+                                                    "%s: Shouldn't use 'remount-system' or"
+                                                        + " 'remount-vendor' in shared test mapping"
+                                                        + " pools.",
+                                                    fileName));
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    errors.add(e.toString());
+                }
+            }
+
+            if (!errors.isEmpty()) {
+                fail(Joiner.on("\n").join(errors));
+            }
+        } finally {
+            FileUtil.recursiveDelete(testConfigDir);
+            FileUtil.recursiveDelete(deviceTestConfigDir);
+        }
+    }
+
+    private void validateIncompatiblePairs(Map<String, Set<String>> incompatiblePairsTracking)
+            throws ConfigurationException {
+        Set<String> presubmitLarge = incompatiblePairsTracking.get("presubmit-large");
+        Set<String> presubmit = incompatiblePairsTracking.get("presubmit");
+
+        Set<String> dual =
+                presubmitLarge.stream()
+                        .filter(e -> presubmit.contains(e))
+                        .collect(Collectors.toSet());
+
+        dual.removeIf(e -> EXEMPTED_DUPLICATION_PRESUBMIT_LARGE.contains(e));
+
+        if (!dual.isEmpty()) {
+            throw new ConfigurationException(
+                    String.format(
+                            "the following entries exist in both presubmit and "
+                                    + "presubmit-large groups: %s. Do not use "
+                                    + "presubmit-large group to run larger tests. "
+                                    + "Make sure your tests meet presubmit SLO "
+                                    + "and use 'presubmit' group.",
+                            dual));
+        }
+        presubmitLarge.removeAll(PRESUBMIT_LARGE_ALLOWLIST);
+        if (!presubmitLarge.isEmpty()) {
+            throw new ConfigurationException(
+                    String.format(
+                            "Adding new modules to presubmit-large "
+                                    + "isn't allowed. Those tests: %s. Do not use "
+                                    + "presubmit-large group to run larger tests. Make sure"
+                                    + " your tests meet presubmit SLO and use 'presubmit'"
+                                    + "group.",
+                            presubmitLarge));
+        }
     }
 }

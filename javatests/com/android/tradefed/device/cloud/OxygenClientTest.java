@@ -18,6 +18,7 @@ package com.android.tradefed.device.cloud;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.android.tradefed.build.BuildInfo;
@@ -168,6 +169,62 @@ public class OxygenClientTest {
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
 
+    /** Test leasing a device with Oxygen client binary without build-id specified. */
+    @Test
+    public void testLeaseWithoutBuildId() throws Exception {
+        TestDeviceOptions testDeviceOptions =
+                new TestDeviceOptions() {
+                    @Override
+                    public List<String> getGceDriverParams() {
+                        return Arrays.asList(
+                                new String[] {
+                                    "--branch", "testBranch", "--build-target", "target"
+                                });
+                    }
+                };
+        OptionSetter setter = new OptionSetter(testDeviceOptions);
+        setter.setOptionValue("oxygen-target-region", "us-east");
+        setter.setOptionValue("oxygen-lease-length", "60m");
+        setter.setOptionValue("oxygen-device-size", "large");
+        setter.setOptionValue("oxygen-service-address", "10.1.23.45");
+        setter.setOptionValue("gce-boot-timeout", "900000");
+        setter.setOptionValue("oxygen-accounting-user", "random1234@space.com");
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                long timeout = mock.getArgument(0);
+                                List<String> cmd = new ArrayList<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    cmd.add(mock.getArgument(i));
+                                }
+                                String cmdString = Joiner.on(" ").join(cmd);
+                                String expectedCmdString =
+                                        mOxygenBinaryFile.getAbsolutePath()
+                                                + " -lease -build_branch testBranch -build_target"
+                                                + " target -build_id testBranch -target_region"
+                                                + " us-east -accounting_user random1234@space.com"
+                                                + " -lease_length_secs 3600"
+                                                + " -user_debug_info work_unit_id:some_id";
+                                assertEquals(timeout, 900000);
+                                assertEquals(expectedCmdString, cmdString);
+
+                                CommandResult res = new CommandResult();
+                                res.setStatus(CommandStatus.SUCCESS);
+                                res.setStdout("");
+                                res.setStderr(EXPECTED_OUTPUT);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, testDeviceOptions, attributes);
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
+        assertEquals(res.getStderr(), EXPECTED_OUTPUT);
+    }
+
     /** Test leasing multiple devices with Oxygen client binary. */
     @Test
     public void testLeaseMultipleDevice() throws Exception {
@@ -231,7 +288,9 @@ public class OxygenClientTest {
                                         mOxygenBinaryFile.getAbsolutePath()
                                                 + " -arg1 value1 -release -server_url 10.0.80.227"
                                                 + " -session_id"
-                                                + " 6a6a744e-0653-4926-b7b8-535d121a2fc9";
+                                                + " 6a6a744e-0653-4926-b7b8-535d121a2fc9"
+                                                + " -accounting_user"
+                                                + " random1234@space.com";
                                 assertEquals(timeout, 900000);
                                 assertEquals(expectedCmdString, cmdString);
 
@@ -263,5 +322,15 @@ public class OxygenClientTest {
         OptionSetter setter = new OptionSetter(mTestDeviceOptions);
         setter.setOptionValue("extra-oxygen-args", "no_wait_for_boot", "");
         assertTrue(mOxygenClient.noWaitForBootSpecified(mTestDeviceOptions));
+    }
+
+    /** Test fetch cvd path override. */
+    @Test
+    public void testFetchCvdOverride() throws Exception {
+        assertNull(mOxygenClient.getOverrideFetchCvdPath(mTestDeviceOptions));
+        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
+        setter.setOptionValue("extra-oxygen-args", "override_fetch_cvd_path", "gs://abc/fetch_cvd");
+        assertEquals(
+                mOxygenClient.getOverrideFetchCvdPath(mTestDeviceOptions), "gs://abc/fetch_cvd");
     }
 }

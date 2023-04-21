@@ -160,6 +160,7 @@ public class TestInvocation implements ITestInvocation {
     static final String RECOVERY_LOG_DEVICE_PATH = "/tmp/recovery.log";
     public static final String INVOCATION_EXTERNAL_DEPENDENCIES =
             "invocation-external-dependencies";
+    public static final long AVAILABILITY_CHECK_TIMEOUT = 180000L; // 3 minutes
 
     public enum Stage {
         ERROR("error"),
@@ -291,7 +292,10 @@ public class TestInvocation implements ITestInvocation {
             exception = e;
             CLog.e("Caught exception while running invocation");
             CLog.e(e);
-            bugreportName = TARGET_SETUP_ERROR_BUGREPORT_NAME;
+            // We let parent process capture the bugreport
+            if (!isSubprocess(config)) {
+                bugreportName = TARGET_SETUP_ERROR_BUGREPORT_NAME;
+            }
             if (e.getDeviceSerial() != null) {
                 badDevice = context.getDeviceBySerial(e.getDeviceSerial());
             }
@@ -364,6 +368,15 @@ public class TestInvocation implements ITestInvocation {
                         CLog.i("Bugreport to be taken for failure instead of invocation ended.");
                     } else {
                         bugreportName = INVOCATION_ENDED_BUGREPORT_NAME;
+                    }
+                }
+                if (exception == null) {
+                    try (CloseableTraceScope ignore =
+                            new CloseableTraceScope("responsiveness_check")) {
+                        exception = bareMinimumResponsiveness(context.getDevices());
+                    }
+                    if (exception != null) {
+                        bugreportName = null;
                     }
                 }
                 if (bugreportName != null) {
@@ -1025,7 +1038,7 @@ public class TestInvocation implements ITestInvocation {
             TestInformation sharedTestInfo = null;
             if (sharedInfoObject != null) {
                 sharedTestInfo = (TestInformation) sharedInfoObject;
-                // During sharding we share everything except the invocation context
+                // During sharding we share everything except the invocation context & properties
                 info = TestInformation.createModuleTestInfo(sharedTestInfo, context);
             }
             if (info == null) {
@@ -1612,9 +1625,12 @@ public class TestInvocation implements ITestInvocation {
             }
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.ATTEMPT_RECOVERY_LOG_COUNT, 1);
+            RecoveryMode mode = device.getRecoveryMode();
             try {
+                device.setRecoveryMode(RecoveryMode.NONE);
                 // We need root to access the recovery logs so attempt to set it
-                device.enableAdbRoot();
+                String output = device.executeAdbCommand("root");
+                CLog.d("adb recovery root output: %s", output);
                 File recovery_log = device.pullFile(RECOVERY_LOG_DEVICE_PATH);
                 if (recovery_log == null) {
                     return;
@@ -1627,6 +1643,8 @@ public class TestInvocation implements ITestInvocation {
                 }
             } catch (DeviceNotAvailableException e) {
                 CLog.i("Device unavailable, can't pull recovery.log");
+            } finally {
+                device.setRecoveryMode(mode);
             }
         }
     }
@@ -1678,6 +1696,33 @@ public class TestInvocation implements ITestInvocation {
         }
     }
 
+    private DeviceNotAvailableException bareMinimumResponsiveness(List<ITestDevice> devices) {
+        for (ITestDevice device : devices) {
+            if (device == null) {
+                continue;
+            }
+            if (device.getIDevice() instanceof StubDevice) {
+                continue;
+            }
+            if (device.isStateBootloaderOrFastbootd()) {
+                return null;
+            }
+            if (TestDeviceState.RECOVERY.equals(device.getDeviceState())) {
+                return null;
+            }
+            RecoveryMode current = device.getRecoveryMode();
+            device.setRecoveryMode(RecoveryMode.NONE);
+            try {
+                device.getApiLevel();
+            } catch (DeviceNotAvailableException e) {
+                return e;
+            } finally {
+                device.setRecoveryMode(current);
+            }
+        }
+        return null;
+    }
+
     /**
      * If no previous exception occurred, report if the device is not available anymore after tests
      * finish running.
@@ -1692,10 +1737,33 @@ public class TestInvocation implements ITestInvocation {
             if (device.getIDevice() instanceof StubDevice) {
                 continue;
             }
+            if (device.isStateBootloaderOrFastbootd()) {
+                dnae =
+                        new DeviceNotAvailableException(
+                                "Device was left in fastboot state after tests",
+                                device.getSerialNumber(),
+                                DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                reportFailure(
+                        createFailureFromException(dnae, FailureStatus.INFRA_FAILURE), listener);
+                continue;
+            }
+            if (TestDeviceState.RECOVERY.equals(device.getDeviceState())) {
+                dnae =
+                        new DeviceNotAvailableException(
+                                "Device was left in recovery state after tests",
+                                device.getSerialNumber(),
+                                DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                reportFailure(
+                        createFailureFromException(dnae, FailureStatus.INFRA_FAILURE), listener);
+                continue;
+            }
             RecoveryMode current = device.getRecoveryMode();
             device.setRecoveryMode(RecoveryMode.NONE);
             try {
-                boolean available = device.waitForDeviceAvailable();
+                // Cap availability check at 3 minutes instead of the device
+                // configured one because this is not tied to a reboot, we just
+                // need the device to be still online & reporting.
+                boolean available = device.waitForDeviceAvailable(AVAILABILITY_CHECK_TIMEOUT);
                 if (!available) {
                     throw new DeviceNotAvailableException(
                             String.format(

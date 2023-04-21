@@ -70,6 +70,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private static final int R_SDK_INT = 30;
     // Pattern used to identify the package names from adb shell pm path.
     private static final Pattern PACKAGE_REGEX = Pattern.compile("package:(.*)");
+    private static final String MODULE_VERSION_PROP_SUFFIX = "_version_used";
     protected static final String APEX_SUFFIX = ".apex";
     protected static final String APK_SUFFIX = ".apk";
     protected static final String SPLIT_APKS_SUFFIX = ".apks";
@@ -102,7 +103,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             name = "apex-staging-wait-time",
             description = "The time in ms to wait for apex staged session ready.",
             isTimeVal = true)
-    private long mApexStagingWaitTime = 1 * 60 * 1000;
+    private long mApexStagingWaitTime = 0;
+
+    @Option(
+            name = "apex-rollback-wait-time",
+            description = "The time in ms to wait for apex rollback success.",
+            isTimeVal = true)
+    private long mApexRollbackWaitTime = 1 * 60 * 1000;
 
     @Option(
             name="extra-booting-wait-time",
@@ -181,6 +188,18 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             }
         }
 
+        // Store the version info of each module for updatiing mainline invocation property in ATI.
+        // Supported for non test mapping runs which has invocation level module installation.
+        if (!mOptimizeMainlineTest && !containsApks(testAppFiles)) {
+            for (File f : testAppFiles) {
+                ApexInfo apexInfo = retrieveApexInfo(f, testInfo.getDevice().getDeviceDescriptor());
+                testInfo.getBuildInfo()
+                        .addBuildAttribute(
+                                apexInfo.name + MODULE_VERSION_PROP_SUFFIX,
+                                String.valueOf(apexInfo.versionCode));
+            }
+        }
+
         if (containsApks(testAppFiles)) {
             installUsingBundleTool(testInfo, testAppFiles);
         } else {
@@ -203,7 +222,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * @throws DeviceNotAvailableException if reboot fails.
      */
     private void activateStagedInstall(ITestDevice device) throws DeviceNotAvailableException {
-        RunUtil.getDefault().sleep(mApexStagingWaitTime);
+        if (mApexStagingWaitTime > 0 && device.getApiLevel() == 29) {
+            RunUtil.getDefault().sleep(mApexStagingWaitTime);
+        }
         device.reboot();
         // Some devices need extra waiting time after reboot to get fully ready.
         if (mExtraBootingWaitTime > 0) {
@@ -413,11 +434,11 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                         }
                     }
                     CLog.i("Wait for rollback fully done.");
-                    RunUtil.getDefault().sleep(mApexStagingWaitTime);
+                    RunUtil.getDefault().sleep(mApexRollbackWaitTime);
                     CLog.i("Device Rebooting");
                     device.reboot();
                     CLog.i("Reboot finished. Wait for rollback fully propagate.");
-                    RunUtil.getDefault().sleep(mApexStagingWaitTime);
+                    RunUtil.getDefault().sleep(mApexRollbackWaitTime);
                     device.waitForDeviceAvailable();
                     // TODO(b/262626794): Remove after confirming with framework team about the
                     // behavior of rollbaking mainline modules.
@@ -633,8 +654,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     device.getDeviceDescriptor(),
                     DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
             }
-            RunUtil.getDefault().sleep(mApexStagingWaitTime);
-
+            if (mApexStagingWaitTime > 0) {
+                RunUtil.getDefault().sleep(mApexStagingWaitTime);
+            }
             if (log.contains("Success")) {
                 CLog.d(
                     "Train is staged successfully. Cmd: %s, Output: %s.",

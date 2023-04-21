@@ -472,7 +472,8 @@ public class TestInvocationTest {
                 .thenReturn(mLogcatSetupSource)
                 .thenReturn(mLogcatTestSource)
                 .thenReturn(mLogcatTeardownSource);
-        when(mMockDevice.waitForDeviceAvailable()).thenReturn(true);
+        when(mMockDevice.waitForDeviceAvailable(TestInvocation.AVAILABILITY_CHECK_TIMEOUT))
+                .thenReturn(true);
 
         when(mMockLogger.getLog()).thenReturn(mHostLogSource);
         Mockito.lenient().when(mMockBuildInfo.getTestTag()).thenReturn("");

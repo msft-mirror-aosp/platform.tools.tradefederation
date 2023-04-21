@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype;
 
+import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
@@ -46,8 +47,10 @@ import com.android.tradefed.util.ListInstrumentationParser.InstrumentationTarget
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -205,7 +208,7 @@ public class InstalledInstrumentationsTest
             name = "use-test-storage",
             description =
                     "If set to true, we will push filters to the test storage instead of disk.")
-    private boolean mUseTestStorage = false;
+    private boolean mUseTestStorage = true;
 
     private int mTotalShards = 0;
     private int mShardIndex = 0;
@@ -224,16 +227,27 @@ public class InstalledInstrumentationsTest
     public boolean shouldRetry(int attemptJustExecuted, List<TestRunResult> previousResults)
             throws DeviceNotAvailableException {
         boolean retry = false;
-        mRunTestsFailureMap = new HashMap<>();
+        if (mRunTestsFailureMap == null) {
+            mRunTestsFailureMap = new HashMap<>();
+        }
         for (TestRunResult run : previousResults) {
             if (run == null) {
                 continue;
             }
             if (run.isRunFailure() || run.hasFailedTests()) {
                 retry = true;
+                HashSet<TestDescription> excludes =
+                        new LinkedHashSet<>(
+                                run.getTestsInState(
+                                        Arrays.asList(
+                                                TestStatus.PASSED,
+                                                TestStatus.ASSUMPTION_FAILURE,
+                                                TestStatus.IGNORED)));
+                if (mRunTestsFailureMap.get(run.getName()) != null) {
+                    excludes.addAll(mRunTestsFailureMap.get(run.getName()));
+                }
                 // Exclude passed tests from rerunning
-                mRunTestsFailureMap.put(
-                        run.getName(), new LinkedHashSet<TestDescription>(run.getPassedTests()));
+                mRunTestsFailureMap.put(run.getName(), excludes);
             } else {
                 // Set null if we should not rerun it
                 mRunTestsFailureMap.put(run.getName(), null);

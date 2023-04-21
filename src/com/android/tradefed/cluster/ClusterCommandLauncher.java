@@ -313,7 +313,13 @@ public class ClusterCommandLauncher
         if (jars.isEmpty()) {
             throw new RuntimeException(String.format("cannot find any TF jars from %s!", tfPath));
         }
-        return String.join(":", jars);
+        // TODO: remove after tradefed-no-fwk.jar is deprecated
+        StringBuilder pathBuilder = new StringBuilder();
+        if (jars.contains("tradefed.jar")) {
+            pathBuilder.append("tradefed.jar");
+            jars.remove("tradefed.jar");
+        }
+        return pathBuilder.append(String.join(":", jars)).toString();
     }
 
     /** Build a shell command line to invoke a TF process. */

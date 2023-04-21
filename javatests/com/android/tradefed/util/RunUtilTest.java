@@ -396,12 +396,11 @@ public class RunUtilTest {
      */
     @Test
     public void testRuntimedCmd_regularOutput_fileNull() {
-        RunUtil spyUtil = new SpyRunUtil(false);
-        String[] command = {"unused", "cmd"};
-        CommandResult result = spyUtil.runTimedCmd(LONG_TIMEOUT_MS, null, null, command);
+        String[] command = {"echo", "TEST STDOUT"};
+        CommandResult result = mRunUtil.runTimedCmd(VERY_LONG_TIMEOUT_MS, null, null, command);
         assertEquals(CommandStatus.SUCCESS, result.getStatus());
-        assertEquals(result.getStdout(), "TEST STDOUT\n");
-        assertEquals(result.getStderr(), "TEST STDERR\n");
+        assertEquals("TEST STDOUT\n", result.getStdout());
+        assertEquals("", result.getStderr());
     }
 
     /**
