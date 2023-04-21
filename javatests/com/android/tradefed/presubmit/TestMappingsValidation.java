@@ -224,7 +224,8 @@ public class TestMappingsValidation implements IBuildReceiver {
                 mergeModuleInfo(deviceBuildInfo.getFile(fileKey));
             }
         }
-        allTests = TestMapping.getAllTests(testMappingsDir);
+        TestMapping testMapping = new TestMapping();
+        allTests = testMapping.getAllTests(testMappingsDir);
     }
 
     @After
