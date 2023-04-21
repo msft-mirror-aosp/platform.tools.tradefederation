@@ -1540,6 +1540,12 @@ public class TestDevice extends NativeDevice {
                         .collect(Collectors.toList());
 
         if (!lines.get(0).contains("users:")) {
+            if (commandOutput.contains("cmd: Can't find service: package")) {
+                throw new DeviceNotAvailableException(
+                        String.format(
+                                "'%s' in not a valid output for 'user list -v'", commandOutput),
+                        getSerialNumber());
+            }
             throw new DeviceRuntimeException(
                     String.format("'%s' in not a valid output for 'user list -v'", commandOutput),
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
