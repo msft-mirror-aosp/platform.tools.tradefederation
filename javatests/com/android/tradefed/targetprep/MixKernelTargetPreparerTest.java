@@ -16,6 +16,7 @@
 package com.android.tradefed.targetprep;
 
 import com.android.tradefed.build.DeviceBuildInfo;
+import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -39,40 +40,54 @@ import java.io.IOException;
 public class MixKernelTargetPreparerTest {
     private IInvocationContext mContext;
     private TestInformation mTestInfo;
+    private IDeviceBuildInfo mBuildInfo;
 
     @Before
     public void setUp() {
         mContext = new InvocationContext();
+        mBuildInfo = new DeviceBuildInfo();
+        mBuildInfo.setBuildFlavor("flavor");
+        mContext.addDeviceBuildInfo("device", mBuildInfo);
+        mContext.addAllocatedDevice("device", Mockito.mock(ITestDevice.class));
         mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
     }
 
     @Test
-    public void testFailsOnMissingDeviceLabel() throws Exception {
+    public void testCopyDeviceImageToDir() throws Exception {
+        String deviceImageName = "oriole-img-9432383";
+        File oldDir = FileUtil.createTempDir("oldDir");
+        File newDir = FileUtil.createTempDir("newDir");
+        File srcFile = FileUtil.createTempFile(deviceImageName + "_", ".zip", oldDir);
         MixKernelTargetPreparer mk = new MixKernelTargetPreparer();
-        ITestDevice mockDevice = Mockito.mock(ITestDevice.class);
         try {
-            mContext.addDeviceBuildInfo("random_invalid_device_label", new DeviceBuildInfo());
-            mContext.addDeviceBuildInfo("kernel", new DeviceBuildInfo());
-            mContext.addAllocatedDevice("device", mockDevice);
-            mk.setUp(mTestInfo);
-            Assert.fail("Expected TargetSetupError");
-        } catch (TargetSetupError e) {
-            // expected.
+            mk.copyDeviceImageToDir(srcFile, newDir);
+            if (FileUtil.findFile(newDir, deviceImageName + ".zip") == null) {
+                Assert.fail(
+                        String.format(
+                                "Copy file %s to %s/%s.zip failed. Files in newDir: %s",
+                                srcFile,
+                                newDir,
+                                deviceImageName,
+                                newDir.listFiles()[0].toString()));
+            }
+        } finally {
+            FileUtil.recursiveDelete(oldDir);
+            FileUtil.recursiveDelete(newDir);
         }
     }
 
     @Test
-    public void testFailsOnMissingKernelLabel() throws Exception {
+    public void testCopyLabelFileToDir() throws Exception {
+        File tmpDir = FileUtil.createTempDir("tmpdir");
+        File srcFile = FileUtil.createTempFile("Image", ".gz", tmpDir);
         MixKernelTargetPreparer mk = new MixKernelTargetPreparer();
-        ITestDevice mockDevice = Mockito.mock(ITestDevice.class);
         try {
-            mContext.addDeviceBuildInfo("device", new DeviceBuildInfo());
-            mContext.addDeviceBuildInfo("invalid_kernel", new DeviceBuildInfo());
-            mContext.addAllocatedDevice("kernel", mockDevice);
-            mk.setUp(mTestInfo);
-            Assert.fail("Expected TargetSetupError");
-        } catch (TargetSetupError e) {
-            // expected.
+            mk.copyLabelFileToDir("{kernel}Image.gz", srcFile, tmpDir);
+            if (FileUtil.findFile(tmpDir, "Image.gz") == null) {
+                Assert.fail(String.format("Copy file %s to %s/Imag.gz failed", srcFile, tmpDir));
+            }
+        } finally {
+            FileUtil.recursiveDelete(tmpDir);
         }
     }
 
@@ -80,8 +95,6 @@ public class MixKernelTargetPreparerTest {
     public void testFailsOnMissingDeviceImage() throws Exception {
         MixKernelTargetPreparer mk = new MixKernelTargetPreparer();
         try {
-            mContext.addDeviceBuildInfo("device", new DeviceBuildInfo());
-            mContext.addDeviceBuildInfo("kernel", new DeviceBuildInfo());
             mk.setUp(mTestInfo);
             Assert.fail("Expected TargetSetupError");
         } catch (TargetSetupError e) {
@@ -90,19 +103,36 @@ public class MixKernelTargetPreparerTest {
     }
 
     @Test
-    public void testFailsOnMissingKernelMixingTool() throws Exception {
+    public void testFailsOnMissingKernelImage() throws Exception {
         MixKernelTargetPreparer mk = new MixKernelTargetPreparer();
         File deviceImage = FileUtil.createTempFile("device-img-12345", "zip");
-        DeviceBuildInfo deviceBuild = createDeviceBuildInfo("device_flavor", "12345", deviceImage);
+        mBuildInfo.setFile("device", deviceImage, "0");
         try {
-            mContext.addDeviceBuildInfo("device", deviceBuild);
-            mContext.addDeviceBuildInfo("kernel", new DeviceBuildInfo("fake_id", "fake_target"));
+            mContext.addDeviceBuildInfo("device", new DeviceBuildInfo());
             mk.setUp(mTestInfo);
             Assert.fail("Expected TargetSetupError");
         } catch (TargetSetupError e) {
             // expected.
         } finally {
             FileUtil.recursiveDelete(deviceImage);
+        }
+    }
+
+    @Test
+    public void testFailsOnMissingKernelMixingTool() throws Exception {
+        MixKernelTargetPreparer mk = new MixKernelTargetPreparer();
+        File deviceImage = FileUtil.createTempFile("device-img-12345", "zip");
+        mBuildInfo.setFile("device", deviceImage, "0");
+        File kernelImage = FileUtil.createTempFile("device-img-12345", "zip");
+        mBuildInfo.setFile("{kernel}Image.gz", kernelImage, "0");
+        try {
+            mk.setUp(mTestInfo);
+            Assert.fail("Expected TargetSetupError");
+        } catch (TargetSetupError e) {
+            // expected.
+        } finally {
+            FileUtil.recursiveDelete(deviceImage);
+            FileUtil.recursiveDelete(kernelImage);
         }
     }
 
@@ -128,13 +158,10 @@ public class MixKernelTargetPreparerTest {
         setter.setOptionValue("mix-kernel-tool-name", "build_mixed_kernels_ramdisk");
         File mixKernelTool = FileUtil.createTempFile("build_mixed_kernels_ramdisk", null, testsDir);
         mixKernelTool.renameTo(new File(testsDir, "build_mixed_kernels_ramdisk"));
-        DeviceBuildInfo deviceBuild = createDeviceBuildInfo("device_flavor", "12345", deviceImage);
-        DeviceBuildInfo kernelBuild =
-                createDeviceBuildInfo("kernel_flavor", "kernel_build_id", null, kernelImage);
-        deviceBuild.setTestsDir(testsDir, "12345");
+        mBuildInfo.setFile("device", deviceImage, "0");
+        mBuildInfo.setFile("{kernel}Image.gz", kernelImage, "0");
+        mBuildInfo.setTestsDir(testsDir, "0");
         try {
-            mContext.addDeviceBuildInfo("device", deviceBuild);
-            mContext.addDeviceBuildInfo("kernel", kernelBuild);
             mk.setUp(mTestInfo);
             Assert.fail("Expected TargetSetupError");
         } catch (TargetSetupError e) {
@@ -169,13 +196,10 @@ public class MixKernelTargetPreparerTest {
         File testsDir = FileUtil.createTempDir("testsdir");
         File mixKernelTool = FileUtil.createTempFile("build_mixed_kernels_ramdisk", null, testsDir);
         mixKernelTool.renameTo(new File(testsDir, "build_mixed_kernels_ramdisk"));
-        DeviceBuildInfo deviceBuild = createDeviceBuildInfo("device_flavor", "12345", deviceImage);
-        DeviceBuildInfo kernelBuild =
-                createDeviceBuildInfo("kernel_flavor", "kernel_build_id", null, kernelImage);
-        deviceBuild.setTestsDir(testsDir, "12345");
+        mBuildInfo.setFile("device", deviceImage, "0");
+        mBuildInfo.setFile("{kernel}Image.gz", kernelImage, "0");
+        mBuildInfo.setTestsDir(testsDir, "0");
         try {
-            mContext.addDeviceBuildInfo("device", deviceBuild);
-            mContext.addDeviceBuildInfo("kernel", kernelBuild);
             mk.setUp(mTestInfo);
             Assert.fail("Expected TargetSetupError");
         } catch (TargetSetupError e) {
@@ -218,13 +242,10 @@ public class MixKernelTargetPreparerTest {
         setter.setOptionValue("mix-kernel-tool-name", "my_tool_12345");
         File mixKernelTool = FileUtil.createTempFile("my_tool_12345", null, testsDir);
         mixKernelTool.renameTo(new File(testsDir, "my_tool_12345"));
-        DeviceBuildInfo deviceBuild = createDeviceBuildInfo("device_flavor", "12345", deviceImage);
-        DeviceBuildInfo kernelBuild =
-                createDeviceBuildInfo("kernel_flavor", "kernel_build_id", null, kernelImage);
-        deviceBuild.setTestsDir(testsDir, "12345");
+        mBuildInfo.setFile("device", deviceImage, "0");
+        mBuildInfo.setFile("{kernel}Image.gz", kernelImage, "0");
+        mBuildInfo.setTestsDir(testsDir, "0");
         try {
-            mContext.addDeviceBuildInfo("device", deviceBuild);
-            mContext.addDeviceBuildInfo("kernel", kernelBuild);
             mk.setUp(mTestInfo);
         } finally {
             FileUtil.recursiveDelete(deviceImage);
@@ -261,14 +282,11 @@ public class MixKernelTargetPreparerTest {
         File kernelImage = FileUtil.createTempFile("dtbo", "img");
         File toolDir = FileUtil.createTempDir("tooldir");
         File mixKernelTool = FileUtil.createTempFile("my_tool_12345", null, toolDir);
-        DeviceBuildInfo deviceBuild = createDeviceBuildInfo("device_flavor", "12345", deviceImage);
-        DeviceBuildInfo kernelBuild =
-                createDeviceBuildInfo("kernel_flavor", "kernel_build_id", null, kernelImage);
+        mBuildInfo.setFile("device", deviceImage, "0");
+        mBuildInfo.setFile("{kernel}Image.gz", kernelImage, "0");
         OptionSetter setter = new OptionSetter(mk);
         setter.setOptionValue("mix-kernel-tool-path", mixKernelTool.getAbsolutePath());
         try {
-            mContext.addDeviceBuildInfo("device", deviceBuild);
-            mContext.addDeviceBuildInfo("kernel", kernelBuild);
             mk.setUp(mTestInfo);
         } finally {
             FileUtil.recursiveDelete(deviceImage);
@@ -288,26 +306,26 @@ public class MixKernelTargetPreparerTest {
         tmpImg.delete();
         FileUtil.hardlinkFile(deviceImageInLcCache, tmpImg);
         // Add the device image with hardlink to device build info
-        DeviceBuildInfo deviceBuildInfo = createDeviceBuildInfo("device_flavor", "12345", tmpImg);
+        mBuildInfo.setFile("device", tmpImg, "0");
         // Create a new device image in the device_dir
         File newImageDir = FileUtil.createTempDir("device_dir");
         File deviceImage = new File(newImageDir, "device-img-12345.zip");
         FileUtil.writeToFile("new_image", deviceImage);
         try {
-            if (deviceImageInLcCache.length() != deviceBuildInfo.getDeviceImageFile().length()) {
+            if (deviceImageInLcCache.length() != mBuildInfo.getDeviceImageFile().length()) {
                 Assert.fail(
                         "Device image in lc cache is not of the same size as device image"
                                 + " in device build info before calling setNewDeviceImage");
             }
-            mk.setNewDeviceImage(deviceBuildInfo, newImageDir);
-            if (deviceBuildInfo.getDeviceImageFile() == null
-                    || !deviceBuildInfo.getDeviceImageFile().exists()) {
+            mk.setNewDeviceImage(mBuildInfo, newImageDir);
+            if (mBuildInfo.getDeviceImageFile() == null
+                    || !mBuildInfo.getDeviceImageFile().exists()) {
                 Assert.fail("New device image is not set");
             }
             if (deviceImageInLcCache == null || !deviceImageInLcCache.exists()) {
                 Assert.fail("Device image in lc cache is gone");
             }
-            if (deviceImageInLcCache.length() == deviceBuildInfo.getDeviceImageFile().length()) {
+            if (deviceImageInLcCache.length() == mBuildInfo.getDeviceImageFile().length()) {
                 Assert.fail(
                         "Device image in lc cache is of the same size as device image "
                                 + "in device build info after calling setNewDeviceImage");
@@ -317,19 +335,5 @@ public class MixKernelTargetPreparerTest {
             FileUtil.recursiveDelete(tmpImg);
             FileUtil.recursiveDelete(newImageDir);
         }
-    }
-
-    private DeviceBuildInfo createDeviceBuildInfo(
-            String buildFlavor, String buildId, File deviceImage, File... images) {
-        DeviceBuildInfo buildInfo = new DeviceBuildInfo();
-        buildInfo.setBuildFlavor(buildFlavor);
-        buildInfo.setBuildId(buildId);
-        if (deviceImage != null) {
-            buildInfo.setDeviceImageFile(deviceImage, buildId);
-        }
-        for (File image : images) {
-            buildInfo.setFile(image.getName(), image, buildId);
-        }
-        return buildInfo;
     }
 }
