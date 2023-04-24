@@ -24,6 +24,7 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.OptionDef;
+import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceFoldableState;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -909,7 +910,10 @@ public class SuiteModuleLoader {
             for (ITargetPreparer preparer : holder.getTargetPreparers()) {
                 String className = preparer.getClass().getName();
                 if (mTestOrPreparerOptions.containsKey(className)) {
-                    config.injectOptionValues(mTestOrPreparerOptions.get(className));
+                    OptionSetter preparerSetter = new OptionSetter(preparer);
+                    for (OptionDef def : mTestOrPreparerOptions.get(className)) {
+                        preparerSetter.setOptionValue(def.name, def.key, def.value);
+                    }
                 }
                 if (preparer instanceof IAbiReceiver) {
                     ((IAbiReceiver) preparer).setAbi(abi);
@@ -922,7 +926,10 @@ public class SuiteModuleLoader {
         for (IRemoteTest test : tests) {
             String className = test.getClass().getName();
             if (mTestOrPreparerOptions.containsKey(className)) {
-                config.injectOptionValues(mTestOrPreparerOptions.get(className));
+                OptionSetter preparerSetter = new OptionSetter(test);
+                for (OptionDef def : mTestOrPreparerOptions.get(className)) {
+                    preparerSetter.setOptionValue(def.name, def.key, def.value);
+                }
             }
             addFiltersToTest(test, abi, fullId, mIncludeFilters, mExcludeFilters);
             if (test instanceof IAbiReceiver) {
