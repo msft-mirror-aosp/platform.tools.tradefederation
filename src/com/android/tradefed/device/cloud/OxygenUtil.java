@@ -16,6 +16,7 @@
 package com.android.tradefed.device.cloud;
 
 import com.android.annotations.VisibleForTesting;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -24,6 +25,8 @@ import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GCSFileDownloader;
 import com.android.tradefed.util.Pair;
+
+import com.google.common.base.Strings;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -123,6 +126,12 @@ public class OxygenUtil {
         File localDir;
         try {
             localDir = mDownloader.downloadFile(remoteFilePath);
+            String oxygenVersion = collectOxygenVersion(localDir);
+            if (!Strings.isNullOrEmpty(oxygenVersion)) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricLogger.InvocationMetricKey.CF_OXYGEN_VERSION,
+                        oxygenVersion);
+            }
             Set<String> files = FileUtil.findFiles(localDir, ".*");
             for (String f : files) {
                 File file = new File(f);
