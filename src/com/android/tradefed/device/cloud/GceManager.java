@@ -948,7 +948,7 @@ public class GceManager {
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
 
             // Search log files for known failures for devices hosted by Oxygen
-            if (options.useOxygenProxy()) {
+            if (options.useOxygenProxy() && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectErrorSignature")) {
                     List<String> signatures = OxygenUtil.collectErrorSignatures(remoteFile);
