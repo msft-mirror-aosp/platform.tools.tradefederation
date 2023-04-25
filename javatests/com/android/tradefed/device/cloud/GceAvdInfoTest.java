@@ -753,5 +753,22 @@ public class GceAvdInfoTest {
         assertEquals("1", metrics.get(InvocationMetricKey.CF_CACHE_WAIT_TIME.toString()));
         assertEquals("L1", metrics.get(InvocationMetricKey.CF_ARTIFACTS_FETCH_SOURCE.toString()));
     }
+
+    @Test
+    public void testRefineOxygenErrorType() throws Exception {
+        assertEquals(
+                InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR,
+                GceAvdInfo.refineOxygenErrorType(
+                        "Lease aborted due to launcher failure: OxygenClient"));
+        assertEquals(
+                InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
+                GceAvdInfo.refineOxygenErrorType(
+                        "Lease aborted due to launcher failure: some error"));
+        assertEquals(
+                InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT,
+                GceAvdInfo.refineOxygenErrorType(
+                        "Lease aborted due to launcher failure: Timed out waiting for virtual"
+                                + " device to start"));
+    }
 }
 
