@@ -691,12 +691,12 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 setLastInvocationExitCode(ExitCode.DEVICE_UNAVAILABLE, e);
                 lastInvocationSet = true;
             } catch (FatalHostError e) {
-                CLog.wtf(
-                        String.format("Fatal error occurred: %s, shutting down", e.getMessage()),
-                        e);
+                String errorMessage =
+                        String.format("Fatal error occurred: %s, shutting down", e.getMessage());
+                CLog.wtf(errorMessage, e);
                 setLastInvocationExitCode(ExitCode.FATAL_HOST_ERROR, e);
                 lastInvocationSet = true;
-                shutdown(true);
+                shutdownHard(true, errorMessage, e.getErrorId());
             } catch (Throwable e) {
                 setLastInvocationExitCode(ExitCode.THROWABLE_EXCEPTION, e);
                 lastInvocationSet = true;
@@ -2168,23 +2168,27 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         shutdownHard(true);
     }
 
-    /** {@inheritDoc} */
-    @Override
-    public synchronized void shutdownHard(boolean killAdb) {
+    private synchronized void shutdownHard(boolean killAdb, String reason, ErrorIdentifier error) {
         setHostState(HostState.KILLING);
         doShutdown();
         CLog.logAndDisplay(LogLevel.WARN, "Stopping invocation threads...");
-        String reason = "Tradefed is shutting down";
         for (InvocationThread thread : mInvocationThreadMap.values()) {
             thread.disableReporters();
             // TODO(b/118891716): Improve tear down
-            thread.stopInvocation(reason, InfraErrorIdentifier.TRADEFED_SHUTTING_DOWN);
+            thread.stopInvocation(reason, error);
         }
         if (killAdb) {
             getDeviceManager().terminateHard(reason);
         } else {
             getDeviceManager().terminate();
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public synchronized void shutdownHard(boolean killAdb) {
+        String reason = "Tradefed is shutting down";
+        shutdownHard(killAdb, reason, InfraErrorIdentifier.TRADEFED_SHUTTING_DOWN);
     }
 
     /**
