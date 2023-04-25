@@ -90,9 +90,9 @@ public class RustTestResultParser extends MultiLineReceiver {
 
     static final Pattern RUST_ONE_LINE_RESULT =
             Pattern.compile(
-                    "test (\\S*) (?:- should panic )?\\.\\.\\. (\\S*)(?: <(\\d+\\.\\d+)s>)?");
+                    "test (\\S*) (?:- should panic )? *\\.\\.\\. (\\S*)(?: <(\\d+\\.\\d+)s>)?");
     static final Pattern RUST_IGNORE_RESULT =
-            Pattern.compile("test (\\S*) (?:- should panic )?\\.\\.\\. (ignored).*");
+            Pattern.compile("test (\\S*) +(?:- should panic )?\\.\\.\\. (ignored).*");
     static final Pattern RUNNING_PATTERN = Pattern.compile("running (.*) test[s]?");
 
     static final Pattern TEST_FAIL_PATTERN = Pattern.compile("---- (\\S*) stdout ----");
