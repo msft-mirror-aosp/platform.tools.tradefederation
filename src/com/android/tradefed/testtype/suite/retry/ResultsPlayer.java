@@ -49,6 +49,8 @@ import java.util.Set;
 /** Special runner that replays the results given to it. */
 public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver {
 
+    public static final String REPLAY_DONE = "REPLAY_DONE";
+
     private class ReplayModuleHolder {
         public IInvocationContext mModuleContext;
         public List<Entry<TestDescription, TestResult>> mResults = new ArrayList<>();
@@ -80,6 +82,7 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
             }
             device.waitForDeviceAvailable();
         }
+        testInfo.getContext().getBuildInfos().get(0).addBuildAttribute(REPLAY_DONE, "false");
 
         long startReplay = System.currentTimeMillis();
         CLog.logAndDisplay(
@@ -133,6 +136,9 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
                 TimeUtil.formatElapsedTime(System.currentTimeMillis() - startReplay));
         mModuleResult.clear();
         mCompleted = true;
+
+        testInfo.getContext().getBuildInfos().get(0).removeBuildAttribute(REPLAY_DONE);
+        testInfo.getContext().getBuildInfos().get(0).addBuildAttribute(REPLAY_DONE, "true");
     }
 
     /**
