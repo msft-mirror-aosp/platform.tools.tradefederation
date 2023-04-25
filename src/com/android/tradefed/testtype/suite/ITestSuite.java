@@ -141,6 +141,7 @@ public abstract class ITestSuite
     public static final String MODULE_METADATA_INCLUDE_FILTER = "module-metadata-include-filter";
     public static final String MODULE_METADATA_EXCLUDE_FILTER = "module-metadata-exclude-filter";
     public static final String RANDOM_SEED = "random-seed";
+    public static final String SKIP_STAGING_ARTIFACTS = "skip-staging-artifacts";
 
     private static final String PRODUCT_CPU_ABI_KEY = "ro.product.cpu.abi";
 
@@ -327,6 +328,11 @@ public abstract class ITestSuite
     private boolean mStageArtifactsViaFeature = true;
 
     @Option(
+            name = SKIP_STAGING_ARTIFACTS,
+            description = "Skip staging artifacts with remote-files if already staged.")
+    private boolean mSkipStagingArtifacts = false;
+
+    @Option(
             name = "multi-devices-modules",
             description = "Running strategy for modules that require multiple devices.")
     private MultiDeviceModuleStrategy mMultiDevicesStrategy = MultiDeviceModuleStrategy.EXCLUDE_ALL;
@@ -461,7 +467,7 @@ public abstract class ITestSuite
 
         if (mBuildInfo != null
                 && mBuildInfo.getRemoteFiles() != null
-                && mBuildInfo.getRemoteFiles().size() > 0) {
+                && !mBuildInfo.getRemoteFiles().isEmpty()) {
             stageTestArtifacts(mDevice, moduleNames);
         }
 
@@ -472,6 +478,11 @@ public abstract class ITestSuite
     /** Helper to download all artifacts for the given modules. */
     private void stageTestArtifacts(ITestDevice device, Set<String> modules) {
         if (mBuildInfo.getRemoteFiles().isEmpty()) {
+            return;
+        }
+        if (mSkipStagingArtifacts
+                || mBuildInfo.getBuildAttributes().get(SKIP_STAGING_ARTIFACTS) != null) {
+            CLog.d(SKIP_STAGING_ARTIFACTS + " is set. Skipping #stageTestArtifacts");
             return;
         }
         CLog.i(String.format("Start to stage test artifacts for %d modules.", modules.size()));
