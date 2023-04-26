@@ -323,7 +323,10 @@ public class OxygenUtil {
                 CLog.d("There is no oxygen_version.txt found.");
                 return null;
             }
-            return FileUtil.readStringFromFile(new File(files.iterator().next()));
+            // Trim the tailing spaces and line breakers at the end of the string.
+            return FileUtil.readStringFromFile(new File(files.iterator().next()))
+                    .replaceAll("(?s)\\n+$", "")
+                    .trim();
         } catch (Exception e) {
             CLog.e("Failed to read oxygen_version.txt .");
             CLog.e(e);
