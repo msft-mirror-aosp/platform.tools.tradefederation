@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -50,25 +51,40 @@ import java.util.regex.Pattern;
 public class GceAvdInfo {
 
     // Patterns to match from Oxygen client's return message to identify error.
-    private static final ImmutableMap<InfraErrorIdentifier, String> OXYGEN_ERROR_PATTERN_MAP =
-            ImmutableMap.of(
-                    InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
-                            "Lease aborted due to launcher failure",
-                    InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN, "server_shutting_down",
-                    InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR,
-                            "UNAVAILABLE: HTTP status code 502",
-                    InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT, "DeadlineExceeded",
-                    InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED, "RESOURCE_EXHAUSTED",
-                    InfraErrorIdentifier.OXYGEN_NOT_ENOUGH_RESOURCE,
-                            "Oxygen currently doesn't have enough resources to fulfil this request",
-                    InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "502:Bad Gateway",
-                    InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR, "OxygenClient");
+    private static final LinkedHashMap<InfraErrorIdentifier, String> OXYGEN_ERROR_PATTERN_MAP;
+
+    static {
+        OXYGEN_ERROR_PATTERN_MAP = new LinkedHashMap<InfraErrorIdentifier, String>();
+        // Order the error message matching carefully so it can surface the expected error properly
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN, "server_shutting_down");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR, "UNAVAILABLE: HTTP status code 502");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT, "DeadlineExceeded");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED, "RESOURCE_EXHAUSTED");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_NOT_ENOUGH_RESOURCE,
+                "Oxygen currently doesn't have enough resources to fulfil this request");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "502:Bad Gateway");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR, "OxygenClient");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT,
+                "Lease aborted due to launcher failure: Timed out waiting for virtual device to"
+                        + " start");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
+                "Lease aborted due to launcher failure");
+    }
 
     // Error message for specify Oxygen error.
     private static final ImmutableMap<InfraErrorIdentifier, String> OXYGEN_ERROR_MESSAGE_MAP =
             ImmutableMap.of(
                     InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
-                            "Oxygen failed to boot up the device properly",
+                            "AVD failed to boot up properly",
                     InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN,
                             "Unexpected error from Oxygen service",
                     InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR,
@@ -80,7 +96,8 @@ public class GceAvdInfo {
                     InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE,
                             "Unexpected error from Oxygen service",
                     InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR,
-                            "Oxygen client failed to lease a device");
+                            "Oxygen client failed to lease a device",
+                    InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT, "AVD boot timed out");
 
     public static class LogFileEntry {
         public final String path;
@@ -437,7 +454,8 @@ public class GceAvdInfo {
      * @param errors error messages returned by Oxygen service.
      * @return InfraErrorIdentifier for the Oxygen service error.
      */
-    private static InfraErrorIdentifier refineOxygenErrorType(String errors) {
+    @VisibleForTesting
+    static InfraErrorIdentifier refineOxygenErrorType(String errors) {
         for (Map.Entry<InfraErrorIdentifier, String> entry : OXYGEN_ERROR_PATTERN_MAP.entrySet()) {
             if (errors.contains(entry.getValue()))
                 return entry.getKey();

@@ -89,6 +89,7 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     OXYGEN_CLIENT_BINARY_ERROR(505_019, FailureStatus.INFRA_FAILURE),
     OXYGEN_CLIENT_LEASE_ERROR(505_020, FailureStatus.INFRA_FAILURE),
     OXYGEN_NOT_ENOUGH_RESOURCE(505_021, FailureStatus.INFRA_FAILURE),
+    OXYGEN_DEVICE_LAUNCHER_TIMEOUT(505_022, FailureStatus.INFRA_FAILURE),
 
     // 505_251 - 505_300: Configuration errors
     INTERNAL_CONFIG_ERROR(505_251, FailureStatus.INFRA_FAILURE),
