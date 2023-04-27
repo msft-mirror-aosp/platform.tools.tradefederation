@@ -63,7 +63,7 @@ public class GceAvdInfo {
         OXYGEN_ERROR_PATTERN_MAP.put(
                 InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT, "DeadlineExceeded");
         OXYGEN_ERROR_PATTERN_MAP.put(
-                InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED, "RESOURCE_EXHAUSTED");
+                InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED, "ResourceExhausted");
         OXYGEN_ERROR_PATTERN_MAP.put(
                 InfraErrorIdentifier.OXYGEN_NOT_ENOUGH_RESOURCE,
                 "Oxygen currently doesn't have enough resources to fulfil this request");
