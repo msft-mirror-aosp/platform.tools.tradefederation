@@ -194,7 +194,7 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
         }
         File dstFile = new File(destDir, newFileName);
         CLog.d("Copy %s to %s", srcFile.toString(), dstFile.toString());
-        FileUtil.copyFile(srcFile, dstFile);
+        FileUtil.hardlinkFile(srcFile, dstFile);
     }
 
     /**
@@ -211,7 +211,7 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
         String newFileName = fileKey.replaceAll("\\{\\w+\\}", "");
         File dstFile = new File(destDir, newFileName);
         CLog.d("Copy %s %s to %s", fileKey, srcFile.toString(), dstFile.toString());
-        FileUtil.copyFile(srcFile, dstFile);
+        FileUtil.hardlinkFile(srcFile, dstFile);
     }
 
     /**
@@ -280,7 +280,7 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
                 newDeviceImage, newDeviceImage.length());
         String deviceImagePath = buildInfo.getFile(BuildInfoFileKey.DEVICE_IMAGE).getAbsolutePath();
         buildInfo.getFile(BuildInfoFileKey.DEVICE_IMAGE.getFileKey()).delete();
-        FileUtil.copyFile(newDeviceImage, new File(deviceImagePath));
+        FileUtil.hardlinkFile(newDeviceImage, new File(deviceImagePath));
 
         CLog.d(
                 "After mixing kernel, the device image %s is of size %d",
