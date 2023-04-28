@@ -23,6 +23,7 @@ import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.ConfigurationUtil;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IBuildReceiver;
@@ -84,6 +85,11 @@ public class DeviceTestsConfigValidation implements IBuildReceiver {
                 // All configurations in device-tests.zip should be module since they are generated
                 // from AndroidTest.xml
                 ValidateSuiteConfigHelper.validateConfig(c);
+
+                for (IDeviceConfiguration dConfig : c.getDeviceConfig()) {
+                    GeneralTestsConfigValidation.validatePreparers(
+                            config, dConfig.getTargetPreparers());
+                }
                 // Check that all the tests runners are well supported.
                 GeneralTestsConfigValidation.checkRunners(c.getTests(), "device-tests");
 
