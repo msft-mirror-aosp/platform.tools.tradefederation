@@ -136,4 +136,19 @@ public class OxygenUtilTest {
             FileUtil.recursiveDelete(tmpDir);
         }
     }
+
+    @Test
+    public void testCollectOxygenVersion() throws Exception {
+        File tmpDir = null;
+        try {
+            tmpDir = FileUtil.createTempDir("logs");
+            File file1 = FileUtil.createTempFile("oxygen_version.txt", "", tmpDir);
+            String content = "version_number \n\n\n";
+            FileUtil.writeToFile(content, file1);
+            assertEquals("version_number", OxygenUtil.collectOxygenVersion(tmpDir));
+
+        } finally {
+            FileUtil.recursiveDelete(tmpDir);
+        }
+    }
 }
