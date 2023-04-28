@@ -164,6 +164,11 @@ public class HostOptions implements IHostOptions {
             description = "cl_flashstation script stored in remote GCS bucket.")
     private File mClFlashstation = new File("/tradefed/cl_flashstation");
 
+    @Option(
+            name = "disable-host-metric-reporting",
+            description = "Feature flag to disable the support for host metric reporting.")
+    private boolean mDisableHostMetricReporting = false;
+
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
     private Map<PermitLimitType, Integer> mInternalConcurrentLimits = new HashMap<>();
 
@@ -400,5 +405,11 @@ public class HostOptions implements IHostOptions {
     @Override
     public File getClFlashstation() {
         return mClFlashstation;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isHostMetricReportingDisabled() {
+        return mDisableHostMetricReporting;
     }
 }
