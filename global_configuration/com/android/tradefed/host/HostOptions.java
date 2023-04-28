@@ -143,8 +143,8 @@ public class HostOptions implements IHostOptions {
     @Option(
             name = "cache-size-limit",
             description =
-                    "The maximum allowed size(bytes) of the local file cache. (default: 20GB)")
-    private Long mCacheSizeLimit = 20L * 1024L * 1024L * 1024L;
+                    "The maximum allowed size(bytes) of the local file cache. (default: 15GB)")
+    private Long mCacheSizeLimit = 15L * 1024L * 1024L * 1024L;
 
     @Option(
             name = "test-phase-timeout",
