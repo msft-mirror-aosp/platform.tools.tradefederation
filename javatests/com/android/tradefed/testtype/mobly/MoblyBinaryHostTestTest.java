@@ -70,6 +70,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** Unit tests for {@link MoblyBinaryHostTest}. */
 @RunWith(JUnit4.class)
@@ -138,7 +139,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -179,7 +180,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -225,7 +226,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         });
         Mockito.when(
@@ -253,7 +254,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -285,7 +286,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -321,7 +322,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -344,15 +345,12 @@ public class MoblyBinaryHostTestTest {
         OptionSetter setter = new OptionSetter(mSpyTest);
         setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
         File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
-        String testResultContent =
-                "---\n" +
-                "{Executed: 0, Skipped: 0, Type: Summary}\n" +
-                "...";
+        String testResultContent = "---\n" + "{Executed: 0, Skipped: 0, Type: Summary}\n" + "...";
         Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -381,7 +379,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -405,15 +403,12 @@ public class MoblyBinaryHostTestTest {
         OptionSetter setter = new OptionSetter(mSpyTest);
         setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
         File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
-        String testResultContent =
-                "---\n" +
-                "{Executed: 0, Skipped: 0, Type: Summary}\n" +
-                "...";
+        String testResultContent = "---\n" + "{Executed: 0, Skipped: 0, Type: Summary}\n" + "...";
         Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -442,7 +437,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -463,19 +458,21 @@ public class MoblyBinaryHostTestTest {
     }
 
     @Test
-    public void testRun_exitFailed_withTestResultFileIncomplete_whenAlreadyFailed() throws Exception {
+    public void testRun_exitFailed_withTestResultFileIncomplete_whenAlreadyFailed()
+            throws Exception {
         OptionSetter setter = new OptionSetter(mSpyTest);
         setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
         File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
         String testResultContent =
-                "---\n" +
-                "{Result: ERROR, Stacktrace: 'Some other error message', Test Name: setup_test, Type: Record}\n" +
-                "...";
+                "---\n"
+                    + "{Result: ERROR, Stacktrace: 'Some other error message', Test Name:"
+                    + " setup_test, Type: Record}\n"
+                    + "...";
         Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -492,8 +489,7 @@ public class MoblyBinaryHostTestTest {
 
         FailureDescription failureDescription =
                 FailureDescription.create(
-                        "Some other error message",
-                        TestRecordProto.FailureStatus.TEST_FAILURE);
+                        "Some other error message", TestRecordProto.FailureStatus.TEST_FAILURE);
 
         verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
         verify(mockListener, times(1)).testRunFailed(eq(failureDescription));
@@ -535,7 +531,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -573,7 +569,8 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("abc\nClassTest.\ntest");
+                            res.setStdout(
+                                    "==========> ClassTest <==========\nabc\nClassTest.\ntest");
                             return res;
                         })
                 .thenAnswer(
@@ -602,7 +599,11 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo\ntest_baz\nClassTest.test_bar");
+                            res.setStdout(
+                                    "==========> ClassTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "ClassTest.test_bar");
                             return res;
                         })
                 .thenAnswer(
@@ -631,7 +632,14 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo\nabc\ntest_baz\nClassTest.test_bar\nClassTest.\ntest");
+                            res.setStdout(
+                                    "==========> ClassTest <==========\n"
+                                        + "test_foo\n"
+                                        + "abc\n"
+                                        + "test_baz\n"
+                                        + "ClassTest.test_bar\n"
+                                        + "ClassTest.\n"
+                                        + "test");
                             return res;
                         })
                 .thenAnswer(
@@ -698,7 +706,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -737,7 +745,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -769,7 +777,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -799,7 +807,7 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo");
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
                             return res;
                         })
                 .thenAnswer(
@@ -830,7 +838,11 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo\ntest_baz\ntest_bar");
+                            res.setStdout(
+                                    "==========> FooTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "test_bar");
                             return res;
                         })
                 .thenAnswer(
@@ -876,7 +888,11 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo\ntest_baz\ntest_bar");
+                            res.setStdout(
+                                    "==========> FooTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "test_bar");
                             return res;
                         })
                 .thenAnswer(
@@ -923,7 +939,11 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo\ntest_baz\ntest_bar");
+                            res.setStdout(
+                                    "==========> FooTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "test_bar");
                             return res;
                         })
                 .thenAnswer(
@@ -970,7 +990,11 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo\ntest_baz\ntest_bar");
+                            res.setStdout(
+                                    "==========> FooTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "test_bar");
                             return res;
                         })
                 .thenAnswer(
@@ -1001,7 +1025,11 @@ public class MoblyBinaryHostTestTest {
                 .thenAnswer(
                         invocation -> {
                             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-                            res.setStdout("test_foo\ntest_baz\ntest_bar");
+                            res.setStdout(
+                                    "==========> FooTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "test_bar");
                             return res;
                         })
                 .thenAnswer(
@@ -1033,6 +1061,247 @@ public class MoblyBinaryHostTestTest {
                         contains("--log_path="),
                         eq("--tests"),
                         eq("test_baz"));
+    }
+
+    @Test
+    public void testFilterTests_withInvalidIncludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+
+        Set<String> invalidIncludeFilters =
+                Set.of(
+                        "FooTest#test_bar_1",
+                        "BarTest#test_foo_1",
+                        "BazTest#test_baz_1",
+                        "BazTest#",
+                        "BazTest",
+                        "#test_baz_1",
+                        "test_baz_1",
+                        "#test_baz",
+                        "test_baz",
+                        "foo",
+                        "foo_test",
+                        "bar",
+                        "bar_test",
+                        "baz",
+                        "baz_test",
+                        "@#!",
+                        "",
+                        "#",
+                        ".");
+
+        Set<String> validIncludeFilters =
+                Set.of(
+                        "FooTest#test_foo_1",
+                        "FooTest#test_foo_2",
+                        "BarTest#test_bar_1",
+                        "BarTest#test_bar_2",
+                        "FooTest#",
+                        "FooTest",
+                        "BarTest#",
+                        "BarTest",
+                        "#test_foo",
+                        "test_foo",
+                        "#test_bar",
+                        "test_bar",
+                        "#test_",
+                        "test_");
+
+        mSpyTest.addAllIncludeFilters(invalidIncludeFilters);
+        mSpyTest.addAllIncludeFilters(validIncludeFilters);
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.filterTests(
+                new String[] {
+                    "invalid line",
+                    "==========> FooTest <==========",
+                    "FooTest.test_foo_1",
+                    "test_foo_2",
+                    "==========> BarTest <==========",
+                    "BarTest.test_bar_1",
+                    "test_bar_2",
+                },
+                BINARY_PATH,
+                mockListener);
+
+        String invalidIncludeFiltersString =
+                invalidIncludeFilters.stream().collect(Collectors.joining(", "));
+
+        FailureDescription failureDescription =
+                FailureDescription.create(
+                        "Invalid include filters: [" + invalidIncludeFiltersString + "]",
+                        TestRecordProto.FailureStatus.TEST_FAILURE);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
+        verify(mockListener, times(1)).testRunFailed(eq(failureDescription));
+        verify(mockListener, times(1)).testRunEnded(eq(0L), eq(new HashMap<String, Metric>()));
+    }
+
+    @Test
+    public void testFilterTests_withInvalidExcludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+
+        Set<String> invalidExcludeFilters =
+                Set.of(
+                        "FooTest#test_bar_1",
+                        "BarTest#test_foo_1",
+                        "BazTest#test_baz_1",
+                        "BazTest#",
+                        "BazTest",
+                        "#test_foo",
+                        "test_foo",
+                        "#test_bar",
+                        "test_bar",
+                        "#test_",
+                        "test_",
+                        "#test_baz_1",
+                        "test_baz_1",
+                        "#test_baz",
+                        "test_baz",
+                        "foo",
+                        "foo_test",
+                        "bar",
+                        "bar_test",
+                        "baz",
+                        "baz_test",
+                        "@#!",
+                        "",
+                        "#",
+                        ".");
+
+        Set<String> validExcludeFilters =
+                Set.of(
+                        "FooTest#test_foo_1",
+                        "FooTest#test_foo_2",
+                        "BarTest#test_bar_1",
+                        "BarTest#test_bar_2",
+                        "FooTest#",
+                        "FooTest",
+                        "BarTest#",
+                        "BarTest");
+
+        mSpyTest.addAllExcludeFilters(invalidExcludeFilters);
+        mSpyTest.addAllExcludeFilters(validExcludeFilters);
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.filterTests(
+                new String[] {
+                    "invalid line",
+                    "==========> FooTest <==========",
+                    "FooTest.test_foo_1",
+                    "test_foo_2",
+                    "==========> BarTest <==========",
+                    "BarTest.test_bar_1",
+                    "test_bar_2",
+                },
+                BINARY_PATH,
+                mockListener);
+
+        String invalidExcludeFiltersString =
+                invalidExcludeFilters.stream().collect(Collectors.joining(", "));
+
+        FailureDescription failureDescription =
+                FailureDescription.create(
+                        "Invalid exclude filters: [" + invalidExcludeFiltersString + "]",
+                        TestRecordProto.FailureStatus.TEST_FAILURE);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
+        verify(mockListener, times(1)).testRunFailed(eq(failureDescription));
+        verify(mockListener, times(1)).testRunEnded(eq(0L), eq(new HashMap<String, Metric>()));
+    }
+
+    @Test
+    public void testFilterTests_withIncludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+
+        mSpyTest.addAllIncludeFilters(
+                Set.of("test_foo", "BarTest#test_bar_1", "BarTest#test_bar_3"));
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        List<String> includedTests =
+                mSpyTest.filterTests(
+                                new String[] {
+                                    "invalid line",
+                                    "==========> FooTest <==========",
+                                    "FooTest.test_foo_1",
+                                    "test_foo_2",
+                                    "==========> BarTest <==========",
+                                    "BarTest.test_bar_1",
+                                    "test_bar_2",
+                                    "test_bar_3",
+                                },
+                                BINARY_PATH,
+                                mockListener)
+                        .get()
+                        .second;
+
+        Truth.assertThat(includedTests)
+                .isEqualTo(
+                        List.of(
+                                "FooTest.test_foo_1",
+                                "test_foo_2",
+                                "BarTest.test_bar_1",
+                                "test_bar_3"));
+    }
+
+    @Test
+    public void testFilterTests_withExcludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+
+        mSpyTest.addAllExcludeFilters(
+                Set.of("FooTest", "BarTest#test_bar_1", "BarTest#test_bar_3"));
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        List<String> includedTests =
+                mSpyTest.filterTests(
+                                new String[] {
+                                    "invalid line",
+                                    "==========> FooTest <==========",
+                                    "FooTest.test_foo_1",
+                                    "test_foo_2",
+                                    "==========> BarTest <==========",
+                                    "BarTest.test_bar_1",
+                                    "test_bar_2",
+                                    "test_bar_3",
+                                },
+                                BINARY_PATH,
+                                mockListener)
+                        .get()
+                        .second;
+
+        Truth.assertThat(includedTests).isEqualTo(List.of("test_bar_2"));
+    }
+
+    @Test
+    public void testFilterTests_withBothIncludeAndExcludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+
+        mSpyTest.addAllIncludeFilters(Set.of("BarTest"));
+        mSpyTest.addAllExcludeFilters(Set.of("test_bar_1", "BarTest#test_bar_3"));
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        List<String> includedTests =
+                mSpyTest.filterTests(
+                                new String[] {
+                                    "invalid line",
+                                    "==========> FooTest <==========",
+                                    "FooTest.test_foo_1",
+                                    "test_foo_2",
+                                    "==========> BarTest <==========",
+                                    "BarTest.test_bar_1",
+                                    "test_bar_2",
+                                    "test_bar_3",
+                                },
+                                BINARY_PATH,
+                                mockListener)
+                        .get()
+                        .second;
+
+        Truth.assertThat(includedTests).isEqualTo(List.of("test_bar_2"));
     }
 
     @Test
