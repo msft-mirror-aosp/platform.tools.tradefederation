@@ -316,7 +316,7 @@ public class GceManager {
                     }
                     throw new TargetSetupError(
                             "Timed out waiting for device to boot.",
-                            InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE);
+                            InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT);
                 }
             }
             // Lease may timeout and skip logging metrics if host is not set.
