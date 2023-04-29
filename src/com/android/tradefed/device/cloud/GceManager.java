@@ -272,20 +272,24 @@ public class GceManager {
     private GceAvdInfo startGceWithOxygenClient(
             ITestLogger logger, MultiMap<String, String> attributes) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
+        long fetchTime = 0;
         try {
             OxygenClient oxygenClient =
                     new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             CommandResult res =
                     oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions(), attributes);
-            GceAvdInfo oxygenDeviceInfo =
+            mGceAvdInfo =
                     GceAvdInfo.parseGceInfoFromOxygenClientOutput(
                                     res, mDeviceOptions.getRemoteAdbPort())
                             .get(0);
-            mGceAvdInfo = oxygenDeviceInfo;
             if (oxygenClient.noWaitForBootSpecified(getTestDeviceOptions())) {
                 CLog.d(
                         "Device leased without waiting for boot to finish. Poll emulator_stderr.txt"
                                 + " for flag `VIRTUAL_DEVICE_BOOT_COMPLETED`");
+                // When leasing without wait for boot to finish, use the time spent so far as the
+                // best estimate of cf_fetch_artifact_time_ms.
+                fetchTime = System.currentTimeMillis() - startTime;
+                startTime = System.currentTimeMillis();
                 Boolean bootSuccess = false;
                 long endTime = startTime + getTestDeviceOptions().getGceCmdTimeout();
                 final String remoteFile =
@@ -314,25 +318,30 @@ public class GceManager {
                         CommonLogRemoteFileUtil.fetchCommonFiles(
                                 logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
                     }
-                    throw new TargetSetupError(
-                            "Timed out waiting for device to boot.",
-                            InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT);
+                    mGceAvdInfo.setStatus(GceStatus.BOOT_FAIL);
+                    // Align the error message raised when Oxygen lease timed out.
+                    mGceAvdInfo.setErrors("Timed out waiting for virtual device to start.");
                 }
             }
             // Lease may timeout and skip logging metrics if host is not set.
-            if (oxygenDeviceInfo.hostAndPort() != null) {
+            if (mGceAvdInfo.hostAndPort() != null) {
                 InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.CF_OXYGEN_SESSION_ID, oxygenDeviceInfo.instanceName());
+                        InvocationMetricKey.CF_OXYGEN_SESSION_ID, mGceAvdInfo.instanceName());
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.CF_OXYGEN_SERVER_URL,
-                        oxygenDeviceInfo.hostAndPort().getHost());
+                        mGceAvdInfo.hostAndPort().getHost());
             }
-            return oxygenDeviceInfo;
+            return mGceAvdInfo;
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.OXYGEN_DEVICE_DIRECT_LEASE_COUNT, 1);
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.CF_LAUNCH_CVD_TIME, System.currentTimeMillis() - startTime);
+            if (mGceAvdInfo != null && GceStatus.SUCCESS.equals(mGceAvdInfo.getStatus())) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_FETCH_ARTIFACT_TIME, fetchTime);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_LAUNCH_CVD_TIME,
+                        System.currentTimeMillis() - startTime);
+            }
         }
     }
 
@@ -869,23 +878,54 @@ public class GceManager {
             // Make sure the Oxygen device is connected.
             remoteSshCommandExec(gceAvd, options, runUtil, adbTool, "connect", "localhost:6520");
         }
-        String output =
-                remoteSshCommandExec(
-                        gceAvd,
-                        options,
-                        runUtil,
-                        adbTool,
-                        "wait-for-device",
-                        "shell",
-                        "bugreportz");
+
+        String output;
+        // TODO(b/280177749): Remove the special logic after Oxygen side is cleaned up.
+        if (options.useOxygen()) {
+            output =
+                    remoteSshCommandExec(
+                            gceAvd,
+                            options,
+                            runUtil,
+                            adbTool,
+                            "-s",
+                            "localhost:6520",
+                            "wait-for-device",
+                            "shell",
+                            "bugreportz");
+        } else {
+            output =
+                    remoteSshCommandExec(
+                            gceAvd,
+                            options,
+                            runUtil,
+                            adbTool,
+                            "wait-for-device",
+                            "shell",
+                            "bugreportz");
+        }
         Matcher match = BUGREPORTZ_RESPONSE_PATTERN.matcher(output);
         if (!match.find()) {
             CLog.e("Something went wrong during bugreportz collection: '%s'", output);
             return null;
         }
         String deviceFilePath = match.group(2);
-        String pullOutput =
-                remoteSshCommandExec(gceAvd, options, runUtil, adbTool, "pull", deviceFilePath);
+        String pullOutput;
+        if (options.useOxygen()) {
+            pullOutput =
+                    remoteSshCommandExec(
+                            gceAvd,
+                            options,
+                            runUtil,
+                            adbTool,
+                            "-s",
+                            "localhost:6520",
+                            "pull",
+                            deviceFilePath);
+        } else {
+            pullOutput =
+                    remoteSshCommandExec(gceAvd, options, runUtil, adbTool, "pull", deviceFilePath);
+        }
         CLog.d(pullOutput);
         String remoteFilePath = "./" + new File(deviceFilePath).getName();
         File localTmpFile = FileUtil.createTempFile("bugreport-ssh", ".zip");
