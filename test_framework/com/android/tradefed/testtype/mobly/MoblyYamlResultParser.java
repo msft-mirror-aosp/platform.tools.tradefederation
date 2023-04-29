@@ -27,6 +27,7 @@ import com.android.tradefed.testtype.mobly.MoblyYamlResultHandlerFactory.Invalid
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
+import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
@@ -71,7 +72,7 @@ public class MoblyYamlResultParser {
         if (yamlEnd == -1)
             return false;
         ArrayList<ITestResult> resultCache = new ArrayList<>();
-        Yaml yaml = new Yaml(new SafeConstructor());
+        Yaml yaml = new Yaml(new SafeConstructor(new LoaderOptions()));
         try {
             for (Object doc : yaml.loadAll(mYamlString.substring(0, yamlEnd))) {
                 Map<String, Object> docMap = (Map<String, Object>) doc;
