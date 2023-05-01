@@ -63,6 +63,7 @@ public class DefaultConnection extends AbstractConnection {
             if (InstanceType.CUTTLEFISH.equals(type)
                     || InstanceType.REMOTE_NESTED_AVD.equals(type)) {
                 if (ManagedTestDeviceFactory.isTcpDeviceSerial(builder.device.getSerialNumber())) {
+                    // TODO: Add support for remote environment
                     // If the device is already started just go for TcpConnection
                     return new AdbTcpConnection(builder);
                 } else {
