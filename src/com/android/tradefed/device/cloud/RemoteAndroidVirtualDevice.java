@@ -330,6 +330,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
         TargetSetupError exception = null;
         for (int attempt = 0; attempt < getOptions().getGceMaxAttempt(); attempt++) {
             try {
+                // Clear exception before each attempt.
+                exception = null;
                 mGceAvd =
                         getGceHandler()
                                 .startGce(
@@ -358,7 +360,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
                 }
             }
         }
-        if (mGceAvd == null) {
+        if (exception != null) {
             throw exception;
         } else {
             CLog.i("GCE AVD has been started: %s", mGceAvd);
