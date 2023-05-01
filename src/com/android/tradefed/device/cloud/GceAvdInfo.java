@@ -218,8 +218,16 @@ public class GceAvdInfo {
         return mErrorType;
     }
 
+    public void setErrorType(ErrorIdentifier errorType) {
+        mErrorType = errorType;
+    }
+
     public String getErrors() {
         return mErrors;
+    }
+
+    public void setErrors(String errors) {
+        mErrors = errors;
     }
 
     /** Return the map from local or remote log paths to types. */
