@@ -35,6 +35,7 @@ import com.android.tradefed.device.DeviceSelectionOptions;
 import com.android.tradefed.device.DeviceSelectionOptions.DeviceRequestedType;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
+import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.ManagedRemoteDevice;
@@ -709,6 +710,10 @@ public class RemoteInvocationExecution extends InvocationExecution {
                     ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
                             .setDeviceTypeRequested(DeviceRequestedType.NULL_DEVICE);
                 }
+            }
+            // For deviceless reset instance type so remote has right type
+            if (config.getCommandOptions().isRemoteInvocationDeviceless()) {
+                deviceConfig.getDeviceOptions().setInstanceType(InstanceType.GCE);
             }
         }
 

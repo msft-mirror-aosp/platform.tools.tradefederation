@@ -650,6 +650,11 @@ public class TestDeviceOptions {
         return mInstanceType;
     }
 
+    /** Sets the instance type of virtual device that should be created */
+    public void setInstanceType(InstanceType type) {
+        mInstanceType = type;
+    }
+
     /** Returns whether or not the Tradefed content provider can be used to push/pull files. */
     public boolean shouldUseContentProvider() {
         return mUseContentProvider;
