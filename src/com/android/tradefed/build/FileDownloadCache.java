@@ -113,8 +113,11 @@ public class FileDownloadCache {
         if (!mCacheRoot.exists()) {
             CLog.d("Creating file cache at %s", mCacheRoot.getAbsolutePath());
             if (!mCacheRoot.mkdirs()) {
-                throw new FatalHostError(String.format("Could not create cache directory at %s",
-                        mCacheRoot.getAbsolutePath()));
+                throw new FatalHostError(
+                        String.format(
+                                "Could not create cache directory at %s",
+                                mCacheRoot.getAbsolutePath()),
+                        InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
             }
         } else {
             mCacheMapLock.lock();
