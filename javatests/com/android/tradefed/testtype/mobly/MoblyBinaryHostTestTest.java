@@ -67,7 +67,6 @@ import java.io.StringWriter;
 import java.io.Writer;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -94,7 +93,6 @@ public class MoblyBinaryHostTestTest {
     private File mVenvDir;
     private DeviceBuildInfo mMockBuildInfo;
     private TestInformation mTestInfo;
-    private Set<String> mIncludeFilters = new LinkedHashSet<>();
 
     @Before
     public void setUp() throws Exception {
@@ -468,6 +466,7 @@ public class MoblyBinaryHostTestTest {
                     + "{Result: ERROR, Stacktrace: 'Some other error message', Test Name:"
                     + " setup_test, Type: Record}\n"
                     + "...";
+        FileUtil.writeToFile(testResultContent, testResult);
         Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
                 .thenAnswer(
                         invocation -> {
@@ -477,7 +476,6 @@ public class MoblyBinaryHostTestTest {
                         })
                 .thenAnswer(
                         invocation -> {
-                            FileUtils.createFile(testResult, testResultContent);
                             CommandResult res = new CommandResult(CommandStatus.FAILED);
                             res.setStderr("Some error message");
                             return res;
