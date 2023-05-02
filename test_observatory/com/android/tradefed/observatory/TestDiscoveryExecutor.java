@@ -27,6 +27,7 @@ import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.keystore.DryRunKeyStore;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -129,7 +130,7 @@ public class TestDiscoveryExecutor {
      */
     private IConfiguration getConfiguration(String[] args) throws ConfigurationException {
         IConfigurationFactory configurationFactory = getConfigurationFactory();
-        return configurationFactory.createConfigurationFromArgs(args);
+        return configurationFactory.createConfigurationFromArgs(args, null, new DryRunKeyStore());
     }
 
     /**
