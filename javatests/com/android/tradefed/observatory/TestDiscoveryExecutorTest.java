@@ -66,6 +66,11 @@ public class TestDiscoveryExecutorTest {
                     IConfigurationFactory getConfigurationFactory() {
                         return mMockConfigFactory;
                     }
+
+                    @Override
+                    protected String getEnvironment(String var) {
+                        return "not-null";
+                    }
                 };
         when(mMockConfigFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mMockedConfiguration);
@@ -265,18 +270,12 @@ public class TestDiscoveryExecutorTest {
         testList.add(test1);
         when(mMockedConfiguration.getTests()).thenReturn(testList);
 
-        try {
-            String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
-            String expected =
-                    "{\"TestModules\":[\"TestModule1\",\"TestModule2\"],\"TestDependencies\":[]}";
-            assertEquals(expected, output);
+        String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
+        String expected =
+                "{\"TestModules\":[\"TestModule1\",\"TestModule2\"],\"TestDependencies\":[]}";
+        assertEquals(expected, output);
 
-            // In test discovery, the loadTest() should have been called exactly once
-            Mockito.verify(test1, Mockito.times(1)).loadTests();
-            // In test discovery, the flag should have been set to true
-            Mockito.verify(test1, Mockito.times(1)).setTestDiscovery(true);
-        } catch (Exception e) {
-            fail(String.format("Should not throw exception %s", e.getMessage()));
-        }
+        // In test discovery, the loadTest() should have been called exactly once
+        Mockito.verify(test1, Mockito.times(1)).loadTestInfos();
     }
 }
