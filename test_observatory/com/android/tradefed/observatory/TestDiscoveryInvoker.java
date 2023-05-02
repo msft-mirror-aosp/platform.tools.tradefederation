@@ -175,11 +175,6 @@ public class TestDiscoveryInvoker {
         if (mTestDir != null) {
             getRunUtil()
                     .setEnvVariable(TEST_DIRECTORY_ENV_VARIABLE_KEY, mTestDir.getAbsolutePath());
-        } else {
-            throw new TestDiscoveryException(
-                    "The TestDiscoveryInvoker need test directory to be set to do test mapping"
-                            + " discovery.",
-                    null);
         }
         CommandResult res = getRunUtil().runTimedCmd(30000, subprocessArgs);
         if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
