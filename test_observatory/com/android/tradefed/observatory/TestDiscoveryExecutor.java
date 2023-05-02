@@ -16,6 +16,7 @@
 
 package com.android.tradefed.observatory;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
@@ -144,8 +145,16 @@ public class TestDiscoveryExecutor {
         for (IRemoteTest test : testList) {
             if (test instanceof BaseTestSuite) {
                 if (test instanceof TestMappingSuiteRunner) {
-                    ((TestMappingSuiteRunner) test).setTestDiscovery(true);
-                    ((TestMappingSuiteRunner) test).loadTests();
+                    if (getEnvironment(TestDiscoveryInvoker.TEST_DIRECTORY_ENV_VARIABLE_KEY)
+                            == null) {
+                        throw new TestDiscoveryException(
+                                "The TestDiscoveryInvoker need test "
+                                        + "directory to be set to do test mapping "
+                                        + "discovery.",
+                                null,
+                                DiscoveryExitCode.ERROR);
+                    }
+                    ((TestMappingSuiteRunner) test).loadTestInfos();
                 }
                 Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
                 MultiMap<String, String> moduleMetadataIncludeFilters =
@@ -211,5 +220,10 @@ public class TestDiscoveryExecutor {
             }
         }
         return dependencies;
+    }
+
+    @VisibleForTesting
+    protected String getEnvironment(String var) {
+        return System.getenv(var);
     }
 }
