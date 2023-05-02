@@ -72,7 +72,13 @@ public class OxygenClient {
                                 {"--kernel-build-id", "-kernel_build_id"},
                                 {"--kernel_build_id", "-kernel_build_id"},
                                 {"--kernel-build-target", "-kernel_build_target"},
-                                {"--kernel_build_target", "-kernel_build_target"}
+                                {"--kernel_build_target", "-kernel_build_target"},
+                                {"--boot-build-id", "-boot_build_id"},
+                                {"--boot_build_id", "-boot_build_id"},
+                                {"--boot-build-target", "-boot_build_target"},
+                                {"--boot_build_target", "-boot_build_target"},
+                                {"--boot-artifact", "-boot_artifact"},
+                                {"--boot_artifact", "-boot_artifact"}
                             })
                     .collect(
                             Collectors.collectingAndThen(
