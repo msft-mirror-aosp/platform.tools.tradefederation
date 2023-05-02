@@ -159,9 +159,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "kernel branches. The option should only be used for kernel tests.")
     private boolean mForceFullRun = false;
 
-    /** Flag to indicate whether the test mapping suite runner is in test discovery mode. */
-    private Boolean mIsTestDiscovery = false;
-
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
@@ -173,28 +170,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         setSkipjarLoading(true);
     }
 
-    /** Set the test discovery mode flag. */
-    public void setTestDiscovery(Boolean testDiscovery) {
-        mIsTestDiscovery = testDiscovery;
-    }
-
-    /**
-     * Load the tests configuration that will be run. Each tests is defined by a {@link
-     * IConfiguration} and a unique name under which it will report results. There are 2 ways to
-     * load tests for {@link TestMappingSuiteRunner}:
-     *
-     * <p>1. --test-mapping-test-group, which specifies the group of tests in TEST_MAPPING files.
-     * The runner will parse all TEST_MAPPING files in the source code through build artifact
-     * test_mappings.zip, and load tests grouped under the given test group.
-     *
-     * <p>2. --include-filter, which specifies the name of the test to run. The use case is for
-     * presubmit check to only run a list of tests related to the Cls to be verifies. The list of
-     * tests are compiled from the related TEST_MAPPING files in modified source code.
-     *
-     * @return a map of test name to the {@link IConfiguration} object of each test.
-     */
-    @Override
-    public LinkedHashMap<String, IConfiguration> loadTests() {
+    public Set<TestInfo> loadTestInfos() {
         Set<String> includeFilter = getIncludeFilter();
         // Name of the tests
         Set<String> testNames = new HashSet<>();
@@ -275,11 +251,27 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             mTestMappingPaths.clear();
             mUseTestMappingPath = false;
         }
+        return testInfosToRun;
+    }
 
-        // In test discovery mode, abort here and the return value should not be used.
-        if (mIsTestDiscovery) {
-            return null;
-        }
+    /**
+     * Load the tests configuration that will be run. Each tests is defined by a {@link
+     * IConfiguration} and a unique name under which it will report results. There are 2 ways to
+     * load tests for {@link TestMappingSuiteRunner}:
+     *
+     * <p>1. --test-mapping-test-group, which specifies the group of tests in TEST_MAPPING files.
+     * The runner will parse all TEST_MAPPING files in the source code through build artifact
+     * test_mappings.zip, and load tests grouped under the given test group.
+     *
+     * <p>2. --include-filter, which specifies the name of the test to run. The use case is for
+     * presubmit check to only run a list of tests related to the Cls to be verifies. The list of
+     * tests are compiled from the related TEST_MAPPING files in modified source code.
+     *
+     * @return a map of test name to the {@link IConfiguration} object of each test.
+     */
+    @Override
+    public LinkedHashMap<String, IConfiguration> loadTests() {
+        Set<TestInfo> testInfosToRun = loadTestInfos();
 
         // load all the configurations with include-filter injected.
         LinkedHashMap<String, IConfiguration> testConfigs = super.loadTests();
