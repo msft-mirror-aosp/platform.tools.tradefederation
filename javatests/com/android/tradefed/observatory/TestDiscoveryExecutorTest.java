@@ -29,6 +29,7 @@ import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.keystore.DryRunKeyStore;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -72,7 +73,8 @@ public class TestDiscoveryExecutorTest {
                         return "not-null";
                     }
                 };
-        when(mMockConfigFactory.createConfigurationFromArgs(Mockito.any()))
+        when(mMockConfigFactory.createConfigurationFromArgs(
+                        Mockito.any(), Mockito.isNull(), Mockito.isA(DryRunKeyStore.class)))
                 .thenReturn(mMockedConfiguration);
     }
 
