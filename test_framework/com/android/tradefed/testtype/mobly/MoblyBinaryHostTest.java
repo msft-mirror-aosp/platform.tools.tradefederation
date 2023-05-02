@@ -77,7 +77,6 @@ public class MoblyBinaryHostTest
 
     private static final String ANDROID_SERIAL_VAR = "ANDROID_SERIAL";
     private static final String MOBLY_TEST_SUMMARY = "test_summary.yaml";
-    private static final String LOCAL_CONFIG_FILENAME = "local_config.yaml";
 
     // TODO(b/159366744): merge this and next options.
     @Option(
@@ -381,7 +380,7 @@ public class MoblyBinaryHostTest
                     configFile =
                             mTestInfo.getDependencyFile(mConfigFileName, /* targetFirst */ false);
                 }
-                configPath = updateTemplateConfigFile(configFile, mWildcardConfig);
+                configPath = updateTemplateConfigFile(configFile);
             } catch (FileNotFoundException e) {
                 reportFailure(
                         listener, runName, "Couldn't find Mobly config file " + mConfigFileName);
@@ -510,8 +509,7 @@ public class MoblyBinaryHostTest
         }
     }
 
-    private String updateTemplateConfigFile(File templateConfig, boolean wildcardConfig)
-            throws HarnessRuntimeException {
+    private String updateTemplateConfigFile(File templateConfig) throws HarnessRuntimeException {
         InputStream inputStream = null;
         FileWriter fileWriter = null;
         File localConfigFile = new File(getLogDir(), "local_config.yaml");
