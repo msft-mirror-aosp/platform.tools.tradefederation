@@ -1497,7 +1497,7 @@ public abstract class ITestSuite
      * @return True if the module should run, false otherwise.
      */
     @VisibleForTesting
-    protected boolean filterByConfigMetadata(
+    public boolean filterByConfigMetadata(
             IConfiguration config,
             MultiMap<String, String> include,
             MultiMap<String, String> exclude) {
