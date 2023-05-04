@@ -2053,7 +2053,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return mCommandTimer.isShutdown() || (mShutdownOnEmpty && getAllCommandsSize() == 0);
     }
 
-    protected synchronized boolean isShuttingDown() {
+    public synchronized boolean isShuttingDown() {
         return mCommandTimer.isShutdown() || mShutdownOnEmpty;
     }
 
