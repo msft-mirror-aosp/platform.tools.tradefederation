@@ -44,9 +44,13 @@ import com.android.tradefed.util.BundletoolUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
-
 import com.google.common.collect.ImmutableSet;
-
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,13 +60,6 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 /** Unit test for {@link InstallApexModuleTargetPreparer} */
 @RunWith(JUnit4.class)
@@ -81,6 +78,7 @@ public class InstallApexModuleTargetPreparerTest {
     private File mFakeApex3;
     private File mFakeApk;
     private File mFakeApk2;
+    private File mFakeApkZip;
     private File mFakeApkApks;
     private File mFakeApexApks;
     private File mBundletoolJar;
@@ -127,6 +125,7 @@ public class InstallApexModuleTargetPreparerTest {
         mFakeApex3 = FileUtil.createTempFile("fakeApex_3", ".apex");
         mFakeApk = FileUtil.createTempFile("fakeApk", ".apk");
         mFakeApk2 = FileUtil.createTempFile("fakeSecondApk", ".apk");
+        mFakeApkZip = FileUtil.createTempFile("fakeApkZip", ".zip");
 
         when(mMockDevice.getSerialNumber()).thenReturn(SERIAL);
         when(mMockDevice.getDeviceDescriptor()).thenReturn(null);
@@ -180,6 +179,9 @@ public class InstallApexModuleTargetPreparerTest {
                         }
                         if (appFileName.endsWith(".jar")) {
                             return mBundletoolJar;
+                        }
+                        if (appFileName.endsWith(".zip")) {
+                            return mFakeApkZip;
                         }
                         return null;
                     }
@@ -244,6 +246,7 @@ public class InstallApexModuleTargetPreparerTest {
         FileUtil.deleteFile(mFakeApex3);
         FileUtil.deleteFile(mFakeApk);
         FileUtil.deleteFile(mFakeApk2);
+        FileUtil.deleteFile(mFakeApkZip);
         mMockBundletoolUtil = null;
     }
 
@@ -2392,6 +2395,60 @@ public class InstallApexModuleTargetPreparerTest {
 
         FileUtil.deleteFile(mFakeApkApks);
         FileUtil.deleteFile(mBundletoolJar);
+    }
+
+    @Test
+    public void testInstallModulesFromZipUsingBundletool() throws Exception {
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
+
+        mBundletoolJar = File.createTempFile("/fake/absolute/path/bundletool", ".jar");
+
+        mSetter.setOptionValue("apks-zip-file-name", "fakeApkZip.zip");
+
+        try {
+            mockCleanInstalledApexPackages();
+            when(mMockBundletoolUtil.generateDeviceSpecFile(Mockito.any(ITestDevice.class)))
+                    .thenReturn("serial.json");
+
+            List<String> trainInstallCmd = new ArrayList<>();
+            trainInstallCmd.add("install-multi-apks");
+            trainInstallCmd.add("--enable-rollback");
+            trainInstallCmd.add("--apks-zip=" + mFakeApkZip.getAbsolutePath());
+            when(mMockDevice.executeAdbCommand(trainInstallCmd.toArray(new String[0])))
+                    .thenReturn("Success");
+
+            Set<ApexInfo> activatedApex = new HashSet<ApexInfo>();
+            activatedApex.add(
+                    new ApexInfo(
+                            SPLIT_APEX_PACKAGE_NAME,
+                            1,
+                            "/data/apex/active/com.android.FAKE_APEX_PACKAGE_NAME@1.apex"));
+            when(mMockDevice.getActiveApexes()).thenReturn(activatedApex);
+            when(mMockDevice.executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME))
+                    .thenReturn("Success");
+
+            Set<String> installableModules = new HashSet<>();
+            installableModules.add(APEX_PACKAGE_NAME);
+            installableModules.add(SPLIT_APK_PACKAGE_NAME);
+            when(mMockDevice.getInstalledPackageNames()).thenReturn(installableModules);
+
+            mInstallApexModuleTargetPreparer.setUp(mTestInfo);
+            mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
+            verifyCleanInstalledApexPackages(1);
+            Mockito.verify(mMockBundletoolUtil, times(1))
+                    .generateDeviceSpecFile(Mockito.any(ITestDevice.class));
+            List<String> expectedArgs = new ArrayList<>();
+            expectedArgs.add("--update-only");
+            expectedArgs.add("--enable-rollback");
+            Mockito.verify(mMockBundletoolUtil, times(1))
+                    .installApksFromZip(mFakeApkZip, mMockDevice, expectedArgs);
+            verify(mMockDevice, times(2)).reboot();
+            verify(mMockDevice, times(1)).getActiveApexes();
+            verify(mMockDevice, times(1)).waitForDeviceAvailable();
+        } finally {
+            FileUtil.deleteFile(mBundletoolJar);
+            FileUtil.deleteFile(mFakeApkZip);
+        }
     }
 
     private void verifySuccessfulInstallPackages(List<File> files) throws Exception {
