@@ -25,7 +25,11 @@ import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.ITestDevice;
-
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -34,10 +38,6 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-
-import java.io.File;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /** Unit tests for {@link BundletoolUtil} */
 @RunWith(JUnit4.class)
@@ -188,5 +188,44 @@ public class BundletoolUtilTest {
 
         FileUtil.deleteFile(fakeApks);
         assertNull(splits);
+    }
+
+    @Test
+    public void test_installApksFromZip() throws Exception {
+        File fakeApksZip = File.createTempFile("fakeApks", ".zip");
+        CommandResult res = new CommandResult();
+        res.setStatus(CommandStatus.SUCCESS);
+        when(mMockRuntil.runTimedCmd(
+                        (Long) Mockito.anyLong(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any(),
+                        (String) Mockito.any()))
+                .thenReturn(res);
+
+        String fileInput = "--apks-zip=" + fakeApksZip.getAbsolutePath();
+        List<String> extraArgs = new ArrayList<String>();
+        extraArgs.add("--update-only");
+        extraArgs.add("--enable-rollback");
+
+        mBundletoolUtil.installApksFromZip(fakeApksZip, mMockDevice, extraArgs);
+        verify(mMockRuntil, times(1))
+                .runTimedCmd(
+                        60000,
+                        "java",
+                        "-jar",
+                        mBundletoolJar.getAbsolutePath(),
+                        "install-multi-apks",
+                        fileInput,
+                        "--device-id=serial",
+                        "--update-only",
+                        "--enable-rollback",
+                        "--adb=adb");
+        FileUtil.deleteFile(fakeApksZip);
     }
 }
