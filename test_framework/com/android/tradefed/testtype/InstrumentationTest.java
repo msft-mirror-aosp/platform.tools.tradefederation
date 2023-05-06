@@ -913,15 +913,17 @@ public class InstrumentationTest
         }
         instrumentationListener.setReportUnexecutedTests(mReportUnexecuted);
 
-        if (testsToRun == null) {
-            // Failed to collect the tests or collection is off. Just try to run them all.
-            runInstrumentationTests(testInfo, mRunner, instrumentationListener);
-        } else if (!testsToRun.isEmpty()) {
-            runWithRerun(testInfo, listener, instrumentationListener, testsToRun);
-        } else {
-            CLog.i("No tests expected for %s, skipping", mPackageName);
-            listener.testRunStarted(mPackageName, 0);
-            listener.testRunEnded(0, new HashMap<String, Metric>());
+        try (CloseableTraceScope instru = new CloseableTraceScope("run_instrumentation")) {
+            if (testsToRun == null) {
+                // Failed to collect the tests or collection is off. Just try to run them all.
+                runInstrumentationTests(testInfo, mRunner, instrumentationListener);
+            } else if (!testsToRun.isEmpty()) {
+                runWithRerun(testInfo, listener, instrumentationListener, testsToRun);
+            } else {
+                CLog.i("No tests expected for %s, skipping", mPackageName);
+                listener.testRunStarted(mPackageName, 0);
+                listener.testRunEnded(0, new HashMap<String, Metric>());
+            }
         }
     }
 

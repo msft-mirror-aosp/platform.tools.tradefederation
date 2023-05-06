@@ -1119,40 +1119,43 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
 
     /** Verify that the device did not crash after the module. */
     private void checkEndModuleDevice(TestInformation testInfo) throws DeviceNotAvailableException {
-        for (ITestDevice device : testInfo.getDevices()) {
-            if (device.getIDevice() instanceof StubDevice) {
-                continue;
-            }
-            // First check device is still online
-            try {
-                device.waitForDeviceAvailable();
-            } catch (DeviceNotAvailableException e) {
-                // Wrap exception for better message
-                throw new DeviceNotAvailableException(
-                        String.format("Device went offline after running module '%s'", mId),
-                        e,
-                        e.getSerial(),
-                        DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
-            }
-            // Second check device didn't crash
-            long deviceDate = device.getDeviceDate();
-            if (deviceDate == 0L) {
-                continue;
-            }
-            try {
-                boolean restarted =
-                        device.deviceSoftRestartedSince(deviceDate - 5000L, TimeUnit.MILLISECONDS);
-                if (restarted) {
-                    CLog.e("Detected a soft-restart after module %s", mId);
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.SOFT_RESTART_AFTER_MODULE, 1);
-                    // TODO: Enable actually failing module for reporting
-                    /*throw new HarnessRuntimeException(
-                    String.format("Device '%s' crashed after running %s.", device.getSerialNumber(), mId),
-                    DeviceErrorIdentifier.DEVICE_CRASHED);*/
+        try (CloseableTraceScope check = new CloseableTraceScope("checkEndModuleDevice")) {
+            for (ITestDevice device : testInfo.getDevices()) {
+                if (device.getIDevice() instanceof StubDevice) {
+                    continue;
                 }
-            } catch (RuntimeException e) {
-                CLog.e(e);
+                // First check device is still online
+                try {
+                    device.waitForDeviceAvailable();
+                } catch (DeviceNotAvailableException e) {
+                    // Wrap exception for better message
+                    throw new DeviceNotAvailableException(
+                            String.format("Device went offline after running module '%s'", mId),
+                            e,
+                            e.getSerial(),
+                            DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                }
+                // Second check device didn't crash
+                long deviceDate = device.getDeviceDate();
+                if (deviceDate == 0L) {
+                    continue;
+                }
+                try {
+                    boolean restarted =
+                            device.deviceSoftRestartedSince(
+                                    deviceDate - 5000L, TimeUnit.MILLISECONDS);
+                    if (restarted) {
+                        CLog.e("Detected a soft-restart after module %s", mId);
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.SOFT_RESTART_AFTER_MODULE, 1);
+                        // TODO: Enable actually failing module for reporting
+                        /*throw new HarnessRuntimeException(
+                        String.format("Device '%s' crashed after running %s.", device.getSerialNumber(), mId),
+                        DeviceErrorIdentifier.DEVICE_CRASHED);*/
+                    }
+                } catch (RuntimeException e) {
+                    CLog.e(e);
+                }
             }
         }
     }
