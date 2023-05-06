@@ -1316,7 +1316,9 @@ public class TestInvocation implements ITestInvocation {
             }
             // Once we have all the information we can start the invocation.
             if (!deviceInit) {
-                startInvocation(config, context, listener);
+                try (CloseableTraceScope s = new CloseableTraceScope("startInvocation")) {
+                    startInvocation(config, context, listener);
+                }
             }
             if (!RunMode.DELEGATED_INVOCATION.equals(mode)
                     && (config.getTests() == null || config.getTests().isEmpty())) {
