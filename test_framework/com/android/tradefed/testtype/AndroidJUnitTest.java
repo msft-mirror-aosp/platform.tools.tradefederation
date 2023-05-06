@@ -25,6 +25,7 @@ import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -368,33 +369,40 @@ public class AndroidJUnitTest extends InstrumentationTest
         }
 
         boolean pushedFile = false;
-        // if mIncludeTestFile is set, perform filtering with this file
-        if (mIncludeTestFile != null && mIncludeTestFile.length() > 0) {
-            mDeviceIncludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + INCLUDE_FILE;
-            pushTestFile(mIncludeTestFile, mDeviceIncludeFile, listener);
-            if (mUseTestStorage) {
-                pushTestFile(
-                        mIncludeTestFile, mTestStorageInternalDir + mDeviceIncludeFile, listener);
+        try (CloseableTraceScope filter = new CloseableTraceScope("push_filter_files")) {
+            // if mIncludeTestFile is set, perform filtering with this file
+            if (mIncludeTestFile != null && mIncludeTestFile.length() > 0) {
+                mDeviceIncludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + INCLUDE_FILE;
+                pushTestFile(mIncludeTestFile, mDeviceIncludeFile, listener);
+                if (mUseTestStorage) {
+                    pushTestFile(
+                            mIncludeTestFile,
+                            mTestStorageInternalDir + mDeviceIncludeFile,
+                            listener);
+                }
+                pushedFile = true;
+                // If an explicit include file filter is provided, do not use the package
+                setTestPackageName(null);
             }
-            pushedFile = true;
-            // If an explicit include file filter is provided, do not use the package
-            setTestPackageName(null);
-        }
 
-        // if mExcludeTestFile is set, perform filtering with this file
-        if (mExcludeTestFile != null && mExcludeTestFile.length() > 0) {
-            mDeviceExcludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + EXCLUDE_FILE;
-            pushTestFile(mExcludeTestFile, mDeviceExcludeFile, listener);
-            if (mUseTestStorage) {
-                pushTestFile(
-                        mExcludeTestFile, mTestStorageInternalDir + mDeviceExcludeFile, listener);
+            // if mExcludeTestFile is set, perform filtering with this file
+            if (mExcludeTestFile != null && mExcludeTestFile.length() > 0) {
+                mDeviceExcludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + EXCLUDE_FILE;
+                pushTestFile(mExcludeTestFile, mDeviceExcludeFile, listener);
+                if (mUseTestStorage) {
+                    pushTestFile(
+                            mExcludeTestFile,
+                            mTestStorageInternalDir + mDeviceExcludeFile,
+                            listener);
+                }
+                pushedFile = true;
             }
-            pushedFile = true;
         }
         TestAppInstallSetup serviceInstaller = null;
         if (mUseTestStorage) {
             File testServices = null;
-            try {
+            try (CloseableTraceScope serviceInstall =
+                    new CloseableTraceScope("install_service_apk")) {
                 testServices = FileUtil.createTempFile("services", ".apk");
                 boolean extracted =
                         ResourceUtil.extractResourceAsFile(
