@@ -67,7 +67,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -614,8 +613,6 @@ public class TestMappingSuiteRunnerTest {
             assertEquals(0, mRunner.getTestMappingPaths().size());
             assertEquals(false, mRunner.getUseTestMappingPath());
         } finally {
-            // Clean up the static variable due to the usage of option `test-mapping-path`.
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
             FileUtil.recursiveDelete(tempDir);
         }
     }
@@ -1075,8 +1072,6 @@ public class TestMappingSuiteRunnerTest {
             assertTrue(mRunner.getIncludeFilter().contains("test1"));
         } finally {
             FileUtil.recursiveDelete(tempDir);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 
@@ -1143,8 +1138,6 @@ public class TestMappingSuiteRunnerTest {
             assertTrue(expected.getMessage().contains("Collision of Test Mapping file"));
         } finally {
             FileUtil.recursiveDelete(tempDir);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 
@@ -1222,8 +1215,6 @@ public class TestMappingSuiteRunnerTest {
         } finally {
             FileUtil.recursiveDelete(tempDir);
             FileUtil.recursiveDelete(tempDir2);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 
@@ -1251,8 +1242,6 @@ public class TestMappingSuiteRunnerTest {
                 "Missing extra-zip in the BuildInfo file.", expected.getMessage());
         } finally {
             FileUtil.recursiveDelete(tempDir);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 
