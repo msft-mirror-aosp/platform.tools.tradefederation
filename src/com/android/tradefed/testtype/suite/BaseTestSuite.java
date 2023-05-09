@@ -756,4 +756,8 @@ public class BaseTestSuite extends ITestSuite {
         mFoldableStates = device.getFoldableStates();
         return mFoldableStates;
     }
+
+    public String getRunSuiteTag() {
+        return mSuiteTag;
+    }
 }
