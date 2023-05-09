@@ -207,17 +207,14 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         }
 
         if (mTestGroup != null) {
-            TestMapping.setIgnoreTestMappingImports(mIgnoreTestMappingImports);
             if (mForceFullRun) {
                 CLog.d("--force-full-run is specified, all tests in test group %s will be ran.",
                         mTestGroup);
                 mTestMappingPaths.clear();
             }
-            if (!mTestMappingPaths.isEmpty()) {
-                TestMapping.setTestMappingPaths(mTestMappingPaths);
-            }
+            TestMapping testMapping = new TestMapping(mTestMappingPaths, mIgnoreTestMappingImports);
             testInfosToRun =
-                    TestMapping.getTests(
+                    testMapping.getTests(
                             mBuildInfo,
                             mTestGroup,
                             getPrioritizeHostConfig(),
@@ -227,8 +224,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             if (!mTestModulesForced.isEmpty()) {
                 CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
                 testInfosToRun =
-                        testInfosToRun
-                                .stream()
+                        testInfosToRun.stream()
                                 .filter(testInfo -> mTestModulesForced.contains(testInfo.getName()))
                                 .collect(Collectors.toSet());
             }
