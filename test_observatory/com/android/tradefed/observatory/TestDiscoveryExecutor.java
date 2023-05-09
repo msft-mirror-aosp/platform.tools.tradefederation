@@ -29,6 +29,7 @@ import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.keystore.DryRunKeyStore;
 
+import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -170,6 +171,12 @@ public class TestDiscoveryExecutor {
                     throw new TestDiscoveryException(
                             "Tradefed Observatory can't do test discovery because the existence of"
                                     + " metadata include filter option.",
+                            null,
+                            DiscoveryExitCode.COMPONENT_METADATA);
+                } else if (!Strings.isNullOrEmpty(((BaseTestSuite) test).getRunSuiteTag())) {
+                    throw new TestDiscoveryException(
+                            "Tradefed Observatory can't do test discovery because the existence of"
+                                    + " run-suite-tag option.",
                             null,
                             DiscoveryExitCode.COMPONENT_METADATA);
                 }
