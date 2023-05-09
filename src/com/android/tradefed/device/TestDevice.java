@@ -2534,12 +2534,19 @@ public class TestDevice extends NativeDevice {
         Pattern deviceStatePattern =
                 Pattern.compile(
                         "DeviceState\\{identifier=(\\d+), name='(\\S+)'"
-                                + "(?:, app_accessible=)?(\\S+)?\\}\\S*");
+                                + "(?:, app_accessible=)?(\\S+)?"
+                                + "(?:, cancel_when_requester_not_on_top=)?(\\S+)?"
+                                + "\\}\\S*");
         for (String line : result.getStdout().split("\n")) {
             Matcher m = deviceStatePattern.matcher(line.trim());
             if (m.matches()) {
                 // Move onto the next state if the device state is not accessible by apps
                 if (m.groupCount() > 2 && m.group(3) != null && !Boolean.parseBoolean(m.group(3))) {
+                    continue;
+                }
+                // Move onto the next state if the device state is canceled when the requesting app
+                // is not on top.
+                if (m.groupCount() > 3 && m.group(4) != null && Boolean.parseBoolean(m.group(4))) {
                     continue;
                 }
                 foldableStates.add(
@@ -2558,7 +2565,9 @@ public class TestDevice extends NativeDevice {
         Pattern deviceStatePattern =
                 Pattern.compile(
                         "Committed state: DeviceState\\{identifier=(\\d+), name='(\\S+)'"
-                                + "(?:, app_accessible=)?(\\S+)?\\}\\S*");
+                                + "(?:, app_accessible=)?(\\S+)?"
+                                + "(?:, cancel_when_requester_not_on_top=)?(\\S+)?"
+                                + "\\}\\S*");
         for (String line : result.getStdout().split("\n")) {
             Matcher m = deviceStatePattern.matcher(line.trim());
             if (m.matches()) {
