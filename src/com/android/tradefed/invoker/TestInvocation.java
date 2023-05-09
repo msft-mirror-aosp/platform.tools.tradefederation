@@ -793,19 +793,21 @@ public class TestInvocation implements ITestInvocation {
                 // Vritual devices have a fake battery there is no point in logging it.
                 continue;
             }
-            Integer batteryLevel = testDevice.getBattery();
-            if (batteryLevel == null) {
-                CLog.v("Failed to get battery level for %s", testDevice.getSerialNumber());
-                continue;
+            try (CloseableTraceScope ignored = new CloseableTraceScope("log_battery")) {
+                Integer batteryLevel = testDevice.getBattery();
+                if (batteryLevel == null) {
+                    CLog.v("Failed to get battery level for %s", testDevice.getSerialNumber());
+                    continue;
+                }
+                CLog.v("%s - %s - %d%%", BATT_TAG, event, batteryLevel);
+                context.getBuildInfo(testDevice)
+                        .addBuildAttribute(
+                                String.format(
+                                        BATTERY_ATTRIBUTE_FORMAT_KEY,
+                                        testDevice.getSerialNumber(),
+                                        event),
+                                batteryLevel.toString());
             }
-            CLog.v("%s - %s - %d%%", BATT_TAG, event, batteryLevel);
-            context.getBuildInfo(testDevice)
-                    .addBuildAttribute(
-                            String.format(
-                                    BATTERY_ATTRIBUTE_FORMAT_KEY,
-                                    testDevice.getSerialNumber(),
-                                    event),
-                            batteryLevel.toString());
         }
     }
 
