@@ -435,7 +435,10 @@ public class AndroidJUnitTest extends InstrumentationTest
         }
         super.run(testInfo, listener);
         if (serviceInstaller != null) {
-            serviceInstaller.tearDown(testInfo, null);
+            try (CloseableTraceScope serviceTeardown =
+                    new CloseableTraceScope("service_teardown")) {
+                serviceInstaller.tearDown(testInfo, null);
+            }
         }
         if (pushedFile) {
             // Remove the directory where the files where pushed
