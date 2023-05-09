@@ -6157,6 +6157,37 @@ public class TestDeviceTest {
     }
 
     @Test
+    public void testGetFoldableStatesVersionU() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Supported states: [\n"
+                                        + " DeviceState{identifier=0, name='CLOSED',"
+                                        + " app_accessible=false,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=1, name='HALF_OPENED',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=2, name='OPENED',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=3, name='CANCEL_WHEN_NOT_TOP',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=true},\n"
+                                        + "]\n");
+                        return result;
+                    }
+                };
+
+        Set<DeviceFoldableState> states = mTestDevice.getFoldableStates();
+        assertEquals(2, states.size());
+    }
+
+    @Test
     public void testGetCurrentFoldableState() throws Exception {
         mTestDevice =
                 new TestableTestDevice() {
@@ -6185,6 +6216,26 @@ public class TestDeviceTest {
                         result.setStdout(
                                 "Committed state: DeviceState{identifier=2, name='DEFAULT',"
                                         + " app_accessible=true}\n");
+                        return result;
+                    }
+                };
+
+        DeviceFoldableState state = mTestDevice.getCurrentFoldableState();
+        assertEquals(2, state.getIdentifier());
+    }
+
+    @Test
+    public void testGetCurrentFoldableStateVersionU() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Committed state: DeviceState{identifier=2, name='DEFAULT',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false}\n");
                         return result;
                     }
                 };
