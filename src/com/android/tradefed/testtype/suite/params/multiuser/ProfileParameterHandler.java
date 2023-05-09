@@ -16,7 +16,6 @@
 
 package com.android.tradefed.testtype.suite.params.multiuser;
 
-import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.targetprep.ITargetPreparer;
@@ -24,10 +23,7 @@ import com.android.tradefed.targetprep.ProfileTargetPreparer;
 import com.android.tradefed.targetprep.RunOnSystemUserTargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestAnnotationFilterReceiver;
-import com.android.tradefed.testtype.suite.ModuleDefinition;
-import com.android.tradefed.testtype.suite.module.IModuleController;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -37,20 +33,11 @@ public abstract class ProfileParameterHandler {
 
     private final String mRequireRunOnProfileAnnotation;
     private final ProfileTargetPreparer mProfileTargetPreparer;
-    private final List<IModuleController> mModuleControllers;
 
     ProfileParameterHandler(
             String requireRunOnProfileAnnotation, ProfileTargetPreparer profileTargetPreparer) {
-        this(requireRunOnProfileAnnotation, profileTargetPreparer, new ArrayList<>());
-    }
-
-    ProfileParameterHandler(
-            String requireRunOnProfileAnnotation,
-            ProfileTargetPreparer profileTargetPreparer,
-            List<IModuleController> moduleControllers) {
         mRequireRunOnProfileAnnotation = requireRunOnProfileAnnotation;
         mProfileTargetPreparer = profileTargetPreparer;
-        mModuleControllers = moduleControllers;
     }
 
     public void addParameterSpecificConfig(IConfiguration moduleConfiguration) {
@@ -65,8 +52,6 @@ public abstract class ProfileParameterHandler {
     }
 
     public void applySetup(IConfiguration moduleConfiguration) {
-        addModuleControllersToConfiguration(moduleConfiguration, mModuleControllers);
-
         // Add filter to include @RequireRunOnXXXProfile
         for (IRemoteTest test : moduleConfiguration.getTests()) {
             if (test instanceof ITestAnnotationFilterReceiver) {
@@ -79,35 +64,6 @@ public abstract class ProfileParameterHandler {
                 filterTest.clearExcludeAnnotations();
                 filterTest.addAllExcludeAnnotation(excludeAnnotations);
             }
-        }
-    }
-
-    private void addModuleControllersToConfiguration(
-            IConfiguration moduleConfiguration, List<IModuleController> moduleControllers) {
-        if (moduleControllers == null || moduleControllers.isEmpty()) {
-            return;
-        }
-
-        List<IModuleController> ctrlObjectList =
-                (List<IModuleController>)
-                        moduleConfiguration.getConfigurationObjectList(
-                                ModuleDefinition.MODULE_CONTROLLER);
-
-        if (ctrlObjectList == null) {
-            ctrlObjectList = new ArrayList<>();
-        }
-
-        Set<IModuleController> ctrlObjectSet = new HashSet<>(ctrlObjectList);
-
-        for (IModuleController moduleController : moduleControllers) {
-            ctrlObjectSet.add(moduleController);
-        }
-
-        try {
-            moduleConfiguration.setConfigurationObjectList(
-                    ModuleDefinition.MODULE_CONTROLLER, new ArrayList<>(ctrlObjectSet));
-        } catch (ConfigurationException e) {
-            throw new RuntimeException(e);
         }
     }
 }
