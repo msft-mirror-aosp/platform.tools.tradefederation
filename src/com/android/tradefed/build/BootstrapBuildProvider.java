@@ -27,6 +27,7 @@ import com.android.tradefed.invoker.ExecutionFiles;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.BuildInfoUtil;
 import com.android.tradefed.util.FileUtil;
@@ -111,24 +112,29 @@ public class BootstrapBuildProvider implements IDeviceBuildProvider {
         IBuildInfo info = new DeviceBuildInfo(mBuildId, mBuildTargetName);
         addFiles(info, mExtraFiles);
         if (!(device.getIDevice() instanceof StubDevice)) {
-            if (!device.waitForDeviceShell(mShellAvailableTimeout * 1000)) {
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Shell did not become available in %d seconds",
-                                mShellAvailableTimeout),
-                        device.getSerialNumber());
+            try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_shell")) {
+                if (!device.waitForDeviceShell(mShellAvailableTimeout * 1000)) {
+                    throw new DeviceNotAvailableException(
+                            String.format(
+                                    "Shell did not become available in %d seconds",
+                                    mShellAvailableTimeout),
+                            device.getSerialNumber());
+                }
             }
         } else {
             // In order to avoid issue with a null branch, use a placeholder stub for StubDevice.
             mBranch = "stub";
         }
-        BuildInfoUtil.bootstrapDeviceBuildAttributes(
-                info,
-                device,
-                mBuildId,
-                null /* override build flavor */,
-                mBranch,
-                null /* override build alias */);
+        try (CloseableTraceScope bootstrapAttributes =
+                new CloseableTraceScope("bootstrapDeviceBuildAttributes")) {
+            BuildInfoUtil.bootstrapDeviceBuildAttributes(
+                    info,
+                    device,
+                    mBuildId,
+                    null /* override build flavor */,
+                    mBranch,
+                    null /* override build alias */);
+        }
         if (mTestsDir != null && mTestsDir.isDirectory()) {
             info.setFile("testsdir", mTestsDir, info.getBuildId());
         }
