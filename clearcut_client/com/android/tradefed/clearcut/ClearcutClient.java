@@ -40,6 +40,7 @@ import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -66,6 +67,7 @@ public class ClearcutClient {
 
     private File mCachedUuidFile = new File(System.getProperty("user.home"), ".tradefed");
     private String mRunId;
+    private long mSessionStartTime = 0L;
 
     private final int mLogSource;
     private final String mUrl;
@@ -146,12 +148,29 @@ public class ClearcutClient {
         if (mDisabled) {
             return;
         }
+        mSessionStartTime = System.nanoTime();
         LogRequest.Builder request = createBaseLogRequest();
         LogEvent.Builder logEvent = LogEvent.newBuilder();
         logEvent.setEventTimeMs(System.currentTimeMillis());
         logEvent.setSourceExtension(
                 ClearcutEventHelper.createStartEvent(
                         getGroupingKey(), mRunId, mUserType, mSubToolName));
+        request.addLogEvent(logEvent);
+        queueEvent(request.build());
+    }
+
+    /** Send the last event to notify that Tradefed is done. */
+    public void notifyTradefedFinishedEvent() {
+        if (mDisabled) {
+            return;
+        }
+        Duration duration = java.time.Duration.ofNanos(System.nanoTime() - mSessionStartTime);
+        LogRequest.Builder request = createBaseLogRequest();
+        LogEvent.Builder logEvent = LogEvent.newBuilder();
+        logEvent.setEventTimeMs(System.currentTimeMillis());
+        logEvent.setSourceExtension(
+                ClearcutEventHelper.createFinishedEvent(
+                        getGroupingKey(), mRunId, mUserType, mSubToolName, duration));
         request.addLogEvent(logEvent);
         queueEvent(request.build());
     }
@@ -167,6 +186,22 @@ public class ClearcutClient {
         logEvent.setSourceExtension(
                 ClearcutEventHelper.createRunStartEvent(
                         getGroupingKey(), mRunId, mUserType, mSubToolName));
+        request.addLogEvent(logEvent);
+        queueEvent(request.build());
+    }
+
+    /** Send the event to notify that a test run finished. */
+    public void notifyTestRunFinished(long startTimeNano) {
+        if (mDisabled) {
+            return;
+        }
+        Duration duration = java.time.Duration.ofNanos(System.nanoTime() - startTimeNano);
+        LogRequest.Builder request = createBaseLogRequest();
+        LogEvent.Builder logEvent = LogEvent.newBuilder();
+        logEvent.setEventTimeMs(System.currentTimeMillis());
+        logEvent.setSourceExtension(
+                ClearcutEventHelper.creatRunTestFinished(
+                        getGroupingKey(), mRunId, mUserType, mSubToolName, duration));
         request.addLogEvent(logEvent);
         queueEvent(request.build());
     }
