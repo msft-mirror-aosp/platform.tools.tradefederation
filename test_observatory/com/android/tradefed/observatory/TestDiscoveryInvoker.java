@@ -60,6 +60,7 @@ public class TestDiscoveryInvoker {
     private final String mDefaultConfigName;
     private final File mRootDir;
     private final IRunUtil mRunUtil = new RunUtil();
+    private final boolean mHasConfigFallback;
     private File mTestDir;
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
@@ -67,6 +68,8 @@ public class TestDiscoveryInvoker {
     public static final String TEST_MODULES_LIST_KEY = "TestModules";
     public static final String TEST_DIRECTORY_ENV_VARIABLE_KEY =
             "TF_TEST_DISCOVERY_USE_TEST_DIRECTORY";
+    public static final String ROOT_DIRECTORY_ENV_VARIABLE_KEY =
+            "ROOT_TEST_DISCOVERY_USE_TEST_DIRECTORY";
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
@@ -83,10 +86,7 @@ public class TestDiscoveryInvoker {
 
     /** Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration} and root directory. */
     public TestDiscoveryInvoker(IConfiguration config, File rootDir) {
-        mConfiguration = config;
-        mDefaultConfigName = null;
-        mRootDir = rootDir;
-        mTestDir = null;
+        this(config, null, rootDir);
     }
 
     /**
@@ -94,10 +94,23 @@ public class TestDiscoveryInvoker {
      * default config name and root directory.
      */
     public TestDiscoveryInvoker(IConfiguration config, String defaultConfigName, File rootDir) {
+        this(config, defaultConfigName, rootDir, false);
+    }
+
+    /**
+     * Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration}, test launcher's
+     * default config name, root directory and if fallback is required.
+     */
+    public TestDiscoveryInvoker(
+            IConfiguration config,
+            String defaultConfigName,
+            File rootDir,
+            boolean hasConfigFallback) {
         mConfiguration = config;
         mDefaultConfigName = defaultConfigName;
         mRootDir = rootDir;
         mTestDir = null;
+        mHasConfigFallback = hasConfigFallback;
     }
 
     /**
@@ -119,6 +132,12 @@ public class TestDiscoveryInvoker {
         // Build command line args to query the tradefed.jar in the root directory
         List<String> args = buildJavaCmdForXtsDiscovery(classPath);
         String[] subprocessArgs = args.toArray(new String[args.size()]);
+
+        if (mHasConfigFallback) {
+            getRunUtil()
+                    .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
+        }
+
         CommandResult res = getRunUtil().runTimedCmd(20000, subprocessArgs);
         if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
             DiscoveryExitCode exitCode = null;
@@ -175,6 +194,10 @@ public class TestDiscoveryInvoker {
         if (mTestDir != null) {
             getRunUtil()
                     .setEnvVariable(TEST_DIRECTORY_ENV_VARIABLE_KEY, mTestDir.getAbsolutePath());
+        }
+        if (mHasConfigFallback) {
+            getRunUtil()
+                    .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
         }
         CommandResult res = getRunUtil().runTimedCmd(30000, subprocessArgs);
         if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
