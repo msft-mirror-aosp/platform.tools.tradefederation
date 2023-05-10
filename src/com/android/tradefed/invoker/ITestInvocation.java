@@ -16,6 +16,7 @@
 
 package com.android.tradefed.invoker;
 
+import com.android.tradefed.clearcut.ClearcutClient;
 import com.android.tradefed.command.CommandRunner.ExitCode;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -61,6 +62,11 @@ public interface ITestInvocation {
     /** The exit information of the given invocation. */
     public default ExitInformation getExitInfo() {
         return new ExitInformation();
+    }
+
+    /** Forward the clearcut client to report metrics. */
+    public default void setClearcutClient(ClearcutClient client) {
+        // Do nothing by default
     }
 
     /** Represents some exit information for an invocation. */

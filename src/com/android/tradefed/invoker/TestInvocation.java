@@ -20,6 +20,7 @@ import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.CommandLineBuildInfoBuilder;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.clearcut.ClearcutClient;
 import com.android.tradefed.command.CommandRunner.ExitCode;
 import com.android.tradefed.command.CommandScheduler;
 import com.android.tradefed.command.ICommandOptions;
@@ -206,6 +207,7 @@ public class TestInvocation implements ITestInvocation {
     private ExitCode mExitCode = ExitCode.NO_ERROR;
     private Throwable mExitStack = null;
     private EventsLoggerListener mEventsLogger = null;
+    private ClearcutClient mClient = null;
 
     /**
      * Display a log message informing the user of a invocation being started.
@@ -599,22 +601,29 @@ public class TestInvocation implements ITestInvocation {
             IInvocationExecution invocationPath,
             ITestInvocationListener listener)
             throws Throwable {
-        getRunUtil().allowInterrupt(true);
-        logDeviceBatteryLevel(testInfo.getContext(), "initial -> setup");
-        CurrentInvocation.setActionInProgress(ActionInProgress.SETUP);
-        invocationPath.doSetup(testInfo, config, listener);
-        // Don't run tests if notified of soft/forced shutdown
-        if (mSoftStopRequestTime != null || mStopRequestTime != null) {
-            // Throw an exception so that it can be reported as an invocation failure
-            // and command can be un-leased
-            throw new RunInterruptedException(
-                    "Notified of shut down. Will not run tests",
-                    InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+        long startTimeNano = System.nanoTime();
+        try {
+            getRunUtil().allowInterrupt(true);
+            logDeviceBatteryLevel(testInfo.getContext(), "initial -> setup");
+            CurrentInvocation.setActionInProgress(ActionInProgress.SETUP);
+            invocationPath.doSetup(testInfo, config, listener);
+            // Don't run tests if notified of soft/forced shutdown
+            if (mSoftStopRequestTime != null || mStopRequestTime != null) {
+                // Throw an exception so that it can be reported as an invocation failure
+                // and command can be un-leased
+                throw new RunInterruptedException(
+                        "Notified of shut down. Will not run tests",
+                        InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+            }
+            logDeviceBatteryLevel(testInfo.getContext(), "setup -> test");
+            mTestStarted = true;
+            CurrentInvocation.setActionInProgress(ActionInProgress.TEST);
+            invocationPath.runTests(testInfo, config, listener);
+        } finally {
+            if (mClient != null) {
+                mClient.notifyTestRunFinished(startTimeNano);
+            }
         }
-        logDeviceBatteryLevel(testInfo.getContext(), "setup -> test");
-        mTestStarted = true;
-        CurrentInvocation.setActionInProgress(ActionInProgress.TEST);
-        invocationPath.runTests(testInfo, config, listener);
         logDeviceBatteryLevel(testInfo.getContext(), "after test");
         CurrentInvocation.setActionInProgress(ActionInProgress.UNSET);
     }
@@ -1880,6 +1889,11 @@ public class TestInvocation implements ITestInvocation {
         info.mExitCode = this.mExitCode;
         info.mStack = this.mExitStack;
         return info;
+    }
+
+    @Override
+    public void setClearcutClient(ClearcutClient client) {
+        mClient = client;
     }
 
     /** Returns true if the invocation is currently within a subprocess scope. */
