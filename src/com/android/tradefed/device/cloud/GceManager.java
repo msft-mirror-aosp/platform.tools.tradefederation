@@ -215,7 +215,7 @@ public class GceManager {
         // If Oxygen cuttlefish is used, skip collecting serial log due to lack of access.
         mSkipSerialLogCollection =
                 (!Strings.isNullOrEmpty(ipDevice) || getTestDeviceOptions().useOxygen());
-        if (getTestDeviceOptions().useOxygenProxy()) {
+        if (getTestDeviceOptions().useOxygen()) {
             return startGceWithOxygenClient(logger, attributes);
         } else {
             return startGceWithAcloud(ipDevice, user, offset, attributes);
@@ -405,14 +405,11 @@ public class GceManager {
                                     getTestDeviceOptions().getGceCmdTimeout(),
                                     gceArgs.toArray(new String[gceArgs.size()]));
             CLog.i("GCE driver stderr: %s", cmd.getStderr());
-            String instanceName = null;
-            if (!getTestDeviceOptions().useOxygen()) {
-                instanceName = extractInstanceName(cmd.getStderr());
-                if (instanceName != null) {
-                    mBuildInfo.addBuildAttribute(GCE_INSTANCE_NAME_KEY, instanceName);
-                } else {
-                    CLog.w("Could not extract an instance name for the gce device.");
-                }
+            String instanceName = extractInstanceName(cmd.getStderr());
+            if (instanceName != null) {
+                mBuildInfo.addBuildAttribute(GCE_INSTANCE_NAME_KEY, instanceName);
+            } else {
+                CLog.w("Could not extract an instance name for the gce device.");
             }
             if (CommandStatus.TIMED_OUT.equals(cmd.getStatus())) {
                 String errors =
@@ -460,12 +457,6 @@ public class GceManager {
             mGceAvdInfo =
                     GceAvdInfo.parseGceInfoFromFile(
                             reportFile, mDeviceDescriptor, mDeviceOptions.getRemoteAdbPort());
-            if (getTestDeviceOptions().useOxygen()) {
-                mBuildInfo.addBuildAttribute(GCE_INSTANCE_NAME_KEY, mGceAvdInfo.instanceName());
-                // Save GCE hostname to build info for releasing Oxygen cuttlefish in the parent
-                // process if needed.
-                mBuildInfo.addBuildAttribute(GCE_HOSTNAME_KEY, mGceAvdInfo.hostAndPort().getHost());
-            }
             mGceAvdInfo.setIpPreconfigured(ipDevice != null);
             mGceAvdInfo.setDeviceOffset(offset);
             mGceAvdInfo.setInstanceUser(user);
@@ -634,11 +625,6 @@ public class GceManager {
         }
         // Do not pass flags --logcat_file and --serial_log_file to collect logcat and serial logs.
 
-        if (getTestDeviceOptions().useOxygen()) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.OXYGEN_DEVICE_LEASE_THROUGH_ACLOUD_COUNT, 1);
-            gceArgs.add("--oxygen");
-        }
         return gceArgs;
     }
 
@@ -648,7 +634,7 @@ public class GceManager {
      * @return returns true if gce shutdown was requested as non-blocking.
      */
     public boolean shutdownGce() {
-        if (getTestDeviceOptions().useOxygenProxy()) {
+        if (getTestDeviceOptions().useOxygen()) {
             return shutdownGceWithOxygen();
         } else {
             return shutdownGceWithAcloud();
@@ -735,17 +721,6 @@ public class GceManager {
             boolean isIpPreconfigured) {
         List<String> gceArgs = ArrayUtil.list(options.getAvdDriverBinary().getAbsolutePath());
         gceArgs.add("delete");
-        if (options.useOxygen()) {
-            if (Strings.isNullOrEmpty(hostname)) {
-                CLog.w("`hostname` is needed for releasing Oxygen cuttlefish.");
-                return null;
-            }
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.OXYGEN_DEVICE_RELEASE_THROUGH_ACLOUD_COUNT, 1);
-            gceArgs.add("--oxygen");
-            gceArgs.add("--ip");
-            gceArgs.add(hostname);
-        }
         if (options.getServiceAccountJsonKeyFile() != null) {
             gceArgs.add("--service-account-json-private-key-path");
             gceArgs.add(options.getServiceAccountJsonKeyFile().getAbsolutePath());
@@ -988,7 +963,7 @@ public class GceManager {
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
 
             // Search log files for known failures for devices hosted by Oxygen
-            if (options.useOxygenProxy() && remoteFile != null) {
+            if (options.useOxygen() && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectErrorSignature")) {
                     List<String> signatures = OxygenUtil.collectErrorSignatures(remoteFile);
