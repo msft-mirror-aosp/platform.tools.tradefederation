@@ -1092,7 +1092,7 @@ public class SuiteModuleLoaderTest {
                         "com.android.permission.apex+com.android.ipsec.apex+com.android.cellbroadcast.apex"));
     }
 
-    /** Test that no test configs are loaded when no include-filter is given. */
+    /** Test that when no include-filter are given we fallback to default loading. */
     @Test
     public void testLoadConfigsWithNoIncludeFilters() throws Exception {
         createModuleConfig("module1");
@@ -1113,8 +1113,8 @@ public class SuiteModuleLoaderTest {
                 mRepo.loadConfigsFromDirectory(
                         Arrays.asList(mTestsDir), mAbis, null, null, patterns);
 
-        // Ensure no test configs would be loaded because no include-filter is given.
-        assertEquals(0, res.size());
+        // When no filter exists, fallback to load everything
+        assertEquals(2, res.size());
     }
 
     /** Test that the test config is loaded based on the given include-filter. */
