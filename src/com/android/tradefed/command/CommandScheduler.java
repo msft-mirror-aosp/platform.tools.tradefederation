@@ -649,6 +649,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             mStartTime = System.currentTimeMillis();
             ITestInvocation instance = getInvocation();
+            instance.setClearcutClient(mClient);
             try (CloseableTraceScope ignore = new CloseableTraceScope("init")) {
                 for (final IScheduledInvocationListener listener : mListeners) {
                     try {
@@ -1264,6 +1265,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 }
             }
             if (mClient != null) {
+                mClient.notifyTradefedFinishedEvent();
                 mClient.stop();
             }
         } finally {

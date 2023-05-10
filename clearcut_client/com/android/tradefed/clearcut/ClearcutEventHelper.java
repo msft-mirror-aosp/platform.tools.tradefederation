@@ -15,13 +15,18 @@
  */
 package com.android.tradefed.clearcut;
 
+import com.android.asuite.clearcut.Common;
 import com.android.asuite.clearcut.Common.UserType;
 import com.android.asuite.clearcut.ExternalUserLog.AtestLogEventExternal;
+import com.android.asuite.clearcut.ExternalUserLog.AtestLogEventExternal.AtestExitEvent;
 import com.android.asuite.clearcut.ExternalUserLog.AtestLogEventExternal.AtestStartEvent;
+import com.android.asuite.clearcut.ExternalUserLog.AtestLogEventExternal.RunTestsFinishEvent;
 import com.android.asuite.clearcut.ExternalUserLog.AtestLogEventExternal.RunnerFinishEvent;
 import com.android.asuite.clearcut.InternalUserLog.AtestLogEventInternal;
 
 import com.google.protobuf.ByteString;
+
+import java.time.Duration;
 
 /** Utility to help populate the event protos */
 public class ClearcutEventHelper {
@@ -56,6 +61,44 @@ public class ClearcutEventHelper {
     }
 
     /**
+     * Create the end event for Tradefed.
+     *
+     * @param userKey The unique id representing the user
+     * @param runId The current id for the session.
+     * @param userType The type of the user: internal or external.
+     * @param subToolName The name of test suite tool.
+     * @param sessionDuration The duration of the complete session.
+     * @return a ByteString representation of the even proto.
+     */
+    public static ByteString createFinishedEvent(
+            String userKey,
+            String runId,
+            UserType userType,
+            String subToolName,
+            Duration sessionDuration) {
+        if (UserType.GOOGLE.equals(userType)) {
+            AtestLogEventInternal.Builder builder =
+                    createBaseInternalEventBuilder(userKey, runId, userType, subToolName);
+            AtestLogEventInternal.AtestExitEvent.Builder exitEventBuilder =
+                    AtestLogEventInternal.AtestExitEvent.newBuilder();
+            Common.Duration duration =
+                    Common.Duration.newBuilder()
+                            .setSeconds(sessionDuration.getSeconds())
+                            .setNanos(sessionDuration.getNano())
+                            .build();
+            exitEventBuilder.setDuration(duration);
+            builder.setAtestExitEvent(exitEventBuilder.build());
+            return builder.build().toByteString();
+        }
+
+        AtestLogEventExternal.Builder builder =
+                createBaseExternalEventBuilder(userKey, runId, userType, subToolName);
+        AtestLogEventExternal.AtestExitEvent.Builder startBuilder = AtestExitEvent.newBuilder();
+        builder.setAtestExitEvent(startBuilder.build());
+        return builder.build().toByteString();
+    }
+
+    /**
      * Create the start invocation event for Tradefed.
      *
      * @param userKey The unique id representing the user
@@ -79,6 +122,44 @@ public class ClearcutEventHelper {
                 createBaseExternalEventBuilder(userKey, runId, userType, subToolName);
         RunnerFinishEvent.Builder startBuilder = RunnerFinishEvent.newBuilder();
         builder.setRunnerFinishEvent(startBuilder.build());
+        return builder.build().toByteString();
+    }
+
+    /**
+     * Create the run test finished event for Tradefed.
+     *
+     * @param userKey The unique id representing the user
+     * @param runId The current id for the session.
+     * @param userType The type of the user: internal or external.
+     * @param subToolName The name of test suite tool.
+     * @param testDuration the duration of the test session.
+     * @return a ByteString representation of the even proto.
+     */
+    public static ByteString creatRunTestFinished(
+            String userKey,
+            String runId,
+            UserType userType,
+            String subToolName,
+            Duration testDuration) {
+        if (UserType.GOOGLE.equals(userType)) {
+            AtestLogEventInternal.Builder builder =
+                    createBaseInternalEventBuilder(userKey, runId, userType, subToolName);
+            AtestLogEventInternal.RunTestsFinishEvent.Builder runTestsFinished =
+                    AtestLogEventInternal.RunTestsFinishEvent.newBuilder();
+            Common.Duration duration =
+                    Common.Duration.newBuilder()
+                            .setSeconds(testDuration.getSeconds())
+                            .setNanos(testDuration.getNano())
+                            .build();
+            runTestsFinished.setDuration(duration);
+            builder.setRunTestsFinishEvent(runTestsFinished.build());
+            return builder.build().toByteString();
+        }
+
+        AtestLogEventExternal.Builder builder =
+                createBaseExternalEventBuilder(userKey, runId, userType, subToolName);
+        RunTestsFinishEvent.Builder startBuilder = RunTestsFinishEvent.newBuilder();
+        builder.setRunTestsFinishEvent(startBuilder.build());
         return builder.build().toByteString();
     }
 
