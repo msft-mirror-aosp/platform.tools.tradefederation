@@ -191,7 +191,7 @@ public class SuiteModuleLoader {
         List<File> listConfigFiles = new ArrayList<>();
         listConfigFiles.addAll(
                 ConfigurationUtil.getConfigNamesFileFromDirs(suitePrefix, testsDirs, patterns));
-        if (mLoadConfigsWithIncludeFilters) {
+        if (mLoadConfigsWithIncludeFilters && !mIncludeFilters.isEmpty()) {
             CLog.i("Loading test configs based on the given include-filter.");
             Set<String> filteredConfigNames = new HashSet<>();
             for (LinkedHashSet<SuiteTestFilter> entry : mIncludeFilters.values()) {
