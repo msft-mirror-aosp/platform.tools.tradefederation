@@ -26,19 +26,25 @@ import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.keystore.DryRunKeyStore;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableSet;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A class for getting test modules and target preparers for a given command line args.
@@ -142,54 +148,69 @@ public class TestDiscoveryExecutor {
      */
     private Set<String> discoverTestModulesFromTests(List<IRemoteTest> testList)
             throws IllegalStateException, TestDiscoveryException {
+        Set<String> testModules = new LinkedHashSet<String>();
         Set<String> includeFilters = new HashSet<>();
         // Collect include filters from every test.
         for (IRemoteTest test : testList) {
-            if (test instanceof BaseTestSuite) {
-                if (test instanceof TestMappingSuiteRunner) {
-                    if (getEnvironment(TestDiscoveryInvoker.TEST_DIRECTORY_ENV_VARIABLE_KEY)
-                            == null) {
-                        throw new TestDiscoveryException(
-                                "The TestDiscoveryInvoker need test "
-                                        + "directory to be set to do test mapping "
-                                        + "discovery.",
-                                null,
-                                DiscoveryExitCode.ERROR);
-                    }
-                    ((TestMappingSuiteRunner) test).loadTestInfos();
-                }
-                Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
-                MultiMap<String, String> moduleMetadataIncludeFilters =
-                        ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
-                // Include/Exclude filters in suites are evaluated first,
-                // then metadata are applied on top, so having metadata filters
-                // and include-filters can actually be resolved to a super-set
-                // which is better than falling back.
-                if (!suiteIncludeFilters.isEmpty()) {
-                    includeFilters.addAll(suiteIncludeFilters);
-                } else if (!moduleMetadataIncludeFilters.isEmpty()) {
-                    throw new TestDiscoveryException(
-                            "Tradefed Observatory can't do test discovery because the existence of"
-                                    + " metadata include filter option.",
-                            null,
-                            DiscoveryExitCode.COMPONENT_METADATA);
-                } else if (!Strings.isNullOrEmpty(((BaseTestSuite) test).getRunSuiteTag())) {
-                    throw new TestDiscoveryException(
-                            "Tradefed Observatory can't do test discovery because the existence of"
-                                    + " run-suite-tag option.",
-                            null,
-                            DiscoveryExitCode.COMPONENT_METADATA);
-                }
-            } else {
+            if (!(test instanceof BaseTestSuite)) {
                 throw new TestDiscoveryException(
                         "Tradefed Observatory can't do test discovery on non suite-based test"
                                 + " runner.",
                         null,
                         DiscoveryExitCode.ERROR);
             }
+            if (test instanceof TestMappingSuiteRunner) {
+                if (getEnvironment(TestDiscoveryInvoker.TEST_DIRECTORY_ENV_VARIABLE_KEY) == null) {
+                    throw new TestDiscoveryException(
+                            "The TestDiscoveryInvoker need test "
+                                    + "directory to be set to do test mapping "
+                                    + "discovery.",
+                            null,
+                            DiscoveryExitCode.ERROR);
+                }
+                ((TestMappingSuiteRunner) test).loadTestInfos();
+            }
+            Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
+            MultiMap<String, String> moduleMetadataIncludeFilters =
+                    ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
+            // Include/Exclude filters in suites are evaluated first,
+            // then metadata are applied on top, so having metadata filters
+            // and include-filters can actually be resolved to a super-set
+            // which is better than falling back.
+            if (!suiteIncludeFilters.isEmpty()) {
+                includeFilters.addAll(suiteIncludeFilters);
+            } else if (!moduleMetadataIncludeFilters.isEmpty()) {
+                String rootDirPath =
+                        getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                boolean throwException = true;
+                if (rootDirPath != null) {
+                    File rootDir = new File(rootDirPath);
+                    if (rootDir.exists() && rootDir.isDirectory()) {
+                        Set<String> configs =
+                                searchConfigsForMetadata(rootDir, moduleMetadataIncludeFilters);
+                        if (configs != null) {
+                            testModules.addAll(configs);
+                            throwException = false;
+                        }
+                    }
+                }
+                if (throwException) {
+                    throw new TestDiscoveryException(
+                            "Tradefed Observatory can't do test discovery because the existence of"
+                                    + " metadata include filter option.",
+                            null,
+                            DiscoveryExitCode.COMPONENT_METADATA);
+                }
+            } else if (!Strings.isNullOrEmpty(((BaseTestSuite) test).getRunSuiteTag())) {
+                throw new TestDiscoveryException(
+                        "Tradefed Observatory can't do test discovery because the existence of"
+                                + " run-suite-tag option.",
+                        null,
+                        DiscoveryExitCode.COMPONENT_METADATA);
+            }
         }
         // Extract test module names from included filters.
-        Set<String> testModules = extractTestModulesFromIncludeFilters(includeFilters);
+        testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
         return testModules;
     }
 
@@ -228,6 +249,43 @@ public class TestDiscoveryExecutor {
             }
         }
         return dependencies;
+    }
+
+    private Set<String> searchConfigsForMetadata(
+            File rootDir, MultiMap<String, String> moduleMetadataIncludeFilters) {
+        try {
+            Set<File> configFiles = FileUtil.findFilesObject(rootDir, "\\.config$");
+            Set<File> shouldRunFiles =
+                    configFiles.stream()
+                            .filter(
+                                    f -> {
+                                        try {
+                                            IConfiguration c =
+                                                    getConfigurationFactory()
+                                                            .createPartialConfigurationFromArgs(
+                                                                    new String[] {
+                                                                        f.getAbsolutePath()
+                                                                    },
+                                                                    new DryRunKeyStore(),
+                                                                    ImmutableSet.of(
+                                                                            Configuration
+                                                                                    .CONFIGURATION_DESCRIPTION_TYPE_NAME),
+                                                                    null);
+                                            return new BaseTestSuite()
+                                                    .filterByConfigMetadata(
+                                                            c,
+                                                            moduleMetadataIncludeFilters,
+                                                            new MultiMap<String, String>());
+                                        } catch (ConfigurationException e) {
+                                            return false;
+                                        }
+                                    })
+                            .collect(Collectors.toSet());
+            return shouldRunFiles.stream().map(c -> c.getName()).collect(Collectors.toSet());
+        } catch (IOException e) {
+            System.err.println(e);
+        }
+        return null;
     }
 
     @VisibleForTesting
