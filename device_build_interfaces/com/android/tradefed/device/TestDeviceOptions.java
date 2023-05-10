@@ -287,10 +287,11 @@ public class TestDeviceOptions {
             description = "Whether or not to use virtual devices created by Oxygen.")
     private boolean mUseOxygen = false;
 
+    @Deprecated
     @Option(
             name = "use-oxygen-client",
             description = "Whether or not to use Oxygen client tool to create virtual devices.")
-    private boolean mUseOxygenClient = false;
+    private boolean mUseOxygenClient = true;
 
     @Option(name = "oxygen-target-region", description = "Oxygen device target region.")
     private String mOxygenTargetRegion = "us-west";
@@ -904,6 +905,7 @@ public class TestDeviceOptions {
     }
 
     /** Returns true if we want TradeFed directly call Oxygen to lease a device. */
+    @Deprecated
     public boolean useOxygenProxy() {
         return mUseOxygenClient;
     }
