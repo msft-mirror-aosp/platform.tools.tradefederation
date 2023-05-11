@@ -52,6 +52,14 @@ public class StrictShardHelper extends ShardHelper {
             TestInformation testInfo,
             IRescheduler rescheduler,
             ITestLogger logger) {
+        // need to look up attempt id somewhere and make sure we only attempt this on attempt 0
+        if (config.getCommandOptions().shouldRemoteDynamicShard()) {
+            // We are using dynamic sharding
+            DynamicShardHelper helper = new DynamicShardHelper();
+            // TODO(murj) handle the case where dynamic sharding fails
+            return helper.shardConfig(config, testInfo, rescheduler, logger);
+        }
+
         Integer shardCount = config.getCommandOptions().getShardCount();
         Integer shardIndex = config.getCommandOptions().getShardIndex();
         boolean optimizeMainline = config.getCommandOptions().getOptimizeMainlineTest();
