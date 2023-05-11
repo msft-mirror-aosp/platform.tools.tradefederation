@@ -35,6 +35,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
 import java.io.File;
@@ -153,7 +154,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         }
 
         List<File> moduleFileNames = getTestsFileName();
-        if (moduleFileNames.isEmpty() && mApksZipFileName.isEmpty()) {
+        if (moduleFileNames.isEmpty() && Strings.isNullOrEmpty(mApksZipFileName)) {
             CLog.i("No apk/apex module file to install. Skipping.");
             return;
         }
@@ -173,7 +174,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             CLog.i("Activated apex: %s", info.toString());
         }
 
-        if (mApksZipFileName != null) {
+        if (!Strings.isNullOrEmpty(mApksZipFileName)) {
             CLog.i("Installing modules using apks zip %s", mApksZipFileName);
             installModulesFromZipUsingBundletool(testInfo, mApksZipFileName);
             activateStagedInstall(device);
