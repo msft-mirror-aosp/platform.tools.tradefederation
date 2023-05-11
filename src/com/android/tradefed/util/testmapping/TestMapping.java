@@ -76,8 +76,6 @@ public class TestMapping {
     private static final String TEST_MAPPINGS_ZIP = "test_mappings.zip";
     // A file containing module names that are disabled in presubmit test runs.
     private static final String DISABLED_PRESUBMIT_TESTS_FILE = "disabled-presubmit-tests";
-
-    private Map<String, Set<TestInfo>> mTestCollection = new LinkedHashMap<>();
     // Pattern used to identify comments start with "//" or "#" in TEST_MAPPING.
     private static final Pattern COMMENTS_REGEX = Pattern.compile(
             "(?m)[\\s\\t]*(//|#).*|(\".*?\")");
@@ -115,18 +113,18 @@ public class TestMapping {
     @VisibleForTesting
     Map<String, Set<TestInfo>> getTestCollection(
             Path path, Path testMappingsDir, Set<String> matchedPatternPaths) {
-        mTestCollection = new LinkedHashMap<>();
+        Map<String, Set<TestInfo>> testCollection = new LinkedHashMap<>();
         String relativePath = testMappingsDir.relativize(path.getParent()).toString();
         String errorMessage = null;
         if (Files.notExists(path)) {
             CLog.d("TEST_MAPPING path not found: %s.", path);
-            return mTestCollection;
+            return testCollection;
         }
         try {
             String content = removeComments(
                     String.join("\n", Files.readAllLines(path, StandardCharsets.UTF_8)));
             if (Strings.isNullOrEmpty(content)) {
-                return mTestCollection;
+                return testCollection;
             }
             JSONTokener tokener = new JSONTokener(content);
             JSONObject root = new JSONObject(tokener);
@@ -143,7 +141,7 @@ public class TestMapping {
                     continue;
                 }
                 Set<TestInfo> testsForGroup = new HashSet<>();
-                mTestCollection.put(group, testsForGroup);
+                testCollection.put(group, testsForGroup);
                 JSONArray arr = root.getJSONArray(group);
                 for (int i = 0; i < arr.length(); i++) {
                     JSONObject testObject = arr.getJSONObject(i);
@@ -195,13 +193,13 @@ public class TestMapping {
                                     .getTestCollection(
                                             filePath, testMappingsDir, matchedPatternPaths);
                     for (String group : filePathImportedTestCollection.keySet()) {
-                        // Add all imported TestInfo to mTestCollection.
+                        // Add all imported TestInfo to testCollection.
                         if (filePathImportedTestCollection.get(group) != null) {
-                            if (mTestCollection.get(group) == null) {
-                                mTestCollection.put(
+                            if (testCollection.get(group) == null) {
+                                testCollection.put(
                                         group, filePathImportedTestCollection.get(group));
                             } else {
-                                mTestCollection
+                                testCollection
                                         .get(group)
                                         .addAll(filePathImportedTestCollection.get(group));
                             }
@@ -223,7 +221,7 @@ public class TestMapping {
             throw new HarnessRuntimeException(
                     errorMessage, InfraErrorIdentifier.TEST_MAPPING_FILE_FORMAT_ISSUE);
         }
-        return mTestCollection;
+        return testCollection;
     }
 
     /**
@@ -374,23 +372,6 @@ public class TestMapping {
     }
 
     /**
-     * Helper to get all tests set from the given group name, disabled tests, host test only, and
-     * keywords.
-     *
-     * @param testGroup A {@link String} of the test group.
-     * @param disabledTests A set of {@link String} for the name of the disabled tests.
-     * @param hostOnly true if only tests running on host and don't require device should be
-     *     returned. false to return tests that require device to run.
-     * @param keywords A set of {@link String} to be matched when filtering tests to run in a Test
-     *     Mapping suite.
-     * @return A {@code Set<TestInfo>} of the test infos.
-     */
-    public Set<TestInfo> getTests(
-            String testGroup, Set<String> disabledTests, boolean hostOnly, Set<String> keywords) {
-        return getTests(mTestCollection, testGroup, disabledTests, hostOnly, keywords);
-    }
-
-    /**
      * Helper to get all tests set from the given test collection, group name, disabled tests, host
      * test only, and keywords.
      *
@@ -403,7 +384,8 @@ public class TestMapping {
      *     Mapping suite.
      * @return A {@code Set<TestInfo>} of the test infos.
      */
-    private Set<TestInfo> getTests(
+    @VisibleForTesting
+    Set<TestInfo> getTests(
             Map<String, Set<TestInfo>> testCollection,
             String testGroup,
             Set<String> disabledTests,
@@ -688,16 +670,6 @@ public class TestMapping {
                             e.getMessage(), disabledPresubmitTestsFile.getAbsolutePath()), e);
         }
         return disabledTests;
-    }
-
-    /**
-     * Helper to get the test collection in a TEST_MAPPING file.
-     *
-     * @return A {@code Map<String, Set<TestInfo>>} containing the test collection in a
-     *     TEST_MAPPING file.
-     */
-    private Map<String, Set<TestInfo>> getTestCollection() {
-        return mTestCollection;
     }
 
     /**
