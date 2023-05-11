@@ -25,6 +25,7 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.targetprep.ITargetPreparer;
+import com.android.tradefed.targetprep.PushFilePreparer;
 import com.android.tradefed.targetprep.TestAppInstallSetup;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IBuildReceiver;
@@ -150,6 +151,14 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                 if (!installer.isCleanUpEnabled()) {
                     throw new ConfigurationException(
                             String.format("Config: %s should set cleanup-apks=true.", config));
+                }
+            }
+            if (preparer instanceof PushFilePreparer) {
+                PushFilePreparer pusher = (PushFilePreparer) preparer;
+                if (!pusher.isCleanUpEnabled()) {
+                    throw new ConfigurationException(
+                            String.format(
+                                    "Config: %s should set cleanup=true for file pusher.", config));
                 }
             }
         }

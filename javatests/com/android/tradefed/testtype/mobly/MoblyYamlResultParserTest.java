@@ -354,7 +354,7 @@ public class MoblyYamlResultParserTest {
 
         spyParser.parse(inputStream);
         verify(spyParser, times(6)).parseDocumentMap(any(Map.class));
-        verify(spyParser, times(6)).reportToListeners(any(), any());
+        verify(spyParser, times(1)).reportToListeners(any(), any());
     }
 
     private ImmutableMap<String, Object> buildTestRecordDocMap(Map<String, Object> propertyMap) {

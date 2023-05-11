@@ -159,6 +159,7 @@ import com.android.tradefed.invoker.shard.TestsPoolPollerTest;
 import com.android.tradefed.invoker.shard.token.CecControllerTokenProviderTest;
 import com.android.tradefed.invoker.shard.token.TelephonyTokenProviderTest;
 import com.android.tradefed.invoker.shard.token.TokenProviderHelperTest;
+import com.android.tradefed.invoker.tracing.TracePropagatingExecutorServiceTest;
 import com.android.tradefed.lite.DryRunnerTest;
 import com.android.tradefed.lite.HostUtilsTest;
 import com.android.tradefed.log.FileLoggerTest;
@@ -263,6 +264,7 @@ import com.android.tradefed.targetprep.InstallApkSetupTest;
 import com.android.tradefed.targetprep.InstrumentationPreparerTest;
 import com.android.tradefed.targetprep.KnownFailurePreparerTest;
 import com.android.tradefed.targetprep.LocalEmulatorLaunchTest;
+import com.android.tradefed.targetprep.MixKernelTargetPreparerTest;
 import com.android.tradefed.targetprep.ModuleOemTargetPreparerTest;
 import com.android.tradefed.targetprep.ModulePusherTest;
 import com.android.tradefed.targetprep.PushFilePreparerTest;
@@ -333,7 +335,6 @@ import com.android.tradefed.testtype.host.CoverageMeasurementForwarderTest;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4TestTest;
 import com.android.tradefed.testtype.junit4.DeviceParameterizedRunnerTest;
 import com.android.tradefed.testtype.junit4.JUnit4ResultForwarderTest;
-import com.android.tradefed.testtype.junit4.LongevityHostRunnerTest;
 import com.android.tradefed.testtype.mobly.MoblyBinaryHostTestTest;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultParserTest;
 import com.android.tradefed.testtype.python.PythonBinaryHostTestTest;
@@ -678,6 +679,9 @@ import org.junit.runners.Suite.SuiteClasses;
     // invoker.sandbox
     ParentSandboxInvocationExecutionTest.class,
 
+    // invoker.tracing
+    TracePropagatingExecutorServiceTest.class,
+
     // lite
     DryRunnerTest.class,
     HostUtilsTest.class,
@@ -777,6 +781,7 @@ import org.junit.runners.Suite.SuiteClasses;
     InstrumentationPreparerTest.class,
     KnownFailurePreparerTest.class,
     LocalEmulatorLaunchTest.class,
+    MixKernelTargetPreparerTest.class,
     ModuleOemTargetPreparerTest.class,
     ModulePusherTest.class,
     PushFilePreparerTest.class,
@@ -890,7 +895,6 @@ import org.junit.runners.Suite.SuiteClasses;
     BaseHostJUnit4TestTest.class,
     DeviceParameterizedRunnerTest.class,
     JUnit4ResultForwarderTest.class,
-    LongevityHostRunnerTest.class,
 
     // testtype/mobly
     MoblyBinaryHostTestTest.class,
