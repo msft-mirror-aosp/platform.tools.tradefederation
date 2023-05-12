@@ -2398,6 +2398,18 @@ public class InstallApexModuleTargetPreparerTest {
     }
 
     @Test
+    public void testNoFilesToInstall() throws Exception {
+        mockCleanInstalledApexPackages();
+        mInstallApexModuleTargetPreparer.setUp(mTestInfo);
+        mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
+        verifyCleanInstalledApexPackages(0);
+        verify(mMockDevice, times(0))
+                .executeShellV2Command(String.format("pm install-add-session " + "123 1"));
+        verify(mMockDevice, times(0)).executeShellV2Command(PARENT_SESSION_CREATION_CMD);
+        verify(mMockDevice, times(0)).executeShellV2Command("pm install-commit " + "123");
+    }
+
+    @Test
     public void testInstallModulesFromZipUsingBundletool() throws Exception {
         mMockBundletoolUtil = mock(BundletoolUtil.class);
 
