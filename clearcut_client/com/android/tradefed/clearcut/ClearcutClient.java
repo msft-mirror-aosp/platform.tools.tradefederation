@@ -29,6 +29,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.net.HttpHelper;
 
+import com.google.common.base.Strings;
 import com.google.protobuf.util.JsonFormat;
 
 import java.io.File;
@@ -53,6 +54,7 @@ import java.util.concurrent.TimeUnit;
 public class ClearcutClient {
 
     public static final String DISABLE_CLEARCUT_KEY = "DISABLE_CLEARCUT";
+    private static final String CLEARCUT_SUB_TOOL_NAME = "CLEARCUT_SUB_TOOL_NAME";
 
     private static final String CLEARCUT_PROD_URL = "https://play.googleapis.com/log";
     private static final int CLIENT_TYPE = 1;
@@ -107,7 +109,11 @@ public class ClearcutClient {
         }
         mRunId = UUID.randomUUID().toString();
         mExternalEventQueue = new ArrayList<>();
-        mSubToolName = subToolName;
+        if (Strings.isNullOrEmpty(subToolName) && System.getenv(CLEARCUT_SUB_TOOL_NAME) != null) {
+            mSubToolName = System.getenv(CLEARCUT_SUB_TOOL_NAME);
+        } else {
+            mSubToolName = subToolName;
+        }
 
         if (mDisabled) {
             return;
