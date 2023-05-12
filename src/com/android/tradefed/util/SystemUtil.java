@@ -52,6 +52,7 @@ public class SystemUtil {
     private static final String TARGET_TESTCASES = "target/testcases";
 
     private static final String LOCAL_AUTH_VARIABLE = "LOCAL_AUTH";
+    private static final String LOCAL_MODE = "LOCAL_MODE";
 
     /** Keep track of the mapping of the variables to the subpath it takes in the tests dir. */
     public static final Map<EnvVariable, String> ENV_VARIABLE_PATHS_IN_TESTS_DIR = new HashMap<>();
@@ -184,6 +185,9 @@ public class SystemUtil {
      * Returns true if Tradefed is running in local mode and should automate some actions for user.
      */
     public static boolean isLocalMode() {
+        if (System.getenv(LOCAL_MODE) != null) {
+            return true;
+        }
         if (System.getenv(LOCAL_AUTH_VARIABLE) != null) {
             return true;
         }
