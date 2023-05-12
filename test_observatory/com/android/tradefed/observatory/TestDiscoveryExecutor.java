@@ -202,11 +202,28 @@ public class TestDiscoveryExecutor {
                             DiscoveryExitCode.COMPONENT_METADATA);
                 }
             } else if (!Strings.isNullOrEmpty(((BaseTestSuite) test).getRunSuiteTag())) {
-                throw new TestDiscoveryException(
-                        "Tradefed Observatory can't do test discovery because the existence of"
-                                + " run-suite-tag option.",
-                        null,
-                        DiscoveryExitCode.COMPONENT_METADATA);
+                String rootDirPath =
+                        getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                boolean throwException = true;
+                if (rootDirPath != null) {
+                    File rootDir = new File(rootDirPath);
+                    if (rootDir.exists() && rootDir.isDirectory()) {
+                        Set<String> configs =
+                                searchConfigsForSuiteTarg(
+                                        rootDir, ((BaseTestSuite) test).getRunSuiteTag());
+                        if (configs != null) {
+                            testModules.addAll(configs);
+                            throwException = false;
+                        }
+                    }
+                }
+                if (throwException) {
+                    throw new TestDiscoveryException(
+                            "Tradefed Observatory can't do test discovery because the existence of"
+                                    + " run-suite-tag option.",
+                            null,
+                            DiscoveryExitCode.COMPONENT_METADATA);
+                }
             }
         }
         // Extract test module names from included filters.
@@ -277,6 +294,30 @@ public class TestDiscoveryExecutor {
                                                             moduleMetadataIncludeFilters,
                                                             new MultiMap<String, String>());
                                         } catch (ConfigurationException e) {
+                                            return false;
+                                        }
+                                    })
+                            .collect(Collectors.toSet());
+            return shouldRunFiles.stream().map(c -> c.getName()).collect(Collectors.toSet());
+        } catch (IOException e) {
+            System.err.println(e);
+        }
+        return null;
+    }
+
+    private Set<String> searchConfigsForSuiteTarg(File rootDir, String suiteTag) {
+        try {
+            Set<File> configFiles = FileUtil.findFilesObject(rootDir, "\\.config$");
+            Set<File> shouldRunFiles =
+                    configFiles.stream()
+                            .filter(
+                                    f -> {
+                                        try {
+                                            // TODO: make it more robust to detect
+                                            String content = FileUtil.readStringFromFile(f);
+                                            return content.contains("test-suite-tag")
+                                                    && content.contains(suiteTag);
+                                        } catch (IOException e) {
                                             return false;
                                         }
                                     })
