@@ -139,6 +139,13 @@ public class CommandOptions implements ICommandOptions {
     )
     private boolean mDynamicSharding = true;
 
+    @Option(
+            name = "remote-dynamic-sharding",
+            description =
+                    "Enable use of the dynamic sharding service to load balance across multiple"
+                            + " hosts.")
+    private boolean mRemoteDynamicSharding = false;
+
     public static final String INVOCATION_DATA = "invocation-data";
 
     @Option(
@@ -786,5 +793,11 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public File getJdkFolderForSubprocess() {
         return mJdkFolder;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldRemoteDynamicShard() {
+        return mRemoteDynamicSharding;
     }
 }
