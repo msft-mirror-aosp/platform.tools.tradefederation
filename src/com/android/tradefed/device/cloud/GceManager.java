@@ -282,6 +282,11 @@ public class GceManager {
                     GceAvdInfo.parseGceInfoFromOxygenClientOutput(
                                     res, mDeviceOptions.getRemoteAdbPort())
                             .get(0);
+            // Lease may time out, skip remaining logic if lease failed.
+            if (mGceAvdInfo.hostAndPort() == null) {
+                CLog.w("Failed to lease a device: %s", mGceAvdInfo);
+                return mGceAvdInfo;
+            }
             if (oxygenClient.noWaitForBootSpecified(getTestDeviceOptions())) {
                 CLog.d(
                         "Device leased without waiting for boot to finish. Poll emulator_stderr.txt"
@@ -323,14 +328,10 @@ public class GceManager {
                     mGceAvdInfo.setErrors("Timed out waiting for virtual device to start.");
                 }
             }
-            // Lease may timeout and skip logging metrics if host is not set.
-            if (mGceAvdInfo.hostAndPort() != null) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.CF_OXYGEN_SESSION_ID, mGceAvdInfo.instanceName());
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.CF_OXYGEN_SERVER_URL,
-                        mGceAvdInfo.hostAndPort().getHost());
-            }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_OXYGEN_SESSION_ID, mGceAvdInfo.instanceName());
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_OXYGEN_SERVER_URL, mGceAvdInfo.hostAndPort().getHost());
             return mGceAvdInfo;
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
