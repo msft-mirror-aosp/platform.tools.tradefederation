@@ -334,7 +334,10 @@ public class IsolatedHostTest
                     mCoverageExecFile = FileUtil.createTempFile("coverage", ".exec");
                     String javaAgent =
                             String.format(
-                                    "-javaagent:%s=destfile=%s",
+                                    "-javaagent:%s=destfile=%s,"
+                                            + "inclnolocationclasses=true,"
+                                            + "exclclassloader="
+                                            + "jdk.internal.reflect.DelegatingClassLoader",
                                     mConfig.getCoverageOptions().getJaCoCoAgentPath(),
                                     mCoverageExecFile.getAbsolutePath());
                     cmdArgs.add(javaAgent);
