@@ -278,4 +278,7 @@ public interface ICommandOptions {
 
     /** Returns the jdk folder to use when forking execution in a subprocess. */
     public File getJdkFolderForSubprocess();
+
+    /** Returns whether to use remote dynamic sharding server or not */
+    public boolean shouldRemoteDynamicShard();
 }
