@@ -20,6 +20,8 @@ import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.ArrayUtil;
@@ -370,6 +372,18 @@ public class OxygenClient {
                 runOxygenTimedCmd(
                         oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]),
                         deviceOptions.getGceCmdTimeout());
+        if (!res.getStatus().equals(CommandStatus.SUCCESS)) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_COUNT, 1);
+            if (res.getStderr() != null) {
+                String error = "Unknown";
+                if (res.getStderr().contains("context deadline exceeded")) {
+                    error = "SERVER_CALL_TIMEOUT";
+                }
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE, error);
+            }
+        }
         return res.getStatus().equals(CommandStatus.SUCCESS);
     }
 

@@ -183,6 +183,8 @@ public class InvocationMetricLogger {
         LOAD_TEST_CONFIGS_TIME("load_test_configs_time_ms", true),
         OXYGEN_DEVICE_DIRECT_LEASE_COUNT("oxygen_device_direct_lease_count", true),
         OXYGEN_DEVICE_DIRECT_RELEASE_COUNT("oxygen_device_direct_release_count", true),
+        OXYGEN_DEVICE_RELEASE_FAILURE_COUNT("oxygen_device_release_failure_count", true),
+        OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE("oxygen_device_release_failure_message", true),
 
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
