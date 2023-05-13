@@ -180,7 +180,9 @@ public class IsolatedHostTestTest {
 
         String javaAgent =
                 String.format(
-                        "-javaagent:path/to/jacocoagent.jar=destfile=%s",
+                        "-javaagent:path/to/jacocoagent.jar=destfile=%s,"
+                                + "inclnolocationclasses=true,"
+                                + "exclclassloader=jdk.internal.reflect.DelegatingClassLoader",
                         mHostTest.getCoverageExecFile().getAbsolutePath());
         assertTrue(commandArgs.contains(javaAgent));
         FileUtil.deleteFile(mHostTest.getCoverageExecFile());
