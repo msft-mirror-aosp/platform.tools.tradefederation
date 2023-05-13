@@ -106,7 +106,6 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -1124,7 +1123,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 if (device.getIDevice() instanceof StubDevice) {
                     continue;
                 }
-                // First check device is still online
+                // Check device is still online
                 try {
                     device.waitForDeviceAvailable();
                 } catch (DeviceNotAvailableException e) {
@@ -1134,27 +1133,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                             e,
                             e.getSerial(),
                             DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
-                }
-                // Second check device didn't crash
-                long deviceDate = device.getDeviceDate();
-                if (deviceDate == 0L) {
-                    continue;
-                }
-                try {
-                    boolean restarted =
-                            device.deviceSoftRestartedSince(
-                                    deviceDate - 5000L, TimeUnit.MILLISECONDS);
-                    if (restarted) {
-                        CLog.e("Detected a soft-restart after module %s", mId);
-                        InvocationMetricLogger.addInvocationMetrics(
-                                InvocationMetricKey.SOFT_RESTART_AFTER_MODULE, 1);
-                        // TODO: Enable actually failing module for reporting
-                        /*throw new HarnessRuntimeException(
-                        String.format("Device '%s' crashed after running %s.", device.getSerialNumber(), mId),
-                        DeviceErrorIdentifier.DEVICE_CRASHED);*/
-                    }
-                } catch (RuntimeException e) {
-                    CLog.e(e);
                 }
             }
         }
