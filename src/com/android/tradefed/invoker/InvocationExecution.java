@@ -1588,6 +1588,11 @@ public class InvocationExecution implements IInvocationExecution {
     /** Collect automatically some information on the primary device under test. */
     protected void collectAutoInfo(IConfiguration config, TestInformation info)
             throws DeviceNotAvailableException {
+        if (SystemUtil.isLocalMode()) {
+            // Avoid collecting for local modes since data collected in this method is used
+            // in CI only.
+            return;
+        }
         if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
             // Avoid logging in the subprocess
             return;
