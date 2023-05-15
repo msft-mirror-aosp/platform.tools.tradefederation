@@ -59,7 +59,7 @@ import java.util.stream.Stream;
 /** A class for loading a TEST_MAPPING file. */
 public class TestMapping {
 
-    // Key for test sources information stored in meta data of ConfigurationDescription.
+    // Key for test sources information stored in metadata of ConfigurationDescription.
     public static final String TEST_SOURCES = "Test Sources";
     // Pattern used to identify mainline tests without parameterized modules configured.
     public static final Pattern MAINLINE_REGEX = Pattern.compile("(\\S+)\\[(\\S+)\\]");
@@ -102,13 +102,12 @@ public class TestMapping {
     }
 
     /**
-     * Helper to get the {@link Map<String, Set<TestInfo>>} test collection from a path to
-     * TEST_MAPPING file.
+     * Helper to get the {@link Map} test collection from a path to TEST_MAPPING file.
      *
      * @param path The {@link Path} to a TEST_MAPPING file.
      * @param testMappingsDir The {@link Path} to the folder of all TEST_MAPPING files for a build.
      * @param matchedPatternPaths The {@link Set<String>} to file paths matched patterns.
-     * @return A {@link Map<String, Set<TestInfo>>} of test collection.
+     * @return A {@link Map} of test collection.
      */
     @VisibleForTesting
     Map<String, Set<TestInfo>> getTestCollection(
@@ -227,7 +226,7 @@ public class TestMapping {
     /**
      * Helper to check whether the given matched-pattern-paths matches the file patterns.
      *
-     * @param testMappingDir A {@link String} to Test_MAPPING directory path.
+     * @param testMappingDir A {@link String} to TEST_MAPPING directory path.
      * @param matchedPatternPaths A {@link Set<String>} to file paths matched patterns.
      * @param filePatterns A {@link Set<String>} to filePatterns from a TEST_MAPPING file.
      * @return A {@link Boolean} of matched result.
@@ -424,7 +423,7 @@ public class TestMapping {
     }
 
     /**
-     * Helper to find all tests in all TEST_MAPPING files based on a artifact in the device build.
+     * Helper to find all tests in all TEST_MAPPING files based on an artifact in the device build.
      *
      * @param buildInfo the {@link IBuildInfo} describing the build.
      * @param testGroup a {@link String} of the test group.
@@ -692,11 +691,16 @@ public class TestMapping {
 
     /**
      * Merge additional test mapping zips into the given directory.
+     *
+     * @param buildInfo the {@link IBuildInfo} describing the build.
+     * @param extraZips A {@link List<String>} of additional zip file paths.
+     * @param baseFile A {@link File} of base test mapping zip.
+     * @param baseDir A {@link File} pointing to the temp directory for base test mappings zip.
      */
     @VisibleForTesting
     static void mergeTestMappingZips(
-        IBuildInfo buildInfo, List<String> extraZips, File baseFile, File baseDir)
-        throws IOException {
+            IBuildInfo buildInfo, List<String> extraZips, File baseFile, File baseDir)
+            throws IOException {
         Set<String> baseNames = getTestMappingSources(baseFile);
         for (String zipName : extraZips) {
             File zipFile;
@@ -719,6 +723,10 @@ public class TestMapping {
 
     /**
      * Helper to validate whether there exists collision of the path of Test Mapping files.
+     *
+     * @param base A {@link Set<String>} of the file paths.
+     * @param target A {@link Set<String>} of the file paths.
+     * @param zipName A {@link String} of the zip file path.
      */
     private static void validateSources(Set<String> base, Set<String> target, String zipName) {
         for (String name : target) {
@@ -732,6 +740,9 @@ public class TestMapping {
 
     /**
      * Helper to collect the path of Test Mapping files with a given zip file.
+     *
+     * @param zipFile A {@link File} of the test mappings zip.
+     * @return A {@link Set<String>} for file paths from the test mappings zip.
      */
     @VisibleForTesting
     static Set<String> getTestMappingSources(File zipFile) {

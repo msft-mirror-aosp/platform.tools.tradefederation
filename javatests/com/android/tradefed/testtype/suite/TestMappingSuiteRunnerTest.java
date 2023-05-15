@@ -828,8 +828,8 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String)} that IRemoteTest
-     * object are created according to the test infos with different test options.
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
+     * IRemoteTest object are created according to the test infos with different test options.
      */
     @Test
     public void testCreateIndividualTestsWithDifferentTestInfos() throws Exception {
@@ -847,7 +847,7 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String, IAbi)} that
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
      * IRemoteTest object are created according to the test infos with multiple test options.
      */
     @Test
@@ -868,7 +868,7 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String, IAbi)} that
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
      * IRemoteTest object are created according to the test infos with multiple test options and top
      * level exclude-filter tests.
      */
@@ -933,7 +933,7 @@ public class TestMappingSuiteRunnerTest {
             for (Entry<String, IConfiguration> config : configMap.entrySet()) {
                 IConfiguration currentConfig = config.getValue();
                 IAbi abi = currentConfig.getConfigurationDescription().getAbi();
-                // Ensure that all the sub-tests abi match the module abi
+                // Ensure that all the subtests abi match the module abi
                 for (IRemoteTest test : currentConfig.getTests()) {
                     if (test instanceof IAbiReceiver) {
                         assertEquals(abi, ((IAbiReceiver) test).getAbi());
@@ -999,7 +999,7 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String, IAbi)} that
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
      * IRemoteTest object are created according to the test infos with the same test options and
      * name.
      */
@@ -1076,8 +1076,8 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#filterByAllowedTestLists()} for filtering tests from a
-     * list of allowed test lists.
+     * Test for {@link TestMappingSuiteRunner#filterByAllowedTestLists(Set)} for filtering tests
+     * from a list of allowed test lists.
      */
     @Test
     public void testFilterByAllowedTestLists() throws Exception {
@@ -1142,7 +1142,7 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#loadTests()} ()} for loading tests when full run is
+     * Test for {@link TestMappingSuiteRunner#loadTests()} for loading tests when full run is
      * forced.
      */
     @Test
