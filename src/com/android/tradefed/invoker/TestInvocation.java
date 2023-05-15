@@ -103,6 +103,7 @@ import com.android.tradefed.util.PrettyPrintDelimiter;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunInterruptedException;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 
@@ -790,6 +791,10 @@ public class TestInvocation implements ITestInvocation {
      */
     @VisibleForTesting
     void logDeviceBatteryLevel(IInvocationContext context, String event) {
+        if (SystemUtil.isLocalMode()) {
+            CLog.d("Skipping battery level log for local invocation on event: %s.", event);
+            return;
+        }
         for (ITestDevice testDevice : context.getDevices()) {
             if (testDevice == null) {
                 continue;
