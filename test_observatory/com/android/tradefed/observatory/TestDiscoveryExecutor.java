@@ -209,7 +209,7 @@ public class TestDiscoveryExecutor {
                     File rootDir = new File(rootDirPath);
                     if (rootDir.exists() && rootDir.isDirectory()) {
                         Set<String> configs =
-                                searchConfigsForSuiteTarg(
+                                searchConfigsForSuiteTag(
                                         rootDir, ((BaseTestSuite) test).getRunSuiteTag());
                         if (configs != null) {
                             testModules.addAll(configs);
@@ -271,7 +271,10 @@ public class TestDiscoveryExecutor {
     private Set<String> searchConfigsForMetadata(
             File rootDir, MultiMap<String, String> moduleMetadataIncludeFilters) {
         try {
-            Set<File> configFiles = FileUtil.findFilesObject(rootDir, "\\.config$");
+            Set<File> configFiles = FileUtil.findFilesObject(rootDir, ".*\\.config$");
+            if (configFiles.isEmpty()) {
+                return null;
+            }
             Set<File> shouldRunFiles =
                     configFiles.stream()
                             .filter(
@@ -298,16 +301,21 @@ public class TestDiscoveryExecutor {
                                         }
                                     })
                             .collect(Collectors.toSet());
-            return shouldRunFiles.stream().map(c -> c.getName()).collect(Collectors.toSet());
+            return shouldRunFiles.stream()
+                    .map(c -> FileUtil.getBaseName(c.getName()))
+                    .collect(Collectors.toSet());
         } catch (IOException e) {
             System.err.println(e);
         }
         return null;
     }
 
-    private Set<String> searchConfigsForSuiteTarg(File rootDir, String suiteTag) {
+    private Set<String> searchConfigsForSuiteTag(File rootDir, String suiteTag) {
         try {
-            Set<File> configFiles = FileUtil.findFilesObject(rootDir, "\\.config$");
+            Set<File> configFiles = FileUtil.findFilesObject(rootDir, ".*\\.config$");
+            if (configFiles.isEmpty()) {
+                return null;
+            }
             Set<File> shouldRunFiles =
                     configFiles.stream()
                             .filter(
@@ -322,7 +330,9 @@ public class TestDiscoveryExecutor {
                                         }
                                     })
                             .collect(Collectors.toSet());
-            return shouldRunFiles.stream().map(c -> c.getName()).collect(Collectors.toSet());
+            return shouldRunFiles.stream()
+                    .map(c -> FileUtil.getBaseName(c.getName()))
+                    .collect(Collectors.toSet());
         } catch (IOException e) {
             System.err.println(e);
         }
