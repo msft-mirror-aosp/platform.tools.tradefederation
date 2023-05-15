@@ -327,6 +327,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
      *
      * @param testInfos A {@code Set<TestInfo>} containing multiple test options.
      * @param moduleConfig The {@link IConfiguration} of the module config.
+     * @param abi The {@link IAbi} of abi information.
      * @return The {@link List} that are injected with the test options.
      */
     @VisibleForTesting
@@ -379,9 +380,15 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         return tests;
     }
 
-    /** Add test mapping's path into module configuration. */
-    private void addTestSourcesToConfig(IConfiguration config, List<IRemoteTest> tests,
-            Set<String> sources) {
+    /**
+     * Add test mapping's path into module configuration.
+     *
+     * @param config The {@link IConfiguration} of the module config.
+     * @param tests The {@link List<IRemoteTest>} of the tests.
+     * @param sources The {@link Set<String>} of test mapping sources.
+     */
+    private void addTestSourcesToConfig(
+            IConfiguration config, List<IRemoteTest> tests, Set<String> sources) {
         for (IRemoteTest test : tests) {
             config.getConfigurationDescription().addMetadata(
                 Integer.toString(test.hashCode()), new ArrayList<>(sources)

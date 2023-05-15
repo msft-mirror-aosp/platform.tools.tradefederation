@@ -160,7 +160,7 @@ public class TestMappingTest {
         }
     }
 
-    /** Test for {@link TestMapping#getTests()} throw exception for malformated json file. */
+    /** Test for {@link TestMapping#getTests()} throw exception for malformatted json file. */
     @Test(expected = RuntimeException.class)
     public void testparseTestMapping_BadJson() throws Exception {
         File tempDir = null;
@@ -607,7 +607,7 @@ public class TestMappingTest {
         }
     }
 
-    /** Test for {@link TestMapping#extractTestMappingsZip()} for extracting test mappings zip. */
+    /** Test for {@link TestMapping#getDisabledTests()} for getting disabled tests. */
     @Test
     public void testGetDisabledTests() throws Exception {
         File tempDir = null;
