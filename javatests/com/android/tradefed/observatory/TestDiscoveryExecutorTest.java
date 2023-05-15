@@ -19,6 +19,7 @@ package com.android.tradefed.observatory;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.Configuration;
@@ -28,6 +29,7 @@ import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.keystore.DryRunKeyStore;
 
@@ -41,6 +43,7 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,7 +62,7 @@ public class TestDiscoveryExecutorTest {
 
     @Before
     public void setUp() throws Exception {
-        mMockConfigFactory = Mockito.mock(ConfigurationFactory.class);
+        mMockConfigFactory = Mockito.spy((ConfigurationFactory) ConfigurationFactory.getInstance());
         mMockedConfiguration = Mockito.mock(Configuration.class);
         mTestDiscoveryExecutor =
                 new TestDiscoveryExecutor() {
@@ -73,9 +76,10 @@ public class TestDiscoveryExecutorTest {
                         return "not-null";
                     }
                 };
-        when(mMockConfigFactory.createConfigurationFromArgs(
-                        Mockito.any(), Mockito.isNull(), Mockito.isA(DryRunKeyStore.class)))
-                .thenReturn(mMockedConfiguration);
+        doReturn(mMockedConfiguration)
+                .when(mMockConfigFactory)
+                .createConfigurationFromArgs(
+                        Mockito.any(), Mockito.isNull(), Mockito.isA(DryRunKeyStore.class));
     }
 
     public static class DiscoverablePreparer extends BaseTargetPreparer
@@ -206,6 +210,51 @@ public class TestDiscoveryExecutorTest {
                                     "Tradefed Observatory can't do test discovery because the"
                                             + " existence of metadata include filter option."));
             assertEquals(DiscoveryExitCode.COMPONENT_METADATA, e.exitCode());
+        }
+    }
+
+    /** Test the executor when a metadata include filter option is in the config. */
+    @Test
+    public void testDiscoverDependencies_fallback() throws Exception {
+        File rootDir = FileUtil.createTempDir("discovery-tests");
+        try {
+            File mediaConfig = new File(rootDir, "CtsMedia.config");
+            FileUtil.writeToFile(
+                    "<configuration><option name=\"config-descriptor:metadata\" key=\"component\""
+                            + " value=\"media\" /></configuration>",
+                    mediaConfig);
+            mTestDiscoveryExecutor =
+                    new TestDiscoveryExecutor() {
+                        @Override
+                        IConfigurationFactory getConfigurationFactory() {
+                            return mMockConfigFactory;
+                        }
+
+                        @Override
+                        protected String getEnvironment(String var) {
+                            return rootDir.getAbsolutePath();
+                        }
+                    };
+
+            // Mock to return some include filters
+            BaseTestSuite test1 = new BaseTestSuite();
+            Set<String> emptyFilters = new HashSet<>();
+
+            // Metadata include filter exist
+            Map<String, String> map = new HashMap<>();
+            map.put("component", "media");
+            test1.addModuleMetadataIncludeFilters(new MultiMap<>(map));
+            test1.setIncludeFilter(emptyFilters);
+
+            List<IRemoteTest> testList = new ArrayList<>();
+            testList.add(test1);
+            when(mMockedConfiguration.getTests()).thenReturn(testList);
+
+            String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
+            String expected = "{\"TestModules\":[\"CtsMedia\"],\"TestDependencies\":[]}";
+            assertEquals(expected, output);
+        } finally {
+            FileUtil.recursiveDelete(rootDir);
         }
     }
 
