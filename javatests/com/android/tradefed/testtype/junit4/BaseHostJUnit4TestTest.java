@@ -24,7 +24,6 @@ import static org.mockito.Mockito.when;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
 import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.ConfigurationDef;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -378,9 +377,7 @@ public class BaseHostJUnit4TestTest {
         SuiteApkInstaller createSuiteApkInstaller() {
             return new SuiteApkInstaller() {
                 @Override
-                protected String parsePackageName(
-                        File testAppFile, DeviceDescriptor deviceDescriptor)
-                        throws TargetSetupError {
+                protected String parsePackageName(File testAppFile) throws TargetSetupError {
                     return "fakepackage";
                 }
             };

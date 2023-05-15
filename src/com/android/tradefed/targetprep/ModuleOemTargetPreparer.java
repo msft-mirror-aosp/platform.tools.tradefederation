@@ -194,7 +194,7 @@ public class ModuleOemTargetPreparer extends InstallApexModuleTargetPreparer {
                 // The base file is the first element
                 toPush = getSplitsForApks(testInfo, moduleFile).toArray(new File[0]);
             }
-            String packageName = parsePackageName(toPush[0], deviceDescriptor);
+            String packageName = parsePackageName(toPush[0]);
             builder.putAll(packageName, toPush);
         }
 

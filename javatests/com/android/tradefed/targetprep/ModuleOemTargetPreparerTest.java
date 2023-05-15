@@ -25,7 +25,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -128,8 +127,7 @@ public class ModuleOemTargetPreparerTest {
         mModuleOemTargetPreparer =
                 new ModuleOemTargetPreparer() {
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         if (testAppFile.getName().endsWith(".apex")) {
                             return APEX_PACKAGE_NAME;
                         }
