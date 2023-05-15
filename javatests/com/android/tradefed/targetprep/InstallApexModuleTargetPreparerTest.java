@@ -44,13 +44,9 @@ import com.android.tradefed.util.BundletoolUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+
 import com.google.common.collect.ImmutableSet;
-import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -60,6 +56,13 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /** Unit test for {@link InstallApexModuleTargetPreparer} */
 @RunWith(JUnit4.class)
@@ -187,8 +190,7 @@ public class InstallApexModuleTargetPreparerTest {
                     }
 
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         if (testAppFile.getName().endsWith(".apex")) {
                             if (testAppFile.getName().contains("fakeApex_2")) {
                                 return APEX2_PACKAGE_NAME;
@@ -1403,14 +1405,13 @@ public class InstallApexModuleTargetPreparerTest {
         write_to_session_res.setStderr("I am an error!");
         write_to_session_res.setStdout("I am the output");
         when(mMockDevice.executeShellV2Command(
-                String.format(
-                        "pm install-write -S %d %s %s %s",
-                        mFakeApex.length(),
-                        "1",
-                        mInstallApexModuleTargetPreparer.parsePackageName(mFakeApex,
-                                                                 mMockDevice.getDeviceDescriptor()),
-                        MODULE_PUSH_REMOTE_PATH + mFakeApex.getName())))
-          .thenReturn(write_to_session_res);
+                        String.format(
+                                "pm install-write -S %d %s %s %s",
+                                mFakeApex.length(),
+                                "1",
+                                mInstallApexModuleTargetPreparer.parsePackageName(mFakeApex),
+                                MODULE_PUSH_REMOTE_PATH + mFakeApex.getName())))
+                .thenReturn(write_to_session_res);
         try {
             mInstallApexModuleTargetPreparer.setUp(mTestInfo);
             fail("Should have thrown a TargetSetupError.");
@@ -1461,14 +1462,13 @@ public class InstallApexModuleTargetPreparerTest {
         add_to_session_res.setStdout("I am the output");
         for (File f : Arrays.asList(mFakeApex, mFakeApk)) {
             when(mMockDevice.executeShellV2Command(
-                    String.format(
-                            "pm install-write -S %d %s %s %s",
-                            f.length(),
-                            "1",
-                            mInstallApexModuleTargetPreparer.parsePackageName(
-                              f, mMockDevice.getDeviceDescriptor()),
-                            MODULE_PUSH_REMOTE_PATH + f.getName())))
-              .thenReturn(write_to_session_res);
+                            String.format(
+                                    "pm install-write -S %d %s %s %s",
+                                    f.length(),
+                                    "1",
+                                    mInstallApexModuleTargetPreparer.parsePackageName(f),
+                                    MODULE_PUSH_REMOTE_PATH + f.getName())))
+                    .thenReturn(write_to_session_res);
             when(mMockDevice.executeShellV2Command(
                     String.format(
                             "pm install-add-session " + parent_session_creation_res.getStdout()
@@ -1520,13 +1520,13 @@ public class InstallApexModuleTargetPreparerTest {
         cmd_res.setStatus(CommandStatus.SUCCESS);
         for (File f : Arrays.asList(mFakeApex, mFakeApk)) {
             when(mMockDevice.executeShellV2Command(
-                    String.format(
-                            "pm install-write -S %d %s %s %s",
-                            f.length(),
-                            "1",
-                            mInstallApexModuleTargetPreparer.parsePackageName(
-                              f, mMockDevice.getDeviceDescriptor()),
-                            MODULE_PUSH_REMOTE_PATH + f.getName()))).thenReturn(cmd_res);
+                            String.format(
+                                    "pm install-write -S %d %s %s %s",
+                                    f.length(),
+                                    "1",
+                                    mInstallApexModuleTargetPreparer.parsePackageName(f),
+                                    MODULE_PUSH_REMOTE_PATH + f.getName())))
+                    .thenReturn(cmd_res);
             when(mMockDevice.executeShellV2Command(
                     String.format(
                             "pm install-add-session "
@@ -2466,12 +2466,14 @@ public class InstallApexModuleTargetPreparerTest {
     private void verifySuccessfulInstallPackages(List<File> files) throws Exception {
         int child_session_id = 1;
         for (File f : files) {
-            verify(mMockDevice, times(1)).executeShellV2Command(String.format(
-                    "pm install-write -S %d %s %s %s",
-                    f.length(),
-                    String.valueOf(child_session_id),
-                    mInstallApexModuleTargetPreparer.parsePackageName(f, null),
-                    MODULE_PUSH_REMOTE_PATH + f.getName()));
+            verify(mMockDevice, times(1))
+                    .executeShellV2Command(
+                            String.format(
+                                    "pm install-write -S %d %s %s %s",
+                                    f.length(),
+                                    String.valueOf(child_session_id),
+                                    mInstallApexModuleTargetPreparer.parsePackageName(f),
+                                    MODULE_PUSH_REMOTE_PATH + f.getName()));
         }
         verify(mMockDevice, times(files.size())).executeShellV2Command(String.format(
                 "pm install-add-session " + "123" + " " + String.valueOf(child_session_id)));
@@ -2513,13 +2515,13 @@ public class InstallApexModuleTargetPreparerTest {
                   .thenReturn(child_session_creation_res);
             }
             when(mMockDevice.executeShellV2Command(
-                    String.format(
-                            "pm install-write -S %d %s %s %s",
-                            f.length(),
-                            String.valueOf(child_session_id),
-                            mInstallApexModuleTargetPreparer.parsePackageName(
-                              f, mMockDevice.getDeviceDescriptor()),
-                            MODULE_PUSH_REMOTE_PATH + f.getName()))).thenReturn(successful_shell_cmd_res);
+                            String.format(
+                                    "pm install-write -S %d %s %s %s",
+                                    f.length(),
+                                    String.valueOf(child_session_id),
+                                    mInstallApexModuleTargetPreparer.parsePackageName(f),
+                                    MODULE_PUSH_REMOTE_PATH + f.getName())))
+                    .thenReturn(successful_shell_cmd_res);
             when(mMockDevice.executeShellV2Command(
                     String.format(
                             "pm install-add-session " + parent_session_creation_res.getStdout()
