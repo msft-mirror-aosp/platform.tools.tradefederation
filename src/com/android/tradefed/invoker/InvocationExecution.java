@@ -876,6 +876,10 @@ public class InvocationExecution implements IInvocationExecution {
 
                     deviceIndex++;
                 }
+
+                if (exception == null) {
+                    exception = deferredThrowable;
+                }
             } finally {
                 InvocationMetricLogger.addInvocationPairMetrics(
                         InvocationMetricKey.TEST_TEARDOWN_PAIR, start, System.currentTimeMillis());
@@ -905,10 +909,10 @@ public class InvocationExecution implements IInvocationExecution {
                     deviceIndex++;
                 }
 
-                // Extra tear down step for the device
                 if (exception == null) {
                     exception = deferredThrowable;
                 }
+                // Extra tear down step for the device
                 runDevicePostInvocationTearDown(context, config, exception);
 
                 // After all, run the multi_pre_target_preparer tearDown.
