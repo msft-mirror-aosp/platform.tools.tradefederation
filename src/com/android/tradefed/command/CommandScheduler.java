@@ -97,6 +97,7 @@ import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TableFormatter;
 import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.hostmetric.IHostMonitor;
@@ -996,7 +997,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 CLog.d(
                         "TestDeviceState for releasing '%s(%s)' is '%s'",
                         device.getSerialNumber(), device.getClass(), deviceState);
-                if (!TestDeviceState.ONLINE.equals(deviceState)) {
+                if (SystemUtil.isLocalMode()) {
+                    // Locally release directly
+                    deviceStates.put(device, FreeDeviceState.AVAILABLE);
+                } else if (!TestDeviceState.ONLINE.equals(deviceState)) {
                     // If the device is offline at the end of the test
                     deviceStates.put(device, FreeDeviceState.UNAVAILABLE);
                 } else if (!device.waitForDeviceShell(30000L)) {
