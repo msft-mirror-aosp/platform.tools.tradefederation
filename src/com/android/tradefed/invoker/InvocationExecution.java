@@ -1540,6 +1540,10 @@ public class InvocationExecution implements IInvocationExecution {
     /** Collect the logs from $TMPDIR/adb.$UID.log. */
     @VisibleForTesting
     protected void logHostAdb(IConfiguration config, ITestLogger logger) {
+        if (SystemUtil.isLocalMode()) {
+            // Skip logging host adb locally
+            return;
+        }
         if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
             // Avoid relogging the adb log in a subprocess
             return;
