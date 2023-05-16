@@ -76,6 +76,7 @@ import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.SizeLimitedOutputStream;
 import com.android.tradefed.util.StringEscapeUtils;
+import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.ZipUtil2;
 
@@ -2849,6 +2850,9 @@ public class NativeDevice
     @VisibleForTesting
     LogcatReceiver createLogcatReceiver() {
         String logcatOptions = mOptions.getLogcatOptions();
+        if (SystemUtil.isLocalMode()) {
+            mLogStartDelay = 0;
+        }
         if (logcatOptions == null) {
             return new LogcatReceiver(this, mOptions.getMaxLogcatDataSize(), mLogStartDelay);
         } else {
