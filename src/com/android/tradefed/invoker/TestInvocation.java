@@ -373,7 +373,7 @@ public class TestInvocation implements ITestInvocation {
                         bugreportName = INVOCATION_ENDED_BUGREPORT_NAME;
                     }
                 }
-                if (exception == null) {
+                if (exception == null && !SystemUtil.isLocalMode()) {
                     try (CloseableTraceScope ignore =
                             new CloseableTraceScope("responsiveness_check")) {
                         exception = bareMinimumResponsiveness(context.getDevices());
@@ -423,10 +423,12 @@ public class TestInvocation implements ITestInvocation {
                     reportRecoveryLogs(context.getDevices(), listener);
                 }
             }
-            try (CloseableTraceScope ignore =
-                    new CloseableTraceScope(InvocationMetricKey.check_device_availability.name())) {
+            try (CloseableTraceScope ignore = new CloseableTraceScope("logExecuteShellCommand")) {
                 // Save the device executeShellCommand logs
                 logExecuteShellCommand(context.getDevices(), listener);
+            }
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(InvocationMetricKey.check_device_availability.name())) {
                 if (exception == null) {
                     exception = mUnavailableMonitor.getUnavailableException();
                     if (exception != null) {
@@ -434,7 +436,9 @@ public class TestInvocation implements ITestInvocation {
                         CLog.e(exception);
                     }
                 }
-                if (exception == null) {
+                if (SystemUtil.isLocalMode()) {
+                    CLog.d("Skipping check for device availability for local run.");
+                } else if (exception == null) {
                     CLog.d("Checking that devices are online.");
                     exception = checkDevicesAvailable(context.getDevices(), listener);
                 } else {
