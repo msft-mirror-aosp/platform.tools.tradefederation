@@ -269,7 +269,7 @@ public class TestMapping {
      * @return A {@link String} of valid json without comments.
      */
     @VisibleForTesting
-    static String removeComments(String jsonContent) {
+    String removeComments(String jsonContent) {
         StringBuffer out = new StringBuffer();
         Matcher matcher = COMMENTS_REGEX.matcher(jsonContent);
         while (matcher.find()) {
@@ -518,7 +518,7 @@ public class TestMapping {
      * @param tests A {@code Set<TestInfo>} of the test infos to be processed.
      * @return A {@code Set<TestInfo>} of tests that each is for a unique test module.
      */
-    private static Set<TestInfo> mergeTests(Set<TestInfo> tests) {
+    private Set<TestInfo> mergeTests(Set<TestInfo> tests) {
         Map<String, List<TestInfo>> testsGroupedbyNameAndHost =
                 tests.stream()
                         .collect(
@@ -650,7 +650,7 @@ public class TestMapping {
      *     returned if the testGroup is not PRESUBMIT.
      */
     @VisibleForTesting
-    static Set<String> getDisabledTests(Path testMappingsRootPath, String testGroup) {
+    Set<String> getDisabledTests(Path testMappingsRootPath, String testGroup) {
         Set<String> disabledTests = new HashSet<>();
         File disabledPresubmitTestsFile =
                 new File(testMappingsRootPath.toString(), DISABLED_PRESUBMIT_TESTS_FILE);
@@ -698,7 +698,7 @@ public class TestMapping {
      * @param baseDir A {@link File} pointing to the temp directory for base test mappings zip.
      */
     @VisibleForTesting
-    static void mergeTestMappingZips(
+    void mergeTestMappingZips(
             IBuildInfo buildInfo, List<String> extraZips, File baseFile, File baseDir)
             throws IOException {
         Set<String> baseNames = getTestMappingSources(baseFile);
@@ -728,7 +728,7 @@ public class TestMapping {
      * @param target A {@link Set<String>} of the file paths.
      * @param zipName A {@link String} of the zip file path.
      */
-    private static void validateSources(Set<String> base, Set<String> target, String zipName) {
+    private void validateSources(Set<String> base, Set<String> target, String zipName) {
         for (String name : target) {
             if (base.contains(name)) {
                 throw new HarnessRuntimeException(
@@ -745,7 +745,7 @@ public class TestMapping {
      * @return A {@link Set<String>} for file paths from the test mappings zip.
      */
     @VisibleForTesting
-    static Set<String> getTestMappingSources(File zipFile) {
+    Set<String> getTestMappingSources(File zipFile) {
         Set<String> fileNames = new HashSet<>();
         Enumeration<? extends ZipArchiveEntry> entries = null;
         ZipFile f = null;
@@ -780,7 +780,7 @@ public class TestMapping {
      *     test_mapping_platform.zip
      * @return The test mapping file, or null if unable to locate one.
      */
-    private static File lookupTestMappingZip(String zipName) {
+    private File lookupTestMappingZip(String zipName) {
         String testDirPath = System.getenv(TestDiscoveryInvoker.TEST_DIRECTORY_ENV_VARIABLE_KEY);
         if (testDirPath == null) {
             return null;
