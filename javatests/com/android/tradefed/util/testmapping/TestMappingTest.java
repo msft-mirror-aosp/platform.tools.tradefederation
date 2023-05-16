@@ -31,6 +31,7 @@ import com.android.tradefed.util.ZipUtil;
 
 import com.google.common.collect.Sets;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -58,6 +59,12 @@ public class TestMappingTest {
     private static final String DISABLED_PRESUBMIT_TESTS = "disabled-presubmit-tests";
     private static final Set<String> NO_MATCHED_PATTERNS = new HashSet<>();
     private static final boolean IGNORE_IMPORTS = true;
+    private TestMapping mTestMapping;
+
+    @Before
+    public void setUp() throws Exception {
+        mTestMapping = new TestMapping();
+    }
 
     /** Test for {@link TestMapping#getTests()} implementation. */
     @Test
@@ -73,10 +80,9 @@ public class TestMappingTest {
             String rootDirName = testMappingRootDir.getName();
             testMappingFile =
                     FileUtil.saveResourceFile(resourceStream, testMappingRootDir, TEST_MAPPING);
-            TestMapping testMapping = new TestMapping();
             Set<TestInfo> tests =
-                    testMapping.getTests(
-                            testMapping.getTestCollection(
+                    mTestMapping.getTests(
+                            mTestMapping.getTestCollection(
                                     testMappingFile.toPath(),
                                     Paths.get(tempDir.getAbsolutePath()),
                                     NO_MATCHED_PATTERNS),
@@ -92,8 +98,8 @@ public class TestMappingTest {
             assertTrue(names.contains("test1"));
 
             tests =
-                    testMapping.getTests(
-                            testMapping.getTestCollection(
+                    mTestMapping.getTests(
+                            mTestMapping.getTestCollection(
                                     testMappingFile.toPath(),
                                     Paths.get(tempDir.getAbsolutePath()),
                                     NO_MATCHED_PATTERNS),
@@ -109,8 +115,8 @@ public class TestMappingTest {
             assertTrue(names.contains("suite/stub1"));
 
             tests =
-                    testMapping.getTests(
-                            testMapping.getTestCollection(
+                    mTestMapping.getTests(
+                            mTestMapping.getTestCollection(
                                     testMappingFile.toPath(),
                                     Paths.get(tempDir.getAbsolutePath()),
                                     NO_MATCHED_PATTERNS),
@@ -134,8 +140,8 @@ public class TestMappingTest {
             assertTrue(testOptions.contains(testOption));
 
             tests =
-                    testMapping.getTests(
-                            testMapping.getTestCollection(
+                    mTestMapping.getTests(
+                            mTestMapping.getTestCollection(
                                     testMappingFile.toPath(),
                                     Paths.get(tempDir.getAbsolutePath()),
                                     NO_MATCHED_PATTERNS),
@@ -169,9 +175,8 @@ public class TestMappingTest {
             tempDir = FileUtil.createTempDir("test_mapping");
             File testMappingFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPING).toFile();
             FileUtil.writeToFile("bad format json file", testMappingFile);
-            TestMapping testMapping = new TestMapping();
-            testMapping.getTests(
-                    testMapping.getTestCollection(
+            mTestMapping.getTests(
+                    mTestMapping.getTestCollection(
                             testMappingFile.toPath(),
                             Paths.get(tempDir.getAbsolutePath()),
                             NO_MATCHED_PATTERNS),
@@ -211,11 +216,10 @@ public class TestMappingTest {
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
 
             // Ensure the static variable doesn't have any relative path configured.
-            TestMapping testMapping = new TestMapping();
-            Set<TestInfo> tests = testMapping.getTests(mockBuildInfo, "presubmit", false, null);
+            Set<TestInfo> tests = mTestMapping.getTests(mockBuildInfo, "presubmit", false, null);
             assertEquals(0, tests.size());
 
-            tests = testMapping.getTests(mockBuildInfo, "presubmit", true, null);
+            tests = mTestMapping.getTests(mockBuildInfo, "presubmit", true, null);
             assertEquals(2, tests.size());
             Set<String> names = new HashSet<String>();
             for (TestInfo test : tests) {
@@ -263,9 +267,8 @@ public class TestMappingTest {
             ZipUtil.createZip(filesToZip, zipFile);
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
 
-            TestMapping testMapping = new TestMapping();
             Set<TestInfo> tests =
-                    testMapping.getTests(
+                    mTestMapping.getTests(
                             mockBuildInfo, "presubmit", false, Sets.newHashSet("key_1"));
             assertEquals(1, tests.size());
             assertEquals("suite/stub2", tests.iterator().next().getName());
@@ -550,8 +553,7 @@ public class TestMappingTest {
             srcFile = File.separator + TEST_DATA_DIR + File.separator + DISABLED_PRESUBMIT_TESTS;
             resourceStream = this.getClass().getResourceAsStream(srcFile);
             FileUtil.saveResourceFile(resourceStream, tempDir, DISABLED_PRESUBMIT_TESTS);
-            TestMapping testMapping = new TestMapping();
-            Map<String, Set<TestInfo>> allTests = testMapping.getAllTests(tempDir);
+            Map<String, Set<TestInfo>> allTests = mTestMapping.getAllTests(tempDir);
             Set<TestInfo> tests = allTests.get("presubmit");
             assertEquals(5, tests.size());
 
@@ -591,8 +593,7 @@ public class TestMappingTest {
             ZipUtil.createZip(filesToZip, zipFile);
 
             extractedFile = TestMapping.extractTestMappingsZip(zipFile);
-            TestMapping testMapping = new TestMapping();
-            Map<String, Set<TestInfo>> allTests = testMapping.getAllTests(tempDir);
+            Map<String, Set<TestInfo>> allTests = mTestMapping.getAllTests(tempDir);
             Set<TestInfo> tests = allTests.get("presubmit");
             assertEquals(5, tests.size());
 
@@ -626,13 +627,13 @@ public class TestMappingTest {
             resourceStream = this.getClass().getResourceAsStream(srcFile);
             FileUtil.saveResourceFile(resourceStream, tempDir, DISABLED_PRESUBMIT_TESTS);
             Path tempDirPath = Paths.get(tempDir.getAbsolutePath());
-            Set<String> disabledTests = TestMapping.getDisabledTests(tempDirPath, "presubmit");
+            Set<String> disabledTests = mTestMapping.getDisabledTests(tempDirPath, "presubmit");
             assertEquals(2, disabledTests.size());
 
-            disabledTests = TestMapping.getDisabledTests(tempDirPath, "postsubmit");
+            disabledTests = mTestMapping.getDisabledTests(tempDirPath, "postsubmit");
             assertEquals(0, disabledTests.size());
 
-            disabledTests = TestMapping.getDisabledTests(tempDirPath, "othertype");
+            disabledTests = mTestMapping.getDisabledTests(tempDirPath, "othertype");
             assertEquals(0, disabledTests.size());
         } finally {
             FileUtil.recursiveDelete(tempDir);
@@ -644,7 +645,7 @@ public class TestMappingTest {
     public void testRemoveComments() throws Exception {
         String jsonString = getJsonStringByName("test_mapping_with_comments1");
         String goldenString = getJsonStringByName("test_mapping_golden1");
-        assertEquals(TestMapping.removeComments(jsonString), goldenString);
+        assertEquals(mTestMapping.removeComments(jsonString), goldenString);
     }
 
     /** Test for {@link TestMapping#removeComments()} for removing comments in TEST_MAPPING file. */
@@ -652,7 +653,7 @@ public class TestMappingTest {
     public void testRemoveComments2() throws Exception {
         String jsonString = getJsonStringByName("test_mapping_with_comments2");
         String goldenString = getJsonStringByName("test_mapping_golden2");
-        assertEquals(TestMapping.removeComments(jsonString), goldenString);
+        assertEquals(mTestMapping.removeComments(jsonString), goldenString);
     }
 
     /**
@@ -796,10 +797,9 @@ public class TestMappingTest {
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
 
             Set<String> names = new HashSet<String>();
-            TestMapping testMapping = new TestMapping();
             Set<TestInfo> testInfos =
-                    testMapping.getTests(
-                            testMapping.getTestCollection(
+                    mTestMapping.getTests(
+                            mTestMapping.getTestCollection(
                                     path3.toPath().resolve(TEST_MAPPING),
                                     tempDir.toPath(),
                                     NO_MATCHED_PATTERNS),
@@ -862,7 +862,7 @@ public class TestMappingTest {
             File zipFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPINGS_ZIP).toFile();
             ZipUtil.createZip(filesToZip, zipFile);
 
-            Set<String> sources = TestMapping.getTestMappingSources(zipFile);
+            Set<String> sources = mTestMapping.getTestMappingSources(zipFile);
             assertEquals(3, sources.size());
             assertTrue(sources.contains("src1/TEST_MAPPING"));
             assertTrue(sources.contains("src1/sub_dir1/TEST_MAPPING"));
@@ -900,7 +900,7 @@ public class TestMappingTest {
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
             when(mockBuildInfo.getFile("extra-zip")).thenReturn(null);
             try {
-                TestMapping.mergeTestMappingZips(
+                mTestMapping.mergeTestMappingZips(
                         mockBuildInfo, Arrays.asList("extra-zip"), zipFile, baseDir);
                 fail("Should have thrown an exception.");
             } catch (HarnessRuntimeException expected) {
@@ -949,7 +949,7 @@ public class TestMappingTest {
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
             when(mockBuildInfo.getFile("extra-zip")).thenReturn(zipFile);
             try {
-                TestMapping.mergeTestMappingZips(
+                mTestMapping.mergeTestMappingZips(
                         mockBuildInfo, Arrays.asList("extra-zip"), zipFile, baseDir);
                 fail("Should have thrown an exception.");
             } catch (HarnessRuntimeException expected) {
@@ -1002,9 +1002,8 @@ public class TestMappingTest {
 
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
             when(mockBuildInfo.getFile("extra-zip")).thenReturn(zipFile2);
-            TestMapping testMapping = new TestMapping();
             Set<TestInfo> results =
-                    testMapping.getTests(
+                    mTestMapping.getTests(
                             mockBuildInfo,
                             "presubmit",
                             false,
