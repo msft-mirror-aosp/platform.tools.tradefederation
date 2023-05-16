@@ -336,7 +336,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         Set<String> unInstallModules = new HashSet<>(modulesInData);
         List<File> filesToSkipInstall = new ArrayList<>();
         for (File testFile : testFiles) {
-            String packageName = parsePackageName(testFile, device.getDeviceDescriptor());
+            String packageName = parsePackageName(testFile);
             for (String moduleInData : modulesInData) {
                 if (moduleInData.equals(packageName)) {
                     unInstallModules.remove(moduleInData);
@@ -588,9 +588,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                             moduleFileName, mDeviceSpecFilePath);
                     continue;
                 }
-                modulePackageName = parsePackageName(splits.get(0), device.getDeviceDescriptor());
+                modulePackageName = parsePackageName(splits.get(0));
             } else {
-                modulePackageName = parsePackageName(moduleFile, device.getDeviceDescriptor());
+                modulePackageName = parsePackageName(moduleFile);
             }
             if (installedPackages.contains(modulePackageName)) {
                 CLog.i("Found preloaded module for %s.", modulePackageName);
@@ -669,7 +669,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             for (File moduleFile : moduleFilenames) {
                 trainInstallCmd.add(moduleFile.getAbsolutePath());
                 if (moduleFile.getName().endsWith(APK_SUFFIX)) {
-                    String packageName = parsePackageName(moduleFile, device.getDeviceDescriptor());
+                    String packageName = parsePackageName(moduleFile);
                     apkPackageNames.add(packageName);
                 }
             }
@@ -713,7 +713,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                         moduleFile.getName(), MODULE_PUSH_REMOTE_PATH + moduleFile.getName());
             }
             if (moduleFile.getName().endsWith(APK_SUFFIX)) {
-                String packageName = parsePackageName(moduleFile, device.getDeviceDescriptor());
+                String packageName = parsePackageName(moduleFile);
                 apkPackageNames.add(packageName);
             }
         }
@@ -785,12 +785,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                             moduleFile.getName(), res.getStderr(), res.getStdout()),
                         device.getDeviceDescriptor());
             }
-            res = device.executeShellV2Command(
+            res =
+                    device.executeShellV2Command(
                             String.format(
                                     "pm install-write -S %d %s %s %s",
                                     moduleFile.length(),
                                     childSessionId,
-                                    parsePackageName(moduleFile, device.getDeviceDescriptor()),
+                                    parsePackageName(moduleFile),
                                     MODULE_PUSH_REMOTE_PATH + moduleFile.getName()));
             if (res.getStatus() == CommandStatus.SUCCESS) {
                 CLog.d(
@@ -878,14 +879,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         // Install .apks that contain apex module.
         if (containsApex(splits)) {
             Map<File, String> appFilesAndPackages = new LinkedHashMap<>();
-            appFilesAndPackages.put(
-                    splits.get(0), parsePackageName(splits.get(0), device.getDeviceDescriptor()));
+            appFilesAndPackages.put(splits.get(0), parsePackageName(splits.get(0)));
             super.installer(testInfo, appFilesAndPackages);
             mTestApexInfoList = collectApexInfoFromApexModules(appFilesAndPackages, testInfo);
         } else {
             // Install .apks that contain apk module.
             getBundletoolUtil().installApks(apks, device);
-            mApkToInstall.add(parsePackageName(splits.get(0), device.getDeviceDescriptor()));
+            mApkToInstall.add(parsePackageName(splits.get(0)));
         }
         return;
     }
@@ -949,7 +949,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     ApexInfo apexInfo = retrieveApexInfo(moduleFile, device.getDeviceDescriptor());
                     mTestApexInfoList.add(apexInfo);
                 } else {
-                    mApkToInstall.add(parsePackageName(moduleFile, device.getDeviceDescriptor()));
+                    mApkToInstall.add(parsePackageName(moduleFile));
                 }
                 mSplitsInstallArgs.add(moduleFile.getAbsolutePath());
             }
@@ -1099,7 +1099,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                 mTestApexInfoList.add(apexInfo);
             }
             if (f.getName().endsWith(APK_SUFFIX)) {
-                mApkToInstall.add(parsePackageName(f, device.getDeviceDescriptor()));
+                mApkToInstall.add(parsePackageName(f));
             }
             if (!splitsArgs.isEmpty()) {
                 splitsArgs += ":" + f.getAbsolutePath();

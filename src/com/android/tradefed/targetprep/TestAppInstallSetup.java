@@ -18,14 +18,13 @@ package com.android.tradefed.targetprep;
 import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.incfs.install.adb.ddmlib.DeviceConnection;
-import com.android.incfs.install.adb.ddmlib.DeviceLogger;
 import com.android.incfs.install.IncrementalInstallSession;
 import com.android.incfs.install.IncrementalInstallSession.Builder;
 import com.android.incfs.install.PendingBlock;
+import com.android.incfs.install.adb.ddmlib.DeviceConnection;
+import com.android.incfs.install.adb.ddmlib.DeviceLogger;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
-import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
@@ -66,10 +65,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A {@link ITargetPreparer} that installs one or more apps from a {@link
@@ -407,9 +406,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
 
         for (File testAppName : mTestFiles) {
             Map<File, String> appFilesAndPackages =
-                    resolveApkFiles(
-                            testInfo,
-                            findApkFiles(testAppName, testInfo.getDevice().getDeviceDescriptor()));
+                    resolveApkFiles(testInfo, findApkFiles(testAppName));
             installer(testInfo, appFilesAndPackages);
         }
 
@@ -618,13 +615,10 @@ public class TestAppInstallSetup extends BaseTargetPreparer
                             aaptParser.getSdkVersion(),
                             device.getApiLevel());
                 } else {
-                    appFiles.put(
-                            testAppFile,
-                            parsePackageName(testAppFile, device.getDeviceDescriptor()));
+                    appFiles.put(testAppFile, parsePackageName(testAppFile));
                 }
             } else {
-                appFiles.put(
-                        testAppFile, parsePackageName(testAppFile, device.getDeviceDescriptor()));
+                appFiles.put(testAppFile, parsePackageName(testAppFile));
             }
         }
         return appFiles;
@@ -634,8 +628,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
      * Returns the provided file if not a directory or all APK files contained in the directory tree
      * rooted at the provided path otherwise.
      */
-    private List<File> findApkFiles(File fileOrDirectory, DeviceDescriptor deviceDescriptor)
-            throws TargetSetupError {
+    private List<File> findApkFiles(File fileOrDirectory) throws TargetSetupError {
 
         if (!fileOrDirectory.isDirectory()) {
             return ImmutableList.of(fileOrDirectory);
@@ -654,7 +647,8 @@ public class TestAppInstallSetup extends BaseTargetPreparer
                     String.format(
                             "Could not list files of specified directory: %s", fileOrDirectory),
                     e,
-                    deviceDescriptor,
+                    null,
+                    false,
                     InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
 
@@ -662,7 +656,9 @@ public class TestAppInstallSetup extends BaseTargetPreparer
             throw new TargetSetupError(
                     String.format(
                             "Could not find any files in specified directory: %s", fileOrDirectory),
-                    deviceDescriptor,
+                    null,
+                    null,
+                    false,
                     InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
 
@@ -733,15 +729,16 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     }
 
     /** Get the package name from the test app. */
-    protected String parsePackageName(File testAppFile, DeviceDescriptor deviceDescriptor)
-            throws TargetSetupError {
+    protected String parsePackageName(File testAppFile) throws TargetSetupError {
         AaptParser parser = AaptParser.parse(testAppFile, mAaptVersion);
         if (parser == null) {
             throw new TargetSetupError(
                     String.format(
                             "AaptParser failed for file %s. The APK won't be installed",
                             testAppFile.getName()),
-                    deviceDescriptor,
+                    null,
+                    null,
+                    false, // Not device side error, doesn't need descriptor
                     DeviceErrorIdentifier.AAPT_PARSER_FAILED);
         }
         return parser.getPackageName();
