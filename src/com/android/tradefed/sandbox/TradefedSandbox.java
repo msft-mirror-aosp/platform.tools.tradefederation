@@ -84,6 +84,8 @@ public class TradefedSandbox implements ISandbox {
     private static final String SANDBOX_PREFIX = "sandbox-";
     public static final String SANDBOX_ENABLED = "SANDBOX_ENABLED";
 
+    private static final String SANDBOX_JVM_OPTIONS_ENV_VAR_KEY = "TF_SANDBOX_JVM_OPTIONS";
+
     private File mStdoutFile = null;
     private File mStderrFile = null;
     private File mHeapDump = null;
@@ -122,6 +124,9 @@ public class TradefedSandbox implements ISandbox {
         }
         SandboxOptions sandboxOptions = getSandboxOptions(config);
         mCmdArgs.addAll(sandboxOptions.getJavaOptions());
+        if (System.getenv(SANDBOX_JVM_OPTIONS_ENV_VAR_KEY) != null) {
+            mCmdArgs.add(System.getenv(SANDBOX_JVM_OPTIONS_ENV_VAR_KEY));
+        }
         mCmdArgs.add("-cp");
         mCmdArgs.add(createClasspath(mRootFolder));
         mCmdArgs.add(TradefedSandboxRunner.class.getCanonicalName());
