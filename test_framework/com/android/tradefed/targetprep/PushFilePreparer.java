@@ -163,15 +163,14 @@ public class PushFilePreparer extends BaseTargetPreparer
     }
 
     /** Create the list of files to be pushed. */
-    public final Map<String, File> getPushSpecs(DeviceDescriptor descriptor)
-            throws TargetSetupError {
+    public final Map<String, File> getPushSpecs(ITestDevice device) throws TargetSetupError {
         Map<String, File> remoteToLocalMapping = new LinkedHashMap<>();
         for (String pushspec : mPushSpecs) {
             String[] pair = pushspec.split("->");
             if (pair.length != 2) {
                 fail(
                         String.format("Invalid pushspec: '%s'", Arrays.asList(pair)),
-                        descriptor,
+                        device.getDeviceDescriptor(),
                         InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 continue;
             }
@@ -372,7 +371,7 @@ public class PushFilePreparer extends BaseTargetPreparer
                     "mv \"" + entry.getKey() + "\" \"" + entry.getValue() + "\"");
         }
 
-        Map<String, File> remoteToLocalMapping = getPushSpecs(device.getDeviceDescriptor());
+        Map<String, File> remoteToLocalMapping = getPushSpecs(device);
         for (String remotePath : remoteToLocalMapping.keySet()) {
             File local = remoteToLocalMapping.get(remotePath);
             CLog.d("Trying to push local '%s' to remote '%s'", local.getPath(), remotePath);
