@@ -88,6 +88,7 @@ import com.android.tradefed.testtype.suite.module.IModuleController.RunStrategy;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import com.google.api.client.util.Joiner;
@@ -1118,6 +1119,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
 
     /** Verify that the device did not crash after the module. */
     private void checkEndModuleDevice(TestInformation testInfo) throws DeviceNotAvailableException {
+        if (SystemUtil.isLocalMode()) {
+            CLog.d("Skipping check for device availability after end of module for local run.");
+            return;
+        }
         try (CloseableTraceScope check = new CloseableTraceScope("checkEndModuleDevice")) {
             for (ITestDevice device : testInfo.getDevices()) {
                 if (device.getIDevice() instanceof StubDevice) {
