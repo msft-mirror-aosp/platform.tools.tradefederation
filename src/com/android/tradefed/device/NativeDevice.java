@@ -219,7 +219,8 @@ public class NativeDevice
     private RecoveryMode mRecoveryMode = RecoveryMode.AVAILABLE;
 
     private Boolean mIsEncryptionSupported = null;
-    private ReentrantLock mAllocationStateLock = new ReentrantLock();
+    private ReentrantLock mAllocationStateLock = new ReentrantLock(true /*fair*/);
+
     @GuardedBy("mAllocationStateLock")
     private DeviceAllocationState mAllocationState = DeviceAllocationState.Unknown;
     private IDeviceMonitor mAllocationMonitor = null;
