@@ -198,7 +198,8 @@ public class NoisyDryRunTest implements IRemoteTest {
                                     new DryRunKeyStore(),
                                     createSandbox(),
                                     createRunUtil(),
-                                    globalConfig);
+                                    globalConfig,
+                                    true /*skip java check */);
             // Do not resolve dynamic files
             config.validateOptions();
         } catch (IOException e) {
