@@ -31,6 +31,7 @@ import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.BuildInfoUtil;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.SystemUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -91,6 +92,11 @@ public class BootstrapBuildProvider implements IDeviceBuildProvider {
                             + "Can be repeated. For example --extra-file file_key_1=/path/to/file")
     private Map<String, File> mExtraFiles = new LinkedHashMap<>();
 
+    @Option(
+            name = "collect-build-attribute",
+            description = "Whether to collect build attributes from the device to build-info.")
+    private boolean mCollectBuildAttribute = true;
+
     private boolean mCreatedTestDir = false;
 
     @Override
@@ -111,7 +117,7 @@ public class BootstrapBuildProvider implements IDeviceBuildProvider {
             DeviceNotAvailableException {
         IBuildInfo info = new DeviceBuildInfo(mBuildId, mBuildTargetName);
         addFiles(info, mExtraFiles);
-        if (!(device.getIDevice() instanceof StubDevice)) {
+        if (!(device.getIDevice() instanceof StubDevice) && !SystemUtil.isLocalMode()) {
             try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_shell")) {
                 if (!device.waitForDeviceShell(mShellAvailableTimeout * 1000)) {
                     throw new DeviceNotAvailableException(
@@ -125,15 +131,17 @@ public class BootstrapBuildProvider implements IDeviceBuildProvider {
             // In order to avoid issue with a null branch, use a placeholder stub for StubDevice.
             mBranch = "stub";
         }
-        try (CloseableTraceScope bootstrapAttributes =
-                new CloseableTraceScope("bootstrapDeviceBuildAttributes")) {
-            BuildInfoUtil.bootstrapDeviceBuildAttributes(
-                    info,
-                    device,
-                    mBuildId,
-                    null /* override build flavor */,
-                    mBranch,
-                    null /* override build alias */);
+        if (mCollectBuildAttribute) {
+            try (CloseableTraceScope bootstrapAttributes =
+                    new CloseableTraceScope("bootstrapDeviceBuildAttributes")) {
+                BuildInfoUtil.bootstrapDeviceBuildAttributes(
+                        info,
+                        device,
+                        mBuildId,
+                        null /* override build flavor */,
+                        mBranch,
+                        null /* override build alias */);
+            }
         }
         if (mTestsDir != null && mTestsDir.isDirectory()) {
             info.setFile("testsdir", mTestsDir, info.getBuildId());
