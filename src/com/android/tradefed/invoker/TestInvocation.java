@@ -1735,6 +1735,7 @@ public class TestInvocation implements ITestInvocation {
             RecoveryMode current = device.getRecoveryMode();
             device.setRecoveryMode(RecoveryMode.NONE);
             try {
+                device.waitForDeviceOnline(60000L);
                 device.getApiLevel();
             } catch (DeviceNotAvailableException e) {
                 return e;
