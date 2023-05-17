@@ -66,6 +66,7 @@ public class TestDiscoveryInvoker {
             TestDiscoveryExecutor.class.getName();
     public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
     public static final String TEST_MODULES_LIST_KEY = "TestModules";
+    public static final String PARTIAL_FALLBACK_KEY = "PartialFallback";
     public static final String TEST_DIRECTORY_ENV_VARIABLE_KEY =
             "TF_TEST_DISCOVERY_USE_TEST_DIRECTORY";
     public static final String ROOT_DIRECTORY_ENV_VARIABLE_KEY =
@@ -74,6 +75,11 @@ public class TestDiscoveryInvoker {
     @VisibleForTesting
     IRunUtil getRunUtil() {
         return mRunUtil;
+    }
+
+    @VisibleForTesting
+    String getJava() {
+        return SystemUtil.getRunningJavaBinaryPath().getAbsolutePath();
     }
 
     public File getTestDir() {
@@ -215,6 +221,10 @@ public class TestDiscoveryInvoker {
         if (!testModules.isEmpty()) {
             dependencies.put(TEST_MODULES_LIST_KEY, testModules);
         }
+        String partialFallback = parsePartialFallback(stdout);
+        if (partialFallback != null) {
+            dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+        }
         return dependencies;
     }
 
@@ -232,7 +242,7 @@ public class TestDiscoveryInvoker {
 
         List<String> args = new ArrayList<>();
 
-        args.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
+        args.add(getJava());
 
         args.add("-cp");
         args.add(classpath);
@@ -297,7 +307,7 @@ public class TestDiscoveryInvoker {
             }
         }
         List<String> args = new ArrayList<>();
-        args.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
+        args.add(getJava());
 
         args.add("-cp");
         args.add(classpath);
@@ -401,5 +411,13 @@ public class TestDiscoveryInvoker {
             }
         }
         return testModules;
+    }
+
+    private String parsePartialFallback(String discoveryOutput) throws JSONException {
+        JSONObject jsonObject = new JSONObject(discoveryOutput);
+        if (jsonObject.has(PARTIAL_FALLBACK_KEY)) {
+            return jsonObject.getString(PARTIAL_FALLBACK_KEY);
+        }
+        return null;
     }
 }
