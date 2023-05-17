@@ -60,6 +60,8 @@ public class TestDiscoveryExecutor {
         return ConfigurationFactory.getInstance();
     }
 
+    private boolean mReportPartialFallback = false;
+
     /**
      * An TradeFederation entry point that will use command args to discover test artifact
      * information.
@@ -126,6 +128,9 @@ public class TestDiscoveryExecutor {
         JsonArray testDependenciesArray = gson.toJsonTree(testDependencies).getAsJsonArray();
         jsonObject.add(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, testModulesArray);
         jsonObject.add(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
+        if (mReportPartialFallback) {
+            jsonObject.addProperty(TestDiscoveryInvoker.PARTIAL_FALLBACK_KEY, "true");
+        }
         return jsonObject.toString();
     }
 
@@ -191,6 +196,7 @@ public class TestDiscoveryExecutor {
                         if (configs != null) {
                             testModules.addAll(configs);
                             throwException = false;
+                            mReportPartialFallback = true;
                         }
                     }
                 }
@@ -214,6 +220,7 @@ public class TestDiscoveryExecutor {
                         if (configs != null) {
                             testModules.addAll(configs);
                             throwException = false;
+                            mReportPartialFallback = true;
                         }
                     }
                 }
