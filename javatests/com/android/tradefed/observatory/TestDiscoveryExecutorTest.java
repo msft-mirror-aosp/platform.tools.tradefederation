@@ -223,6 +223,8 @@ public class TestDiscoveryExecutorTest {
                     "<configuration><option name=\"config-descriptor:metadata\" key=\"component\""
                             + " value=\"media\" /></configuration>",
                     mediaConfig);
+            File secondNotRunConfig = new File(rootDir, "another.config");
+            FileUtil.writeToFile("<configuration></configuration>", secondNotRunConfig);
             mTestDiscoveryExecutor =
                     new TestDiscoveryExecutor() {
                         @Override
@@ -251,7 +253,8 @@ public class TestDiscoveryExecutorTest {
             when(mMockedConfiguration.getTests()).thenReturn(testList);
 
             String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
-            String expected = "{\"TestModules\":[\"CtsMedia\"],\"TestDependencies\":[]}";
+            String expected =
+                    "{\"TestModules\":[\"CtsMedia\"],\"TestDependencies\":[],\"PartialFallback\":\"true\"}";
             assertEquals(expected, output);
         } finally {
             FileUtil.recursiveDelete(rootDir);
