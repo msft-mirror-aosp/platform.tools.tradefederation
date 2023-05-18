@@ -61,6 +61,7 @@ public class TestDiscoveryInvoker {
     private final File mRootDir;
     private final IRunUtil mRunUtil = new RunUtil();
     private final boolean mHasConfigFallback;
+    private final boolean mUseCurrentTradefed;
     private File mTestDir;
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
@@ -100,7 +101,7 @@ public class TestDiscoveryInvoker {
      * default config name and root directory.
      */
     public TestDiscoveryInvoker(IConfiguration config, String defaultConfigName, File rootDir) {
-        this(config, defaultConfigName, rootDir, false);
+        this(config, defaultConfigName, rootDir, false, false);
     }
 
     /**
@@ -111,12 +112,14 @@ public class TestDiscoveryInvoker {
             IConfiguration config,
             String defaultConfigName,
             File rootDir,
-            boolean hasConfigFallback) {
+            boolean hasConfigFallback,
+            boolean useCurrentTradefed) {
         mConfiguration = config;
         mDefaultConfigName = defaultConfigName;
         mRootDir = rootDir;
         mTestDir = null;
         mHasConfigFallback = hasConfigFallback;
+        mUseCurrentTradefed = useCurrentTradefed;
     }
 
     /**
@@ -333,7 +336,7 @@ public class TestDiscoveryInvoker {
      * @throws IOException
      */
     private String buildTestMappingClasspath(File workingDir) throws IOException {
-        List<File> classpathList = new ArrayList<>();
+        List<String> classpathList = new ArrayList<>();
 
         if (!workingDir.exists()) {
             throw new FileNotFoundException("Couldn't find the build directory");
@@ -346,12 +349,19 @@ public class TestDiscoveryInvoker {
         }
         for (File toolsFile : workingDir.listFiles()) {
             if (toolsFile.getName().endsWith(".jar")) {
-                classpathList.add(toolsFile);
+                classpathList.add(toolsFile.getAbsolutePath());
             }
         }
         Collections.sort(classpathList);
+        if (mUseCurrentTradefed) {
+            classpathList.add(getCurrentClassPath());
+        }
 
         return Joiner.on(":").join(classpathList);
+    }
+
+    private String getCurrentClassPath() {
+        return System.getProperty("java.class.path");
     }
 
     /**
