@@ -137,6 +137,10 @@ public class InvocationMetricLogger {
         RESET_RETRY_ISOLATION_PAIR("reset_isolation_timestamp_pair", true),
         // Capture the time spent isolating a retry with reboot
         REBOOT_RETRY_ISOLATION_PAIR("reboot_isolation_timestamp_pair", true),
+        // Track metrics for skipped retries
+        RETRY_MODULE_SKIPPED_COUNT("retry_module_skipped_count", true),
+        RETRY_TEST_SKIPPED_COUNT("retry_test_skipped_count", true),
+
         // The time spent inside metric collectors
         COLLECTOR_TIME("collector_time_ms", true),
         // Track if soft restart is occurring after test module
