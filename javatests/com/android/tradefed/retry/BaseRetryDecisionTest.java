@@ -39,6 +39,8 @@ import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.InstalledInstrumentationsTest;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 
+import com.google.common.truth.Truth;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -241,6 +243,24 @@ public class BaseRetryDecisionTest {
     }
 
     @Test
+    public void testShouldRetry_skip_retrying_list_test() throws Exception {
+        final String SKIP_RETRYING_LIST = "skip-retrying-list";
+        final String moduleID1 = "x86 module1";
+        final String moduleID1_test = "x86 module1 class#method2";
+        TestRunResult result1 =
+                createResult(
+                        FailureDescription.create("failure1"),
+                        FailureDescription.create("failure2"));
+        ModuleDefinition module1 = Mockito.mock(ModuleDefinition.class);
+        Mockito.when(module1.getId()).thenReturn(moduleID1);
+        OptionSetter setter = new OptionSetter(mRetryDecision);
+        setter.setOptionValue(SKIP_RETRYING_LIST, moduleID1_test);
+        boolean res = mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result1));
+        assertTrue(res);
+        Truth.assertThat(mTestClass.getExcludeFilters()).containsExactly("class#method2");
+    }
+
+    @Test
     public void testShouldRetry_autoRetriable() throws Exception {
         OptionSetter setter = new OptionSetter(mRetryDecision);
         setter.setOptionValue("reboot-at-last-retry", "true");
@@ -261,7 +281,6 @@ public class BaseRetryDecisionTest {
     @Test
     public void shouldRetryPreparation_NOT_ISOLATED() throws Exception {
         ModuleDefinition module1 = Mockito.mock(ModuleDefinition.class);
-        OptionSetter setter = new OptionSetter(mRetryDecision);
         RetryPreparationDecision res = mRetryDecision.shouldRetryPreparation(module1, 0, 3);
         assertFalse(res.shouldRetry());
         assertTrue(res.shouldFailRun());
