@@ -501,9 +501,15 @@ public abstract class ITestSuite
             if (mStageArtifactsViaFeature) {
                 try (TradefedFeatureClient client = new TradefedFeatureClient()) {
                     Map<String, String> args = new HashMap<>();
-                    args.put(
-                            ResolvePartialDownload.DESTINATION_DIR,
-                            getTestsDir().getAbsolutePath());
+                    String destination = getTestsDir().getAbsolutePath();
+                    // In *TS cases, download from root dir reference instead of tests dir
+                    if (mBuildInfo.getBuildAttributes().containsKey("ROOT_DIR")) {
+                        destination = mBuildInfo.getBuildAttributes().get("ROOT_DIR");
+                    }
+                    CLog.d(
+                            "downloading to destination: %s the following include_filters: %s",
+                            destination, includeFilters);
+                    args.put(ResolvePartialDownload.DESTINATION_DIR, destination);
                     args.put(
                             ResolvePartialDownload.INCLUDE_FILTERS,
                             String.join(";", includeFilters));
@@ -516,7 +522,6 @@ public abstract class ITestSuite
                                     .map(p -> p.toString())
                                     .collect(Collectors.joining(";"));
                     args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
-
                     FeatureResponse rep =
                             client.triggerFeature(
                                     ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME,
