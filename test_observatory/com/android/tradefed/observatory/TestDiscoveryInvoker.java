@@ -178,6 +178,11 @@ public class TestDiscoveryInvoker {
         if (!testDependencies.isEmpty()) {
             dependencies.put(TEST_DEPENDENCIES_LIST_KEY, testDependencies);
         }
+
+        String partialFallback = parsePartialFallback(stdout);
+        if (partialFallback != null) {
+            dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+        }
         return dependencies;
     }
 
