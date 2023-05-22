@@ -129,6 +129,7 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
             tmpGkiDir = FileUtil.createTempDir("gki_dir");
 
             for (String fileKey : buildInfo.getVersionedFileKeys()) {
+                CLog.i("Processing file %s", fileKey);
                 File srcFile = buildInfo.getFile(fileKey);
                 if (fileKey.contains("{" + mKernelLabel + "}")) {
                     // Copy kernel image to tmpKernelDir
@@ -153,6 +154,7 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
                         "Could not find kernel images", device.getDeviceDescriptor());
             }
             // Run the mix kernel tool and generate new device image into tmpNewDeviceDir
+            CLog.i("running mixkernel tool from %s", mMixKernelToolPath);
             runMixKernelTool(device, tmpDeviceDir, tmpKernelDir, tmpGkiDir, tmpNewDeviceDir);
             // Find the new device image and copy it to device build info's device image file
             setNewDeviceImage(buildInfo, tmpNewDeviceDir);
@@ -187,18 +189,22 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
         if (matcher.find()) {
             newFileName = matcher.group();
         } else {
-            newFileName = new String("device-img");
+            newFileName = new String("device-img-001");
         }
         if (!suffix.isEmpty()) {
             newFileName = newFileName + suffix;
+        } else {
+            newFileName = newFileName + ".zip";
         }
         File dstFile = new File(destDir, newFileName);
-        CLog.d("Copy %s to %s", srcFile.toString(), dstFile.toString());
+        CLog.i("Copy %s to %s", srcFile.toString(), dstFile.toString());
         FileUtil.hardlinkFile(srcFile, dstFile);
     }
 
     /**
-     * Copy files with labelled filekey to the specified destination directory.
+     * Copy files with labelled filekey to the specified destination directory, with {prefix}
+     * stripped. Also replaces {zip} with ".zip" due to MTT cannot handle .zip file natively. See
+     * test for examples.
      *
      * @param fileKey the fileKey of the source file will be copied from
      * @param srcFile the source file will be copied from
@@ -208,9 +214,9 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
     @VisibleForTesting
     void copyLabelFileToDir(String fileKey, File srcFile, File destDir) throws IOException {
         // Recover the original file name
-        String newFileName = fileKey.replaceAll("\\{\\w+\\}", "");
+        String newFileName = fileKey.replace("{zip}", ".zip").replaceAll("\\{\\w+\\}", "");
         File dstFile = new File(destDir, newFileName);
-        CLog.d("Copy %s %s to %s", fileKey, srcFile.toString(), dstFile.toString());
+        CLog.i("Copy %s %s to %s", fileKey, srcFile.toString(), dstFile.toString());
         FileUtil.hardlinkFile(srcFile, dstFile);
     }
 
@@ -224,16 +230,18 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
      * @throws IOException if hit IOException
      */
     private void findMixKernelTool(IBuildInfo buildInfo) throws TargetSetupError, IOException {
-        if (mMixKernelToolPath == null || !mMixKernelToolPath.exists()) {
+        if (mMixKernelToolPath == null) {
             CLog.i(
-                    "File mix-kernel-tool-path is not configured or does not exist. "
-                            + "Use Devices's TestsDir and the mix kernel tool path.");
+                    "File mix-kernel-tool-path is not configured. Use devices build's testsdir"
+                            + " as the mix kernel tool path.");
             mMixKernelToolPath = buildInfo.getFile(BuildInfoFileKey.TESTDIR_IMAGE.getFileKey());
             if (mMixKernelToolPath == null || !mMixKernelToolPath.isDirectory()) {
                 throw new TargetSetupError(
                         String.format(
-                                "There is no testsDir for %s to search for mix kernel tool",
-                                buildInfo.getBuildId()),
+                                "There is no %s to search for mix kernel tool. Please assign a test"
+                                        + " artifact with name %s and type TEST_PACKAGE",
+                                BuildInfoFileKey.TESTDIR_IMAGE.getFileKey(),
+                                BuildInfoFileKey.TESTDIR_IMAGE.getFileKey()),
                         InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
         }
@@ -264,7 +272,7 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
     @VisibleForTesting
     void setNewDeviceImage(IBuildInfo buildInfo, File newDeviceDir)
             throws TargetSetupError, IOException {
-        CLog.d(
+        CLog.i(
                 "Before mixing kernel, the device image %s is of size %d",
                 buildInfo.getFile(BuildInfoFileKey.DEVICE_IMAGE.getFileKey()).toString(),
                 buildInfo.getFile(BuildInfoFileKey.DEVICE_IMAGE.getFileKey()).length());
@@ -282,7 +290,7 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
         buildInfo.getFile(BuildInfoFileKey.DEVICE_IMAGE.getFileKey()).delete();
         FileUtil.hardlinkFile(newDeviceImage, new File(deviceImagePath));
 
-        CLog.d(
+        CLog.i(
                 "After mixing kernel, the device image %s is of size %d",
                 buildInfo.getFile(BuildInfoFileKey.DEVICE_IMAGE.getFileKey()).toString(),
                 buildInfo.getFile(BuildInfoFileKey.DEVICE_IMAGE.getFileKey()).length());
