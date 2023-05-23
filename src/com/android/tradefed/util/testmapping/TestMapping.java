@@ -455,7 +455,6 @@ public class TestMapping {
      * @param matchedPatternPaths The {@link Set<String>} to file paths matched patterns.
      * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
      */
-    @SuppressWarnings("StreamResourceLeak")
     public Set<TestInfo> getTests(
             IBuildInfo buildInfo,
             String testGroup,
@@ -471,17 +470,13 @@ public class TestMapping {
             zipFile = buildInfo.getFile(TEST_MAPPINGS_ZIP);
         }
         File testMappingsDir = extractTestMappingsZip(zipFile);
-        Stream<Path> stream = null;
-        try {
+        Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
+        try (Stream<Path> stream =
+                mTestMappingRelativePaths.isEmpty()
+                        ? Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS)
+                        : getAllTestMappingPaths(testMappingsRootPath).stream()) {
             mergeTestMappingZips(buildInfo, extraZipNames, zipFile, testMappingsDir);
-            Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
             Set<String> disabledTests = getDisabledTests(testMappingsRootPath, testGroup);
-            if (mTestMappingRelativePaths.isEmpty()) {
-                stream = Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS);
-            }
-            else {
-                stream = getAllTestMappingPaths(testMappingsRootPath).stream();
-            }
             stream.filter(path -> path.getFileName().toString().equals(TEST_MAPPING))
                     .forEach(
                             path ->
@@ -502,9 +497,6 @@ public class TestMapping {
                             "IO exception (%s) when reading tests from TEST_MAPPING files (%s)",
                             e.getMessage(), testMappingsDir.getAbsolutePath()), e);
         } finally {
-            if (stream != null) {
-                stream.close();
-            }
             FileUtil.recursiveDelete(testMappingsDir);
         }
 
@@ -579,13 +571,10 @@ public class TestMapping {
      * @return A {@code Map<String, Set<TestInfo>>} of tests in the given directory and its child
      *     directories.
      */
-    @SuppressWarnings("StreamResourceLeak")
     public Map<String, Set<TestInfo>> getAllTests(File testMappingsDir) {
         Map<String, Set<TestInfo>> allTests = new HashMap<String, Set<TestInfo>>();
-        Stream<Path> stream = null;
-        try {
-            Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
-            stream = Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS);
+        Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
+        try (Stream<Path> stream = Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS)) {
             stream.filter(path -> path.getFileName().toString().equals(TEST_MAPPING))
                     .forEach(
                             path ->
@@ -597,10 +586,6 @@ public class TestMapping {
                             "IO exception (%s) when reading tests from TEST_MAPPING files (%s)",
                             e.getMessage(), testMappingsDir.getAbsolutePath()),
                     e);
-        } finally {
-            if (stream != null) {
-                stream.close();
-            }
         }
         return allTests;
     }
