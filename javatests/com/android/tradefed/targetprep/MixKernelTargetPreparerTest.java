@@ -79,12 +79,18 @@ public class MixKernelTargetPreparerTest {
     @Test
     public void testCopyLabelFileToDir() throws Exception {
         File tmpDir = FileUtil.createTempDir("tmpdir");
-        File srcFile = FileUtil.createTempFile("Image", ".gz", tmpDir);
+        File srcFile1 = FileUtil.createTempFile("Image", ".gz", tmpDir);
+        File srcFile2 = FileUtil.createTempFile("oriole-img-9089658", ".zip", tmpDir);
         MixKernelTargetPreparer mk = new MixKernelTargetPreparer();
         try {
-            mk.copyLabelFileToDir("{kernel}Image.gz", srcFile, tmpDir);
+            mk.copyLabelFileToDir("{kernel}Image.gz", srcFile1, tmpDir);
+            mk.copyLabelFileToDir("{device}some-img-001{zip}", srcFile2, tmpDir);
             if (FileUtil.findFile(tmpDir, "Image.gz") == null) {
-                Assert.fail(String.format("Copy file %s to %s/Imag.gz failed", srcFile, tmpDir));
+                Assert.fail(String.format("Copy file %s to %s/Imag.gz failed", srcFile1, tmpDir));
+            }
+            if (FileUtil.findFile(tmpDir, "some-img-001.zip") == null) {
+                Assert.fail(
+                        String.format("Copy file %s to %s/some-img-001 failed", srcFile1, tmpDir));
             }
         } finally {
             FileUtil.recursiveDelete(tmpDir);
