@@ -201,7 +201,7 @@ public class TestDeviceOptions {
     @Option(
             name = "enable-device-connection",
             description = "Use the new Connection descriptor for devices.")
-    private boolean mEnableConnectionFeature = false;
+    private boolean mEnableConnectionFeature = true;
 
     // ====================== Options Related to Virtual Devices ======================
     @Option(
@@ -428,9 +428,7 @@ public class TestDeviceOptions {
         return mAdbCommandTimeout;
     }
 
-    /**
-     * @return the timeout to send a command in msecs.
-     */
+    /** Sets the timeout to send a command in msecs. */
     public void setAdbCommandTimeout(long adbCommandTimeout) {
         mAdbCommandTimeout = adbCommandTimeout;
     }
@@ -953,6 +951,10 @@ public class TestDeviceOptions {
     /** Return whether or not we should use the new connection feature. */
     public boolean shouldUseConnection() {
         return mEnableConnectionFeature;
+    }
+
+    public void setUseConnection(boolean useConnection) {
+        mEnableConnectionFeature = useConnection;
     }
 }
 
