@@ -55,6 +55,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NoDeviceException;
 import com.android.tradefed.device.NullDevice;
+import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.error.HarnessRuntimeException;
@@ -489,6 +490,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
         private final IDeviceManager mDeviceManager;
         private boolean mDeviceReleased = false;
+        private Map<ITestDevice, FreeDeviceState> mDevicesStates = null;
 
         FreeDeviceHandler(IDeviceManager deviceManager, IScheduledInvocationListener... listeners) {
             super(listeners);
@@ -501,6 +503,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             if (mDeviceReleased) {
                 return;
             }
+            mDevicesStates = devicesStates;
             for (ITestDevice device : context.getDevices()) {
                 mDeviceManager.freeDevice(device, devicesStates.get(device));
                 if (device instanceof IManagedTestDevice) {
@@ -514,6 +517,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         @Override
         public void invocationComplete(
                 IInvocationContext context, Map<ITestDevice, FreeDeviceState> devicesStates) {
+            if (mDevicesStates != null) {
+                devicesStates = mDevicesStates;
+            }
             for (ITestInvocationListener listener : getListeners()) {
                 try {
                     ((IScheduledInvocationListener) listener)
@@ -985,10 +991,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         for (ITestDevice device : context.getDevices()) {
             deviceStates.put(device, FreeDeviceState.AVAILABLE);
         }
+        if (context.wasReleasedEarly()) {
+            // Logic was already used, no need to run through it again.
+            return deviceStates;
+        }
 
         for (ITestDevice device : context.getDevices()) {
-            if (device.getIDevice() instanceof StubDevice
-                    && !(device.getIDevice() instanceof FastbootDevice)) {
+            if ((device.getIDevice() instanceof StubDevice
+                            && !(device.getIDevice() instanceof FastbootDevice))
+                    || device instanceof RemoteAndroidDevice) {
                 // Never release stub and Tcp devices, otherwise they will disappear
                 // during deallocation since they are only placeholder.
                 deviceStates.put(device, FreeDeviceState.AVAILABLE);
