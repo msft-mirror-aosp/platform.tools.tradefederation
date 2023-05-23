@@ -171,7 +171,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     private final CountDownLatch mRunLatch;
 
     /** Maximum time to wait for adb to initialize and get the physical devices discovered */
-    private static final long ADB_INIT_TIME_MS = 500;
+    private static final long ADB_INIT_TIME_MS = 25;
 
     /** used to assign unique ids to each CommandTracker created */
     private int mCurrentCommandId = 0;
