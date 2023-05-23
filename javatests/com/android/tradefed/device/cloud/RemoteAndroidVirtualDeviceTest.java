@@ -94,6 +94,8 @@ public class RemoteAndroidVirtualDeviceTest {
         public TestableRemoteAndroidVirtualDevice() {
             super(mMockIDevice, mMockStateMonitor, mMockDvcMonitor);
             mOptions = new TestDeviceOptions();
+            // Disable connection to test the internal codepath
+            mOptions.setUseConnection(false);
         }
 
         @Override
