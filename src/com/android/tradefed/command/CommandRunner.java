@@ -22,12 +22,16 @@ import com.android.tradefed.clearcut.TerminateClearcutClient;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.NoDeviceException;
+import com.android.tradefed.invoker.tracing.ActiveTrace;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.testtype.suite.TestSuiteInfo;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.SerializationUtil;
-import com.android.tradefed.testtype.suite.TestSuiteInfo;
+import com.android.tradefed.util.SystemUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -189,8 +193,22 @@ public class CommandRunner {
     }
 
     public static void main(final String[] mainArgs) {
+        long pid = ProcessHandle.current().pid();
+        long tid = Thread.currentThread().getId();
+        ActiveTrace trace = null;
+        // Enable Full Tradefed tracing in local mode only for now
+        if (SystemUtil.isLocalMode()) {
+            trace = TracingLogger.createActiveTrace(pid, tid, true);
+            trace.startTracing(false);
+        }
         CommandRunner console = new CommandRunner();
-        console.run(mainArgs);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("end_to_end_command")) {
+            console.run(mainArgs);
+        } finally {
+            if (trace != null) {
+                trace.finalizeTracing();
+            }
+        }
         System.exit(console.getErrorCode().getCodeValue());
     }
 
