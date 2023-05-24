@@ -753,6 +753,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 if (trace != null) {
                     File traceFile = trace.finalizeTracing();
                     if (traceFile != null) {
+                        ActiveTrace main = TracingLogger.getMainTrace();
+                        if (main != null) {
+                            main.addSubprocessTrace(traceFile);
+                        }
                         logTrace(traceFile, config);
                     }
                 }
@@ -1348,8 +1352,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         for (Map.Entry<ExecutableCommand, IInvocationContext> cmdDeviceEntry :
                 scheduledCommandMap.entrySet()) {
             ExecutableCommand cmd = cmdDeviceEntry.getKey();
-            startInvocation(
-                    cmdDeviceEntry.getValue(), cmd, new FreeDeviceHandler(getDeviceManager()));
+            try (CloseableTraceScope ignored = new CloseableTraceScope("startInvocation")) {
+                startInvocation(
+                        cmdDeviceEntry.getValue(), cmd, new FreeDeviceHandler(getDeviceManager()));
+            }
             cmd.getCommandTracker().incrementScheduledCount();
             if (cmd.isLoopMode()
                     && cmd.getCommandTracker().getScheduledCount() < cmd.getMaxLoopCount()) {
