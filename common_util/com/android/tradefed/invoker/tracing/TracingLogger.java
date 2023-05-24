@@ -35,19 +35,33 @@ public class TracingLogger {
      * @param tid Current thread id
      */
     public static ActiveTrace createActiveTrace(long pid, long tid) {
+        return createActiveTrace(pid, tid, false);
+    }
+
+    public static ActiveTrace createActiveTrace(long pid, long tid, boolean mainProcess) {
         ThreadGroup group = Thread.currentThread().getThreadGroup();
         synchronized (mPerGroupActiveTrace) {
-            ActiveTrace trace = new ActiveTrace(pid, tid);
+            ActiveTrace trace = new ActiveTrace(pid, tid, mainProcess);
             mPerGroupActiveTrace.put(group, trace);
             return trace;
+        }
+    }
+
+    /** If it exists, returns the current trace of the Tradefed process itself. */
+    public static ActiveTrace getMainTrace() {
+        synchronized (mPerGroupActiveTrace) {
+            for (ActiveTrace t : mPerGroupActiveTrace.values()) {
+                if (t.isMainTradefedProcess()) {
+                    return t;
+                }
+            }
+            return null;
         }
     }
 
     /**
      * Sets the currently active trace for an invocation.
      *
-     * @param pid Current process id
-     * @param tid Current thread id
      * @return the previous active trace or {@code null} if there was none.
      */
     @Nullable
