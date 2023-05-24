@@ -31,6 +31,7 @@ import com.android.tradefed.device.IDeviceMonitor.DeviceLister;
 import com.android.tradefed.device.IManagedTestDevice.DeviceEventResponse;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
 import com.android.tradefed.host.IHostOptions;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ILogRegistry.EventType;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -274,9 +275,6 @@ public class DeviceManager implements IDeviceManager {
             // don't set fastboot enabled bit until mFastbootListeners has been initialized
             mFastbootEnabled = true;
             deviceFactory.setFastbootEnabled(mFastbootEnabled);
-            // Populate the fastboot devices
-            // TODO: remove when refactoring fastboot handling
-            addFastbootDevices();
             CLog.d("Using Fastboot from: '%s'", getFastbootPath());
         } else {
             CLog.w("Fastboot is not available.");
@@ -287,7 +285,10 @@ public class DeviceManager implements IDeviceManager {
         }
 
         // don't start adding devices until fastboot support has been established
-        startAdbBridgeAndDependentServices();
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("startAdbBridgeAndDependentServices")) {
+            startAdbBridgeAndDependentServices();
+        }
         // We change the state of some mutable properties quite often so we can't keep this caching
         // for our invocations.
         PropertyFetcher.enableCachingMutableProps(false);
@@ -320,13 +321,15 @@ public class DeviceManager implements IDeviceManager {
         }
 
         mAdbBridge.init(false /* client support */, mAdbPath);
-        addEmulators();
-        addNullDevices();
-        addTcpDevices();
-        addGceDevices();
-        addRemoteDevices();
-        addLocalVirtualDevices();
-        addNetworkDevices();
+        try (CloseableTraceScope add = new CloseableTraceScope("add_devices")) {
+            addEmulators();
+            addNullDevices();
+            addTcpDevices();
+            addGceDevices();
+            addRemoteDevices();
+            addLocalVirtualDevices();
+            addNetworkDevices();
+        }
 
         List<IMultiDeviceRecovery> recoverers = getGlobalConfig().getMultiDeviceRecoveryHandlers();
         if (recoverers != null && !recoverers.isEmpty()) {
@@ -592,17 +595,6 @@ public class DeviceManager implements IDeviceManager {
             mManagedDeviceList.handleDeviceEvent(d, DeviceEvent.FORCE_AVAILABLE);
         } else {
             CLog.e("Could not create stub device");
-        }
-    }
-
-    private void addFastbootDevices() {
-        final FastbootHelper fastboot = new FastbootHelper(getRunUtil(), getFastbootPath());
-        Set<String> serials = fastboot.getDevices();
-        for (String serial : serials) {
-            FastbootDevice d = new FastbootDevice(serial);
-            if (mGlobalDeviceFilter != null && mGlobalDeviceFilter.matches(d)) {
-                addAvailableDevice(d);
-            }
         }
     }
 
