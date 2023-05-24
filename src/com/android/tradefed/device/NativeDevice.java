@@ -3322,6 +3322,8 @@ public class NativeDevice
                 }
             }
         } finally {
+            // Invalidate cache after reboots
+            mPropertiesCache.invalidateAll();
             long elapsed = System.currentTimeMillis() - startTime;
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.POSTBOOT_SETUP_TIME, elapsed);
