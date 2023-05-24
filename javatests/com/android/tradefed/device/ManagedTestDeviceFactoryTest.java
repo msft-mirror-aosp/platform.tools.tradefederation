@@ -17,10 +17,6 @@ package com.android.tradefed.device;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
@@ -34,8 +30,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import java.util.concurrent.TimeUnit;
 
 /** Unit Tests for {@link ManagedTestDeviceFactory} */
 @RunWith(JUnit4.class)
@@ -57,31 +51,31 @@ public class ManagedTestDeviceFactoryTest {
     @Test
     public void testIsSerialTcpDevice() {
         String input = "127.0.0.1:5555";
-        assertTrue(mFactory.isTcpDeviceSerial(input));
+        assertTrue(ManagedTestDeviceFactory.isTcpDeviceSerial(input));
     }
 
     @Test
     public void testIsSerialTcpDevice_localhost() {
         String input = "localhost:54014";
-        assertTrue(mFactory.isTcpDeviceSerial(input));
+        assertTrue(ManagedTestDeviceFactory.isTcpDeviceSerial(input));
     }
 
     @Test
     public void testIsSerialTcpDevice_notTcp() {
         String input = "00bf84d7d084cc84";
-        assertFalse(mFactory.isTcpDeviceSerial(input));
+        assertFalse(ManagedTestDeviceFactory.isTcpDeviceSerial(input));
     }
 
     @Test
     public void testIsSerialTcpDevice_malformedPort() {
         String input = "127.0.0.1:999989";
-        assertFalse(mFactory.isTcpDeviceSerial(input));
+        assertFalse(ManagedTestDeviceFactory.isTcpDeviceSerial(input));
     }
 
     @Test
     public void testIsSerialTcpDevice_nohost() {
         String input = ":5555";
-        assertFalse(mFactory.isTcpDeviceSerial(input));
+        assertFalse(ManagedTestDeviceFactory.isTcpDeviceSerial(input));
     }
 
     @Test
@@ -100,97 +94,5 @@ public class ManagedTestDeviceFactoryTest {
 
         IManagedTestDevice result = mFactory.createDevice(mMockIDevice);
         assertTrue(result instanceof NestedRemoteDevice);
-    }
-
-    /**
-     * Test that {@link ManagedTestDeviceFactory#checkFrameworkSupport(IDevice)} is true when the
-     * device returns a proper 'pm' path.
-     */
-    @Test
-    public void testFrameworkAvailable() throws Exception {
-        final CollectingOutputReceiver cor = new CollectingOutputReceiver();
-        mFactory =
-                new ManagedTestDeviceFactory(true, mMockDeviceManager, mMockDeviceMonitor) {
-                    @Override
-                    protected CollectingOutputReceiver createOutputReceiver() {
-                        String response = ManagedTestDeviceFactory.EXPECTED_RES + "\n";
-                        cor.addOutput(response.getBytes(), 0, response.length());
-                        return cor;
-                    }
-                };
-        when(mMockIDevice.getState()).thenReturn(DeviceState.ONLINE);
-        String expectedCmd =
-                String.format(
-                        ManagedTestDeviceFactory.CHECK_PM_CMD,
-                        ManagedTestDeviceFactory.EXPECTED_RES);
-
-        assertTrue(mFactory.checkFrameworkSupport(mMockIDevice));
-        verify(mMockIDevice, times(1))
-                .executeShellCommand(
-                        eq(expectedCmd), eq(cor), anyLong(), eq(TimeUnit.MILLISECONDS));
-    }
-
-    /**
-     * Test that {@link ManagedTestDeviceFactory#checkFrameworkSupport(IDevice)} is false when the
-     * device does not have the 'pm' binary.
-     */
-    @Test
-    public void testFrameworkNotAvailable() throws Exception {
-        final CollectingOutputReceiver cor = new CollectingOutputReceiver();
-        mFactory =
-                new ManagedTestDeviceFactory(true, mMockDeviceManager, mMockDeviceMonitor) {
-                    @Override
-                    protected CollectingOutputReceiver createOutputReceiver() {
-                        String response = "ls: /system/bin/pm: No such file or directory\n";
-                        cor.addOutput(response.getBytes(), 0, response.length());
-                        return cor;
-                    }
-                };
-        when(mMockIDevice.getState()).thenReturn(DeviceState.ONLINE);
-        String expectedCmd =
-                String.format(
-                        ManagedTestDeviceFactory.CHECK_PM_CMD,
-                        ManagedTestDeviceFactory.EXPECTED_RES);
-
-        assertFalse(mFactory.checkFrameworkSupport(mMockIDevice));
-        verify(mMockIDevice, times(1))
-                .executeShellCommand(
-                        eq(expectedCmd), eq(cor), anyLong(), eq(TimeUnit.MILLISECONDS));
-    }
-
-    /**
-     * Test that {@link ManagedTestDeviceFactory#checkFrameworkSupport(IDevice)} is retrying because
-     * device doesn't return a proper answer. It should return True for default value.
-     */
-    @Test
-    public void testCheckFramework_emptyReturns() throws Exception {
-        final CollectingOutputReceiver cor = new CollectingOutputReceiver();
-        mFactory =
-                new ManagedTestDeviceFactory(true, mMockDeviceManager, mMockDeviceMonitor) {
-                    @Override
-                    protected CollectingOutputReceiver createOutputReceiver() {
-                        String response = "";
-                        cor.addOutput(response.getBytes(), 0, response.length());
-                        return cor;
-                    }
-
-                    @Override
-                    protected IRunUtil getRunUtil() {
-                        return mMockRunUtil;
-                    }
-                };
-
-        when(mMockIDevice.getSerialNumber()).thenReturn("SERIAL");
-        when(mMockIDevice.getState()).thenReturn(DeviceState.ONLINE);
-        String expectedCmd =
-                String.format(
-                        ManagedTestDeviceFactory.CHECK_PM_CMD,
-                        ManagedTestDeviceFactory.EXPECTED_RES);
-
-        assertTrue(mFactory.checkFrameworkSupport(mMockIDevice));
-        verify(mMockRunUtil, times(ManagedTestDeviceFactory.FRAMEWORK_CHECK_MAX_RETRY)).sleep(500);
-        verify(mMockIDevice, times(ManagedTestDeviceFactory.FRAMEWORK_CHECK_MAX_RETRY))
-                .executeShellCommand(
-                        eq(expectedCmd), eq(cor), anyLong(), eq(TimeUnit.MILLISECONDS));
     }
 }
