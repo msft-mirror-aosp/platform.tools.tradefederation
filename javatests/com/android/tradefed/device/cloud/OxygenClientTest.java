@@ -91,6 +91,22 @@ public class OxygenClientTest {
                 "boot-5.10.img"
             };
 
+    private static final String[] BOOTLOADER_PARAMS =
+            new String[] {
+                "--bootloader-build-target",
+                "testBootloaderTarget",
+                "--bootloader-build-id",
+                "BL1234567"
+            };
+
+    private static final String[] HOST_PACKAGE_PARAMS =
+            new String[] {
+                "--host_package_build_target",
+                "testHostPackageTarget",
+                "--host_package_build_id",
+                "HP1234567"
+            };
+
     private static final String EXPECTED_OUTPUT =
             "debug info lease result: session_id:\"6a6a744e-0653-4926-b7b8-535d121a2fc9\"\n"
                     + " server_url:\"10.0.80.227\"\n"
@@ -383,6 +399,130 @@ public class OxygenClientTest {
                                                 + " -boot_build_target testBootTarget"
                                                 + " -boot_build_id B1234567"
                                                 + " -boot_artifact boot-5.10.img"
+                                                + " -target_region us-east"
+                                                + " -accounting_user random1234@space.com"
+                                                + " -lease_length_secs 3600"
+                                                + " -arg1 value1"
+                                                + " -user_debug_info work_unit_id:some_id";
+                                assertEquals(expectedCmdString, cmdString);
+
+                                CommandResult res = new CommandResult();
+                                res.setStatus(CommandStatus.SUCCESS);
+                                res.setStdout("");
+                                res.setStderr(EXPECTED_OUTPUT);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions, attributes);
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
+        assertEquals(res.getStderr(), EXPECTED_OUTPUT);
+    }
+
+    @Test
+    public void testLeaseWithBootloader() throws Exception {
+        mTestDeviceOptions =
+                new TestDeviceOptions() {
+                    @Override
+                    public List<String> getGceDriverParams() {
+                        List<String> paramsList = new ArrayList<>();
+                        paramsList.addAll(Arrays.asList(GCE_DEVICE_PARAMS));
+                        paramsList.addAll(Arrays.asList(BOOTLOADER_PARAMS));
+                        return paramsList;
+                    }
+                };
+        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
+        setter.setOptionValue("oxygen-target-region", "us-east");
+        setter.setOptionValue("oxygen-lease-length", "60m");
+        setter.setOptionValue("oxygen-device-size", "large");
+        setter.setOptionValue("oxygen-service-address", "10.1.23.45");
+        setter.setOptionValue("gce-boot-timeout", "900000");
+        setter.setOptionValue("oxygen-accounting-user", "random1234@space.com");
+        setter.setOptionValue("extra-oxygen-args", "arg1", "value1");
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                List<String> cmd = new ArrayList<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    cmd.add(mock.getArgument(i));
+                                }
+                                String cmdString = String.join(" ", cmd);
+                                String expectedCmdString =
+                                        mOxygenBinaryFile.getAbsolutePath()
+                                                + " -lease -build_branch testBranch -build_target"
+                                                + " target -build_id P1234567"
+                                                + " -system_build_target testSystemTarget"
+                                                + " -system_build_id S1234567"
+                                                + " -kernel_build_target testKernelTarget"
+                                                + " -kernel_build_id K1234567"
+                                                + " -bootloader_build_target testBootloaderTarget"
+                                                + " -bootloader_build_id BL1234567"
+                                                + " -target_region us-east"
+                                                + " -accounting_user random1234@space.com"
+                                                + " -lease_length_secs 3600"
+                                                + " -arg1 value1"
+                                                + " -user_debug_info work_unit_id:some_id";
+                                assertEquals(expectedCmdString, cmdString);
+
+                                CommandResult res = new CommandResult();
+                                res.setStatus(CommandStatus.SUCCESS);
+                                res.setStdout("");
+                                res.setStderr(EXPECTED_OUTPUT);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions, attributes);
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
+        assertEquals(res.getStderr(), EXPECTED_OUTPUT);
+    }
+
+    @Test
+    public void testLeaseWithHostPackage() throws Exception {
+        mTestDeviceOptions =
+                new TestDeviceOptions() {
+                    @Override
+                    public List<String> getGceDriverParams() {
+                        List<String> paramsList = new ArrayList<>();
+                        paramsList.addAll(Arrays.asList(GCE_DEVICE_PARAMS));
+                        paramsList.addAll(Arrays.asList(HOST_PACKAGE_PARAMS));
+                        return paramsList;
+                    }
+                };
+        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
+        setter.setOptionValue("oxygen-target-region", "us-east");
+        setter.setOptionValue("oxygen-lease-length", "60m");
+        setter.setOptionValue("oxygen-device-size", "large");
+        setter.setOptionValue("oxygen-service-address", "10.1.23.45");
+        setter.setOptionValue("gce-boot-timeout", "900000");
+        setter.setOptionValue("oxygen-accounting-user", "random1234@space.com");
+        setter.setOptionValue("extra-oxygen-args", "arg1", "value1");
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                List<String> cmd = new ArrayList<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    cmd.add(mock.getArgument(i));
+                                }
+                                String cmdString = String.join(" ", cmd);
+                                String expectedCmdString =
+                                        mOxygenBinaryFile.getAbsolutePath()
+                                                + " -lease -build_branch testBranch -build_target"
+                                                + " target -build_id P1234567"
+                                                + " -system_build_target testSystemTarget"
+                                                + " -system_build_id S1234567"
+                                                + " -kernel_build_target testKernelTarget"
+                                                + " -kernel_build_id K1234567"
+                                                + " -host_package_build_target testHostPackageTarget"
+                                                + " -host_package_build_id HP1234567"
                                                 + " -target_region us-east"
                                                 + " -accounting_user random1234@space.com"
                                                 + " -lease_length_secs 3600"
