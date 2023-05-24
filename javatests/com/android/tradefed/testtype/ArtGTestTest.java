@@ -67,14 +67,10 @@ public class ArtGTestTest {
         final String nativeTestPath = ArtChrootPreparer.CHROOT_PATH;
         final String test1 = "test1";
         final String testPath1 = String.format("%s/%s", nativeTestPath, test1);
+        final String findCmd = String.format("find %s -type f -executable", nativeTestPath);
 
         when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(testPath1)).thenReturn(false);
-        when(mMockITestDevice.isExecutable(testPath1)).thenReturn(true);
-
-        String[] files = new String[] {"test1"};
-        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+        when(mMockITestDevice.executeShellCommand(findCmd)).thenReturn(testPath1);
 
         mGTest.run(mTestInfo, mMockInvocationListener);
 

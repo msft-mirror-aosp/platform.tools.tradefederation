@@ -37,7 +37,9 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** A Test that runs a native test package on given device. */
@@ -165,48 +167,26 @@ public class GTest extends GTestBase implements IDeviceTest {
     void doRunAllTestsInSubdirectory(
             String root, ITestDevice testDevice, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        if (testDevice.isDirectory(root)) {
-            if (!shouldRunFolder(root)) {
-                return;
+        Set<String> includeDirectories = new LinkedHashSet<>();
+        // Decide to filter out a folder sub-path based on whether we should enforce the
+        // current abi under test.
+        if (mFilterAbiFolders && getAbi() != null) {
+            includeDirectories.add(AbiUtils.getArchForAbi(getAbi().getName()));
+        }
+        String[] executableFiles = getExecutableFiles(testDevice, root, includeDirectories);
+        for (String filePath : executableFiles) {
+            if (shouldRunFile(filePath)) {
+                IShellOutputReceiver resultParser =
+                        createResultParser(getFileName(filePath), listener);
+                String flags = getAllGTestFlags(filePath);
+                CLog.i("Running gtest %s %s on %s", filePath, flags, testDevice.getSerialNumber());
+                if (isEnableXmlOutput()) {
+                    runTestXml(testDevice, filePath, flags, listener);
+                } else {
+                    runTest(testDevice, resultParser, filePath, flags);
+                }
             }
-            // recursively run tests in all subdirectories
-            for (String child : testDevice.getChildren(root)) {
-                doRunAllTestsInSubdirectory(root + "/" + child, testDevice, listener);
-            }
-        } else {
-            if (!shouldRunFile(root)) {
-                return;
-            }
-            IShellOutputReceiver resultParser = createResultParser(getFileName(root), listener);
-            String flags = getAllGTestFlags(root);
-            CLog.i("Running gtest %s %s on %s", root, flags, testDevice.getSerialNumber());
-            if (isEnableXmlOutput()) {
-                runTestXml(testDevice, root, flags, listener);
-            } else {
-                runTest(testDevice, resultParser, root, flags);
-            }
         }
-    }
-
-    /**
-     * Decide to filter out a folder subpath based on whether or not we should enforce the current
-     * abi under test.
-     */
-    boolean shouldRunFolder(String path) {
-        if (!mFilterAbiFolders) {
-            return true;
-        }
-        if (getAbi() == null) {
-            return true;
-        }
-        String fileName = getFileName(path);
-        if (!AbiUtils.getArchSupported().contains(fileName)) {
-            return true;
-        }
-        if (fileName.equals(AbiUtils.getArchForAbi(getAbi().getName()))) {
-            return true;
-        }
-        return false;
     }
 
     String getFileName(String fullPath) {
@@ -227,7 +207,7 @@ public class GTest extends GTestBase implements IDeviceTest {
      * @param fullPath the full path of the file in question
      * @return true if we should execute the said file.
      */
-    protected boolean shouldRunFile(String fullPath) throws DeviceNotAvailableException {
+    protected boolean shouldRunFile(String fullPath) {
         if (fullPath == null || fullPath.isEmpty()) {
             return false;
         }
@@ -236,11 +216,6 @@ public class GTest extends GTestBase implements IDeviceTest {
         String moduleName = getTestModule();
         String fileName = getFileName(fullPath);
         if (moduleName != null && !fileName.startsWith(moduleName)) {
-            return false;
-        }
-
-        // skip any file that's not executable
-        if (!mDevice.isExecutable(fullPath)) {
             return false;
         }
 
@@ -451,5 +426,32 @@ public class GTest extends GTestBase implements IDeviceTest {
 
     public boolean isRebootBeforeTestEnabled() {
         return mRebootBeforeTest;
+    }
+
+    /**
+     * Searches directories recursively to find all executable files.
+     *
+     * @param device {@link ITestDevice} where the search will occur.
+     * @param deviceFilePath is the path on the device where to do the search.
+     * @param includedDirectories Set of directory names that must be included in the search.
+     * @return Array of string containing all the executable file paths on the device.
+     * @throws DeviceNotAvailableException
+     */
+    private String[] getExecutableFiles(
+            ITestDevice device, String deviceFilePath, Set<String> includedDirectories)
+            throws DeviceNotAvailableException {
+        String cmd = String.format("find %s -type f -executable", deviceFilePath);
+
+        if (includedDirectories != null && !includedDirectories.isEmpty()) {
+            for (String directoryName : includedDirectories) {
+                cmd += String.format(" -path */%s/*", directoryName);
+            }
+        }
+
+        String output = device.executeShellCommand(cmd);
+        if (output.trim().isEmpty()) {
+            return new String[0];
+        }
+        return output.split("\r?\n");
     }
 }
