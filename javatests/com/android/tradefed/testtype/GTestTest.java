@@ -24,7 +24,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.android.ddmlib.FileListingService;
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.OptionSetter;
@@ -136,19 +135,11 @@ public class GTestTest {
         final String test2 = "test2";
         final String testPath1 = String.format("%s/%s", nativeTestPath, test1);
         final String testPath2 = String.format("%s/%s", nativeTestPath, test2);
+        final String findCmd = String.format("find %s -type f -executable", nativeTestPath);
+        final String findCmdOut = testPath1 + "\n" + testPath2;
 
-        MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
         when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(testPath1)).thenReturn(false);
-        // report the file as executable
-        when(mMockITestDevice.isExecutable(testPath1)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(testPath2)).thenReturn(false);
-        // report the file as executable
-        when(mMockITestDevice.isExecutable(testPath2)).thenReturn(true);
-
-        String[] files = new String[] {"test1", "test2"};
-        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+        when(mMockITestDevice.executeShellCommand(findCmd)).thenReturn(findCmdOut);
 
         mGTest.run(mTestInfo, mMockInvocationListener);
 
@@ -174,22 +165,16 @@ public class GTestTest {
         final String test1 = "arm/test1";
         final String test2 = "arm64/test2";
         final String testPath2 = String.format("%s/%s", nativeTestPath, test2);
+        final String findCmd =
+                String.format("find %s -type f -executable -path */arm64/*", nativeTestPath);
+        final String findCmdOut = testPath2;
+
         MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
         mGTest.setAbi(new Abi("arm64-v8a", "64"));
 
         when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(nativeTestPath + "/arm")).thenReturn(true);
 
-        when(mMockITestDevice.isDirectory(nativeTestPath + "/arm64")).thenReturn(true);
-        when(mMockITestDevice.isDirectory(testPath2)).thenReturn(false);
-        // report the file as executable
-        when(mMockITestDevice.isExecutable(testPath2)).thenReturn(true);
-
-        String[] dirs = new String[] {"arm", "arm64"};
-        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(dirs);
-        String[] testFiles = new String[] {"test2"};
-        when(mMockITestDevice.getChildren(nativeTestPath + "/arm64")).thenReturn(testFiles);
+        when(mMockITestDevice.executeShellCommand(findCmd)).thenReturn(findCmdOut);
 
         mGTest.run(mTestInfo, mMockInvocationListener);
 
@@ -207,65 +192,21 @@ public class GTestTest {
     public void testRun_moduleName() throws DeviceNotAvailableException {
         final String nativeTestPath = GTest.DEFAULT_NATIVETEST_PATH;
         final String module = "test1";
-        final String notModule = "not_a_test";
         final String modulePath = String.format("%s/%s", nativeTestPath, module);
-        final String notModulePath = String.format("%s/%s", nativeTestPath, notModule);
+        final String findCmd = String.format("find %s -type f -executable", modulePath);
+        final String findCmdOut = modulePath;
 
         MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, module, "not_a_test");
 
         mGTest.setModuleName(module);
 
         when(mMockITestDevice.doesFileExist(modulePath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(modulePath)).thenReturn(false);
-        when(mMockITestDevice.doesFileExist(notModulePath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(notModulePath)).thenReturn(false);
-
-        // report the file as executable
-        when(mMockITestDevice.isExecutable(modulePath)).thenReturn(true);
-        when(mMockITestDevice.isExecutable(notModulePath)).thenReturn(true);
-
+        when(mMockITestDevice.executeShellCommand(findCmd)).thenReturn(findCmdOut);
         mGTest.run(mTestInfo, mMockInvocationListener);
 
         verify(mMockITestDevice)
                 .executeShellCommand(
                         Mockito.contains(modulePath),
-                        Mockito.same(mMockReceiver),
-                        Mockito.anyLong(),
-                        (TimeUnit) Mockito.any(),
-                        Mockito.anyInt());
-    }
-
-    /** Test the run method for a test in a subdirectory */
-    @Test
-    public void testRun_nested() throws DeviceNotAvailableException {
-        final String nativeTestPath = GTest.DEFAULT_NATIVETEST_PATH;
-        final String subFolderName = "subFolder";
-        final String test1 = "test1";
-        final String test1Path =
-                String.format(
-                        "%s%s%s%s%s",
-                        nativeTestPath,
-                        FileListingService.FILE_SEPARATOR,
-                        subFolderName,
-                        FileListingService.FILE_SEPARATOR,
-                        test1);
-        MockitoFileUtil.setMockDirPath(mMockITestDevice, nativeTestPath, subFolderName, test1);
-        when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(nativeTestPath + "/" + subFolderName)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(test1Path)).thenReturn(false);
-        // report the file as executable
-        when(mMockITestDevice.isExecutable(test1Path)).thenReturn(true);
-        String[] files = new String[] {subFolderName};
-        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
-        String[] files2 = new String[] {"test1"};
-        when(mMockITestDevice.getChildren(nativeTestPath + "/" + subFolderName)).thenReturn(files2);
-
-        mGTest.run(mTestInfo, mMockInvocationListener);
-
-        verify(mMockITestDevice)
-                .executeShellCommand(
-                        Mockito.contains(test1Path),
                         Mockito.same(mMockReceiver),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
@@ -281,15 +222,13 @@ public class GTestTest {
     private void doTestFilter(String filterString) throws DeviceNotAvailableException {
         String nativeTestPath = GTest.DEFAULT_NATIVETEST_PATH;
         String testPath = nativeTestPath + "/test1";
+        String findCmd = String.format("find %s -type f -executable", nativeTestPath);
+        String findCmdOut = testPath;
         // configure the mock file system to have a single test
         MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, "test1");
         when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(testPath)).thenReturn(false);
-        // report the file as executable
-        when(mMockITestDevice.isExecutable(testPath)).thenReturn(true);
-        String[] files = new String[] {"test1"};
-        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+
+        when(mMockITestDevice.executeShellCommand(findCmd)).thenReturn(findCmdOut);
 
         mGTest.run(mTestInfo, mMockInvocationListener);
 
@@ -372,15 +311,10 @@ public class GTestTest {
 
         String nativeTestPath = GTest.DEFAULT_NATIVETEST_PATH;
         String testPath = nativeTestPath + "/" + testName;
-        // configure the mock file system to have a single test
-        MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, "test1");
+        String findCmd = String.format("find %s -type f -executable", nativeTestPath);
+        String findCmdOut = testPath;
         when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(testPath)).thenReturn(false);
-        // report the file as executable
-        when(mMockITestDevice.isExecutable(testPath)).thenReturn(true);
-        String[] files = new String[] {testName};
-        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+        when(mMockITestDevice.executeShellCommand(findCmd)).thenReturn(findCmdOut);
         // Expect push of script file
         when(mMockITestDevice.pushString(Mockito.<String>any(), Mockito.eq(deviceScriptPath)))
                 .thenReturn(Boolean.TRUE);
@@ -470,16 +404,12 @@ public class GTestTest {
         final String test2 = "test2";
         final String testPath1 = String.format("%s/%s", nativeTestPath, test1);
         final String testPath2 = String.format("%s/%s", nativeTestPath, test2);
+        final String findCmd = String.format("find %s -type f -executable", nativeTestPath);
+        final String findCmdOut = testPath1 + "\n" + testPath2;
 
         MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
         when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(testPath1)).thenReturn(false);
-        when(mMockITestDevice.isExecutable(testPath1)).thenReturn(true);
-        when(mMockITestDevice.isDirectory(testPath2)).thenReturn(false);
-        when(mMockITestDevice.isExecutable(testPath2)).thenReturn(true);
-        String[] files = new String[] {"test1", "test2"};
-        when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+        when(mMockITestDevice.executeShellCommand(findCmd)).thenReturn(findCmdOut);
 
         when(mMockITestDevice.pullFile((String) Mockito.any(), (File) Mockito.any()))
                 .thenReturn(true);
