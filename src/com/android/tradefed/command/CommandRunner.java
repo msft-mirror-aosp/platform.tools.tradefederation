@@ -40,6 +40,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 
 import sun.misc.Signal;
 import sun.misc.SignalHandler;
@@ -110,20 +111,16 @@ public class CommandRunner {
      */
     public void run(String[] args) {
         try {
-            initGlobalConfig(args);
+            try (CloseableTraceScope ignored = new CloseableTraceScope("initGlobalConfig")) {
+                initGlobalConfig(args);
+            }
 
             ClearcutClient client = createClient();
             Runtime.getRuntime().addShutdownHook(new TerminateClearcutClient(client));
             client.notifyTradefedStartEvent();
-            TradefedFeatureServer server = null;
             if (System.getenv("START_FEATURE_SERVER") != null) {
-                try {
-                    server = new TradefedFeatureServer();
-                    server.start();
-                    GlobalConfiguration.getInstance().setTradefedFeatureServer(server);
-                } catch (RuntimeException e) {
-                    System.out.println(String.format("Error starting feature server: %s", e));
-                }
+                // Starting the server takes 100ms so do it in parallel
+                CompletableFuture.supplyAsync(() -> startFeatureSever());
             }
 
             mScheduler = getCommandScheduler();
@@ -235,5 +232,16 @@ public class CommandRunner {
         public int getCodeValue() {
             return mCodeValue;
         }
+    }
+
+    private boolean startFeatureSever() {
+        try (CloseableTraceScope f = new CloseableTraceScope("start_fr_client")) {
+            TradefedFeatureServer server = new TradefedFeatureServer();
+            server.start();
+            GlobalConfiguration.getInstance().setTradefedFeatureServer(server);
+        } catch (RuntimeException e) {
+            System.out.println(String.format("Error starting feature server: %s", e));
+        }
+        return true;
     }
 }
