@@ -1115,7 +1115,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             initLogging();
 
-            initDeviceManager();
+            try (CloseableTraceScope ignored = new CloseableTraceScope("initDeviceManager")) {
+                initDeviceManager();
+            }
 
             mStarted = true;
         }
