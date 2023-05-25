@@ -85,14 +85,14 @@ public final class MainlineModuleHandler {
             throw new IllegalArgumentException(
                     "Missing build information when enable-mainline-parameterized-modules is set.");
         }
-        String buildBranch = buildInfo.getBuildBranch();
-        String buildFlavor = buildInfo.getBuildFlavor();
-        String buildId = buildInfo.getBuildId();
-        if (buildBranch == null || buildFlavor == null || buildId == null) {
-            throw new IllegalArgumentException(
-                    "Missing required information to build the dynamic base link.");
-        }
         if (mBuildTop == null) {
+            String buildBranch = buildInfo.getBuildBranch();
+            String buildFlavor = buildInfo.getBuildFlavor();
+            String buildId = buildInfo.getBuildId();
+            if (buildBranch == null || buildFlavor == null || buildId == null) {
+                throw new IllegalArgumentException(
+                        "Missing required information to build the dynamic base link.");
+            }
             CLog.i("Building the dynamic base link based on the build information.");
             mDynamicBaseLink = String.format("ab://%s/%s/%s", buildBranch, buildFlavor, buildId);
         } else {
