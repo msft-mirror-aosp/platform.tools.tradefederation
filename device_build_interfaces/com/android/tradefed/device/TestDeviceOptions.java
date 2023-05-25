@@ -294,7 +294,7 @@ public class TestDeviceOptions {
     private boolean mUseOxygenClient = true;
 
     @Option(name = "oxygen-target-region", description = "Oxygen device target region.")
-    private String mOxygenTargetRegion = "us-west";
+    private String mOxygenTargetRegion = null;
 
     @Option(
             name = "oxygen-lease-length",

@@ -240,7 +240,7 @@ public class OxygenClient {
 
         // add oxygen side lease options
         oxygenClientArgs.add("-target_region");
-        oxygenClientArgs.add(deviceOptions.getOxygenTargetRegion());
+        oxygenClientArgs.add(OxygenUtil.getTargetRegion(deviceOptions));
         oxygenClientArgs.add("-accounting_user");
         oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
         oxygenClientArgs.add("-lease_length_secs");
@@ -320,7 +320,7 @@ public class OxygenClient {
         oxygenClientArgs.add("-multidevice_size");
         oxygenClientArgs.add(String.valueOf(buildInfos.size()));
         oxygenClientArgs.add("-target_region");
-        oxygenClientArgs.add(deviceOptions.getOxygenTargetRegion());
+        oxygenClientArgs.add(OxygenUtil.getTargetRegion(deviceOptions));
         oxygenClientArgs.add("-accounting_user");
         oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
         oxygenClientArgs.add("-lease_length_secs");
