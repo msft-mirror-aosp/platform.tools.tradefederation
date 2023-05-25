@@ -142,6 +142,9 @@ public class BootstrapBuildProvider implements IDeviceBuildProvider {
                         mBranch,
                         null /* override build alias */);
             }
+        } else {
+            info.setBuildBranch(mBranch);
+            info.setBuildFlavor(mBuildTargetName);
         }
         if (mTestsDir != null && mTestsDir.isDirectory()) {
             info.setFile("testsdir", mTestsDir, info.getBuildId());
