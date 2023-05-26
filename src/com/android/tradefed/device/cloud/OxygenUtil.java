@@ -15,7 +15,7 @@
  */
 package com.android.tradefed.device.cloud;
 
-import com.android.annotations.VisibleForTesting;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -26,10 +26,15 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GCSFileDownloader;
 import com.android.tradefed.util.Pair;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.file.Files;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -45,9 +50,15 @@ import java.util.stream.Stream;
 
 /** Utility to interact with Oxygen service. */
 public class OxygenUtil {
-
     // Maximum size of tailing part of a file to search for error signature.
     private static final long MAX_FILE_SIZE_FOR_ERROR = 10 * 1024 * 1024;
+
+    // URL for retrieving instance metadata related to the computing zone.
+    private static final String ZONE_METADATA_URL =
+            "http://metadata/computeMetadata/v1/instance/zone";
+
+    // Default region if no specific zone is provided.
+    private static final String DEFAULT_REGION = "us-west";
 
     private GCSFileDownloader mDownloader;
 
@@ -332,5 +343,52 @@ public class OxygenUtil {
             CLog.e(e);
             return null;
         }
+    }
+
+    /**
+     * Retrieves the target region based on the provided device options. If the target region is
+     * explicitly set in the device options, it returns the specified region. If the target region
+     * is not set, it retrieves the region based on the instance's zone.
+     *
+     * @param deviceOptions The TestDeviceOptions object containing device options.
+     * @return The target region.
+     */
+    public static String getTargetRegion(TestDeviceOptions deviceOptions) {
+        if (deviceOptions.getOxygenTargetRegion() != null) {
+            return deviceOptions.getOxygenTargetRegion();
+        }
+        try {
+            URL url = new URL(ZONE_METADATA_URL);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestProperty("Metadata-Flavor", "Google");
+
+            StringBuilder response = new StringBuilder();
+            try (BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+            }
+
+            return getRegionFromZoneMeta(response.toString());
+        } catch (Exception e) {
+            // Error occurred while fetching zone information, fallback to default region.
+            CLog.e(e);
+            return DEFAULT_REGION;
+        }
+    }
+
+    /**
+     * Retrieves the region from a given zone string.
+     *
+     * @param zone The input zone string in the format "projects/12345/zones/us-west12-a".
+     * @return The extracted region string, e.g., "us-west12".
+     */
+    public static String getRegionFromZoneMeta(String zone) {
+        int lastSlashIndex = zone.lastIndexOf("/");
+        String region = zone.substring(lastSlashIndex + 1);
+        int lastDashIndex = region.lastIndexOf("-");
+        return region.substring(0, lastDashIndex);
     }
 }
