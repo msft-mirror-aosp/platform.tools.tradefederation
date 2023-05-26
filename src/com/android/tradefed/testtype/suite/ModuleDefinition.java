@@ -70,6 +70,7 @@ import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryPreparationDecision;
 import com.android.tradefed.retry.RetryStatistics;
+import com.android.tradefed.retry.RetryStrategy;
 import com.android.tradefed.suite.checker.ISystemStatusCheckerReceiver;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.ITargetPreparer;
@@ -624,7 +625,11 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                         mPassThroughFilters.addAll(mCurrentTestWrapper.getPassedTests());
                     }
                     // Limit escalating retries across all sub-IRemoteTests
-                    perModuleRetryQuota -= mCurrentTestWrapper.getRetryCount();
+                    if (mRetryDecision != null
+                            && RetryStrategy.RETRY_ANY_FAILURE.equals(
+                                    mRetryDecision.getRetryStrategy())) {
+                        perModuleRetryQuota -= mCurrentTestWrapper.getRetryCount();
+                    }
 
                     mExpectedTests += mCurrentTestWrapper.getExpectedTestsCount();
                     // Get information about retry
