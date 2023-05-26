@@ -56,6 +56,8 @@ public abstract class GTestBase
     static {
         // Exclude .so by default as they are not runnable.
         DEFAULT_FILE_EXCLUDE_FILTERS.add(".*\\.so");
+        // Exclude configs in case permission are wrong
+        DEFAULT_FILE_EXCLUDE_FILTERS.add(".*\\.config");
     }
 
     @Option(name = "run-disable-tests", description = "Determine to run disable tests or not.")
