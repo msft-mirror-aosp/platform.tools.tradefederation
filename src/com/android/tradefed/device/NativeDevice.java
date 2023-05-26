@@ -5114,18 +5114,21 @@ public class NativeDevice
 
     protected void initializeConnection(IBuildInfo info, MultiMap<String, String> attributes)
             throws DeviceNotAvailableException, TargetSetupError {
-        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil(), this, info, getLogger());
-        if (attributes != null) {
-            builder.addAttributes(attributes);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("initializeConnection")) {
+            ConnectionBuilder builder =
+                    new ConnectionBuilder(getRunUtil(), this, info, getLogger());
+            if (attributes != null) {
+                builder.addAttributes(attributes);
+            }
+            if (getOptions().shouldUseConnection()) {
+                mConnection = DefaultConnection.createConnection(builder);
+            } else {
+                // Use default inop connection
+                mConnection = DefaultConnection.createInopConnection(builder);
+            }
+            CLog.d("Using connection: %s", mConnection);
+            mConnection.initializeConnection();
         }
-        if (getOptions().shouldUseConnection()) {
-            mConnection = DefaultConnection.createConnection(builder);
-        } else {
-            // Use default inop connection
-            mConnection = DefaultConnection.createInopConnection(builder);
-        }
-        CLog.d("Using connection: %s", mConnection);
-        mConnection.initializeConnection();
     }
 
     /** {@inheritDoc} */
