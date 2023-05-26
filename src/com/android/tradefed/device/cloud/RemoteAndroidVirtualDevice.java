@@ -107,7 +107,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
             mGceHandler = new GceManager(getDeviceDescriptor(), getOptions(), info);
             setFastbootEnabled(false);
 
-            long remainingTime = 0;
+            long remainingTime = getOptions().getGceCmdTimeout();
             // mGceAvd is null means the device hasn't been launched.
             if (mGceAvd != null) {
                 CLog.d("skipped GCE launch because GceAvdInfo %s is already set", mGceAvd);
@@ -129,8 +129,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
                                 TimeUnit.MILLISECONDS.toSeconds(queueTime));
                     }
                     launchGce(info, attributes);
-                    remainingTime =
-                            getOptions().getGceCmdTimeout() - (getCurrentTime() - startTime);
+                    remainingTime = remainingTime - (getCurrentTime() - startTime);
                 } finally {
                     if (GlobalConfiguration.getInstance()
                                     .getHostOptions()
@@ -141,7 +140,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
                                 .returnPermit(PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP);
                     }
                 }
-                if (remainingTime < 0) {
+                if (remainingTime <= 0) {
                     throw new DeviceNotAvailableException(
                             String.format(
                                     "Failed to launch GCE after %sms",
