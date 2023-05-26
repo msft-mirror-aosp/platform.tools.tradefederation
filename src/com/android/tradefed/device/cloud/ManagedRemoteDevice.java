@@ -73,10 +73,12 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
             IDevice device, IDeviceStateMonitor stateMonitor, IDeviceMonitor allocationMonitor) {
         super(device, stateMonitor, allocationMonitor);
     }
-
+    
     @Override
     public void preInvocationSetup(IBuildInfo info, MultiMap<String, String> attributes)
             throws TargetSetupError, DeviceNotAvailableException {
+        // TODO: Check if it's possible to refactor remote device to handle connection
+        getOptions().setUseConnection(false);
         super.preInvocationSetup(info, attributes);
         mGceAvd = null;
         // First get the options
