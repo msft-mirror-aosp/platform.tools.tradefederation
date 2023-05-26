@@ -1613,7 +1613,7 @@ public class ClusterCommandSchedulerTest {
 
     /** Tests upload events with specific host state. */
     @Test
-    public void testUploadHostEventWithState() {
+    public void testUploadHostEventWithState() throws Exception {
         ArgumentCaptor<ClusterHostEvent> capture = ArgumentCaptor.forClass(ClusterHostEvent.class);
 
         // Ignore exceptions here, only test uploading host states.
@@ -1626,11 +1626,7 @@ public class ClusterCommandSchedulerTest {
         assertNotNull(hostEvent.getHostName());
         assertNotNull(hostEvent.getTimestamp());
         assertEquals(CommandScheduler.HostState.RUNNING, hostEvent.getHostState());
-        stopScheduler(scheduler);
-    }
-
-    @SuppressWarnings("deprecation")
-    private void stopScheduler(TestableClusterCommandScheduler scheduler) {
-        scheduler.stop(); // stop is deprecated.
+        scheduler.shutdown();
+        scheduler.join();
     }
 }
