@@ -114,7 +114,7 @@ public class BaseRetryDecision
             description =
                     "If a test in the list, skip retrying it. The format is the same as the "
                             + "SuiteTestFilter.")
-    private Set<String> mSkipRetryingList = new LinkedHashSet<>();
+    private Set<String> mSkipRetryingSet = new LinkedHashSet<>();
 
     @Option(
             name = "updated-retry-reporting",
@@ -168,7 +168,7 @@ public class BaseRetryDecision
 
     @Override
     public void addToSkipRetryList(String filterEntry) {
-        mSkipRetryingList.add(filterEntry);
+        mSkipRetryingSet.add(filterEntry);
     }
 
     @Override
@@ -358,6 +358,10 @@ public class BaseRetryDecision
         return mRetryIsolationGrade;
     }
 
+    public Set<String> getSkipRetrySet() {
+        return mSkipRetryingSet;
+    }
+
     private static Set<TestDescription> getPassedTestCases(List<TestRunResult> previousResults) {
         Set<TestDescription> previousPassed = new LinkedHashSet<>();
         for (TestRunResult run : previousResults) {
@@ -386,7 +390,7 @@ public class BaseRetryDecision
         String name = moduleIdFilter.getName();
 
         boolean shouldSkip = false;
-        for (String skipTest : mSkipRetryingList) {
+        for (String skipTest : mSkipRetryingSet) {
             // Only handle module level exclusion
             SuiteTestFilter skipRetryingFilter = SuiteTestFilter.createFrom(skipTest);
             String skipAbi = skipRetryingFilter.getAbi();
