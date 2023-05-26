@@ -643,7 +643,10 @@ public class InvocationExecution implements IInvocationExecution {
             }
         }
         if (multiDeviceCount != null && multiDeviceCount != 1 && allVirtualDevices) {
-            runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope("runMultiVirtualDevicesPreInvocationSetup")) {
+                runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
+            }
         } else {
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope("device_pre_invocation_setup")) {
