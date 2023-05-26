@@ -756,9 +756,6 @@ public class CommandOptions implements ICommandOptions {
         List<String> tags = new ArrayList<>();
         // Convert a few of the enabled features into easily consumable tag that can be displayed
         // to see if a feature is enabled.
-        if (filterPreviousPassedTests()) {
-            tags.add("incremental_retry");
-        }
         if (mAutoCollectors.contains(AutoLogCollector.DEVICE_TRACE)) {
             tags.add("device_tracing_enable");
         }
