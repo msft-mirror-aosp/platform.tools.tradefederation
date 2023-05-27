@@ -243,7 +243,7 @@ public class GceManager {
             throws TargetSetupError {
         List<GceAvdInfo> gceAvdInfos;
         long startTime = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignore = new CloseableTraceScope("startMultiDevicesGce")) {
             OxygenClient oxygenClient =
                     new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             CommandResult res =
@@ -265,7 +265,7 @@ public class GceManager {
     /**
      * Attempt to start a gce instance with Oxygen.
      *
-     * @param loggger The {@link ITestLogger} where to log the device launch logs.
+     * @param logger The {@link ITestLogger} where to log the device launch logs.
      * @param attributes attributes associated with current invocation
      * @return a {@link GceAvdInfo} describing the GCE instance.
      */
