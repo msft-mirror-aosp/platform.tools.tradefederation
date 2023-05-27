@@ -21,6 +21,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -150,5 +152,20 @@ public class OxygenUtilTest {
         } finally {
             FileUtil.recursiveDelete(tmpDir);
         }
+    }
+
+    @Test
+    public void testGetTargetRegion_WithExplicitRegion() throws Exception {
+        TestDeviceOptions deviceOptions = new TestDeviceOptions();
+        OptionSetter setter = new OptionSetter(deviceOptions);
+        setter.setOptionValue("oxygen-target-region", "us-east");
+        String targetRegion = OxygenUtil.getTargetRegion(deviceOptions);
+        assertEquals("us-east", targetRegion);
+    }
+
+    @Test
+    public void testGetRegionFromZoneMeta() throws Exception {
+        assertEquals(
+                "us-west12", OxygenUtil.getRegionFromZoneMeta("projects/12345/zones/us-west12-a"));
     }
 }
