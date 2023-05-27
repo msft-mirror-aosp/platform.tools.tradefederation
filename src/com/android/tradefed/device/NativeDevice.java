@@ -5121,6 +5121,7 @@ public class NativeDevice
                 builder.addAttributes(attributes);
             }
             if (getOptions().shouldUseConnection()) {
+                addExtraConnectionBuilderArgs(builder);
                 mConnection = DefaultConnection.createConnection(builder);
             } else {
                 // Use default inop connection
@@ -5129,6 +5130,10 @@ public class NativeDevice
             CLog.d("Using connection: %s", mConnection);
             mConnection.initializeConnection();
         }
+    }
+
+    protected void addExtraConnectionBuilderArgs(ConnectionBuilder builder) {
+        // Empty by default
     }
 
     /** {@inheritDoc} */
