@@ -107,7 +107,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
             mGceHandler = new GceManager(getDeviceDescriptor(), getOptions(), info);
             setFastbootEnabled(false);
 
-            long remainingTime = 0;
+            long remainingTime = getOptions().getGceCmdTimeout();
             // mGceAvd is null means the device hasn't been launched.
             if (mGceAvd != null) {
                 CLog.d("skipped GCE launch because GceAvdInfo %s is already set", mGceAvd);
@@ -129,8 +129,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
                                 TimeUnit.MILLISECONDS.toSeconds(queueTime));
                     }
                     launchGce(info, attributes);
-                    remainingTime =
-                            getOptions().getGceCmdTimeout() - (getCurrentTime() - startTime);
+                    remainingTime = remainingTime - (getCurrentTime() - startTime);
                 } finally {
                     if (GlobalConfiguration.getInstance()
                                     .getHostOptions()
@@ -141,7 +140,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
                                 .returnPermit(PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP);
                     }
                 }
-                if (remainingTime < 0) {
+                if (remainingTime <= 0) {
                     throw new DeviceNotAvailableException(
                             String.format(
                                     "Failed to launch GCE after %sms",
@@ -330,6 +329,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
         TargetSetupError exception = null;
         for (int attempt = 0; attempt < getOptions().getGceMaxAttempt(); attempt++) {
             try {
+                // Clear exception before each attempt.
+                exception = null;
                 mGceAvd =
                         getGceHandler()
                                 .startGce(
@@ -339,7 +340,12 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
                                         attributes,
                                         getLogger());
                 if (mGceAvd != null) {
-                    break;
+                    if (GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
+                        break;
+                    }
+                    CLog.w(
+                            "Failed to start AVD with attempt: %s out of %s, error: %s",
+                            attempt + 1, getOptions().getGceMaxAttempt(), mGceAvd.getErrors());
                 }
             } catch (TargetSetupError tse) {
                 CLog.w(
@@ -353,20 +359,23 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
                 }
             }
         }
-        if (mGceAvd == null) {
+        if (exception != null) {
             throw exception;
         } else {
             CLog.i("GCE AVD has been started: %s", mGceAvd);
+            ErrorIdentifier errorIdentifier =
+                    (mGceAvd.getErrorType() != null)
+                            ? mGceAvd.getErrorType()
+                            : DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE;
             if (GceAvdInfo.GceStatus.BOOT_FAIL.equals(mGceAvd.getStatus())) {
                 String errorMsg =
                         String.format(
                                 "Device failed to boot. Error from Acloud: %s",
                                 mGceAvd.getErrors());
-                ErrorIdentifier errorIdentifier =
-                        (mGceAvd.getErrorType() != null)
-                                ? mGceAvd.getErrorType()
-                                : DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE;
                 throw new TargetSetupError(errorMsg, getDeviceDescriptor(), errorIdentifier);
+            } else if (GceAvdInfo.GceStatus.FAIL.equals(mGceAvd.getStatus())) {
+                throw new TargetSetupError(
+                        mGceAvd.getErrors(), getDeviceDescriptor(), errorIdentifier);
             }
         }
         createGceSshMonitor(this, buildInfo, mGceAvd.hostAndPort(), this.getOptions());

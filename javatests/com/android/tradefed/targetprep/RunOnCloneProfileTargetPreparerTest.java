@@ -120,21 +120,6 @@ public final class RunOnCloneProfileTargetPreparerTest {
     }
 
     @Test
-    public void setUp_cloneUserType_createsCloneProfileAndStartsUserWithoutWait() throws Exception {
-        String expectedCreateUserCommand =
-                "pm create-user --profileOf 0 --user-type"
-                        + " android.os.usertype.profile.CLONE user";
-        when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
-                .thenReturn(CREATED_USER_10_MESSAGE);
-        when(mTestInfo.getDevice().getApiLevel()).thenReturn(33).thenReturn(28);
-
-        mPreparer.setUp(mTestInfo);
-
-        verify(mTestInfo.getDevice()).executeShellCommand(expectedCreateUserCommand);
-        verify(mTestInfo.getDevice()).startUser(10, /* waitFlag= */ false);
-    }
-
-    @Test
     public void setUp_profileAlreadyExists_doesNotCreateProfile() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
         userInfos.put(

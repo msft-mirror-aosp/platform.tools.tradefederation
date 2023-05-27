@@ -201,7 +201,7 @@ public class TestDeviceOptions {
     @Option(
             name = "enable-device-connection",
             description = "Use the new Connection descriptor for devices.")
-    private boolean mEnableConnectionFeature = false;
+    private boolean mEnableConnectionFeature = true;
 
     // ====================== Options Related to Virtual Devices ======================
     @Option(
@@ -287,13 +287,14 @@ public class TestDeviceOptions {
             description = "Whether or not to use virtual devices created by Oxygen.")
     private boolean mUseOxygen = false;
 
+    @Deprecated
     @Option(
             name = "use-oxygen-client",
             description = "Whether or not to use Oxygen client tool to create virtual devices.")
-    private boolean mUseOxygenClient = false;
+    private boolean mUseOxygenClient = true;
 
     @Option(name = "oxygen-target-region", description = "Oxygen device target region.")
-    private String mOxygenTargetRegion = "us-west";
+    private String mOxygenTargetRegion = null;
 
     @Option(
             name = "oxygen-lease-length",
@@ -427,9 +428,7 @@ public class TestDeviceOptions {
         return mAdbCommandTimeout;
     }
 
-    /**
-     * @return the timeout to send a command in msecs.
-     */
+    /** Sets the timeout to send a command in msecs. */
     public void setAdbCommandTimeout(long adbCommandTimeout) {
         mAdbCommandTimeout = adbCommandTimeout;
     }
@@ -648,6 +647,11 @@ public class TestDeviceOptions {
     /** Returns the instance type of virtual device that should be created */
     public InstanceType getInstanceType() {
         return mInstanceType;
+    }
+
+    /** Sets the instance type of virtual device that should be created */
+    public void setInstanceType(InstanceType type) {
+        mInstanceType = type;
     }
 
     /** Returns whether or not the Tradefed content provider can be used to push/pull files. */
@@ -899,6 +903,7 @@ public class TestDeviceOptions {
     }
 
     /** Returns true if we want TradeFed directly call Oxygen to lease a device. */
+    @Deprecated
     public boolean useOxygenProxy() {
         return mUseOxygenClient;
     }
@@ -946,6 +951,10 @@ public class TestDeviceOptions {
     /** Return whether or not we should use the new connection feature. */
     public boolean shouldUseConnection() {
         return mEnableConnectionFeature;
+    }
+
+    public void setUseConnection(boolean useConnection) {
+        mEnableConnectionFeature = useConnection;
     }
 }
 

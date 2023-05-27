@@ -54,7 +54,6 @@ public class RunUtil implements IRunUtil {
 
     private static final int POLL_TIME_INCREASE_FACTOR = 4;
     private static final long THREAD_JOIN_POLL_INTERVAL = 30 * 1000;
-    private static final long IO_THREAD_JOIN_INTERVAL = 5 * 1000;
     private static final long PROCESS_DESTROY_TIMEOUT_SEC = 2;
     private static IRunUtil sDefaultInstance = null;
     private File mWorkingDir = null;
@@ -786,16 +785,10 @@ public class RunUtil implements IRunUtil {
                     rc = mProcess.waitFor();
                     // wait for stdout and stderr to be read
                     if (stdoutThread != null) {
-                        stdoutThread.join(IO_THREAD_JOIN_INTERVAL);
-                        if (stdoutThread.isAlive()) {
-                            CLog.d("stdout read thread %s still alive.", stdoutThread.toString());
-                        }
+                        stdoutThread.join();
                     }
                     if (stderrThread != null) {
-                        stderrThread.join(IO_THREAD_JOIN_INTERVAL);
-                        if (stderrThread.isAlive()) {
-                            CLog.d("stderr read thread %s still alive.", stderrThread.toString());
-                        }
+                        stderrThread.join();
                     }
                 } finally {
                     rc = (rc != null) ? rc : 1; // In case of interruption ReturnCode is null

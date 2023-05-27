@@ -143,8 +143,8 @@ public class HostOptions implements IHostOptions {
     @Option(
             name = "cache-size-limit",
             description =
-                    "The maximum allowed size(bytes) of the local file cache. (default: 20GB)")
-    private Long mCacheSizeLimit = 20L * 1024L * 1024L * 1024L;
+                    "The maximum allowed size(bytes) of the local file cache. (default: 15GB)")
+    private Long mCacheSizeLimit = 15L * 1024L * 1024L * 1024L;
 
     @Option(
             name = "test-phase-timeout",
@@ -163,6 +163,11 @@ public class HostOptions implements IHostOptions {
             name = "cl-flashstation",
             description = "cl_flashstation script stored in remote GCS bucket.")
     private File mClFlashstation = new File("/tradefed/cl_flashstation");
+
+    @Option(
+            name = "disable-host-metric-reporting",
+            description = "Feature flag to disable the support for host metric reporting.")
+    private boolean mDisableHostMetricReporting = false;
 
     private Map<PermitLimitType, Semaphore> mConcurrentLocks = new HashMap<>();
     private Map<PermitLimitType, Integer> mInternalConcurrentLimits = new HashMap<>();
@@ -400,5 +405,11 @@ public class HostOptions implements IHostOptions {
     @Override
     public File getClFlashstation() {
         return mClFlashstation;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isHostMetricReportingDisabled() {
+        return mDisableHostMetricReporting;
     }
 }

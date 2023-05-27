@@ -20,6 +20,7 @@ import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.CommandLineBuildInfoBuilder;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.clearcut.ClearcutClient;
 import com.android.tradefed.command.CommandRunner.ExitCode;
 import com.android.tradefed.command.CommandScheduler;
 import com.android.tradefed.command.ICommandOptions;
@@ -102,6 +103,7 @@ import com.android.tradefed.util.PrettyPrintDelimiter;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunInterruptedException;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 
@@ -206,6 +208,7 @@ public class TestInvocation implements ITestInvocation {
     private ExitCode mExitCode = ExitCode.NO_ERROR;
     private Throwable mExitStack = null;
     private EventsLoggerListener mEventsLogger = null;
+    private ClearcutClient mClient = null;
 
     /**
      * Display a log message informing the user of a invocation being started.
@@ -370,7 +373,7 @@ public class TestInvocation implements ITestInvocation {
                         bugreportName = INVOCATION_ENDED_BUGREPORT_NAME;
                     }
                 }
-                if (exception == null) {
+                if (exception == null && !SystemUtil.isLocalMode()) {
                     try (CloseableTraceScope ignore =
                             new CloseableTraceScope("responsiveness_check")) {
                         exception = bareMinimumResponsiveness(context.getDevices());
@@ -420,10 +423,12 @@ public class TestInvocation implements ITestInvocation {
                     reportRecoveryLogs(context.getDevices(), listener);
                 }
             }
-            try (CloseableTraceScope ignore =
-                    new CloseableTraceScope(InvocationMetricKey.check_device_availability.name())) {
+            try (CloseableTraceScope ignore = new CloseableTraceScope("logExecuteShellCommand")) {
                 // Save the device executeShellCommand logs
                 logExecuteShellCommand(context.getDevices(), listener);
+            }
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope(InvocationMetricKey.check_device_availability.name())) {
                 if (exception == null) {
                     exception = mUnavailableMonitor.getUnavailableException();
                     if (exception != null) {
@@ -431,7 +436,9 @@ public class TestInvocation implements ITestInvocation {
                         CLog.e(exception);
                     }
                 }
-                if (exception == null) {
+                if (SystemUtil.isLocalMode()) {
+                    CLog.d("Skipping check for device availability for local run.");
+                } else if (exception == null) {
                     CLog.d("Checking that devices are online.");
                     exception = checkDevicesAvailable(context.getDevices(), listener);
                 } else {
@@ -478,9 +485,9 @@ public class TestInvocation implements ITestInvocation {
                     }
                 }
 
-                Map<ITestDevice, FreeDeviceState> devicesStates =
-                        handleAndLogReleaseState(context, exception, tearDownException);
                 if (config.getCommandOptions().earlyDeviceRelease()) {
+                    Map<ITestDevice, FreeDeviceState> devicesStates =
+                            handleAndLogReleaseState(context, exception, tearDownException);
                     context.markReleasedEarly();
                     for (IScheduledInvocationListener scheduleListener : mSchedulerListeners) {
                         scheduleListener.releaseDevices(context, devicesStates);
@@ -599,22 +606,29 @@ public class TestInvocation implements ITestInvocation {
             IInvocationExecution invocationPath,
             ITestInvocationListener listener)
             throws Throwable {
-        getRunUtil().allowInterrupt(true);
-        logDeviceBatteryLevel(testInfo.getContext(), "initial -> setup");
-        CurrentInvocation.setActionInProgress(ActionInProgress.SETUP);
-        invocationPath.doSetup(testInfo, config, listener);
-        // Don't run tests if notified of soft/forced shutdown
-        if (mSoftStopRequestTime != null || mStopRequestTime != null) {
-            // Throw an exception so that it can be reported as an invocation failure
-            // and command can be un-leased
-            throw new RunInterruptedException(
-                    "Notified of shut down. Will not run tests",
-                    InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+        long startTimeNano = System.nanoTime();
+        try {
+            getRunUtil().allowInterrupt(true);
+            logDeviceBatteryLevel(testInfo.getContext(), "initial -> setup");
+            CurrentInvocation.setActionInProgress(ActionInProgress.SETUP);
+            invocationPath.doSetup(testInfo, config, listener);
+            // Don't run tests if notified of soft/forced shutdown
+            if (mSoftStopRequestTime != null || mStopRequestTime != null) {
+                // Throw an exception so that it can be reported as an invocation failure
+                // and command can be un-leased
+                throw new RunInterruptedException(
+                        "Notified of shut down. Will not run tests",
+                        InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+            }
+            logDeviceBatteryLevel(testInfo.getContext(), "setup -> test");
+            mTestStarted = true;
+            CurrentInvocation.setActionInProgress(ActionInProgress.TEST);
+            invocationPath.runTests(testInfo, config, listener);
+        } finally {
+            if (mClient != null) {
+                mClient.notifyTestRunFinished(startTimeNano);
+            }
         }
-        logDeviceBatteryLevel(testInfo.getContext(), "setup -> test");
-        mTestStarted = true;
-        CurrentInvocation.setActionInProgress(ActionInProgress.TEST);
-        invocationPath.runTests(testInfo, config, listener);
         logDeviceBatteryLevel(testInfo.getContext(), "after test");
         CurrentInvocation.setActionInProgress(ActionInProgress.UNSET);
     }
@@ -781,6 +795,10 @@ public class TestInvocation implements ITestInvocation {
      */
     @VisibleForTesting
     void logDeviceBatteryLevel(IInvocationContext context, String event) {
+        if (SystemUtil.isLocalMode()) {
+            CLog.d("Skipping battery level log for local invocation on event: %s.", event);
+            return;
+        }
         for (ITestDevice testDevice : context.getDevices()) {
             if (testDevice == null) {
                 continue;
@@ -793,19 +811,21 @@ public class TestInvocation implements ITestInvocation {
                 // Vritual devices have a fake battery there is no point in logging it.
                 continue;
             }
-            Integer batteryLevel = testDevice.getBattery();
-            if (batteryLevel == null) {
-                CLog.v("Failed to get battery level for %s", testDevice.getSerialNumber());
-                continue;
+            try (CloseableTraceScope ignored = new CloseableTraceScope("log_battery")) {
+                Integer batteryLevel = testDevice.getBattery();
+                if (batteryLevel == null) {
+                    CLog.v("Failed to get battery level for %s", testDevice.getSerialNumber());
+                    continue;
+                }
+                CLog.v("%s - %s - %d%%", BATT_TAG, event, batteryLevel);
+                context.getBuildInfo(testDevice)
+                        .addBuildAttribute(
+                                String.format(
+                                        BATTERY_ATTRIBUTE_FORMAT_KEY,
+                                        testDevice.getSerialNumber(),
+                                        event),
+                                batteryLevel.toString());
             }
-            CLog.v("%s - %s - %d%%", BATT_TAG, event, batteryLevel);
-            context.getBuildInfo(testDevice)
-                    .addBuildAttribute(
-                            String.format(
-                                    BATTERY_ATTRIBUTE_FORMAT_KEY,
-                                    testDevice.getSerialNumber(),
-                                    event),
-                            batteryLevel.toString());
         }
     }
 
@@ -1316,7 +1336,9 @@ public class TestInvocation implements ITestInvocation {
             }
             // Once we have all the information we can start the invocation.
             if (!deviceInit) {
-                startInvocation(config, context, listener);
+                try (CloseableTraceScope s = new CloseableTraceScope("startInvocation")) {
+                    startInvocation(config, context, listener);
+                }
             }
             if (!RunMode.DELEGATED_INVOCATION.equals(mode)
                     && (config.getTests() == null || config.getTests().isEmpty())) {
@@ -1713,6 +1735,10 @@ public class TestInvocation implements ITestInvocation {
             RecoveryMode current = device.getRecoveryMode();
             device.setRecoveryMode(RecoveryMode.NONE);
             try {
+                if (device instanceof NativeDevice) {
+                    ((NativeDevice) device).invalidatePropertyCache();
+                }
+                device.waitForDeviceOnline(60000L);
                 device.getApiLevel();
             } catch (DeviceNotAvailableException e) {
                 return e;
@@ -1876,6 +1902,11 @@ public class TestInvocation implements ITestInvocation {
         info.mExitCode = this.mExitCode;
         info.mStack = this.mExitStack;
         return info;
+    }
+
+    @Override
+    public void setClearcutClient(ClearcutClient client) {
+        mClient = client;
     }
 
     /** Returns true if the invocation is currently within a subprocess scope. */

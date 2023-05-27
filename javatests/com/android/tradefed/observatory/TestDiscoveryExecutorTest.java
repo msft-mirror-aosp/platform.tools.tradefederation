@@ -19,6 +19,7 @@ package com.android.tradefed.observatory;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.Configuration;
@@ -28,7 +29,9 @@ import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.keystore.DryRunKeyStore;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -40,6 +43,7 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -58,7 +62,7 @@ public class TestDiscoveryExecutorTest {
 
     @Before
     public void setUp() throws Exception {
-        mMockConfigFactory = Mockito.mock(ConfigurationFactory.class);
+        mMockConfigFactory = Mockito.spy((ConfigurationFactory) ConfigurationFactory.getInstance());
         mMockedConfiguration = Mockito.mock(Configuration.class);
         mTestDiscoveryExecutor =
                 new TestDiscoveryExecutor() {
@@ -66,9 +70,16 @@ public class TestDiscoveryExecutorTest {
                     IConfigurationFactory getConfigurationFactory() {
                         return mMockConfigFactory;
                     }
+
+                    @Override
+                    protected String getEnvironment(String var) {
+                        return "not-null";
+                    }
                 };
-        when(mMockConfigFactory.createConfigurationFromArgs(Mockito.any()))
-                .thenReturn(mMockedConfiguration);
+        doReturn(mMockedConfiguration)
+                .when(mMockConfigFactory)
+                .createConfigurationFromArgs(
+                        Mockito.any(), Mockito.isNull(), Mockito.isA(DryRunKeyStore.class));
     }
 
     public static class DiscoverablePreparer extends BaseTargetPreparer
@@ -202,6 +213,54 @@ public class TestDiscoveryExecutorTest {
         }
     }
 
+    /** Test the executor when a metadata include filter option is in the config. */
+    @Test
+    public void testDiscoverDependencies_fallback() throws Exception {
+        File rootDir = FileUtil.createTempDir("discovery-tests");
+        try {
+            File mediaConfig = new File(rootDir, "CtsMedia.config");
+            FileUtil.writeToFile(
+                    "<configuration><option name=\"config-descriptor:metadata\" key=\"component\""
+                            + " value=\"media\" /></configuration>",
+                    mediaConfig);
+            File secondNotRunConfig = new File(rootDir, "another.config");
+            FileUtil.writeToFile("<configuration></configuration>", secondNotRunConfig);
+            mTestDiscoveryExecutor =
+                    new TestDiscoveryExecutor() {
+                        @Override
+                        IConfigurationFactory getConfigurationFactory() {
+                            return mMockConfigFactory;
+                        }
+
+                        @Override
+                        protected String getEnvironment(String var) {
+                            return rootDir.getAbsolutePath();
+                        }
+                    };
+
+            // Mock to return some include filters
+            BaseTestSuite test1 = new BaseTestSuite();
+            Set<String> emptyFilters = new HashSet<>();
+
+            // Metadata include filter exist
+            Map<String, String> map = new HashMap<>();
+            map.put("component", "media");
+            test1.addModuleMetadataIncludeFilters(new MultiMap<>(map));
+            test1.setIncludeFilter(emptyFilters);
+
+            List<IRemoteTest> testList = new ArrayList<>();
+            testList.add(test1);
+            when(mMockedConfiguration.getTests()).thenReturn(testList);
+
+            String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
+            String expected =
+                    "{\"TestModules\":[\"CtsMedia\"],\"TestDependencies\":[],\"PartialFallback\":\"true\"}";
+            assertEquals(expected, output);
+        } finally {
+            FileUtil.recursiveDelete(rootDir);
+        }
+    }
+
     @Test
     public void testDiscoverDependencies_metadataAndIncludeFilters() throws Exception {
         // Mock to return some include filters
@@ -265,18 +324,12 @@ public class TestDiscoveryExecutorTest {
         testList.add(test1);
         when(mMockedConfiguration.getTests()).thenReturn(testList);
 
-        try {
-            String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
-            String expected =
-                    "{\"TestModules\":[\"TestModule1\",\"TestModule2\"],\"TestDependencies\":[]}";
-            assertEquals(expected, output);
+        String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
+        String expected =
+                "{\"TestModules\":[\"TestModule1\",\"TestModule2\"],\"TestDependencies\":[]}";
+        assertEquals(expected, output);
 
-            // In test discovery, the loadTest() should have been called exactly once
-            Mockito.verify(test1, Mockito.times(1)).loadTests();
-            // In test discovery, the flag should have been set to true
-            Mockito.verify(test1, Mockito.times(1)).setTestDiscovery(true);
-        } catch (Exception e) {
-            fail(String.format("Should not throw exception %s", e.getMessage()));
-        }
+        // In test discovery, the loadTest() should have been called exactly once
+        Mockito.verify(test1, Mockito.times(1)).loadTestInfos();
     }
 }

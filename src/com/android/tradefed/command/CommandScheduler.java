@@ -55,6 +55,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NoDeviceException;
 import com.android.tradefed.device.NullDevice;
+import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.error.HarnessRuntimeException;
@@ -97,6 +98,7 @@ import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TableFormatter;
 import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.hostmetric.IHostMonitor;
@@ -169,7 +171,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     private final CountDownLatch mRunLatch;
 
     /** Maximum time to wait for adb to initialize and get the physical devices discovered */
-    private static final long ADB_INIT_TIME_MS = 500;
+    private static final long ADB_INIT_TIME_MS = 25;
 
     /** used to assign unique ids to each CommandTracker created */
     private int mCurrentCommandId = 0;
@@ -488,6 +490,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
         private final IDeviceManager mDeviceManager;
         private boolean mDeviceReleased = false;
+        private Map<ITestDevice, FreeDeviceState> mDevicesStates = null;
 
         FreeDeviceHandler(IDeviceManager deviceManager, IScheduledInvocationListener... listeners) {
             super(listeners);
@@ -500,6 +503,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             if (mDeviceReleased) {
                 return;
             }
+            mDevicesStates = devicesStates;
             for (ITestDevice device : context.getDevices()) {
                 mDeviceManager.freeDevice(device, devicesStates.get(device));
                 if (device instanceof IManagedTestDevice) {
@@ -513,6 +517,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         @Override
         public void invocationComplete(
                 IInvocationContext context, Map<ITestDevice, FreeDeviceState> devicesStates) {
+            if (mDevicesStates != null) {
+                devicesStates = mDevicesStates;
+            }
             for (ITestInvocationListener listener : getListeners()) {
                 try {
                     ((IScheduledInvocationListener) listener)
@@ -649,6 +656,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             mStartTime = System.currentTimeMillis();
             ITestInvocation instance = getInvocation();
+            instance.setClearcutClient(mClient);
             try (CloseableTraceScope ignore = new CloseableTraceScope("init")) {
                 for (final IScheduledInvocationListener listener : mListeners) {
                     try {
@@ -691,12 +699,12 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 setLastInvocationExitCode(ExitCode.DEVICE_UNAVAILABLE, e);
                 lastInvocationSet = true;
             } catch (FatalHostError e) {
-                CLog.wtf(
-                        String.format("Fatal error occurred: %s, shutting down", e.getMessage()),
-                        e);
+                String errorMessage =
+                        String.format("Fatal error occurred: %s, shutting down", e.getMessage());
+                CLog.wtf(errorMessage, e);
                 setLastInvocationExitCode(ExitCode.FATAL_HOST_ERROR, e);
                 lastInvocationSet = true;
-                shutdown(true);
+                shutdownHard(true, errorMessage, e.getErrorId());
             } catch (Throwable e) {
                 setLastInvocationExitCode(ExitCode.THROWABLE_EXCEPTION, e);
                 lastInvocationSet = true;
@@ -745,6 +753,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 if (trace != null) {
                     File traceFile = trace.finalizeTracing();
                     if (traceFile != null) {
+                        ActiveTrace main = TracingLogger.getMainTrace();
+                        if (main != null) {
+                            main.addSubprocessTrace(traceFile);
+                        }
                         logTrace(traceFile, config);
                     }
                 }
@@ -983,10 +995,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         for (ITestDevice device : context.getDevices()) {
             deviceStates.put(device, FreeDeviceState.AVAILABLE);
         }
+        if (context.wasReleasedEarly()) {
+            // Logic was already used, no need to run through it again.
+            return deviceStates;
+        }
 
         for (ITestDevice device : context.getDevices()) {
-            if (device.getIDevice() instanceof StubDevice
-                    && !(device.getIDevice() instanceof FastbootDevice)) {
+            if ((device.getIDevice() instanceof StubDevice
+                            && !(device.getIDevice() instanceof FastbootDevice))
+                    || device instanceof RemoteAndroidDevice) {
                 // Never release stub and Tcp devices, otherwise they will disappear
                 // during deallocation since they are only placeholder.
                 deviceStates.put(device, FreeDeviceState.AVAILABLE);
@@ -995,7 +1012,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 CLog.d(
                         "TestDeviceState for releasing '%s(%s)' is '%s'",
                         device.getSerialNumber(), device.getClass(), deviceState);
-                if (!TestDeviceState.ONLINE.equals(deviceState)) {
+                if (SystemUtil.isLocalMode()) {
+                    // Locally release directly
+                    deviceStates.put(device, FreeDeviceState.AVAILABLE);
+                } else if (!TestDeviceState.ONLINE.equals(deviceState)) {
                     // If the device is offline at the end of the test
                     deviceStates.put(device, FreeDeviceState.UNAVAILABLE);
                 } else if (!device.waitForDeviceShell(30000L)) {
@@ -1095,7 +1115,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             initLogging();
 
-            initDeviceManager();
+            try (CloseableTraceScope ignored = new CloseableTraceScope("initDeviceManager")) {
+                initDeviceManager();
+            }
 
             mStarted = true;
         }
@@ -1264,6 +1286,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                 }
             }
             if (mClient != null) {
+                mClient.notifyTradefedFinishedEvent();
                 mClient.stop();
             }
         } finally {
@@ -1331,8 +1354,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         for (Map.Entry<ExecutableCommand, IInvocationContext> cmdDeviceEntry :
                 scheduledCommandMap.entrySet()) {
             ExecutableCommand cmd = cmdDeviceEntry.getKey();
-            startInvocation(
-                    cmdDeviceEntry.getValue(), cmd, new FreeDeviceHandler(getDeviceManager()));
+            try (CloseableTraceScope ignored = new CloseableTraceScope("startInvocation")) {
+                startInvocation(
+                        cmdDeviceEntry.getValue(), cmd, new FreeDeviceHandler(getDeviceManager()));
+            }
             cmd.getCommandTracker().incrementScheduledCount();
             if (cmd.isLoopMode()
                     && cmd.getCommandTracker().getScheduledCount() < cmd.getMaxLoopCount()) {
@@ -2053,7 +2078,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return mCommandTimer.isShutdown() || (mShutdownOnEmpty && getAllCommandsSize() == 0);
     }
 
-    protected synchronized boolean isShuttingDown() {
+    public synchronized boolean isShuttingDown() {
         return mCommandTimer.isShutdown() || mShutdownOnEmpty;
     }
 
@@ -2168,23 +2193,27 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         shutdownHard(true);
     }
 
-    /** {@inheritDoc} */
-    @Override
-    public synchronized void shutdownHard(boolean killAdb) {
+    private synchronized void shutdownHard(boolean killAdb, String reason, ErrorIdentifier error) {
         setHostState(HostState.KILLING);
         doShutdown();
         CLog.logAndDisplay(LogLevel.WARN, "Stopping invocation threads...");
-        String reason = "Tradefed is shutting down";
         for (InvocationThread thread : mInvocationThreadMap.values()) {
             thread.disableReporters();
             // TODO(b/118891716): Improve tear down
-            thread.stopInvocation(reason, InfraErrorIdentifier.TRADEFED_SHUTTING_DOWN);
+            thread.stopInvocation(reason, error);
         }
         if (killAdb) {
             getDeviceManager().terminateHard(reason);
         } else {
             getDeviceManager().terminate();
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public synchronized void shutdownHard(boolean killAdb) {
+        String reason = "Tradefed is shutting down";
+        shutdownHard(killAdb, reason, InfraErrorIdentifier.TRADEFED_SHUTTING_DOWN);
     }
 
     /**

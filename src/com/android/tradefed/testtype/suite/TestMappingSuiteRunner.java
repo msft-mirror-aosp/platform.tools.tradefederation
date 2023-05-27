@@ -159,9 +159,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "kernel branches. The option should only be used for kernel tests.")
     private boolean mForceFullRun = false;
 
-    /** Flag to indicate whether the test mapping suite runner is in test discovery mode. */
-    private Boolean mIsTestDiscovery = false;
-
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
@@ -173,28 +170,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         setSkipjarLoading(true);
     }
 
-    /** Set the test discovery mode flag. */
-    public void setTestDiscovery(Boolean testDiscovery) {
-        mIsTestDiscovery = testDiscovery;
-    }
-
-    /**
-     * Load the tests configuration that will be run. Each tests is defined by a {@link
-     * IConfiguration} and a unique name under which it will report results. There are 2 ways to
-     * load tests for {@link TestMappingSuiteRunner}:
-     *
-     * <p>1. --test-mapping-test-group, which specifies the group of tests in TEST_MAPPING files.
-     * The runner will parse all TEST_MAPPING files in the source code through build artifact
-     * test_mappings.zip, and load tests grouped under the given test group.
-     *
-     * <p>2. --include-filter, which specifies the name of the test to run. The use case is for
-     * presubmit check to only run a list of tests related to the Cls to be verifies. The list of
-     * tests are compiled from the related TEST_MAPPING files in modified source code.
-     *
-     * @return a map of test name to the {@link IConfiguration} object of each test.
-     */
-    @Override
-    public LinkedHashMap<String, IConfiguration> loadTests() {
+    public Set<TestInfo> loadTestInfos() {
         Set<String> includeFilter = getIncludeFilter();
         // Name of the tests
         Set<String> testNames = new HashSet<>();
@@ -231,17 +207,14 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         }
 
         if (mTestGroup != null) {
-            TestMapping.setIgnoreTestMappingImports(mIgnoreTestMappingImports);
             if (mForceFullRun) {
                 CLog.d("--force-full-run is specified, all tests in test group %s will be ran.",
                         mTestGroup);
                 mTestMappingPaths.clear();
             }
-            if (!mTestMappingPaths.isEmpty()) {
-                TestMapping.setTestMappingPaths(mTestMappingPaths);
-            }
+            TestMapping testMapping = new TestMapping(mTestMappingPaths, mIgnoreTestMappingImports);
             testInfosToRun =
-                    TestMapping.getTests(
+                    testMapping.getTests(
                             mBuildInfo,
                             mTestGroup,
                             getPrioritizeHostConfig(),
@@ -251,8 +224,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             if (!mTestModulesForced.isEmpty()) {
                 CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
                 testInfosToRun =
-                        testInfosToRun
-                                .stream()
+                        testInfosToRun.stream()
                                 .filter(testInfo -> mTestModulesForced.contains(testInfo.getName()))
                                 .collect(Collectors.toSet());
             }
@@ -275,11 +247,27 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             mTestMappingPaths.clear();
             mUseTestMappingPath = false;
         }
+        return testInfosToRun;
+    }
 
-        // In test discovery mode, abort here and the return value should not be used.
-        if (mIsTestDiscovery) {
-            return null;
-        }
+    /**
+     * Load the tests configuration that will be run. Each tests is defined by a {@link
+     * IConfiguration} and a unique name under which it will report results. There are 2 ways to
+     * load tests for {@link TestMappingSuiteRunner}:
+     *
+     * <p>1. --test-mapping-test-group, which specifies the group of tests in TEST_MAPPING files.
+     * The runner will parse all TEST_MAPPING files in the source code through build artifact
+     * test_mappings.zip, and load tests grouped under the given test group.
+     *
+     * <p>2. --include-filter, which specifies the name of the test to run. The use case is for
+     * presubmit check to only run a list of tests related to the Cls to be verifies. The list of
+     * tests are compiled from the related TEST_MAPPING files in modified source code.
+     *
+     * @return a map of test name to the {@link IConfiguration} object of each test.
+     */
+    @Override
+    public LinkedHashMap<String, IConfiguration> loadTests() {
+        Set<TestInfo> testInfosToRun = loadTestInfos();
 
         // load all the configurations with include-filter injected.
         LinkedHashMap<String, IConfiguration> testConfigs = super.loadTests();
@@ -339,6 +327,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
      *
      * @param testInfos A {@code Set<TestInfo>} containing multiple test options.
      * @param moduleConfig The {@link IConfiguration} of the module config.
+     * @param abi The {@link IAbi} of abi information.
      * @return The {@link List} that are injected with the test options.
      */
     @VisibleForTesting
@@ -391,9 +380,15 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         return tests;
     }
 
-    /** Add test mapping's path into module configuration. */
-    private void addTestSourcesToConfig(IConfiguration config, List<IRemoteTest> tests,
-            Set<String> sources) {
+    /**
+     * Add test mapping's path into module configuration.
+     *
+     * @param config The {@link IConfiguration} of the module config.
+     * @param tests The {@link List<IRemoteTest>} of the tests.
+     * @param sources The {@link Set<String>} of test mapping sources.
+     */
+    private void addTestSourcesToConfig(
+            IConfiguration config, List<IRemoteTest> tests, Set<String> sources) {
         for (IRemoteTest test : tests) {
             config.getConfigurationDescription().addMetadata(
                 Integer.toString(test.hashCode()), new ArrayList<>(sources)

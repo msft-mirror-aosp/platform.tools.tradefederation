@@ -141,6 +141,7 @@ public abstract class ITestSuite
     public static final String MODULE_METADATA_INCLUDE_FILTER = "module-metadata-include-filter";
     public static final String MODULE_METADATA_EXCLUDE_FILTER = "module-metadata-exclude-filter";
     public static final String RANDOM_SEED = "random-seed";
+    public static final String SKIP_STAGING_ARTIFACTS = "skip-staging-artifacts";
 
     private static final String PRODUCT_CPU_ABI_KEY = "ro.product.cpu.abi";
 
@@ -327,6 +328,11 @@ public abstract class ITestSuite
     private boolean mStageArtifactsViaFeature = true;
 
     @Option(
+            name = SKIP_STAGING_ARTIFACTS,
+            description = "Skip staging artifacts with remote-files if already staged.")
+    private boolean mSkipStagingArtifacts = false;
+
+    @Option(
             name = "multi-devices-modules",
             description = "Running strategy for modules that require multiple devices.")
     private MultiDeviceModuleStrategy mMultiDevicesStrategy = MultiDeviceModuleStrategy.EXCLUDE_ALL;
@@ -461,7 +467,7 @@ public abstract class ITestSuite
 
         if (mBuildInfo != null
                 && mBuildInfo.getRemoteFiles() != null
-                && mBuildInfo.getRemoteFiles().size() > 0) {
+                && !mBuildInfo.getRemoteFiles().isEmpty()) {
             stageTestArtifacts(mDevice, moduleNames);
         }
 
@@ -472,6 +478,11 @@ public abstract class ITestSuite
     /** Helper to download all artifacts for the given modules. */
     private void stageTestArtifacts(ITestDevice device, Set<String> modules) {
         if (mBuildInfo.getRemoteFiles().isEmpty()) {
+            return;
+        }
+        if (mSkipStagingArtifacts
+                || mBuildInfo.getBuildAttributes().get(SKIP_STAGING_ARTIFACTS) != null) {
+            CLog.d(SKIP_STAGING_ARTIFACTS + " is set. Skipping #stageTestArtifacts");
             return;
         }
         CLog.i(String.format("Start to stage test artifacts for %d modules.", modules.size()));
@@ -490,9 +501,15 @@ public abstract class ITestSuite
             if (mStageArtifactsViaFeature) {
                 try (TradefedFeatureClient client = new TradefedFeatureClient()) {
                     Map<String, String> args = new HashMap<>();
-                    args.put(
-                            ResolvePartialDownload.DESTINATION_DIR,
-                            getTestsDir().getAbsolutePath());
+                    String destination = getTestsDir().getAbsolutePath();
+                    // In *TS cases, download from root dir reference instead of tests dir
+                    if (mBuildInfo.getBuildAttributes().containsKey("ROOT_DIR")) {
+                        destination = mBuildInfo.getBuildAttributes().get("ROOT_DIR");
+                    }
+                    CLog.d(
+                            "downloading to destination: %s the following include_filters: %s",
+                            destination, includeFilters);
+                    args.put(ResolvePartialDownload.DESTINATION_DIR, destination);
                     args.put(
                             ResolvePartialDownload.INCLUDE_FILTERS,
                             String.join(";", includeFilters));
@@ -505,7 +522,6 @@ public abstract class ITestSuite
                                     .map(p -> p.toString())
                                     .collect(Collectors.joining(";"));
                     args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
-
                     FeatureResponse rep =
                             client.triggerFeature(
                                     ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME,
@@ -1486,7 +1502,7 @@ public abstract class ITestSuite
      * @return True if the module should run, false otherwise.
      */
     @VisibleForTesting
-    protected boolean filterByConfigMetadata(
+    public boolean filterByConfigMetadata(
             IConfiguration config,
             MultiMap<String, String> include,
             MultiMap<String, String> exclude) {

@@ -44,9 +44,14 @@ public class ActiveTrace {
     private final long tid;
     private final long traceUuid;
     private final int uid = 5555; // TODO: collect a real uid
+    private final boolean mainTradefedProcess;
     private final Map<Long, Long> mThreadToTracker;
     // File where the final trace gets outputed
     private File mTraceOutput;
+
+    public ActiveTrace(long pid, long tid) {
+        this(pid, tid, false);
+    }
 
     /**
      * Constructor.
@@ -54,11 +59,12 @@ public class ActiveTrace {
      * @param pid Current process id
      * @param tid Current thread id
      */
-    public ActiveTrace(long pid, long tid) {
+    public ActiveTrace(long pid, long tid, boolean mainProcess) {
         this.pid = pid;
         this.tid = tid;
         this.traceUuid = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
         mThreadToTracker = new HashMap<>();
+        mainTradefedProcess = mainProcess;
     }
 
     /** Start the tracing and report the metadata of the trace. */
@@ -111,6 +117,10 @@ public class ActiveTrace {
         return tid;
     }
 
+    public boolean isMainTradefedProcess() {
+        return mainTradefedProcess;
+    }
+
     /**
      * Very basic event reporting to do START / END of traces.
      *
@@ -161,6 +171,9 @@ public class ActiveTrace {
     private String createProcessName(boolean isSubprocess) {
         if (isSubprocess) {
             return "subprocess-test-invocation";
+        }
+        if (isMainTradefedProcess()) {
+            return "Tradefed";
         }
         return "test-invocation";
     }

@@ -1,6 +1,7 @@
 package com.android.tradefed.service.management;
 
 import com.android.annotations.VisibleForTesting;
+import com.android.tradefed.command.CommandScheduler;
 import com.android.tradefed.command.ICommandScheduler;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.DeviceAllocationState;
@@ -156,6 +157,16 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
             responseObserver.onNext(responseBuilder.build());
             responseObserver.onCompleted();
             return;
+        }
+        if (mCommandScheduler instanceof CommandScheduler) {
+            if (((CommandScheduler) mCommandScheduler).isShuttingDown()) {
+                responseBuilder
+                        .setResult(Result.UNKNOWN)
+                        .setMessage("Tradefed is shutting down, rejecting reservation.");
+                responseObserver.onNext(responseBuilder.build());
+                responseObserver.onCompleted();
+                return;
+            }
         }
 
         DeviceDescriptor descriptor = mDeviceManager.getDeviceDescriptor(serial);

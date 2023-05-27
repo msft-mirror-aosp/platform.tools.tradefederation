@@ -643,7 +643,10 @@ public class InvocationExecution implements IInvocationExecution {
             }
         }
         if (multiDeviceCount != null && multiDeviceCount != 1 && allVirtualDevices) {
-            runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope("runMultiVirtualDevicesPreInvocationSetup")) {
+                runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
+            }
         } else {
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope("device_pre_invocation_setup")) {
@@ -876,6 +879,10 @@ public class InvocationExecution implements IInvocationExecution {
 
                     deviceIndex++;
                 }
+
+                if (exception == null) {
+                    exception = deferredThrowable;
+                }
             } finally {
                 InvocationMetricLogger.addInvocationPairMetrics(
                         InvocationMetricKey.TEST_TEARDOWN_PAIR, start, System.currentTimeMillis());
@@ -905,10 +912,10 @@ public class InvocationExecution implements IInvocationExecution {
                     deviceIndex++;
                 }
 
-                // Extra tear down step for the device
                 if (exception == null) {
                     exception = deferredThrowable;
                 }
+                // Extra tear down step for the device
                 runDevicePostInvocationTearDown(context, config, exception);
 
                 // After all, run the multi_pre_target_preparer tearDown.
@@ -1540,6 +1547,10 @@ public class InvocationExecution implements IInvocationExecution {
     /** Collect the logs from $TMPDIR/adb.$UID.log. */
     @VisibleForTesting
     protected void logHostAdb(IConfiguration config, ITestLogger logger) {
+        if (SystemUtil.isLocalMode()) {
+            // Skip logging host adb locally
+            return;
+        }
         if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
             // Avoid relogging the adb log in a subprocess
             return;
@@ -1588,6 +1599,11 @@ public class InvocationExecution implements IInvocationExecution {
     /** Collect automatically some information on the primary device under test. */
     protected void collectAutoInfo(IConfiguration config, TestInformation info)
             throws DeviceNotAvailableException {
+        if (SystemUtil.isLocalMode()) {
+            // Avoid collecting for local modes since data collected in this method is used
+            // in CI only.
+            return;
+        }
         if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
             // Avoid logging in the subprocess
             return;
@@ -1596,19 +1612,22 @@ public class InvocationExecution implements IInvocationExecution {
         if (device.getIDevice() instanceof StubDevice) {
             return;
         }
-        CommandResult kernelInfoResult = device.executeShellV2Command("uname -a");
-        if (kernelInfoResult != null
-                && CommandStatus.SUCCESS.equals(kernelInfoResult.getStatus())) {
-            info.getBuildInfo()
-                    .addBuildAttribute("device_kernel_info", kernelInfoResult.getStdout().trim());
-        }
-        String system_img_info = device.getProperty("ro.system.build.fingerprint");
-        if (system_img_info != null) {
-            info.getBuildInfo().addBuildAttribute("system_img_info", system_img_info);
-        }
-        String vendor_img_info = device.getProperty("ro.vendor.build.fingerprint");
-        if (vendor_img_info != null) {
-            info.getBuildInfo().addBuildAttribute("vendor_img_info", vendor_img_info);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("collect_device_info")) {
+            CommandResult kernelInfoResult = device.executeShellV2Command("uname -a");
+            if (kernelInfoResult != null
+                    && CommandStatus.SUCCESS.equals(kernelInfoResult.getStatus())) {
+                info.getBuildInfo()
+                        .addBuildAttribute(
+                                "device_kernel_info", kernelInfoResult.getStdout().trim());
+            }
+            String system_img_info = device.getProperty("ro.system.build.fingerprint");
+            if (system_img_info != null) {
+                info.getBuildInfo().addBuildAttribute("system_img_info", system_img_info);
+            }
+            String vendor_img_info = device.getProperty("ro.vendor.build.fingerprint");
+            if (vendor_img_info != null) {
+                info.getBuildInfo().addBuildAttribute("vendor_img_info", vendor_img_info);
+            }
         }
     }
 }

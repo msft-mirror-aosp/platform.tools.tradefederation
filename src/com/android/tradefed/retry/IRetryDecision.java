@@ -94,4 +94,9 @@ public interface IRetryDecision {
 
     /** Returns the {@link RetryStatistics} representing the retry. */
     public RetryStatistics getRetryStatistics();
+
+    /** Add an entry to skip retrying it. */
+    public default void addToSkipRetryList(String filterEntry) {
+        // Empty by default on purpose
+    }
 }

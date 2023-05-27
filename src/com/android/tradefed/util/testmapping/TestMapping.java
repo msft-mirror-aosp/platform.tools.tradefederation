@@ -59,7 +59,7 @@ import java.util.stream.Stream;
 /** A class for loading a TEST_MAPPING file. */
 public class TestMapping {
 
-    // Key for test sources information stored in meta data of ConfigurationDescription.
+    // Key for test sources information stored in metadata of ConfigurationDescription.
     public static final String TEST_SOURCES = "Test Sources";
     // Pattern used to identify mainline tests without parameterized modules configured.
     public static final Pattern MAINLINE_REGEX = Pattern.compile("(\\S+)\\[(\\S+)\\]");
@@ -76,58 +76,54 @@ public class TestMapping {
     private static final String TEST_MAPPINGS_ZIP = "test_mappings.zip";
     // A file containing module names that are disabled in presubmit test runs.
     private static final String DISABLED_PRESUBMIT_TESTS_FILE = "disabled-presubmit-tests";
-
-    private Map<String, Set<TestInfo>> mTestCollection = null;
     // Pattern used to identify comments start with "//" or "#" in TEST_MAPPING.
     private static final Pattern COMMENTS_REGEX = Pattern.compile(
             "(?m)[\\s\\t]*(//|#).*|(\".*?\")");
     private static final Set<String> COMMENTS = new HashSet<>(Arrays.asList("#", "//"));
 
-    private static List<String> mTestMappingRelativePaths = new ArrayList<>();
+    private List<String> mTestMappingRelativePaths = new ArrayList<>();
 
-    // TODO: refactor the flag out of statics.
-    private static boolean mIgnoreTestMappingImports = true;
+    private boolean mIgnoreTestMappingImports = true;
 
-    /**
-     * Set the TEST_MAPPING paths inside of TEST_MAPPINGS_ZIP to limit loading the TEST_MAPPING.
-     *
-     * @param relativePaths A {@code List<String>} of TEST_MAPPING paths relative to
-     *     TEST_MAPPINGS_ZIP.
-     */
-    public static void setTestMappingPaths(List<String> relativePaths) {
-        mTestMappingRelativePaths.clear();
-        mTestMappingRelativePaths.addAll(relativePaths);
+    /** Constructor to initialize an empty {@link TestMapping} object. */
+    public TestMapping() {
+        this(new ArrayList<>(), true);
     }
 
     /**
-     * Set the mIgnoreTestMappingImports inside TestMapping.
+     * Constructor to create a {@link TestMapping} object.
      *
-     * @param ignoreTestMappingImports A boolean of whether to ignore imports in test mapping.
+     * @param testMappingRelativePaths The {@link List<String>} to the TEST_MAPPING file paths.
+     * @param ignoreTestMappingImports The {@link boolean} to ignore imports.
      */
-    public static void setIgnoreTestMappingImports(boolean ignoreTestMappingImports) {
+    public TestMapping(List<String> testMappingRelativePaths, boolean ignoreTestMappingImports) {
+        mTestMappingRelativePaths = testMappingRelativePaths;
         mIgnoreTestMappingImports = ignoreTestMappingImports;
     }
 
     /**
-     * Constructor to create a {@link TestMapping} object from a path to TEST_MAPPING file.
+     * Helper to get the {@link Map} test collection from a path to TEST_MAPPING file.
      *
      * @param path The {@link Path} to a TEST_MAPPING file.
      * @param testMappingsDir The {@link Path} to the folder of all TEST_MAPPING files for a build.
      * @param matchedPatternPaths The {@link Set<String>} to file paths matched patterns.
+     * @return A {@link Map} of test collection.
      */
-    public TestMapping(Path path, Path testMappingsDir, Set<String> matchedPatternPaths) {
-        mTestCollection = new LinkedHashMap<>();
+    @VisibleForTesting
+    Map<String, Set<TestInfo>> getTestCollection(
+            Path path, Path testMappingsDir, Set<String> matchedPatternPaths) {
+        Map<String, Set<TestInfo>> testCollection = new LinkedHashMap<>();
         String relativePath = testMappingsDir.relativize(path.getParent()).toString();
         String errorMessage = null;
         if (Files.notExists(path)) {
             CLog.d("TEST_MAPPING path not found: %s.", path);
-            return;
+            return testCollection;
         }
         try {
             String content = removeComments(
                     String.join("\n", Files.readAllLines(path, StandardCharsets.UTF_8)));
             if (Strings.isNullOrEmpty(content)) {
-                return;
+                return testCollection;
             }
             JSONTokener tokener = new JSONTokener(content);
             JSONObject root = new JSONObject(tokener);
@@ -144,7 +140,7 @@ public class TestMapping {
                     continue;
                 }
                 Set<TestInfo> testsForGroup = new HashSet<>();
-                mTestCollection.put(group, testsForGroup);
+                testCollection.put(group, testsForGroup);
                 JSONArray arr = root.getJSONArray(group);
                 for (int i = 0; i < arr.length(); i++) {
                     JSONObject testObject = arr.getJSONObject(i);
@@ -189,30 +185,25 @@ public class TestMapping {
             }
 
             if (!mIgnoreTestMappingImports) {
-                try {
-                    // No longer need to include import paths, filePaths includes all related paths.
-                    mIgnoreTestMappingImports = true;
-                    for (Path filePath : filePaths) {
-                        Map<String, Set<TestInfo>> filePathImportedTestCollection =
-                                new TestMapping(filePath, testMappingsDir, matchedPatternPaths)
-                                        .getTestCollection();
-                        for (String group : filePathImportedTestCollection.keySet()) {
-                            // Add all imported TestInfo to mTestCollection.
-                            if (filePathImportedTestCollection.get(group) != null) {
-                                if (mTestCollection.get(group) == null) {
-                                    mTestCollection.put(
-                                            group, filePathImportedTestCollection.get(group));
-                                } else {
-                                    mTestCollection
-                                            .get(group)
-                                            .addAll(filePathImportedTestCollection.get(group));
-                                }
+                // No longer need to include import paths, filePaths includes all related paths.
+                for (Path filePath : filePaths) {
+                    Map<String, Set<TestInfo>> filePathImportedTestCollection =
+                            new TestMapping(mTestMappingRelativePaths, true)
+                                    .getTestCollection(
+                                            filePath, testMappingsDir, matchedPatternPaths);
+                    for (String group : filePathImportedTestCollection.keySet()) {
+                        // Add all imported TestInfo to testCollection.
+                        if (filePathImportedTestCollection.get(group) != null) {
+                            if (testCollection.get(group) == null) {
+                                testCollection.put(
+                                        group, filePathImportedTestCollection.get(group));
+                            } else {
+                                testCollection
+                                        .get(group)
+                                        .addAll(filePathImportedTestCollection.get(group));
                             }
                         }
                     }
-                } finally {
-                    // Restore the flag.
-                    mIgnoreTestMappingImports = false;
                 }
             }
         } catch (IOException e) {
@@ -229,17 +220,18 @@ public class TestMapping {
             throw new HarnessRuntimeException(
                     errorMessage, InfraErrorIdentifier.TEST_MAPPING_FILE_FORMAT_ISSUE);
         }
+        return testCollection;
     }
 
     /**
      * Helper to check whether the given matched-pattern-paths matches the file patterns.
      *
-     * @param testMappingDir A {@link String} to Test_MAPPING directory path.
+     * @param testMappingDir A {@link String} to TEST_MAPPING directory path.
      * @param matchedPatternPaths A {@link Set<String>} to file paths matched patterns.
      * @param filePatterns A {@link Set<String>} to filePatterns from a TEST_MAPPING file.
      * @return A {@link Boolean} of matched result.
      */
-    private static boolean isMatchedFilePatterns(
+    private boolean isMatchedFilePatterns(
             String testMappingDir, Set<String> matchedPatternPaths, Set<String> filePatterns) {
         Set<String> matchedPatternPathsInSource = new HashSet<>();
         for (String matchedPatternPath : matchedPatternPaths) {
@@ -277,7 +269,7 @@ public class TestMapping {
      * @return A {@link String} of valid json without comments.
      */
     @VisibleForTesting
-    static String removeComments(String jsonContent) {
+    String removeComments(String jsonContent) {
         StringBuffer out = new StringBuffer();
         Matcher matcher = COMMENTS_REGEX.matcher(jsonContent);
         while (matcher.find()) {
@@ -298,7 +290,7 @@ public class TestMapping {
      *     build.
      * @param filePaths A {@link Set<Path>} to store all TEST_MAPPING paths.
      */
-    public static void listTestMappingFiles(
+    public void listTestMappingFiles(
             Path testMappingDir, Path testMappingsRootDir, Set<Path> filePaths) {
         String errorMessage = null;
 
@@ -379,8 +371,10 @@ public class TestMapping {
     }
 
     /**
-     * Helper to get all tests set in a TEST_MAPPING file for a given group.
+     * Helper to get all tests set from the given test collection, group name, disabled tests, host
+     * test only, and keywords.
      *
+     * @param testCollection A {@link Map} of the test collection.
      * @param testGroup A {@link String} of the test group.
      * @param disabledTests A set of {@link String} for the name of the disabled tests.
      * @param hostOnly true if only tests running on host and don't require device should be
@@ -389,11 +383,15 @@ public class TestMapping {
      *     Mapping suite.
      * @return A {@code Set<TestInfo>} of the test infos.
      */
-    public Set<TestInfo> getTests(
-            String testGroup, Set<String> disabledTests, boolean hostOnly, Set<String> keywords) {
+    @VisibleForTesting
+    Set<TestInfo> getTests(
+            Map<String, Set<TestInfo>> testCollection,
+            String testGroup,
+            Set<String> disabledTests,
+            boolean hostOnly,
+            Set<String> keywords) {
         Set<TestInfo> tests = new HashSet<TestInfo>();
-
-        for (TestInfo test : mTestCollection.getOrDefault(testGroup, new HashSet<>())) {
+        for (TestInfo test : testCollection.getOrDefault(testGroup, new HashSet<>())) {
             if (disabledTests != null && disabledTests.contains(test.getName())) {
                 continue;
             }
@@ -425,7 +423,7 @@ public class TestMapping {
     }
 
     /**
-     * Helper to find all tests in all TEST_MAPPING files based on a artifact in the device build.
+     * Helper to find all tests in all TEST_MAPPING files based on an artifact in the device build.
      *
      * @param buildInfo the {@link IBuildInfo} describing the build.
      * @param testGroup a {@link String} of the test group.
@@ -435,7 +433,7 @@ public class TestMapping {
      *     Mapping suite.
      * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
      */
-    public static Set<TestInfo> getTests(
+    public Set<TestInfo> getTests(
             IBuildInfo buildInfo, String testGroup, boolean hostOnly, Set<String> keywords) {
         return getTests(
                 buildInfo, testGroup, hostOnly, keywords, new ArrayList<>(), new HashSet<>());
@@ -457,8 +455,7 @@ public class TestMapping {
      * @param matchedPatternPaths The {@link Set<String>} to file paths matched patterns.
      * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
      */
-    @SuppressWarnings("StreamResourceLeak")
-    public static Set<TestInfo> getTests(
+    public Set<TestInfo> getTests(
             IBuildInfo buildInfo,
             String testGroup,
             boolean hostOnly,
@@ -473,30 +470,26 @@ public class TestMapping {
             zipFile = buildInfo.getFile(TEST_MAPPINGS_ZIP);
         }
         File testMappingsDir = extractTestMappingsZip(zipFile);
-        Stream<Path> stream = null;
-        try {
+        Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
+        try (Stream<Path> stream =
+                mTestMappingRelativePaths.isEmpty()
+                        ? Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS)
+                        : getAllTestMappingPaths(testMappingsRootPath).stream()) {
             mergeTestMappingZips(buildInfo, extraZipNames, zipFile, testMappingsDir);
-            Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
             Set<String> disabledTests = getDisabledTests(testMappingsRootPath, testGroup);
-            if (mTestMappingRelativePaths.isEmpty()) {
-                stream = Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS);
-            }
-            else {
-                stream = getAllTestMappingPaths(testMappingsRootPath).stream();
-            }
             stream.filter(path -> path.getFileName().toString().equals(TEST_MAPPING))
                     .forEach(
                             path ->
                                     tests.addAll(
-                                            new TestMapping(
+                                            getTests(
+                                                    getTestCollection(
                                                             path,
                                                             testMappingsRootPath,
-                                                            matchedPatternPaths)
-                                                    .getTests(
-                                                            testGroup,
-                                                            disabledTests,
-                                                            hostOnly,
-                                                            keywords)));
+                                                            matchedPatternPaths),
+                                                    testGroup,
+                                                    disabledTests,
+                                                    hostOnly,
+                                                    keywords)));
 
         } catch (IOException e) {
             throw new RuntimeException(
@@ -504,9 +497,6 @@ public class TestMapping {
                             "IO exception (%s) when reading tests from TEST_MAPPING files (%s)",
                             e.getMessage(), testMappingsDir.getAbsolutePath()), e);
         } finally {
-            if (stream != null) {
-                stream.close();
-            }
             FileUtil.recursiveDelete(testMappingsDir);
         }
 
@@ -520,7 +510,7 @@ public class TestMapping {
      * @param tests A {@code Set<TestInfo>} of the test infos to be processed.
      * @return A {@code Set<TestInfo>} of tests that each is for a unique test module.
      */
-    private static Set<TestInfo> mergeTests(Set<TestInfo> tests) {
+    private Set<TestInfo> mergeTests(Set<TestInfo> tests) {
         Map<String, List<TestInfo>> testsGroupedbyNameAndHost =
                 tests.stream()
                         .collect(
@@ -548,7 +538,7 @@ public class TestMapping {
      * @return A {@code Set<Path>} of all the TEST_MAPPING paths relative to TEST_MAPPINGS_ZIP.
      */
     @VisibleForTesting
-    static Set<Path> getAllTestMappingPaths(Path testMappingsRootPath) {
+    Set<Path> getAllTestMappingPaths(Path testMappingsRootPath) {
         Set<Path> allTestMappingPaths = new HashSet<>();
         for (String path : mTestMappingRelativePaths) {
             boolean hasAdded = false;
@@ -581,13 +571,10 @@ public class TestMapping {
      * @return A {@code Map<String, Set<TestInfo>>} of tests in the given directory and its child
      *     directories.
      */
-    @SuppressWarnings("StreamResourceLeak")
-    public static Map<String, Set<TestInfo>> getAllTests(File testMappingsDir) {
+    public Map<String, Set<TestInfo>> getAllTests(File testMappingsDir) {
         Map<String, Set<TestInfo>> allTests = new HashMap<String, Set<TestInfo>>();
-        Stream<Path> stream = null;
-        try {
-            Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
-            stream = Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS);
+        Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
+        try (Stream<Path> stream = Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS)) {
             stream.filter(path -> path.getFileName().toString().equals(TEST_MAPPING))
                     .forEach(
                             path ->
@@ -597,11 +584,8 @@ public class TestMapping {
             throw new RuntimeException(
                     String.format(
                             "IO exception (%s) when reading tests from TEST_MAPPING files (%s)",
-                            e.getMessage(), testMappingsDir.getAbsolutePath()), e);
-        } finally {
-            if (stream != null) {
-                stream.close();
-            }
+                            e.getMessage(), testMappingsDir.getAbsolutePath()),
+                    e);
         }
         return allTests;
     }
@@ -609,15 +593,15 @@ public class TestMapping {
     /**
      * Helper to find all tests in the TEST_MAPPING files from a given directory.
      *
-     * @param allTests the {@code HashMap<String, Set<TestInfo>>} containing the tests of each
-     * test group.
+     * @param allTests the {@code HashMap<String, Set<TestInfo>>} containing the tests of each test
+     *     group.
      * @param path the {@link Path} to a TEST_MAPPING file.
      * @param testMappingsRootPath the {@link Path} to a test mappings zip path.
      */
-    private static void getAllTests(Map<String, Set<TestInfo>> allTests,
-        Path path, Path testMappingsRootPath) {
+    private void getAllTests(
+            Map<String, Set<TestInfo>> allTests, Path path, Path testMappingsRootPath) {
         Map<String, Set<TestInfo>> testCollection =
-                new TestMapping(path, testMappingsRootPath, new HashSet<>()).getTestCollection();
+                getTestCollection(path, testMappingsRootPath, new HashSet<>());
         for (String group : testCollection.keySet()) {
             allTests.computeIfAbsent(group, k -> new HashSet<>()).addAll(testCollection.get(group));
         }
@@ -651,7 +635,7 @@ public class TestMapping {
      *     returned if the testGroup is not PRESUBMIT.
      */
     @VisibleForTesting
-    static Set<String> getDisabledTests(Path testMappingsRootPath, String testGroup) {
+    Set<String> getDisabledTests(Path testMappingsRootPath, String testGroup) {
         Set<String> disabledTests = new HashSet<>();
         File disabledPresubmitTestsFile =
                 new File(testMappingsRootPath.toString(), DISABLED_PRESUBMIT_TESTS_FILE);
@@ -670,16 +654,6 @@ public class TestMapping {
                             e.getMessage(), disabledPresubmitTestsFile.getAbsolutePath()), e);
         }
         return disabledTests;
-    }
-
-    /**
-     * Helper to get the test collection in a TEST_MAPPING file.
-     *
-     * @return A {@code Map<String, Set<TestInfo>>} containing the test collection in a
-     *     TEST_MAPPING file.
-     */
-    private Map<String, Set<TestInfo>> getTestCollection() {
-        return mTestCollection;
     }
 
     /**
@@ -702,11 +676,16 @@ public class TestMapping {
 
     /**
      * Merge additional test mapping zips into the given directory.
+     *
+     * @param buildInfo the {@link IBuildInfo} describing the build.
+     * @param extraZips A {@link List<String>} of additional zip file paths.
+     * @param baseFile A {@link File} of base test mapping zip.
+     * @param baseDir A {@link File} pointing to the temp directory for base test mappings zip.
      */
     @VisibleForTesting
-    static void mergeTestMappingZips(
-        IBuildInfo buildInfo, List<String> extraZips, File baseFile, File baseDir)
-        throws IOException {
+    void mergeTestMappingZips(
+            IBuildInfo buildInfo, List<String> extraZips, File baseFile, File baseDir)
+            throws IOException {
         Set<String> baseNames = getTestMappingSources(baseFile);
         for (String zipName : extraZips) {
             File zipFile;
@@ -729,8 +708,12 @@ public class TestMapping {
 
     /**
      * Helper to validate whether there exists collision of the path of Test Mapping files.
+     *
+     * @param base A {@link Set<String>} of the file paths.
+     * @param target A {@link Set<String>} of the file paths.
+     * @param zipName A {@link String} of the zip file path.
      */
-    private static void validateSources(Set<String> base, Set<String> target, String zipName) {
+    private void validateSources(Set<String> base, Set<String> target, String zipName) {
         for (String name : target) {
             if (base.contains(name)) {
                 throw new HarnessRuntimeException(
@@ -742,9 +725,12 @@ public class TestMapping {
 
     /**
      * Helper to collect the path of Test Mapping files with a given zip file.
+     *
+     * @param zipFile A {@link File} of the test mappings zip.
+     * @return A {@link Set<String>} for file paths from the test mappings zip.
      */
     @VisibleForTesting
-    static Set<String> getTestMappingSources(File zipFile) {
+    Set<String> getTestMappingSources(File zipFile) {
         Set<String> fileNames = new HashSet<>();
         Enumeration<? extends ZipArchiveEntry> entries = null;
         ZipFile f = null;
@@ -779,7 +765,7 @@ public class TestMapping {
      *     test_mapping_platform.zip
      * @return The test mapping file, or null if unable to locate one.
      */
-    private static File lookupTestMappingZip(String zipName) {
+    private File lookupTestMappingZip(String zipName) {
         String testDirPath = System.getenv(TestDiscoveryInvoker.TEST_DIRECTORY_ENV_VARIABLE_KEY);
         if (testDirPath == null) {
             return null;

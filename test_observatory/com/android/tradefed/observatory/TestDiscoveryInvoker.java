@@ -60,17 +60,27 @@ public class TestDiscoveryInvoker {
     private final String mDefaultConfigName;
     private final File mRootDir;
     private final IRunUtil mRunUtil = new RunUtil();
+    private final boolean mHasConfigFallback;
+    private final boolean mUseCurrentTradefed;
     private File mTestDir;
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
     public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
     public static final String TEST_MODULES_LIST_KEY = "TestModules";
+    public static final String PARTIAL_FALLBACK_KEY = "PartialFallback";
     public static final String TEST_DIRECTORY_ENV_VARIABLE_KEY =
             "TF_TEST_DISCOVERY_USE_TEST_DIRECTORY";
+    public static final String ROOT_DIRECTORY_ENV_VARIABLE_KEY =
+            "ROOT_TEST_DISCOVERY_USE_TEST_DIRECTORY";
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
         return mRunUtil;
+    }
+
+    @VisibleForTesting
+    String getJava() {
+        return SystemUtil.getRunningJavaBinaryPath().getAbsolutePath();
     }
 
     public File getTestDir() {
@@ -83,10 +93,7 @@ public class TestDiscoveryInvoker {
 
     /** Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration} and root directory. */
     public TestDiscoveryInvoker(IConfiguration config, File rootDir) {
-        mConfiguration = config;
-        mDefaultConfigName = null;
-        mRootDir = rootDir;
-        mTestDir = null;
+        this(config, null, rootDir);
     }
 
     /**
@@ -94,10 +101,25 @@ public class TestDiscoveryInvoker {
      * default config name and root directory.
      */
     public TestDiscoveryInvoker(IConfiguration config, String defaultConfigName, File rootDir) {
+        this(config, defaultConfigName, rootDir, false, false);
+    }
+
+    /**
+     * Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration}, test launcher's
+     * default config name, root directory and if fallback is required.
+     */
+    public TestDiscoveryInvoker(
+            IConfiguration config,
+            String defaultConfigName,
+            File rootDir,
+            boolean hasConfigFallback,
+            boolean useCurrentTradefed) {
         mConfiguration = config;
         mDefaultConfigName = defaultConfigName;
         mRootDir = rootDir;
         mTestDir = null;
+        mHasConfigFallback = hasConfigFallback;
+        mUseCurrentTradefed = useCurrentTradefed;
     }
 
     /**
@@ -119,6 +141,12 @@ public class TestDiscoveryInvoker {
         // Build command line args to query the tradefed.jar in the root directory
         List<String> args = buildJavaCmdForXtsDiscovery(classPath);
         String[] subprocessArgs = args.toArray(new String[args.size()]);
+
+        if (mHasConfigFallback) {
+            getRunUtil()
+                    .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
+        }
+
         CommandResult res = getRunUtil().runTimedCmd(20000, subprocessArgs);
         if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
             DiscoveryExitCode exitCode = null;
@@ -150,6 +178,11 @@ public class TestDiscoveryInvoker {
         if (!testDependencies.isEmpty()) {
             dependencies.put(TEST_DEPENDENCIES_LIST_KEY, testDependencies);
         }
+
+        String partialFallback = parsePartialFallback(stdout);
+        if (partialFallback != null) {
+            dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+        }
         return dependencies;
     }
 
@@ -175,11 +208,10 @@ public class TestDiscoveryInvoker {
         if (mTestDir != null) {
             getRunUtil()
                     .setEnvVariable(TEST_DIRECTORY_ENV_VARIABLE_KEY, mTestDir.getAbsolutePath());
-        } else {
-            throw new TestDiscoveryException(
-                    "The TestDiscoveryInvoker need test directory to be set to do test mapping"
-                            + " discovery.",
-                    null);
+        }
+        if (mHasConfigFallback) {
+            getRunUtil()
+                    .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
         }
         CommandResult res = getRunUtil().runTimedCmd(30000, subprocessArgs);
         if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
@@ -196,6 +228,10 @@ public class TestDiscoveryInvoker {
         List<String> testModules = parseTestDiscoveryOutput(stdout, TEST_MODULES_LIST_KEY);
         if (!testModules.isEmpty()) {
             dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+        }
+        String partialFallback = parsePartialFallback(stdout);
+        if (partialFallback != null) {
+            dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
         }
         return dependencies;
     }
@@ -214,7 +250,7 @@ public class TestDiscoveryInvoker {
 
         List<String> args = new ArrayList<>();
 
-        args.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
+        args.add(getJava());
 
         args.add("-cp");
         args.add(classpath);
@@ -279,7 +315,7 @@ public class TestDiscoveryInvoker {
             }
         }
         List<String> args = new ArrayList<>();
-        args.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
+        args.add(getJava());
 
         args.add("-cp");
         args.add(classpath);
@@ -305,7 +341,7 @@ public class TestDiscoveryInvoker {
      * @throws IOException
      */
     private String buildTestMappingClasspath(File workingDir) throws IOException {
-        List<File> classpathList = new ArrayList<>();
+        List<String> classpathList = new ArrayList<>();
 
         if (!workingDir.exists()) {
             throw new FileNotFoundException("Couldn't find the build directory");
@@ -318,12 +354,19 @@ public class TestDiscoveryInvoker {
         }
         for (File toolsFile : workingDir.listFiles()) {
             if (toolsFile.getName().endsWith(".jar")) {
-                classpathList.add(toolsFile);
+                classpathList.add(toolsFile.getAbsolutePath());
             }
         }
         Collections.sort(classpathList);
+        if (mUseCurrentTradefed) {
+            classpathList.add(getCurrentClassPath());
+        }
 
         return Joiner.on(":").join(classpathList);
+    }
+
+    private String getCurrentClassPath() {
+        return System.getProperty("java.class.path");
     }
 
     /**
@@ -383,5 +426,13 @@ public class TestDiscoveryInvoker {
             }
         }
         return testModules;
+    }
+
+    private String parsePartialFallback(String discoveryOutput) throws JSONException {
+        JSONObject jsonObject = new JSONObject(discoveryOutput);
+        if (jsonObject.has(PARTIAL_FALLBACK_KEY)) {
+            return jsonObject.getString(PARTIAL_FALLBACK_KEY);
+        }
+        return null;
     }
 }

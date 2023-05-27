@@ -422,33 +422,6 @@ public class DeviceManagerTest {
         assertTrue(device.getIDevice() instanceof NullDevice);
     }
 
-    /**
-     * Test that DeviceManager will add devices on fastboot to available queue on startup, and that
-     * they can be allocated.
-     */
-    @Test
-    public void testAllocateDevice_fastboot() {
-        Mockito.reset(mMockRunUtil);
-        // mock 'fastboot help' call
-        when(mMockRunUtil.runTimedCmdSilently(
-                        Mockito.anyLong(), Mockito.eq("fastboot"), Mockito.eq("help")))
-                .thenReturn(new CommandResult(CommandStatus.SUCCESS));
-
-        // mock 'fastboot devices' call to return one device
-        CommandResult fastbootResult = new CommandResult(CommandStatus.SUCCESS);
-        fastbootResult.setStdout("serial        fastboot\n");
-        when(mMockRunUtil.runTimedCmdSilently(
-                        Mockito.anyLong(), Mockito.eq("fastboot"), Mockito.eq("devices")))
-                .thenReturn(fastbootResult);
-        when(mMockTestDevice.handleAllocationEvent(DeviceEvent.FORCE_AVAILABLE))
-                .thenReturn(new DeviceEventResponse(DeviceAllocationState.Available, true));
-        when(mMockTestDevice.handleAllocationEvent(DeviceEvent.ALLOCATE_REQUEST))
-                .thenReturn(new DeviceEventResponse(DeviceAllocationState.Allocated, true));
-
-        DeviceManager manager = createDeviceManager(null);
-        assertNotNull(manager.allocateDevice(mDeviceSelections));
-    }
-
     /** Test {@link DeviceManager#forceAllocateDevice(String)} when device is unknown */
     @Test
     public void testForceAllocateDevice() {

@@ -21,6 +21,7 @@ import com.android.asuite.clearcut.Clientanalytics.LogEvent;
 import com.android.asuite.clearcut.Clientanalytics.LogRequest;
 import com.android.asuite.clearcut.Clientanalytics.LogResponse;
 import com.android.asuite.clearcut.Common.UserType;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -29,6 +30,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.net.HttpHelper;
 
+import com.google.common.base.Strings;
 import com.google.protobuf.util.JsonFormat;
 
 import java.io.File;
@@ -40,9 +42,12 @@ import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
@@ -52,20 +57,22 @@ import java.util.concurrent.TimeUnit;
 public class ClearcutClient {
 
     public static final String DISABLE_CLEARCUT_KEY = "DISABLE_CLEARCUT";
+    private static final String CLEARCUT_SUB_TOOL_NAME = "CLEARCUT_SUB_TOOL_NAME";
 
     private static final String CLEARCUT_PROD_URL = "https://play.googleapis.com/log";
     private static final int CLIENT_TYPE = 1;
     private static final int INTERNAL_LOG_SOURCE = 971;
     private static final int EXTERNAL_LOG_SOURCE = 934;
 
-    private static final long SCHEDULER_INITIAL_DELAY_SECONDS = 2;
-    private static final long SCHEDULER_PERDIOC_SECONDS = 30;
+    private static final long SCHEDULER_INITIAL_DELAY_MILLISECONDS = 1000;
+    private static final long SCHEDULER_PERDIOC_MILLISECONDS = 250;
 
     private static final String GOOGLE_EMAIL = "@google.com";
     private static final String GOOGLE_HOSTNAME = ".google.com";
 
     private File mCachedUuidFile = new File(System.getProperty("user.home"), ".tradefed");
     private String mRunId;
+    private long mSessionStartTime = 0L;
 
     private final int mLogSource;
     private final String mUrl;
@@ -105,7 +112,11 @@ public class ClearcutClient {
         }
         mRunId = UUID.randomUUID().toString();
         mExternalEventQueue = new ArrayList<>();
-        mSubToolName = subToolName;
+        if (Strings.isNullOrEmpty(subToolName) && System.getenv(CLEARCUT_SUB_TOOL_NAME) != null) {
+            mSubToolName = System.getenv(CLEARCUT_SUB_TOOL_NAME);
+        } else {
+            mSubToolName = subToolName;
+        }
 
         if (mDisabled) {
             return;
@@ -136,9 +147,9 @@ public class ClearcutClient {
                 };
         mExecutor.scheduleAtFixedRate(
                 command,
-                SCHEDULER_INITIAL_DELAY_SECONDS,
-                SCHEDULER_PERDIOC_SECONDS,
-                TimeUnit.SECONDS);
+                SCHEDULER_INITIAL_DELAY_MILLISECONDS,
+                SCHEDULER_PERDIOC_MILLISECONDS,
+                TimeUnit.MILLISECONDS);
     }
 
     /** Send the first event to notify that Tradefed was started. */
@@ -146,12 +157,29 @@ public class ClearcutClient {
         if (mDisabled) {
             return;
         }
+        mSessionStartTime = System.nanoTime();
         LogRequest.Builder request = createBaseLogRequest();
         LogEvent.Builder logEvent = LogEvent.newBuilder();
         logEvent.setEventTimeMs(System.currentTimeMillis());
         logEvent.setSourceExtension(
                 ClearcutEventHelper.createStartEvent(
                         getGroupingKey(), mRunId, mUserType, mSubToolName));
+        request.addLogEvent(logEvent);
+        queueEvent(request.build());
+    }
+
+    /** Send the last event to notify that Tradefed is done. */
+    public void notifyTradefedFinishedEvent() {
+        if (mDisabled) {
+            return;
+        }
+        Duration duration = java.time.Duration.ofNanos(System.nanoTime() - mSessionStartTime);
+        LogRequest.Builder request = createBaseLogRequest();
+        LogEvent.Builder logEvent = LogEvent.newBuilder();
+        logEvent.setEventTimeMs(System.currentTimeMillis());
+        logEvent.setSourceExtension(
+                ClearcutEventHelper.createFinishedEvent(
+                        getGroupingKey(), mRunId, mUserType, mSubToolName, duration));
         request.addLogEvent(logEvent);
         queueEvent(request.build());
     }
@@ -167,6 +195,22 @@ public class ClearcutClient {
         logEvent.setSourceExtension(
                 ClearcutEventHelper.createRunStartEvent(
                         getGroupingKey(), mRunId, mUserType, mSubToolName));
+        request.addLogEvent(logEvent);
+        queueEvent(request.build());
+    }
+
+    /** Send the event to notify that a test run finished. */
+    public void notifyTestRunFinished(long startTimeNano) {
+        if (mDisabled) {
+            return;
+        }
+        Duration duration = java.time.Duration.ofNanos(System.nanoTime() - startTimeNano);
+        LogRequest.Builder request = createBaseLogRequest();
+        LogEvent.Builder logEvent = LogEvent.newBuilder();
+        logEvent.setEventTimeMs(System.currentTimeMillis());
+        logEvent.setSourceExtension(
+                ClearcutEventHelper.creatRunTestFinished(
+                        getGroupingKey(), mRunId, mUserType, mSubToolName, duration));
         request.addLogEvent(logEvent);
         queueEvent(request.build());
     }
@@ -232,6 +276,14 @@ public class ClearcutClient {
     /** Returns True if the user is a Googler, False otherwise. */
     @VisibleForTesting
     boolean isGoogleUser() {
+        try {
+            String hostname = InetAddress.getLocalHost().getHostName();
+            if (hostname.contains(GOOGLE_HOSTNAME)) {
+                return true;
+            }
+        } catch (UnknownHostException e) {
+            // Ignore
+        }
         CommandResult gitRes =
                 RunUtil.getDefault()
                         .runTimedCmdSilently(60000L, "git", "config", "--get", "user.email");
@@ -241,14 +293,7 @@ public class ClearcutClient {
                 return true;
             }
         }
-        try {
-            String hostname = InetAddress.getLocalHost().getHostName();
-            if (hostname.contains(GOOGLE_HOSTNAME)) {
-                return true;
-            }
-        } catch (UnknownHostException e) {
-            // Ignore
-        }
+
         return false;
     }
 
@@ -265,21 +310,30 @@ public class ClearcutClient {
             copy.addAll(mExternalEventQueue);
             mExternalEventQueue.clear();
         }
+        List<CompletableFuture<Boolean>> futures = new ArrayList<>();
         while (!copy.isEmpty()) {
             LogRequest event = copy.remove(0);
-            sendToClearcut(event);
+            futures.add(CompletableFuture.supplyAsync(() -> sendToClearcut(event)));
+        }
+
+        for (CompletableFuture<Boolean> future : futures) {
+            try {
+                future.get();
+            } catch (InterruptedException | ExecutionException e) {
+                CLog.e(e);
+            }
         }
     }
 
     /** Send one event to the configured server. */
-    private void sendToClearcut(LogRequest event) {
+    private boolean sendToClearcut(LogRequest event) {
         HttpHelper helper = new HttpHelper();
 
         InputStream inputStream = null;
         InputStream errorStream = null;
         OutputStream outputStream = null;
         OutputStreamWriter outputStreamWriter = null;
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("sendToClearcut")) {
             HttpURLConnection connection = helper.createConnection(new URL(mUrl), "POST", "text");
             outputStream = connection.getOutputStream();
             outputStreamWriter = new OutputStreamWriter(outputStream);
@@ -304,5 +358,6 @@ public class ClearcutClient {
             StreamUtil.close(outputStreamWriter);
             StreamUtil.close(errorStream);
         }
+        return true;
     }
 }

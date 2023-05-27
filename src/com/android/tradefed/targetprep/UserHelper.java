@@ -26,14 +26,14 @@ import java.util.ArrayList;
 import java.util.Map;
 
 // Not directly unit tested, but its clients are
-final class UserHelper {
+public final class UserHelper {
 
     private static final String TF_CREATED_USER = "tf_created_user";
 
     @VisibleForTesting static final String USER_SETUP_COMPLETE = "user_setup_complete";
 
     /** System property used to indicate which Android user is running the test. */
-    static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
+    public static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
     public static int createUser(ITestDevice device, boolean reuseTestUser)
             throws DeviceNotAvailableException, TargetSetupError {

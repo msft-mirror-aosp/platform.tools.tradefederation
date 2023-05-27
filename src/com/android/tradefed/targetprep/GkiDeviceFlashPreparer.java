@@ -48,7 +48,7 @@ import java.util.concurrent.TimeUnit;
  * https://source.android.com/devices/architecture/kernel/android-common for details.
  */
 @OptionClass(alias = "gki-device-flash-preparer")
-public class GkiDeviceFlashPreparer extends BaseTargetPreparer {
+public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPreparer {
 
     private static final String AVBTOOL = "avbtool";
     private static final String MKBOOTIMG = "mkbootimg";

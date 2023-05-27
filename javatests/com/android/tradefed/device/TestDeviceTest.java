@@ -28,6 +28,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -996,7 +997,7 @@ public class TestDeviceTest {
         }
 
         assertRecoverySuccess(TestDevice.MAX_RETRY_ATTEMPTS + 1);
-        verifySystemProperty(SDK_VERSION, "23", 3);
+        verifySystemProperty(SDK_VERSION, "23", 1);
         verify(mMockStateMonitor, times(3)).waitForDeviceOnline();
         verify(mMockIDevice, times(TestDevice.MAX_RETRY_ATTEMPTS + 1))
                 .executeShellCommand(
@@ -2032,7 +2033,7 @@ public class TestDeviceTest {
 
         assertNull(mTestDevice.installPackages(mLocalApks, true));
 
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         verifyMockIDeviceAppOpsToPersist();
         ArgumentCaptor<List<File>> filesCapture = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List<String>> optionsCapture = ArgumentCaptor.forClass(List.class);
@@ -2114,7 +2115,7 @@ public class TestDeviceTest {
             assertTrue(optionsCapture.getValue().contains("--user"));
             assertTrue(optionsCapture.getValue().contains("1"));
             assertTrue(optionsCapture.getValue().contains("-g"));
-            verifyMockIDeviceRuntimePermissionSupported(2);
+            verifyMockIDeviceRuntimePermissionSupported(1);
             verifyMockIDeviceAppOpsToPersist();
         } finally {
             for (File apkFile : mLocalApks) {
@@ -2159,7 +2160,7 @@ public class TestDeviceTest {
                         Mockito.eq(TestDevice.INSTALL_TIMEOUT_MINUTES),
                         Mockito.eq(TimeUnit.MINUTES));
         assertTrue(optionsCapture.getValue().contains("-g"));
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         verifyMockIDeviceAppOpsToPersist();
         for (File apkFile : mLocalApks) {
             assertTrue(filesCapture.getValue().contains(apkFile));
@@ -2211,7 +2212,7 @@ public class TestDeviceTest {
 
         assertNull(mTestDevice.installRemotePackages(mRemoteApkPaths, true));
 
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         ArgumentCaptor<List<String>> filePathsCapture = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List<String>> optionsCapture = ArgumentCaptor.forClass(List.class);
         verify(mMockIDevice, times(1))
@@ -2263,7 +2264,7 @@ public class TestDeviceTest {
                         Mockito.eq(TestDevice.INSTALL_TIMEOUT_MINUTES),
                         Mockito.eq(TimeUnit.MINUTES));
         assertTrue(optionsCapture.getValue().contains("-g"));
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         for (String apkPath : mRemoteApkPaths) {
             assertTrue(filePathsCapture.getValue().contains(apkPath));
         }
@@ -6157,6 +6158,37 @@ public class TestDeviceTest {
     }
 
     @Test
+    public void testGetFoldableStatesVersionU() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Supported states: [\n"
+                                        + " DeviceState{identifier=0, name='CLOSED',"
+                                        + " app_accessible=false,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=1, name='HALF_OPENED',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=2, name='OPENED',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=3, name='CANCEL_WHEN_NOT_TOP',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=true},\n"
+                                        + "]\n");
+                        return result;
+                    }
+                };
+
+        Set<DeviceFoldableState> states = mTestDevice.getFoldableStates();
+        assertEquals(2, states.size());
+    }
+
+    @Test
     public void testGetCurrentFoldableState() throws Exception {
         mTestDevice =
                 new TestableTestDevice() {
@@ -6185,6 +6217,26 @@ public class TestDeviceTest {
                         result.setStdout(
                                 "Committed state: DeviceState{identifier=2, name='DEFAULT',"
                                         + " app_accessible=true}\n");
+                        return result;
+                    }
+                };
+
+        DeviceFoldableState state = mTestDevice.getCurrentFoldableState();
+        assertEquals(2, state.getIdentifier());
+    }
+
+    @Test
+    public void testGetCurrentFoldableStateVersionU() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Committed state: DeviceState{identifier=2, name='DEFAULT',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false}\n");
                         return result;
                     }
                 };
@@ -6227,7 +6279,10 @@ public class TestDeviceTest {
 
     @Test
     public void testCheckApiLevelAgainstNextRelease_propertyNotSet() throws Exception {
-        TestDevice testDevice = new TestableTestDeviceV2().injectSystemProperty(BUILD_CODENAME, "");
+        TestDevice testDevice =
+                new TestableTestDeviceV2()
+                        .injectSystemProperty(BUILD_CODENAME, "")
+                        .setApiLevel(40, null);
         DeviceRuntimeException e =
                 assertThrows(
                         DeviceRuntimeException.class,
@@ -6658,7 +6713,8 @@ public class TestDeviceTest {
     }
 
     private void verifyGetPropertyExpectation(String property, String value, int times) {
-        verify(mMockRunUtil, times(times))
+        // Use atLeast due to property caching
+        verify(mMockRunUtil, atLeast(times))
                 .runTimedCmd(
                         Mockito.anyLong(),
                         (OutputStream) Mockito.isNull(),
