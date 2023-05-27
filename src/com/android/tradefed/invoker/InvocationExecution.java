@@ -693,6 +693,12 @@ public class InvocationExecution implements IInvocationExecution {
 
         List<ITestDevice> devices = context.getDevices();
         List<IBuildInfo> buildInfos = context.getBuildInfos();
+        // Set logger on all devices first
+        for (ITestDevice device : devices) {
+            if (device instanceof ITestLoggerReceiver) {
+                ((ITestLoggerReceiver) device).setTestLogger(logger);
+            }
+        }
 
         // Start multiple devices in a group
         List<GceAvdInfo> gceAvdInfoList =
@@ -716,9 +722,6 @@ public class InvocationExecution implements IInvocationExecution {
                         device.getSerialNumber());
                 device.getOptions().setSkipTearDown(true);
             }
-
-            // Every RemoteAndroidVirtualDevice is a ITestLoggerReceiver
-            ((ITestLoggerReceiver) device).setTestLogger(logger);
         }
     }
 
