@@ -129,15 +129,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     private List<String> mAdditionalTestMappingZips = new ArrayList<>();
 
     @Option(
-            name = "test-mapping-unmatched-file-pattern-paths",
-            description =
-                    "A list of modified paths that does not match with a certain file_pattern in "
-                            + "the TEST_MAPPING file. This is used only for Work Node, and handled "
-                            + "by provider service. If none is specified, all tests are needed "
-                            + "to run for the given change.")
-    private Set<String> mUnmatchedFilePatternPaths = new HashSet<>();
-
-    @Option(
             name = "test-mapping-matched-pattern-paths",
             description =
                     "A list of modified paths that matches with a certain file_pattern in "

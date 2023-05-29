@@ -53,7 +53,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /** A class for loading a TEST_MAPPING file. */
@@ -501,34 +500,6 @@ public class TestMapping {
         }
 
         return tests;
-    }
-
-    /**
-     * Merge multiple tests if there are any for the same test module, but with different test
-     * options.
-     *
-     * @param tests A {@code Set<TestInfo>} of the test infos to be processed.
-     * @return A {@code Set<TestInfo>} of tests that each is for a unique test module.
-     */
-    private Set<TestInfo> mergeTests(Set<TestInfo> tests) {
-        Map<String, List<TestInfo>> testsGroupedbyNameAndHost =
-                tests.stream()
-                        .collect(
-                                Collectors.groupingBy(
-                                        TestInfo::getNameAndHostOnly, Collectors.toList()));
-
-        Set<TestInfo> mergedTests = new HashSet<>();
-        for (List<TestInfo> multiTests : testsGroupedbyNameAndHost.values()) {
-            TestInfo mergedTest = multiTests.get(0);
-            if (multiTests.size() > 1) {
-                for (TestInfo test : multiTests.subList(1, multiTests.size())) {
-                    mergedTest.merge(test);
-                }
-            }
-            mergedTests.add(mergedTest);
-        }
-
-        return mergedTests;
     }
 
     /**
