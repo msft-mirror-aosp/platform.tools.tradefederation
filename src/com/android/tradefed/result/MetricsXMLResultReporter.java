@@ -188,7 +188,7 @@ public class MetricsXMLResultReporter extends CollectingTestListener {
 
     /** Returns the text in a format that is safe for use in an XML document. */
     private String sanitize(String text) {
-        return text.replace("\0", "<\\0>");
+        return text == null ? "" : text.replace("\0", "<\\0>");
     }
 
     /** Return the current timestamp as a {@link String}. */
