@@ -158,14 +158,20 @@ public class ClearcutClient {
             return;
         }
         mSessionStartTime = System.nanoTime();
+        long eventTimeMs = System.currentTimeMillis();
+        CompletableFuture.supplyAsync(() -> createStartEvent(eventTimeMs));
+    }
+
+    private boolean createStartEvent(long eventTimeMs) {
         LogRequest.Builder request = createBaseLogRequest();
         LogEvent.Builder logEvent = LogEvent.newBuilder();
-        logEvent.setEventTimeMs(System.currentTimeMillis());
+        logEvent.setEventTimeMs(eventTimeMs);
         logEvent.setSourceExtension(
                 ClearcutEventHelper.createStartEvent(
                         getGroupingKey(), mRunId, mUserType, mSubToolName));
         request.addLogEvent(logEvent);
         queueEvent(request.build());
+        return true;
     }
 
     /** Send the last event to notify that Tradefed is done. */
