@@ -41,6 +41,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import sun.misc.Signal;
 import sun.misc.SignalHandler;
@@ -111,11 +112,13 @@ public class CommandRunner {
      */
     public void run(String[] args) {
         try {
+            CompletableFuture<ClearcutClient> futureClient =
+                    CompletableFuture.supplyAsync(() -> createClient());
             try (CloseableTraceScope ignored = new CloseableTraceScope("initGlobalConfig")) {
                 initGlobalConfig(args);
             }
 
-            ClearcutClient client = createClient();
+            ClearcutClient client = futureClient.get();
             Runtime.getRuntime().addShutdownHook(new TerminateClearcutClient(client));
             client.notifyTradefedStartEvent();
             if (System.getenv("START_FEATURE_SERVER") != null) {
@@ -140,7 +143,10 @@ public class CommandRunner {
             Signal.handle(new Signal("TERM"), handler);
 
             mScheduler.addCommand(args);
-        } catch (ConfigurationException | RuntimeException e) {
+        } catch (ConfigurationException
+                | RuntimeException
+                | InterruptedException
+                | ExecutionException e) {
             printStackTrace(e);
             mErrorCode = ExitCode.CONFIG_EXCEPTION;
             return;
@@ -183,10 +189,12 @@ public class CommandRunner {
     }
 
     protected ClearcutClient createClient() {
-        return new ClearcutClient(
-                TestSuiteInfo.getInstance().didLoadFromProperties()
-                        ? TestSuiteInfo.getInstance().getName()
-                        : "");
+        try (CloseableTraceScope ignored = new CloseableTraceScope("createClient")) {
+            return new ClearcutClient(
+                    TestSuiteInfo.getInstance().didLoadFromProperties()
+                            ? TestSuiteInfo.getInstance().getName()
+                            : "");
+        }
     }
 
     public static void main(final String[] mainArgs) {
