@@ -40,6 +40,7 @@ import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.ManagedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteFileUtil;
+import com.android.tradefed.device.connection.AdbSshConnection;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -165,7 +166,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
             TestInformation info, IConfiguration config, ITestInvocationListener listener)
             throws Throwable {
         ManagedRemoteDevice device = (ManagedRemoteDevice) info.getDevice();
-        GceAvdInfo gceInfo = device.getRemoteAvdInfo();
+        GceAvdInfo gceInfo = ((AdbSshConnection) device.getConnection()).getAvdInfo();
 
         // Run remote TF (new tests?)
         IRunUtil runUtil = new RunUtil();
