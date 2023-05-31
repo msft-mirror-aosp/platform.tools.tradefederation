@@ -552,20 +552,21 @@ public class InvocationExecution implements IInvocationExecution {
                 preparer.setUp(testInfo);
             } finally {
                 testInfo.setActiveDeviceIndex(0);
-            }
+                long elapsedTime = System.currentTimeMillis() - startTime;
 
+                CLog.d(
+                        "done with lab preparer '%s' on device: '%s' in %s",
+                        preparer,
+                        device.getSerialNumber(),
+                        TimeUtil.formatElapsedTime(elapsedTime));
+
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationGroupMetricKey.LAB_PREPARER_SETUP_LATENCY,
+                        preparer.getClass().getName(),
+                        elapsedTime);
+            }
             // Track which lab preparers were executed separately from the target preparers
             trackLabPreparers.add(preparer);
-            long elapsedTime = System.currentTimeMillis() - startTime;
-
-            CLog.d(
-                    "done with lab preparer '%s' on device: '%s' in %s",
-                    preparer, device.getSerialNumber(), TimeUtil.formatElapsedTime(elapsedTime));
-
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationGroupMetricKey.LAB_PREPARER_SETUP_LATENCY,
-                    preparer.getClass().getName(),
-                    elapsedTime);
         }
     }
 
