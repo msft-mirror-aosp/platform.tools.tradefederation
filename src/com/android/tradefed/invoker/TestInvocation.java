@@ -374,9 +374,16 @@ public class TestInvocation implements ITestInvocation {
                     }
                 }
                 if (exception == null && !SystemUtil.isLocalMode()) {
-                    try (CloseableTraceScope ignore =
-                            new CloseableTraceScope("responsiveness_check")) {
-                        exception = bareMinimumResponsiveness(context.getDevices());
+                    exception = mUnavailableMonitor.getUnavailableException();
+                    if (exception != null) {
+                        CLog.e("Found a test level only device unavailable exception:");
+                        CLog.e(exception);
+                    }
+                    if (exception == null) {
+                        try (CloseableTraceScope ignore =
+                                new CloseableTraceScope("responsiveness_check")) {
+                            exception = bareMinimumResponsiveness(context.getDevices());
+                        }
                     }
                     if (exception != null) {
                         bugreportName = null;
@@ -429,13 +436,6 @@ public class TestInvocation implements ITestInvocation {
             }
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope(InvocationMetricKey.check_device_availability.name())) {
-                if (exception == null) {
-                    exception = mUnavailableMonitor.getUnavailableException();
-                    if (exception != null) {
-                        CLog.e("Found a test level only device unavailable exception:");
-                        CLog.e(exception);
-                    }
-                }
                 if (SystemUtil.isLocalMode()) {
                     CLog.d("Skipping check for device availability for local run.");
                 } else if (exception == null) {
@@ -1734,6 +1734,7 @@ public class TestInvocation implements ITestInvocation {
             }
             RecoveryMode current = device.getRecoveryMode();
             device.setRecoveryMode(RecoveryMode.NONE);
+            CLog.d("Testing minimum responsiveness.");
             try {
                 if (device instanceof NativeDevice) {
                     ((NativeDevice) device).invalidatePropertyCache();

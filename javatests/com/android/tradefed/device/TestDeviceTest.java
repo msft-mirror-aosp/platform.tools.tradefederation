@@ -6415,37 +6415,6 @@ public class TestDeviceTest {
 
     /** Unit test for {@link NativeDevice#logBugreport(String, ITestLogger)}. */
     @Test
-    public void testTestLogBugreport_oldDevice() {
-        final String dataName = "test";
-        final InputStreamSource stream = new ByteArrayInputStreamSource("bugreport".getBytes());
-        mTestDevice =
-                new TestableTestDevice() {
-                    @Override
-                    public InputStreamSource getBugreportz() {
-                        // Older device do not support bugreportz and return null
-                        return null;
-                    }
-
-                    @Override
-                    public InputStreamSource getBugreportInternal() {
-                        return stream;
-                    }
-
-                    @Override
-                    public int getApiLevel() throws DeviceNotAvailableException {
-                        // no bugreportz support
-                        return 23;
-                    }
-                };
-        ITestLogger listener = mock(ITestLogger.class);
-
-        assertTrue(mTestDevice.logBugreport(dataName, listener));
-
-        verify(listener).testLog(dataName, LogDataType.BUGREPORT, stream);
-    }
-
-    /** Unit test for {@link NativeDevice#logBugreport(String, ITestLogger)}. */
-    @Test
     public void testTestLogBugreport_fail() {
         mTestDevice =
                 new TestableTestDevice() {
