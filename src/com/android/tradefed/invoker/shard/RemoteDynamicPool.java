@@ -24,6 +24,7 @@ import com.android.tradefed.testtype.suite.ITestSuite;
 import com.google.internal.android.engprod.v1.RequestTestTargetRequest;
 import com.google.internal.android.engprod.v1.RequestTestTargetResponse;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -33,7 +34,7 @@ public class RemoteDynamicPool implements ITestsPool {
     private IDynamicShardingClient mClient;
     private Map<String, ITestSuite> mModuleMapping;
     private String mPoolId;
-    private List<IRemoteTest> mQueuedTests;
+    private List<IRemoteTest> mQueuedTests = new ArrayList<>();
 
     public static RemoteDynamicPool newInstance(
             IDynamicShardingClient client, String poolId, Map<String, ITestSuite> moduleMapping) {
@@ -44,6 +45,7 @@ public class RemoteDynamicPool implements ITestsPool {
             IDynamicShardingClient client, String poolId, Map<String, ITestSuite> moduleMapping) {
         mClient = client;
         mModuleMapping = moduleMapping;
+        mPoolId = poolId;
     }
 
     @Override
