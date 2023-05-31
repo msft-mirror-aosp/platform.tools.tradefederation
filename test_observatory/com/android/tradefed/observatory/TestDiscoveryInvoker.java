@@ -147,7 +147,7 @@ public class TestDiscoveryInvoker {
                     .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
         }
 
-        CommandResult res = getRunUtil().runTimedCmd(20000, subprocessArgs);
+        CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
         if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
             DiscoveryExitCode exitCode = null;
             if (res.getExitCode() != null) {
@@ -213,7 +213,7 @@ public class TestDiscoveryInvoker {
             getRunUtil()
                     .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
         }
-        CommandResult res = getRunUtil().runTimedCmd(30000, subprocessArgs);
+        CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
         if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
             throw new TestDiscoveryException(
                     String.format(
