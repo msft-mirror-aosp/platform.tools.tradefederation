@@ -166,7 +166,9 @@ public class GTestTest {
         final String test2 = "arm64/test2";
         final String testPath2 = String.format("%s/%s", nativeTestPath, test2);
         final String findCmd =
-                String.format("find %s -type f -executable -path */arm64/*", nativeTestPath);
+                String.format("find %s -type f -executable -not -path \"*/arm/*\" -not -path"
+                        +" \"*/x86/*\" -not -path \"*/x86_64/*\" -not -path \"*/mips/*\" -not "
+                        + "-path \"*/mips64/*\" -not -path \"*/riscv64/*\"", nativeTestPath);
         final String findCmdOut = testPath2;
 
         MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
