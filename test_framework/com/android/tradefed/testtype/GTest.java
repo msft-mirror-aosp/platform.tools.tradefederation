@@ -167,13 +167,19 @@ public class GTest extends GTestBase implements IDeviceTest {
     void doRunAllTestsInSubdirectory(
             String root, ITestDevice testDevice, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        Set<String> includeDirectories = new LinkedHashSet<>();
+        Set<String> excludeDirectories = new LinkedHashSet<>();
         // Decide to filter out a folder sub-path based on whether we should enforce the
         // current abi under test.
         if (mFilterAbiFolders && getAbi() != null) {
-            includeDirectories.add(AbiUtils.getArchForAbi(getAbi().getName()));
+            String currentArch = AbiUtils.getArchForAbi(getAbi().getName());
+            // exclude all abi specific folders, that is not the current abi, from the search
+            for (String supportedArch : AbiUtils.getArchSupported()) {
+                if (!supportedArch.equals(currentArch)) {
+                    excludeDirectories.add(supportedArch);
+                }
+            }
         }
-        String[] executableFiles = getExecutableFiles(testDevice, root, includeDirectories);
+        String[] executableFiles = getExecutableFiles(testDevice, root, excludeDirectories);
         for (String filePath : executableFiles) {
             if (shouldRunFile(filePath)) {
                 IShellOutputReceiver resultParser =
@@ -433,18 +439,18 @@ public class GTest extends GTestBase implements IDeviceTest {
      *
      * @param device {@link ITestDevice} where the search will occur.
      * @param deviceFilePath is the path on the device where to do the search.
-     * @param includedDirectories Set of directory names that must be included in the search.
+     * @param excludeDirectories Set of directory names that must be excluded from the search.
      * @return Array of string containing all the executable file paths on the device.
      * @throws DeviceNotAvailableException
      */
     private String[] getExecutableFiles(
-            ITestDevice device, String deviceFilePath, Set<String> includedDirectories)
+            ITestDevice device, String deviceFilePath, Set<String> excludeDirectories)
             throws DeviceNotAvailableException {
         String cmd = String.format("find %s -type f -executable", deviceFilePath);
 
-        if (includedDirectories != null && !includedDirectories.isEmpty()) {
-            for (String directoryName : includedDirectories) {
-                cmd += String.format(" -path */%s/*", directoryName);
+        if (excludeDirectories != null && !excludeDirectories.isEmpty()) {
+            for (String directoryName : excludeDirectories) {
+                cmd += String.format(" -not -path \"*/%s/*\"", directoryName);
             }
         }
 
