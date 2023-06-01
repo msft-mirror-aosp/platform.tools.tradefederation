@@ -22,16 +22,14 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
-
 import com.google.common.annotations.VisibleForTesting;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -49,7 +47,10 @@ public class BundletoolUtil {
     private static final String DEVICE_ID_FLAG = "--device-id=";
     private static final String EXTRACT_APKS_OPTION = "extract-apks";
     private static final String INSTALL_APKS_OPTION = "install-apks";
+    private static final String INSTALL_MULTI_APKS_OPTION = "install-multi-apks";
     private static final String DEVICE_SPEC_FILE_EXTENSION = ".json";
+    private static final String APKS_FILE_INPUT_SELECTOR = "--apks=";
+    private static final String ZIP_FILE_INPUT_SELECTOR = "--apks-zip=";
     private static final long CMD_TIME_OUT = 10 * 6000; // 1 min
 
     private File mBundleToolFile;
@@ -157,14 +158,16 @@ public class BundletoolUtil {
         return destDir;
     }
 
-    /**
-     * Installs the apk .apks that using bundletool.
-     *
-     * @param apks the apks that need to be installed
-     * @param device the connected device
-     */
-    public void installApks(File apks, ITestDevice device) throws TargetSetupError {
-        String inputPathArg = "--apks=" + apks.getAbsolutePath();
+    private void installApksOnDevice(
+            File inputFile,
+            ITestDevice device,
+            String inputArg,
+            String installOptionCmd,
+            List<String> extraArgs,
+            String onErrorMsg,
+            String onSuccessMsg)
+            throws TargetSetupError {
+        String inputPathArg = inputArg + inputFile.getAbsolutePath();
 
         String deviceIdArg = DEVICE_ID_FLAG + device.getSerialNumber();
 
@@ -174,9 +177,10 @@ public class BundletoolUtil {
                                 "java",
                                 "-jar",
                                 getBundletoolFile().getAbsolutePath(),
-                                INSTALL_APKS_OPTION,
+                                installOptionCmd,
                                 inputPathArg,
                                 deviceIdArg));
+        installApksCmd.addAll(extraArgs);
 
         if (getAdbPath() != null) {
             installApksCmd.add("--adb=" + getAdbPath());
@@ -190,13 +194,49 @@ public class BundletoolUtil {
         if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
             throw new TargetSetupError(
                     String.format(
-                            "Failed to install split apk. Cmd: %s. Error: %s.",
-                            installApksCmd.toString(), res.getStderr()),
+                            "%s Cmd: %s. Error: %s.",
+                            onErrorMsg, installApksCmd.toString(), res.getStderr()),
                     device.getDeviceDescriptor(),
                     DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
         }
-        CLog.i("%s is installed successfully", apks.getName());
+        CLog.i(onSuccessMsg);
         return;
+    }
+
+    /**
+     * Installs the apk .apks that using bundletool.
+     *
+     * @param apks the apks that need to be installed
+     * @param device the connected device
+     */
+    public void installApks(File apks, ITestDevice device) throws TargetSetupError {
+        installApksOnDevice(
+                apks,
+                device,
+                APKS_FILE_INPUT_SELECTOR,
+                INSTALL_APKS_OPTION,
+                new ArrayList<String>(),
+                "Failed to install split apks.",
+                apks.getName() + " is installed successfully");
+    }
+
+    /**
+     * Installs the apks contained in provided zip file
+     *
+     * @param apksZip the zip file to install
+     * @param device the connected device
+     * @param extraArgs additional args to pass to bundletool install command
+     */
+    public void installApksFromZip(File apksZip, ITestDevice device, List<String> extraArgs)
+            throws TargetSetupError {
+        installApksOnDevice(
+                apksZip,
+                device,
+                ZIP_FILE_INPUT_SELECTOR,
+                INSTALL_MULTI_APKS_OPTION,
+                extraArgs,
+                "Failed to install apks from zip file",
+                "Successfully installed apks from " + apksZip.getName());
     }
 
     @VisibleForTesting

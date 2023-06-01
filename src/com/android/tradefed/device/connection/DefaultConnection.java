@@ -23,6 +23,7 @@ import com.android.tradefed.device.ManagedTestDeviceFactory;
 import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
+import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.util.IRunUtil;
@@ -63,6 +64,7 @@ public class DefaultConnection extends AbstractConnection {
             if (InstanceType.CUTTLEFISH.equals(type)
                     || InstanceType.REMOTE_NESTED_AVD.equals(type)) {
                 if (ManagedTestDeviceFactory.isTcpDeviceSerial(builder.device.getSerialNumber())) {
+                    // TODO: Add support for remote environment
                     // If the device is already started just go for TcpConnection
                     return new AdbTcpConnection(builder);
                 } else {
@@ -83,6 +85,7 @@ public class DefaultConnection extends AbstractConnection {
         MultiMap<String, String> attributes;
         IRunUtil runUtil;
         ITestLogger logger;
+        GceAvdInfo existingAvdInfo;
 
         public ConnectionBuilder(
                 IRunUtil runUtil, ITestDevice device, IBuildInfo buildInfo, ITestLogger logger) {
@@ -95,6 +98,11 @@ public class DefaultConnection extends AbstractConnection {
 
         public ConnectionBuilder addAttributes(MultiMap<String, String> attributes) {
             this.attributes.putAll(attributes);
+            return this;
+        }
+
+        public ConnectionBuilder setExistingAvdInfo(GceAvdInfo info) {
+            existingAvdInfo = info;
             return this;
         }
     }

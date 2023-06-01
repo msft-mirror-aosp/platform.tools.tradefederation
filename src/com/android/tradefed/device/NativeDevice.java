@@ -76,11 +76,15 @@ import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.SizeLimitedOutputStream;
 import com.android.tradefed.util.StringEscapeUtils;
+import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.errorprone.annotations.FormatMethod;
 
 import java.io.File;
@@ -219,7 +223,8 @@ public class NativeDevice
     private RecoveryMode mRecoveryMode = RecoveryMode.AVAILABLE;
 
     private Boolean mIsEncryptionSupported = null;
-    private ReentrantLock mAllocationStateLock = new ReentrantLock();
+    private ReentrantLock mAllocationStateLock = new ReentrantLock(true /*fair*/);
+
     @GuardedBy("mAllocationStateLock")
     private DeviceAllocationState mAllocationState = DeviceAllocationState.Unknown;
     private IDeviceMonitor mAllocationMonitor = null;
@@ -254,6 +259,8 @@ public class NativeDevice
 
     /** If the device is a Microdroid, this refers to the VM process. Otherwise, it is null. */
     private Process mMicrodroidProcess = null;
+
+    private final LoadingCache<String, String> mPropertiesCache;
 
     /**
      * Interface for a generic device communication attempt.
@@ -422,6 +429,19 @@ public class NativeDevice
         mIDevice = device;
         mStateMonitor = stateMonitor;
         mAllocationMonitor = allocationMonitor;
+        // Keep a short timeout to expire key in case of large state changes
+        // such as flashing
+        mPropertiesCache =
+                CacheBuilder.newBuilder()
+                        .maximumSize(50)
+                        .expireAfterAccess(2, TimeUnit.MINUTES)
+                        .build(
+                                new CacheLoader<String, String>() {
+                                    @Override
+                                    public String load(String key) {
+                                        throw new IllegalStateException("Should never be called");
+                                    }
+                                });
     }
 
     /** Get the {@link RunUtil} instance to use. */
@@ -578,49 +598,63 @@ public class NativeDevice
         if (getIDevice() instanceof StubDevice) {
             return null;
         }
-        TestDeviceState state = getDeviceState();
-        if (!TestDeviceState.ONLINE.equals(state) && !TestDeviceState.RECOVERY.equals(state)) {
-            if (recovery) {
-                // Only query property for online device so trigger recovery before getting
-                // property.
-                recoverDevice();
-            } else {
-                if (mStateMonitor.waitForDeviceOnline() == null) {
-                    CLog.w(
-                            "Waited for device %s to be online but it is in state '%s', cannot "
-                                    + "get property %s.",
-                            getSerialNumber(), getDeviceState(), name);
-                    CLog.w(new RuntimeException("This is not an actual exception but to help"
+        String property = mPropertiesCache.getIfPresent(name);
+        if (property != null) {
+            CLog.d("Using property %s=%s from cache.", name, property);
+            return property;
+        }
+        try (CloseableTraceScope getProp = new CloseableTraceScope("get_property:" + name)) {
+            TestDeviceState state = getDeviceState();
+            if (!TestDeviceState.ONLINE.equals(state) && !TestDeviceState.RECOVERY.equals(state)) {
+                if (recovery) {
+                    // Only query property for online device so trigger recovery before getting
+                    // property.
+                    recoverDevice();
+                } else {
+                    if (mStateMonitor.waitForDeviceOnline() == null) {
+                        CLog.w(
+                                "Waited for device %s to be online but it is in state '%s', cannot "
+                                        + "get property %s.",
+                                getSerialNumber(), getDeviceState(), name);
+                        CLog.w(
+                                new RuntimeException(
+                                        "This is not an actual exception but to help"
                                                 + " debugging. If this happens deterministically, "
                                                 + " it means the caller has wrong assumption of "
                                                 + " device state and is wasting time in waiting."));
-                    return null;
+                        return null;
+                    }
                 }
             }
-        }
-        String cmd = String.format("getprop %s", name);
-        CommandResult result =
-                executeShellV2Command(cmd, PROPERTY_GET_TIMEOUT, TimeUnit.MILLISECONDS, 0);
-        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-            CLog.e(
-                    "Failed to run '%s' returning null. stdout: %s\nstderr: %s\nexit code: %s",
-                    cmd, result.getStdout(), result.getStderr(), result.getExitCode());
-            if (result.getStderr().contains("device offline")) {
-                if (recovery) {
-                    recoverDevice();
-                    return getPropertyWithRecovery(name, false);
+            String cmd = String.format("getprop %s", name);
+            CommandResult result =
+                    executeShellV2Command(cmd, PROPERTY_GET_TIMEOUT, TimeUnit.MILLISECONDS, 0);
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                CLog.e(
+                        "Failed to run '%s' returning null. stdout: %s\nstderr: %s\nexit code: %s",
+                        cmd, result.getStdout(), result.getStderr(), result.getExitCode());
+                if (result.getStderr().contains("device offline")) {
+                    if (recovery) {
+                        recoverDevice();
+                        return getPropertyWithRecovery(name, false);
+                    }
+                    throw new DeviceNotAvailableException(
+                            String.format("Device went offline when querying property: %s", name),
+                            getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
                 }
-                throw new DeviceNotAvailableException(
-                        String.format("Device went offline when querying property: %s", name),
-                        getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                return null;
             }
-            return null;
+            if (result.getStdout() == null || result.getStdout().trim().isEmpty()) {
+                return null;
+            }
+            property = result.getStdout().trim();
+            if (property != null) {
+                // Manage the cache manually to maintain exception handling
+                mPropertiesCache.put(name, property);
+            }
+            return property;
         }
-        if (result.getStdout() == null || result.getStdout().trim().isEmpty()) {
-            return null;
-        }
-        return result.getStdout().trim();
     }
 
     /** {@inheritDoc} */
@@ -667,6 +701,7 @@ public class NativeDevice
         String setPropCmd = String.format("\"setprop %s '%s'\"", propKey, propValue);
         CommandResult result = executeShellV2Command(setPropCmd);
         if (CommandStatus.SUCCESS.equals(result.getStatus())) {
+            mPropertiesCache.invalidate(propKey);
             return true;
         }
         CLog.e(
@@ -2848,6 +2883,9 @@ public class NativeDevice
     @VisibleForTesting
     LogcatReceiver createLogcatReceiver() {
         String logcatOptions = mOptions.getLogcatOptions();
+        if (SystemUtil.isLocalMode()) {
+            mLogStartDelay = 0;
+        }
         if (logcatOptions == null) {
             return new LogcatReceiver(this, mOptions.getMaxLogcatDataSize(), mLogStartDelay);
         } else {
@@ -3284,6 +3322,8 @@ public class NativeDevice
                 }
             }
         } finally {
+            // Invalidate cache after reboots
+            mPropertiesCache.invalidateAll();
             long elapsed = System.currentTimeMillis() - startTime;
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.POSTBOOT_SETUP_TIME, elapsed);
@@ -3393,6 +3433,7 @@ public class NativeDevice
      */
     private void rebootIntoFastbootInternal(boolean isBootloader)
             throws DeviceNotAvailableException {
+        invalidatePropertyCache();
         final RebootMode mode =
                 isBootloader ? RebootMode.REBOOT_INTO_BOOTLOADER : RebootMode.REBOOT_INTO_FASTBOOTD;
         if (!mFastbootEnabled) {
@@ -4506,6 +4547,10 @@ public class NativeDevice
     @Override
     public boolean checkApiLevelAgainstNextRelease(int strictMinLevel)
             throws DeviceNotAvailableException {
+        int apiLevel = getApiLevel();
+        if (apiLevel > strictMinLevel) {
+            return true;
+        }
         String codeName = getPropertyWithRecovery(DeviceProperties.BUILD_CODENAME, true);
         if (codeName == null) {
             throw new DeviceRuntimeException(
@@ -4515,7 +4560,7 @@ public class NativeDevice
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
         }
         codeName = codeName.trim();
-        int apiLevel = getApiLevel() + ("REL".equals(codeName) ? 0 : 1);
+        apiLevel = apiLevel + ("REL".equals(codeName) ? 0 : 1);
         if (strictMinLevel > apiLevel) {
             return false;
         }
@@ -4811,6 +4856,7 @@ public class NativeDevice
         // command to disable verity
         if (verity != null && !verity.isEmpty()) {
             executeAdbCommand("disable-verity");
+            mPropertiesCache.invalidate("partition.system.verified");
             reboot();
         }
         enableAdbRoot();
@@ -4826,6 +4872,7 @@ public class NativeDevice
         // command to disable verity
         if (verity != null && !verity.isEmpty()) {
             executeAdbCommand("disable-verity");
+            mPropertiesCache.invalidate("partition.vendor.verified");
             reboot();
         }
         enableAdbRoot();
@@ -5067,23 +5114,32 @@ public class NativeDevice
 
     protected void initializeConnection(IBuildInfo info, MultiMap<String, String> attributes)
             throws DeviceNotAvailableException, TargetSetupError {
-        ConnectionBuilder builder = new ConnectionBuilder(getRunUtil(), this, info, getLogger());
-        if (attributes != null) {
-            builder.addAttributes(attributes);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("initializeConnection")) {
+            ConnectionBuilder builder =
+                    new ConnectionBuilder(getRunUtil(), this, info, getLogger());
+            if (attributes != null) {
+                builder.addAttributes(attributes);
+            }
+            if (getOptions().shouldUseConnection()) {
+                addExtraConnectionBuilderArgs(builder);
+                mConnection = DefaultConnection.createConnection(builder);
+            } else {
+                // Use default inop connection
+                mConnection = DefaultConnection.createInopConnection(builder);
+            }
+            CLog.d("Using connection: %s", mConnection);
+            mConnection.initializeConnection();
         }
-        if (getOptions().shouldUseConnection()) {
-            mConnection = DefaultConnection.createConnection(builder);
-        } else {
-            // Use default inop connection
-            mConnection = DefaultConnection.createInopConnection(builder);
-        }
-        CLog.d("Using connection: %s", mConnection);
-        mConnection.initializeConnection();
+    }
+
+    protected void addExtraConnectionBuilderArgs(ConnectionBuilder builder) {
+        // Empty by default
     }
 
     /** {@inheritDoc} */
     @Override
     public void postInvocationTearDown(Throwable exception) {
+        invalidatePropertyCache();
         mConfiguration = null;
         mIsEncryptionSupported = null;
         FileUtil.deleteFile(mExecuteShellCommandLogs);
@@ -5967,5 +6023,9 @@ public class NativeDevice
         } catch (ConfigurationException e) {
             CLog.w(e);
         }
+    }
+
+    public void invalidatePropertyCache() {
+        mPropertiesCache.invalidateAll();
     }
 }

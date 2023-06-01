@@ -1303,7 +1303,7 @@ public class Configuration implements IConfiguration {
     @Override
     public void resolveDynamicOptions(DynamicRemoteFileResolver resolver)
             throws ConfigurationException, BuildRetrievalError {
-        List<Object> configObjects = new ArrayList<>(getAllConfigurationObjects());
+        List<Object> configObjects = new ArrayList<>(getAllNonDisabledConfigurationObjects());
         // Resolve regardless of sharding if we are in remote environment because we know that's
         // where the execution will occur.
         if (!isRemoteEnvironment()) {

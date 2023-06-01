@@ -137,6 +137,10 @@ public class InvocationMetricLogger {
         RESET_RETRY_ISOLATION_PAIR("reset_isolation_timestamp_pair", true),
         // Capture the time spent isolating a retry with reboot
         REBOOT_RETRY_ISOLATION_PAIR("reboot_isolation_timestamp_pair", true),
+        // Track metrics for skipped retries
+        RETRY_MODULE_SKIPPED_COUNT("retry_module_skipped_count", true),
+        RETRY_TEST_SKIPPED_COUNT("retry_test_skipped_count", true),
+
         // The time spent inside metric collectors
         COLLECTOR_TIME("collector_time_ms", true),
         // Track if soft restart is occurring after test module
@@ -181,12 +185,10 @@ public class InvocationMetricLogger {
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
         INVOCATION_START("tf_invocation_start_timestamp", false),
         LOAD_TEST_CONFIGS_TIME("load_test_configs_time_ms", true),
-        // Track the way of requesting Oxygen device lease/release.
-        OXYGEN_DEVICE_LEASE_THROUGH_ACLOUD_COUNT("oxygen_device_lease_through_acloud_count", true),
-        OXYGEN_DEVICE_RELEASE_THROUGH_ACLOUD_COUNT(
-                "oxygen_device_release_through_acloud_count", true),
         OXYGEN_DEVICE_DIRECT_LEASE_COUNT("oxygen_device_direct_lease_count", true),
         OXYGEN_DEVICE_DIRECT_RELEASE_COUNT("oxygen_device_direct_release_count", true),
+        OXYGEN_DEVICE_RELEASE_FAILURE_COUNT("oxygen_device_release_failure_count", true),
+        OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE("oxygen_device_release_failure_message", true),
 
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
@@ -238,6 +240,8 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_TIME("cas_download_time_ms", true),
         // Records the wait time caused by CAS downloader concurrency limitation.
         CAS_DOWNLOAD_WAIT_TIME("cas_download_wait_time_ms", true),
+        CAS_CACHE_FALLBACK_COUNT("cas_cache_fallback_count", true),
+        CAS_TIMEOUT_COUNT("cas_timeout_count", true),
         // Records cache hit metrics
         CAS_DOWNLOAD_HOT_BYTES("cas_download_hot_bytes", true),
         CAS_DOWNLOAD_COLD_BYTES("cas_download_cold_bytes", true),

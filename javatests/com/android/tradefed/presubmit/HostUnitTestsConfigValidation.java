@@ -185,8 +185,9 @@ public class HostUnitTestsConfigValidation implements IBuildReceiver {
         // We need the test mapping files for this test.
         Assume.assumeNotNull(mBuild.getFile("test_mappings.zip"));
 
+        TestMapping testMapping = new TestMapping();
         Set<TestInfo> testInfosToRun =
-                TestMapping.getTests(
+                testMapping.getTests(
                         mBuild, group, /* host */ true, /* keywords */ new HashSet<>());
 
         List<String> errors = new ArrayList<>();
@@ -207,10 +208,12 @@ public class HostUnitTestsConfigValidation implements IBuildReceiver {
                                         + "need the test mapping config: %s",
                                 moduleName, infos.get(moduleName)));
             } else if (infos.containsKey(moduleName) && !FINAL_MODULE_LIST.contains(moduleName)) {
-                errors.add(String.format(
-                        "Target '%s' is attempted to be added to host test mapping."
-                        + " We do not currently allow new addition, consider using unit_tests "
-                        + " setup instead.", moduleName));
+                errors.add(
+                        String.format(
+                                "Target '%s' is attempted to be added to host test mapping. We do"
+                                    + " not currently allow new addition, consider using unit_tests"
+                                    + "  setup instead.",
+                                moduleName));
             }
         }
         return errors;

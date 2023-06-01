@@ -139,6 +139,8 @@ public class VisibleBackgroundUserPreparer extends BaseTargetPreparer {
             CLog.d("Skipping teardown because no user was created or reused");
             return;
         }
+        // Clean property at teardown
+        testInfo.properties().remove(RUN_TESTS_AS_USER_KEY);
         if (e instanceof DeviceNotAvailableException) {
             CLog.d("Skipping teardown due to dnae: %s", e.getMessage());
             return;

@@ -70,6 +70,7 @@ import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryPreparationDecision;
 import com.android.tradefed.retry.RetryStatistics;
+import com.android.tradefed.retry.RetryStrategy;
 import com.android.tradefed.suite.checker.ISystemStatusCheckerReceiver;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.ITargetPreparer;
@@ -88,6 +89,7 @@ import com.android.tradefed.testtype.suite.module.IModuleController.RunStrategy;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import com.google.api.client.util.Joiner;
@@ -106,7 +108,6 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -624,7 +625,11 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                         mPassThroughFilters.addAll(mCurrentTestWrapper.getPassedTests());
                     }
                     // Limit escalating retries across all sub-IRemoteTests
-                    perModuleRetryQuota -= mCurrentTestWrapper.getRetryCount();
+                    if (mRetryDecision != null
+                            && RetryStrategy.RETRY_ANY_FAILURE.equals(
+                                    mRetryDecision.getRetryStrategy())) {
+                        perModuleRetryQuota -= mCurrentTestWrapper.getRetryCount();
+                    }
 
                     mExpectedTests += mCurrentTestWrapper.getExpectedTestsCount();
                     // Get information about retry
@@ -1119,40 +1124,26 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
 
     /** Verify that the device did not crash after the module. */
     private void checkEndModuleDevice(TestInformation testInfo) throws DeviceNotAvailableException {
-        for (ITestDevice device : testInfo.getDevices()) {
-            if (device.getIDevice() instanceof StubDevice) {
-                continue;
-            }
-            // First check device is still online
-            try {
-                device.waitForDeviceAvailable();
-            } catch (DeviceNotAvailableException e) {
-                // Wrap exception for better message
-                throw new DeviceNotAvailableException(
-                        String.format("Device went offline after running module '%s'", mId),
-                        e,
-                        e.getSerial(),
-                        DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
-            }
-            // Second check device didn't crash
-            long deviceDate = device.getDeviceDate();
-            if (deviceDate == 0L) {
-                continue;
-            }
-            try {
-                boolean restarted =
-                        device.deviceSoftRestartedSince(deviceDate - 5000L, TimeUnit.MILLISECONDS);
-                if (restarted) {
-                    CLog.e("Detected a soft-restart after module %s", mId);
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.SOFT_RESTART_AFTER_MODULE, 1);
-                    // TODO: Enable actually failing module for reporting
-                    /*throw new HarnessRuntimeException(
-                    String.format("Device '%s' crashed after running %s.", device.getSerialNumber(), mId),
-                    DeviceErrorIdentifier.DEVICE_CRASHED);*/
+        if (SystemUtil.isLocalMode()) {
+            CLog.d("Skipping check for device availability after end of module for local run.");
+            return;
+        }
+        try (CloseableTraceScope check = new CloseableTraceScope("checkEndModuleDevice")) {
+            for (ITestDevice device : testInfo.getDevices()) {
+                if (device.getIDevice() instanceof StubDevice) {
+                    continue;
                 }
-            } catch (RuntimeException e) {
-                CLog.e(e);
+                // Check device is still online
+                try {
+                    device.waitForDeviceAvailable();
+                } catch (DeviceNotAvailableException e) {
+                    // Wrap exception for better message
+                    throw new DeviceNotAvailableException(
+                            String.format("Device went offline after running module '%s'", mId),
+                            e,
+                            e.getSerial(),
+                            DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                }
             }
         }
     }

@@ -240,8 +240,6 @@ public class DeviceManagementGrpcServerTest {
     public void testReserve_cancelledBeforeReserved() {
         when(mMockDeviceManager.getDeviceDescriptor("serial1"))
                 .thenReturn(createDescriptor("serial1", DeviceAllocationState.Available));
-        ITestDevice mockedDevice = Mockito.mock(ITestDevice.class);
-        when(mMockDeviceManager.allocateDevice(Mockito.any())).thenReturn(mockedDevice);
         when(mReserveDeviceResponseObserver.isCancelled()).thenReturn(true);
         // Allocate a device
         mServer.reserveDevice(

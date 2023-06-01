@@ -113,8 +113,11 @@ public class FileDownloadCache {
         if (!mCacheRoot.exists()) {
             CLog.d("Creating file cache at %s", mCacheRoot.getAbsolutePath());
             if (!mCacheRoot.mkdirs()) {
-                throw new FatalHostError(String.format("Could not create cache directory at %s",
-                        mCacheRoot.getAbsolutePath()));
+                throw new FatalHostError(
+                        String.format(
+                                "Could not create cache directory at %s",
+                                mCacheRoot.getAbsolutePath()),
+                        InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
             }
         } else {
             mCacheMapLock.lock();
@@ -347,6 +350,8 @@ public class FileDownloadCache {
             } finally {
                 mCacheMapLock.unlock();
             }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CACHE_WAIT_FOR_LOCK, System.currentTimeMillis() - start);
             try {
                 if (!download
                         && cachedFile.exists()
@@ -368,9 +373,6 @@ public class FileDownloadCache {
                 } else {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.CACHE_HIT_COUNT, 1);
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.CACHE_WAIT_FOR_LOCK,
-                            System.currentTimeMillis() - start);
                     CLog.d(
                             "Retrieved remote file %s from cached file %s",
                             remotePath, cachedFile.getAbsolutePath());

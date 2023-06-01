@@ -72,6 +72,9 @@ public class AdbSshConnection extends AdbTcpConnection {
 
     public AdbSshConnection(ConnectionBuilder builder) {
         super(builder);
+        if (builder.existingAvdInfo != null) {
+            mGceAvd = builder.existingAvdInfo;
+        }
     }
 
     @Override
@@ -85,10 +88,12 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getOptions(),
                         getBuildInfo());
 
-        long remainingTime = 0;
+        long remainingTime = getDevice().getOptions().getGceCmdTimeout();
         // mGceAvd is null means the device hasn't been launched.
         if (mGceAvd != null) {
             CLog.d("skipped GCE launch because GceAvdInfo %s is already set", mGceAvd);
+            createGceSshMonitor(
+                    getDevice(), getBuildInfo(), mGceAvd.hostAndPort(), getDevice().getOptions());
         } else {
             // Launch GCE helper script.
             long startTime = getCurrentTime();
@@ -107,9 +112,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                             TimeUnit.MILLISECONDS.toSeconds(queueTime));
                 }
                 launchGce(getBuildInfo(), getAttributes());
-                remainingTime =
-                        getDevice().getOptions().getGceCmdTimeout()
-                                - (getCurrentTime() - startTime);
+                remainingTime = remainingTime - (getCurrentTime() - startTime);
             } finally {
                 if (GlobalConfiguration.getInstance()
                                 .getHostOptions()
@@ -120,7 +123,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                             .returnPermit(PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP);
                 }
             }
-            if (remainingTime < 0) {
+            if (remainingTime <= 0) {
                 throw new DeviceNotAvailableException(
                         String.format(
                                 "Failed to launch GCE after %sms",
@@ -333,7 +336,14 @@ public class AdbSshConnection extends AdbTcpConnection {
                                         attributes,
                                         getLogger());
                 if (mGceAvd != null) {
-                    break;
+                    if (GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
+                        break;
+                    }
+                    CLog.w(
+                            "Failed to start AVD with attempt: %s out of %s, error: %s",
+                            attempt + 1,
+                            getDevice().getOptions().getGceMaxAttempt(),
+                            mGceAvd.getErrors());
                 }
             } catch (TargetSetupError tse) {
                 CLog.w(
@@ -351,17 +361,20 @@ public class AdbSshConnection extends AdbTcpConnection {
             throw exception;
         } else {
             CLog.i("GCE AVD has been started: %s", mGceAvd);
+            ErrorIdentifier errorIdentifier =
+                    (mGceAvd.getErrorType() != null)
+                            ? mGceAvd.getErrorType()
+                            : DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE;
             if (GceAvdInfo.GceStatus.BOOT_FAIL.equals(mGceAvd.getStatus())) {
                 String errorMsg =
                         String.format(
                                 "Device failed to boot. Error from Acloud: %s",
                                 mGceAvd.getErrors());
-                ErrorIdentifier errorIdentifier =
-                        (mGceAvd.getErrorType() != null)
-                                ? mGceAvd.getErrorType()
-                                : DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE;
                 throw new TargetSetupError(
                         errorMsg, getDevice().getDeviceDescriptor(), errorIdentifier);
+            } else if (GceAvdInfo.GceStatus.FAIL.equals(mGceAvd.getStatus())) {
+                throw new TargetSetupError(
+                        mGceAvd.getErrors(), getDevice().getDeviceDescriptor(), errorIdentifier);
             }
         }
         createGceSshMonitor(

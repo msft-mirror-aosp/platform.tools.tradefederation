@@ -41,6 +41,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.PythonVirtualenvHelper;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
@@ -56,19 +57,18 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /** Host test meant to run a mobly python binary file from the Android Build system (Soong) */
 @OptionClass(alias = "mobly-host")
@@ -77,7 +77,6 @@ public class MoblyBinaryHostTest
 
     private static final String ANDROID_SERIAL_VAR = "ANDROID_SERIAL";
     private static final String MOBLY_TEST_SUMMARY = "test_summary.yaml";
-    private static final String LOCAL_CONFIG_FILENAME = "local_config.yaml";
 
     // TODO(b/159366744): merge this and next options.
     @Option(
@@ -249,6 +248,124 @@ public class MoblyBinaryHostTest
         return files;
     }
 
+    private final class TestFilter {
+        public String mFilter;
+        public String mTestClassName = "";
+        public String mTestName = "";
+        public boolean mMatched = false;
+
+        public TestFilter(String filter) {
+            this.mFilter = filter;
+            if (mFilter.startsWith("test_")) this.mTestName = mFilter;
+            else {
+                String[] split = mFilter.split("#", 2);
+                if (split.length != 2) this.mTestClassName = mFilter;
+                else {
+                    this.mTestClassName = split[0];
+                    this.mTestName = split[1];
+                }
+            }
+        }
+
+        public boolean match(String testClassName, String testName, boolean exact) {
+            if (mTestName.isEmpty() && mTestClassName.isEmpty()) return false;
+            if (!mTestClassName.isEmpty() && !mTestClassName.equals(testClassName)) return false;
+            if (!mTestName.isEmpty()) {
+                if (testName.startsWith(testClassName))
+                    testName = testName.substring(testClassName.length() + 1);
+                if (exact && !testName.equals(mTestName)) return false;
+                if (!exact && !testName.startsWith(mTestName)) return false;
+            }
+            mMatched = true;
+            return true;
+        }
+
+        public boolean isMatched() {
+            return mMatched;
+        }
+
+        @Override
+        public String toString() {
+            return mFilter;
+        }
+    }
+
+    @VisibleForTesting
+    protected Optional<Pair<List<String>, List<String>>> filterTests(
+            String[] testListLines, String runName, ITestInvocationListener listener) {
+        final List<TestFilter> includeFilters =
+                getIncludeFilters().stream().map(TestFilter::new).collect(Collectors.toList());
+        final List<TestFilter> excludeFilters =
+                getExcludeFilters().stream().map(TestFilter::new).collect(Collectors.toList());
+        List<String> tests = new ArrayList<>();
+        List<String> includedTests = new ArrayList<>();
+        String topTestClassName = "";
+        // `testListLines` are formatted as follow:
+        // ==========> testClassName(1) <==========
+        // [testClassName(1).]testName(1)
+        // [testClassName(1).]testName(n)
+        // ==========> testClassName(n) <==========
+        // [testClassName(n).]testName(1)
+        // [testClassName(n).]testName(n)
+        for (String line : testListLines) {
+            if (line.startsWith("==========> ")) {
+                topTestClassName = line.substring(12, line.length() - 12);
+                continue;
+            }
+            if (!line.startsWith("test_") && !line.contains(".test_")) continue;
+            final String testClassName = topTestClassName;
+            final String testName = line;
+            // While exclude filters are only exact match, we allow prefixed include filters
+            // for user usage only on the command-line for convenience.
+            boolean included =
+                    includeFilters.stream()
+                                    .filter(filter -> filter.match(testClassName, testName, false))
+                                    .count()
+                            > 0;
+            boolean excluded =
+                    excludeFilters.stream()
+                                    .filter(filter -> filter.match(testClassName, testName, true))
+                                    .count()
+                            > 0;
+            // For each parsed test name:
+            // - append to the complete test list.
+            // - append to the included test list when:
+            //   - not filtered out by an exclude filter.
+            //   - filtered in by an include filter, or no include filters at all.
+            tests.add(testName);
+            if (!excluded && (included || includeFilters.isEmpty())) includedTests.add(testName);
+        }
+        if (!includeFilters.isEmpty()) {
+            String invalidIncludeFilters =
+                    includeFilters.stream()
+                            .filter(filter -> !filter.isMatched())
+                            .map(filter -> filter.toString())
+                            .collect(Collectors.joining(", "));
+            if (!invalidIncludeFilters.isEmpty()) {
+                reportFailure(
+                        listener,
+                        runName,
+                        "Invalid include filters: [" + invalidIncludeFilters + "]");
+                return Optional.empty();
+            }
+        }
+        if (!excludeFilters.isEmpty()) {
+            String invalidExcludeFilters =
+                    excludeFilters.stream()
+                            .filter(filter -> !filter.isMatched())
+                            .map(filter -> filter.toString())
+                            .collect(Collectors.joining(", "));
+            if (!invalidExcludeFilters.isEmpty()) {
+                reportFailure(
+                        listener,
+                        runName,
+                        "Invalid exclude filters: [" + invalidExcludeFilters + "]");
+                return Optional.empty();
+            }
+        }
+        return Optional.of(new Pair<>(tests, includedTests));
+    }
+
     private void runSingleParFile(
             String parFilePath, String runName, ITestInvocationListener listener) {
         if (mInjectAndroidSerialVar) {
@@ -263,7 +380,7 @@ public class MoblyBinaryHostTest
                     configFile =
                             mTestInfo.getDependencyFile(mConfigFileName, /* targetFirst */ false);
                 }
-                configPath = updateTemplateConfigFile(configFile, mWildcardConfig);
+                configPath = updateTemplateConfigFile(configFile);
             } catch (FileNotFoundException e) {
                 reportFailure(
                         listener, runName, "Couldn't find Mobly config file " + mConfigFileName);
@@ -286,79 +403,32 @@ public class MoblyBinaryHostTest
             reportFailure(listener, runName, message);
             return;
         }
-        // Compute all tests.
-        final String[] all_tests =
-                Arrays.stream(list_result.getStdout().split(System.lineSeparator()))
-                        .filter(line -> line.startsWith("test_") || line.contains(".test_"))
-                        .toArray(String[]::new);
-        Stream<String> includedTests = Arrays.stream(all_tests);
-        // Process include filters.
-        String[] includeFilters =
-                getIncludeFilters().stream()
-                        .map(filter -> filter.replace("#", "."))
-                        .toArray(String[]::new);
-        if (includeFilters.length > 0) {
-            String invalidIncludeFilters =
-                    Arrays.stream(includeFilters)
-                            .filter(
-                                    filter ->
-                                            !Arrays.stream(all_tests)
-                                                    .anyMatch(test -> test.startsWith(filter)))
-                            .collect(Collectors.joining(", "));
-            if (!invalidIncludeFilters.isEmpty()) {
-                reportFailure(
-                        listener,
-                        runName,
-                        "Invalid include filters: [" + invalidIncludeFilters + "]");
-                return;
-            }
-            includedTests =
-                    includedTests.filter(
-                            test ->
-                                    Arrays.stream(includeFilters)
-                                            .anyMatch(filter -> test.startsWith(filter)));
+        // Compute filtered tests.
+        Optional<Pair<List<String>, List<String>>> filteredTests =
+                filterTests(
+                        list_result.getStdout().split(System.lineSeparator()), runName, listener);
+        if (filteredTests.isEmpty()) {
+            // An empty option here mean a failure has already been reported in `filterTests`,
+            // just return.
+            return;
         }
-        // Process exclude filters.
-        String[] excludeFilters =
-                getExcludeFilters().stream()
-                        .map(filter -> filter.replace("#", "."))
-                        .toArray(String[]::new);
-        if (excludeFilters.length > 0) {
-            String invalidExcludeFilters =
-                    Arrays.stream(excludeFilters)
-                            .filter(
-                                    filter ->
-                                            !Arrays.stream(all_tests)
-                                                    .anyMatch(test -> test.equals(filter)))
-                            .collect(Collectors.joining(", "));
-            if (!invalidExcludeFilters.isEmpty()) {
-                reportFailure(
-                        listener,
-                        runName,
-                        "Invalid exclude filters: [" + invalidExcludeFilters + "]");
-                return;
-            }
-            includedTests =
-                    includedTests.filter(
-                            test ->
-                                    !Arrays.stream(excludeFilters)
-                                            .anyMatch(filter -> test.equals(filter)));
-        }
-        // Collect final filtered tests list.
-        List<String> tests = includedTests.collect(Collectors.toList());
+        List<String> allTests = filteredTests.get().first;
+        List<String> includedTests = filteredTests.get().second;
+        CLog.d("All tests: %s", allTests);
+        CLog.d("Included tests: %s", includedTests);
         // Start run.
         long startTime = System.currentTimeMillis();
-        listener.testRunStarted(runName, tests.size());
+        listener.testRunStarted(runName, includedTests.size());
         // No test to run, abort early.
-        if (tests.isEmpty()) {
+        if (includedTests.isEmpty()) {
             listener.testRunEnded(0, new HashMap<String, String>());
             return;
         }
         // Do not pass tests to command line if all included.
-        if (tests.size() == all_tests.length) {
-            tests.clear();
+        if (includedTests.size() == allTests.size()) {
+            includedTests.clear();
         }
-        String[] command = buildCommandLineArray(parFilePath, configPath, tests);
+        String[] command = buildCommandLineArray(parFilePath, configPath, includedTests);
         ExecutorService executor = Executors.newSingleThreadExecutor();
         CompletableFuture<CommandResult> future =
                 CompletableFuture.supplyAsync(
@@ -439,8 +509,7 @@ public class MoblyBinaryHostTest
         }
     }
 
-    private String updateTemplateConfigFile(File templateConfig, boolean wildcardConfig)
-            throws HarnessRuntimeException {
+    private String updateTemplateConfigFile(File templateConfig) throws HarnessRuntimeException {
         InputStream inputStream = null;
         FileWriter fileWriter = null;
         File localConfigFile = new File(getLogDir(), "local_config.yaml");

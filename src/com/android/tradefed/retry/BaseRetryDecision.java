@@ -114,7 +114,7 @@ public class BaseRetryDecision
             description =
                     "If a test in the list, skip retrying it. The format is the same as the "
                             + "SuiteTestFilter.")
-    private Set<String> mSkipRetryingList = new HashSet<>();
+    private Set<String> mSkipRetryingSet = new LinkedHashSet<>();
 
     @Option(
             name = "updated-retry-reporting",
@@ -164,6 +164,11 @@ public class BaseRetryDecision
     @Override
     public int getMaxRetryCount() {
         return mMaxRetryAttempts;
+    }
+
+    @Override
+    public void addToSkipRetryList(String filterEntry) {
+        mSkipRetryingSet.add(filterEntry);
     }
 
     @Override
@@ -274,9 +279,8 @@ public class BaseRetryDecision
                 break;
         }
 
-        // TODO(b/179206516): Skip known failure list in class/method Level.
-        // Currently, only support skip list in module level.
-        if (module != null && isInSkipList(module)) {
+        Set<String> moduleSkipList = new LinkedHashSet<String>();
+        if (module != null && isInSkipList(module, moduleSkipList)) {
             CLog.d("Skip retrying known failure test of %s", module.getId());
             return false;
         }
@@ -287,7 +291,7 @@ public class BaseRetryDecision
             // TODO(b/77548917): Right now we only support ITestFilterReceiver. We should expect to
             // support ITestFile*Filter*Receiver in the future.
             ITestFilterReceiver filterableTest = (ITestFilterReceiver) test;
-            shouldRetry = handleRetryFailures(filterableTest, previousResults);
+            shouldRetry = handleRetryFailures(filterableTest, previousResults, moduleSkipList);
             if (shouldRetry) {
                 // In case of retry, go through the recovery routine
                 recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
@@ -354,6 +358,10 @@ public class BaseRetryDecision
         return mRetryIsolationGrade;
     }
 
+    public Set<String> getSkipRetrySet() {
+        return mSkipRetryingSet;
+    }
+
     private static Set<TestDescription> getPassedTestCases(List<TestRunResult> previousResults) {
         Set<TestDescription> previousPassed = new LinkedHashSet<>();
         for (TestRunResult run : previousResults) {
@@ -368,7 +376,11 @@ public class BaseRetryDecision
         return previousPassed;
     }
 
-    private boolean isInSkipList(ModuleDefinition module) {
+    /**
+     * Skips retry if the module is fully skipped and populate module skip list if only some tests
+     * need to stop retrying.
+     */
+    private boolean isInSkipList(ModuleDefinition module, Set<String> moduleSkipList) {
         String moduleId = module.getId();
         if (moduleId == null) {
             return false;
@@ -376,20 +388,30 @@ public class BaseRetryDecision
         SuiteTestFilter moduleIdFilter = SuiteTestFilter.createFrom(moduleId);
         String abi = moduleIdFilter.getAbi();
         String name = moduleIdFilter.getName();
-        for (String skipTest : mSkipRetryingList) {
+
+        boolean shouldSkip = false;
+        for (String skipTest : mSkipRetryingSet) {
+            // Only handle module level exclusion
             SuiteTestFilter skipRetryingFilter = SuiteTestFilter.createFrom(skipTest);
             String skipAbi = skipRetryingFilter.getAbi();
             String skipName = skipRetryingFilter.getName();
+            String skipTestName = skipRetryingFilter.getTest();
             if (abi != null
                     && skipAbi != null
                     && name != null
                     && skipName != null
                     && abi.equals(skipAbi)
                     && name.equals(skipName)) {
-                return true;
+                if (skipTestName == null) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.RETRY_MODULE_SKIPPED_COUNT, 1);
+                    shouldSkip = true;
+                } else {
+                    moduleSkipList.add(skipTestName);
+                }
             }
         }
-        return false;
+        return shouldSkip;
     }
 
     /** Returns the list of failure from the previous results. */
@@ -414,7 +436,9 @@ public class BaseRetryDecision
     }
 
     private boolean handleRetryFailures(
-            ITestFilterReceiver test, List<TestRunResult> previousResults) {
+            ITestFilterReceiver test,
+            List<TestRunResult> previousResults,
+            Set<String> moduleSkipList) {
         List<TestRunResult> runFailures = getRunFailures(previousResults);
         List<TestRunResult> nonRetriableRunFailures = getNonRetriableFailures(runFailures);
         if (!nonRetriableRunFailures.isEmpty()) {
@@ -431,7 +455,7 @@ public class BaseRetryDecision
             }
             Set<TestDescription> previouslyPassedTests = getPassedTestCases(previousResults);
             excludePassedTests(test, previouslyPassedTests);
-            excludeNonRetriableFailure(test, previousFailedTests);
+            excludeNonRetriableFailure(test, previousFailedTests, moduleSkipList);
             return true;
         } else if (!runFailures.isEmpty()) {
             if (shouldFullRerun(runFailures)) {
@@ -544,7 +568,9 @@ public class BaseRetryDecision
     }
 
     private void excludeNonRetriableFailure(
-          ITestFilterReceiver test, Map<TestDescription, TestResult> previousFailedTests) {
+            ITestFilterReceiver test,
+            Map<TestDescription, TestResult> previousFailedTests,
+            Set<String> skipListForModule) {
         for (Entry<TestDescription, TestResult> testCaseEntry : previousFailedTests.entrySet()) {
             TestDescription testCase = testCaseEntry.getKey();
             if (!testCaseEntry.getValue().getFailure().isRetriable()) {
@@ -552,6 +578,15 @@ public class BaseRetryDecision
                 String filter =
                         String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
                 test.addExcludeFilter(filter);
+            }
+            if (skipListForModule.contains(testCase.toString())) {
+                // If a test case failure is excluded from retry, exclude it
+                String filter =
+                        String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
+                test.addExcludeFilter(filter);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.RETRY_TEST_SKIPPED_COUNT, 1);
+                CLog.d("Skip retry of %s, it's in skip-retry-list.", filter);
             }
         }
     }

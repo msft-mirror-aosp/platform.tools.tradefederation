@@ -55,7 +55,7 @@ import java.util.zip.ZipOutputStream;
  * System Update.
  */
 @OptionClass(alias = "dynamic-system-update")
-public class DynamicSystemPreparer extends BaseTargetPreparer {
+public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPreparer {
     static final int DSU_MAX_WAIT_SEC = 10 * 60;
 
     private static final int ANDROID_API_R = 30;

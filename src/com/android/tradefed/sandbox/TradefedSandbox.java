@@ -84,6 +84,8 @@ public class TradefedSandbox implements ISandbox {
     private static final String SANDBOX_PREFIX = "sandbox-";
     public static final String SANDBOX_ENABLED = "SANDBOX_ENABLED";
 
+    private static final String SANDBOX_JVM_OPTIONS_ENV_VAR_KEY = "TF_SANDBOX_JVM_OPTIONS";
+
     private File mStdoutFile = null;
     private File mStderrFile = null;
     private File mHeapDump = null;
@@ -122,6 +124,9 @@ public class TradefedSandbox implements ISandbox {
         }
         SandboxOptions sandboxOptions = getSandboxOptions(config);
         mCmdArgs.addAll(sandboxOptions.getJavaOptions());
+        if (System.getenv(SANDBOX_JVM_OPTIONS_ENV_VAR_KEY) != null) {
+            mCmdArgs.add(System.getenv(SANDBOX_JVM_OPTIONS_ENV_VAR_KEY));
+        }
         mCmdArgs.add("-cp");
         mCmdArgs.add(createClasspath(mRootFolder));
         mCmdArgs.add(TradefedSandboxRunner.class.getCanonicalName());
@@ -435,7 +440,12 @@ public class TradefedSandbox implements ISandbox {
             try {
                 mSerializedConfiguration =
                         SandboxConfigUtil.dumpConfigForVersion(
-                                createClasspath(mRootFolder), mRunUtil, args, mode, mGlobalConfig);
+                                createClasspath(mRootFolder),
+                                mRunUtil,
+                                args,
+                                mode,
+                                mGlobalConfig,
+                                false);
             } catch (SandboxConfigurationException e) {
                 // TODO: Improve our detection of that scenario
                 CLog.e(e);
@@ -469,7 +479,8 @@ public class TradefedSandbox implements ISandbox {
                                             mRunUtil,
                                             new String[] {parentConfig.getAbsolutePath()},
                                             mode,
-                                            mGlobalConfig);
+                                            mGlobalConfig,
+                                            false);
                         } finally {
                             FileUtil.deleteFile(parentConfig);
                         }
@@ -613,7 +624,8 @@ public class TradefedSandbox implements ISandbox {
                         mRunUtil,
                         new String[] {uniqueTemplates.get("test")},
                         DumpCmd.STRICT_TEST,
-                        mGlobalConfig);
+                        mGlobalConfig,
+                        false);
         leftOverCommandLine.add("--template:map");
         leftOverCommandLine.add("test=" + mSerializedTestConfig.getAbsolutePath());
         leftOverCommandLine.add(0, configArg);

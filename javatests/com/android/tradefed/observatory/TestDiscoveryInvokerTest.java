@@ -92,6 +92,11 @@ public class TestDiscoveryInvokerTest {
                     IRunUtil getRunUtil() {
                         return mRunUtil;
                     }
+
+                    @Override
+                    String getJava() {
+                        return "java";
+                    }
                 };
         String successStdout =
                 "{\"TestModules\":[" + TEST_MODULE_1_NAME + "," + TEST_MODULE_2_NAME + "]}";
@@ -207,6 +212,11 @@ public class TestDiscoveryInvokerTest {
                     IRunUtil getRunUtil() {
                         return mRunUtil;
                     }
+
+                    @Override
+                    String getJava() {
+                        return "java";
+                    }
                 };
         String successStdout =
                 "{\"TestModules\":[" + TEST_MODULE_1_NAME + "," + TEST_MODULE_2_NAME + "]}";
@@ -285,6 +295,11 @@ public class TestDiscoveryInvokerTest {
                     @Override
                     IRunUtil getRunUtil() {
                         return mRunUtil;
+                    }
+
+                    @Override
+                    String getJava() {
+                        return "java";
                     }
                 };
         mTestDiscoveryInvoker.setTestDir(mRootDir);

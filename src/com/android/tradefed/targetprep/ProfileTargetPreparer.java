@@ -118,10 +118,10 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
         if (mTradefedUserType.isManagedProfile()
                 && !requireFeatures(testInfo, "android.software.managed_users")) {
             return true;
-        } else if (mTradefedUserType.isCloneProfile() && !matchesApiLevel(testInfo, 33)) {
+        } else if (mTradefedUserType.isCloneProfile() && !matchesApiLevel(testInfo, 34)) {
             // Clone profile type was introduced in Android S(api 31).
-            // However, adb support to get usertype was added in 33.
-            // Android T = 33
+            // However, major functionalities supporting clone got added in 34.
+            // Android U = 34
             return true;
         }
         return false;

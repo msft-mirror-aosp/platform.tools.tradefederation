@@ -142,6 +142,13 @@ public class IsolatedHostTest
             new HashSet<>(Arrays.asList("org/junit", "com/google/common/collect/testing/google"));
 
     @Option(
+            name = "exclude-robolectric-packages",
+            description =
+                    "Indicates whether to exclude 'org/robolectric' when robolectric resources."
+                            + " Defaults to be true.")
+    private boolean mExcludeRobolectricPackages = true;
+
+    @Option(
             name = "java-folder",
             description = "The JDK to be used. If unset, the JDK on $PATH will be used.")
     private File mJdkFolder = null;
@@ -334,7 +341,10 @@ public class IsolatedHostTest
                     mCoverageExecFile = FileUtil.createTempFile("coverage", ".exec");
                     String javaAgent =
                             String.format(
-                                    "-javaagent:%s=destfile=%s",
+                                    "-javaagent:%s=destfile=%s,"
+                                            + "inclnolocationclasses=true,"
+                                            + "exclclassloader="
+                                            + "jdk.internal.reflect.DelegatingClassLoader",
                                     mConfig.getCoverageOptions().getJaCoCoAgentPath(),
                                     mCoverageExecFile.getAbsolutePath());
                     cmdArgs.add(javaAgent);
@@ -355,7 +365,9 @@ public class IsolatedHostTest
             cmdArgs.addAll(compileRobolectricOptions(artifactsDir));
             // Prevent tradefed from eagerly loading classes, which may not load without shadows
             // applied.
-            mExcludePaths.add("org/robolectric");
+            if (mExcludeRobolectricPackages) {
+                mExcludePaths.add("org/robolectric");
+            }
         }
 
         if (this.debug) {

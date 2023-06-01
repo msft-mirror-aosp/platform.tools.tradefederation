@@ -67,7 +67,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -614,8 +613,6 @@ public class TestMappingSuiteRunnerTest {
             assertEquals(0, mRunner.getTestMappingPaths().size());
             assertEquals(false, mRunner.getUseTestMappingPath());
         } finally {
-            // Clean up the static variable due to the usage of option `test-mapping-path`.
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
             FileUtil.recursiveDelete(tempDir);
         }
     }
@@ -831,8 +828,8 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String)} that IRemoteTest
-     * object are created according to the test infos with different test options.
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
+     * IRemoteTest object are created according to the test infos with different test options.
      */
     @Test
     public void testCreateIndividualTestsWithDifferentTestInfos() throws Exception {
@@ -850,7 +847,7 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String, IAbi)} that
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
      * IRemoteTest object are created according to the test infos with multiple test options.
      */
     @Test
@@ -871,7 +868,7 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String, IAbi)} that
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
      * IRemoteTest object are created according to the test infos with multiple test options and top
      * level exclude-filter tests.
      */
@@ -936,7 +933,7 @@ public class TestMappingSuiteRunnerTest {
             for (Entry<String, IConfiguration> config : configMap.entrySet()) {
                 IConfiguration currentConfig = config.getValue();
                 IAbi abi = currentConfig.getConfigurationDescription().getAbi();
-                // Ensure that all the sub-tests abi match the module abi
+                // Ensure that all the subtests abi match the module abi
                 for (IRemoteTest test : currentConfig.getTests()) {
                     if (test instanceof IAbiReceiver) {
                         assertEquals(abi, ((IAbiReceiver) test).getAbi());
@@ -1002,7 +999,7 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String, IAbi)} that
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
      * IRemoteTest object are created according to the test infos with the same test options and
      * name.
      */
@@ -1075,14 +1072,12 @@ public class TestMappingSuiteRunnerTest {
             assertTrue(mRunner.getIncludeFilter().contains("test1"));
         } finally {
             FileUtil.recursiveDelete(tempDir);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#filterByAllowedTestLists()} for filtering tests from a
-     * list of allowed test lists.
+     * Test for {@link TestMappingSuiteRunner#filterByAllowedTestLists(Set)} for filtering tests
+     * from a list of allowed test lists.
      */
     @Test
     public void testFilterByAllowedTestLists() throws Exception {
@@ -1143,13 +1138,11 @@ public class TestMappingSuiteRunnerTest {
             assertTrue(expected.getMessage().contains("Collision of Test Mapping file"));
         } finally {
             FileUtil.recursiveDelete(tempDir);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#loadTests()} ()} for loading tests when full run is
+     * Test for {@link TestMappingSuiteRunner#loadTests()} for loading tests when full run is
      * forced.
      */
     @Test
@@ -1222,8 +1215,6 @@ public class TestMappingSuiteRunnerTest {
         } finally {
             FileUtil.recursiveDelete(tempDir);
             FileUtil.recursiveDelete(tempDir2);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 
@@ -1251,8 +1242,6 @@ public class TestMappingSuiteRunnerTest {
                 "Missing extra-zip in the BuildInfo file.", expected.getMessage());
         } finally {
             FileUtil.recursiveDelete(tempDir);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 

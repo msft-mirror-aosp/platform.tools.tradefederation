@@ -20,6 +20,8 @@ import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.ArrayUtil;
@@ -72,7 +74,19 @@ public class OxygenClient {
                                 {"--kernel-build-id", "-kernel_build_id"},
                                 {"--kernel_build_id", "-kernel_build_id"},
                                 {"--kernel-build-target", "-kernel_build_target"},
-                                {"--kernel_build_target", "-kernel_build_target"}
+                                {"--kernel_build_target", "-kernel_build_target"},
+                                {"--boot-build-id", "-boot_build_id"},
+                                {"--boot_build_id", "-boot_build_id"},
+                                {"--boot-build-target", "-boot_build_target"},
+                                {"--boot_build_target", "-boot_build_target"},
+                                {"--boot-artifact", "-boot_artifact"},
+                                {"--boot_artifact", "-boot_artifact"},
+                                {"--host_package_build_id", "-host_package_build_id"},
+                                {"--host_package_build_target", "-host_package_build_target"},
+                                {"--bootloader-build-id", "-bootloader_build_id"},
+                                {"--bootloader_build_id", "-bootloader_build_id"},
+                                {"--bootloader-build-target", "-bootloader_build_target"},
+                                {"--bootloader_build_target", "-bootloader_build_target"}
                             })
                     .collect(
                             Collectors.collectingAndThen(
@@ -226,7 +240,7 @@ public class OxygenClient {
 
         // add oxygen side lease options
         oxygenClientArgs.add("-target_region");
-        oxygenClientArgs.add(deviceOptions.getOxygenTargetRegion());
+        oxygenClientArgs.add(OxygenUtil.getTargetRegion(deviceOptions));
         oxygenClientArgs.add("-accounting_user");
         oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
         oxygenClientArgs.add("-lease_length_secs");
@@ -306,7 +320,7 @@ public class OxygenClient {
         oxygenClientArgs.add("-multidevice_size");
         oxygenClientArgs.add(String.valueOf(buildInfos.size()));
         oxygenClientArgs.add("-target_region");
-        oxygenClientArgs.add(deviceOptions.getOxygenTargetRegion());
+        oxygenClientArgs.add(OxygenUtil.getTargetRegion(deviceOptions));
         oxygenClientArgs.add("-accounting_user");
         oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
         oxygenClientArgs.add("-lease_length_secs");
@@ -364,6 +378,18 @@ public class OxygenClient {
                 runOxygenTimedCmd(
                         oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]),
                         deviceOptions.getGceCmdTimeout());
+        if (!res.getStatus().equals(CommandStatus.SUCCESS)) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_COUNT, 1);
+            if (res.getStderr() != null) {
+                String error = "Unknown";
+                if (res.getStderr().contains("context deadline exceeded")) {
+                    error = "SERVER_CALL_TIMEOUT";
+                }
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE, error);
+            }
+        }
         return res.getStatus().equals(CommandStatus.SUCCESS);
     }
 

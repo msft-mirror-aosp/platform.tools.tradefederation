@@ -602,54 +602,57 @@ public class InstrumentationTest
     IRemoteAndroidTestRunner createRemoteAndroidTestRunner(
             String packageName, String runnerName, IDevice device, TestInformation testInformation)
             throws DeviceNotAvailableException {
-        RemoteAndroidTestRunner runner =
-                new DefaultRemoteAndroidTestRunner(packageName, runnerName, device);
-        String abiName = resolveAbiName();
-        String runOptions = "";
-        // hidden-api-checks flag only exists in P and after.
-        // Using a temp variable to consolidate the dynamic checks
-        int apiLevel = !mHiddenApiChecks || !mWindowAnimation ? getDevice().getApiLevel() : 0;
-        if (!mHiddenApiChecks && apiLevel >= 28) {
-            runOptions += "--no-hidden-api-checks ";
-        }
-        // test-api-access flag only exists in R and after.
-        // Test API checks are subset of hidden API checks, so only make sense if hidden API
-        // checks are enabled.
-        if (mHiddenApiChecks
-                && !mTestApiAccess
-                && getDevice().checkApiLevelAgainstNextRelease(30)) {
-            runOptions += "--no-test-api-access ";
-        }
-        // isolated-storage flag only exists in Q and after.
-        if (!mIsolatedStorage && getDevice().checkApiLevelAgainstNextRelease(29)) {
-            runOptions += "--no-isolated-storage ";
-        }
-        // window-animation flag only exists in ICS and after
-        if (!mWindowAnimation && apiLevel >= 14) {
-            runOptions += "--no-window-animation ";
-        }
-        if (!mRestart && getDevice().checkApiLevelAgainstNextRelease(31)) {
-            runOptions += "--no-restart ";
-        }
-        if (getDevice().checkApiLevelAgainstNextRelease(33)
-                && Optional.ofNullable(testInformation)
-                        .map(TestInformation::properties)
-                        .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
-                        .map(value -> Boolean.TRUE.toString().equals(value))
-                        .orElse(false)) {
-            runOptions += "--instrument-sdk-in-sandbox ";
-        }
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("createRemoteAndroidTestRunner")) {
+            RemoteAndroidTestRunner runner =
+                    new DefaultRemoteAndroidTestRunner(packageName, runnerName, device);
+            String abiName = resolveAbiName();
+            String runOptions = "";
+            // hidden-api-checks flag only exists in P and after.
+            // Using a temp variable to consolidate the dynamic checks
+            int apiLevel = !mHiddenApiChecks || !mWindowAnimation ? getDevice().getApiLevel() : 0;
+            if (!mHiddenApiChecks && apiLevel >= 28) {
+                runOptions += "--no-hidden-api-checks ";
+            }
+            // test-api-access flag only exists in R and after.
+            // Test API checks are subset of hidden API checks, so only make sense if hidden API
+            // checks are enabled.
+            if (mHiddenApiChecks
+                    && !mTestApiAccess
+                    && getDevice().checkApiLevelAgainstNextRelease(30)) {
+                runOptions += "--no-test-api-access ";
+            }
+            // isolated-storage flag only exists in Q and after.
+            if (!mIsolatedStorage && getDevice().checkApiLevelAgainstNextRelease(29)) {
+                runOptions += "--no-isolated-storage ";
+            }
+            // window-animation flag only exists in ICS and after
+            if (!mWindowAnimation && apiLevel >= 14) {
+                runOptions += "--no-window-animation ";
+            }
+            if (!mRestart && getDevice().checkApiLevelAgainstNextRelease(31)) {
+                runOptions += "--no-restart ";
+            }
+            if (getDevice().checkApiLevelAgainstNextRelease(33)
+                    && Optional.ofNullable(testInformation)
+                            .map(TestInformation::properties)
+                            .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
+                            .map(value -> Boolean.TRUE.toString().equals(value))
+                            .orElse(false)) {
+                runOptions += "--instrument-sdk-in-sandbox ";
+            }
 
-        if (abiName != null && getDevice().getApiLevel() > 20) {
-            mInstallArgs.add(String.format("--abi %s", abiName));
-            runOptions += String.format("--abi %s", abiName);
-        }
-        // Set the run options if any.
-        if (!runOptions.isEmpty()) {
-            runner.setRunOptions(runOptions);
-        }
+            if (abiName != null && getDevice().getApiLevel() > 20) {
+                mInstallArgs.add(String.format("--abi %s", abiName));
+                runOptions += String.format("--abi %s", abiName);
+            }
+            // Set the run options if any.
+            if (!runOptions.isEmpty()) {
+                runner.setRunOptions(runOptions);
+            }
 
-        return runner;
+            return runner;
+        }
     }
 
     private String resolveAbiName() throws DeviceNotAvailableException {
@@ -692,27 +695,30 @@ public class InstrumentationTest
      * @throws DeviceNotAvailableException
      */
     protected String queryRunnerName() throws DeviceNotAvailableException {
-        ListInstrumentationParser parser = getListInstrumentationParser();
-        getDevice().executeShellCommand("pm list instrumentation", parser);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("query_runner_name")) {
+            ListInstrumentationParser parser = getListInstrumentationParser();
+            getDevice().executeShellCommand("pm list instrumentation", parser);
 
-        Set<String> candidates = new LinkedHashSet<>();
-        for (InstrumentationTarget target : parser.getInstrumentationTargets()) {
-            if (mPackageName.equals(target.packageName)) {
-                candidates.add(target.runnerName);
+            Set<String> candidates = new LinkedHashSet<>();
+            for (InstrumentationTarget target : parser.getInstrumentationTargets()) {
+                if (mPackageName.equals(target.packageName)) {
+                    candidates.add(target.runnerName);
+                }
             }
+            if (candidates.isEmpty()) {
+                CLog.w("Unable to determine runner name for package: %s", mPackageName);
+                return null;
+            }
+            // Bias toward using one of the AJUR runner when available, otherwise use the first
+            // runner
+            // available.
+            Set<String> intersection =
+                    Sets.intersection(candidates, ListInstrumentationParser.SHARDABLE_RUNNERS);
+            if (intersection.isEmpty()) {
+                return candidates.iterator().next();
+            }
+            return intersection.iterator().next();
         }
-        if (candidates.isEmpty()) {
-            CLog.w("Unable to determine runner name for package: %s", mPackageName);
-            return null;
-        }
-        // Bias toward using one of the AJUR runner when available, otherwise use the first runner
-        // available.
-        Set<String> intersection =
-                Sets.intersection(candidates, ListInstrumentationParser.SHARDABLE_RUNNERS);
-        if (intersection.isEmpty()) {
-            return candidates.iterator().next();
-        }
-        return intersection.iterator().next();
     }
 
     /** {@inheritDoc} */
@@ -913,15 +919,17 @@ public class InstrumentationTest
         }
         instrumentationListener.setReportUnexecutedTests(mReportUnexecuted);
 
-        if (testsToRun == null) {
-            // Failed to collect the tests or collection is off. Just try to run them all.
-            runInstrumentationTests(testInfo, mRunner, instrumentationListener);
-        } else if (!testsToRun.isEmpty()) {
-            runWithRerun(testInfo, listener, instrumentationListener, testsToRun);
-        } else {
-            CLog.i("No tests expected for %s, skipping", mPackageName);
-            listener.testRunStarted(mPackageName, 0);
-            listener.testRunEnded(0, new HashMap<String, Metric>());
+        try (CloseableTraceScope instru = new CloseableTraceScope("run_instrumentation")) {
+            if (testsToRun == null) {
+                // Failed to collect the tests or collection is off. Just try to run them all.
+                runInstrumentationTests(testInfo, mRunner, instrumentationListener);
+            } else if (!testsToRun.isEmpty()) {
+                runWithRerun(testInfo, listener, instrumentationListener, testsToRun);
+            } else {
+                CLog.i("No tests expected for %s, skipping", mPackageName);
+                listener.testRunStarted(mPackageName, 0);
+                listener.testRunEnded(0, new HashMap<String, Metric>());
+            }
         }
     }
 

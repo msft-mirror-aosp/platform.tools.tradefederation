@@ -22,12 +22,16 @@ import com.android.tradefed.clearcut.TerminateClearcutClient;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.NoDeviceException;
+import com.android.tradefed.invoker.tracing.ActiveTrace;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.testtype.suite.TestSuiteInfo;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.SerializationUtil;
-import com.android.tradefed.testtype.suite.TestSuiteInfo;
+import com.android.tradefed.util.SystemUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -36,6 +40,8 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import sun.misc.Signal;
 import sun.misc.SignalHandler;
@@ -106,20 +112,18 @@ public class CommandRunner {
      */
     public void run(String[] args) {
         try {
-            initGlobalConfig(args);
+            CompletableFuture<ClearcutClient> futureClient =
+                    CompletableFuture.supplyAsync(() -> createClient());
+            try (CloseableTraceScope ignored = new CloseableTraceScope("initGlobalConfig")) {
+                initGlobalConfig(args);
+            }
 
-            ClearcutClient client = createClient();
+            ClearcutClient client = futureClient.get();
             Runtime.getRuntime().addShutdownHook(new TerminateClearcutClient(client));
             client.notifyTradefedStartEvent();
-            TradefedFeatureServer server = null;
             if (System.getenv("START_FEATURE_SERVER") != null) {
-                try {
-                    server = new TradefedFeatureServer();
-                    server.start();
-                    GlobalConfiguration.getInstance().setTradefedFeatureServer(server);
-                } catch (RuntimeException e) {
-                    System.out.println(String.format("Error starting feature server: %s", e));
-                }
+                // Starting the server takes 100ms so do it in parallel
+                CompletableFuture.supplyAsync(() -> startFeatureSever());
             }
 
             mScheduler = getCommandScheduler();
@@ -139,7 +143,10 @@ public class CommandRunner {
             Signal.handle(new Signal("TERM"), handler);
 
             mScheduler.addCommand(args);
-        } catch (ConfigurationException | RuntimeException e) {
+        } catch (ConfigurationException
+                | RuntimeException
+                | InterruptedException
+                | ExecutionException e) {
             printStackTrace(e);
             mErrorCode = ExitCode.CONFIG_EXCEPTION;
             return;
@@ -182,15 +189,31 @@ public class CommandRunner {
     }
 
     protected ClearcutClient createClient() {
-        return new ClearcutClient(
-                TestSuiteInfo.getInstance().didLoadFromProperties()
-                        ? TestSuiteInfo.getInstance().getName()
-                        : "");
+        try (CloseableTraceScope ignored = new CloseableTraceScope("createClient")) {
+            return new ClearcutClient(
+                    TestSuiteInfo.getInstance().didLoadFromProperties()
+                            ? TestSuiteInfo.getInstance().getName()
+                            : "");
+        }
     }
 
     public static void main(final String[] mainArgs) {
+        long pid = ProcessHandle.current().pid();
+        long tid = Thread.currentThread().getId();
+        ActiveTrace trace = null;
+        // Enable Full Tradefed tracing in local mode only for now
+        if (SystemUtil.isLocalMode()) {
+            trace = TracingLogger.createActiveTrace(pid, tid, true);
+            trace.startTracing(false);
+        }
         CommandRunner console = new CommandRunner();
-        console.run(mainArgs);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("end_to_end_command")) {
+            console.run(mainArgs);
+        } finally {
+            if (trace != null) {
+                trace.finalizeTracing();
+            }
+        }
         System.exit(console.getErrorCode().getCodeValue());
     }
 
@@ -217,5 +240,16 @@ public class CommandRunner {
         public int getCodeValue() {
             return mCodeValue;
         }
+    }
+
+    private boolean startFeatureSever() {
+        try (CloseableTraceScope f = new CloseableTraceScope("start_fr_client")) {
+            TradefedFeatureServer server = new TradefedFeatureServer();
+            server.start();
+            GlobalConfiguration.getInstance().setTradefedFeatureServer(server);
+        } catch (RuntimeException e) {
+            System.out.println(String.format("Error starting feature server: %s", e));
+        }
+        return true;
     }
 }

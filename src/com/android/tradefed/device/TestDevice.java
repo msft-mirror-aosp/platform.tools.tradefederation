@@ -328,14 +328,6 @@ public class TestDevice extends NativeDevice {
         try {
             bugreport = getBugreportz();
             type = LogDataType.BUGREPORTZ;
-            // Limit fallback to older devices
-            if (!TestDeviceState.RECOVERY.equals(getDeviceState())) {
-                if (bugreport == null && getApiLevelSafe() < 24) {
-                    CLog.d("Bugreportz failed, attempting bugreport collection instead.");
-                    bugreport = getBugreportInternal();
-                    type = LogDataType.BUGREPORT;
-                }
-            }
             // log what we managed to capture.
             if (bugreport != null && bugreport.size() > 0L) {
                 listener.testLog(dataName, type, bugreport);
@@ -1540,6 +1532,12 @@ public class TestDevice extends NativeDevice {
                         .collect(Collectors.toList());
 
         if (!lines.get(0).contains("users:")) {
+            if (commandOutput.contains("cmd: Can't find service: package")) {
+                throw new DeviceNotAvailableException(
+                        String.format(
+                                "'%s' in not a valid output for 'user list -v'", commandOutput),
+                        getSerialNumber());
+            }
             throw new DeviceRuntimeException(
                     String.format("'%s' in not a valid output for 'user list -v'", commandOutput),
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
@@ -2519,28 +2517,42 @@ public class TestDevice extends NativeDevice {
         if (getIDevice() instanceof StubDevice) {
             return new HashSet<>();
         }
-        CommandResult result = executeShellV2Command("cmd device_state print-states");
-        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-            // Can't throw an exception since it would fail on non-supported version
-            return new HashSet<>();
-        }
-        Set<DeviceFoldableState> foldableStates = new LinkedHashSet<>();
-        Pattern deviceStatePattern =
-                Pattern.compile(
-                        "DeviceState\\{identifier=(\\d+), name='(\\S+)'"
-                                + "(?:, app_accessible=)?(\\S+)?\\}\\S*");
-        for (String line : result.getStdout().split("\n")) {
-            Matcher m = deviceStatePattern.matcher(line.trim());
-            if (m.matches()) {
-                // Move onto the next state if the device state is not accessible by apps
-                if (m.groupCount() > 2 && m.group(3) != null && !Boolean.parseBoolean(m.group(3))) {
-                    continue;
-                }
-                foldableStates.add(
-                        new DeviceFoldableState(Integer.parseInt(m.group(1)), m.group(2)));
+        try (CloseableTraceScope foldable = new CloseableTraceScope("getFoldableStates")) {
+            CommandResult result = executeShellV2Command("cmd device_state print-states");
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                // Can't throw an exception since it would fail on non-supported version
+                return new HashSet<>();
             }
+            Set<DeviceFoldableState> foldableStates = new LinkedHashSet<>();
+            Pattern deviceStatePattern =
+                    Pattern.compile(
+                            "DeviceState\\{identifier=(\\d+), name='(\\S+)'"
+                                    + "(?:, app_accessible=)?(\\S+)?"
+                                    + "(?:, cancel_when_requester_not_on_top=)?(\\S+)?"
+                                    + "\\}\\S*");
+            for (String line : result.getStdout().split("\n")) {
+                Matcher m = deviceStatePattern.matcher(line.trim());
+                if (m.matches()) {
+                    // Move onto the next state if the device state is not accessible by apps
+                    if (m.groupCount() > 2
+                            && m.group(3) != null
+                            && !Boolean.parseBoolean(m.group(3))) {
+                        continue;
+                    }
+                    // Move onto the next state if the device state is canceled when the requesting
+                    // app
+                    // is not on top.
+                    if (m.groupCount() > 3
+                            && m.group(4) != null
+                            && Boolean.parseBoolean(m.group(4))) {
+                        continue;
+                    }
+                    foldableStates.add(
+                            new DeviceFoldableState(Integer.parseInt(m.group(1)), m.group(2)));
+                }
+            }
+            return foldableStates;
         }
-        return foldableStates;
     }
 
     @Override
@@ -2552,7 +2564,9 @@ public class TestDevice extends NativeDevice {
         Pattern deviceStatePattern =
                 Pattern.compile(
                         "Committed state: DeviceState\\{identifier=(\\d+), name='(\\S+)'"
-                                + "(?:, app_accessible=)?(\\S+)?\\}\\S*");
+                                + "(?:, app_accessible=)?(\\S+)?"
+                                + "(?:, cancel_when_requester_not_on_top=)?(\\S+)?"
+                                + "\\}\\S*");
         for (String line : result.getStdout().split("\n")) {
             Matcher m = deviceStatePattern.matcher(line.trim());
             if (m.matches()) {
