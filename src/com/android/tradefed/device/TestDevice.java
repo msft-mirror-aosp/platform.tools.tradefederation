@@ -2240,7 +2240,7 @@ public class TestDevice extends NativeDevice {
     public String getAndroidId(int userId) throws DeviceNotAvailableException {
         if (isAdbRoot()) {
             String cmd = String.format(
-                    "sqlite3 /data/user/%d/com.google.android.gsf/databases/gservices.db "
+                    "sqlite3 /data/user/%d/*/databases/gservices.db "
                     + "'select value from main where name = \"android_id\"'", userId);
             String output = executeShellCommand(cmd).trim();
             if (!output.contains("unable to open database")) {
