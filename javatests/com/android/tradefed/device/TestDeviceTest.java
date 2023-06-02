@@ -5155,7 +5155,7 @@ public class TestDeviceTest {
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "Error: unable to open database"
-                                + "\"/data/0/com.google.android.gsf/databases/gservices.db\": "
+                                + "\"/data/0/*/databases/gservices.db\": "
                                 + "unable to open database file";
                     }
 
