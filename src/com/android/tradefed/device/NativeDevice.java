@@ -3322,8 +3322,6 @@ public class NativeDevice
                 }
             }
         } finally {
-            // Invalidate cache after reboots
-            mPropertiesCache.invalidateAll();
             long elapsed = System.currentTimeMillis() - startTime;
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.POSTBOOT_SETUP_TIME, elapsed);
@@ -3609,6 +3607,8 @@ public class NativeDevice
             throws DeviceNotAvailableException {
         long rebootStart = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("rebootUntilOnline")) {
+            // Invalidate cache before reboots
+            mPropertiesCache.invalidateAll();
             doReboot(RebootMode.REBOOT_FULL, reason);
             RecoveryMode cachedRecoveryMode = getRecoveryMode();
             setRecoveryMode(RecoveryMode.ONLINE);
