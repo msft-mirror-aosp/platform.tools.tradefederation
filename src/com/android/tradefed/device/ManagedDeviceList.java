@@ -238,7 +238,7 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
         try {
             if (options.getBaseDeviceTypeRequested() != null) {
                 String rand = UUID.randomUUID().toString();
-                String serial = String.format("%s%s", NullDevice.TEMP_NULL_DEVICE_PREFIX, rand);
+                String serial = String.format("%s%s", "base-request-null-device-", rand);
                 // TODO: Currently ignore any capacity from placeholder
                 IManagedTestDevice specificDevice =
                         mDeviceFactory.createRequestedDevice(new NullDevice(serial, true), options);
