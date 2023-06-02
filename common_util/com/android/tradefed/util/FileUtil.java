@@ -1267,6 +1267,51 @@ public class FileUtil {
     }
 
     /**
+     * Get all files in the given directory with name matching the given filter and also filter the
+     * found files by abi arch if abi is not null.
+     *
+     * @param fileName {@link String} of the regex to match file path
+     * @param abi {@link IAbi} object of the abi to match the target
+     * @param includeDirectory whether to include directories in the search result
+     * @param dirs an array of {@link File} object of the directories to search for files
+     * @return a set of {@link File}s or empty if it could not be found
+     */
+    public static Set<File> findFiles(
+            String fileName, IAbi abi, boolean includeDirectory, File... dirs) throws IOException {
+        // files that will be returned at the end
+        Set<File> abiSpecificFiles = new LinkedHashSet<>();
+        // files that were found before abi check
+        Set<File> allFiles = new LinkedHashSet<>();
+        for (File dir : dirs) {
+            Set<File> testSrcs = findFilesObject(dir, fileName, includeDirectory);
+            allFiles.addAll(testSrcs);
+            if (testSrcs.isEmpty()) {
+                continue;
+            }
+            Iterator<File> itr = testSrcs.iterator();
+            if (abi != null) {
+                while (itr.hasNext()) {
+                    File matchFile = itr.next();
+                    if (matchFile
+                            .getParentFile()
+                            .getName()
+                            .equals(AbiUtils.getArchForAbi(abi.getName()))) {
+                        abiSpecificFiles.add(matchFile);
+                    }
+                }
+            }
+        }
+        // if arch specific directory structure exists, return files only from the arch specific
+        // directories
+        if (!abiSpecificFiles.isEmpty()) {
+            return abiSpecificFiles;
+        } else {
+            // Otherwise, return all files that matched the filename
+            return allFiles;
+        }
+    }
+
+    /**
      * Search and return the first directory {@link File} among other directories.
      *
      * @param dirName The directory name we are looking for.
@@ -1299,11 +1344,32 @@ public class FileUtil {
      * @return a set of {@link File} of the file objects. @See {@link #findFiles(File, String)}
      */
     public static Set<File> findFilesObject(File dir, String filter) throws IOException {
+        return findFilesObject(dir, filter, true);
+    }
+
+    /**
+     * Get all file paths of files in the given directory with name matching the given filter
+     *
+     * @param dir {@link File} object of the directory to search for files recursively
+     * @param filter {@link String} of the regex to match file names
+     * @param includeDirectory whether to include directories in the search result
+     * @return a set of {@link File} of the file objects. @See {@link #findFiles(File, String)}
+     */
+    public static Set<File> findFilesObject(File dir, String filter, boolean includeDirectory)
+            throws IOException {
         Set<File> files = new LinkedHashSet<>();
         try (Stream<Path> stream =
                 Files.walk(Paths.get(dir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)) {
-            stream.filter(path -> path.getFileName().toString().matches(filter))
-                    .forEach(path -> files.add(path.toFile()));
+            if (includeDirectory) {
+                stream.filter(path -> path.getFileName().toString().matches(filter))
+                        .forEach(path -> files.add(path.toFile()));
+            } else {
+                stream.filter(
+                                path ->
+                                        path.getFileName().toString().matches(filter)
+                                                && path.toFile().isFile())
+                        .forEach(path -> files.add(path.toFile()));
+            }
         }
         return files;
     }
