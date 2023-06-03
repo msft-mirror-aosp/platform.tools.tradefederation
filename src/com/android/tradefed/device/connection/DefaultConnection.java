@@ -21,6 +21,7 @@ import com.android.tradefed.device.IConfigurableVirtualDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ManagedTestDeviceFactory;
 import com.android.tradefed.device.NativeDevice;
+import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo;
@@ -44,6 +45,8 @@ public class DefaultConnection extends AbstractConnection {
     private final Integer mInitialDeviceNumOffset;
     private final String mInitialSerial;
     private final ITestLogger mTestLogger;
+
+    private final boolean mTemporaryHolder;
 
     public static DefaultConnection createInopConnection(ConnectionBuilder builder) {
         return new DefaultConnection(builder);
@@ -125,6 +128,11 @@ public class DefaultConnection extends AbstractConnection {
             mInitialUser = null;
             mInitialDeviceNumOffset = null;
         }
+        if (idevice instanceof NullDevice) {
+            mTemporaryHolder = ((NullDevice) idevice).isTemporary();
+        } else {
+            mTemporaryHolder = false;
+        }
     }
 
     /** Returns {@link IRunUtil} to execute commands. */
@@ -169,5 +177,9 @@ public class DefaultConnection extends AbstractConnection {
     /** Returns the {@link ITestLogger} to log files. */
     public ITestLogger getLogger() {
         return mTestLogger;
+    }
+
+    public boolean wasTemporaryHolder() {
+        return mTemporaryHolder;
     }
 }
