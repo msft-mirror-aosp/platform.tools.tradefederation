@@ -50,7 +50,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /** A Test that runs a native test package. */
@@ -271,52 +275,52 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         }
 
         String moduleName = getTestModule();
-        File gTestFile = null;
+        Set<File> gTestFiles;
         try {
-            gTestFile = FileUtil.findFile(moduleName, getAbi(), scanDirs.toArray(new File[] {}));
-            if (gTestFile != null && gTestFile.isDirectory()) {
-                // Search the exact file in subdir
-                gTestFile = FileUtil.findFile(moduleName, getAbi(), gTestFile);
-            }
+            gTestFiles =
+                    FileUtil.findFiles(
+                            moduleName, getAbi(), false, scanDirs.toArray(new File[] {}));
+            gTestFiles = applyFileExclusionFilters(gTestFiles);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        if (gTestFile == null) {
+        if (gTestFiles == null || gTestFiles.isEmpty()) {
             // If we ended up here we most likely failed to find the proper file as is, so we
             // search for it with a potential suffix (which is allowed).
             try {
-                File byBaseName =
-                        FileUtil.findFile(
-                                moduleName + ".*", getAbi(), scanDirs.toArray(new File[] {}));
-                if (byBaseName != null && byBaseName.isFile()) {
-                    gTestFile = byBaseName;
-                }
+                gTestFiles =
+                        FileUtil.findFiles(
+                                moduleName + ".*",
+                                getAbi(),
+                                false,
+                                scanDirs.toArray(new File[] {}));
+                gTestFiles = applyFileExclusionFilters(gTestFiles);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         }
 
-        if (gTestFile == null) {
+        if (gTestFiles == null || gTestFiles.isEmpty()) {
             throw new RuntimeException(
                     String.format(
                             "Fail to find native test %s in directory %s.", moduleName, scanDirs));
         }
+        // Since we searched files in multiple directories, it is possible that we may have the same
+        // file in different source directories. Exclude duplicates.
+        gTestFiles = excludeDuplicateFiles(gTestFiles);
+        for (File gTestFile : gTestFiles) {
+            if (!gTestFile.canExecute()) {
+                CLog.i("%s is not executable! Skipping.", gTestFile.getAbsolutePath());
+                continue;
+            }
 
-        if (!gTestFile.canExecute()) {
-            reportFailure(
-                    listener,
-                    gTestFile.getName(),
-                    new RuntimeException(
-                            String.format("%s is not executable!", gTestFile.getAbsolutePath())));
-            return;
+            listener = getGTestListener(listener);
+            // TODO: Need to support XML test output based on isEnableXmlOutput
+            IShellOutputReceiver resultParser = createResultParser(gTestFile.getName(), listener);
+            String flags = getAllGTestFlags(gTestFile.getName());
+            CLog.i("Running gtest %s %s", gTestFile.getName(), flags);
+            runTest(resultParser, gTestFile, flags, listener);
         }
-
-        listener = getGTestListener(listener);
-        // TODO: Need to support XML test output based on isEnableXmlOutput
-        IShellOutputReceiver resultParser = createResultParser(gTestFile.getName(), listener);
-        String flags = getAllGTestFlags(gTestFile.getName());
-        CLog.i("Running gtest %s %s", gTestFile.getName(), flags);
-        runTest(resultParser, gTestFile, flags, listener);
     }
 
     private void reportFailure(
@@ -328,5 +332,49 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
 
     private FailureDescription createFailure(Exception e) {
         return TestInvocation.createFailureFromException(e, FailureStatus.TEST_FAILURE);
+    }
+
+    /**
+     * Apply exclusion filters and return the remaining files.
+     *
+     * @param filesToFilterFrom a set of files which need to be filtered.
+     * @return a set of files
+     */
+    private Set<File> applyFileExclusionFilters(Set<File> filesToFilterFrom) {
+        Set<File> retFiles = new LinkedHashSet<>();
+        List<String> fileExclusionFilterRegex = getFileExclusionFilterRegex();
+        for (File file : filesToFilterFrom) {
+            boolean matchedRegex = false;
+            for (String regex : fileExclusionFilterRegex) {
+                if (file.getPath().matches(regex)) {
+                    CLog.i(
+                            "File %s matches exclusion file regex %s, skipping",
+                            file.getPath(), regex);
+                    matchedRegex = true;
+                    break;
+                }
+            }
+            if (!matchedRegex) {
+                retFiles.add(file);
+            }
+        }
+        return retFiles;
+    }
+
+    /** exclude files with same names */
+    private Set<File> excludeDuplicateFiles(Set<File> files) {
+        Map<String, File> seen = new LinkedHashMap<>();
+        for (File file : files) {
+            if (seen.containsKey(file.getName())) {
+                CLog.i(
+                        "File %s already exists in location %s. skipping %s.",
+                        file.getName(),
+                        seen.get(file.getName()).getAbsolutePath(),
+                        file.getAbsolutePath());
+            } else {
+                seen.put(file.getName(), file);
+            }
+        }
+        return new LinkedHashSet(seen.values());
     }
 }
