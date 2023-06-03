@@ -24,6 +24,7 @@ import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NativeDevice;
+import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
@@ -302,14 +303,22 @@ public class AdbSshConnection extends AdbTcpConnection {
             // We are done with the gce related information, clean it to prevent re-entry.
             mGceAvd = null;
 
+            // TODO: Ensure the release is always done so we never leak placeholders
             if (getInitialSerial() != null) {
-                ((IManagedTestDevice) getDevice())
-                        .setIDevice(
-                                new RemoteAvdIDevice(
-                                        getInitialSerial(),
-                                        getInitialIp(),
-                                        getInitialUser(),
-                                        getInitialDeviceNumOffset()));
+                if (wasTemporaryHolder()) {
+                    // Logic linked to {@link ManagedDeviceList#allocate()}.
+                    // restore the temporary placeholder to avoid leaking it
+                    ((IManagedTestDevice) getDevice())
+                            .setIDevice(new NullDevice(getInitialSerial(), true));
+                } else {
+                    ((IManagedTestDevice) getDevice())
+                            .setIDevice(
+                                    new RemoteAvdIDevice(
+                                            getInitialSerial(),
+                                            getInitialIp(),
+                                            getInitialUser(),
+                                            getInitialDeviceNumOffset()));
+                }
             }
             ((IManagedTestDevice) getDevice()).setFastbootEnabled(false);
 
