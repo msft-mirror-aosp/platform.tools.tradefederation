@@ -21,7 +21,4 @@
       <option name="test-arg" value="com.android.tradefed.testtype.InstrumentationTest:rerun:false" />
   </test>
   <result_reporter class="com.android.tradefed.result.SubprocessResultsReporter" />
-  <result_reporter class="com.android.tradefed.result.proto.FileProtoResultReporter">
-      <option name="use-delimited-api" value="false" />
-  </result_reporter>
 </configuration>
