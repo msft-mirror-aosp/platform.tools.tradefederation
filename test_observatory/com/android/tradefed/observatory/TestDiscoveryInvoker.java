@@ -22,6 +22,7 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
@@ -73,6 +74,8 @@ public class TestDiscoveryInvoker {
     public static final String ROOT_DIRECTORY_ENV_VARIABLE_KEY =
             "ROOT_TEST_DISCOVERY_USE_TEST_DIRECTORY";
 
+    public static final String OUTPUT_FILE = "DISCOVERY_OUTPUT_FILE";
+
     @VisibleForTesting
     IRunUtil getRunUtil() {
         return mRunUtil;
@@ -81,6 +84,11 @@ public class TestDiscoveryInvoker {
     @VisibleForTesting
     String getJava() {
         return SystemUtil.getRunningJavaBinaryPath().getAbsolutePath();
+    }
+
+    @VisibleForTesting
+    File createOutputFile() throws IOException {
+        return FileUtil.createTempFile("discovery-output", ".txt");
     }
 
     public File getTestDir() {
@@ -146,44 +154,51 @@ public class TestDiscoveryInvoker {
             getRunUtil()
                     .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
         }
-
-        CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
-        if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
-            DiscoveryExitCode exitCode = null;
-            if (res.getExitCode() != null) {
-                for (DiscoveryExitCode code : DiscoveryExitCode.values()) {
-                    if (code.exitCode() == res.getExitCode()) {
-                        exitCode = code;
+        File outputFile = createOutputFile();
+        try {
+            getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
+            CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
+            if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
+                DiscoveryExitCode exitCode = null;
+                if (res.getExitCode() != null) {
+                    for (DiscoveryExitCode code : DiscoveryExitCode.values()) {
+                        if (code.exitCode() == res.getExitCode()) {
+                            exitCode = code;
+                        }
                     }
                 }
+                throw new TestDiscoveryException(
+                        String.format(
+                                "Tradefed observatory error, unable to discover test module names."
+                                        + " command used: %s error: %s",
+                                Joiner.on(" ").join(subprocessArgs), res.getStderr()),
+                        null,
+                        exitCode);
             }
-            throw new TestDiscoveryException(
-                    String.format(
-                            "Tradefed observatory error, unable to discover test module names."
-                                    + " command used: %s error: %s",
-                            Joiner.on(" ").join(subprocessArgs), res.getStderr()),
-                    null,
-                    exitCode);
-        }
-        String stdout = res.getStdout();
-        CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
+            String stdout = res.getStdout();
+            CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
 
-        List<String> testModules = parseTestDiscoveryOutput(stdout, TEST_MODULES_LIST_KEY);
-        if (!testModules.isEmpty()) {
-            dependencies.put(TEST_MODULES_LIST_KEY, testModules);
-        }
+            String result = FileUtil.readStringFromFile(outputFile);
 
-        List<String> testDependencies =
-                parseTestDiscoveryOutput(stdout, TEST_DEPENDENCIES_LIST_KEY);
-        if (!testDependencies.isEmpty()) {
-            dependencies.put(TEST_DEPENDENCIES_LIST_KEY, testDependencies);
-        }
+            List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+            if (!testModules.isEmpty()) {
+                dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+            }
 
-        String partialFallback = parsePartialFallback(stdout);
-        if (partialFallback != null) {
-            dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+            List<String> testDependencies =
+                    parseTestDiscoveryOutput(result, TEST_DEPENDENCIES_LIST_KEY);
+            if (!testDependencies.isEmpty()) {
+                dependencies.put(TEST_DEPENDENCIES_LIST_KEY, testDependencies);
+            }
+
+            String partialFallback = parsePartialFallback(result);
+            if (partialFallback != null) {
+                dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+            }
+            return dependencies;
+        } finally {
+            FileUtil.deleteFile(outputFile);
         }
-        return dependencies;
     }
 
     /**
@@ -213,27 +228,35 @@ public class TestDiscoveryInvoker {
             getRunUtil()
                     .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
         }
-        CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
-        if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
-            throw new TestDiscoveryException(
-                    String.format(
-                            "Tradefed observatory error, unable to discover test module names."
-                                    + " command used: %s error: %s",
-                            Joiner.on(" ").join(subprocessArgs), res.getStderr()),
-                    null);
-        }
-        String stdout = res.getStdout();
-        CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
+        File outputFile = createOutputFile();
+        try {
+            getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
+            CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
+            if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
+                throw new TestDiscoveryException(
+                        String.format(
+                                "Tradefed observatory error, unable to discover test module names."
+                                        + " command used: %s error: %s",
+                                Joiner.on(" ").join(subprocessArgs), res.getStderr()),
+                        null);
+            }
+            String stdout = res.getStdout();
+            CLog.i(String.format("Tradefed Observatory returned in stdout:\n %s", stdout));
 
-        List<String> testModules = parseTestDiscoveryOutput(stdout, TEST_MODULES_LIST_KEY);
-        if (!testModules.isEmpty()) {
-            dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+            String result = FileUtil.readStringFromFile(outputFile);
+
+            List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+            if (!testModules.isEmpty()) {
+                dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+            }
+            String partialFallback = parsePartialFallback(result);
+            if (partialFallback != null) {
+                dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+            }
+            return dependencies;
+        } finally {
+            FileUtil.deleteFile(outputFile);
         }
-        String partialFallback = parsePartialFallback(stdout);
-        if (partialFallback != null) {
-            dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
-        }
-        return dependencies;
     }
 
     /**

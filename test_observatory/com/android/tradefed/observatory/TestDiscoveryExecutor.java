@@ -78,6 +78,10 @@ public class TestDiscoveryExecutor {
         TestDiscoveryExecutor testDiscoveryExecutor = new TestDiscoveryExecutor();
         try {
             String testModules = testDiscoveryExecutor.discoverDependencies(args);
+            if (System.getenv(TestDiscoveryInvoker.OUTPUT_FILE) != null) {
+                FileUtil.writeToFile(
+                        testModules, new File(System.getenv(TestDiscoveryInvoker.OUTPUT_FILE)));
+            }
             System.out.print(testModules);
         } catch (TestDiscoveryException e) {
             System.err.print(e.getMessage());
@@ -234,6 +238,7 @@ public class TestDiscoveryExecutor {
             }
         }
         // Extract test module names from included filters.
+        System.out.println(String.format("include filters: %s", includeFilters));
         testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
         return testModules;
     }
