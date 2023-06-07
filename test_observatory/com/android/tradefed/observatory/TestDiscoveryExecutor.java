@@ -158,7 +158,7 @@ public class TestDiscoveryExecutor {
     private Set<String> discoverTestModulesFromTests(List<IRemoteTest> testList)
             throws IllegalStateException, TestDiscoveryException {
         Set<String> testModules = new LinkedHashSet<String>();
-        Set<String> includeFilters = new HashSet<>();
+        Set<String> includeFilters = new LinkedHashSet<>();
         // Collect include filters from every test.
         for (IRemoteTest test : testList) {
             if (!(test instanceof BaseTestSuite)) {
@@ -251,7 +251,7 @@ public class TestDiscoveryExecutor {
      */
     private Set<String> extractTestModulesFromIncludeFilters(Set<String> includeFilters)
             throws IllegalStateException {
-        Set<String> testModuleNames = new HashSet<>();
+        Set<String> testModuleNames = new LinkedHashSet<>();
         // Extract module name from each include filter.
         // TODO: Ensure if a module is fully excluded then it's excluded.
         for (String includeFilter : includeFilters) {
