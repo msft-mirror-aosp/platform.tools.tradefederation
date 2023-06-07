@@ -284,7 +284,7 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
             try (FileInputStreamSource source = new FileInputStreamSource(coverageTar, true)) {
                 String fileName =
                         String.format("%s_%d_kernel_coverage", name, System.currentTimeMillis());
-                testLog(fileName, LogDataType.TAR_GZ, source);
+                testLog(fileName, LogDataType.GCOV_KERNEL_COVERAGE, source);
             } finally {
                 FileUtil.deleteFile(coverageTar);
             }
