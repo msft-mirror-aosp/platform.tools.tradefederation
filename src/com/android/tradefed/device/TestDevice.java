@@ -328,14 +328,6 @@ public class TestDevice extends NativeDevice {
         try {
             bugreport = getBugreportz();
             type = LogDataType.BUGREPORTZ;
-            // Limit fallback to older devices
-            if (!TestDeviceState.RECOVERY.equals(getDeviceState())) {
-                if (bugreport == null && getApiLevelSafe() < 24) {
-                    CLog.d("Bugreportz failed, attempting bugreport collection instead.");
-                    bugreport = getBugreportInternal();
-                    type = LogDataType.BUGREPORT;
-                }
-            }
             // log what we managed to capture.
             if (bugreport != null && bugreport.size() > 0L) {
                 listener.testLog(dataName, type, bugreport);
@@ -2248,7 +2240,7 @@ public class TestDevice extends NativeDevice {
     public String getAndroidId(int userId) throws DeviceNotAvailableException {
         if (isAdbRoot()) {
             String cmd = String.format(
-                    "sqlite3 /data/user/%d/com.google.android.gsf/databases/gservices.db "
+                    "sqlite3 /data/user/%d/*/databases/gservices.db "
                     + "'select value from main where name = \"android_id\"'", userId);
             String output = executeShellCommand(cmd).trim();
             if (!output.contains("unable to open database")) {

@@ -139,22 +139,25 @@ public class TestDeviceOptions {
             description = "default number of attempts to connect to wifi network.")
     private int mWifiAttempts = 4;
 
-    @Option(name = "wifi-retry-wait-time",
-            description = "the base wait time in ms between wifi connect retries. "
-            + "The actual wait time would be a multiple of this value.")
-    private int mWifiRetryWaitTime = 60 * 1000;
+    @Option(
+            name = "wifi-retry-wait-time",
+            description =
+                    "the base wait time in ms between wifi connect retries. "
+                            + "The actual wait time would be a multiple of this value.")
+    private int mWifiRetryWaitTime = 15 * 1000;
 
     @Option(
-        name = "max-wifi-connect-time",
-        isTimeVal = true,
-        description = "the maximum amount of time to attempt to connect to wifi."
-    )
-    private long mMaxWifiConnectTime = 10 * 60 * 1000;
+            name = "max-wifi-connect-time",
+            isTimeVal = true,
+            description = "the maximum amount of time to attempt to connect to wifi.")
+    private long mMaxWifiConnectTime = 5 * 60 * 1000;
 
-    @Option(name = "wifi-exponential-retry",
-            description = "Change the wifi connection retry strategy from a linear wait time into"
-                    + " a binary exponential back-offs when retrying.")
-    private boolean mWifiExpoRetryEnabled = true;
+    @Option(
+            name = "wifi-exponential-retry",
+            description =
+                    "Change the wifi connection retry strategy from a linear wait time into"
+                            + " a binary exponential back-offs when retrying.")
+    private boolean mWifiExpoRetryEnabled = false;
 
     @Option(name = "wifiutil-apk-path", description = "path to the wifiutil APK file")
     private String mWifiUtilAPKPath = null;

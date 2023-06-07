@@ -30,6 +30,7 @@ import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
+import com.android.tradefed.device.connection.DefaultConnection.ConnectionBuilder;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -91,6 +92,13 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
         super(device, stateMonitor, allocationMonitor);
     }
 
+    @Override
+    protected void addExtraConnectionBuilderArgs(ConnectionBuilder builder) {
+        if (mGceAvd != null) {
+            builder.setExistingAvdInfo(mGceAvd);
+        }
+    }
+
     /** {@inheritDoc} */
     @Override
     public void preInvocationSetup(IBuildInfo info, MultiMap<String, String> attributes)
@@ -111,6 +119,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
             // mGceAvd is null means the device hasn't been launched.
             if (mGceAvd != null) {
                 CLog.d("skipped GCE launch because GceAvdInfo %s is already set", mGceAvd);
+                createGceSshMonitor(this, info, mGceAvd.hostAndPort(), this.getOptions());
             } else {
                 // Launch GCE helper script.
                 long startTime = getCurrentTime();

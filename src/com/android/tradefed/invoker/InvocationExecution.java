@@ -552,20 +552,21 @@ public class InvocationExecution implements IInvocationExecution {
                 preparer.setUp(testInfo);
             } finally {
                 testInfo.setActiveDeviceIndex(0);
-            }
+                long elapsedTime = System.currentTimeMillis() - startTime;
 
+                CLog.d(
+                        "done with lab preparer '%s' on device: '%s' in %s",
+                        preparer,
+                        device.getSerialNumber(),
+                        TimeUtil.formatElapsedTime(elapsedTime));
+
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationGroupMetricKey.LAB_PREPARER_SETUP_LATENCY,
+                        preparer.getClass().getName(),
+                        elapsedTime);
+            }
             // Track which lab preparers were executed separately from the target preparers
             trackLabPreparers.add(preparer);
-            long elapsedTime = System.currentTimeMillis() - startTime;
-
-            CLog.d(
-                    "done with lab preparer '%s' on device: '%s' in %s",
-                    preparer, device.getSerialNumber(), TimeUtil.formatElapsedTime(elapsedTime));
-
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationGroupMetricKey.LAB_PREPARER_SETUP_LATENCY,
-                    preparer.getClass().getName(),
-                    elapsedTime);
         }
     }
 
@@ -693,6 +694,12 @@ public class InvocationExecution implements IInvocationExecution {
 
         List<ITestDevice> devices = context.getDevices();
         List<IBuildInfo> buildInfos = context.getBuildInfos();
+        // Set logger on all devices first
+        for (ITestDevice device : devices) {
+            if (device instanceof ITestLoggerReceiver) {
+                ((ITestLoggerReceiver) device).setTestLogger(logger);
+            }
+        }
 
         // Start multiple devices in a group
         List<GceAvdInfo> gceAvdInfoList =
@@ -716,9 +723,6 @@ public class InvocationExecution implements IInvocationExecution {
                         device.getSerialNumber());
                 device.getOptions().setSkipTearDown(true);
             }
-
-            // Every RemoteAndroidVirtualDevice is a ITestLoggerReceiver
-            ((ITestLoggerReceiver) device).setTestLogger(logger);
         }
     }
 

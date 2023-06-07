@@ -5155,7 +5155,7 @@ public class TestDeviceTest {
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "Error: unable to open database"
-                                + "\"/data/0/com.google.android.gsf/databases/gservices.db\": "
+                                + "\"/data/0/*/databases/gservices.db\": "
                                 + "unable to open database file";
                     }
 
@@ -6411,37 +6411,6 @@ public class TestDeviceTest {
         assertTrue(mTestDevice.logBugreport(dataName, listener));
 
         verify(listener).testLog(dataName, LogDataType.BUGREPORTZ, stream);
-    }
-
-    /** Unit test for {@link NativeDevice#logBugreport(String, ITestLogger)}. */
-    @Test
-    public void testTestLogBugreport_oldDevice() {
-        final String dataName = "test";
-        final InputStreamSource stream = new ByteArrayInputStreamSource("bugreport".getBytes());
-        mTestDevice =
-                new TestableTestDevice() {
-                    @Override
-                    public InputStreamSource getBugreportz() {
-                        // Older device do not support bugreportz and return null
-                        return null;
-                    }
-
-                    @Override
-                    public InputStreamSource getBugreportInternal() {
-                        return stream;
-                    }
-
-                    @Override
-                    public int getApiLevel() throws DeviceNotAvailableException {
-                        // no bugreportz support
-                        return 23;
-                    }
-                };
-        ITestLogger listener = mock(ITestLogger.class);
-
-        assertTrue(mTestDevice.logBugreport(dataName, listener));
-
-        verify(listener).testLog(dataName, LogDataType.BUGREPORT, stream);
     }
 
     /** Unit test for {@link NativeDevice#logBugreport(String, ITestLogger)}. */

@@ -21,8 +21,10 @@ import com.android.tradefed.device.IConfigurableVirtualDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ManagedTestDeviceFactory;
 import com.android.tradefed.device.NativeDevice;
+import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
+import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.util.IRunUtil;
@@ -43,6 +45,8 @@ public class DefaultConnection extends AbstractConnection {
     private final Integer mInitialDeviceNumOffset;
     private final String mInitialSerial;
     private final ITestLogger mTestLogger;
+
+    private final boolean mTemporaryHolder;
 
     public static DefaultConnection createInopConnection(ConnectionBuilder builder) {
         return new DefaultConnection(builder);
@@ -84,6 +88,7 @@ public class DefaultConnection extends AbstractConnection {
         MultiMap<String, String> attributes;
         IRunUtil runUtil;
         ITestLogger logger;
+        GceAvdInfo existingAvdInfo;
 
         public ConnectionBuilder(
                 IRunUtil runUtil, ITestDevice device, IBuildInfo buildInfo, ITestLogger logger) {
@@ -96,6 +101,11 @@ public class DefaultConnection extends AbstractConnection {
 
         public ConnectionBuilder addAttributes(MultiMap<String, String> attributes) {
             this.attributes.putAll(attributes);
+            return this;
+        }
+
+        public ConnectionBuilder setExistingAvdInfo(GceAvdInfo info) {
+            existingAvdInfo = info;
             return this;
         }
     }
@@ -117,6 +127,11 @@ public class DefaultConnection extends AbstractConnection {
             mInitialIpDevice = null;
             mInitialUser = null;
             mInitialDeviceNumOffset = null;
+        }
+        if (idevice instanceof NullDevice) {
+            mTemporaryHolder = ((NullDevice) idevice).isTemporary();
+        } else {
+            mTemporaryHolder = false;
         }
     }
 
@@ -162,5 +177,9 @@ public class DefaultConnection extends AbstractConnection {
     /** Returns the {@link ITestLogger} to log files. */
     public ITestLogger getLogger() {
         return mTestLogger;
+    }
+
+    public boolean wasTemporaryHolder() {
+        return mTemporaryHolder;
     }
 }
