@@ -164,8 +164,8 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     public Set<TestInfo> loadTestInfos() {
         Set<String> includeFilter = getIncludeFilter();
         // Name of the tests
-        Set<String> testNames = new HashSet<>();
-        Set<TestInfo> testInfosToRun = new HashSet<>();
+        Set<String> testNames = new LinkedHashSet<>();
+        Set<TestInfo> testInfosToRun = new LinkedHashSet<>();
         mBuildInfo = getBuildInfo();
         if (mTestGroup == null && includeFilter.isEmpty()) {
             throw new HarnessRuntimeException(
