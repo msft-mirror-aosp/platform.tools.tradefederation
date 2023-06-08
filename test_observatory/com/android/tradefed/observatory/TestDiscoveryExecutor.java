@@ -238,7 +238,7 @@ public class TestDiscoveryExecutor {
             }
         }
         // Extract test module names from included filters.
-        System.out.println(String.format("include filters: %s", includeFilters));
+        // System.out.println(String.format("include filters: %s", includeFilters));
         testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
         return testModules;
     }
