@@ -394,10 +394,10 @@ public class PushFilePreparer extends BaseTargetPreparer
         ITestDevice device = testInfo.getDevice();
         if (!(e instanceof DeviceNotAvailableException) && mCleanup && mFilesPushed != null) {
             if (mRemountSystem) {
-                device.remountSystemWritable();
+                device.remountSystemReadOnly();
             }
             if (mRemountVendor) {
-                device.remountVendorWritable();
+                device.remountVendorReadOnly();
             }
             for (String devicePath : mFilesPushed) {
                 device.deleteFile(devicePath);

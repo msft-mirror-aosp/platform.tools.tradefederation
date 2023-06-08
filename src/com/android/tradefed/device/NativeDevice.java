@@ -4880,9 +4880,35 @@ public class NativeDevice
         waitForDeviceAvailable();
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
+    @Override
+    public void remountSystemReadOnly() throws DeviceNotAvailableException {
+        String verity = getProperty("partition.system.verified");
+        // have the property set (regardless state) implies verity is enabled, so we send adb
+        // command to disable verity
+        if (verity == null || verity.isEmpty()) {
+            executeAdbCommand("enable-verity");
+            reboot();
+        }
+        executeAdbCommand("remount");
+        waitForDeviceAvailable();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void remountVendorReadOnly() throws DeviceNotAvailableException {
+        String verity = getProperty("partition.vendor.verified");
+        // have the property set (regardless state) implies verity is enabled, so we send adb
+        // command to disable verity
+        if (verity == null || verity.isEmpty()) {
+            executeAdbCommand("enable-verity");
+            reboot();
+        }
+        executeAdbCommand("remount");
+        waitForDeviceAvailable();
+    }
+
+    /** {@inheritDoc} */
     @Override
     public Integer getPrimaryUserId() throws DeviceNotAvailableException {
         throw new UnsupportedOperationException("No support for user's feature.");
