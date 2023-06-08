@@ -82,7 +82,7 @@ public class BaseTestSuite extends ITestSuite {
                         + " documentation:"
                         + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
-    private Set<String> mIncludeFilters = new HashSet<>();
+    private Set<String> mIncludeFilters = new LinkedHashSet<>();
 
     @Option(
             name = EXCLUDE_FILTER_OPTION,
@@ -91,7 +91,7 @@ public class BaseTestSuite extends ITestSuite {
                         + " documentation:"
                         + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
-    private Set<String> mExcludeFilters = new HashSet<>();
+    private Set<String> mExcludeFilters = new LinkedHashSet<>();
 
     @Option(
             name = REVERSE_EXCLUDE_FILTERS,
@@ -467,7 +467,7 @@ public class BaseTestSuite extends ITestSuite {
 
     /** Gets a copy of include-filters for the compatibility test */
     public Set<String> getIncludeFilter() {
-        return new HashSet<String>(mIncludeFilters);
+        return new LinkedHashSet<String>(mIncludeFilters);
     }
 
     public void clearIncludeFilter() {
