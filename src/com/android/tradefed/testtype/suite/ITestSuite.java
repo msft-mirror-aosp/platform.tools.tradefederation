@@ -126,6 +126,9 @@ public abstract class ITestSuite
                 ITokenRequest,
                 ITestLoggerReceiver {
 
+    public static final String MODULE_START_TIME = "MODULE_START_TIME";
+    public static final String MODULE_END_TIME = "MODULE_END_TIME";
+
     public static final String SKIP_SYSTEM_STATUS_CHECKER = "skip-system-status-check";
     public static final String RUNNER_WHITELIST = "runner-whitelist";
     public static final String PREPARER_WHITELIST = "preparer-whitelist";
@@ -810,6 +813,9 @@ public abstract class ITestSuite
                             }
                         }
                     }
+                    module.getModuleInvocationContext()
+                            .addInvocationAttribute(
+                                    MODULE_START_TIME, Long.toString(System.currentTimeMillis()));
                     listenerWithCollectors.testModuleStarted(module.getModuleInvocationContext());
                     mModuleInProgress = module;
                     // Trigger module start on module level listener too
@@ -822,6 +828,9 @@ public abstract class ITestSuite
                         runSingleModule(
                                 module, moduleInfo, listener, moduleListeners, failureListener);
                     } finally {
+                        module.getModuleInvocationContext()
+                                .addInvocationAttribute(
+                                        MODULE_END_TIME, Long.toString(System.currentTimeMillis()));
                         // Trigger module end on module level listener too
                         new ResultForwarder(moduleListeners).testModuleEnded();
                         // clear out module invocation context since we are now done with module
