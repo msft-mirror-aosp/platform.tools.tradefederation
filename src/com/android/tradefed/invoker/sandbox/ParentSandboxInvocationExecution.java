@@ -122,7 +122,11 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             boolean parallelSetup = getSandboxOptions(config).shouldParallelSetup();
             if (parallelSetup) {
                 setupThread =
-                        new SandboxSetupThread(mTestInfo, config, (ITestInvocationListener) logger);
+                        new SandboxSetupThread(
+                                Thread.currentThread().getThreadGroup(),
+                                mTestInfo,
+                                config,
+                                (ITestInvocationListener) logger);
                 setupThread.start();
             }
             try {
@@ -242,9 +246,12 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
         public Throwable error;
 
         public SandboxSetupThread(
-                TestInformation info, IConfiguration config, ITestInvocationListener listener) {
+                ThreadGroup currentGroup,
+                TestInformation info,
+                IConfiguration config,
+                ITestInvocationListener listener) {
+            super(currentGroup, "SandboxSetupThread");
             setDaemon(true);
-            setName("SandboxSetupThread");
             this.info = info;
             this.config = config;
             this.listener = listener;
