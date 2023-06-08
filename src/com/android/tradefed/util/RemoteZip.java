@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 /** Utilities to unzip individual files inside a remote zip file. */
 public class RemoteZip {
 
-    private static final int POOL_MAX_SIZE = 5;
+    private static final int POOL_MAX_SIZE = 8;
     private String mRemoteFilePath;
     private List<CentralDirectoryInfo> mZipEntries;
     private long mFileSize;
