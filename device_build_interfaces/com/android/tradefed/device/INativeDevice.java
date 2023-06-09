@@ -1446,6 +1446,20 @@ public interface INativeDevice {
     public void remountVendorWritable() throws DeviceNotAvailableException;
 
     /**
+     * Make the system partition on the device read-only. May reboot the device.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void remountSystemReadOnly() throws DeviceNotAvailableException;
+
+    /**
+     * Make the vendor partition on the device read-only. May reboot the device.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void remountVendorReadOnly() throws DeviceNotAvailableException;
+
+    /**
      * Returns the key type used to sign the device image
      * <p>
      * Typically Android devices may be signed with test-keys (like in AOSP) or release-keys
