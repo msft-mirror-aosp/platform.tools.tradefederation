@@ -190,6 +190,15 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
                     .setMessage("device is currently in unavailable state.");
         } else if (!serverCallStreamObserver.isCancelled()) {
             DeviceSelectionOptions selection = new DeviceSelectionOptions();
+            // Allow reservation to hold any placeholder
+            // We have to match serial because selection is exclusive and doesn't
+            // currently allow a wide match. We could improve that in the future.
+            if (serial.startsWith("gce-device")) {
+                selection.setGceDeviceRequested(true);
+            }
+            if (serial.startsWith("null-device")) {
+                selection.setNullDeviceRequested(true);
+            }
             selection.addSerial(serial);
             ITestDevice device = mDeviceManager.allocateDevice(selection);
             if (device == null) {
