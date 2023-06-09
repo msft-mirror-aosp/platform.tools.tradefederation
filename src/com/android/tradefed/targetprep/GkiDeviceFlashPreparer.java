@@ -89,6 +89,11 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private String mVendorDlkmImageName = "vendor_dlkm.img";
 
     @Option(
+            name = "system-dlkm-image-name",
+            description = "The file name in BuildInfo that provides system_dlkm image.")
+    private String mSystemDlkmImageName = "system_dlkm.img";
+
+    @Option(
             name = "boot-image-file-name",
             description =
                     "The boot image file name to search for if gki-boot-image-name in "
@@ -115,6 +120,13 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                     "The vendor_dlkm image file name to search for if vendor-dlkm-image-name in "
                             + "BuildInfo is a zip file or directory, for example vendor_dlkm.img.")
     private String mVendorDlkmImageFileName = "vendor_dlkm.img";
+
+    @Option(
+            name = "system-dlkm-image-file-name",
+            description =
+                    "The system_dlkm image file name to search for if system-dlkm-image-name in "
+                            + "BuildInfo is a zip file or directory, for example system_dlkm.img.")
+    private String mSystemDlkmImageFileName = "system_dlkm.img";
 
     @Option(
             name = "post-reboot-device-into-user-space",
@@ -261,6 +273,17 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                                 tmpDir);
                 device.rebootIntoFastbootd();
                 executeFastbootCmd(device, "flash", "vendor_dlkm", vendorDlkmImg.getAbsolutePath());
+            }
+
+            if (buildInfo.getFile(mSystemDlkmImageName) != null) {
+                File systemDlkmImg =
+                        getRequestedFile(
+                                device,
+                                mSystemDlkmImageFileName,
+                                buildInfo.getFile(mSystemDlkmImageName),
+                                tmpDir);
+                device.rebootIntoFastbootd();
+                executeFastbootCmd(device, "flash", "system_dlkm", systemDlkmImg.getAbsolutePath());
             }
 
             if (mShouldWipeDevice) {
