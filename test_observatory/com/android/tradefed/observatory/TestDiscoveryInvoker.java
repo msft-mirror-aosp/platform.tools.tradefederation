@@ -19,6 +19,7 @@ package com.android.tradefed.observatory;
 import com.android.tradefed.config.ArgsOptionParser;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -143,19 +144,20 @@ public class TestDiscoveryInvoker {
      */
     public Map<String, List<String>> discoverTestDependencies()
             throws IOException, JSONException, ConfigurationException, TestDiscoveryException {
-        Map<String, List<String>> dependencies = new HashMap<>();
-        // Build the classpath base on test root directory which should contain all the jars
-        String classPath = buildXtsClasspath(mRootDir);
-        // Build command line args to query the tradefed.jar in the root directory
-        List<String> args = buildJavaCmdForXtsDiscovery(classPath);
-        String[] subprocessArgs = args.toArray(new String[args.size()]);
-
-        if (mHasConfigFallback) {
-            getRunUtil()
-                    .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
-        }
         File outputFile = createOutputFile();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("discoverTestDependencies")) {
+            Map<String, List<String>> dependencies = new HashMap<>();
+            // Build the classpath base on test root directory which should contain all the jars
+            String classPath = buildXtsClasspath(mRootDir);
+            // Build command line args to query the tradefed.jar in the root directory
+            List<String> args = buildJavaCmdForXtsDiscovery(classPath);
+            String[] subprocessArgs = args.toArray(new String[args.size()]);
+
+            if (mHasConfigFallback) {
+                getRunUtil()
+                        .setEnvVariable(
+                                ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
+            }
             getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
             CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
             if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
@@ -212,24 +214,27 @@ public class TestDiscoveryInvoker {
      */
     public Map<String, List<String>> discoverTestMappingDependencies()
             throws IOException, JSONException, ConfigurationException, TestDiscoveryException {
-        Map<String, List<String>> dependencies = new HashMap<>();
-        // Build the classpath base on the working directory
-        String classPath = buildTestMappingClasspath(mRootDir);
-        // Build command line args to query the tradefed.jar in the working directory
-        List<String> args = buildJavaCmdForTestMappingDiscovery(classPath);
-        String[] subprocessArgs = args.toArray(new String[args.size()]);
-
-        // Pass the test directory path to subprocess by environment variable
-        if (mTestDir != null) {
-            getRunUtil()
-                    .setEnvVariable(TEST_DIRECTORY_ENV_VARIABLE_KEY, mTestDir.getAbsolutePath());
-        }
-        if (mHasConfigFallback) {
-            getRunUtil()
-                    .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
-        }
         File outputFile = createOutputFile();
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("discoverTestMappingDependencies")) {
+            Map<String, List<String>> dependencies = new HashMap<>();
+            // Build the classpath base on the working directory
+            String classPath = buildTestMappingClasspath(mRootDir);
+            // Build command line args to query the tradefed.jar in the working directory
+            List<String> args = buildJavaCmdForTestMappingDiscovery(classPath);
+            String[] subprocessArgs = args.toArray(new String[args.size()]);
+
+            // Pass the test directory path to subprocess by environment variable
+            if (mTestDir != null) {
+                getRunUtil()
+                        .setEnvVariable(
+                                TEST_DIRECTORY_ENV_VARIABLE_KEY, mTestDir.getAbsolutePath());
+            }
+            if (mHasConfigFallback) {
+                getRunUtil()
+                        .setEnvVariable(
+                                ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
+            }
             getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
             CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
             if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
