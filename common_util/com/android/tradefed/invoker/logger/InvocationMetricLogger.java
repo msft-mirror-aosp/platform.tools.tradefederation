@@ -340,6 +340,18 @@ public class InvocationMetricLogger {
 
     private InvocationMetricLogger() {}
 
+    private static ThreadLocal<ThreadGroup> sLocal = new ThreadLocal<>();
+
+    /** Tracks a localized context when using the properties inside the gRPC server */
+    public static void setLocalGroup(ThreadGroup tg) {
+        sLocal.set(tg);
+    }
+
+    /** Resets the localized context. */
+    public static void resetLocalGroup() {
+        sLocal.remove();
+    }
+
     /**
      * Track metrics per ThreadGroup as a proxy to invocation since an invocation run within one
      * threadgroup.
@@ -400,6 +412,9 @@ public class InvocationMetricLogger {
     private static void addInvocationMetrics(String key, String value) {
         ThreadGroup group = Thread.currentThread().getThreadGroup();
         synchronized (mPerGroupMetrics) {
+            if (sLocal.get() != null) {
+                group = sLocal.get();
+            }
             if (mPerGroupMetrics.get(group) == null) {
                 mPerGroupMetrics.put(group, new HashMap<>());
             }
@@ -472,6 +487,9 @@ public class InvocationMetricLogger {
     public static Map<String, String> getInvocationMetrics() {
         ThreadGroup group = Thread.currentThread().getThreadGroup();
         synchronized (mPerGroupMetrics) {
+            if (sLocal.get() != null) {
+                group = sLocal.get();
+            }
             if (mPerGroupMetrics.get(group) == null) {
                 mPerGroupMetrics.put(group, new HashMap<>());
             }
