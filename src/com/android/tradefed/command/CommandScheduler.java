@@ -2020,11 +2020,15 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         CLog.d("starting invocation for command id %d", invocationId);
         // Name invocation with first device serial
         final String invocationName = String.format("Invocation-%s", context.getSerials().get(0));
-        if (getFeatureServer() != null) {
-            getFeatureServer().registerInvocation(cmd.getConfiguration(), Arrays.asList(listeners));
-        }
         InvocationThread invocationThread =
                 new InvocationThread(invocationName, context, cmd, listeners);
+        if (getFeatureServer() != null) {
+            getFeatureServer()
+                    .registerInvocation(
+                            cmd.getConfiguration(),
+                            invocationThread.getThreadGroup(),
+                            Arrays.asList(listeners));
+        }
         // Link context and command
         context.addInvocationAttribute(
                 IInvocationContext.INVOCATION_ID, Integer.toString(invocationId));

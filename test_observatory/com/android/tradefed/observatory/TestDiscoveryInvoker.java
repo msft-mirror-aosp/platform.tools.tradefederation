@@ -19,9 +19,11 @@ package com.android.tradefed.observatory;
 import com.android.tradefed.config.ArgsOptionParser;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
@@ -73,6 +75,8 @@ public class TestDiscoveryInvoker {
     public static final String ROOT_DIRECTORY_ENV_VARIABLE_KEY =
             "ROOT_TEST_DISCOVERY_USE_TEST_DIRECTORY";
 
+    public static final String OUTPUT_FILE = "DISCOVERY_OUTPUT_FILE";
+
     @VisibleForTesting
     IRunUtil getRunUtil() {
         return mRunUtil;
@@ -81,6 +85,11 @@ public class TestDiscoveryInvoker {
     @VisibleForTesting
     String getJava() {
         return SystemUtil.getRunningJavaBinaryPath().getAbsolutePath();
+    }
+
+    @VisibleForTesting
+    File createOutputFile() throws IOException {
+        return FileUtil.createTempFile("discovery-output", ".txt");
     }
 
     public File getTestDir() {
@@ -135,55 +144,63 @@ public class TestDiscoveryInvoker {
      */
     public Map<String, List<String>> discoverTestDependencies()
             throws IOException, JSONException, ConfigurationException, TestDiscoveryException {
-        Map<String, List<String>> dependencies = new HashMap<>();
-        // Build the classpath base on test root directory which should contain all the jars
-        String classPath = buildXtsClasspath(mRootDir);
-        // Build command line args to query the tradefed.jar in the root directory
-        List<String> args = buildJavaCmdForXtsDiscovery(classPath);
-        String[] subprocessArgs = args.toArray(new String[args.size()]);
+        File outputFile = createOutputFile();
+        try (CloseableTraceScope ignored = new CloseableTraceScope("discoverTestDependencies")) {
+            Map<String, List<String>> dependencies = new HashMap<>();
+            // Build the classpath base on test root directory which should contain all the jars
+            String classPath = buildXtsClasspath(mRootDir);
+            // Build command line args to query the tradefed.jar in the root directory
+            List<String> args = buildJavaCmdForXtsDiscovery(classPath);
+            String[] subprocessArgs = args.toArray(new String[args.size()]);
 
-        if (mHasConfigFallback) {
-            getRunUtil()
-                    .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
-        }
-
-        CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
-        if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
-            DiscoveryExitCode exitCode = null;
-            if (res.getExitCode() != null) {
-                for (DiscoveryExitCode code : DiscoveryExitCode.values()) {
-                    if (code.exitCode() == res.getExitCode()) {
-                        exitCode = code;
+            if (mHasConfigFallback) {
+                getRunUtil()
+                        .setEnvVariable(
+                                ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
+            }
+            getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
+            CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
+            if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
+                DiscoveryExitCode exitCode = null;
+                if (res.getExitCode() != null) {
+                    for (DiscoveryExitCode code : DiscoveryExitCode.values()) {
+                        if (code.exitCode() == res.getExitCode()) {
+                            exitCode = code;
+                        }
                     }
                 }
+                throw new TestDiscoveryException(
+                        String.format(
+                                "Tradefed observatory error, unable to discover test module names."
+                                        + " command used: %s error: %s",
+                                Joiner.on(" ").join(subprocessArgs), res.getStderr()),
+                        null,
+                        exitCode);
             }
-            throw new TestDiscoveryException(
-                    String.format(
-                            "Tradefed observatory error, unable to discover test module names."
-                                    + " command used: %s error: %s",
-                            Joiner.on(" ").join(subprocessArgs), res.getStderr()),
-                    null,
-                    exitCode);
-        }
-        String stdout = res.getStdout();
-        CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
+            String stdout = res.getStdout();
+            CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
 
-        List<String> testModules = parseTestDiscoveryOutput(stdout, TEST_MODULES_LIST_KEY);
-        if (!testModules.isEmpty()) {
-            dependencies.put(TEST_MODULES_LIST_KEY, testModules);
-        }
+            String result = FileUtil.readStringFromFile(outputFile);
 
-        List<String> testDependencies =
-                parseTestDiscoveryOutput(stdout, TEST_DEPENDENCIES_LIST_KEY);
-        if (!testDependencies.isEmpty()) {
-            dependencies.put(TEST_DEPENDENCIES_LIST_KEY, testDependencies);
-        }
+            List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+            if (!testModules.isEmpty()) {
+                dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+            }
 
-        String partialFallback = parsePartialFallback(stdout);
-        if (partialFallback != null) {
-            dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+            List<String> testDependencies =
+                    parseTestDiscoveryOutput(result, TEST_DEPENDENCIES_LIST_KEY);
+            if (!testDependencies.isEmpty()) {
+                dependencies.put(TEST_DEPENDENCIES_LIST_KEY, testDependencies);
+            }
+
+            String partialFallback = parsePartialFallback(result);
+            if (partialFallback != null) {
+                dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+            }
+            return dependencies;
+        } finally {
+            FileUtil.deleteFile(outputFile);
         }
-        return dependencies;
     }
 
     /**
@@ -197,43 +214,54 @@ public class TestDiscoveryInvoker {
      */
     public Map<String, List<String>> discoverTestMappingDependencies()
             throws IOException, JSONException, ConfigurationException, TestDiscoveryException {
-        Map<String, List<String>> dependencies = new HashMap<>();
-        // Build the classpath base on the working directory
-        String classPath = buildTestMappingClasspath(mRootDir);
-        // Build command line args to query the tradefed.jar in the working directory
-        List<String> args = buildJavaCmdForTestMappingDiscovery(classPath);
-        String[] subprocessArgs = args.toArray(new String[args.size()]);
+        File outputFile = createOutputFile();
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("discoverTestMappingDependencies")) {
+            Map<String, List<String>> dependencies = new HashMap<>();
+            // Build the classpath base on the working directory
+            String classPath = buildTestMappingClasspath(mRootDir);
+            // Build command line args to query the tradefed.jar in the working directory
+            List<String> args = buildJavaCmdForTestMappingDiscovery(classPath);
+            String[] subprocessArgs = args.toArray(new String[args.size()]);
 
-        // Pass the test directory path to subprocess by environment variable
-        if (mTestDir != null) {
-            getRunUtil()
-                    .setEnvVariable(TEST_DIRECTORY_ENV_VARIABLE_KEY, mTestDir.getAbsolutePath());
-        }
-        if (mHasConfigFallback) {
-            getRunUtil()
-                    .setEnvVariable(ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
-        }
-        CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
-        if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
-            throw new TestDiscoveryException(
-                    String.format(
-                            "Tradefed observatory error, unable to discover test module names."
-                                    + " command used: %s error: %s",
-                            Joiner.on(" ").join(subprocessArgs), res.getStderr()),
-                    null);
-        }
-        String stdout = res.getStdout();
-        CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
+            // Pass the test directory path to subprocess by environment variable
+            if (mTestDir != null) {
+                getRunUtil()
+                        .setEnvVariable(
+                                TEST_DIRECTORY_ENV_VARIABLE_KEY, mTestDir.getAbsolutePath());
+            }
+            if (mHasConfigFallback) {
+                getRunUtil()
+                        .setEnvVariable(
+                                ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
+            }
+            getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
+            CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
+            if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
+                throw new TestDiscoveryException(
+                        String.format(
+                                "Tradefed observatory error, unable to discover test module names."
+                                        + " command used: %s error: %s",
+                                Joiner.on(" ").join(subprocessArgs), res.getStderr()),
+                        null);
+            }
+            String stdout = res.getStdout();
+            CLog.i(String.format("Tradefed Observatory returned in stdout:\n %s", stdout));
 
-        List<String> testModules = parseTestDiscoveryOutput(stdout, TEST_MODULES_LIST_KEY);
-        if (!testModules.isEmpty()) {
-            dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+            String result = FileUtil.readStringFromFile(outputFile);
+
+            List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+            if (!testModules.isEmpty()) {
+                dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+            }
+            String partialFallback = parsePartialFallback(result);
+            if (partialFallback != null) {
+                dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+            }
+            return dependencies;
+        } finally {
+            FileUtil.deleteFile(outputFile);
         }
-        String partialFallback = parsePartialFallback(stdout);
-        if (partialFallback != null) {
-            dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
-        }
-        return dependencies;
     }
 
     /**

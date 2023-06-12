@@ -78,6 +78,10 @@ public class TestDiscoveryExecutor {
         TestDiscoveryExecutor testDiscoveryExecutor = new TestDiscoveryExecutor();
         try {
             String testModules = testDiscoveryExecutor.discoverDependencies(args);
+            if (System.getenv(TestDiscoveryInvoker.OUTPUT_FILE) != null) {
+                FileUtil.writeToFile(
+                        testModules, new File(System.getenv(TestDiscoveryInvoker.OUTPUT_FILE)));
+            }
             System.out.print(testModules);
         } catch (TestDiscoveryException e) {
             System.err.print(e.getMessage());
@@ -154,7 +158,7 @@ public class TestDiscoveryExecutor {
     private Set<String> discoverTestModulesFromTests(List<IRemoteTest> testList)
             throws IllegalStateException, TestDiscoveryException {
         Set<String> testModules = new LinkedHashSet<String>();
-        Set<String> includeFilters = new HashSet<>();
+        Set<String> includeFilters = new LinkedHashSet<>();
         // Collect include filters from every test.
         for (IRemoteTest test : testList) {
             if (!(test instanceof BaseTestSuite)) {
@@ -234,6 +238,7 @@ public class TestDiscoveryExecutor {
             }
         }
         // Extract test module names from included filters.
+        // System.out.println(String.format("include filters: %s", includeFilters));
         testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
         return testModules;
     }
@@ -246,7 +251,7 @@ public class TestDiscoveryExecutor {
      */
     private Set<String> extractTestModulesFromIncludeFilters(Set<String> includeFilters)
             throws IllegalStateException {
-        Set<String> testModuleNames = new HashSet<>();
+        Set<String> testModuleNames = new LinkedHashSet<>();
         // Extract module name from each include filter.
         // TODO: Ensure if a module is fully excluded then it's excluded.
         for (String includeFilter : includeFilters) {

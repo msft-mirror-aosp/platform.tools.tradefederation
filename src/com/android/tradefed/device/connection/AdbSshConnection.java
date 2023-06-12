@@ -24,6 +24,7 @@ import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NativeDevice;
+import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
@@ -33,6 +34,7 @@ import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
 import com.android.tradefed.device.cloud.OxygenUtil;
+import com.android.tradefed.device.cloud.VmRemoteDevice;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -65,6 +67,9 @@ public class AdbSshConnection extends AdbTcpConnection {
     private GceSshTunnelMonitor mGceSshMonitor;
     private DeviceNotAvailableException mTunnelInitFailed = null;
 
+    private boolean mIsRemote = false;
+    private String mKnownIp = null;
+
     private static final long CHECK_WAIT_DEVICE_AVAIL_MS = 30 * 1000;
     private static final int WAIT_TIME_DIVISION = 4;
     private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
@@ -87,6 +92,10 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getDeviceDescriptor(),
                         getDevice().getOptions(),
                         getBuildInfo());
+        if (getDevice().getIDevice() instanceof VmRemoteDevice) {
+            mIsRemote = true;
+            mKnownIp = ((VmRemoteDevice) getDevice().getIDevice()).getKnownDeviceIp();
+        }
 
         long remainingTime = getDevice().getOptions().getGceCmdTimeout();
         // mGceAvd is null means the device hasn't been launched.
@@ -301,15 +310,25 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
             // We are done with the gce related information, clean it to prevent re-entry.
             mGceAvd = null;
-
+            // TODO: Ensure the release is always done so we never leak placeholders
             if (getInitialSerial() != null) {
-                ((IManagedTestDevice) getDevice())
-                        .setIDevice(
-                                new RemoteAvdIDevice(
-                                        getInitialSerial(),
-                                        getInitialIp(),
-                                        getInitialUser(),
-                                        getInitialDeviceNumOffset()));
+                if (wasTemporaryHolder()) {
+                    // Logic linked to {@link ManagedDeviceList#allocate()}.
+                    // restore the temporary placeholder to avoid leaking it
+                    ((IManagedTestDevice) getDevice())
+                            .setIDevice(new NullDevice(getInitialSerial(), true));
+                } else if (mIsRemote) {
+                    ((IManagedTestDevice) getDevice())
+                            .setIDevice(new VmRemoteDevice(getInitialSerial(), mKnownIp));
+                } else {
+                    ((IManagedTestDevice) getDevice())
+                            .setIDevice(
+                                    new RemoteAvdIDevice(
+                                            getInitialSerial(),
+                                            getInitialIp(),
+                                            getInitialUser(),
+                                            getInitialDeviceNumOffset()));
+                }
             }
             ((IManagedTestDevice) getDevice()).setFastbootEnabled(false);
 

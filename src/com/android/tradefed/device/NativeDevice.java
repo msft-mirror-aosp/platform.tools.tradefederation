@@ -3322,8 +3322,6 @@ public class NativeDevice
                 }
             }
         } finally {
-            // Invalidate cache after reboots
-            mPropertiesCache.invalidateAll();
             long elapsed = System.currentTimeMillis() - startTime;
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.POSTBOOT_SETUP_TIME, elapsed);
@@ -3609,6 +3607,8 @@ public class NativeDevice
             throws DeviceNotAvailableException {
         long rebootStart = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("rebootUntilOnline")) {
+            // Invalidate cache before reboots
+            mPropertiesCache.invalidateAll();
             doReboot(RebootMode.REBOOT_FULL, reason);
             RecoveryMode cachedRecoveryMode = getRecoveryMode();
             setRecoveryMode(RecoveryMode.ONLINE);
@@ -4880,9 +4880,35 @@ public class NativeDevice
         waitForDeviceAvailable();
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
+    @Override
+    public void remountSystemReadOnly() throws DeviceNotAvailableException {
+        String verity = getProperty("partition.system.verified");
+        // have the property set (regardless state) implies verity is enabled, so we send adb
+        // command to disable verity
+        if (verity == null || verity.isEmpty()) {
+            executeAdbCommand("enable-verity");
+            reboot();
+        }
+        executeAdbCommand("remount");
+        waitForDeviceAvailable();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void remountVendorReadOnly() throws DeviceNotAvailableException {
+        String verity = getProperty("partition.vendor.verified");
+        // have the property set (regardless state) implies verity is enabled, so we send adb
+        // command to disable verity
+        if (verity == null || verity.isEmpty()) {
+            executeAdbCommand("enable-verity");
+            reboot();
+        }
+        executeAdbCommand("remount");
+        waitForDeviceAvailable();
+    }
+
+    /** {@inheritDoc} */
     @Override
     public Integer getPrimaryUserId() throws DeviceNotAvailableException {
         throw new UnsupportedOperationException("No support for user's feature.");

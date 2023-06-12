@@ -68,7 +68,7 @@ public class BootstrapBuildProvider implements IDeviceBuildProvider {
     @Option(name="build-target", description="build target name to supply.")
     private String mBuildTargetName = "bootstrapped";
 
-    @Option(name="branch", description="build branch name to supply.")
+    @Option(name = "branch", description = "build branch name to supply.")
     private String mBranch = null;
 
     @Option(
@@ -127,7 +127,7 @@ public class BootstrapBuildProvider implements IDeviceBuildProvider {
                             device.getSerialNumber());
                 }
             }
-        } else {
+        } else if (mBranch == null) {
             // In order to avoid issue with a null branch, use a placeholder stub for StubDevice.
             mBranch = "stub";
         }

@@ -27,7 +27,6 @@ import com.android.tradefed.util.ZipUtil2;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 
-import java.util.Enumeration;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.json.JSONArray;
@@ -44,10 +43,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -461,7 +463,7 @@ public class TestMapping {
             Set<String> keywords,
             List<String> extraZipNames,
             Set<String> matchedPatternPaths) {
-        Set<TestInfo> tests = new HashSet<TestInfo>();
+        Set<TestInfo> tests = Collections.synchronizedSet(new LinkedHashSet<TestInfo>());
         File zipFile;
         if (buildInfo == null) {
             zipFile = lookupTestMappingZip(TEST_MAPPINGS_ZIP);
@@ -657,6 +659,9 @@ public class TestMapping {
     void mergeTestMappingZips(
             IBuildInfo buildInfo, List<String> extraZips, File baseFile, File baseDir)
             throws IOException {
+        if (extraZips.isEmpty()) {
+            return;
+        }
         Set<String> baseNames = getTestMappingSources(baseFile);
         for (String zipName : extraZips) {
             File zipFile;
