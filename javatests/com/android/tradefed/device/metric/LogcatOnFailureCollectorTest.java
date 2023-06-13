@@ -178,7 +178,7 @@ public class LogcatOnFailureCollectorTest {
                         Mockito.anyLong(),
                         Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener).testRunEnded(0L, new HashMap<String, Metric>());
-        verify(mMockDevice).executeShellCommand(Mockito.eq("logcat -t 5000"), Mockito.any());
+        verify(mMockDevice).executeShellCommand(Mockito.eq("logcat -b all -t 5000"), Mockito.any());
         verify(mMockListener)
                 .testLog(
                         Mockito.eq("class#test-serial-logcat-on-failure"),
