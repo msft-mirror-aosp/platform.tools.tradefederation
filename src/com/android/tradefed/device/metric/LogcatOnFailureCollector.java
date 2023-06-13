@@ -44,9 +44,9 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
 
     private static final String NAME_FORMAT = "%s-%s-logcat-on-failure";
 
-    private static final String LOGCAT_COLLECT_CMD = "logcat -T 150";
+    private static final String LOGCAT_COLLECT_CMD = "logcat -b all -T 150";
     // -t implies -d (dump) so it's a one time collection
-    private static final String LOGCAT_COLLECT_CMD_LEGACY = "logcat -t 5000";
+    private static final String LOGCAT_COLLECT_CMD_LEGACY = "logcat -b all -t 5000";
     private static final int API_LIMIT = 20;
 
     private static final int THROTTLE_LIMIT_PER_RUN = 10;
