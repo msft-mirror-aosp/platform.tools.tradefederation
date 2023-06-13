@@ -15,7 +15,7 @@
  */
 package com.android.tradefed.cluster;
 
-import com.android.tradefed.build.FolderBuildInfo;
+import com.android.tradefed.build.DeviceFolderBuildInfo;
 import com.android.tradefed.build.IBuildInfo;
 
 import java.io.File;
@@ -24,7 +24,7 @@ import java.util.Collections;
 import java.util.List;
 
 /** A {@link IBuildInfo} class for builds piped from TFC. */
-public class ClusterBuildInfo extends FolderBuildInfo {
+public class ClusterBuildInfo extends DeviceFolderBuildInfo {
 
     private List<File> mZipMounts = new ArrayList<>();
 
