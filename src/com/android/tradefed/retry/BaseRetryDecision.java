@@ -284,6 +284,10 @@ public class BaseRetryDecision
             CLog.d("Skip retrying known failure test of %s", module.getId());
             return false;
         }
+        if (module == null) {
+            // If it's not a module, carry all filters
+            moduleSkipList.addAll(mSkipRetryingSet);
+        }
 
         boolean shouldRetry = false;
         long retryStartTime = System.currentTimeMillis();
