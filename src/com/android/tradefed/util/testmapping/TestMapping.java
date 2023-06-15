@@ -140,7 +140,7 @@ public class TestMapping {
                 if (group.equals(IMPORTS)) {
                     continue;
                 }
-                Set<TestInfo> testsForGroup = new HashSet<>();
+                Set<TestInfo> testsForGroup = new LinkedHashSet<>();
                 testCollection.put(group, testsForGroup);
                 JSONArray arr = root.getJSONArray(group);
                 for (int i = 0; i < arr.length(); i++) {
@@ -391,8 +391,9 @@ public class TestMapping {
             Set<String> disabledTests,
             boolean hostOnly,
             Set<String> keywords) {
-        Set<TestInfo> tests = new HashSet<TestInfo>();
+        Set<TestInfo> tests = new LinkedHashSet<TestInfo>();
         for (TestInfo test : testCollection.getOrDefault(testGroup, new HashSet<>())) {
+            CLog.d("Considering: %s", test);
             if (disabledTests != null && disabledTests.contains(test.getName())) {
                 continue;
             }
@@ -417,6 +418,7 @@ public class TestMapping {
                     continue;
                 }
             }
+            CLog.d("#getTests adding: %s", test);
             tests.add(test);
         }
 
@@ -500,7 +502,7 @@ public class TestMapping {
         } finally {
             FileUtil.recursiveDelete(testMappingsDir);
         }
-
+        CLog.d("TestInfo found: %s", tests);
         return tests;
     }
 
@@ -512,7 +514,7 @@ public class TestMapping {
      */
     @VisibleForTesting
     Set<Path> getAllTestMappingPaths(Path testMappingsRootPath) {
-        Set<Path> allTestMappingPaths = new HashSet<>();
+        Set<Path> allTestMappingPaths = new LinkedHashSet<>();
         for (String path : mTestMappingRelativePaths) {
             boolean hasAdded = false;
             Path testMappingPath = testMappingsRootPath.resolve(path);
