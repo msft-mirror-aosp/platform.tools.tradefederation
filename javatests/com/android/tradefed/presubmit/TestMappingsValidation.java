@@ -143,6 +143,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsOsTestCases",
                     "CtsStatsdAtomHostTestCases",
                     "CtsPermission3TestCases",
+                    "CtsPermissionUiTestCases",// Renamed from Permission3 in 2023
                     "CtsMediaAudioTestCases");
 
     private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST = ImmutableSet.of(
@@ -158,6 +159,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsLibcoreTestCases",
                     "OverlayRemountedTest",
                     "CtsPermission3TestCases",
+                    "CtsPermissionUiTestCases",
                     "sharedlibs_host_tests",
                     "CtsDevicePolicyManagerTestCases",
                     "CtsMediaAudioTestCases",
