@@ -17,11 +17,16 @@
 package com.android.tradefed.observatory;
 
 import com.android.annotations.VisibleForTesting;
+import com.android.ddmlib.DdmPreferences;
+import com.android.ddmlib.Log;
+import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.log.LogRegistry;
+import com.android.tradefed.log.StdoutLogger;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
@@ -62,6 +67,10 @@ public class TestDiscoveryExecutor {
 
     private boolean mReportPartialFallback = false;
 
+    private static boolean hasOutputResultFile() {
+        return System.getenv(TestDiscoveryInvoker.OUTPUT_FILE) != null;
+    }
+
     /**
      * An TradeFederation entry point that will use command args to discover test artifact
      * information.
@@ -78,7 +87,7 @@ public class TestDiscoveryExecutor {
         TestDiscoveryExecutor testDiscoveryExecutor = new TestDiscoveryExecutor();
         try {
             String testModules = testDiscoveryExecutor.discoverDependencies(args);
-            if (System.getenv(TestDiscoveryInvoker.OUTPUT_FILE) != null) {
+            if (hasOutputResultFile()) {
                 FileUtil.writeToFile(
                         testModules, new File(System.getenv(TestDiscoveryInvoker.OUTPUT_FILE)));
             }
@@ -108,34 +117,47 @@ public class TestDiscoveryExecutor {
         // Create IConfiguration base on command line args.
         IConfiguration config = getConfiguration(args);
 
-        // Get tests from the configuration.
-        List<IRemoteTest> tests = config.getTests();
-
-        // Tests could be empty if input args are corrupted.
-        if (tests == null || tests.isEmpty()) {
-            throw new TestDiscoveryException(
-                    "Tradefed Observatory discovered no tests from the IConfiguration created from"
-                            + " command line args.",
-                    null,
-                    DiscoveryExitCode.ERROR);
+        if (hasOutputResultFile()) {
+            DdmPreferences.setLogLevel(LogLevel.VERBOSE.getStringValue());
+            Log.setLogOutput(LogRegistry.getLogRegistry());
+            StdoutLogger logger = new StdoutLogger();
+            logger.setLogLevel(LogLevel.VERBOSE);
+            LogRegistry.getLogRegistry().registerLogger(logger);
         }
+        try {
+            // Get tests from the configuration.
+            List<IRemoteTest> tests = config.getTests();
 
-        List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));
+            // Tests could be empty if input args are corrupted.
+            if (tests == null || tests.isEmpty()) {
+                throw new TestDiscoveryException(
+                        "Tradefed Observatory discovered no tests from the IConfiguration created"
+                                + " from command line args.",
+                        null,
+                        DiscoveryExitCode.ERROR);
+            }
 
-        List<String> testDependencies = new ArrayList<>(discoverDependencies(config));
-        Collections.sort(testModules);
-        Collections.sort(testDependencies);
+            List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));
 
-        JsonObject jsonObject = new JsonObject();
-        Gson gson = new Gson();
-        JsonArray testModulesArray = gson.toJsonTree(testModules).getAsJsonArray();
-        JsonArray testDependenciesArray = gson.toJsonTree(testDependencies).getAsJsonArray();
-        jsonObject.add(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, testModulesArray);
-        jsonObject.add(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
-        if (mReportPartialFallback) {
-            jsonObject.addProperty(TestDiscoveryInvoker.PARTIAL_FALLBACK_KEY, "true");
+            List<String> testDependencies = new ArrayList<>(discoverDependencies(config));
+            Collections.sort(testModules);
+            Collections.sort(testDependencies);
+
+            JsonObject jsonObject = new JsonObject();
+            Gson gson = new Gson();
+            JsonArray testModulesArray = gson.toJsonTree(testModules).getAsJsonArray();
+            JsonArray testDependenciesArray = gson.toJsonTree(testDependencies).getAsJsonArray();
+            jsonObject.add(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, testModulesArray);
+            jsonObject.add(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
+            if (mReportPartialFallback) {
+                jsonObject.addProperty(TestDiscoveryInvoker.PARTIAL_FALLBACK_KEY, "true");
+            }
+            return jsonObject.toString();
+        } finally {
+            if (hasOutputResultFile()) {
+                LogRegistry.getLogRegistry().unregisterLogger();
+            }
         }
-        return jsonObject.toString();
     }
 
     /**
@@ -238,7 +260,9 @@ public class TestDiscoveryExecutor {
             }
         }
         // Extract test module names from included filters.
-        // System.out.println(String.format("include filters: %s", includeFilters));
+        if (hasOutputResultFile()) {
+            System.out.println(String.format("include filters: %s", includeFilters));
+        }
         testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
         return testModules;
     }
