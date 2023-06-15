@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.invoker;
 
+import com.android.tradefed.command.CommandRunner;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
@@ -50,6 +51,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -239,16 +241,15 @@ public class DelegatedInvocationExecution extends InvocationExecution {
         runUtil.setEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT, Integer.toString(port));
         // Set a variable to detect delegated mode
         runUtil.setEnvVariable(DELEGATED_MODE_VAR, "1");
-        // Pass the server reference for child to use.
-        if (config.getConfigurationDescription().getMetaData(TradefedFeatureServer.SERVER_REFERENCE)
-                != null) {
-            runUtil.setEnvVariable(
-                    TradefedFeatureServer.SERVER_REFERENCE,
-                    config.getConfigurationDescription()
-                            .getAllMetaData()
-                            .getUniqueMap()
-                            .get(TradefedFeatureServer.SERVER_REFERENCE));
-        }
+        // Trigger the feature server to be restarted in the delegate
+        // this ensures all the code is being delegated.
+        runUtil.setEnvVariable(CommandRunner.START_FEATURE_SERVER, "1");
+        ServerSocket s = new ServerSocket(0);
+        s.setReuseAddress(true);
+        int servicePort = s.getLocalPort();
+        s.close();
+        runUtil.setEnvVariable(
+                TradefedFeatureServer.TF_SERVICE_PORT, Integer.toString(servicePort));
         return runUtil;
     }
 
