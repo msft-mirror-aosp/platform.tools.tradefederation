@@ -21,6 +21,7 @@ import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
@@ -336,6 +337,7 @@ public class FileDownloadCache {
         }
 
         long start = System.currentTimeMillis();
+        CloseableTraceScope scope = new CloseableTraceScope("cache_lock");
         lockFile(remotePath);
         try {
             mCacheMapLock.lock();
@@ -350,6 +352,7 @@ public class FileDownloadCache {
             } finally {
                 mCacheMapLock.unlock();
             }
+            scope.close();
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.CACHE_WAIT_FOR_LOCK, System.currentTimeMillis() - start);
             try {
