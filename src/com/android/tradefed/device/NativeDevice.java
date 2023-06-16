@@ -5155,7 +5155,7 @@ public class NativeDevice
                 // Use default inop connection
                 mConnection = DefaultConnection.createInopConnection(builder);
             }
-            CLog.d("Using connection: %s", mConnection);
+            CLog.d("Using connection: %s (%s)", mConnection, getIDevice());
             mConnection.initializeConnection();
         }
     }
