@@ -181,6 +181,15 @@ public class TestDiscoveryInvoker {
             CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
 
             String result = FileUtil.readStringFromFile(outputFile);
+            CLog.i("output file content: %s", result);
+
+            // For backward compatibility
+            try {
+                new JSONObject(result);
+            } catch (JSONException e) {
+                CLog.w("Output file was incorrect. Try falling back stdout");
+                result = stdout;
+            }
 
             List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
             if (!testModules.isEmpty()) {
