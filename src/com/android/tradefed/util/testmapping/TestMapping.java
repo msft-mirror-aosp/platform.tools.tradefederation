@@ -474,6 +474,7 @@ public class TestMapping {
         }
         File testMappingsDir = extractTestMappingsZip(zipFile);
         Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
+        CLog.d("Relative test mapping paths: %s", mTestMappingRelativePaths);
         try (Stream<Path> stream =
                 mTestMappingRelativePaths.isEmpty()
                         ? Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS)
@@ -536,6 +537,7 @@ public class TestMapping {
                     String.format(
                             "Couldn't find TEST_MAPPING files from %s", mTestMappingRelativePaths));
         }
+        CLog.d("All resolved TEST_MAPPING paths: %s", allTestMappingPaths);
         return allTestMappingPaths;
     }
 
