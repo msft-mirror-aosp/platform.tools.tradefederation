@@ -133,7 +133,21 @@ public class DeviceFlashPreparerTest {
     /** Simple normal case test for {@link DeviceFlashPreparer#setUp(TestInformation)}. */
     @Test
     public void testSetup() throws Exception {
-        doSetupExpectations();
+        doSetupExpectations(mMockBuildInfo.getBuildFlavor());
+
+        // report flashing success in normal case
+        when(mMockFlasher.getSystemFlashingStatus()).thenReturn(CommandStatus.SUCCESS);
+
+        mDeviceFlashPreparer.setUp(mTestInfo);
+
+        verify(mMockFlasher).setShouldFlashRamdisk(false);
+        assertTrue("should report flashing metrics in normal case", mFlashingMetricsReported);
+    }
+
+    @Test
+    public void testSetup_trunk() throws Exception {
+        mMockBuildInfo.setBuildFlavor("flavor-trunk_food-userdebug");
+        doSetupExpectations("flavor-userdebug");
 
         // report flashing success in normal case
         when(mMockFlasher.getSystemFlashingStatus()).thenReturn(CommandStatus.SUCCESS);
@@ -145,7 +159,8 @@ public class DeviceFlashPreparerTest {
     }
 
     /** Set EasyMock expectations for a normal setup call */
-    private void doSetupExpectations() throws TargetSetupError, DeviceNotAvailableException {
+    private void doSetupExpectations(String flavor)
+            throws TargetSetupError, DeviceNotAvailableException {
         mMockDevice.setRecoveryMode(RecoveryMode.ONLINE);
         mMockFlasher.overrideDeviceOptions(mMockDevice);
         mMockFlasher.setForceSystemFlash(false);
@@ -156,7 +171,7 @@ public class DeviceFlashPreparerTest {
         when(mMockDevice.enableAdbRoot()).thenReturn(Boolean.TRUE);
         mMockDevice.setDate(null);
         when(mMockDevice.getBuildId()).thenReturn(mMockBuildInfo.getBuildId());
-        when(mMockDevice.getBuildFlavor()).thenReturn(mMockBuildInfo.getBuildFlavor());
+        when(mMockDevice.getBuildFlavor()).thenReturn(flavor);
         when(mMockDevice.isEncryptionSupported()).thenReturn(Boolean.TRUE);
         when(mMockDevice.isDeviceEncrypted()).thenReturn(Boolean.FALSE);
         mMockDevice.clearLogcat();
@@ -288,7 +303,7 @@ public class DeviceFlashPreparerTest {
      */
     @Test
     public void testSetup_flashSkipped() throws Exception {
-        doSetupExpectations();
+        doSetupExpectations(mMockBuildInfo.getBuildFlavor());
 
         // report flashing status as null (for not flashing system partitions)
         when(mMockFlasher.getSystemFlashingStatus()).thenReturn(null);
@@ -308,7 +323,7 @@ public class DeviceFlashPreparerTest {
     public void testSetup_flashRamdisk() throws Exception {
         mSetter.setOptionValue("flash-ramdisk", "true");
         mMockBuildInfo.setRamdiskFile(new File("foo"), "0");
-        doSetupExpectations();
+        doSetupExpectations(mMockBuildInfo.getBuildFlavor());
         // report flashing success in normal case
         when(mMockFlasher.getSystemFlashingStatus()).thenReturn(CommandStatus.SUCCESS);
 
@@ -327,7 +342,7 @@ public class DeviceFlashPreparerTest {
         mSetter.setOptionValue("flash-ramdisk", "true");
         mSetter.setOptionValue("ramdisk-partition", "vendor_boot");
         mMockBuildInfo.setRamdiskFile(new File("foo"), "0");
-        doSetupExpectations();
+        doSetupExpectations(mMockBuildInfo.getBuildFlavor());
         // report flashing success in normal case
         when(mMockFlasher.getSystemFlashingStatus()).thenReturn(CommandStatus.SUCCESS);
 
