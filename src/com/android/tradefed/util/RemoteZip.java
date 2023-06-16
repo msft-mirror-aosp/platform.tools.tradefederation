@@ -195,6 +195,7 @@ public class RemoteZip {
                                         new File(
                                                 Paths.get(destDir.toString(), entry.getFileName())
                                                         .toString());
+                                CLog.d("Downloaded %s", entry.getFileName());
                                 LocalFileHeader localFileHeader =
                                         new LocalFileHeader(
                                                 partialZipFile,
