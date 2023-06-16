@@ -28,11 +28,11 @@ import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.MultiMap;
 
-import com.google.common.annotations.VisibleForTesting;
 
 /**
  * A device running inside a virtual machine that we manage remotely via a Tradefed instance inside
@@ -58,6 +58,7 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
     @Override
     public void preInvocationSetup(IBuildInfo info, MultiMap<String, String> attributes)
             throws TargetSetupError, DeviceNotAvailableException {
+        mCopiedOptions = null;
         super.preInvocationSetup(info, attributes);
     }
 
@@ -74,12 +75,6 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
         super.postInvocationTearDown(exception);
     }
 
-    /** Returns the current system time. Exposed for testing. */
-    @VisibleForTesting
-    protected long getCurrentTime() {
-        return System.currentTimeMillis();
-    }
-
     /**
      * Override the base getter to be able to resolve dynamic options before attempting to do the
      * remote setup.
@@ -87,6 +82,7 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
     @Override
     public TestDeviceOptions getOptions() {
         if (mCopiedOptions == null) {
+            CLog.d("Copying TestDeviceOptions for dynamic configs.");
             mCopiedOptions = new TestDeviceOptions();
             TestDeviceOptions options = super.getOptions();
             OptionCopier.copyOptionsNoThrow(options, mCopiedOptions);
