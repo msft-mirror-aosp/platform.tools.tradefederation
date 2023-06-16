@@ -30,7 +30,6 @@ import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
-import com.android.tradefed.device.connection.DefaultConnection.ConnectionBuilder;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -90,13 +89,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
     public RemoteAndroidVirtualDevice(
             IDevice device, IDeviceStateMonitor stateMonitor, IDeviceMonitor allocationMonitor) {
         super(device, stateMonitor, allocationMonitor);
-    }
-
-    @Override
-    protected void addExtraConnectionBuilderArgs(ConnectionBuilder builder) {
-        if (mGceAvd != null) {
-            builder.setExistingAvdInfo(mGceAvd);
-        }
     }
 
     /** {@inheritDoc} */
@@ -539,6 +531,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
     public void setAvdInfo(GceAvdInfo gceAvdInfo) throws TargetSetupError {
         if (mGceAvd == null) {
             mGceAvd = gceAvdInfo;
+            setConnectionAvdInfo(gceAvdInfo);
         } else {
             throw new TargetSetupError(
                     String.format(
