@@ -329,6 +329,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                                             getInitialUser(),
                                             getInitialDeviceNumOffset()));
                 }
+                CLog.d("Release as idevice: %s", ((IManagedTestDevice) getDevice()).getIDevice());
             }
             ((IManagedTestDevice) getDevice()).setFastbootEnabled(false);
 
