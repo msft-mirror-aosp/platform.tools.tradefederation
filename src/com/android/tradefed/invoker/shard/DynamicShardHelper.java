@@ -25,6 +25,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.ITestSuite;
 
+import com.google.common.base.Strings;
 import com.google.internal.android.engprod.v1.ProvideTestTargetRequest;
 import com.google.internal.android.engprod.v1.SerializedTestTarget;
 
@@ -65,7 +66,12 @@ public class DynamicShardHelper extends ShardHelper {
         // Initialize Dynamic Sharding client
         IDynamicShardingClient client = getClient();
 
-        String poolId = testInfo.getContext().getInvocationId();
+        // TODO: Also include attempt_id in unique poolId.
+        String poolId = testInfo.getContext().getAttribute("invocation_id");
+        if (Strings.isNullOrEmpty(poolId)) {
+            CLog.d("No invocation_id specified, falling back to strict sharding.");
+            return super.shardConfig(config, testInfo, rescheduler, logger);
+        }
 
         List<ITestSuite> allModules = getAllModules(config, testInfo);
 
