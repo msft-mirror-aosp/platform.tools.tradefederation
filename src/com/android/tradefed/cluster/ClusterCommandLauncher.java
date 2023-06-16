@@ -53,6 +53,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -314,12 +315,19 @@ public class ClusterCommandLauncher
             throw new RuntimeException(String.format("cannot find any TF jars from %s!", tfPath));
         }
         // TODO: remove after tradefed-no-fwk.jar is deprecated
-        StringBuilder pathBuilder = new StringBuilder();
-        if (jars.contains("tradefed.jar")) {
-            pathBuilder.append("tradefed.jar");
-            jars.remove("tradefed.jar");
+        List<String> finalJars = new ArrayList<>();
+        Iterator<String> iterator = jars.iterator();
+        while (iterator.hasNext()) {
+            final String jar = iterator.next();
+            if (new File(jar).getName().equalsIgnoreCase("tradefed.jar")) {
+                finalJars.add(jar);
+                iterator.remove();
+            }
         }
-        return pathBuilder.append(String.join(":", jars)).toString();
+        if (!jars.isEmpty()) {
+            finalJars.add(String.join(":", jars));
+        }
+        return String.join(":", finalJars);
     }
 
     /** Build a shell command line to invoke a TF process. */
