@@ -17,7 +17,12 @@ package com.android.tradefed.targetprep;
 
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 
 /**
  * An {@link ITargetPreparer} to marks that tests should run in the sdk sandbox. See
@@ -27,10 +32,40 @@ import com.android.tradefed.invoker.TestInformation;
 public class RunOnSdkSandboxTargetPreparer extends BaseTargetPreparer {
 
     public static final String RUN_TESTS_ON_SDK_SANDBOX = "RUN_TESTS_ON_SDK_SANDBOX";
+    public static final String SDK_IN_SANDBOX_ACTIVITIES =
+            "sdk_in_sandbox_tests_activities_enabled";
+    public static final String ENABLE_TEST_ACTIVITIES_CMD =
+            "device_config put adservices " + SDK_IN_SANDBOX_ACTIVITIES + " true";
+    public static final String DISABLE_TEST_ACTIVITIES_CMD =
+            "device_config put adservices " + SDK_IN_SANDBOX_ACTIVITIES + " false";
 
     @Override
     public void setUp(TestInformation testInformation)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         testInformation.properties().put(RUN_TESTS_ON_SDK_SANDBOX, Boolean.TRUE.toString());
+
+        ITestDevice device = testInformation.getDevice();
+        CommandResult result = device.executeShellV2Command(ENABLE_TEST_ACTIVITIES_CMD);
+        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+            throw new TargetSetupError(
+                    String.format(
+                            "Failed to enable test activities. stdout: '%s'\nstderr: '%s'",
+                            result.getStdout(), result.getStderr()),
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+    }
+
+    @Override
+    public void tearDown(TestInformation testInformation, Throwable e)
+            throws DeviceNotAvailableException {
+        CommandResult result =
+                testInformation.getDevice().executeShellV2Command(DISABLE_TEST_ACTIVITIES_CMD);
+        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+            CLog.e(
+                    String.format(
+                            "Failed to disable test activities. stdout: '%s'\nstderr: '%s'",
+                            result.getStdout(), result.getStderr()));
+        }
     }
 }
