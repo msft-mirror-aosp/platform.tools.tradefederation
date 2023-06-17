@@ -97,6 +97,8 @@ public class ProtoResultParser {
     /** Track the name of the module in progress. */
     private String mModuleInProgress = null;
 
+    private boolean mMergeInvocationContext = true;
+
     /** Ctor. */
     public ProtoResultParser(
             ITestInvocationListener listener,
@@ -137,6 +139,23 @@ public class ProtoResultParser {
     /** Sets whether or not we should report the logs. */
     public void setReportLogs(boolean reportLogs) {
         mReportLogs = reportLogs;
+    }
+
+    /**
+     * Enable or disable merging the serialized invocation context with the main context that this
+     * object is initialized with.
+     *
+     * <p>Note that disabling invocation-level reporting via the {@code reportInvocation}
+     * constructor parameter still merges context information and requires explicitly using this
+     * method to disable the behavior.
+     *
+     * @return the previous state
+     * @see #ProtoResultParser
+     */
+    public boolean setMergeInvocationContext(boolean enabled) {
+        boolean previousContext = mMergeInvocationContext;
+        mMergeInvocationContext = enabled;
+        return previousContext;
     }
 
     /**
@@ -486,9 +505,9 @@ public class ProtoResultParser {
         String[] info = testcaseProto.getTestRecordId().split("#");
         TestDescription description = new TestDescription(info[0], info[1]);
         if (testcaseProto.hasEndTime()) {
-            // Allow end event that also report start in one go. When using StreamProtoResultReporter
-            // we can save some socket communication by reporting test cases start and end at the
-            // same time in some instances.
+            // Allow end event that also report start in one go. When using
+            // StreamProtoResultReporter we can save some socket communication
+            // by reporting test cases start and end at the same time in some instances.
             if (mCurrentTestCase == null) {
                 log("Test case started proto: %s", description.toString());
                 mListener.testStarted(description, timeStampToMillis(testcaseProto.getStartTime()));
@@ -648,6 +667,9 @@ public class ProtoResultParser {
      */
     private void mergeInvocationContext(
             IInvocationContext receiverContext, IInvocationContext endInvocationContext) {
+        if (!mMergeInvocationContext) {
+            return;
+        }
         if (receiverContext == null) {
             return;
         }
