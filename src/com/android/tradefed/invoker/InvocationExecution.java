@@ -659,6 +659,11 @@ public class InvocationExecution implements IInvocationExecution {
                     if (device instanceof ITestLoggerReceiver) {
                         ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
                     }
+                    IDeviceConfiguration deviceConfig = config.getDeviceConfigByName(deviceName);
+                    if (deviceConfig != null && deviceConfig.isFake()) {
+                        CLog.d("Skip preInvocationSetup on fake device %s", device);
+                        continue;
+                    }
                     device.preInvocationSetup(
                             context.getBuildInfo(deviceName), context.getAttributes());
                 }
@@ -749,6 +754,11 @@ public class InvocationExecution implements IInvocationExecution {
         }
         for (String deviceName : context.getDeviceConfigNames()) {
             ITestDevice device = context.getDevice(deviceName);
+            IDeviceConfiguration deviceConfig = config.getDeviceConfigByName(deviceName);
+            if (deviceConfig != null && deviceConfig.isFake()) {
+                CLog.d("Skip postInvocationTearDown on fake device %s", device);
+                continue;
+            }
             device.postInvocationTearDown(exception);
         }
     }
