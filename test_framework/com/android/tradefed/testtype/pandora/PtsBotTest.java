@@ -235,6 +235,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         int startIndex = 0;
         for (int i = 0; i < shardCountHint; i++) {
             PtsBotTest shard = new PtsBotTest();
+            shard.addAllIncludeFilters(getIncludeFilters());
+            shard.addAllExcludeFilters(getExcludeFilters());
             // Copy all options.
             try {
                 OptionCopier.copyOptions(this, shard);
