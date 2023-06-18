@@ -748,6 +748,10 @@ public class TestMapping {
      * @return The test mapping file, or null if unable to locate one.
      */
     private File lookupTestMappingZip(String zipName) {
+        String directFile = System.getenv(TestDiscoveryInvoker.TEST_MAPPING_ZIP_FILE);
+        if (directFile != null && new File(directFile).exists()) {
+            return new File(directFile);
+        }
         String testDirPath = System.getenv(TestDiscoveryInvoker.TEST_DIRECTORY_ENV_VARIABLE_KEY);
         if (testDirPath == null) {
             return null;
