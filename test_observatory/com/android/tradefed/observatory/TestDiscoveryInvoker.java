@@ -65,6 +65,7 @@ public class TestDiscoveryInvoker {
     private final boolean mHasConfigFallback;
     private final boolean mUseCurrentTradefed;
     private File mTestDir;
+    private File mTestMappingZip;
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
     public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
@@ -72,6 +73,7 @@ public class TestDiscoveryInvoker {
     public static final String PARTIAL_FALLBACK_KEY = "PartialFallback";
     public static final String TEST_DIRECTORY_ENV_VARIABLE_KEY =
             "TF_TEST_DISCOVERY_USE_TEST_DIRECTORY";
+    public static final String TEST_MAPPING_ZIP_FILE = "TF_TEST_MAPPING_ZIP_FILE";
     public static final String ROOT_DIRECTORY_ENV_VARIABLE_KEY =
             "ROOT_TEST_DISCOVERY_USE_TEST_DIRECTORY";
 
@@ -98,6 +100,10 @@ public class TestDiscoveryInvoker {
 
     public void setTestDir(File testDir) {
         mTestDir = testDir;
+    }
+
+    public void setTestMappingZip(File testMappingZip) {
+        mTestMappingZip = testMappingZip;
     }
 
     /** Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration} and root directory. */
@@ -238,6 +244,10 @@ public class TestDiscoveryInvoker {
                 getRunUtil()
                         .setEnvVariable(
                                 TEST_DIRECTORY_ENV_VARIABLE_KEY, mTestDir.getAbsolutePath());
+            }
+            if (mTestMappingZip != null) {
+                getRunUtil()
+                        .setEnvVariable(TEST_MAPPING_ZIP_FILE, mTestMappingZip.getAbsolutePath());
             }
             if (mHasConfigFallback) {
                 getRunUtil()
