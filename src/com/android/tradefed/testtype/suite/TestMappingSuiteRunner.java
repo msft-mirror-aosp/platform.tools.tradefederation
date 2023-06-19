@@ -362,9 +362,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                     continue;
                 }
                 List<IRemoteTest> remoteTests = entry.getValue().getTests();
-                if (mRemoteTestTimeOut != null) {
-                    addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
-                }
+                addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
                 tests.addAll(remoteTests);
             }
         }
