@@ -149,6 +149,8 @@ public class ProtoResultParser {
      * constructor parameter still merges context information and requires explicitly using this
      * method to disable the behavior.
      *
+     * <p>TODO(b/288001953): Revisit the proper API for accomplishing this.
+     *
      * @return the previous state
      * @see #ProtoResultParser
      */
@@ -668,6 +670,7 @@ public class ProtoResultParser {
     private void mergeInvocationContext(
             IInvocationContext receiverContext, IInvocationContext endInvocationContext) {
         if (!mMergeInvocationContext) {
+            CLog.d("Skipping merging invocation context");
             return;
         }
         if (receiverContext == null) {
