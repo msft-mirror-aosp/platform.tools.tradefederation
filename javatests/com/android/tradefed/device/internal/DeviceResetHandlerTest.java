@@ -121,7 +121,7 @@ public class DeviceResetHandlerTest {
                 InvocationMetricLogger.getInvocationMetrics()
                         .getOrDefault(
                                 InvocationMetricLogger.InvocationMetricKey
-                                        .DEVICE_POWREWASH_DURATIONS
+                                        .DEVICE_POWERWASH_DURATIONS
                                         .toString(),
                                 "0");
         assertEquals("999,999", durations);
