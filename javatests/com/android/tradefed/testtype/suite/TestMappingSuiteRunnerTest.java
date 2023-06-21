@@ -1105,7 +1105,7 @@ public class TestMappingSuiteRunnerTest {
             testInfos.add(test2);
             testInfos.add(createTestInfo("test3", "path"));
 
-            testInfos = mRunner.filterByAllowedTestLists(testInfos);
+            testInfos = mRunner.filterByAllowedTestLists(mockBuildInfo, testInfos);
             assertEquals(2, testInfos.size());
             assertTrue(testInfos.contains(test1));
             assertTrue(testInfos.contains(test2));
