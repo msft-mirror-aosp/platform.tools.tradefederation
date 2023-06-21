@@ -74,7 +74,7 @@ public class TestMapping {
     private static final String KEY_NAME = "name";
     private static final String KEY_OPTIONS = "options";
     private static final String TEST_MAPPING = "TEST_MAPPING";
-    private static final String TEST_MAPPINGS_ZIP = "test_mappings.zip";
+    public static final String TEST_MAPPINGS_ZIP = "test_mappings.zip";
     // A file containing module names that are disabled in presubmit test runs.
     private static final String DISABLED_PRESUBMIT_TESTS_FILE = "disabled-presubmit-tests";
     // Pattern used to identify comments start with "//" or "#" in TEST_MAPPING.
