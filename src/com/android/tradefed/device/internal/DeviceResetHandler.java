@@ -117,7 +117,7 @@ public class DeviceResetHandler {
         if (matcher.find()) {
             InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.DEVICE_RESET_COUNT, 1);
             InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_POWREWASH_DURATIONS, matcher.group(1));
+                    InvocationMetricKey.DEVICE_POWERWASH_DURATIONS, matcher.group(1));
         }
         return true;
     }
