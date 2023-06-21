@@ -179,7 +179,7 @@ public class InvocationMetricLogger {
         UNCAUGHT_TEST_CRASH_FAILURES("uncaught_test_crash_failures", true),
         DEVICE_RESET_COUNT("device_reset_count", true),
         DEVICE_RESET_MODULES("device_reset_modules", true),
-        DEVICE_POWREWASH_DURATIONS("device_powerwash_durations", true),
+        DEVICE_POWERWASH_DURATIONS("device_powerwash_durations", true),
         DEVICE_RESET_MODULES_FOR_TARGET_PREPARER("device_reset_modules_for_target_preparer", true),
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
@@ -268,6 +268,10 @@ public class InvocationMetricLogger {
 
         DEVICE_IMAGE_NOT_CHANGED("device_image_not_changed", false),
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
+
+        POWERWASH_TIME("powerwash_time_ms", true),
+        POWERWASH_SUCCESS_COUNT("powerwash_success_count", true),
+        POWERWASH_FAILURE_COUNT("powerwash_failure_count", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
