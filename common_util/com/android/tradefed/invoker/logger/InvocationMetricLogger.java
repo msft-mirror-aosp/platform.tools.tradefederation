@@ -290,6 +290,9 @@ public class InvocationMetricLogger {
         stage_suite_test_artifacts("stage_suite_test_artifacts", true),
         wait_for_results_update("wait_for_results_update", true),
         instru_collect_tests("instru_collect_tests", true),
+
+        // Test caching metrics
+        CACHED_MODULE_RESULTS_COUNT("cached_module_results_count", true),
         ;
 
         private final String mKeyName;
