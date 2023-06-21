@@ -18,6 +18,7 @@ package com.android.tradefed.result.proto;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -41,6 +42,8 @@ import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
+
+import com.google.protobuf.Any;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -734,6 +737,87 @@ public class ProtoResultParserTest {
         assertEquals(
                 "Module was interrupted after starting, results are incomplete.",
                 capture.getValue().getErrorMessage());
+    }
+
+    @Test
+    public void testContextMergingEnabled() throws Exception {
+        InvocationContext moduleContext = new InvocationContext();
+        moduleContext.addInvocationAttribute("testkey", "testvalue");
+        TestRecord.Builder record1 =
+                TestRecord.newBuilder().setDescription(Any.pack(moduleContext.toProto()));
+
+        ProtoResultParser parser =
+                new ProtoResultParser(
+                        mMockListener, mInvocationContext, false /* reportInvocation */);
+
+        // context from mainContext should be transferred to mInvocationContext during call
+        parser.processFinalizedProto(record1.build());
+
+        assertEquals("testvalue", mInvocationContext.getAttribute("testkey"));
+    }
+
+    @Test
+    public void testContextMergingDisabled() throws Exception {
+        InvocationContext moduleContext = new InvocationContext();
+        moduleContext.addInvocationAttribute("testkey", "testvalue");
+        TestRecord.Builder record1 =
+                TestRecord.newBuilder().setDescription(Any.pack(moduleContext.toProto()));
+        ProtoResultParser parser =
+                new ProtoResultParser(
+                        mMockListener, mInvocationContext, false /* reportInvocation */);
+
+        // context from mainContext should be transferred to mInvocationContext during call
+        parser.setMergeInvocationContext(false);
+        parser.processFinalizedProto(record1.build());
+
+        // returns empty string for missing attributes
+        assertEquals("", mInvocationContext.getAttribute("testkey"));
+    }
+
+    @Test
+    public void testProcessFinalizedProtoAllowsInvocationAttributeUpdates() {
+        // Calling processFinalizedProto has a side-effect of unlocking the InvocationContext
+        // for invocation attribute updates.
+        // If we disable merging, we also disable this side effect and the InvocationContext
+        // attributes remain unmodifiable
+        InvocationContext moduleContext = new InvocationContext();
+        moduleContext.addInvocationAttribute("testkey", "testvalue");
+        TestRecord.Builder record1 =
+                TestRecord.newBuilder().setDescription(Any.pack(moduleContext.toProto()));
+        ProtoResultParser parser =
+                new ProtoResultParser(
+                        mMockListener, mInvocationContext, false /* reportInvocation */);
+
+        ((InvocationContext) mInvocationContext).lockAttributes();
+        // allow merges, i.e. the default value.
+        parser.setMergeInvocationContext(true);
+        parser.processFinalizedProto(record1.build());
+        mInvocationContext.addInvocationAttribute("merge-key", "car");
+
+        // Value should have been set.
+        assertEquals("car", mInvocationContext.getAttribute("merge-key"));
+    }
+
+    @Test
+    public void test_when_processMergingDisabled_the_context_remains_locked() {
+        // Calling processFinalizedProto has a side-effect of unlocking the InvocationContext
+        // for invocation attribute updates.
+        // If we disable merging, we also disable this side effect and the InvocationContext
+        // attributes remain unmodifiable
+        InvocationContext moduleContext = new InvocationContext();
+        moduleContext.addInvocationAttribute("testkey", "testvalue");
+        TestRecord.Builder record1 =
+                TestRecord.newBuilder().setDescription(Any.pack(moduleContext.toProto()));
+        ProtoResultParser parser =
+                new ProtoResultParser(
+                        mMockListener, mInvocationContext, false /* reportInvocation */);
+
+        ((InvocationContext) mInvocationContext).lockAttributes();
+        parser.setMergeInvocationContext(false);
+        parser.processFinalizedProto(record1.build());
+        assertThrows(
+                IllegalStateException.class,
+                () -> mInvocationContext.addInvocationAttribute("key", "car"));
     }
 
     /** Helper to create a module context. */
