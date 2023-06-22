@@ -4892,8 +4892,6 @@ public class NativeDevice
             executeAdbCommand("enable-verity");
             reboot();
         }
-        executeAdbCommand("remount");
-        waitForDeviceAvailable();
     }
 
     /** {@inheritDoc} */
@@ -4906,8 +4904,6 @@ public class NativeDevice
             executeAdbCommand("enable-verity");
             reboot();
         }
-        executeAdbCommand("remount");
-        waitForDeviceAvailable();
     }
 
     /** {@inheritDoc} */
