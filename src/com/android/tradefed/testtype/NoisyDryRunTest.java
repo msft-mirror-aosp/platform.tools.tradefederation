@@ -29,6 +29,7 @@ import com.android.tradefed.config.SandboxConfigurationFactory;
 import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -77,7 +78,7 @@ public class NoisyDryRunTest implements IRemoteTest {
                 new TestDescription(NoisyDryRunTest.class.getCanonicalName(), "parseFile");
         listener.testStarted(parseFileTest);
         CommandFileParser parser = new CommandFileParser();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("parseCommandFile")) {
             checkFileWithTimeout(file);
             return parser.parseFile(file);
         } catch (IOException | ConfigurationException e) {
@@ -144,39 +145,43 @@ public class NoisyDryRunTest implements IRemoteTest {
             TestDescription parseCmdTest =
                     new TestDescription(
                             NoisyDryRunTest.class.getCanonicalName(), "parseCommand" + i);
-            listener.testStarted(parseCmdTest);
+            try (CloseableTraceScope ignored = new CloseableTraceScope(parseCmdTest.toString())) {
+                listener.testStarted(parseCmdTest);
 
-            String[] args = commands.get(i).asArray();
-            String cmdLine = QuotationAwareTokenizer.combineTokens(args);
-            try {
-                TradefedDelegator delegator = CommandScheduler.checkDelegation(args);
-                if (delegator.shouldUseDelegation()) {
-                    // TODO: Add some validation of delegated config.
-                    continue;
-                }
+                String[] args = commands.get(i).asArray();
+                String cmdLine = QuotationAwareTokenizer.combineTokens(args);
+                try {
+                    TradefedDelegator delegator = CommandScheduler.checkDelegation(args);
+                    if (delegator.shouldUseDelegation()) {
+                        // TODO: Add some validation of delegated config.
+                        continue;
+                    }
 
-                if (cmdLine.contains("--" + CommandOptions.USE_SANDBOX)) {
-                    // Handle the sandboxed command use case.
-                    testSandboxCommand(args);
-                } else {
-                    // Use dry run keystore to always work for any keystore.
-                    // FIXME: the DryRunKeyStore is a temporary fixed until each config can be
-                    // validated against its own keystore.
-                    IConfiguration config =
-                            ConfigurationFactory.getInstance()
-                                    .createConfigurationFromArgs(args, null, new DryRunKeyStore());
-                    // Do not resolve dynamic files
-                    config.validateOptions();
+                    if (cmdLine.contains("--" + CommandOptions.USE_SANDBOX)) {
+                        // Handle the sandboxed command use case.
+                        testSandboxCommand(args);
+                    } else {
+                        // Use dry run keystore to always work for any keystore.
+                        // FIXME: the DryRunKeyStore is a temporary fixed until each config can be
+                        // validated against its own keystore.
+                        IConfiguration config =
+                                ConfigurationFactory.getInstance()
+                                        .createConfigurationFromArgs(
+                                                args, null, new DryRunKeyStore());
+                        // Do not resolve dynamic files
+                        config.validateOptions();
+                    }
+                } catch (ConfigurationException e) {
+                    String errorMessage =
+                            String.format("Failed to parse command line: %s.", cmdLine);
+                    CLog.e(errorMessage);
+                    CLog.e(e);
+                    listener.testFailed(
+                            parseCmdTest,
+                            String.format("%s\n%s", errorMessage, StreamUtil.getStackTrace(e)));
+                } finally {
+                    listener.testEnded(parseCmdTest, new HashMap<String, Metric>());
                 }
-            } catch (ConfigurationException e) {
-                String errorMessage = String.format("Failed to parse command line: %s.", cmdLine);
-                CLog.e(errorMessage);
-                CLog.e(e);
-                listener.testFailed(
-                        parseCmdTest,
-                        String.format("%s\n%s", errorMessage, StreamUtil.getStackTrace(e)));
-            } finally {
-                listener.testEnded(parseCmdTest, new HashMap<String, Metric>());
             }
         }
         listener.testRunEnded(0, new HashMap<String, Metric>());
