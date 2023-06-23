@@ -412,9 +412,7 @@ public class FileDownloadCache {
         File hardlinkFile = destFile;
         try {
             if (hardlinkFile == null) {
-                hardlinkFile =
-                        FileUtil.createTempFileForRemote(
-                                remotePath, CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER));
+                hardlinkFile = FileUtil.createTempFileForRemote(remotePath, getWorkFolder());
             }
             hardlinkFile.delete();
             CLog.d(
@@ -435,6 +433,11 @@ public class FileDownloadCache {
                     e,
                     InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
+    }
+
+    @VisibleForTesting
+    File getWorkFolder() {
+        return CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER);
     }
 
     /**
