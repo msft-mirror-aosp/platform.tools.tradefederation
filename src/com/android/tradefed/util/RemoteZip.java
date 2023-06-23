@@ -259,5 +259,18 @@ public class RemoteZip {
                 files.size(),
                 TimeUtil.formatElapsedTime(System.currentTimeMillis() - startTime),
                 downloadSizes.stream().mapToLong(Long::longValue).sum());
+        if (executor.hasErrors()) {
+            List<Throwable> errors = executor.getErrors();
+            CLog.e(
+                    "%d exceptions raised when downloading partially from remote zip.",
+                    errors.size());
+            for (Throwable e : errors) {
+                CLog.e(e);
+            }
+            if (errors.get(0) instanceof IOException) {
+                throw (IOException) errors.get(0);
+            }
+            throw new RuntimeException(errors.get(0));
+        }
     }
 }
