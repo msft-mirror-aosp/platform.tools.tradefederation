@@ -401,11 +401,14 @@ public class BaseRetryDecision
             String skipName = skipRetryingFilter.getName();
             String skipTestName = skipRetryingFilter.getTest();
             if (abi != null
-                    && skipAbi != null
                     && name != null
                     && skipName != null
-                    && abi.equals(skipAbi)
                     && name.equals(skipName)) {
+                if (skipAbi != null && !abi.equals(skipAbi)) {
+                    // If the skip has an explicit abi that doesn't match
+                    // module, don't skip. If not specified, consider all modules
+                    continue;
+                }
                 if (skipTestName == null) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.RETRY_MODULE_SKIPPED_COUNT, 1);
