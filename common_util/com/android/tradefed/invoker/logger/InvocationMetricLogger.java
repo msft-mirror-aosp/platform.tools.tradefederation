@@ -140,6 +140,7 @@ public class InvocationMetricLogger {
         // Track metrics for skipped retries
         RETRY_MODULE_SKIPPED_COUNT("retry_module_skipped_count", true),
         RETRY_TEST_SKIPPED_COUNT("retry_test_skipped_count", true),
+        RETRY_SKIPPED_ALL_FILTERED_COUNT("retry_skipped_all_filtered_count", true),
 
         // The time spent inside metric collectors
         COLLECTOR_TIME("collector_time_ms", true),
