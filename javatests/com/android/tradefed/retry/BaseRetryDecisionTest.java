@@ -261,6 +261,24 @@ public class BaseRetryDecisionTest {
     }
 
     @Test
+    public void testShouldRetry_skip_retrying_list_test_no_abi() throws Exception {
+        final String SKIP_RETRYING_LIST = "skip-retrying-list";
+        final String moduleID1 = "x86 module1";
+        final String moduleID1_test = "module1 class#method2"; // no abi
+        TestRunResult result1 =
+                createResult(
+                        FailureDescription.create("failure1"),
+                        FailureDescription.create("failure2"));
+        ModuleDefinition module1 = Mockito.mock(ModuleDefinition.class);
+        Mockito.when(module1.getId()).thenReturn(moduleID1);
+        OptionSetter setter = new OptionSetter(mRetryDecision);
+        setter.setOptionValue(SKIP_RETRYING_LIST, moduleID1_test);
+        boolean res = mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result1));
+        assertTrue(res);
+        Truth.assertThat(mTestClass.getExcludeFilters()).containsExactly("class#method2");
+    }
+
+    @Test
     public void testShouldRetry_autoRetriable() throws Exception {
         OptionSetter setter = new OptionSetter(mRetryDecision);
         setter.setOptionValue("reboot-at-last-retry", "true");
