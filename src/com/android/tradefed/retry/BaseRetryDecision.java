@@ -288,6 +288,8 @@ public class BaseRetryDecision
         Set<String> moduleSkipList = new LinkedHashSet<String>();
         if (module != null && isInSkipList(module, moduleSkipList)) {
             CLog.d("Skip retrying known failure test of %s", module.getId());
+            InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.RETRY_SKIPPED_ALL_FILTERED_COUNT, 1);
             return false;
         }
         if (module == null) {
