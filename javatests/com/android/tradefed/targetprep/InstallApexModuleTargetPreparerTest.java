@@ -2463,6 +2463,27 @@ public class InstallApexModuleTargetPreparerTest {
         }
     }
 
+    @Test
+    public void initDeviceSpecFilePath_whenGenerateDeviceSpecFileFailed_noExceptionWhenTwoFiles()
+            throws Exception {
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
+        when(mMockBundletoolUtil.generateDeviceSpecFile(Mockito.any(ITestDevice.class)))
+                .thenReturn(null);
+        try {
+            mBundletoolJar = File.createTempFile("bundletool", ".jar");
+            mFakeApexApks = File.createTempFile("fakeApex", ".apks");
+            mFakeApkApks = File.createTempFile("fakeApk", ".apks");
+            mInstallApexModuleTargetPreparer.addTestFile(mFakeApexApks);
+            mInstallApexModuleTargetPreparer.addTestFile(mFakeApkApks);
+
+            mInstallApexModuleTargetPreparer.getModulesToInstall(mTestInfo);
+        } finally {
+            FileUtil.deleteFile(mBundletoolJar);
+            FileUtil.deleteFile(mFakeApexApks);
+            FileUtil.deleteFile(mFakeApkApks);
+        }
+    }
+
     private void verifySuccessfulInstallPackages(List<File> files) throws Exception {
         int child_session_id = 1;
         for (File f : files) {
