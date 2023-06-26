@@ -481,8 +481,6 @@ public class TestMapping {
                         : getAllTestMappingPaths(testMappingsRootPath).stream()) {
             mergeTestMappingZips(buildInfo, extraZipNames, zipFile, testMappingsDir);
             Set<String> disabledTests = getDisabledTests(testMappingsRootPath, testGroup);
-            CLog.d("Paths: %s", stream);
-            CLog.d("Debug paths: %s", FileUtil.findFilesObject(testMappingsDir, "TEST_MAPPING"));
             stream.filter(path -> path.getFileName().toString().equals(TEST_MAPPING))
                     .forEach(
                             path ->
