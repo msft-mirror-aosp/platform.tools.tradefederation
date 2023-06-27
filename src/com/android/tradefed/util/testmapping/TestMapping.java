@@ -393,7 +393,6 @@ public class TestMapping {
             Set<String> keywords) {
         Set<TestInfo> tests = new LinkedHashSet<TestInfo>();
         for (TestInfo test : testCollection.getOrDefault(testGroup, new HashSet<>())) {
-            CLog.d("Considering: %s", test);
             if (disabledTests != null && disabledTests.contains(test.getName())) {
                 continue;
             }
