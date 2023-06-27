@@ -367,6 +367,8 @@ public class OxygenClient {
         }
 
         oxygenClientArgs.add("-release");
+        oxygenClientArgs.add("-target_region");
+        oxygenClientArgs.add(OxygenUtil.getTargetRegion(deviceOptions));
         oxygenClientArgs.add("-server_url");
         oxygenClientArgs.add(gceAvdInfo.hostAndPort().getHost());
         oxygenClientArgs.add("-session_id");
