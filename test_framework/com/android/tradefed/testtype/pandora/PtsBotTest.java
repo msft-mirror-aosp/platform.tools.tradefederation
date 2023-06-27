@@ -710,22 +710,6 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         return builder;
     }
 
-    /**
-     * Execute a shutdown hook and remove it from the runtime's shutdown hooks, to clean it up while
-     * keeping the JVM running.
-     */
-    private void completeShutdownHook(Thread hook) {
-        if (hook == null) {
-            return;
-        }
-        try {
-            Runtime.getRuntime().removeShutdownHook(hook);
-            hook.start();
-        } catch (IllegalStateException e) {
-            // If we are already in the process of shutting down do nothing
-        }
-    }
-
     private void adbForwardPort(ITestDevice testDevice, int hostPort, int dutPort)
             throws DeviceNotAvailableException {
         testDevice.executeAdbCommand(
