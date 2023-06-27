@@ -311,7 +311,8 @@ public class OxygenClientTest {
                                 String cmdString = Joiner.on(" ").join(cmd);
                                 String expectedCmdString =
                                         mOxygenBinaryFile.getAbsolutePath()
-                                                + " -arg1 value1 -release -server_url 10.0.80.227"
+                                                + " -arg1 value1 -release -target_region us-east"
+                                                + " -server_url 10.0.80.227"
                                                 + " -session_id"
                                                 + " 6a6a744e-0653-4926-b7b8-535d121a2fc9"
                                                 + " -accounting_user"
@@ -516,17 +517,15 @@ public class OxygenClientTest {
                                 String expectedCmdString =
                                         mOxygenBinaryFile.getAbsolutePath()
                                                 + " -lease -build_branch testBranch -build_target"
-                                                + " target -build_id P1234567"
-                                                + " -system_build_target testSystemTarget"
-                                                + " -system_build_id S1234567"
+                                                + " target -build_id P1234567 -system_build_target"
+                                                + " testSystemTarget -system_build_id S1234567"
                                                 + " -kernel_build_target testKernelTarget"
                                                 + " -kernel_build_id K1234567"
-                                                + " -host_package_build_target testHostPackageTarget"
-                                                + " -host_package_build_id HP1234567"
-                                                + " -target_region us-east"
+                                                + " -host_package_build_target"
+                                                + " testHostPackageTarget -host_package_build_id"
+                                                + " HP1234567 -target_region us-east"
                                                 + " -accounting_user random1234@space.com"
-                                                + " -lease_length_secs 3600"
-                                                + " -arg1 value1"
+                                                + " -lease_length_secs 3600 -arg1 value1"
                                                 + " -user_debug_info work_unit_id:some_id";
                                 assertEquals(expectedCmdString, cmdString);
 

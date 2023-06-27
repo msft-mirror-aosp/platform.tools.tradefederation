@@ -58,7 +58,7 @@ public class OxygenUtil {
             "http://metadata/computeMetadata/v1/instance/zone";
 
     // Default region if no specific zone is provided.
-    private static final String DEFAULT_REGION = "us-west";
+    private static final String DEFAULT_REGION = "us-west1";
 
     private GCSFileDownloader mDownloader;
 
