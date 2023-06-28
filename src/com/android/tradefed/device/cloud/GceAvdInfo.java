@@ -78,6 +78,8 @@ public class GceAvdInfo {
         OXYGEN_ERROR_PATTERN_MAP.put(
                 InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
                 "Lease aborted due to launcher failure");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_SERVER_LB_CONNECTION_ERROR, "desc = connection error");
     }
 
     // Error message for specify Oxygen error.

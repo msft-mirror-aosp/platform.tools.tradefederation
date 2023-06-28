@@ -510,11 +510,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * @throws TargetSetupError if fails to generate the device spec file.
      */
     private void initDeviceSpecFilePath(ITestDevice device) throws TargetSetupError {
-        if (!mDeviceSpecFilePath.equals("")) {
+        if (!"".equals(mDeviceSpecFilePath)) {
             return;
         }
         try {
-            mDeviceSpecFilePath = getBundletoolUtil().generateDeviceSpecFile(device);
+            // Sets to be the initial value (which is "") if failed to generateDeviceSpecFile.
+            mDeviceSpecFilePath =
+                    Strings.nullToEmpty(getBundletoolUtil().generateDeviceSpecFile(device));
         } catch (IOException e) {
             throw new TargetSetupError(
                     String.format(

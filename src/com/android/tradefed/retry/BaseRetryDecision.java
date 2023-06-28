@@ -279,10 +279,22 @@ public class BaseRetryDecision
                 break;
         }
 
+        if (!hasAnyFailures(previousResults)) {
+            CLog.d("No test run or test case failures. No need to retry.");
+            mStatistics.addResultsFromRun(previousResults, 0L, attemptJustExecuted);
+            return false;
+        }
+
         Set<String> moduleSkipList = new LinkedHashSet<String>();
         if (module != null && isInSkipList(module, moduleSkipList)) {
             CLog.d("Skip retrying known failure test of %s", module.getId());
+            InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.RETRY_SKIPPED_ALL_FILTERED_COUNT, 1);
             return false;
+        }
+        if (module == null) {
+            // If it's not a module, carry all filters
+            moduleSkipList.addAll(mSkipRetryingSet);
         }
 
         boolean shouldRetry = false;
@@ -397,11 +409,14 @@ public class BaseRetryDecision
             String skipName = skipRetryingFilter.getName();
             String skipTestName = skipRetryingFilter.getTest();
             if (abi != null
-                    && skipAbi != null
                     && name != null
                     && skipName != null
-                    && abi.equals(skipAbi)
                     && name.equals(skipName)) {
+                if (skipAbi != null && !abi.equals(skipAbi)) {
+                    // If the skip has an explicit abi that doesn't match
+                    // module, don't skip. If not specified, consider all modules
+                    continue;
+                }
                 if (skipTestName == null) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.RETRY_MODULE_SKIPPED_COUNT, 1);
@@ -455,8 +470,14 @@ public class BaseRetryDecision
             }
             Set<TestDescription> previouslyPassedTests = getPassedTestCases(previousResults);
             excludePassedTests(test, previouslyPassedTests);
-            excludeNonRetriableFailure(test, previousFailedTests, moduleSkipList);
-            return true;
+            boolean everythingFiltered =
+                    excludeNonRetriableFailure(test, previousFailedTests, moduleSkipList);
+            if (everythingFiltered && runFailures.isEmpty()) {
+                CLog.d("No failures are retriable, skipping retry.");
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.RETRY_SKIPPED_ALL_FILTERED_COUNT, 1);
+            }
+            return !everythingFiltered || !runFailures.isEmpty();
         } else if (!runFailures.isEmpty()) {
             if (shouldFullRerun(runFailures)) {
                 List<String> names =
@@ -567,10 +588,12 @@ public class BaseRetryDecision
         }
     }
 
-    private void excludeNonRetriableFailure(
+    /** Returns true if all failure are filtered out */
+    private boolean excludeNonRetriableFailure(
             ITestFilterReceiver test,
             Map<TestDescription, TestResult> previousFailedTests,
             Set<String> skipListForModule) {
+        Set<TestDescription> failedTests = new HashSet<>(previousFailedTests.keySet());
         for (Entry<TestDescription, TestResult> testCaseEntry : previousFailedTests.entrySet()) {
             TestDescription testCase = testCaseEntry.getKey();
             if (!testCaseEntry.getValue().getFailure().isRetriable()) {
@@ -578,6 +601,7 @@ public class BaseRetryDecision
                 String filter =
                         String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
                 test.addExcludeFilter(filter);
+                failedTests.remove(testCase);
             }
             if (skipListForModule.contains(testCase.toString())) {
                 // If a test case failure is excluded from retry, exclude it
@@ -586,9 +610,12 @@ public class BaseRetryDecision
                 test.addExcludeFilter(filter);
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.RETRY_TEST_SKIPPED_COUNT, 1);
+                failedTests.remove(testCase);
                 CLog.d("Skip retry of %s, it's in skip-retry-list.", filter);
             }
         }
+
+        return failedTests.isEmpty();
     }
 
     /** Returns all the non-stub device associated with the {@link IRemoteTest}. */

@@ -38,6 +38,7 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.IWifiHelper.WifiConnectionResult;
+import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.connection.AbstractConnection;
 import com.android.tradefed.device.connection.DefaultConnection;
 import com.android.tradefed.device.connection.DefaultConnection.ConnectionBuilder;
@@ -247,6 +248,7 @@ public class NativeDevice
     private File mUnpackedFastbootDir = null;
     // Connection for the device.
     private AbstractConnection mConnection;
+    private GceAvdInfo mConnectionAvd;
 
     private ITestLogger mTestLogger;
 
@@ -4880,9 +4882,31 @@ public class NativeDevice
         waitForDeviceAvailable();
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
+    @Override
+    public void remountSystemReadOnly() throws DeviceNotAvailableException {
+        String verity = getProperty("partition.system.verified");
+        // have the property set (regardless state) implies verity is enabled, so we send adb
+        // command to disable verity
+        if (verity == null || verity.isEmpty()) {
+            executeAdbCommand("enable-verity");
+            reboot();
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void remountVendorReadOnly() throws DeviceNotAvailableException {
+        String verity = getProperty("partition.vendor.verified");
+        // have the property set (regardless state) implies verity is enabled, so we send adb
+        // command to disable verity
+        if (verity == null || verity.isEmpty()) {
+            executeAdbCommand("enable-verity");
+            reboot();
+        }
+    }
+
+    /** {@inheritDoc} */
     @Override
     public Integer getPrimaryUserId() throws DeviceNotAvailableException {
         throw new UnsupportedOperationException("No support for user's feature.");
@@ -5127,13 +5151,19 @@ public class NativeDevice
                 // Use default inop connection
                 mConnection = DefaultConnection.createInopConnection(builder);
             }
-            CLog.d("Using connection: %s", mConnection);
+            CLog.d("Using connection: %s (%s)", mConnection, getIDevice());
             mConnection.initializeConnection();
         }
     }
 
     protected void addExtraConnectionBuilderArgs(ConnectionBuilder builder) {
-        // Empty by default
+        if (mConnectionAvd != null) {
+            builder.setExistingAvdInfo(mConnectionAvd);
+        }
+    }
+
+    public final void setConnectionAvdInfo(GceAvdInfo avdInfo) {
+        mConnectionAvd = avdInfo;
     }
 
     /** {@inheritDoc} */

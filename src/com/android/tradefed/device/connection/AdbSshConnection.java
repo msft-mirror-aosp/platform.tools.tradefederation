@@ -34,6 +34,7 @@ import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
 import com.android.tradefed.device.cloud.OxygenUtil;
+import com.android.tradefed.device.cloud.VmRemoteDevice;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -66,6 +67,9 @@ public class AdbSshConnection extends AdbTcpConnection {
     private GceSshTunnelMonitor mGceSshMonitor;
     private DeviceNotAvailableException mTunnelInitFailed = null;
 
+    private boolean mIsRemote = false;
+    private String mKnownIp = null;
+
     private static final long CHECK_WAIT_DEVICE_AVAIL_MS = 30 * 1000;
     private static final int WAIT_TIME_DIVISION = 4;
     private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
@@ -88,6 +92,10 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getDeviceDescriptor(),
                         getDevice().getOptions(),
                         getBuildInfo());
+        if (getDevice().getIDevice() instanceof VmRemoteDevice) {
+            mIsRemote = true;
+            mKnownIp = ((VmRemoteDevice) getDevice().getIDevice()).getKnownDeviceIp();
+        }
 
         long remainingTime = getDevice().getOptions().getGceCmdTimeout();
         // mGceAvd is null means the device hasn't been launched.
@@ -302,7 +310,6 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
             // We are done with the gce related information, clean it to prevent re-entry.
             mGceAvd = null;
-
             // TODO: Ensure the release is always done so we never leak placeholders
             if (getInitialSerial() != null) {
                 if (wasTemporaryHolder()) {
@@ -310,6 +317,9 @@ public class AdbSshConnection extends AdbTcpConnection {
                     // restore the temporary placeholder to avoid leaking it
                     ((IManagedTestDevice) getDevice())
                             .setIDevice(new NullDevice(getInitialSerial(), true));
+                } else if (mIsRemote) {
+                    ((IManagedTestDevice) getDevice())
+                            .setIDevice(new VmRemoteDevice(getInitialSerial(), mKnownIp));
                 } else {
                     ((IManagedTestDevice) getDevice())
                             .setIDevice(
@@ -319,6 +329,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                                             getInitialUser(),
                                             getInitialDeviceNumOffset()));
                 }
+                CLog.d("Release as idevice: %s", ((IManagedTestDevice) getDevice()).getIDevice());
             }
             ((IManagedTestDevice) getDevice()).setFastbootEnabled(false);
 
@@ -489,6 +500,8 @@ public class AdbSshConnection extends AdbTcpConnection {
      * @throws TargetSetupError
      */
     public CommandResult powerwashGce(String user, Integer offset) throws TargetSetupError {
+        long startTime = System.currentTimeMillis();
+
         if (mGceAvd == null) {
             String errorMsg = String.format("Can not get GCE AVD Info. launch GCE first?");
             throw new TargetSetupError(
@@ -536,7 +549,18 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getRunUtil(),
                         Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
                         powerwashCommand.split(" "));
-        if (!CommandStatus.SUCCESS.equals(powerwashRes.getStatus())) {
+
+        // Time taken for powerwash this invocation
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.POWERWASH_TIME,
+                Long.toString(System.currentTimeMillis() - startTime));
+
+        if (CommandStatus.SUCCESS.equals(powerwashRes.getStatus())) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POWERWASH_SUCCESS_COUNT, 1);
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POWERWASH_FAILURE_COUNT, 1);
             CLog.e("%s", powerwashRes.getStderr());
             // Log 'adb devices' to confirm device is gone
             CommandResult printAdbDevices = getRunUtil().runTimedCmd(60000L, "adb", "devices");
@@ -544,6 +568,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             // Proceed here, device could have been already gone.
             return powerwashRes;
         }
+
         ((NativeDevice) getDevice()).getMonitor().waitForDeviceAvailable();
         ((NativeDevice) getDevice()).resetContentProviderSetup();
         return powerwashRes;

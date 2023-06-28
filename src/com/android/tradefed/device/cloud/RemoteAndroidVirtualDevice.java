@@ -30,7 +30,6 @@ import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
-import com.android.tradefed.device.connection.DefaultConnection.ConnectionBuilder;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -90,13 +89,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
     public RemoteAndroidVirtualDevice(
             IDevice device, IDeviceStateMonitor stateMonitor, IDeviceMonitor allocationMonitor) {
         super(device, stateMonitor, allocationMonitor);
-    }
-
-    @Override
-    protected void addExtraConnectionBuilderArgs(ConnectionBuilder builder) {
-        if (mGceAvd != null) {
-            builder.setExistingAvdInfo(mGceAvd);
-        }
     }
 
     /** {@inheritDoc} */
@@ -539,6 +531,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
     public void setAvdInfo(GceAvdInfo gceAvdInfo) throws TargetSetupError {
         if (mGceAvd == null) {
             mGceAvd = gceAvdInfo;
+            setConnectionAvdInfo(gceAvdInfo);
         } else {
             throw new TargetSetupError(
                     String.format(
@@ -662,6 +655,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
      * @throws TargetSetupError
      */
     public CommandResult powerwashGce(String user, Integer offset) throws TargetSetupError {
+        long startTime = System.currentTimeMillis();
+
         if (mGceAvd == null) {
             String errorMsg = String.format("Can not get GCE AVD Info. launch GCE first?");
             throw new TargetSetupError(
@@ -707,7 +702,18 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
                         getRunUtil(),
                         Math.max(300000L, this.getOptions().getGceCmdTimeout()),
                         powerwashCommand.split(" "));
-        if (!CommandStatus.SUCCESS.equals(powerwashRes.getStatus())) {
+
+        // Time taken for powerwash this invocation
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.POWERWASH_TIME,
+                Long.toString(System.currentTimeMillis() - startTime));
+
+        if (CommandStatus.SUCCESS.equals(powerwashRes.getStatus())) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POWERWASH_SUCCESS_COUNT, 1);
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POWERWASH_FAILURE_COUNT, 1);
             CLog.e("%s", powerwashRes.getStderr());
             // Log 'adb devices' to confirm device is gone
             CommandResult printAdbDevices = getRunUtil().runTimedCmd(60000L, "adb", "devices");
@@ -715,6 +721,7 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
             // Proceed here, device could have been already gone.
             return powerwashRes;
         }
+
         getMonitor().waitForDeviceAvailable();
         resetContentProviderSetup();
         return powerwashRes;
