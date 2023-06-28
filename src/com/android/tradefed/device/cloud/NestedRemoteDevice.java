@@ -81,7 +81,8 @@ public class NestedRemoteDevice extends TestDevice {
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
         }
         String powerwashCommand = String.format("powerwash_cvd -instance_num %s", usernameId);
-        CommandResult powerwashRes = getRunUtil().runTimedCmd(300000L, powerwashCommand.split(" "));
+        long timeout = Math.max(300000L, this.getOptions().getGceCmdTimeout());
+        CommandResult powerwashRes = getRunUtil().runTimedCmd(timeout, powerwashCommand.split(" "));
         if (!CommandStatus.SUCCESS.equals(powerwashRes.getStatus())) {
             CLog.e("%s", powerwashRes.getStderr());
             // Log 'adb devices' to confirm device is gone
