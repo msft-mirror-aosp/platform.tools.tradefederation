@@ -211,6 +211,8 @@ public class SandboxConfigDump {
                 // Reset serials, ensure any null/tcp/gce-device can be selected.
                 requirements.setSerial();
             }
+            // Reset device requested type, we don't need it in the sandbox
+            requirements.setBaseDeviceTypeRequested(null);
         }
     }
 }

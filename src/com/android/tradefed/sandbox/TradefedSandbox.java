@@ -29,6 +29,8 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.IGlobalConfiguration;
 import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.device.DeviceSelectionOptions;
+import com.android.tradefed.device.IDeviceSelection.BaseDeviceType;
+import com.android.tradefed.device.ManagedTestDeviceFactory;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.RemoteInvocationExecution;
@@ -61,6 +63,8 @@ import com.android.tradefed.util.SubprocessTestResultsParser;
 import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
 
+import com.google.common.base.Joiner;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -70,6 +74,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -144,6 +149,7 @@ public class TradefedSandbox implements ISandbox {
             mCmdArgs.add("--" + CommandOptions.USE_SANDBOX);
         }
         if (sandboxOptions.startAvdInParent()) {
+            Set<String> notifyAsNative = new LinkedHashSet<String>();
             for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
                 if (deviceConfig.getDeviceRequirements().gceDeviceRequested()) {
                     // Turn off the gce-device option and force the serial instead to use the
@@ -166,7 +172,19 @@ public class TradefedSandbox implements ISandbox {
                         mCmdArgs.add(
                                 DeviceSelectionOptions.DeviceRequestedType.EXISTING_DEVICE.name());
                     }
+                    if (BaseDeviceType.NATIVE_DEVICE.equals(
+                            deviceConfig.getDeviceRequirements().getBaseDeviceTypeRequested())) {
+                        notifyAsNative.add(
+                                info.getContext()
+                                        .getDevice(deviceConfig.getDeviceName())
+                                        .getSerialNumber());
+                    }
                 }
+            }
+            if (!notifyAsNative.isEmpty()) {
+                mRunUtil.setEnvVariable(
+                        ManagedTestDeviceFactory.NOTIFY_AS_NATIVE,
+                        Joiner.on(",").join(notifyAsNative));
             }
         }
 
