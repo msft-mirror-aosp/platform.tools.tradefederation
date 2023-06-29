@@ -86,6 +86,7 @@ import com.google.common.base.Strings;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.FormatMethod;
 
 import java.io.File;
@@ -264,9 +265,11 @@ public class NativeDevice
 
     private final LoadingCache<String, String> mPropertiesCache;
 
-    /**
-     * Interface for a generic device communication attempt.
-     */
+    // If we increase the number of props, then increase the cache size of mPropertiesCache.
+    private final Set<String> propsToPrefetch =
+            ImmutableSet.of("ro.build.version.sdk", "ro.build.version.codename", "ro.build.id");
+
+    /** Interface for a generic device communication attempt. */
     abstract interface DeviceAction {
 
         /**
@@ -656,6 +659,64 @@ public class NativeDevice
                 mPropertiesCache.put(name, property);
             }
             return property;
+        }
+    }
+
+    /**
+     * Micro optimization (about 400 millis) by prefetching all props we need rather than call 'adb
+     * getprop' for each one. i.e. It is just as fast to fetch all properties as it is to fetch one.
+     * Things like device.getApiLevel(), checkApiLevelAgainstNextRelease and getBuildAlias all call
+     * `adb getprop` under the hood. We fetch them in one call and call NativeDevice.setProperty.
+     * Even if we don't do this, NativeDevice will itself call setProperty and cache the result for
+     * future calls. We are just doing it slightly earlier. If the device is in recovery or there
+     * are other errors fetching the props, we just ignore them.
+     */
+    public void batchPrefetchStartupBuildProps() {
+        String cmd = "getprop";
+        try (CloseableTraceScope ignored = new CloseableTraceScope("batchPrefetchProp")) {
+            // Skip refetching if we already have the props by counting the ones in the cache
+            // that we need to fetch.
+            int propsAlreadyPresent = 0;
+            for (String propName : propsToPrefetch) {
+                if (mPropertiesCache.getIfPresent(propName) != null) {
+                    propsAlreadyPresent++;
+                } else {
+                    break;
+                }
+            }
+            if (propsAlreadyPresent == propsToPrefetch.size()) {
+                return;
+            }
+
+            try {
+                CommandResult result =
+                        executeShellV2Command(cmd, PROPERTY_GET_TIMEOUT, TimeUnit.MILLISECONDS, 0);
+                if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                    CLog.w(
+                            "Failed to run '%s' returning null. stdout: %s\n"
+                                    + "stderr: %s\n"
+                                    + "exit code: %s",
+                            cmd, result.getStdout(), result.getStderr(), result.getExitCode());
+                    if (result.getStdout() == null || result.getStdout().trim().isEmpty()) {
+                        return;
+                    }
+                }
+                for (String line : result.getStdout().split("\n")) {
+                    String[] parts = line.trim().split("]: \\[");
+                    if (parts.length != 2) {
+                        continue;
+                    }
+                    String propName = parts[0].substring(1).trim();
+                    String propValue = parts[1].substring(0, parts[1].length() - 1).trim();
+                    if (propValue != null) {
+                        if (propsToPrefetch.contains(propName)) {
+                            mPropertiesCache.put(propName, propValue);
+                        }
+                    }
+                }
+            } catch (DeviceNotAvailableException e) {
+                // okay to ignore, the real get property will deal with it.
+            }
         }
     }
 
@@ -2504,80 +2565,82 @@ public class NativeDevice
     }
 
     /**
-     * Performs an action on this device. Attempts to recover device and optionally retry command
-     * if action fails.
+     * Performs an action on this device. Attempts to recover device and optionally retry command if
+     * action fails.
      *
      * @param actionDescription a short description of action to be performed. Used for logging
-     *            purposes only.
+     *     purposes only.
      * @param action the action to be performed
-     * @param retryAttempts the retry attempts to make for action if it fails but
-     *            recovery succeeds
+     * @param retryAttempts the retry attempts to make for action if it fails but recovery succeeds
      * @return <code>true</code> if action was performed successfully
      * @throws DeviceNotAvailableException if recovery attempt fails or max attempts done without
-     *             success
+     *     success
      */
-    protected boolean performDeviceAction(String actionDescription, final DeviceAction action,
-            int retryAttempts) throws DeviceNotAvailableException {
+    protected boolean performDeviceAction(
+            String actionDescription, final DeviceAction action, int retryAttempts)
+            throws DeviceNotAvailableException {
         Exception lastException = null;
-        for (int i = 0; i < retryAttempts + 1; i++) {
-            boolean shouldRecover = true;
-            try {
-                return action.run();
-            } catch (TimeoutException e) {
-                logDeviceActionException(actionDescription, e, false);
-                lastException = e;
-            } catch (IOException e) {
-                logDeviceActionException(actionDescription, e, true);
-                lastException = e;
-            } catch (InstallException e) {
-                logDeviceActionException(actionDescription, e, true);
-                lastException = e;
-            } catch (SyncException e) {
-                logDeviceActionException(actionDescription, e, true);
-                lastException = e;
-                // a SyncException is not necessarily a device communication problem
-                // do additional diagnosis
-                if (!e.getErrorCode().equals(SyncError.BUFFER_OVERRUN) &&
-                        !e.getErrorCode().equals(SyncError.TRANSFER_PROTOCOL_ERROR)) {
-                    // this is a logic problem, doesn't need recovery or to be retried
-                    return false;
+        try (CloseableTraceScope ignored = new CloseableTraceScope(actionDescription)) {
+            for (int i = 0; i < retryAttempts + 1; i++) {
+                boolean shouldRecover = true;
+                try {
+                    return action.run();
+                } catch (TimeoutException e) {
+                    logDeviceActionException(actionDescription, e, false);
+                    lastException = e;
+                } catch (IOException e) {
+                    logDeviceActionException(actionDescription, e, true);
+                    lastException = e;
+                } catch (InstallException e) {
+                    logDeviceActionException(actionDescription, e, true);
+                    lastException = e;
+                } catch (SyncException e) {
+                    logDeviceActionException(actionDescription, e, true);
+                    lastException = e;
+                    // a SyncException is not necessarily a device communication problem
+                    // do additional diagnosis
+                    if (!e.getErrorCode().equals(SyncError.BUFFER_OVERRUN)
+                            && !e.getErrorCode().equals(SyncError.TRANSFER_PROTOCOL_ERROR)) {
+                        // this is a logic problem, doesn't need recovery or to be retried
+                        return false;
+                    }
+                } catch (AdbCommandRejectedException e) {
+                    // Workaround to not recover device if TCP adb is used.
+                    if (isAdbTcp()
+                            && (action instanceof RebootDeviceAction)
+                            && ((RebootDeviceAction) action).isFastbootOrBootloader()) {
+                        CLog.d(
+                                "Ignore AdbCommandRejectedException when TCP device is rebooted"
+                                        + " into fastboot.");
+                        return true;
+                    }
+                    lastException = e;
+                    logDeviceActionException(actionDescription, e, false);
+                } catch (ShellCommandUnresponsiveException e) {
+                    // ShellCommandUnresponsiveException is thrown when no output occurs within the
+                    // timeout. It doesn't necessarily mean the device is offline.
+                    shouldRecover = false;
+                    lastException = e;
+                    CLog.w(
+                            "Command: '%s' on '%s' went over its timeout for outputing a response.",
+                            actionDescription, getSerialNumber());
                 }
-            } catch (AdbCommandRejectedException e) {
-                // Workaround to not recover device if TCP adb is used.
-                if (isAdbTcp()
-                        && (action instanceof RebootDeviceAction)
-                        && ((RebootDeviceAction) action).isFastbootOrBootloader()) {
-                    CLog.d(
-                            "Ignore AdbCommandRejectedException when TCP device is rebooted into"
-                                    + " fastboot.");
-                    return true;
+                if (shouldRecover) {
+                    recoverDevice();
                 }
-                lastException = e;
-                logDeviceActionException(actionDescription, e, false);
-            } catch (ShellCommandUnresponsiveException e) {
-                // ShellCommandUnresponsiveException is thrown when no output occurs within the
-                // timeout. It doesn't necessarily mean the device is offline.
-                shouldRecover = false;
-                lastException = e;
-                CLog.w(
-                        "Command: '%s' on '%s' went over its timeout for outputing a response.",
-                        actionDescription, getSerialNumber());
             }
-            if (shouldRecover) {
-                recoverDevice();
+            if (retryAttempts > 0) {
+                throw new DeviceUnresponsiveException(
+                        String.format(
+                                "Attempted %s multiple times "
+                                        + "on device %s without communication success. Aborting.",
+                                actionDescription, getSerialNumber()),
+                        lastException,
+                        getSerialNumber(),
+                        DeviceErrorIdentifier.DEVICE_UNRESPONSIVE);
             }
+            return false;
         }
-        if (retryAttempts > 0) {
-            throw new DeviceUnresponsiveException(
-                    String.format(
-                            "Attempted %s multiple times "
-                                    + "on device %s without communication success. Aborting.",
-                            actionDescription, getSerialNumber()),
-                    lastException,
-                    getSerialNumber(),
-                    DeviceErrorIdentifier.DEVICE_UNRESPONSIVE);
-        }
-        return false;
     }
 
     /**
