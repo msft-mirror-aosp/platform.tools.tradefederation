@@ -239,7 +239,12 @@ public class BaseTestSuite extends ITestSuite {
     public LinkedHashMap<String, IConfiguration> loadTests() {
         try {
             File testsDir = getTestsDir();
-            mFoldableStates = getFoldableStates(getDevice());
+            try {
+                mFoldableStates = getFoldableStates(getDevice());
+            } catch (UnsupportedOperationException e) {
+                // Foldable state isn't always supported
+                CLog.e(e);
+            }
             setupFilters(testsDir);
             mAbis = getAbis(getDevice());
 
