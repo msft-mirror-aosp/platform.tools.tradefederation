@@ -82,7 +82,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-
 /** Unit tests for {@link NativeDevice}. */
 @RunWith(JUnit4.class)
 public class NativeDeviceTest {
@@ -3325,5 +3324,47 @@ public class NativeDeviceTest {
                 };
         assertEquals(
                 "tcp:fe80:0:0:0:230:1bff:feba:8128%en0", mTestDevice.getFastbootSerialNumber());
+    }
+
+    @Test
+    public void testBatchPrefetch() throws Exception {
+        NativeDevice device =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(
+                            String cmd,
+                            final long maxTimeoutForCommand,
+                            final TimeUnit timeUnit,
+                            int retryAttempts)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        if (cmd.equals("getprop")) {
+                            result.setStdout(
+                                    String.join(
+                                            "\n",
+                                            "[prop1]: [value1]",
+                                            "[ro.product.cpu.abi]: [x86_64]",
+                                            "[ro.system.product.cpu.abilist]:"
+                                                    + " [x86_64,x86,arm64-v8a,armeabi-v7a,armeabi]",
+                                            "[open error",
+                                            "[open error]: [no val",
+                                            "build.ro: foo",
+                                            "build.ro.",
+                                            "[ro.build.version.sdk]: [99]",
+                                            "[ro.build.version.codename]: [CremeBrule]",
+                                            "[ro.build.id]: [AOSP.MASTER.hash]"));
+                        } else if (cmd.equals("getprop ro.product.cpu.abi")) {
+                            result.setStdout("");
+                        }
+                        return result;
+                    }
+                };
+
+        // We don't have access to the cache, but we can call getProperty which will read
+        // from the cache if the key is there.
+        device.batchPrefetchStartupBuildProps();
+        assertEquals("AOSP.MASTER.hash", device.getProperty("ro.build.id"));
+        // And getProperty will issue more calls that we stub out with "" if we haven't cached.
+        assertNull(device.getProperty("ro.product.cpu.abi"));
     }
 }
