@@ -28,6 +28,9 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.SystemUtil;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,6 +39,7 @@ import java.util.regex.Pattern;
  */
 public class ManagedTestDeviceFactory implements IManagedTestDeviceFactory {
 
+    public static final String NOTIFY_AS_NATIVE = "NOTIFY_AS_NATIVE";
     public static final String IPADDRESS_PATTERN =
             "((^([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\."
                     + "([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\."
@@ -123,13 +127,27 @@ public class ManagedTestDeviceFactory implements IManagedTestDeviceFactory {
                                         mDeviceManager, idevice, mFastbootEnabled),
                                 mAllocationMonitor);
             } else {
-                // Handle device connected via 'adb connect'
-                testDevice =
-                        new RemoteAndroidDevice(
-                                idevice,
-                                new DeviceStateMonitor(mDeviceManager, idevice, mFastbootEnabled),
-                                mAllocationMonitor);
-                testDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
+                Set<String> nativeSerials = new HashSet<>();
+                if (System.getenv(NOTIFY_AS_NATIVE) != null) {
+                    nativeSerials.addAll(Arrays.asList(System.getenv(NOTIFY_AS_NATIVE).split(",")));
+                }
+                if (nativeSerials.contains(idevice.getSerialNumber())) {
+                    testDevice =
+                            new NativeDevice(
+                                    idevice,
+                                    new NativeDeviceStateMonitor(
+                                            mDeviceManager, idevice, mFastbootEnabled),
+                                    mAllocationMonitor);
+                } else {
+                    // Handle device connected via 'adb connect'
+                    testDevice =
+                            new RemoteAndroidDevice(
+                                    idevice,
+                                    new DeviceStateMonitor(
+                                            mDeviceManager, idevice, mFastbootEnabled),
+                                    mAllocationMonitor);
+                    testDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
+                }
             }
         } else {
             // Default to-go device is Android full stack device.

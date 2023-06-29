@@ -24,6 +24,7 @@ import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.ManagedTestDeviceFactory;
 import com.android.tradefed.invoker.ExecutionFiles;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
@@ -168,6 +169,10 @@ public class SandboxedInvocationExecution extends InvocationExecution {
      * Do not run the pre invocation setup for the device if the parent handled it.
      */
     private boolean shouldRunDeviceSpecificSetup(IConfiguration config) {
+        if (System.getenv(ManagedTestDeviceFactory.NOTIFY_AS_NATIVE) != null) {
+            CLog.d("Usage of native device detected: running device preSetup for connection.");
+            return true;
+        }
         SandboxOptions options =
                 (SandboxOptions)
                         config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME);
