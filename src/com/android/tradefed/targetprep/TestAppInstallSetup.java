@@ -30,6 +30,7 @@ import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -352,6 +353,11 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         // resolve abi flags
         if (mAbi != null && mForceAbi != null) {
             throw new IllegalStateException("cannot specify both abi flags: --abi and --force-abi");
+        }
+
+        // We are going to need several "ro.build" props, save some time (0.4 sec) by prefetching
+        if (getDevice() instanceof NativeDevice) {
+            ((NativeDevice) getDevice()).batchPrefetchStartupBuildProps();
         }
         String abiName = null;
         if (mAbi != null) {
