@@ -99,6 +99,7 @@ import com.android.tradefed.device.cloud.OxygenClientTest;
 import com.android.tradefed.device.cloud.OxygenUtilTest;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDeviceTest;
 import com.android.tradefed.device.cloud.RemoteFileUtilTest;
+import com.android.tradefed.device.connection.AdbTcpConnectionTest;
 import com.android.tradefed.device.contentprovider.ContentProviderHandlerTest;
 import com.android.tradefed.device.helper.TelephonyHelperTest;
 import com.android.tradefed.device.internal.DeviceReleaseReporterTest;
@@ -592,6 +593,9 @@ import org.junit.runners.Suite.SuiteClasses;
     OxygenUtilTest.class,
     RemoteAndroidVirtualDeviceTest.class,
     RemoteFileUtilTest.class,
+
+    // device.connection
+    AdbTcpConnectionTest.class,
 
     // device.contentprovider
     ContentProviderHandlerTest.class,
