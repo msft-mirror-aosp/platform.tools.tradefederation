@@ -156,20 +156,9 @@ public class GceSshTunnelMonitor extends Thread {
         // shutdown adb connection first, if we reached where there could be a connection
         CLog.d("closeConnection is triggered.");
         if (mLocalHostAndPort != null) {
-            if (mDevice.getOptions().shouldUseConnection()) {
-                AbstractConnection conn = mDevice.getConnection();
-                if (conn instanceof AdbTcpConnection) {
-                    if (!((AdbTcpConnection) conn)
-                            .adbTcpDisconnect(
-                                    mLocalHostAndPort.getHost(),
-                                    Integer.toString(mLocalHostAndPort.getPort()))) {
-                        CLog.d(
-                                "Failed to disconnect from local host %s",
-                                mLocalHostAndPort.toString());
-                    }
-                }
-            } else if (mDevice instanceof RemoteAndroidDevice) {
-                if (!((RemoteAndroidDevice) mDevice)
+            AbstractConnection conn = mDevice.getConnection();
+            if (conn instanceof AdbTcpConnection) {
+                if (!((AdbTcpConnection) conn)
                         .adbTcpDisconnect(
                                 mLocalHostAndPort.getHost(),
                                 Integer.toString(mLocalHostAndPort.getPort()))) {
@@ -308,25 +297,16 @@ public class GceSshTunnelMonitor extends Thread {
             // Checking if it is actually running.
             if (isTunnelAlive()) {
                 mLocalHostAndPort = HostAndPort.fromString(mDevice.getSerialNumber());
-                if (mDevice.getOptions().shouldUseConnection()) {
-                    AbstractConnection conn = mDevice.getConnection();
-                    if (conn instanceof AdbTcpConnection) {
-                        if (!((AdbTcpConnection) conn)
-                                .adbTcpConnect(
-                                        mLocalHostAndPort.getHost(),
-                                        Integer.toString(mLocalHostAndPort.getPort()))) {
-                            CLog.e("Adb connect failed, re-init GCE connection.");
-                            closeConnection();
-                            continue;
-                        }
+                AbstractConnection conn = mDevice.getConnection();
+                if (conn instanceof AdbTcpConnection) {
+                    if (!((AdbTcpConnection) conn)
+                            .adbTcpConnect(
+                                    mLocalHostAndPort.getHost(),
+                                    Integer.toString(mLocalHostAndPort.getPort()))) {
+                        CLog.e("Adb connect failed, re-init GCE connection.");
+                        closeConnection();
+                        continue;
                     }
-                } else if (!((RemoteAndroidDevice) mDevice)
-                        .adbTcpConnect(
-                                mLocalHostAndPort.getHost(),
-                                Integer.toString(mLocalHostAndPort.getPort()))) {
-                    CLog.e("Adb connect failed, re-init GCE connection.");
-                    closeConnection();
-                    continue;
                 }
                 try {
                     mSshTunnelProcess.waitFor();
