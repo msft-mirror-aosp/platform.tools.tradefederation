@@ -170,6 +170,7 @@ public class RemoteZip {
 
         // Remove from download anything that is in our cache
         if (mUseCache) {
+            CLog.d("RemoteZip caching is enabled, evaluating.");
             for (CentralDirectoryInfo info : new ArrayList<>(files)) {
                 File targetFile = new File(destDir, info.getFileName());
                 boolean cacheHit =
