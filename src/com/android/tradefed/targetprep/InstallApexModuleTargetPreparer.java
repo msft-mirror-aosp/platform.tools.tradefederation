@@ -83,6 +83,8 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     // invalid.
     private static final ImmutableList<String> PACKAGES_WITH_INVALID_DUMP_INFO =
             ImmutableList.of("com.google.mainline.primary.libs");
+    private static final String STAGED_READY_TIMEOUT_OPTION = "--staged-ready-timeout";
+    private static final String TIMEOUT_MILLIS_OPTION = "--timeout-millis=";
 
     private List<ApexInfo> mTestApexInfoList = new ArrayList<>();
     private List<String> mApexModulesToUninstall = new ArrayList<>();
@@ -142,6 +144,14 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             name = "apks-zip-file-name",
             description = "Install modules from apk zip file. Accepts a single file.")
     private String mApksZipFileName = null;
+
+    @Option(
+            name = "staged-ready-timeout-ms",
+            description =
+                    "Time option in millis to wait for session stage. It will be passed to"
+                            + " --staged-ready-timeout for adb install-multi-package and"
+                            + " --timeout-millis for bundletool install-apks.")
+    private long mStagedReadyTimeoutMs = 0;
 
     @Override
     public void setUp(TestInformation testInfo)
@@ -668,6 +678,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             if (mEnableRollback) {
                 trainInstallCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
             }
+            addStagedReadyTimeoutForAdb(trainInstallCmd);
             for (File moduleFile : moduleFilenames) {
                 trainInstallCmd.add(moduleFile.getAbsolutePath());
                 if (moduleFile.getName().endsWith(APK_SUFFIX)) {
@@ -886,7 +897,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             mTestApexInfoList = collectApexInfoFromApexModules(appFilesAndPackages, testInfo);
         } else {
             // Install .apks that contain apk module.
-            getBundletoolUtil().installApks(apks, device);
+            List<String> extraArgs = new ArrayList<>();
+            addTimeoutMillisForBundletool(extraArgs);
+            getBundletoolUtil().installApks(apks, device, extraArgs);
             mApkToInstall.add(parsePackageName(splits.get(0)));
         }
         return;
@@ -917,6 +930,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         if (mEnableRollback) {
             extraOptions.add(ENABLE_ROLLBACK_INSTALL_OPTION);
         }
+        addTimeoutMillisForBundletool(extraOptions);
 
         device.waitForDeviceAvailable();
 
@@ -963,6 +977,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         if (mEnableRollback) {
             installCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
         }
+        addStagedReadyTimeoutForAdb(installCmd);
         for (String arg : mSplitsInstallArgs) {
             installCmd.add(arg);
         }
@@ -1201,5 +1216,20 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     @VisibleForTesting
     public void setIgnoreIfNotPreloaded(boolean skip) {
         mIgnoreIfNotPreloaded = skip;
+    }
+
+    @VisibleForTesting
+    protected void addStagedReadyTimeoutForAdb(List<String> cmd) {
+        if (mStagedReadyTimeoutMs > 0) {
+            cmd.add(STAGED_READY_TIMEOUT_OPTION);
+            cmd.add(Long.toString(mStagedReadyTimeoutMs));
+        }
+    }
+
+    @VisibleForTesting
+    protected void addTimeoutMillisForBundletool(List<String> extraArgs) {
+        if (mStagedReadyTimeoutMs > 0) {
+            extraArgs.add(TIMEOUT_MILLIS_OPTION + mStagedReadyTimeoutMs);
+        }
     }
 }
