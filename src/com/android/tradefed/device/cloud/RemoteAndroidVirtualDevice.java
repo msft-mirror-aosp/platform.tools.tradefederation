@@ -16,27 +16,19 @@
 package com.android.tradefed.device.cloud;
 
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.IDevice.DeviceState;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
-import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
-import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
-import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
-import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.result.FileInputStreamSource;
-import com.android.tradefed.result.InputStreamSource;
-import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -45,7 +37,6 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
-import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.net.HostAndPort;
@@ -55,7 +46,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 
@@ -72,11 +62,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
     private GceSshTunnelMonitor mGceSshMonitor;
     private DeviceNotAvailableException mTunnelInitFailed = null;
 
-    private static final long CHECK_WAIT_DEVICE_AVAIL_MS = 30 * 1000;
-    private static final long WAIT_FOR_TUNNEL_ONLINE = 2 * 60 * 1000;
-    private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
-    private static final int WAIT_TIME_DIVISION = 4;
-
     private static final long FETCH_TOMBSTONES_TIMEOUT_MS = 5 * 60 * 1000;
 
     /**
@@ -89,239 +74,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
     public RemoteAndroidVirtualDevice(
             IDevice device, IDeviceStateMonitor stateMonitor, IDeviceMonitor allocationMonitor) {
         super(device, stateMonitor, allocationMonitor);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public void preInvocationSetup(IBuildInfo info, MultiMap<String, String> attributes)
-            throws TargetSetupError, DeviceNotAvailableException {
-        super.preInvocationSetup(info, attributes);
-        if (getOptions().shouldUseConnection()) {
-            // Connection should be initialized at this point
-            return;
-        }
-        try {
-            mGceSshMonitor = null;
-            mTunnelInitFailed = null;
-            // We create a brand new GceManager each time to ensure clean state.
-            mGceHandler = new GceManager(getDeviceDescriptor(), getOptions(), info);
-            setFastbootEnabled(false);
-
-            long remainingTime = getOptions().getGceCmdTimeout();
-            // mGceAvd is null means the device hasn't been launched.
-            if (mGceAvd != null) {
-                CLog.d("skipped GCE launch because GceAvdInfo %s is already set", mGceAvd);
-                createGceSshMonitor(this, info, mGceAvd.hostAndPort(), this.getOptions());
-            } else {
-                // Launch GCE helper script.
-                long startTime = getCurrentTime();
-
-                try {
-                    if (GlobalConfiguration.getInstance()
-                                    .getHostOptions()
-                                    .getConcurrentVirtualDeviceStartupLimit()
-                            != null) {
-                        GlobalConfiguration.getInstance()
-                                .getHostOptions()
-                                .takePermit(PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP);
-                        long queueTime = System.currentTimeMillis() - startTime;
-                        CLog.v(
-                                "Fetch and launch CVD permit obtained after %ds",
-                                TimeUnit.MILLISECONDS.toSeconds(queueTime));
-                    }
-                    launchGce(info, attributes);
-                    remainingTime = remainingTime - (getCurrentTime() - startTime);
-                } finally {
-                    if (GlobalConfiguration.getInstance()
-                                    .getHostOptions()
-                                    .getConcurrentVirtualDeviceStartupLimit()
-                            != null) {
-                        GlobalConfiguration.getInstance()
-                                .getHostOptions()
-                                .returnPermit(PermitLimitType.CONCURRENT_VIRTUAL_DEVICE_STARTUP);
-                    }
-                }
-                if (remainingTime <= 0) {
-                    throw new DeviceNotAvailableException(
-                            String.format(
-                                    "Failed to launch GCE after %sms",
-                                    getOptions().getGceCmdTimeout()),
-                            getSerialNumber(),
-                            DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE);
-                }
-                CLog.d("%sms left before timeout after GCE launch returned", remainingTime);
-            }
-            // Wait for device to be ready.
-            RecoveryMode previousMode = getRecoveryMode();
-            setRecoveryMode(RecoveryMode.NONE);
-            boolean unresponsive = true;
-            try {
-                for (int i = 0; i < WAIT_TIME_DIVISION; i++) {
-                    // We don't have a way to bail out of waitForDeviceAvailable if the Gce Avd
-                    // boot up and then fail some other setup so we check to make sure the monitor
-                    // thread is alive and we have an opportunity to abort and avoid wasting time.
-                    if (getMonitor().waitForDeviceAvailable(remainingTime / WAIT_TIME_DIVISION)
-                            != null) {
-                        unresponsive = false;
-                        break;
-                    }
-                    waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
-                    waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
-                }
-            } finally {
-                setRecoveryMode(previousMode);
-            }
-            if (!DeviceState.ONLINE.equals(getIDevice().getState()) || unresponsive) {
-                if (mGceAvd != null && GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
-                    // Update status to reflect that we were not able to connect to it.
-                    mGceAvd.setStatus(GceStatus.DEVICE_OFFLINE);
-                }
-                if (unresponsive) {
-                    throw new DeviceUnresponsiveException(
-                            "AVD device booted to online but is unresponsive.",
-                            getSerialNumber(),
-                            DeviceErrorIdentifier.DEVICE_UNRESPONSIVE);
-                }
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "AVD device booted but was in %s state", getIDevice().getState()),
-                        getSerialNumber(),
-                        DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE);
-            }
-            enableAdbRoot();
-        } catch (DeviceNotAvailableException | TargetSetupError e) {
-            throw e;
-        }
-        // make sure we start logcat directly, device is up.
-        setLogStartDelay(0);
-        // For virtual device we only start logcat collection after we are sure it's online.
-        if (getOptions().isLogcatCaptureEnabled()) {
-            startLogcat();
-        }
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public void postInvocationTearDown(Throwable exception) {
-        if (getOptions().shouldUseConnection()) {
-            // Ensure parent postInvocationTearDown is always called.
-            super.postInvocationTearDown(exception);
-            return;
-        }
-        try {
-            CLog.i("Invocation tear down for device %s", getSerialNumber());
-            // Just clear the logcat, we don't need the teardown logcat
-            clearLogcat();
-            stopLogcat();
-            // Terminate SSH tunnel process.
-            if (getGceSshMonitor() != null) {
-                getGceSshMonitor().logSshTunnelLogs(getLogger());
-                getGceSshMonitor().shutdown();
-                try {
-                    getGceSshMonitor().joinMonitor();
-                } catch (InterruptedException e1) {
-                    CLog.i("Interrupted while waiting for GCE SSH monitor to shutdown.");
-                }
-                // We are done with the monitor, clean it to prevent re-entry.
-                mGceSshMonitor = null;
-            }
-            if (!waitForDeviceNotAvailable(DEFAULT_SHORT_CMD_TIMEOUT)) {
-                CLog.w("Device %s still available after timeout.", getSerialNumber());
-            }
-
-            if (mGceAvd != null) {
-                // Host and port can be null in case of acloud timeout
-                if (mGceAvd.hostAndPort() != null) {
-                    // attempt to get a bugreport if Gce Avd is a failure
-                    if (!GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
-                        // Get a bugreport via ssh
-                        getSshBugreport();
-                    }
-                    // Log the serial output of the instance.
-                    getGceHandler().logSerialOutput(mGceAvd, getLogger());
-
-                    // Test if an SSH connection can be established. If can't, skip all collection.
-                    boolean isGceReachable =
-                            CommonLogRemoteFileUtil.isRemoteGceReachableBySsh(
-                                    mGceAvd, getOptions(), getRunUtil());
-
-                    if (isGceReachable) {
-                        // Fetch remote files
-                        CommonLogRemoteFileUtil.fetchCommonFiles(
-                                getLogger(), mGceAvd, getOptions(), getRunUtil());
-
-                        // Fetch all tombstones if any.
-                        CommonLogRemoteFileUtil.fetchTombstones(
-                                getLogger(), mGceAvd, getOptions(), getRunUtil());
-                    } else {
-                        CLog.e(
-                                "Failed to establish ssh connect to remote file host, skipping"
-                                        + " remote common file and tombstones collection.");
-                    }
-
-                    // Fetch host kernel log by running `dmesg` for Oxygen hosts
-                    if (getOptions().useOxygen()) {
-                        CommonLogRemoteFileUtil.logRemoteCommandOutput(
-                                getLogger(),
-                                mGceAvd,
-                                getOptions(),
-                                getRunUtil(),
-                                "host_kernel.log",
-                                "toybox",
-                                "dmesg");
-                    }
-                }
-            }
-
-            // Cleanup GCE first to make sure ssh tunnel has nowhere to go.
-            if (!getOptions().shouldSkipTearDown() && getGceHandler() != null) {
-                getGceHandler().shutdownGce();
-            }
-            // We are done with the gce related information, clean it to prevent re-entry.
-            mGceAvd = null;
-
-            if (getInitialSerial() != null) {
-                setIDevice(
-                        new RemoteAvdIDevice(
-                                getInitialSerial(),
-                                getInitialIp(),
-                                getInitialUser(),
-                                getInitialDeviceNumOffset()));
-            }
-            setFastbootEnabled(false);
-
-            if (getGceHandler() != null) {
-                getGceHandler().cleanUp();
-            }
-        } finally {
-            // Ensure parent postInvocationTearDown is always called.
-            super.postInvocationTearDown(exception);
-        }
-    }
-
-    /** Capture a remote bugreport by ssh-ing into the device directly. */
-    private void getSshBugreport() {
-        InstanceType type = getOptions().getInstanceType();
-        File bugreportFile = null;
-        try {
-            if (InstanceType.GCE.equals(type) || InstanceType.REMOTE_AVD.equals(type)) {
-                bugreportFile =
-                        GceManager.getBugreportzWithSsh(mGceAvd, getOptions(), getRunUtil());
-            } else {
-                bugreportFile =
-                        GceManager.getNestedDeviceSshBugreportz(
-                                mGceAvd, getOptions(), getRunUtil());
-            }
-            if (bugreportFile != null) {
-                InputStreamSource bugreport = new FileInputStreamSource(bugreportFile);
-                getLogger().testLog("bugreportz-ssh", LogDataType.BUGREPORTZ, bugreport);
-                StreamUtil.cancel(bugreport);
-            }
-        } catch (IOException e) {
-            CLog.e(e);
-        } finally {
-            FileUtil.deleteFile(bugreportFile);
-        }
     }
 
     /** Launch the actual gce device based on the build info. */
@@ -392,25 +144,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
         mGceSshMonitor.start();
     }
 
-    /** {@inherit} */
-    @Override
-    public void postBootSetup() throws DeviceNotAvailableException {
-        if (!getOptions().shouldDisableReboot()) {
-            if (!getOptions().shouldUseConnection()) {
-                CLog.v("Performing post boot setup for GCE AVD %s", getSerialNumber());
-                // Should already be connected at this point, but if something is
-                // missing, restart the tunnel
-                if (!getGceSshMonitor().isTunnelAlive()) {
-                    getGceSshMonitor().closeConnection();
-                    getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
-                    waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
-                }
-                waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
-            }
-        }
-        super.postBootSetup();
-    }
-
     /** Check if the tunnel monitor is running. */
     protected void waitForTunnelOnline(final long waitTime) throws DeviceNotAvailableException {
         CLog.i("Waiting %d ms for tunnel to be restarted", waitTime);
@@ -432,65 +165,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
                         getSerialNumber(),
                         DeviceErrorIdentifier.FAILED_TO_CONNECT_TO_GCE);
         throw mTunnelInitFailed;
-    }
-
-    @Override
-    public boolean recoverDevice() throws DeviceNotAvailableException {
-        if (!getOptions().shouldUseConnection()) {
-            if (getGceSshMonitor() == null) {
-                if (mTunnelInitFailed != null) {
-                    // We threw before but was not reported, so throw the root cause here.
-                    throw mTunnelInitFailed;
-                }
-                waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
-            }
-            // Check that shell is available before resetting the bridge
-            if (!waitForDeviceShell(CHECK_WAIT_DEVICE_AVAIL_MS)) {
-                long startTime = System.currentTimeMillis();
-                try {
-                    // Re-init tunnel when attempting recovery
-                    CLog.i("Attempting recovery on GCE AVD %s", getSerialNumber());
-                    getGceSshMonitor().closeConnection();
-                    getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
-                    waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
-                    waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
-                } catch (Exception e) {
-                    // Log the entrance in recovery here to avoid double counting with
-                    // super.recoverDevice.
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.RECOVERY_ROUTINE_COUNT, 1);
-                    throw e;
-                } finally {
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.RECOVERY_TIME,
-                            System.currentTimeMillis() - startTime);
-                }
-            }
-        }
-        // Then attempt regular recovery
-        return super.recoverDevice();
-    }
-
-    @Override
-    protected void doAdbReboot(RebootMode rebootMode, @Nullable final String reason)
-            throws DeviceNotAvailableException {
-        // We catch that adb reboot is called to expect it from the tunnel.
-        if (getGceSshMonitor() != null) {
-            getGceSshMonitor().isAdbRebootCalled(true);
-        }
-        super.doAdbReboot(rebootMode, reason);
-    }
-
-    @Override
-    protected void postAdbReboot() throws DeviceNotAvailableException {
-        if (!getOptions().shouldUseConnection()) {
-            // After the reboot we wait for tunnel to be online and device to be reconnected
-            getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
-            waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
-            waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
-        } else {
-            super.postAdbReboot();
-        }
     }
 
     /**

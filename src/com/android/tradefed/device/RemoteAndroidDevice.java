@@ -17,17 +17,9 @@ package com.android.tradefed.device;
 
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.command.remote.DeviceDescriptor;
-import com.android.tradefed.device.TestDeviceOptions.InstanceType;
-import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.result.error.DeviceErrorIdentifier;
-import com.android.tradefed.util.CommandResult;
-import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
-import com.android.tradefed.util.IRunUtil;
-import com.android.tradefed.util.RunUtil;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,10 +34,6 @@ public class RemoteAndroidDevice extends TestDevice {
     protected static final long RETRY_INTERVAL_MS = 5000;
     protected static final int MAX_RETRIES = 5;
     protected static final long DEFAULT_SHORT_CMD_TIMEOUT = 20 * 1000;
-
-    private static final String ADB_SUCCESS_CONNECT_TAG = "connected to";
-    private static final String ADB_ALREADY_CONNECTED_TAG = "already";
-    private static final String ADB_CONN_REFUSED = "Connection refused";
 
     private static final Pattern IP_PATTERN =
             Pattern.compile(ManagedTestDeviceFactory.IPADDRESS_PATTERN);
@@ -82,95 +70,6 @@ public class RemoteAndroidDevice extends TestDevice {
     }
 
     /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void postAdbRootAction() throws DeviceNotAvailableException {
-        if (getOptions().shouldUseConnection()) {
-            super.postAdbRootAction();
-            return;
-        }
-        // attempt to reconnect first to make sure we didn't loose the connection because of
-        // adb root.
-        adbTcpConnect(getHostName(), getPortNum());
-        waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void postAdbUnrootAction() throws DeviceNotAvailableException {
-        if (getOptions().shouldUseConnection()) {
-            super.postAdbUnrootAction();
-            return;
-        }
-        // attempt to reconnect first to make sure we didn't loose the connection because of
-        // adb unroot.
-        adbTcpConnect(getHostName(), getPortNum());
-        waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    protected void postAdbReboot() throws DeviceNotAvailableException {
-        // This should waitForDevice NOT_AVAILABLE as expected then we reconnect
-        super.postAdbReboot();
-        // A remote nested device does not loose the ssh bridge when rebooted only adb connect is
-        // required.
-        if (!getOptions().shouldUseConnection()) {
-            InstanceType type = mOptions.getInstanceType();
-            if (InstanceType.CUTTLEFISH.equals(type)
-                    || InstanceType.REMOTE_NESTED_AVD.equals(type)
-                    || InstanceType.EMULATOR.equals(type)) {
-                adbTcpConnect(getHostName(), getPortNum());
-                waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
-            }
-        }
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean recoverDevice() throws DeviceNotAvailableException {
-        if (!getOptions().shouldUseConnection()) {
-            // If device is not in use (TcpDevice) do not attempt reconnection, it will fail
-            // device in use will not be of the TcpDevice type.
-            if (!(getIDevice() instanceof TcpDevice)) {
-                // Before attempting standard recovery, reconnect the device.
-                CLog.i("Reconnecting to %s:%s for recovery", getHostName(), getPortNum());
-                adbTcpConnect(getHostName(), getPortNum());
-                waitForAdbConnect(WAIT_FOR_ADB_CONNECT);
-            }
-        }
-        // Standard recovery
-        return super.recoverDevice();
-    }
-
-    /**
-     * Return the hostname associated with the device. Extracted from the serial.
-     */
-    public String getHostName() {
-        if (!checkSerialFormatValid(getSerialNumber())) {
-            throw new RuntimeException(
-                    String.format("Serial Format is unexpected: %s "
-                            + "should look like <hostname>:<port>", getSerialNumber()));
-        }
-        return getSerialNumber().split(":")[0];
-    }
-
-    /**
-     * Return the port number asociated with the device. Extracted from the serial.
-     */
-    public String getPortNum() {
-        if (!checkSerialFormatValid(getSerialNumber())) {
-            throw new RuntimeException(
-                    String.format("Serial Format is unexpected: %s "
-                            + "should look like <hostname>:<port>", getSerialNumber()));
-        }
-        return getSerialNumber().split(":")[1];
-    }
-
-    /**
      * Check if the format of the serial is as expected <hostname>:port
      *
      * @return true if the format is valid, false otherwise.
@@ -192,88 +91,6 @@ public class RemoteAndroidDevice extends TestDevice {
             }
         }
         return false;
-    }
-
-    /**
-     * Helper method to adb connect to a given tcp ip Android device
-     *
-     * @param host the hostname/ip of a tcp/ip Android device
-     * @param port the port number of a tcp/ip device
-     * @return true if we successfully connected to the device, false
-     *         otherwise.
-     */
-    public boolean adbTcpConnect(String host, String port) {
-        for (int i = 0; i < MAX_RETRIES; i++) {
-            CommandResult result = adbConnect(host, port);
-            if (CommandStatus.SUCCESS.equals(result.getStatus()) &&
-                result.getStdout().contains(ADB_SUCCESS_CONNECT_TAG)) {
-                CLog.d(
-                        "adb connect output: status: %s stdout: %s",
-                        result.getStatus(), result.getStdout());
-
-                // It is possible to get a positive result without it being connected because of
-                // the ssh bridge. Retrying to get confirmation, and expecting "already connected".
-                if(confirmAdbTcpConnect(host, port)) {
-                    return true;
-                }
-            } else if (CommandStatus.SUCCESS.equals(result.getStatus()) &&
-                    result.getStdout().contains(ADB_CONN_REFUSED)) {
-                // If we find "Connection Refused", we bail out directly as more connect won't help
-                return false;
-            }
-            CLog.d("adb connect output: status: %s stdout: %s stderr: %s, retrying.",
-                    result.getStatus(), result.getStdout(), result.getStderr());
-            getRunUtil().sleep((i + 1) * RETRY_INTERVAL_MS);
-        }
-        return false;
-    }
-
-    private boolean confirmAdbTcpConnect(String host, String port) {
-        CommandResult resultConfirmation = adbConnect(host, port);
-        if (CommandStatus.SUCCESS.equals(resultConfirmation.getStatus())
-                && resultConfirmation.getStdout().contains(ADB_ALREADY_CONNECTED_TAG)) {
-            CLog.d("adb connect confirmed:\nstdout: %s\n", resultConfirmation.getStdout());
-            return true;
-        } else {
-            CLog.d("adb connect confirmation failed:\nstatus:%s\nstdout: %s\nsterr: %s",
-                    resultConfirmation.getStatus(), resultConfirmation.getStdout(),
-                    resultConfirmation.getStderr());
-        }
-        return false;
-    }
-
-    /**
-     * Helper method to adb disconnect from a given tcp ip Android device
-     *
-     * @param host the hostname/ip of a tcp/ip Android device
-     * @param port the port number of a tcp/ip device
-     * @return true if we successfully disconnected to the device, false
-     *         otherwise.
-     */
-    public boolean adbTcpDisconnect(String host, String port) {
-        CommandResult result = getRunUtil().runTimedCmd(DEFAULT_SHORT_CMD_TIMEOUT, "adb",
-                "disconnect",
-                String.format("%s:%s", host, port));
-        return CommandStatus.SUCCESS.equals(result.getStatus());
-    }
-
-    /**
-     * Check if the adb connection is enabled.
-     */
-    public void waitForAdbConnect(final long waitTime) throws DeviceNotAvailableException {
-        CLog.i("Waiting %d ms for adb connection.", waitTime);
-        long startTime = System.currentTimeMillis();
-        while (System.currentTimeMillis() - startTime < waitTime) {
-            if (confirmAdbTcpConnect(getHostName(), getPortNum())) {
-                CLog.d("Adb connection confirmed.");
-                return;
-            }
-            getRunUtil().sleep(RETRY_INTERVAL_MS);
-        }
-        throw new DeviceNotAvailableException(
-                String.format("No adb connection after %sms.", waitTime),
-                getSerialNumber(),
-                DeviceErrorIdentifier.FAILED_TO_CONNECT_TO_GCE);
     }
 
     /**
@@ -299,31 +116,6 @@ public class RemoteAndroidDevice extends TestDevice {
     @Override
     public String getMacAddress() {
         return null;
-    }
-
-    /** Run adb connect. */
-    private CommandResult adbConnect(String host, String port) {
-        IRunUtil runUtil = getRunUtil();
-        if (mAdbConnectLogs != null) {
-            runUtil = new RunUtil();
-            runUtil.setEnvVariable("ADB_TRACE", "1");
-        }
-        CommandResult result =
-                runUtil.runTimedCmd(
-                        DEFAULT_SHORT_CMD_TIMEOUT,
-                        "adb",
-                        "connect",
-                        String.format("%s:%s", host, port));
-        if (mAdbConnectLogs != null) {
-            try {
-                FileUtil.writeToFile(result.getStderr(), mAdbConnectLogs, true);
-                FileUtil.writeToFile(
-                        "\n======= SEPARATOR OF ATTEMPTS =====\n", mAdbConnectLogs, true);
-            } catch (IOException e) {
-                CLog.e(e);
-            }
-        }
-        return result;
     }
 
     @Override
