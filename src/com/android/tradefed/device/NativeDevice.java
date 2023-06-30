@@ -5207,13 +5207,8 @@ public class NativeDevice
             if (attributes != null) {
                 builder.addAttributes(attributes);
             }
-            if (getOptions().shouldUseConnection()) {
-                addExtraConnectionBuilderArgs(builder);
-                mConnection = DefaultConnection.createConnection(builder);
-            } else {
-                // Use default inop connection
-                mConnection = DefaultConnection.createInopConnection(builder);
-            }
+            addExtraConnectionBuilderArgs(builder);
+            mConnection = DefaultConnection.createConnection(builder);
             CLog.d("Using connection: %s (%s)", mConnection, getIDevice());
             mConnection.initializeConnection();
         }
