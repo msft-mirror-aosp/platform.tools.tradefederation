@@ -113,7 +113,7 @@ public class PartialZipDownloadCache {
                 mFileCache.invalidate(key);
             }
         } catch (IOException e) {
-            // Ignore
+            CLog.e(e);
         }
         return false;
     }
