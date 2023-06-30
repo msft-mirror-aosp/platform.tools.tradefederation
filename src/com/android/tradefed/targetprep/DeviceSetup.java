@@ -1195,6 +1195,10 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         if (mMinExternalStorageKb <= 0) {
             return;
         }
+        if (!(device instanceof TestDevice)) {
+            // TODO: instead check that sdcard exists
+            return;
+        }
         // Wait for device available to ensure the mounting of sdcard
         device.waitForDeviceAvailable();
         long freeSpace = device.getExternalStoreFreeSpace();
