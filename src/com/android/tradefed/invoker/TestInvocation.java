@@ -1033,8 +1033,8 @@ public class TestInvocation implements ITestInvocation {
             } else {
                 CLog.d("Fetching options from parent.");
                 // Get options from the parent process
-                try (OptionFetcher fetchOtpions = new OptionFetcher()) {
-                    fetchOtpions.fetchParentOptions(config);
+                try (OptionFetcher fetchOptions = new OptionFetcher()) {
+                    fetchOptions.fetchParentOptions(config);
                 }
             }
             // Handle the automated reporting
