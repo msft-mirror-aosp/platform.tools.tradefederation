@@ -34,6 +34,7 @@ import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TcpDevice;
+import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
@@ -70,7 +71,7 @@ public class DeviceSetupTest {
 
     @Before
     public void setUp() throws Exception {
-        mMockDevice = mock(ITestDevice.class);
+        mMockDevice = mock(TestDevice.class);
         mMockIDevice = mock(IDevice.class);
         when(mMockDevice.getSerialNumber()).thenReturn("foo");
         when(mMockDevice.getDeviceDescriptor()).thenReturn(null);
