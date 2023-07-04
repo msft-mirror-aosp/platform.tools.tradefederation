@@ -187,6 +187,7 @@ public class TestDevice extends NativeDevice {
     /** Track microdroid and its resources */
     private class MicrodroidTracker {
         ExecutorService executor;
+        String cid;
     }
 
     /**
@@ -2678,7 +2679,7 @@ public class TestDevice extends NativeDevice {
                     String.format(
                             "Microdroid with cid '%s' already exists in device. Cannot create"
                                     + " another one.",
-                            mStartedMicrodroids.values().iterator().next()));
+                            mStartedMicrodroids.values().iterator().next().cid));
 
         String microdroidSerial;
         int vmAdbPort = -1;
@@ -2845,6 +2846,7 @@ public class TestDevice extends NativeDevice {
         }
         MicrodroidTracker tracker = new MicrodroidTracker();
         tracker.executor = executor;
+        tracker.cid = cid;
         mStartedMicrodroids.put(process, tracker);
         return microdroid;
     }
