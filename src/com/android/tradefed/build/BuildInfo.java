@@ -236,6 +236,13 @@ public class BuildInfo implements IBuildInfo {
             if (applyBuildProperties(fileEntry.getValue(), build, this)) {
                 continue;
             }
+            if (fileEntry.getKey().startsWith(IBuildInfo.REMOTE_FILE_PREFIX)) {
+                setFile(
+                        fileEntry.getKey(),
+                        new File(fileEntry.getValue().getFile().getPath()),
+                        fileEntry.getValue().getVersion());
+                continue;
+            }
             File copyFile;
             if (origFile.isDirectory()) {
                 copyFile = FileUtil.createTempDir(fileEntry.getKey());
