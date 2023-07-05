@@ -417,7 +417,6 @@ public class TestMapping {
                     continue;
                 }
             }
-            CLog.d("#getTests adding: %s", test);
             tests.add(test);
         }
 
