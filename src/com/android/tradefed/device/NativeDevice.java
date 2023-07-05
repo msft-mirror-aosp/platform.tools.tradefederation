@@ -3351,7 +3351,8 @@ public class NativeDevice
      */
     @Override
     public boolean clearErrorDialogs() throws DeviceNotAvailableException {
-        throw new UnsupportedOperationException("No support for Screen's features");
+        CLog.e("No support for Screen's features");
+        return false;
     }
 
     /** {@inheritDoc} */
