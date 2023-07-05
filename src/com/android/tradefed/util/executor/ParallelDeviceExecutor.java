@@ -48,6 +48,10 @@ public class ParallelDeviceExecutor<V> {
      * @return The list of results for each callable task.
      */
     public List<V> invokeAll(List<Callable<V>> callableTasks, long timeout, TimeUnit unit) {
+        List<V> results = new ArrayList<>();
+        if (callableTasks.isEmpty()) {
+            return results;
+        }
         ExecutorService executor =
                 Executors.newFixedThreadPool(
                         mPoolSize,
@@ -59,7 +63,6 @@ public class ParallelDeviceExecutor<V> {
                                 return t;
                             }
                         });
-        List<V> results = new ArrayList<>();
         try {
             List<Future<V>> futures =
                     timeout == 0L
