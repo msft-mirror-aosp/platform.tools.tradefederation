@@ -84,6 +84,7 @@ public class TradefedFeatureClient implements AutoCloseable {
             } else {
                 CLog.w("Reference id is null.");
             }
+            CLog.d("%s", request);
             response = mBlockingStub.triggerFeature(request.build());
         } catch (StatusRuntimeException e) {
             response =
