@@ -268,6 +268,8 @@ public class NativeDevice
     // If we increase the number of props, then increase the cache size of mPropertiesCache.
     private final Set<String> propsToPrefetch =
             ImmutableSet.of("ro.build.version.sdk", "ro.build.version.codename", "ro.build.id");
+    // Avoid caching any properties in those namespace
+    private final Set<String> NEVER_CACHE_PROPERTIES = ImmutableSet.of("vendor.debug", "ro.boot");
 
     /** Interface for a generic device communication attempt. */
     abstract interface DeviceAction {
@@ -655,8 +657,10 @@ public class NativeDevice
             }
             property = result.getStdout().trim();
             if (property != null) {
-                // Manage the cache manually to maintain exception handling
-                mPropertiesCache.put(name, property);
+                if (!NEVER_CACHE_PROPERTIES.stream().anyMatch(p -> name.startsWith(p))) {
+                    // Manage the cache manually to maintain exception handling
+                    mPropertiesCache.put(name, property);
+                }
             }
             return property;
         }
