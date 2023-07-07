@@ -168,6 +168,14 @@ public class RemoteZip {
             throws BuildRetrievalError, IOException {
         long startTime = System.currentTimeMillis();
 
+        for (CentralDirectoryInfo info : new ArrayList<>(files)) {
+            File targetFile = new File(destDir, info.getFileName());
+            if (targetFile.exists()) {
+                files.remove(info);
+                CLog.d("%s already exists, skip re-download.", info.getFileName());
+            }
+        }
+
         // Remove from download anything that is in our cache
         if (mUseCache) {
             CLog.d("RemoteZip caching is enabled, evaluating.");
@@ -227,6 +235,12 @@ public class RemoteZip {
                                         new File(
                                                 Paths.get(destDir.toString(), entry.getFileName())
                                                         .toString());
+                                if (targetFile.exists()) {
+                                    CLog.d(
+                                            "Downloaded %s already exists, skip partial unzip.",
+                                            entry.getFileName());
+                                    continue;
+                                }
                                 CLog.d("Downloaded %s", entry.getFileName());
                                 LocalFileHeader localFileHeader =
                                         new LocalFileHeader(
