@@ -26,6 +26,7 @@ import com.android.tradefed.build.DeviceFolderBuildInfoTest;
 import com.android.tradefed.build.FileDownloadCacheTest;
 import com.android.tradefed.build.LocalDeviceBuildProviderTest;
 import com.android.tradefed.build.OtaZipfileBuildProviderTest;
+import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
 import com.android.tradefed.cache.ModifiedFilesParserTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
@@ -492,6 +493,9 @@ import org.junit.runners.Suite.SuiteClasses;
     FileDownloadCacheTest.class,
     LocalDeviceBuildProviderTest.class,
     OtaZipfileBuildProviderTest.class,
+
+    // build.cache
+    PartialZipDownloadCacheTest.class,
 
     // cache
     ModifiedFilesParserTest.class,
