@@ -637,8 +637,12 @@ public class ZipUtil {
         }
 
         // Validate CRC
-        if (FileUtil.calculateCrc32(targetFile) != zipEntry.getCrc()) {
-            throw new IOException(String.format("Failed to match CRC for file %s", targetFile));
+        long targetFileCrc = FileUtil.calculateCrc32(targetFile);
+        if (targetFileCrc != zipEntry.getCrc()) {
+            throw new IOException(
+                    String.format(
+                            "Failed to match CRC for file %s [expected=%s, actual=%s]",
+                            targetFile, zipEntry.getCrc(), targetFileCrc));
         }
     }
 }
