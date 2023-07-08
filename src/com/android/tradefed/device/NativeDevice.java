@@ -269,7 +269,8 @@ public class NativeDevice
     private final Set<String> propsToPrefetch =
             ImmutableSet.of("ro.build.version.sdk", "ro.build.version.codename", "ro.build.id");
     // Avoid caching any properties in those namespace
-    private final Set<String> NEVER_CACHE_PROPERTIES = ImmutableSet.of("vendor.debug", "ro.boot");
+    private static final Set<String> NEVER_CACHE_PROPERTIES =
+            ImmutableSet.of("vendor.debug", "ro.boot");
 
     /** Interface for a generic device communication attempt. */
     abstract interface DeviceAction {
