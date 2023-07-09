@@ -180,7 +180,8 @@ public class TestDiscoveryExecutor {
     private Set<String> discoverTestModulesFromTests(List<IRemoteTest> testList)
             throws IllegalStateException, TestDiscoveryException {
         Set<String> testModules = new LinkedHashSet<String>();
-        Set<String> includeFilters = new LinkedHashSet<>();
+        Set<String> includeFilters = new LinkedHashSet<String>();
+        Set<String> excludeFilters = new LinkedHashSet<String>();
         // Collect include filters from every test.
         for (IRemoteTest test : testList) {
             if (!(test instanceof BaseTestSuite)) {
@@ -202,6 +203,7 @@ public class TestDiscoveryExecutor {
                 ((TestMappingSuiteRunner) test).loadTestInfos();
             }
             Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
+            excludeFilters.addAll(((BaseTestSuite) test).getExcludeFilter());
             MultiMap<String, String> moduleMetadataIncludeFilters =
                     ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
             // Include/Exclude filters in suites are evaluated first,
@@ -264,6 +266,8 @@ public class TestDiscoveryExecutor {
             System.out.println(String.format("include filters: %s", includeFilters));
         }
         testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
+        // Any directly excluded won't be discovered since it shouldn't run
+        testModules.removeAll(excludeFilters);
         return testModules;
     }
 
