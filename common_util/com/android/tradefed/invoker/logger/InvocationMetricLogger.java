@@ -66,6 +66,7 @@ public class InvocationMetricLogger {
                 "sandbox_jar_staging_partial_download_FEATURE_count", true),
         SANDBOX_JAR_STAGING_PARTIAL_DOWNLOAD_SUCCESS_COUNT(
                 "sandbox_jar_staging_partial_download_SUCCESS_count", true),
+        TEST_DISCOVERY_MODULE_COUNT("test_discovery_module_count", true),
         // -- Disk memory usage --
         // Approximate peak disk space usage of the invocation
         // Represent files that would usually live for the full invocation (min usage)
