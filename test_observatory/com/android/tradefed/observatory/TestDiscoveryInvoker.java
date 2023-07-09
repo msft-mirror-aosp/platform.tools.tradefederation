@@ -20,6 +20,8 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.ArgsOptionParser;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
@@ -518,6 +520,8 @@ public class TestDiscoveryInvoker {
                 testModules.add(jsonArray.getString(i));
             }
         }
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
         return testModules;
     }
 
