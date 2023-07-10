@@ -16,7 +16,10 @@
 package com.android.tradefed.device.connection;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
+import com.android.tradefed.device.internal.DeviceResetHandler;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
@@ -66,6 +69,24 @@ public class AdbTcpConnection extends DefaultConnection {
         super.reconnect(serial);
         adbTcpConnect(getHostName(serial), getPortNum(serial));
         waitForAdbConnect(serial, WAIT_FOR_ADB_CONNECT);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void recoverVirtualDevice(ITestDevice device, DeviceNotAvailableException dnae)
+            throws DeviceNotAvailableException {
+        DeviceResetHandler recoveryHandler = new DeviceResetHandler();
+        boolean recoverSuccess = recoveryHandler.resetDevice(device);
+        if (recoverSuccess) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricLogger.InvocationMetricKey.DEVICE_RECOVERED_FROM_DEVICE_RESET,
+                    1);
+        } else {
+            throw new DeviceNotAvailableException(
+                    String.format("Failed to recover device: %s", device.getSerialNumber()),
+                    device.getSerialNumber(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
+        }
     }
 
     /**

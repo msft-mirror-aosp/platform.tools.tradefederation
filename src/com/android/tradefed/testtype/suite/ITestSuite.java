@@ -307,6 +307,13 @@ public abstract class ITestSuite
     )
     private boolean mIsolatedModule = false;
 
+    @Option(
+            name = "recover-device-by-cvd",
+            description =
+                    "Try to recover the device by cvd tool when the device is gone during test"
+                            + " running.")
+    protected boolean mRecoverDeviceByCvd = false;
+
     /** @deprecated to be deleted when next version is deployed */
     @Deprecated
     @Option(
@@ -922,6 +929,9 @@ public abstract class ITestSuite
             }
             if (mCollectTestsOnly) {
                 module.setCollectTestsOnly(mCollectTestsOnly);
+            }
+            if (mRecoverDeviceByCvd) {
+                module.setRecoverVirtualDevice(mRecoverDeviceByCvd);
             }
             // Pass the run defined collectors to be used.
             module.setMetricCollectors(CollectorHelper.cloneCollectors(mMetricCollectors));
