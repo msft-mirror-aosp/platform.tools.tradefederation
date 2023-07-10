@@ -74,7 +74,6 @@ java_library_host {
     ],
     static_libs: [
         "grpc-java",
-        "grpc-java-okhttp",
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
