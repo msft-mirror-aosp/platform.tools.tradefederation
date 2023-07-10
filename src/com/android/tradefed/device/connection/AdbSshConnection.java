@@ -569,8 +569,10 @@ public class AdbSshConnection extends AdbTcpConnection {
             return powerwashRes;
         }
 
-        ((NativeDevice) getDevice()).getMonitor().waitForDeviceAvailable();
-        ((NativeDevice) getDevice()).resetContentProviderSetup();
+        ((IManagedTestDevice) getDevice()).getMonitor().waitForDeviceAvailable();
+        if (getDevice() instanceof NativeDevice) {
+            ((NativeDevice) getDevice()).resetContentProviderSetup();
+        }
         return powerwashRes;
     }
 
