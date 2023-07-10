@@ -4861,11 +4861,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertTrue(mTestDevice.hasFeature("feature:com.google.android.feature.EXCHANGE_6_2"));
@@ -4876,11 +4879,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertTrue(mTestDevice.hasFeature("com.google.android.feature.EXCHANGE_6_2"));
@@ -4892,11 +4898,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:test"));
@@ -4908,11 +4917,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:com.google.android.feature"));
@@ -4930,12 +4942,15 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD_VERSIONED=2\n"
-                                + "feature:org.com.google.android.feature.GOOGLE_BUILD_ORG=1\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD_EXT";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                    + "feature:com.google.android.feature.GOOGLE_BUILD_VERSIONED=2\n"
+                                    + "feature:org.com.google.android.feature.GOOGLE_BUILD_ORG=1\n"
+                                    + "feature:com.google.android.feature.GOOGLE_BUILD_EXT");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:com.google.android.feature"));
