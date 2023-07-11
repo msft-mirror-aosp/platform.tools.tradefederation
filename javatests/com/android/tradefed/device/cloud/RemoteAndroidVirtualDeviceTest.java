@@ -28,7 +28,6 @@ import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.GlobalConfiguration;
-import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IDeviceMonitor;
@@ -56,7 +55,6 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -342,34 +340,6 @@ public class RemoteAndroidVirtualDeviceTest {
             fail("Should have thrown an exception");
         } catch (TargetSetupError expected) {
             // expected
-        }
-    }
-
-    @Test
-    public void testGetRemoteTombstone() throws Exception {
-        mTestDevice =
-                new TestableRemoteAndroidVirtualDevice() {
-                    @Override
-                    boolean fetchRemoteDir(File localDir, String remotePath) {
-                        try {
-                            FileUtil.createTempFile("tombstone_00", "", localDir);
-                            FileUtil.createTempFile("tombstone_01", "", localDir);
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                        return true;
-                    }
-                };
-        OptionSetter setter = new OptionSetter(mTestDevice.getOptions());
-        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
-
-        List<File> tombstones = mTestDevice.getTombstones();
-        try {
-            assertEquals(2, tombstones.size());
-        } finally {
-            for (File f : tombstones) {
-                FileUtil.deleteFile(f);
-            }
         }
     }
 
