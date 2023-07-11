@@ -275,6 +275,24 @@ public class ConfigurationUtil {
      */
     public static Set<File> getConfigNamesFileFromDirs(
             String subPath, List<File> dirs, List<String> configNamePatterns) {
+        return getConfigNamesFileFromDirs(subPath, dirs, configNamePatterns, false);
+    }
+
+    /**
+     * Search a particular pattern of in the given directories.
+     *
+     * @param subPath The location where to look for configuration. Can be null.
+     * @param dirs A list of {@link File} of extra directories to search for test configs
+     * @param configNamePatterns the list of patterns for files to be found.
+     * @param includeDuplicateFileNames whether to include config files with same name but different
+     *     content.
+     * @return the set of {@link File} that were found.
+     */
+    public static Set<File> getConfigNamesFileFromDirs(
+            String subPath,
+            List<File> dirs,
+            List<String> configNamePatterns,
+            boolean includeDuplicateFileNames) {
         Set<File> configNames = new LinkedHashSet<>();
         for (File dir : dirs) {
             if (subPath != null) {
@@ -292,14 +310,14 @@ public class ConfigurationUtil {
                 CLog.w("Failed to get test config files from directory %s", dir.getAbsolutePath());
             }
         }
-        return dedupFiles(configNames);
+        return dedupFiles(configNames, includeDuplicateFileNames);
     }
 
     /**
      * From a same tests dir we only expect a single instance of each names, so we dedup the files
      * if that happens.
      */
-    private static Set<File> dedupFiles(Set<File> origSet) {
+    private static Set<File> dedupFiles(Set<File> origSet, boolean includeDuplicateFileNames) {
         Map<String, List<File>> newMap = new LinkedHashMap<>();
         for (File f : origSet) {
             try {
@@ -316,9 +334,9 @@ public class ConfigurationUtil {
                 List<File> newList = new LinkedList<>();
                 newList.add(f);
                 newMap.put(f.getName(), newList);
-            } else {
+            } else if (includeDuplicateFileNames) {
                 // Two files with same name may have different contents. Make sure they are
-                // not identical.
+                // identical. if not, add them to the list.
                 boolean isSameContent = false;
                 for (File uniqueFiles : newMap.get(f.getName())) {
                     try {
