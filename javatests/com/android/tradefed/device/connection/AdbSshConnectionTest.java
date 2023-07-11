@@ -38,6 +38,7 @@ import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 
 import com.google.common.net.HostAndPort;
@@ -51,7 +52,10 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
+import java.io.File;
+import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
 
 /** Unit tests for {@link AdbSshConnection}. */
 @RunWith(JUnit4.class)
@@ -83,9 +87,11 @@ public class AdbSshConnectionTest {
     }
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         mOptions = new TestDeviceOptions();
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
         when(mMockDevice.getSerialNumber()).thenReturn(MOCK_DEVICE_SERIAL);
         when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
         when(mMockDevice.getOptions()).thenReturn(mOptions);
@@ -312,5 +318,37 @@ public class AdbSshConnectionTest {
         // Launch GCE before powerwash.
         mConnection.initializeConnection();
         mConnection.powerwashGce(instanceUser, 2);
+    }
+
+    @Test
+    public void testGetRemoteTombstone() throws Exception {
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger)) {
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+
+                    @Override
+                    boolean fetchRemoteDir(File localDir, String remotePath) {
+                        try {
+                            FileUtil.createTempFile("tombstone_00", "", localDir);
+                            FileUtil.createTempFile("tombstone_01", "", localDir);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                        return true;
+                    }
+                };
+        List<File> tombstones = mConnection.getTombstones();
+        try {
+            assertEquals(2, tombstones.size());
+        } finally {
+            for (File f : tombstones) {
+                FileUtil.deleteFile(f);
+            }
+        }
     }
 }
