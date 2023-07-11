@@ -45,10 +45,10 @@ public class ActiveTrace {
     private final long traceUuid;
     private final int uid = 5555; // TODO: collect a real uid
     private final boolean mainTradefedProcess;
-    private final Map<Long, Long> mThreadToTracker;
+    private final Map<String, Long> mThreadToTracker;
     // File where the final trace gets outputed
     private File mTraceOutput;
-
+    
     public ActiveTrace(long pid, long tid) {
         this(pid, tid, false);
     }
@@ -132,12 +132,12 @@ public class ActiveTrace {
             String categories, String name, int threadId, String threadName, TrackEvent.Type type) {
         long traceIdentifier = traceUuid;
         if (threadId != this.tid) {
-            if (mThreadToTracker.containsKey(Long.valueOf(threadId))) {
-                traceIdentifier = mThreadToTracker.get(Long.valueOf(threadId));
+            if (mThreadToTracker.containsKey(Integer.toString(threadId))) {
+                traceIdentifier = mThreadToTracker.get(Integer.toString(threadId));
             } else {
                 traceIdentifier = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
                 createThreadTracker((int) pid, threadId, threadName, traceIdentifier);
-                mThreadToTracker.put(Long.valueOf(threadId), Long.valueOf(traceIdentifier));
+                mThreadToTracker.put(Integer.toString(threadId), Long.valueOf(traceIdentifier));
             }
         }
         TracePacket.Builder tracePacket =
