@@ -32,6 +32,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -299,7 +300,7 @@ public class ConfigurationUtil {
      * if that happens.
      */
     private static Set<File> dedupFiles(Set<File> origSet) {
-        Map<String, File> newMap = new LinkedHashMap<>();
+        Map<String, List<File>> newMap = new LinkedHashMap<>();
         for (File f : origSet) {
             try {
                 if (!FileUtil.readStringFromFile(f).contains("<configuration")) {
@@ -312,9 +313,35 @@ public class ConfigurationUtil {
             }
             // Always keep the first found
             if (!newMap.keySet().contains(f.getName())) {
-                newMap.put(f.getName(), f);
+                List<File> newList = new LinkedList<>();
+                newList.add(f);
+                newMap.put(f.getName(), newList);
+            } else {
+                // Two files with same name may have different contents. Make sure they are
+                // not identical.
+                boolean isSameContent = false;
+                for (File uniqueFiles : newMap.get(f.getName())) {
+                    try {
+                        isSameContent = FileUtil.compareFileContents(uniqueFiles, f);
+                        if (isSameContent) {
+                            break;
+                        }
+                    } catch (IOException e) {
+                        CLog.e(e);
+                    }
+                }
+                if (!isSameContent) {
+                    newMap.get(f.getName()).add(f);
+                    CLog.d(
+                            "Config %s already exists, but content is different. Not skipping.",
+                            f.getName());
+                }
             }
         }
-        return new LinkedHashSet<>(newMap.values());
+        Set<File> uniqueFiles = new LinkedHashSet<>();
+        for (List<File> files : newMap.values()) {
+            uniqueFiles.addAll(files);
+        }
+        return uniqueFiles;
     }
 }
