@@ -251,6 +251,7 @@ import com.android.tradefed.targetprep.BaseTargetPreparerTest;
 import com.android.tradefed.targetprep.CreateUserPreparerTest;
 import com.android.tradefed.targetprep.DefaultTestsZipInstallerTest;
 import com.android.tradefed.targetprep.DeviceFlashPreparerTest;
+import com.android.tradefed.targetprep.DeviceOwnerTargetPreparerTest;
 import com.android.tradefed.targetprep.DeviceSetupTest;
 import com.android.tradefed.targetprep.DeviceStorageFillerTest;
 import com.android.tradefed.targetprep.DeviceStringPusherTest;
@@ -775,6 +776,7 @@ import org.junit.runners.Suite.SuiteClasses;
     CreateUserPreparerTest.class,
     DefaultTestsZipInstallerTest.class,
     DeviceFlashPreparerTest.class,
+    DeviceOwnerTargetPreparerTest.class,
     DeviceSetupTest.class,
     DeviceStorageFillerTest.class,
     DeviceStringPusherTest.class,
