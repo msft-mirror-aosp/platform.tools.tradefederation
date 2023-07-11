@@ -26,22 +26,19 @@ import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
+import com.android.tradefed.device.connection.AdbSshConnection;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
-import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.net.HostAndPort;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import javax.annotation.Nullable;
@@ -58,8 +55,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
     private GceManager mGceHandler = null;
     private GceSshTunnelMonitor mGceSshMonitor;
     private DeviceNotAvailableException mTunnelInitFailed = null;
-
-    private static final long FETCH_TOMBSTONES_TIMEOUT_MS = 5 * 60 * 1000;
 
     /**
      * Creates a {@link RemoteAndroidVirtualDevice}.
@@ -172,27 +167,9 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
     public List<File> getTombstones() throws DeviceNotAvailableException {
         InstanceType type = getOptions().getInstanceType();
         if (InstanceType.CUTTLEFISH.equals(type) || InstanceType.REMOTE_NESTED_AVD.equals(type)) {
-            List<File> tombs = new ArrayList<>();
-            String remoteRuntimePath =
-                    String.format(
-                                    CommonLogRemoteFileUtil.NESTED_REMOTE_LOG_DIR,
-                                    getOptions().getInstanceUser())
-                            + "tombstones/*";
-            File localDir = null;
-            try {
-                localDir = FileUtil.createTempDir("tombstones");
-            } catch (IOException e) {
-                CLog.e(e);
-                return tombs;
+            if (getConnection() instanceof AdbSshConnection) {
+                return ((AdbSshConnection) getConnection()).getTombstones();
             }
-            if (!fetchRemoteDir(localDir, remoteRuntimePath)) {
-                CLog.e("Failed to pull %s", remoteRuntimePath);
-                FileUtil.recursiveDelete(localDir);
-            } else {
-                tombs.addAll(Arrays.asList(localDir.listFiles()));
-                localDir.deleteOnExit();
-            }
-            return tombs;
         }
         // If it's not Cuttlefish, use the standard call.
         return super.getTombstones();
@@ -239,17 +216,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
             return null;
         }
         return mGceAvd;
-    }
-
-    @VisibleForTesting
-    boolean fetchRemoteDir(File localDir, String remotePath) {
-        return RemoteFileUtil.fetchRemoteDir(
-                mGceAvd,
-                getOptions(),
-                getRunUtil(),
-                FETCH_TOMBSTONES_TIMEOUT_MS,
-                remotePath,
-                localDir);
     }
 
     /**
