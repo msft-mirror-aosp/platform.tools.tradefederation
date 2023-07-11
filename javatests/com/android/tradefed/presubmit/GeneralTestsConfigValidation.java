@@ -316,7 +316,8 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             "PtsCoreAuthTestCases.config",
                             "PtsCoreGetclientTestCases.config",
                             "PtsKmsGetfbTestCases.config",
-                            "PtsKmsFlipTestCases.config"));
+                            "PtsKmsFlipTestCases.config",
+                            "s2-geometry-library-java-tests.config"));
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
