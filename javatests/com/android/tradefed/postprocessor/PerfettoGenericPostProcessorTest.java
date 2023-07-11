@@ -76,6 +76,8 @@ public class PerfettoGenericPostProcessorTest {
 
     File perfettoMetricProtoFile = null;
 
+    private static final Boolean DEBUG = false;
+
     @Before
     public void setUp() throws ConfigurationException {
         initMocks(this);
@@ -505,6 +507,50 @@ public class PerfettoGenericPostProcessorTest {
                 5040562);
     }
 
+    @Test
+    public void testBlockingCallsMetric() throws ConfigurationException, IOException {
+        setupPerfettoMetricFile(METRIC_FILE_FORMAT.text, true, true);
+        mOptionSetter.setOptionValue(PREFIX_OPTION, PREFIX_OPTION_VALUE);
+        mOptionSetter.setOptionValue(KEY_PREFIX_OPTION, "perfetto.protos.AndroidBlockingCall.name");
+
+        mOptionSetter.setOptionValue(REPLACE_REGEX_OPTION, "android_blocking_calls_cuj_metric",
+                "android_blocking_call");
+        mOptionSetter.setOptionValue(REGEX_OPTION_VALUE,
+                "android_blocking_calls_cuj_metric.*calls-name-.*"
+                        + "(min_dur_ms|max_dur|total_dur|cnt).*");
+
+        Map<String, LogFile> testLogs = new HashMap<>();
+        testLogs.put(PREFIX_OPTION_VALUE,
+                new LogFile(perfettoMetricProtoFile.getAbsolutePath(), "some.url",
+                        LogDataType.TEXTPB));
+        Map<String, Metric.Builder> parsedMetrics = mProcessor.processRunMetricsAndLogs(
+                new HashMap<>(), testLogs);
+
+        if (DEBUG) {
+            printOutputMetricsForDebug(parsedMetrics);
+        }
+        assertMetricsContain(parsedMetrics,
+                "perfetto_android_blocking_call-cuj-name-TASKBAR_EXPAND-blocking_calls-name-AIDL"
+                        + "::java::ITrustManager::isDeviceSecure::server-total_dur_ms", 1);
+
+        assertMetricsContain(parsedMetrics,
+                "perfetto_android_blocking_call-cuj-name-TASKBAR_EXPAND-blocking_calls-name-AIDL"
+                        + "::java::ITrustManager::isDeviceSecure::server-min_dur_ms", 0);
+        assertMetricsContain(parsedMetrics,
+                "perfetto_android_blocking_call-cuj-name-TASKBAR_EXPAND-blocking_calls-name-AIDL"
+                        + "::java::ITrustManager::isDeviceSecure::server-max_dur_ms", 1);
+
+        assertMetricsContain(parsedMetrics,
+                "perfetto_android_blocking_call-cuj-name-ACTION_REQUEST_IME_HIDDEN"
+                        + "::HIDE_SOFT_INPUT-blocking_calls-name-AIDL::java::ITrustManager"
+                        + "::isDeviceSecure::server-total_dur_ms", 1);
+    }
+
+    private void printOutputMetricsForDebug(Map<String, Metric.Builder> metrics) {
+        System.out.println("\n\noutput metrics:\n\n");
+        metrics.forEach((k, v) -> System.out.println(k + " value: " + v));
+    }
+
     /** Test that post processor runtime is reported if metrics are present. */
     @Test
     public void testReportsRuntime() throws ConfigurationException, IOException {
@@ -742,6 +788,44 @@ public class PerfettoGenericPostProcessorTest {
                         + "      }\n"
                         + "    }\n"
                         + " }\n"
+                        + "}\n"
+                        + "android_blocking_calls_cuj_metric {\n"
+                        + "  cuj {\n"
+                        + "    id: 1\n"
+                        + "    name: \"TASKBAR_EXPAND\"\n"
+                        + "    process {\n"
+                        + "      name: \"com.google.android.apps.nexuslauncher\"\n"
+                        + "      uid: 10248\n"
+                        + "      pid: 8834\n"
+                        + "    }\n"
+                        + "    ts: 5124565418314\n"
+                        + "    dur: 215758545\n"
+                        + "    blocking_calls {\n"
+                        + "      name: \"AIDL::java::ITrustManager::isDeviceSecure::server\"\n"
+                        + "      cnt: 3\n"
+                        + "      total_dur_ms: 1\n"
+                        + "      max_dur_ms: 1\n"
+                        + "      min_dur_ms: 0\n"
+                        + "    }\n"
+                        + "  }\n"
+                        + "  cuj {\n"
+                        + "    id: 2\n"
+                        + "    name: \"ACTION_REQUEST_IME_HIDDEN::HIDE_SOFT_INPUT\"\n"
+                        + "    process {\n"
+                        + "      name: \"com.google.android.apps.nexuslauncher\"\n"
+                        + "      uid: 10248\n"
+                        + "      pid: 8834\n"
+                        + "    }\n"
+                        + "    ts: 5125365576395\n"
+                        + "    dur: 306844\n"
+                        + "    blocking_calls {\n"
+                        + "      name: \"AIDL::java::ITrustManager::isDeviceSecure::server\"\n"
+                        + "      cnt: 3\n"
+                        + "      total_dur_ms: 1\n"
+                        + "      max_dur_ms: 1\n"
+                        + "      min_dur_ms: 0\n"
+                        + "    }\n"
+                        + "  }\n"
                         + "}";
 
         String perfettoTextContentWithoutMetricProto =
