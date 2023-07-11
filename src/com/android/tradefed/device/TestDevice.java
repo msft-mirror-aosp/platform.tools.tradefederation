@@ -2119,7 +2119,15 @@ public class TestDevice extends NativeDevice {
             feature = "feature:" + feature;
         }
         final String versionedFeature = feature + "=";
-        String commandOutput = executeShellCommand("pm list features");
+        CommandResult commandResult = executeShellV2Command("pm list features");
+        if (!CommandStatus.SUCCESS.equals(commandResult.getStatus())) {
+            throw new DeviceRuntimeException(
+                    String.format(
+                            "Failed to list features, command returned: stdout: %s, stderr: %s",
+                            commandResult.getStdout(), commandResult.getStderr()),
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+        String commandOutput = commandResult.getStdout();
         for (String line: commandOutput.split("\\s+")) {
             // Each line in the output of the command has the format
             // "feature:{FEATURE_VALUE}[={FEATURE_VERSION}]".
