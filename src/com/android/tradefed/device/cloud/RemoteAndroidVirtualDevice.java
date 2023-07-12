@@ -28,12 +28,9 @@ import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.connection.AdbSshConnection;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.result.error.DeviceErrorIdentifier;
-import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
-import com.android.tradefed.util.MultiMap;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.net.HostAndPort;
@@ -68,64 +65,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
         super(device, stateMonitor, allocationMonitor);
     }
 
-    /** Launch the actual gce device based on the build info. */
-    protected void launchGce(IBuildInfo buildInfo, MultiMap<String, String> attributes)
-            throws TargetSetupError {
-        TargetSetupError exception = null;
-        for (int attempt = 0; attempt < getOptions().getGceMaxAttempt(); attempt++) {
-            try {
-                // Clear exception before each attempt.
-                exception = null;
-                mGceAvd =
-                        getGceHandler()
-                                .startGce(
-                                        getInitialIp(),
-                                        getInitialUser(),
-                                        getInitialDeviceNumOffset(),
-                                        attributes,
-                                        getLogger());
-                if (mGceAvd != null) {
-                    if (GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
-                        break;
-                    }
-                    CLog.w(
-                            "Failed to start AVD with attempt: %s out of %s, error: %s",
-                            attempt + 1, getOptions().getGceMaxAttempt(), mGceAvd.getErrors());
-                }
-            } catch (TargetSetupError tse) {
-                CLog.w(
-                        "Failed to start Gce with attempt: %s out of %s. With Exception: %s",
-                        attempt + 1, getOptions().getGceMaxAttempt(), tse);
-                exception = tse;
-
-                if (getOptions().useOxygen()) {
-                    OxygenUtil util = new OxygenUtil();
-                    util.downloadLaunchFailureLogs(tse, getLogger());
-                }
-            }
-        }
-        if (exception != null) {
-            throw exception;
-        } else {
-            CLog.i("GCE AVD has been started: %s", mGceAvd);
-            ErrorIdentifier errorIdentifier =
-                    (mGceAvd.getErrorType() != null)
-                            ? mGceAvd.getErrorType()
-                            : DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE;
-            if (GceAvdInfo.GceStatus.BOOT_FAIL.equals(mGceAvd.getStatus())) {
-                String errorMsg =
-                        String.format(
-                                "Device failed to boot. Error from Acloud: %s",
-                                mGceAvd.getErrors());
-                throw new TargetSetupError(errorMsg, getDeviceDescriptor(), errorIdentifier);
-            } else if (GceAvdInfo.GceStatus.FAIL.equals(mGceAvd.getStatus())) {
-                throw new TargetSetupError(
-                        mGceAvd.getErrors(), getDeviceDescriptor(), errorIdentifier);
-            }
-        }
-        createGceSshMonitor(this, buildInfo, mGceAvd.hostAndPort(), this.getOptions());
-    }
-
     /** Create an ssh tunnel, connect to it, and keep the connection alive. */
     void createGceSshMonitor(
             ITestDevice device,
@@ -134,29 +73,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
             TestDeviceOptions deviceOptions) {
         mGceSshMonitor = new GceSshTunnelMonitor(device, buildInfo, hostAndPort, deviceOptions);
         mGceSshMonitor.start();
-    }
-
-    /** Check if the tunnel monitor is running. */
-    protected void waitForTunnelOnline(final long waitTime) throws DeviceNotAvailableException {
-        CLog.i("Waiting %d ms for tunnel to be restarted", waitTime);
-        long startTime = getCurrentTime();
-        while (getCurrentTime() - startTime < waitTime) {
-            if (getGceSshMonitor() == null) {
-                CLog.e("Tunnel Thread terminated, something went wrong with the device.");
-                break;
-            }
-            if (getGceSshMonitor().isTunnelAlive()) {
-                CLog.d("Tunnel online again, resuming.");
-                return;
-            }
-            getRunUtil().sleep(RETRY_INTERVAL_MS);
-        }
-        mTunnelInitFailed =
-                new DeviceNotAvailableException(
-                        String.format("Tunnel did not come back online after %sms", waitTime),
-                        getSerialNumber(),
-                        DeviceErrorIdentifier.FAILED_TO_CONNECT_TO_GCE);
-        throw mTunnelInitFailed;
     }
 
     /**
@@ -234,11 +150,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
     public void setGceSshMonitor(GceSshTunnelMonitor gceSshMonitor) {
         CLog.i("Overriding internal GCE SSH monitor.");
         mGceSshMonitor = gceSshMonitor;
-    }
-
-    /** Returns the current system time. Exposed for testing. */
-    protected long getCurrentTime() {
-        return System.currentTimeMillis();
     }
 
     /** Returns the instance of the {@link com.android.tradefed.device.cloud.GceManager}. */
