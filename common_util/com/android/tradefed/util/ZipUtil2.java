@@ -15,12 +15,15 @@
  */
 package com.android.tradefed.util;
 
+import com.android.tradefed.error.HarnessIOException;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Enumeration;
@@ -112,6 +115,11 @@ public class ZipUtil2 {
         // Extract fast
         try (java.util.zip.ZipFile zipFile = new java.util.zip.ZipFile(toUnzip)) {
             ZipUtil.extractZip(zipFile, destDir);
+        } catch (IOException e) {
+            if (e instanceof FileNotFoundException) {
+                throw new HarnessIOException(e, InfraErrorIdentifier.ARTIFACT_INVALID);
+            }
+            throw e;
         }
         // Then restore permissions
         try (ZipFile zip = new ZipFile(toUnzip)) {
