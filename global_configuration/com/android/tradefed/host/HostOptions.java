@@ -62,7 +62,7 @@ public class HostOptions implements IHostOptions {
             description =
                     "The maximum number of concurrent virtual device startup to avoid resource"
                             + " contentions depending on factors such as network, CPU, I/O etc.")
-    private Integer mConcurrentVirtualDeviceStartupLimit = Integer.MAX_VALUE;
+    private Integer mConcurrentVirtualDeviceStartupLimit = null;
 
     @Option(name = "concurrent-limits", description =
             "The maximum number of concurrent actions of a given type.")
