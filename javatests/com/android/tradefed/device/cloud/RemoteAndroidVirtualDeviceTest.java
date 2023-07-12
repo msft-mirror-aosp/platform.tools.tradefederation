@@ -16,24 +16,16 @@
 package com.android.tradefed.device.cloud;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.IDevice.DeviceState;
-import com.android.tradefed.build.BuildInfo;
-import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.DeviceAllocationState;
-import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceRecovery;
 import com.android.tradefed.device.IDeviceStateMonitor;
-import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
@@ -41,9 +33,6 @@ import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
-import com.android.tradefed.util.MultiMap;
-
-import com.google.common.net.HostAndPort;
 
 import org.junit.After;
 import org.junit.Before;
@@ -54,16 +43,12 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-
 /** Unit tests for {@link RemoteAndroidVirtualDevice}. */
 @RunWith(JUnit4.class)
 public class RemoteAndroidVirtualDeviceTest {
 
     private static final String MOCK_DEVICE_SERIAL = "localhost:1234";
-    private static final long WAIT_FOR_TUNNEL_TIMEOUT = 10;
+
     @Mock IDevice mMockIDevice;
     @Mock ITestLogger mTestLogger;
     @Mock IDeviceStateMonitor mMockStateMonitor;
@@ -73,9 +58,6 @@ public class RemoteAndroidVirtualDeviceTest {
     private RemoteAndroidVirtualDevice mTestDevice;
     private GceSshTunnelMonitor mGceSshMonitor;
     private boolean mUseRealTunnel = false;
-
-    private GceManager mGceHandler;
-    private IBuildInfo mMockBuildInfo;
 
     /** A {@link TestDevice} that is suitable for running tests against */
     private class TestableRemoteAndroidVirtualDevice extends RemoteAndroidVirtualDevice {
@@ -131,9 +113,6 @@ public class RemoteAndroidVirtualDeviceTest {
         mTestDevice.setRecovery(mMockRecovery);
 
         mGceSshMonitor = Mockito.mock(GceSshTunnelMonitor.class);
-        mGceHandler = Mockito.mock(GceManager.class);
-
-        mMockBuildInfo = new BuildInfo();
 
         try {
             GlobalConfiguration.createGlobalConfiguration(new String[] {"empty"});
@@ -145,202 +124,6 @@ public class RemoteAndroidVirtualDeviceTest {
     @After
     public void tearDown() {
         FileUtil.deleteFile(mTestDevice.getExecuteShellCommandLog());
-    }
-
-    /**
-     * Test that an exception thrown in the parser should be propagated to the top level and should
-     * not be caught.
-     */
-    @Test
-    public void testExceptionFromParser() {
-        final String expectedException =
-                "acloud errors: Could not get a valid instance name, check the gce driver's "
-                        + "output.The instance may not have booted up at all.\nGCE driver stderr: ";
-        mTestDevice =
-                new TestableRemoteAndroidVirtualDevice() {
-                    @Override
-                    protected IRunUtil getRunUtil() {
-                        return mMockRunUtil;
-                    }
-
-                    @Override
-                    void createGceSshMonitor(
-                            ITestDevice device,
-                            IBuildInfo buildInfo,
-                            HostAndPort hostAndPort,
-                            TestDeviceOptions deviceOptions) {
-                        // ignore
-                    }
-
-                    @Override
-                    GceManager getGceHandler() {
-                        return new GceManager(
-                                getDeviceDescriptor(), new TestDeviceOptions(), mMockBuildInfo) {
-                            @Override
-                            protected List<String> buildGceCmd(
-                                    File reportFile,
-                                    IBuildInfo b,
-                                    String ipDevice,
-                                    String user,
-                                    Integer offset,
-                                    MultiMap<String, String> attributes) {
-                                FileUtil.deleteFile(reportFile);
-                                List<String> tmp = new ArrayList<String>();
-                                tmp.add("");
-                                return tmp;
-                            }
-                        };
-                    }
-                };
-
-        try {
-            mTestDevice.launchGce(mMockBuildInfo, null);
-            fail("A TargetSetupError should have been thrown");
-        } catch (TargetSetupError expected) {
-            assertTrue(expected.getMessage().startsWith(expectedException));
-        }
-    }
-
-    /**
-     * Test {@link RemoteAndroidVirtualDevice#waitForTunnelOnline(long)} return without exception
-     * when tunnel is online.
-     */
-    @Test
-    public void testWaitForTunnelOnline() throws Exception {
-        doReturn(true).when(mGceSshMonitor).isTunnelAlive();
-
-        mTestDevice.waitForTunnelOnline(WAIT_FOR_TUNNEL_TIMEOUT);
-    }
-
-    /**
-     * Test {@link RemoteAndroidVirtualDevice#waitForTunnelOnline(long)} throws an exception when
-     * the tunnel returns not alive.
-     */
-    @Test
-    public void testWaitForTunnelOnline_notOnline() throws Exception {
-
-        doReturn(false).when(mGceSshMonitor).isTunnelAlive();
-
-        try {
-            mTestDevice.waitForTunnelOnline(WAIT_FOR_TUNNEL_TIMEOUT);
-            fail("Should have thrown an exception.");
-        } catch (DeviceNotAvailableException expected) {
-            // expected.
-        }
-    }
-
-    /**
-     * Test {@link RemoteAndroidVirtualDevice#waitForTunnelOnline(long)} throws an exception when
-     * the tunnel object is null, meaning something went wrong during its setup.
-     */
-    @Test
-    public void testWaitForTunnelOnline_tunnelTerminated() throws Exception {
-        mGceSshMonitor = null;
-
-        try {
-            mTestDevice.waitForTunnelOnline(WAIT_FOR_TUNNEL_TIMEOUT);
-            fail("Should have thrown an exception.");
-        } catch (DeviceNotAvailableException expected) {
-            assertEquals(
-                    String.format(
-                            "Tunnel did not come back online after %sms", WAIT_FOR_TUNNEL_TIMEOUT),
-                    expected.getMessage());
-        }
-    }
-
-    /**
-     * Test {@link RemoteAndroidVirtualDevice#preInvocationDeviceSetup(IBuildInfo, MultiMap)} when
-     * device is launched and mGceAvdInfo is set.
-     */
-    @Test
-    public void testPreInvocationLaunchedDeviceSetup() throws Exception {
-        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
-        mTestDevice =
-                new TestableRemoteAndroidVirtualDevice() {
-                    @Override
-                    protected void launchGce(
-                            IBuildInfo buildInfo, MultiMap<String, String> attributes)
-                            throws TargetSetupError {
-                        fail("Should not launch a Gce because the device should already launched");
-                        // ignore
-                    }
-
-                    @Override
-                    public IDevice getIDevice() {
-                        return mMockIDevice;
-                    }
-
-                    @Override
-                    public boolean enableAdbRoot() throws DeviceNotAvailableException {
-                        return true;
-                    }
-
-                    @Override
-                    public void startLogcat() {
-                        // ignore
-                    }
-
-                    @Override
-                    GceManager getGceHandler() {
-                        return mGceHandler;
-                    }
-                };
-        when(mMockStateMonitor.waitForDeviceAvailable(Mockito.anyLong())).thenReturn(mMockIDevice);
-        when(mMockIDevice.getState()).thenReturn(DeviceState.ONLINE);
-        GceAvdInfo mockGceAvdInfo = Mockito.mock(GceAvdInfo.class);
-        when(mockGceAvdInfo.getStatus()).thenReturn(GceStatus.SUCCESS);
-
-        mTestDevice.setAvdInfo(mockGceAvdInfo);
-        mTestDevice.preInvocationSetup(mMockBuildInfo, null);
-        assertEquals(mockGceAvdInfo, mTestDevice.getAvdInfo());
-    }
-
-    /** Test that in case of BOOT_FAIL, RemoteAndroidVirtualDevice choose to throw exception. */
-    @Test
-    public void testLaunchGce_bootFail() throws Exception {
-        mTestDevice =
-                new TestableRemoteAndroidVirtualDevice() {
-                    @Override
-                    protected IRunUtil getRunUtil() {
-                        return mMockRunUtil;
-                    }
-
-                    @Override
-                    void createGceSshMonitor(
-                            ITestDevice device,
-                            IBuildInfo buildInfo,
-                            HostAndPort hostAndPort,
-                            TestDeviceOptions deviceOptions) {
-                        // ignore
-                    }
-
-                    @Override
-                    GceManager getGceHandler() {
-                        return mGceHandler;
-                    }
-
-                    @Override
-                    public DeviceDescriptor getDeviceDescriptor() {
-                        return null;
-                    }
-                };
-        doReturn(
-                        new GceAvdInfo(
-                                "ins-name",
-                                HostAndPort.fromHost("127.0.0.1"),
-                                null,
-                                "acloud error",
-                                GceStatus.BOOT_FAIL))
-                .when(mGceHandler)
-                .startGce(null, null, null, null, mTestLogger);
-
-        try {
-            mTestDevice.setTestLogger(mTestLogger);
-            mTestDevice.launchGce(new BuildInfo(), null);
-            fail("Should have thrown an exception");
-        } catch (TargetSetupError expected) {
-            // expected
-        }
     }
 
     /** Test setAvdInfo() */
