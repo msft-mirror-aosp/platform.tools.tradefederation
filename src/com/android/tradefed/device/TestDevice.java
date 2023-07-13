@@ -2689,24 +2689,6 @@ public class TestDevice extends NativeDevice {
                                     + " another one.",
                             mStartedMicrodroids.values().iterator().next().cid));
 
-        String microdroidSerial;
-        int vmAdbPort = -1;
-        try {
-            ServerSocket microdroidServerSocket = new ServerSocket(0);
-            vmAdbPort = microdroidServerSocket.getLocalPort();
-            microdroidServerSocket.close();
-        } catch (IOException e) {
-            throw new DeviceRuntimeException(
-                    "Unable to get an unused port for Microdroid.",
-                    e,
-                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
-        }
-
-        microdroidSerial = "localhost:" + vmAdbPort;
-
-        // disconnect from microdroid
-        getRunUtil().runTimedCmd(10000, deviceManager.getAdbPath(), "disconnect", microdroidSerial);
-
         // remove any leftover files under test root
         executeShellV2Command("rm -rf " + TEST_ROOT + "*");
 
@@ -2820,6 +2802,9 @@ public class TestDevice extends NativeDevice {
                     forwardFileToLog(logPath, "MicrodroidLog");
                 });
 
+        int vmAdbPort = forwardMicrodroidAdbPort(cid);
+        String microdroidSerial = "localhost:" + vmAdbPort;
+
         DeviceSelectionOptions microSelection = new DeviceSelectionOptions();
         microSelection.setSerial(microdroidSerial);
         microSelection.setBaseDeviceTypeRequested(BaseDeviceType.NATIVE_DEVICE);
@@ -2857,6 +2842,53 @@ public class TestDevice extends NativeDevice {
         tracker.cid = cid;
         mStartedMicrodroids.put(process, tracker);
         return microdroid;
+    }
+
+    /** Find an unused port and forward microdroid's adb connection. Returns the port number. */
+    private int forwardMicrodroidAdbPort(String cid) {
+        IDeviceManager deviceManager = GlobalConfiguration.getDeviceManagerInstance();
+        boolean forwarded = false;
+        for (int trial = 0; trial < 10; trial++) {
+            int vmAdbPort;
+            String microdroidSerial;
+            try (ServerSocket serverSocket = new ServerSocket(0)) {
+                vmAdbPort = serverSocket.getLocalPort();
+                microdroidSerial = "localhost:" + vmAdbPort;
+            } catch (IOException e) {
+                throw new DeviceRuntimeException(
+                        "Unable to get an unused port for Microdroid.",
+                        e,
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
+            String from = "tcp:" + vmAdbPort;
+            String to = "vsock:" + cid + ":5555";
+
+            CommandResult result =
+                    getRunUtil()
+                            .runTimedCmd(
+                                    10000,
+                                    deviceManager.getAdbPath(),
+                                    "-s",
+                                    getSerialNumber(),
+                                    "forward",
+                                    from,
+                                    to);
+            if (result.getStatus() == CommandStatus.SUCCESS) {
+                return vmAdbPort;
+            }
+
+            if (result.getStderr().contains("Address already in use")) {
+                // retry with other ports
+                continue;
+            } else {
+                throw new DeviceRuntimeException(
+                        "Unable to forward vsock:" + cid + ":5555: " + result.getStderr(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
+        }
+        throw new DeviceRuntimeException(
+                "Unable to get an unused port for Microdroid.",
+                DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
     }
 
     /**
