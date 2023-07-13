@@ -501,7 +501,6 @@ public class TestMapping {
         } finally {
             FileUtil.recursiveDelete(testMappingsDir);
         }
-        CLog.d("TestInfo found: %s", tests);
         return tests;
     }
 
