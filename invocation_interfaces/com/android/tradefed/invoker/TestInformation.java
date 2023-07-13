@@ -237,8 +237,10 @@ public class TestInformation {
                 // approach to do individual download from remote artifact.
                 // Try to stage the files from remote zip files.
                 file = getBuildInfo().stageRemoteFile(fileName, testsDir);
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.STAGE_UNDEFINED_DEPENDENCY, fileName);
+                if (file != null) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.STAGE_UNDEFINED_DEPENDENCY, fileName);
+                }
             } else if (file.isDirectory()) {
                 CLog.d("Found %s as a directory, searching further.", fileName);
                 file = FileUtil.findFile(file, fileName);
