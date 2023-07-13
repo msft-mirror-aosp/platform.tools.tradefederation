@@ -730,6 +730,7 @@ public class RunUtil implements IRunUtil {
                                             "temporary-stdout-%s",
                                             mProcessBuilder.command().get(0)),
                                     ".txt");
+                    stdoutFile.deleteOnExit();
                     mProcessBuilder.redirectOutput(Redirect.appendTo(stdoutFile));
                 }
                 if (stderrFile == null && mStdErr == null) {
@@ -740,6 +741,7 @@ public class RunUtil implements IRunUtil {
                                             "temporary-errout-%s",
                                             mProcessBuilder.command().get(0)),
                                     ".txt");
+                    stderrFile.deleteOnExit();
                     mProcessBuilder.redirectError(Redirect.appendTo(stderrFile));
                 }
                 try {
