@@ -56,8 +56,6 @@ public class RemoteAndroidVirtualDeviceTest {
     @Mock IDeviceMonitor mMockDvcMonitor;
     @Mock IDeviceRecovery mMockRecovery;
     private RemoteAndroidVirtualDevice mTestDevice;
-    private GceSshTunnelMonitor mGceSshMonitor;
-    private boolean mUseRealTunnel = false;
 
     /** A {@link TestDevice} that is suitable for running tests against */
     private class TestableRemoteAndroidVirtualDevice extends RemoteAndroidVirtualDevice {
@@ -71,14 +69,6 @@ public class RemoteAndroidVirtualDeviceTest {
         @Override
         protected IRunUtil getRunUtil() {
             return mMockRunUtil;
-        }
-
-        @Override
-        public GceSshTunnelMonitor getGceSshMonitor() {
-            if (mUseRealTunnel) {
-                return super.getGceSshMonitor();
-            }
-            return mGceSshMonitor;
         }
 
         @Override
@@ -104,15 +94,11 @@ public class RemoteAndroidVirtualDeviceTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
-        mUseRealTunnel = false;
-
         when(mMockIDevice.getSerialNumber()).thenReturn(MOCK_DEVICE_SERIAL);
 
         // A TestDevice with a no-op recoverDevice() implementation
         mTestDevice = new TestableRemoteAndroidVirtualDevice();
         mTestDevice.setRecovery(mMockRecovery);
-
-        mGceSshMonitor = Mockito.mock(GceSshTunnelMonitor.class);
 
         try {
             GlobalConfiguration.createGlobalConfiguration(new String[] {"empty"});
