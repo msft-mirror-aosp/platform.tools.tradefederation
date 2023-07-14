@@ -85,7 +85,12 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
 
             for (File f : workDir.listFiles()) {
                 try (CloseableTraceScope ignored = new CloseableTraceScope("push:" + f.getName())) {
-                    boolean success = getDevice().pushFile(f, "/data/ndb/");
+                    boolean success;
+                    if (f.isDirectory()) {
+                        success = getDevice().pushDir(f, "/data/ndb/");
+                    } else {
+                        success = getDevice().pushFile(f, "/data/ndb/");
+                    }
                     CLog.e("Push successful: %s", success);
                     assertTrue(success);
                 }
