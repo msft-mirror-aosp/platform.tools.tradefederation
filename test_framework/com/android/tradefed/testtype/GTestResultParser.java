@@ -801,7 +801,11 @@ public class GTestResultParser extends MultiLineReceiver {
             mTestRunStartReported = false;
             mTestRunInProgress = false;
         } else if (mTestRunInProgress) {
-            handleTestRunFailed("No test results", InfraErrorIdentifier.UNDETERMINED);
+            // possible only when all tests were executed, but test run completed tag not reported
+            CLog.e(
+                    "All tests were executed, but test run completion not reported."
+                            + "Unable to determine the total run time.");
+            reportTestRunEnded();
             mTestRunInProgress = false;
         } else if (!mSeenOneTestRunStart && !mFailureReported) {
             for (ITestInvocationListener listener : mTestListeners) {
