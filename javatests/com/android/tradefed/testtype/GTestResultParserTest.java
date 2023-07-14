@@ -312,6 +312,26 @@ public class GTestResultParserTest extends GTestParserTestBase {
         assertEquals("Test run incomplete. Expected 11 tests, received 0", cap.getErrorMessage());
     }
 
+    /** Tests the parser when all tests are executed, but doesn't get run end tag from device. */
+    @Test
+    public void testParseSimpleFile_TestsExecutedButNoRunEndTag() throws Exception {
+        String[] contents = readInFile(GTEST_OUTPUT_FILE_14);
+        ITestInvocationListener mockRunListener = mock(ITestInvocationListener.class);
+        GTestResultParser resultParser = new GTestResultParser(TEST_MODULE_NAME, mockRunListener);
+        resultParser.processNewLines(contents);
+        resultParser.flush();
+
+        verify(mockRunListener).testRunStarted(TEST_MODULE_NAME, 1);
+        verify(mockRunListener).testStarted(Mockito.any(), Mockito.anyLong());
+        verify(mockRunListener)
+                .testEnded(
+                        (TestDescription) Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, Metric>>any());
+        verify(mockRunListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+    }
+
     @Test
     public void testParse_interrupted() throws Exception {
         String[] contents = readInFile(GTEST_OUTPUT_FILE_13);
