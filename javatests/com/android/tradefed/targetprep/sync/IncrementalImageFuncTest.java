@@ -89,7 +89,7 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                     if (f.isDirectory()) {
                         success = getDevice().pushDir(f, "/data/ndb/");
                     } else {
-                        success = getDevice().pushFile(f, "/data/ndb/");
+                        success = getDevice().pushFile(f, "/data/ndb/" + f.getName());
                     }
                     CLog.e("Push successful: %s", success);
                     assertTrue(success);
@@ -133,7 +133,7 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
     }
 
     private void inspectCowPatches(File workDir) {
-        File inspect = getBuild().getFile("inspected_cow");
+        File inspect = getBuild().getFile("inspect_cow");
         if (inspect == null) {
             return;
         }
