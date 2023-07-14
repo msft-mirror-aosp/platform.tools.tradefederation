@@ -294,30 +294,36 @@ public class GceManager {
                 // When leasing without wait for boot to finish, use the time spent so far as the
                 // best estimate of cf_fetch_artifact_time_ms.
                 fetchTime = System.currentTimeMillis() - startTime;
-                startTime = System.currentTimeMillis();
                 Boolean bootSuccess = false;
-                long endTime = startTime + getTestDeviceOptions().getGceCmdTimeout();
+                long timeout =
+                        startTime
+                                + getTestDeviceOptions().getGceCmdTimeout()
+                                - System.currentTimeMillis();
+                startTime = System.currentTimeMillis();
                 final String remoteFile =
                         CommonLogRemoteFileUtil.OXYGEN_EMULATOR_LOG_DIR + "3/emulator_stderr.txt";
-                while (System.currentTimeMillis() < endTime) {
-                    res =
-                            remoteSshCommandExecution(
-                                    mGceAvdInfo,
-                                    getTestDeviceOptions(),
-                                    RunUtil.getDefault(),
-                                    10000L,
-                                    "grep",
-                                    "VIRTUAL_DEVICE_BOOT_COMPLETED",
-                                    remoteFile);
-                    if (CommandStatus.SUCCESS.equals(res.getStatus())) {
-                        bootSuccess = true;
-                        CLog.d(
-                                "Device boot completed after %sms, flag located: %s",
-                                System.currentTimeMillis() - startTime, res.getStdout().trim());
-                        break;
-                    }
-                    RunUtil.getDefault().sleep(10000);
+                // Continuously scan cf boot status and exit immediately when the magic string
+                // VIRTUAL_DEVICE_BOOT_COMPLETED is found
+                String cfBootStatusSshCmd =
+                        "tail -F -n +1 "
+                                + remoteFile
+                                + " | grep -m 1 VIRTUAL_DEVICE_BOOT_COMPLETED";
+                String[] cfBootStatusSshCommand = cfBootStatusSshCmd.split(" ");
+
+                res =
+                        remoteSshCommandExecution(
+                                mGceAvdInfo,
+                                getTestDeviceOptions(),
+                                RunUtil.getDefault(),
+                                timeout,
+                                cfBootStatusSshCommand);
+                if (CommandStatus.SUCCESS.equals(res.getStatus())) {
+                    bootSuccess = true;
+                    CLog.d(
+                            "Device boot completed after %sms, flag located: %s",
+                            System.currentTimeMillis() - startTime, res.getStdout().trim());
                 }
+
                 if (!bootSuccess) {
                     if (logger != null) {
                         CommonLogRemoteFileUtil.fetchCommonFiles(
