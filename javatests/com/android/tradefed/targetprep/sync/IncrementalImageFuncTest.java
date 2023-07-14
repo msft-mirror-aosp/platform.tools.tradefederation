@@ -71,6 +71,7 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                     CLog.e("Skipping %s no src or target", partition);
                 }
             }
+            inspectCowPatches(workDir);
 
             getDevice().executeShellV2Command("mkdir -p /data/ndb");
             getDevice().executeShellV2Command("rm -rf /data/ndb/*.patch");
@@ -123,6 +124,24 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             }
             File[] listFiles = workDir.listFiles();
             CLog.e("%s", Arrays.asList(listFiles));
+        }
+    }
+
+    private void inspectCowPatches(File workDir) {
+        File inspect = getBuild().getFile("inspected_cow");
+        if (inspect == null) {
+            return;
+        }
+        FileUtil.chmodGroupRWX(inspect);
+        IRunUtil runUtil = new RunUtil();
+        try (CloseableTraceScope ignored = new CloseableTraceScope("inspect_cow")) {
+            for (File f : workDir.listFiles()) {
+                CommandResult result =
+                        runUtil.runTimedCmd(0L, inspect.getAbsolutePath(), f.getAbsolutePath());
+                CLog.e("Status: %s", result.getStatus());
+                CLog.e("Stdout: %s", result.getStdout());
+                CLog.e("Stderr: %s", result.getStderr());
+            }
         }
     }
 }
