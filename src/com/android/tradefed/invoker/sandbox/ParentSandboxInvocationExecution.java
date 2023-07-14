@@ -93,7 +93,22 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         // TODO address the situation where multi-target preparers are configured
         // (they will be run by both the parent and sandbox if configured)
-        super.doSetup(testInfo, config, listener);
+        boolean parallelSetup = getSandboxOptions(config).shouldParallelSetup();
+        try {
+            super.doSetup(testInfo, config, listener);
+        } catch (DeviceNotAvailableException | TargetSetupError | BuildError | RuntimeException e) {
+            if (parallelSetup) {
+                // Join and clean up since run won't be called.
+                try {
+                    setupThread.join();
+                } catch (InterruptedException ie) {
+                    // Ignore
+                    CLog.e(ie);
+                }
+                SandboxInvocationRunner.teardownSandbox(config);
+            }
+            throw e;
+        }
     }
 
     @Override
@@ -138,7 +153,7 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                         setupThread.join();
                     } catch (InterruptedException ie) {
                         // Ignore
-                        CLog.e(e);
+                        CLog.e(ie);
                     }
                     SandboxInvocationRunner.teardownSandbox(config);
                 }
