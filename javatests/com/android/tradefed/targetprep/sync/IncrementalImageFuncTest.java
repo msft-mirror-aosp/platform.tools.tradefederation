@@ -34,6 +34,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Set;
 
@@ -91,7 +92,7 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                     } else {
                         success = getDevice().pushFile(f, "/data/ndb/" + f.getName());
                     }
-                    CLog.e("Push successful: %s", success);
+                    CLog.e("Push successful.: %s. %s->%s", success, f, "/data/ndb/" + f.getName());
                     assertTrue(success);
                 }
             }
@@ -132,11 +133,13 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
         }
     }
 
-    private void inspectCowPatches(File workDir) {
-        File inspect = getBuild().getFile("inspect_cow");
-        if (inspect == null) {
+    private void inspectCowPatches(File workDir) throws IOException {
+        File inspectZip = getBuild().getFile("inspect_cow.zip");
+        if (inspectZip == null) {
             return;
         }
+        File destDir = ZipUtil2.extractZipToTemp(inspectZip, "inspect_cow_unzip");
+        File inspect = FileUtil.findFile(destDir, "inspect_cow");
         FileUtil.chmodGroupRWX(inspect);
         IRunUtil runUtil = new RunUtil();
         try (CloseableTraceScope ignored = new CloseableTraceScope("inspect_cow")) {
@@ -147,6 +150,8 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                 CLog.e("Stdout: %s", result.getStdout());
                 CLog.e("Stderr: %s", result.getStderr());
             }
+        } finally {
+            FileUtil.recursiveDelete(destDir);
         }
     }
 }
