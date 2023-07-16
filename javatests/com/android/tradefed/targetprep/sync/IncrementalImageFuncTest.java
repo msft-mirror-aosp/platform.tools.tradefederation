@@ -16,7 +16,9 @@
 package com.android.tradefed.targetprep.sync;
 
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
@@ -36,7 +38,9 @@ import org.junit.runner.RunWith;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Basic test to start iterating on device incremental image. */
 @RunWith(DeviceJUnit4ClassRunner.class)
@@ -51,6 +55,13 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                     "system_ext.img",
                     "vendor.img",
                     "vendor_dlkm.img");
+
+    public static class TrackResults {
+        public String imageMd5;
+        public String mountedBlock;
+    }
+
+    private Map<String, TrackResults> partitionToInfo = new ConcurrentHashMap<>();
 
     @Test
     public void testBlockCompareUpdate() throws Exception {
@@ -68,6 +79,9 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                 File possibleTarget = new File(targetDirectory, partition);
                 if (possibleSrc.exists() && possibleTarget.exists()) {
                     blockCompare(blockCompare, possibleSrc, possibleTarget, workDir);
+                    TrackResults newRes = new TrackResults();
+                    newRes.imageMd5 = FileUtil.calculateMd5(possibleTarget);
+                    partitionToInfo.put(FileUtil.getBaseName(partition), newRes);
                 } else {
                     CLog.e("Skipping %s no src or target", partition);
                 }
@@ -100,15 +114,24 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             CommandResult mapOutput =
                     getDevice().executeShellV2Command("snapshotctl map-snapshots /data/ndb/");
             CLog.e("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
-            if (CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
-                getDevice().reboot();
+            if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
+                fail("Failed to map the snapshots.");
             }
 
+            getDevice().reboot();
             // Do Validation
+            getDevice().enableAdbRoot();
+            CommandResult psOutput = getDevice().executeShellV2Command("ps -ef | grep snapuserd");
+            CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
+
+            // TODO: parse output to match mounted partition
+            CommandResult lsOutput = getDevice().executeShellV2Command("ls -l /dev/block/mapper/");
+            CLog.d("stdout: %s, stderr: %s", lsOutput.getStdout(), lsOutput.getStderr());
         } finally {
             FileUtil.recursiveDelete(workDir);
             FileUtil.recursiveDelete(srcDirectory);
             FileUtil.recursiveDelete(targetDirectory);
+            revertToPreviousBuild();
         }
     }
 
@@ -153,5 +176,10 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
         } finally {
             FileUtil.recursiveDelete(destDir);
         }
+    }
+
+    private void revertToPreviousBuild() throws DeviceNotAvailableException {
+        getDevice().executeShellV2Command("rm -f /metadata/ota/snapshot-boot");
+        getDevice().reboot();
     }
 }
