@@ -169,14 +169,18 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
         File inspect = FileUtil.findFile(destDir, "inspect_cow");
         FileUtil.chmodGroupRWX(inspect);
         IRunUtil runUtil = new RunUtil();
+        long sizeOfPatches = 0L;
         try (CloseableTraceScope ignored = new CloseableTraceScope("inspect_cow")) {
             for (File f : workDir.listFiles()) {
                 CommandResult result =
                         runUtil.runTimedCmd(0L, inspect.getAbsolutePath(), f.getAbsolutePath());
-                CLog.e("Status: %s", result.getStatus());
-                CLog.e("Stdout: %s", result.getStdout());
-                CLog.e("Stderr: %s", result.getStderr());
+                CLog.d("Status: %s", result.getStatus());
+                CLog.d("Stdout: %s", result.getStdout());
+                CLog.d("Stderr: %s", result.getStderr());
+                CLog.d("Patch size: %s", f.length());
+                sizeOfPatches += f.length();
             }
+            CLog.d("Total size of patches: %s", sizeOfPatches);
         } finally {
             FileUtil.recursiveDelete(destDir);
         }
