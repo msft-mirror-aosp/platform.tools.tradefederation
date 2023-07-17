@@ -31,6 +31,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.common.truth.Truth;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -59,6 +60,11 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
     public static class TrackResults {
         public String imageMd5;
         public String mountedBlock;
+
+        @Override
+        public String toString() {
+            return "TrackResults [imageMd5=" + imageMd5 + ", mountedBlock=" + mountedBlock + "]";
+        }
     }
 
     private Map<String, TrackResults> partitionToInfo = new ConcurrentHashMap<>();
@@ -124,9 +130,7 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             CommandResult psOutput = getDevice().executeShellV2Command("ps -ef | grep snapuserd");
             CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
 
-            // TODO: parse output to match mounted partition
-            CommandResult lsOutput = getDevice().executeShellV2Command("ls -l /dev/block/mapper/");
-            CLog.d("stdout: %s, stderr: %s", lsOutput.getStdout(), lsOutput.getStderr());
+            listMappingAndCompare(partitionToInfo);
         } finally {
             FileUtil.recursiveDelete(workDir);
             FileUtil.recursiveDelete(srcDirectory);
@@ -175,6 +179,31 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             }
         } finally {
             FileUtil.recursiveDelete(destDir);
+        }
+    }
+
+    private void listMappingAndCompare(Map<String, TrackResults> partitionToInfo)
+            throws DeviceNotAvailableException {
+        CommandResult lsOutput = getDevice().executeShellV2Command("ls -l /dev/block/mapper/");
+        CLog.d("stdout: %s, stderr: %s", lsOutput.getStdout(), lsOutput.getStderr());
+
+        for (String lines : lsOutput.getStdout().split("\n")) {
+            String[] pieces = lines.split(" ");
+            String partition = pieces[7].substring(0, pieces[7].length() - 2);
+            if (partitionToInfo.containsKey(partition)) {
+                partitionToInfo.get(partition).mountedBlock = pieces[9];
+            }
+        }
+        CLog.d("Infos: %s", partitionToInfo);
+
+        for (TrackResults res : partitionToInfo.values()) {
+            CommandResult md5Output =
+                    getDevice().executeShellV2Command("m5sum " + res.mountedBlock);
+            if (!CommandStatus.SUCCESS.equals(md5Output.getStatus())) {
+                fail("Fail to get md5sum from " + res.mountedBlock);
+            }
+            String md5device = md5Output.getStdout().trim();
+            Truth.assertThat(res.imageMd5).isEqualTo(md5device);
         }
     }
 
