@@ -35,6 +35,8 @@ public class TestInfo {
     private List<TestOption> mOptions = new ArrayList<TestOption>();
     // A Set of locations with TEST_MAPPING files that containing the test.
     private Set<String> mSources = new HashSet<String>();
+    // A Set of import paths defined in TEST_MAPPING files.
+    private Set<String> mImportPaths = new HashSet<String>();
     // True if the test should run on host and require no device.
     private boolean mHostOnly = false;
     // A Set of keywords to be matched when filtering tests to run in a Test Mapping suite.
@@ -66,6 +68,14 @@ public class TestInfo {
 
     public void addSources(Set<String> sources) {
         mSources.addAll(sources);
+    }
+
+    public void addImportPaths(Set<String> paths) {
+        mImportPaths.addAll(paths);
+    }
+
+    public Set<String> getImportPaths() {
+        return mImportPaths;
     }
 
     public Set<String> getSources() {
