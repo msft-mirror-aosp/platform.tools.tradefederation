@@ -436,4 +436,56 @@ public class ClusterCommandLauncherTest {
                                     DEVICE_SERIAL,
                                 }));
     }
+
+    @Test
+    public void testRun_excludeFileInJavaClasspath()
+            throws DeviceNotAvailableException, ConfigurationException, IOException {
+        mInvocationContext.addAllocatedDevice("foo", mMockTestDevice);
+        final File tfJar = new File(mRootDir, "tradefed.jar");
+        tfJar.createNewFile();
+        final File fooJar = new File(mTfPath, "foo.jar");
+        fooJar.createNewFile();
+        // Default excluded file
+        final File artJar = new File(mTfPath, "art-run-test.jar");
+        artJar.createNewFile();
+        // Excluded with template path
+        final File bazJar = new File(mTfPath, "baz.jar");
+        bazJar.createNewFile();
+        final String tfPathValue =
+                String.format(
+                        "${TF_WORK_DIR}/%s:${TF_WORK_DIR}/%s:${TF_WORK_DIR}/%s",
+                        tfJar.getName(), mTfPath.getName(), mTfLibDir.getName());
+        final String bazJarPath =
+                String.format("${TF_WORK_DIR}/%s/%s", mTfPath.getName(), bazJar.getName());
+        mOptionSetter.setOptionValue("cluster:env-var", "TF_PATH", tfPathValue);
+        mOptionSetter.setOptionValue("cluster:exclude-file-in-java-classpath", bazJarPath);
+        mOptionSetter.setOptionValue("cluster:command-line", COMMAND);
+        final CommandResult mockCommandResult = new CommandResult(CommandStatus.SUCCESS);
+        when(mMockRunUtil.runTimedCmdWithInput(
+                        Mockito.anyLong(),
+                        Mockito.isNull(),
+                        Mockito.<File>any(),
+                        Mockito.<File>any(),
+                        Mockito.<String[]>any()))
+                .thenReturn(mockCommandResult);
+        Mockito.when(mLauncher.getRunUtil()).thenReturn(mMockRunUtil);
+
+        mLauncher.run(mMockTestInformation, mMockListener);
+
+        Mockito.verify(mMockRunUtil)
+                .runTimedCmdWithInput(
+                        Mockito.eq(10000L),
+                        Mockito.isNull(),
+                        Mockito.<File>any(),
+                        Mockito.<File>any(),
+                        asMatchers(
+                                SystemUtil.getRunningJavaBinaryPath().getAbsolutePath(),
+                                "-cp",
+                                tfJar.getAbsolutePath() + ":" + fooJar.getAbsolutePath(),
+                                "-Djava.io.tmpdir=" + mRootDir.getAbsolutePath() + "/tmp",
+                                "com.android.tradefed.command.CommandRunner",
+                                COMMAND,
+                                "--serial",
+                                DEVICE_SERIAL));
+    }
 }
