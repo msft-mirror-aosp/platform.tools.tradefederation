@@ -53,6 +53,7 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                     "product.img",
                     "system.img",
                     "system_dlkm.img",
+                    "system_other.img",
                     "system_ext.img",
                     "vendor.img",
                     "vendor_dlkm.img");
@@ -71,6 +72,9 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
 
     @Test
     public void testBlockCompareUpdate() throws Exception {
+        String originalBuildId = getDevice().getBuildId();
+        CLog.d("Original build id: %s", originalBuildId);
+
         File blockCompare = getBuild().getFile("block-compare");
         FileUtil.chmodGroupRWX(blockCompare);
         File srcImage = getBuild().getFile("src-image");
@@ -131,6 +135,11 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
 
             listMappingAndCompare(partitionToInfo);
+
+            String afterMountBuildId = getDevice().getBuildId();
+            CLog.d(
+                    "Original build id: %s. after mount build id: %s",
+                    originalBuildId, afterMountBuildId);
         } finally {
             FileUtil.recursiveDelete(workDir);
             FileUtil.recursiveDelete(srcDirectory);
