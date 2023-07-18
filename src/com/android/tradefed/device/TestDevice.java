@@ -92,6 +92,12 @@ public class TestDevice extends NativeDevice {
     private static final int NUM_CLEAR_ATTEMPTS = 5;
     /** the command used to dismiss a error dialog. Currently sends a DPAD_CENTER key event */
     static final String DISMISS_DIALOG_CMD = "input keyevent 23";
+
+    private static final String DISMISS_DIALOG_BROADCAST =
+            "am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOG";
+    // Collapse notifications
+    private static final String COLLAPSE_STATUS_BAR = "cmd statusbar collapse";
+
     /** Commands that can be used to dismiss the keyguard. */
     public static final String DISMISS_KEYGUARD_CMD = "input keyevent 82";
 
@@ -1067,6 +1073,8 @@ public class TestDevice extends NativeDevice {
      */
     @Override
     public boolean clearErrorDialogs() throws DeviceNotAvailableException {
+        executeShellCommand(DISMISS_DIALOG_BROADCAST);
+        executeShellCommand(COLLAPSE_STATUS_BAR);
         // attempt to clear error dialogs multiple times
         for (int i = 0; i < NUM_CLEAR_ATTEMPTS; i++) {
             int numErrorDialogs = getErrorDialogCount();
