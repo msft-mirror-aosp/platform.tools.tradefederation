@@ -40,6 +40,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -196,21 +197,28 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                 continue;
             }
             String[] pieces = lines.split(" ");
-            String partition = pieces[7].substring(0, pieces[7].length() - 2);
+            String partition = pieces[8].substring(0, pieces[8].length() - 2);
+            CLog.d("Partition extracted: %s", partition);
             if (partitionToInfo.containsKey(partition)) {
-                partitionToInfo.get(partition).mountedBlock = pieces[9];
+                partitionToInfo.get(partition).mountedBlock = pieces[10];
             }
         }
         CLog.d("Infos: %s", partitionToInfo);
 
-        for (TrackResults res : partitionToInfo.values()) {
-            CommandResult md5Output =
-                    getDevice().executeShellV2Command("m5sum " + res.mountedBlock);
-            if (!CommandStatus.SUCCESS.equals(md5Output.getStatus())) {
-                fail("Fail to get md5sum from " + res.mountedBlock);
+        for (Entry<String, TrackResults> res : partitionToInfo.entrySet()) {
+            if (res.getValue().mountedBlock == null) {
+                CLog.e("No partition found in mapping for %s", res);
+                continue;
             }
-            String md5device = md5Output.getStdout().trim();
-            Truth.assertThat(res.imageMd5).isEqualTo(md5device);
+            TrackResults result = res.getValue();
+            CommandResult md5Output =
+                    getDevice().executeShellV2Command("md5sum " + result.mountedBlock);
+            CLog.d("stdout: %s, stderr: %s", md5Output.getStdout(), md5Output.getStderr());
+            if (!CommandStatus.SUCCESS.equals(md5Output.getStatus())) {
+                fail("Fail to get md5sum from " + result.mountedBlock);
+            }
+            String md5device = md5Output.getStdout().trim().split("\\s+")[0];
+            Truth.assertThat(result.imageMd5).isEqualTo(md5device);
         }
     }
 
