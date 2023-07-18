@@ -299,6 +299,9 @@ public class ClusterCommandConfigBuilder {
         if (mTestEnvironment.getLogLevel() != null) {
             config.injectOptionValue("log-level", mTestEnvironment.getLogLevel());
         }
+        for (String excludedFile : mTestEnvironment.getExcludedFilesInJavaClasspath()) {
+            config.injectOptionValue("cluster:exclude-file-in-java-classpath", excludedFile);
+        }
 
         List<TestResource> testResources = new ArrayList<>();
         testResources.addAll(mTestResources);
