@@ -453,13 +453,18 @@ public class GceManager {
                     errors =
                             "Could not get a valid instance name, check the gce driver's output."
                                     + "The instance may not have booted up at all.";
+                    InfraErrorIdentifier errorId = InfraErrorIdentifier.NO_ACLOUD_REPORT;
                     CLog.e(errors);
+                    if (cmd.getStderr() != null
+                            && cmd.getStderr().contains("Invalid JWT Signature")) {
+                        errorId = InfraErrorIdentifier.ACLOUD_INVALID_SERVICE_ACCOUNT_KEY;
+                    }
                     throw new TargetSetupError(
                             String.format(
                                     "acloud errors: %s\nGCE driver stderr: %s",
                                     errors, cmd.getStderr()),
                             mDeviceDescriptor,
-                            InfraErrorIdentifier.NO_ACLOUD_REPORT);
+                            errorId);
                 }
             }
             mGceAvdInfo =
