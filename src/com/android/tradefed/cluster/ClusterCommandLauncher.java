@@ -63,6 +63,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -317,7 +318,7 @@ public class ClusterCommandLauncher
                                             f ->
                                                     f.toLowerCase().endsWith(".jar")
                                                             && !matchPatterns(excludedPatterns, f))
-                                    .toList();
+                                    .collect(Collectors.toList());
                     jars.addAll(result);
                 } catch (IOException e) {
                     throw new RuntimeException(
