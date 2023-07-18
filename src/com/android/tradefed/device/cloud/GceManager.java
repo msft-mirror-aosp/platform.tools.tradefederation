@@ -615,7 +615,6 @@ public class GceManager {
             getTestDeviceOptions().setRemoteAdbPort(6520 + offset);
             gceArgs.add("--base-instance-num");
             gceArgs.add(String.valueOf(offset + 1));
-            gceArgs.add("--launch-args=\"" + "--base_instance_num=" + (offset + 1) + "\"");
         }
         switch (getTestDeviceOptions().getGceDriverLogLevel()) {
             case DEBUG:
