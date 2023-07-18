@@ -388,7 +388,7 @@ public class MoblyBinaryHostTest
             }
         }
         CommandResult list_result =
-                getRunUtil().runTimedCmd(6000, parFilePath, "--", "--list_tests");
+                getRunUtil().runTimedCmd(60000, parFilePath, "--", "--list_tests");
         if (!CommandStatus.SUCCESS.equals(list_result.getStatus())) {
             String message;
             if (CommandStatus.TIMED_OUT.equals(list_result.getStatus())) {
