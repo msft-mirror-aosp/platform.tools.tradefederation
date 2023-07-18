@@ -192,6 +192,9 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
         CLog.d("stdout: %s, stderr: %s", lsOutput.getStdout(), lsOutput.getStderr());
 
         for (String lines : lsOutput.getStdout().split("\n")) {
+            if (!lines.contains("->")) {
+                continue;
+            }
             String[] pieces = lines.split(" ");
             String partition = pieces[7].substring(0, pieces[7].length() - 2);
             if (partitionToInfo.containsKey(partition)) {
