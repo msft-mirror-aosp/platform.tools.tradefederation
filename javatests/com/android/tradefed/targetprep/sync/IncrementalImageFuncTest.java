@@ -53,7 +53,6 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                     "product.img",
                     "system.img",
                     "system_dlkm.img",
-                    "system_other.img",
                     "system_ext.img",
                     "vendor.img",
                     "vendor_dlkm.img");
