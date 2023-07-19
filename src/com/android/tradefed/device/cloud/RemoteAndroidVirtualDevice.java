@@ -16,24 +16,19 @@
 package com.android.tradefed.device.cloud;
 
 import com.android.ddmlib.IDevice;
-import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
-import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
-import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.connection.AdbSshConnection;
+import com.android.tradefed.device.connection.DefaultConnection;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.net.HostAndPort;
 
 import java.io.File;
 import java.util.List;
@@ -49,10 +44,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
 
     private GceAvdInfo mGceAvd = null;
 
-    private GceManager mGceHandler = null;
-    private GceSshTunnelMonitor mGceSshMonitor;
-    private DeviceNotAvailableException mTunnelInitFailed = null;
-
     /**
      * Creates a {@link RemoteAndroidVirtualDevice}.
      *
@@ -63,16 +54,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
     public RemoteAndroidVirtualDevice(
             IDevice device, IDeviceStateMonitor stateMonitor, IDeviceMonitor allocationMonitor) {
         super(device, stateMonitor, allocationMonitor);
-    }
-
-    /** Create an ssh tunnel, connect to it, and keep the connection alive. */
-    void createGceSshMonitor(
-            ITestDevice device,
-            IBuildInfo buildInfo,
-            HostAndPort hostAndPort,
-            TestDeviceOptions deviceOptions) {
-        mGceSshMonitor = new GceSshTunnelMonitor(device, buildInfo, hostAndPort, deviceOptions);
-        mGceSshMonitor.start();
     }
 
     /**
@@ -134,40 +115,19 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
         return mGceAvd;
     }
 
-    /**
-     * Returns the {@link com.android.tradefed.device.cloud.GceSshTunnelMonitor} of the device.
-     */
-    public GceSshTunnelMonitor getGceSshMonitor() {
-        return mGceSshMonitor;
-    }
-
-    /**
-     * Override the internal {@link com.android.tradefed.device.cloud.GceSshTunnelMonitor} of the
-     * device.
-     */
-    // TODO(b/190657509): Remove this API once boot test is refactored to use
-    // preInvocationSetup and postInvocationTeardown.
-    public void setGceSshMonitor(GceSshTunnelMonitor gceSshMonitor) {
-        CLog.i("Overriding internal GCE SSH monitor.");
-        mGceSshMonitor = gceSshMonitor;
-    }
-
-    /** Returns the instance of the {@link com.android.tradefed.device.cloud.GceManager}. */
-    @VisibleForTesting
-    GceManager getGceHandler() {
-        return mGceHandler;
-    }
-
     @Override
     public DeviceDescriptor getDeviceDescriptor() {
         DeviceDescriptor descriptor = super.getDeviceDescriptor();
-        if (!getInitialSerial().equals(descriptor.getSerial())) {
-            // Alter the display for the console.
-            descriptor =
-                    new DeviceDescriptor(
-                            descriptor,
-                            getInitialSerial(),
-                            getInitialSerial() + "[" + descriptor.getSerial() + "]");
+        if (getConnection() instanceof DefaultConnection) {
+            String initialSerial = ((DefaultConnection) getConnection()).getInitialSerial();
+            if (!initialSerial.equals(descriptor.getSerial())) {
+                // Alter the display for the console.
+                descriptor =
+                        new DeviceDescriptor(
+                                descriptor,
+                                initialSerial,
+                                initialSerial + "[" + descriptor.getSerial() + "]");
+            }
         }
         return descriptor;
     }
