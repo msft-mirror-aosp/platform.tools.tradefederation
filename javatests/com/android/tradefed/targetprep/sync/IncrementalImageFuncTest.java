@@ -18,6 +18,7 @@ package com.android.tradefed.targetprep.sync;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -47,6 +48,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Basic test to start iterating on device incremental image. */
 @RunWith(DeviceJUnit4ClassRunner.class)
 public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
+
+    @Option(name = "disable-verity")
+    private boolean mDisableVerity = true;
 
     public static final Set<String> PARTITIONS_TO_DIFF =
             ImmutableSet.of(
@@ -127,6 +131,9 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                 fail("Failed to map the snapshots.");
             }
 
+            if (mDisableVerity) {
+                getDevice().executeAdbCommand("disable-verity");
+            }
             getDevice().reboot();
             // Do Validation
             getDevice().enableAdbRoot();
@@ -203,11 +210,11 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             if (!lines.contains("->")) {
                 continue;
             }
-            String[] pieces = lines.split(" ");
-            String partition = pieces[8].substring(0, pieces[8].length() - 2);
+            String[] pieces = lines.split("\\s+");
+            String partition = pieces[7].substring(0, pieces[7].length() - 2);
             CLog.d("Partition extracted: %s", partition);
             if (partitionToInfo.containsKey(partition)) {
-                partitionToInfo.get(partition).mountedBlock = pieces[10];
+                partitionToInfo.get(partition).mountedBlock = pieces[9];
             }
         }
         CLog.d("Infos: %s", partitionToInfo);
