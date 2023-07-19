@@ -17,6 +17,7 @@ package com.android.tradefed.device;
 
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.device.connection.DefaultConnection;
 import com.android.tradefed.util.FileUtil;
 
 import java.io.File;
@@ -121,13 +122,15 @@ public class RemoteAndroidDevice extends TestDevice {
     @Override
     public DeviceDescriptor getDeviceDescriptor() {
         DeviceDescriptor descriptor = super.getDeviceDescriptor();
-        if (mInitialIpDevice != null) {
-            // Alter the display for the console.
-            descriptor =
-                    new DeviceDescriptor(
-                            descriptor,
-                            mInitialSerial,
-                            mInitialSerial + "[" + mInitialIpDevice + "]");
+        if (getConnection() instanceof DefaultConnection) {
+            String initialSerial = ((DefaultConnection) getConnection()).getInitialSerial();
+            String initialIp = ((DefaultConnection) getConnection()).getInitialIp();
+            if (initialIp != null) {
+                // Alter the display for the console.
+                descriptor =
+                        new DeviceDescriptor(
+                                descriptor, initialSerial, initialSerial + "[" + initialIp + "]");
+            }
         }
         return descriptor;
     }
