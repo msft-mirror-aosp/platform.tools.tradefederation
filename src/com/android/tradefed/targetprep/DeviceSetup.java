@@ -350,7 +350,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     // setprop persist.sys.test_harness 1
 
     @Option(name = "hide-error-dialogs", description = "Turn on or off the error dialogs.")
-    protected BinaryState mHideErrorDialogs = BinaryState.IGNORE;
+    protected BinaryState mHideErrorDialogs = BinaryState.ON;
     // ON:  settings put global hide_error_dialogs 1
     // OFF: settings put global hide_error_dialogs 0
 
