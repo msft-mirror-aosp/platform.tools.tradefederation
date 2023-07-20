@@ -32,7 +32,6 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.common.truth.Truth;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -219,9 +218,11 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
         }
         CLog.d("Infos: %s", partitionToInfo);
 
+        StringBuilder errorSummary = new StringBuilder();
         for (Entry<String, TrackResults> res : partitionToInfo.entrySet()) {
             if (res.getValue().mountedBlock == null) {
-                CLog.e("No partition found in mapping for %s", res);
+                errorSummary.append(String.format("No partition found in mapping for %s", res));
+                errorSummary.append("\n");
                 continue;
             }
             TrackResults result = res.getValue();
@@ -232,7 +233,18 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                 fail("Fail to get md5sum from " + result.mountedBlock);
             }
             String md5device = md5Output.getStdout().trim().split("\\s+")[0];
-            Truth.assertThat(result.imageMd5).isEqualTo(md5device);
+            String message =
+                    String.format(
+                            "partition: %s. device md5: %s, file md5: %s",
+                            res.getKey(), md5device, result.imageMd5);
+            CLog.d(message);
+            if (!md5device.equals(result.imageMd5)) {
+                errorSummary.append(message);
+                errorSummary.append("\n");
+            }
+        }
+        if (!errorSummary.isEmpty()) {
+            fail(errorSummary.toString());
         }
     }
 
