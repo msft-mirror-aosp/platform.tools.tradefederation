@@ -140,6 +140,7 @@ public class InvocationMetricLogger {
         // Track metrics for skipped retries
         RETRY_MODULE_SKIPPED_COUNT("retry_module_skipped_count", true),
         RETRY_TEST_SKIPPED_COUNT("retry_test_skipped_count", true),
+        RETRY_SKIPPED_ALL_FILTERED_COUNT("retry_skipped_all_filtered_count", true),
 
         // The time spent inside metric collectors
         COLLECTOR_TIME("collector_time_ms", true),
@@ -179,7 +180,7 @@ public class InvocationMetricLogger {
         UNCAUGHT_TEST_CRASH_FAILURES("uncaught_test_crash_failures", true),
         DEVICE_RESET_COUNT("device_reset_count", true),
         DEVICE_RESET_MODULES("device_reset_modules", true),
-        DEVICE_POWREWASH_DURATIONS("device_powerwash_durations", true),
+        DEVICE_POWERWASH_DURATIONS("device_powerwash_durations", true),
         DEVICE_RESET_MODULES_FOR_TARGET_PREPARER("device_reset_modules_for_target_preparer", true),
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
@@ -256,6 +257,7 @@ public class InvocationMetricLogger {
 
         // Ab downloader metrics
         AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
+        ZIP_PARTIAL_DOWNLOAD_CACHE_HIT("zip_partial_download_cache_hit", true),
 
         DUPLICATE_MAPPING_DIFFERENT_OPTIONS("duplicate_mapping_different_options", true),
 
@@ -267,6 +269,10 @@ public class InvocationMetricLogger {
 
         DEVICE_IMAGE_NOT_CHANGED("device_image_not_changed", false),
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
+
+        POWERWASH_TIME("powerwash_time_ms", true),
+        POWERWASH_SUCCESS_COUNT("powerwash_success_count", true),
+        POWERWASH_FAILURE_COUNT("powerwash_failure_count", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
@@ -289,6 +295,9 @@ public class InvocationMetricLogger {
         stage_suite_test_artifacts("stage_suite_test_artifacts", true),
         wait_for_results_update("wait_for_results_update", true),
         instru_collect_tests("instru_collect_tests", true),
+
+        // Test caching metrics
+        CACHED_MODULE_RESULTS_COUNT("cached_module_results_count", true),
         ;
 
         private final String mKeyName;

@@ -16,6 +16,7 @@
 
 package com.android.tradefed.observatory;
 
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.ArgsOptionParser;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
@@ -29,6 +30,7 @@ import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StringEscapeUtils;
 import com.android.tradefed.util.SystemUtil;
+import com.android.tradefed.util.testmapping.TestMapping;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
@@ -65,6 +67,8 @@ public class TestDiscoveryInvoker {
     private final boolean mHasConfigFallback;
     private final boolean mUseCurrentTradefed;
     private File mTestDir;
+    private File mTestMappingZip;
+    private IBuildInfo mBuildInfo;
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
     public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
@@ -72,10 +76,13 @@ public class TestDiscoveryInvoker {
     public static final String PARTIAL_FALLBACK_KEY = "PartialFallback";
     public static final String TEST_DIRECTORY_ENV_VARIABLE_KEY =
             "TF_TEST_DISCOVERY_USE_TEST_DIRECTORY";
+    public static final String TEST_MAPPING_ZIP_FILE = "TF_TEST_MAPPING_ZIP_FILE";
     public static final String ROOT_DIRECTORY_ENV_VARIABLE_KEY =
             "ROOT_TEST_DISCOVERY_USE_TEST_DIRECTORY";
 
     public static final String OUTPUT_FILE = "DISCOVERY_OUTPUT_FILE";
+
+    private static final long DISCOVERY_TIMEOUT_MS = 120000L;
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
@@ -98,6 +105,14 @@ public class TestDiscoveryInvoker {
 
     public void setTestDir(File testDir) {
         mTestDir = testDir;
+    }
+
+    public void setTestMappingZip(File testMappingZip) {
+        mTestMappingZip = testMappingZip;
+    }
+
+    public void setBuildInfo(IBuildInfo buildInfo) {
+        mBuildInfo = buildInfo;
     }
 
     /** Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration} and root directory. */
@@ -159,7 +174,7 @@ public class TestDiscoveryInvoker {
                                 ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
             }
             getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
-            CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
+            CommandResult res = getRunUtil().runTimedCmd(DISCOVERY_TIMEOUT_MS, subprocessArgs);
             if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
                 DiscoveryExitCode exitCode = null;
                 if (res.getExitCode() != null) {
@@ -181,6 +196,15 @@ public class TestDiscoveryInvoker {
             CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
 
             String result = FileUtil.readStringFromFile(outputFile);
+            CLog.i("output file content: %s", result);
+
+            // For backward compatibility
+            try {
+                new JSONObject(result);
+            } catch (JSONException e) {
+                CLog.w("Output file was incorrect. Try falling back stdout");
+                result = stdout;
+            }
 
             List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
             if (!testModules.isEmpty()) {
@@ -217,6 +241,19 @@ public class TestDiscoveryInvoker {
         File outputFile = createOutputFile();
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("discoverTestMappingDependencies")) {
+            List<String> fullCommandLineArgs =
+                    new ArrayList<String>(
+                            Arrays.asList(
+                                    QuotationAwareTokenizer.tokenizeLine(
+                                            mConfiguration.getCommandLine())));
+            // first arg is config name
+            fullCommandLineArgs.remove(0);
+            final ConfigurationTestMappingParserSettings mappingParserSettings =
+                    new ConfigurationTestMappingParserSettings();
+            ArgsOptionParser mappingOptionParser = new ArgsOptionParser(mappingParserSettings);
+            // Parse to collect all values of --cts-params as well config name
+            mappingOptionParser.parseBestEffort(fullCommandLineArgs, true);
+
             Map<String, List<String>> dependencies = new HashMap<>();
             // Build the classpath base on the working directory
             String classPath = buildTestMappingClasspath(mRootDir);
@@ -230,13 +267,42 @@ public class TestDiscoveryInvoker {
                         .setEnvVariable(
                                 TEST_DIRECTORY_ENV_VARIABLE_KEY, mTestDir.getAbsolutePath());
             }
+            if (mTestMappingZip != null) {
+                getRunUtil()
+                        .setEnvVariable(TEST_MAPPING_ZIP_FILE, mTestMappingZip.getAbsolutePath());
+            }
+            if (mBuildInfo != null) {
+                if (mBuildInfo.getFile(TestMapping.TEST_MAPPINGS_ZIP) != null) {
+                    getRunUtil()
+                            .setEnvVariable(
+                                    TEST_MAPPING_ZIP_FILE,
+                                    mBuildInfo
+                                            .getFile(TestMapping.TEST_MAPPINGS_ZIP)
+                                            .getAbsolutePath());
+                    getRunUtil()
+                            .setEnvVariable(
+                                    TestMapping.TEST_MAPPINGS_ZIP,
+                                    mBuildInfo
+                                            .getFile(TestMapping.TEST_MAPPINGS_ZIP)
+                                            .getAbsolutePath());
+                }
+                for (String allowedList : mappingParserSettings.mAllowedTestLists) {
+                    if (mBuildInfo.getFile(allowedList) != null) {
+                        getRunUtil()
+                                .setEnvVariable(
+                                        allowedList,
+                                        mBuildInfo.getFile(allowedList).getAbsolutePath());
+                    }
+                }
+            }
+
             if (mHasConfigFallback) {
                 getRunUtil()
                         .setEnvVariable(
                                 ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
             }
             getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
-            CommandResult res = getRunUtil().runTimedCmd(60000, subprocessArgs);
+            CommandResult res = getRunUtil().runTimedCmd(DISCOVERY_TIMEOUT_MS, subprocessArgs);
             if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
                 throw new TestDiscoveryException(
                         String.format(
@@ -312,12 +378,11 @@ public class TestDiscoveryInvoker {
                                 QuotationAwareTokenizer.tokenizeLine(
                                         mConfiguration.getCommandLine())));
         // first arg is config name
-        final String testLauncherConfigName = fullCommandLineArgs.remove(0);
+        fullCommandLineArgs.remove(0);
 
         final ConfigurationCtsParserSettings ctsParserSettings =
                 new ConfigurationCtsParserSettings();
-        ArgsOptionParser ctsOptionParser = null;
-        ctsOptionParser = new ArgsOptionParser(ctsParserSettings);
+        ArgsOptionParser ctsOptionParser = new ArgsOptionParser(ctsParserSettings);
 
         // Parse to collect all values of --cts-params as well config name
         ctsOptionParser.parseBestEffort(fullCommandLineArgs, true);

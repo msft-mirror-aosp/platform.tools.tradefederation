@@ -221,7 +221,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             }
             if (!mAllowedTestLists.isEmpty()) {
                 CLog.i("Filtering tests from allowed test lists: %s", mAllowedTestLists);
-                testInfosToRun = filterByAllowedTestLists(testInfosToRun);
+                testInfosToRun = filterByAllowedTestLists(mBuildInfo, testInfosToRun);
             }
             if (testInfosToRun.isEmpty() && !mAllowEmptyTests) {
                 throw new HarnessRuntimeException(
@@ -362,9 +362,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                     continue;
                 }
                 List<IRemoteTest> remoteTests = entry.getValue().getTests();
-                if (mRemoteTestTimeOut != null) {
-                    addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
-                }
+                addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
                 tests.addAll(remoteTests);
             }
         }
@@ -543,11 +541,19 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
      * @return A {@code Set<TestInfo>} of tests matching the allowed test lists.
      */
     @VisibleForTesting
-    Set<TestInfo> filterByAllowedTestLists(Set<TestInfo> testInfos) {
+    Set<TestInfo> filterByAllowedTestLists(IBuildInfo info, Set<TestInfo> testInfos) {
         // Read the list of allowed tests, and compile a set of allowed test module names.
         Set<String> allowedTests = new HashSet<String>();
         for (String testList : mAllowedTestLists) {
-            File testListZip = getBuildInfo().getFile(testList);
+            File testListZip = null;
+            if (info == null) {
+                String envBackfill = System.getenv(testList);
+                if (envBackfill != null) {
+                    testListZip = new File(envBackfill);
+                }
+            } else {
+                testListZip = info.getFile(testList);
+            }
             if (testListZip == null) {
                 throw new RuntimeException("Failed to locate allowed test list " + testList);
             }

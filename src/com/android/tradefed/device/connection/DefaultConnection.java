@@ -27,6 +27,7 @@ import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.log.ITestLogger;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 
@@ -64,6 +65,7 @@ public class DefaultConnection extends AbstractConnection {
         }
         if (builder.device != null) {
             InstanceType type = builder.device.getOptions().getInstanceType();
+            CLog.d("Instance type for connection: %s", type);
             if (InstanceType.CUTTLEFISH.equals(type)
                     || InstanceType.REMOTE_NESTED_AVD.equals(type)) {
                 if (ManagedTestDeviceFactory.isTcpDeviceSerial(builder.device.getSerialNumber())) {

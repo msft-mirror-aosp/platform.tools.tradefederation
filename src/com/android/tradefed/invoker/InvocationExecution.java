@@ -33,10 +33,10 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.filter.GetPreviousPassedHelper;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceManager;
-import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
@@ -659,6 +659,11 @@ public class InvocationExecution implements IInvocationExecution {
                     if (device instanceof ITestLoggerReceiver) {
                         ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
                     }
+                    IDeviceConfiguration deviceConfig = config.getDeviceConfigByName(deviceName);
+                    if (deviceConfig != null && deviceConfig.isFake()) {
+                        CLog.d("Skip preInvocationSetup on fake device %s", device);
+                        continue;
+                    }
                     device.preInvocationSetup(
                             context.getBuildInfo(deviceName), context.getAttributes());
                 }
@@ -705,13 +710,15 @@ public class InvocationExecution implements IInvocationExecution {
         List<GceAvdInfo> gceAvdInfoList =
                 multiDeviceRequester.startMultiDevicesGce(buildInfos, context.getAttributes());
         for (int i = 0; i < devices.size(); i++) {
-            RemoteAndroidVirtualDevice device = (RemoteAndroidVirtualDevice) devices.get(i);
             // For each device, do setup with its GceAvdInfo
             CLog.d(
                     "Starting device pre invocation launched device setup with GceAvdInfo %s"
                             + " for : '%s'",
-                    gceAvdInfoList.get(i), device.getSerialNumber());
-            device.setAvdInfo(gceAvdInfoList.get(i));
+                    gceAvdInfoList.get(i), devices.get(i).getSerialNumber());
+            // Use the most common basic interface for device connection setup
+            NativeDevice device = (NativeDevice) devices.get(i);
+
+            device.setConnectionAvdInfo(gceAvdInfoList.get(i));
             device.preInvocationSetup(buildInfos.get(i), context.getAttributes());
 
             // Last device in the group is responsible for releasing the whole device group
@@ -747,6 +754,11 @@ public class InvocationExecution implements IInvocationExecution {
         }
         for (String deviceName : context.getDeviceConfigNames()) {
             ITestDevice device = context.getDevice(deviceName);
+            IDeviceConfiguration deviceConfig = config.getDeviceConfigByName(deviceName);
+            if (deviceConfig != null && deviceConfig.isFake()) {
+                CLog.d("Skip postInvocationTearDown on fake device %s", device);
+                continue;
+            }
             device.postInvocationTearDown(exception);
         }
     }

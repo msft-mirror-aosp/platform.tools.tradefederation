@@ -29,6 +29,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.LocalAndroidVirtualDevice;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
@@ -982,7 +983,8 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                 // to home screen
                 // No need for this on Wear OS, since that causes the launcher to show
                 // instead of the home screen
-                if (!device.hasFeature("android.hardware.type.watch")) {
+                if ((device instanceof TestDevice)
+                        && !device.hasFeature("android.hardware.type.watch")) {
                     device.executeShellCommand("input keyevent 3");
                 }
                 break;
@@ -1191,6 +1193,10 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
      */
     private void checkExternalStoreSpace(ITestDevice device) throws DeviceNotAvailableException {
         if (mMinExternalStorageKb <= 0) {
+            return;
+        }
+        if (!(device instanceof TestDevice)) {
+            // TODO: instead check that sdcard exists
             return;
         }
         // Wait for device available to ensure the mounting of sdcard

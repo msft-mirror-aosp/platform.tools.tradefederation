@@ -323,6 +323,7 @@ public class GceManager {
                         CommonLogRemoteFileUtil.fetchCommonFiles(
                                 logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
                     }
+                    mGceAvdInfo.setErrorType(InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT);
                     mGceAvdInfo.setStatus(GceStatus.BOOT_FAIL);
                     // Align the error message raised when Oxygen lease timed out.
                     mGceAvdInfo.setErrors("Timed out waiting for virtual device to start.");

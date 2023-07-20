@@ -1807,6 +1807,121 @@ public class InstallApexModuleTargetPreparerTest {
     }
 
     @Test
+    public void testInstallUsingBundletool_setStagedReadyTimeout() throws Exception {
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
+        mSetter.setOptionValue("staged-ready-timeout-ms", "120000");
+        mInstallApexModuleTargetPreparer.addTestFileName(SPLIT_APEX_APKS_NAME);
+        mInstallApexModuleTargetPreparer.addTestFileName(SPLIT_APK__APKS_NAME);
+        mFakeApexApks = File.createTempFile("fakeApex", ".apks");
+        mFakeApkApks = File.createTempFile("fakeApk", ".apks");
+
+        File fakeSplitApexApks = File.createTempFile("ApexSplits", "");
+        fakeSplitApexApks.delete();
+        fakeSplitApexApks.mkdir();
+        File splitApex = File.createTempFile("fakeSplitApex", ".apex", fakeSplitApexApks);
+
+        File fakeSplitApkApks = File.createTempFile("ApkSplits", "");
+        fakeSplitApkApks.delete();
+        fakeSplitApkApks.mkdir();
+        File splitApk1 = File.createTempFile("fakeSplitApk1", ".apk", fakeSplitApkApks);
+        mBundletoolJar = File.createTempFile("bundletool", ".jar");
+        File splitApk2 = File.createTempFile("fakeSplitApk2", ".apk", fakeSplitApkApks);
+        try {
+            mockCleanInstalledApexPackages();
+            when(mMockBundletoolUtil.generateDeviceSpecFile(Mockito.any(ITestDevice.class)))
+                    .thenReturn("serial.json");
+
+            assertTrue(fakeSplitApexApks != null);
+            assertTrue(fakeSplitApkApks != null);
+            assertTrue(mFakeApexApks != null);
+            assertTrue(mFakeApkApks != null);
+            assertEquals(1, fakeSplitApexApks.listFiles().length);
+            assertEquals(2, fakeSplitApkApks.listFiles().length);
+
+            when(mMockBundletoolUtil.extractSplitsFromApks(
+                            Mockito.eq(mFakeApexApks),
+                            anyString(),
+                            Mockito.any(ITestDevice.class),
+                            Mockito.any(IBuildInfo.class)))
+                    .thenReturn(fakeSplitApexApks);
+
+            when(mMockBundletoolUtil.extractSplitsFromApks(
+                            Mockito.eq(mFakeApkApks),
+                            anyString(),
+                            Mockito.any(ITestDevice.class),
+                            Mockito.any(IBuildInfo.class)))
+                    .thenReturn(fakeSplitApkApks);
+
+            List<String> trainInstallCmd = new ArrayList<>();
+            trainInstallCmd.add("install-multi-package");
+            trainInstallCmd.add("--enable-rollback");
+            trainInstallCmd.add("--staged-ready-timeout");
+            trainInstallCmd.add("120000");
+            trainInstallCmd.add(splitApex.getAbsolutePath());
+            String cmd = "";
+            for (File f : fakeSplitApkApks.listFiles()) {
+                if (!cmd.isEmpty()) {
+                    cmd += ":" + f.getParentFile().getAbsolutePath() + "/" + f.getName();
+                } else {
+                    cmd += f.getParentFile().getAbsolutePath() + "/" + f.getName();
+                }
+            }
+            trainInstallCmd.add(cmd);
+            when(mMockDevice.executeAdbCommand(trainInstallCmd.toArray(new String[0])))
+                    .thenReturn("Success");
+
+            Set<ApexInfo> activatedApex = new HashSet<ApexInfo>();
+            activatedApex.add(
+                    new ApexInfo(
+                            SPLIT_APEX_PACKAGE_NAME,
+                            1,
+                            "/data/apex/active/com.android.FAKE_APEX_PACKAGE_NAME@1.apex"));
+            when(mMockDevice.getActiveApexes()).thenReturn(activatedApex);
+            when(mMockDevice.executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME))
+                    .thenReturn("Success");
+
+            Set<String> installableModules = new HashSet<>();
+            installableModules.add(APEX_PACKAGE_NAME);
+            installableModules.add(SPLIT_APK_PACKAGE_NAME);
+            when(mMockDevice.getInstalledPackageNames()).thenReturn(installableModules);
+
+            mInstallApexModuleTargetPreparer.setUp(mTestInfo);
+            mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
+            verifyCleanInstalledApexPackages(2);
+            Mockito.verify(mMockBundletoolUtil, times(1))
+                    .generateDeviceSpecFile(Mockito.any(ITestDevice.class));
+            // Extract splits 1 time to get the package name for the module, and again during
+            // installation.
+            Mockito.verify(mMockBundletoolUtil, times(2))
+                    .extractSplitsFromApks(
+                            Mockito.eq(mFakeApexApks),
+                            anyString(),
+                            Mockito.any(ITestDevice.class),
+                            Mockito.any(IBuildInfo.class));
+            Mockito.verify(mMockBundletoolUtil, times(2))
+                    .extractSplitsFromApks(
+                            Mockito.eq(mFakeApkApks),
+                            anyString(),
+                            Mockito.any(ITestDevice.class),
+                            Mockito.any(IBuildInfo.class));
+            verify(mMockDevice, times(4)).reboot();
+            verify(mMockDevice, times(1)).executeAdbCommand(trainInstallCmd.toArray(new String[0]));
+            verify(mMockDevice, times(1))
+                    .executeShellCommand("pm rollback-app " + SPLIT_APEX_PACKAGE_NAME);
+            verify(mMockDevice, times(3)).getActiveApexes();
+            verify(mMockDevice, times(2)).waitForDeviceAvailable();
+        } finally {
+            FileUtil.deleteFile(mFakeApexApks);
+            FileUtil.deleteFile(mFakeApkApks);
+            FileUtil.recursiveDelete(fakeSplitApexApks);
+            FileUtil.deleteFile(fakeSplitApexApks);
+            FileUtil.recursiveDelete(fakeSplitApkApks);
+            FileUtil.deleteFile(fakeSplitApkApks);
+            FileUtil.deleteFile(mBundletoolJar);
+        }
+    }
+
+    @Test
     public void testInstallUsingBundletool_TrainFolder() throws Exception {
         mMockBundletoolUtil = mock(BundletoolUtil.class);
         File trainFolder = File.createTempFile("tmpTrain", "");
@@ -2117,7 +2232,7 @@ public class InstallApexModuleTargetPreparerTest {
                             Mockito.any(ITestDevice.class),
                             Mockito.any(IBuildInfo.class));
             order.verify(mMockBundletoolUtil, times(1))
-                    .installApks(eq(mFakeApkApks), eq(mMockDevice));
+                    .installApks(eq(mFakeApkApks), eq(mMockDevice), eq(new ArrayList<String>()));
             order.verify(mMockDevice, times(1)).uninstallPackage(SPLIT_APK_PACKAGE_NAME);
         } finally {
             FileUtil.deleteFile(mFakeApexApks);
@@ -2461,6 +2576,49 @@ public class InstallApexModuleTargetPreparerTest {
             FileUtil.deleteFile(mBundletoolJar);
             FileUtil.deleteFile(mFakeApkZip);
         }
+    }
+
+    @Test
+    public void initDeviceSpecFilePath_whenGenerateDeviceSpecFileFailed_noExceptionWhenTwoFiles()
+            throws Exception {
+        mMockBundletoolUtil = mock(BundletoolUtil.class);
+        when(mMockBundletoolUtil.generateDeviceSpecFile(Mockito.any(ITestDevice.class)))
+                .thenReturn(null);
+        try {
+            mBundletoolJar = File.createTempFile("bundletool", ".jar");
+            mFakeApexApks = File.createTempFile("fakeApex", ".apks");
+            mFakeApkApks = File.createTempFile("fakeApk", ".apks");
+            mInstallApexModuleTargetPreparer.addTestFile(mFakeApexApks);
+            mInstallApexModuleTargetPreparer.addTestFile(mFakeApkApks);
+
+            mInstallApexModuleTargetPreparer.getModulesToInstall(mTestInfo);
+        } finally {
+            FileUtil.deleteFile(mBundletoolJar);
+            FileUtil.deleteFile(mFakeApexApks);
+            FileUtil.deleteFile(mFakeApkApks);
+        }
+    }
+
+    @Test
+    public void addStagedReadyTimeoutForAdb_expected() throws Exception {
+        List<String> cmd = new ArrayList<>();
+        mInstallApexModuleTargetPreparer.addStagedReadyTimeoutForAdb(cmd);
+        assertTrue(cmd.isEmpty());
+
+        mSetter.setOptionValue("staged-ready-timeout-ms", "120000");
+        mInstallApexModuleTargetPreparer.addStagedReadyTimeoutForAdb(cmd);
+        assertEquals(cmd.toArray(new String[0]), new String[] {"--staged-ready-timeout", "120000"});
+    }
+
+    @Test
+    public void addTimeoutMillisForBundletool_expected() throws Exception {
+        List<String> cmd = new ArrayList<>();
+        mInstallApexModuleTargetPreparer.addTimeoutMillisForBundletool(cmd);
+        assertTrue(cmd.isEmpty());
+
+        mSetter.setOptionValue("staged-ready-timeout-ms", "120000");
+        mInstallApexModuleTargetPreparer.addTimeoutMillisForBundletool(cmd);
+        assertEquals(cmd.toArray(new String[0]), new String[] {"--timeout-millis=120000"});
     }
 
     private void verifySuccessfulInstallPackages(List<File> files) throws Exception {

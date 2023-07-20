@@ -74,7 +74,7 @@ public class TestMapping {
     private static final String KEY_NAME = "name";
     private static final String KEY_OPTIONS = "options";
     private static final String TEST_MAPPING = "TEST_MAPPING";
-    private static final String TEST_MAPPINGS_ZIP = "test_mappings.zip";
+    public static final String TEST_MAPPINGS_ZIP = "test_mappings.zip";
     // A file containing module names that are disabled in presubmit test runs.
     private static final String DISABLED_PRESUBMIT_TESTS_FILE = "disabled-presubmit-tests";
     // Pattern used to identify comments start with "//" or "#" in TEST_MAPPING.
@@ -140,7 +140,7 @@ public class TestMapping {
                 if (group.equals(IMPORTS)) {
                     continue;
                 }
-                Set<TestInfo> testsForGroup = new HashSet<>();
+                Set<TestInfo> testsForGroup = new LinkedHashSet<>();
                 testCollection.put(group, testsForGroup);
                 JSONArray arr = root.getJSONArray(group);
                 for (int i = 0; i < arr.length(); i++) {
@@ -391,7 +391,7 @@ public class TestMapping {
             Set<String> disabledTests,
             boolean hostOnly,
             Set<String> keywords) {
-        Set<TestInfo> tests = new HashSet<TestInfo>();
+        Set<TestInfo> tests = new LinkedHashSet<TestInfo>();
         for (TestInfo test : testCollection.getOrDefault(testGroup, new HashSet<>())) {
             if (disabledTests != null && disabledTests.contains(test.getName())) {
                 continue;
@@ -472,6 +472,7 @@ public class TestMapping {
         }
         File testMappingsDir = extractTestMappingsZip(zipFile);
         Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
+        CLog.d("Relative test mapping paths: %s", mTestMappingRelativePaths);
         try (Stream<Path> stream =
                 mTestMappingRelativePaths.isEmpty()
                         ? Files.walk(testMappingsRootPath, FileVisitOption.FOLLOW_LINKS)
@@ -500,7 +501,7 @@ public class TestMapping {
         } finally {
             FileUtil.recursiveDelete(testMappingsDir);
         }
-
+        CLog.d("TestInfo found: %s", tests);
         return tests;
     }
 
@@ -512,7 +513,7 @@ public class TestMapping {
      */
     @VisibleForTesting
     Set<Path> getAllTestMappingPaths(Path testMappingsRootPath) {
-        Set<Path> allTestMappingPaths = new HashSet<>();
+        Set<Path> allTestMappingPaths = new LinkedHashSet<>();
         for (String path : mTestMappingRelativePaths) {
             boolean hasAdded = false;
             Path testMappingPath = testMappingsRootPath.resolve(path);
@@ -534,6 +535,7 @@ public class TestMapping {
                     String.format(
                             "Couldn't find TEST_MAPPING files from %s", mTestMappingRelativePaths));
         }
+        CLog.d("All resolved TEST_MAPPING paths: %s", allTestMappingPaths);
         return allTestMappingPaths;
     }
 
@@ -742,6 +744,10 @@ public class TestMapping {
      * @return The test mapping file, or null if unable to locate one.
      */
     private File lookupTestMappingZip(String zipName) {
+        String directFile = System.getenv(TestDiscoveryInvoker.TEST_MAPPING_ZIP_FILE);
+        if (directFile != null && new File(directFile).exists()) {
+            return new File(directFile);
+        }
         String testDirPath = System.getenv(TestDiscoveryInvoker.TEST_DIRECTORY_ENV_VARIABLE_KEY);
         if (testDirPath == null) {
             return null;

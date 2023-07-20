@@ -27,6 +27,7 @@ import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.logger.InvocationLocal;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -382,19 +383,22 @@ public class DynamicRemoteFileResolver {
         String unzipValue = query.get(UNZIP_KEY);
         if (unzipValue != null && "true".equals(unzipValue.toLowerCase())) {
             // File was requested to be unzipped.
-            if (ZipUtil.isZipFileValid(downloadedFile, false)) {
-                File extractedDir =
-                        FileUtil.createTempDir(
-                                FileUtil.getBaseName(downloadedFile.getName()),
-                                CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER));
-                ZipUtil2.extractZip(downloadedFile, extractedDir);
-                FileUtil.deleteFile(downloadedFile);
-                return extractedDir;
-            } else {
-                throw new IOException(
-                        String.format(
-                                "%s was requested to be unzipped but is not a valid zip.",
-                                downloadedFile));
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope("unzip " + downloadedFile.getName())) {
+                if (ZipUtil.isZipFileValid(downloadedFile, false)) {
+                    File extractedDir =
+                            FileUtil.createTempDir(
+                                    FileUtil.getBaseName(downloadedFile.getName()),
+                                    CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER));
+                    ZipUtil2.extractZip(downloadedFile, extractedDir);
+                    FileUtil.deleteFile(downloadedFile);
+                    return extractedDir;
+                } else {
+                    throw new IOException(
+                            String.format(
+                                    "%s was requested to be unzipped but is not a valid zip.",
+                                    downloadedFile));
+                }
             }
         }
         // Return the original file untouched

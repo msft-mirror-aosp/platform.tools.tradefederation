@@ -59,6 +59,7 @@ public class CommandRunner {
     private ExitCode mErrorCode = ExitCode.NO_ERROR;
 
     public static final String EXCEPTION_KEY = "serialized_exception";
+    public static final String START_FEATURE_SERVER = "START_FEATURE_SERVER";
     private static final long CHECK_DEVICE_TIMEOUT = 60000;
 
     public CommandRunner() {}
@@ -121,7 +122,7 @@ public class CommandRunner {
             ClearcutClient client = futureClient.get();
             Runtime.getRuntime().addShutdownHook(new TerminateClearcutClient(client));
             client.notifyTradefedStartEvent();
-            if (System.getenv("START_FEATURE_SERVER") != null) {
+            if (System.getenv(START_FEATURE_SERVER) != null) {
                 // Starting the server takes 100ms so do it in parallel
                 CompletableFuture.supplyAsync(() -> startFeatureSever());
             }

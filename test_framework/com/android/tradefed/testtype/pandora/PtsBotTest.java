@@ -79,23 +79,11 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     // (i.e. the machine running pts-bot) which will connect to the DUT.
     private static final int HCI_PROXY_PORT = 1234;
 
-    // These are the fixed ports of Rootcanal (i.e. virtual Bluetooth Controller
-    // used for virtual tests).
-    // By default, these ports are available when running Rootcanal on a
-    // physical DUT, but not when the DUT is a Cuttlefish device, because
-    // Rootcanal is running on the CF Host and not on the CF Guest. To make
-    // them available we forward the CF Host Rootcanal ports (see below) to
-    // these ports on the CF Guest which is exposed to the host running the
-    // tests.
-    // Note: the CF Host is different from the test host (or just host), which
-    // is the machine running the tests!
-    private static final int HCI_ROOTCANAL_PORT = 6211;
-    private static final int CONTROL_ROOTCANAL_PORT = 6212;
-
     // These are Rootcanal CF Host fixed ports as specified at Cuttlefish
     // startup, in assemble_cvd/flags.cc.
     private static final int HCI_ROOTCANAL_PORT_CF = 7300;
     private static final int CONTROL_ROOTCANAL_PORT_CF = 7500;
+    private static final int ROOTCANAL_VSOCK_CID = 2;
 
     // This is the vsock port where the modem simulator is exposed in the
     // Cuttlefish guest. It is specified in
@@ -235,6 +223,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         int startIndex = 0;
         for (int i = 0; i < shardCountHint; i++) {
             PtsBotTest shard = new PtsBotTest();
+            shard.addAllIncludeFilters(getIncludeFilters());
+            shard.addAllExcludeFilters(getExcludeFilters());
             // Copy all options.
             try {
                 OptionCopier.copyOptions(this, shard);
@@ -304,28 +294,17 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
 
         CLog.i("PTS HCI port: %s", getHciPort());
 
-        Thread killHciPassthrough = null;
-        Thread killControlPassthrough = null;
-
         if (!physical) {
-            boolean isCuttlefish = testDevice.getProductType().equals("cutf");
-
-            if (isCuttlefish) {
-                // forward HCI + Control ("test") ports from CF Host
-                // Rootcanal to CF device.
-                killHciPassthrough =
-                        createCfHostToCfDevicePassthrough(
-                                testDevice, HCI_ROOTCANAL_PORT_CF, HCI_ROOTCANAL_PORT);
-                killControlPassthrough =
-                        createCfHostToCfDevicePassthrough(
-                                testDevice, CONTROL_ROOTCANAL_PORT_CF, CONTROL_ROOTCANAL_PORT);
-            }
-
             // Forward allocated host Rootcanal ports to DUT Rootcanal ports.
             hostHciRootcanalPort = getUnusedPort();
-            adbForwardPort(testDevice, hostHciRootcanalPort, HCI_ROOTCANAL_PORT);
+            adbForwardVsockPort(
+                    testDevice, hostHciRootcanalPort, ROOTCANAL_VSOCK_CID, HCI_ROOTCANAL_PORT_CF);
             hostControlRootcanalPort = getUnusedPort();
-            adbForwardPort(testDevice, hostControlRootcanalPort, CONTROL_ROOTCANAL_PORT);
+            adbForwardVsockPort(
+                    testDevice,
+                    hostControlRootcanalPort,
+                    ROOTCANAL_VSOCK_CID,
+                    CONTROL_ROOTCANAL_PORT_CF);
 
             // forward host port to DUT modem_simulator vsock
             hostModemSimulatorPort = getUnusedPort();
@@ -351,14 +330,6 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
 
         // Execute tests.
         runPtsBotTests(tests, testInfo, listener);
-
-        // Kill passthroughs, if initialized.
-        if (killHciPassthrough != null) {
-            completeShutdownHook(killHciPassthrough);
-        }
-        if (killControlPassthrough != null) {
-            completeShutdownHook(killControlPassthrough);
-        }
 
         // Remove forwarded ports.
         adbForwardRemovePort(testDevice, hostPandoraServerPort);
@@ -737,72 +708,6 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         builder.environment().put("PYTHONPATH", pythonPath);
 
         return builder;
-    }
-
-    /**
-     * Some services (notably RootCanal) run on the CF Host, whereas we only have access to the CF
-     * Guest (device) ports to do ADB port forwarding. Therefore, we need to forward ports from the
-     * CF Guest to the CF Host, so we can reach them from the local machine. Note: the CF Host is
-     * different from the test host (or just host) which is the machine running the tests.
-     */
-    private Thread createCfHostToCfDevicePassthrough(
-            ITestDevice testDevice, int cfHostPort, int cfDevicePort)
-            throws DeviceNotAvailableException {
-        String cfHostIp = "192.168.97.1";
-        String command =
-                String.format(
-                        "nohup nc -L -p %s nc %s %s 2>/dev/null 1>/dev/null & echo $!",
-                        cfDevicePort, cfHostIp, cfHostPort);
-        CommandResult result = testDevice.executeShellV2Command(command);
-        if (result.getExitCode() != 0) {
-            throw new RuntimeException("Port passthrough command failed: " + result.getExitCode());
-        }
-
-        int pid = Integer.parseInt(result.getStdout().trim());
-
-        CLog.i("Port passthrough pid: %s for RootCanal port: %s", pid, cfHostPort);
-
-        // Wait a bit and see if pid is still there.
-        RunUtil.getDefault().sleep(100);
-
-        CommandResult psResult = testDevice.executeShellV2Command(String.format("ps -p %s", pid));
-        if (psResult.getExitCode() != 0) {
-            throw new RuntimeException(
-                    String.format("Port passthrough for RootCanal port %d died", cfHostPort));
-        }
-
-        // Since our test may be interrupted, we want to do our best to avoid
-        // polluting the test device, as it persists across tests.
-        Thread hook =
-                new Thread(
-                        () -> {
-                            try {
-                                testDevice.executeShellV2Command(String.format("kill %s", pid));
-                            } catch (DeviceNotAvailableException e) {
-                                CLog.e(
-                                        "Can not kill passthrough for RootCanal port %s,"
-                                                + " device not found",
-                                        cfHostPort);
-                            }
-                        });
-        Runtime.getRuntime().addShutdownHook(hook);
-        return hook;
-    }
-
-    /**
-     * Execute a shutdown hook and remove it from the runtime's shutdown hooks, to clean it up while
-     * keeping the JVM running.
-     */
-    private void completeShutdownHook(Thread hook) {
-        if (hook == null) {
-            return;
-        }
-        try {
-            Runtime.getRuntime().removeShutdownHook(hook);
-            hook.start();
-        } catch (IllegalStateException e) {
-            // If we are already in the process of shutting down do nothing
-        }
     }
 
     private void adbForwardPort(ITestDevice testDevice, int hostPort, int dutPort)

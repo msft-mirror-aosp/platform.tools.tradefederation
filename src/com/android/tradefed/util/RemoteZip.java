@@ -17,6 +17,9 @@ package com.android.tradefed.util;
 
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IFileDownloader;
+import com.android.tradefed.build.cache.PartialZipDownloadCache;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 import com.android.tradefed.util.zip.CentralDirectoryInfo;
@@ -45,6 +48,8 @@ public class RemoteZip {
     private long mLastAccess;
     private boolean mUseZip64;
 
+    private boolean mUseCache;
+
     /**
      * Constructor
      *
@@ -57,13 +62,20 @@ public class RemoteZip {
             String remoteFilePath,
             long fileSize,
             IFileDownloader downloader,
-            boolean useZip64) {
+            boolean useZip64,
+            boolean useCache) {
         mRemoteFilePath = remoteFilePath;
         mFileSize = fileSize;
         mDownloader = downloader;
         mZipEntries = null;
         mUseZip64 = useZip64;
         mLastAccess = System.currentTimeMillis();
+        mUseCache = useCache;
+    }
+
+    public RemoteZip(
+            String remoteFilePath, long fileSize, IFileDownloader downloader, boolean useZip64) {
+        this(remoteFilePath, fileSize, downloader, useZip64, false);
     }
 
     /**
@@ -156,6 +168,26 @@ public class RemoteZip {
             throws BuildRetrievalError, IOException {
         long startTime = System.currentTimeMillis();
 
+        // Remove from download anything that is in our cache
+        if (mUseCache) {
+            CLog.d("RemoteZip caching is enabled, evaluating.");
+            for (CentralDirectoryInfo info : new ArrayList<>(files)) {
+                File targetFile = new File(destDir, info.getFileName());
+                boolean cacheHit =
+                        PartialZipDownloadCache.getDefaultCache()
+                                .getCachedFile(
+                                        targetFile,
+                                        info.getFileName(),
+                                        Long.toString(info.getCrc()));
+                if (cacheHit) {
+                    files.remove(info);
+                    CLog.d("Retrieved %s from cache", info.getFileName());
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.ZIP_PARTIAL_DOWNLOAD_CACHE_HIT, 1);
+                }
+            }
+        }
+
         // Merge the entries into sections to minimize the download attempts.
         List<MergedZipEntryCollection> collections =
                 MergedZipEntryCollection.createCollections(files);
@@ -195,6 +227,7 @@ public class RemoteZip {
                                         new File(
                                                 Paths.get(destDir.toString(), entry.getFileName())
                                                         .toString());
+                                CLog.d("Downloaded %s", entry.getFileName());
                                 LocalFileHeader localFileHeader =
                                         new LocalFileHeader(
                                                 partialZipFile,
@@ -206,6 +239,13 @@ public class RemoteZip {
                                         entry,
                                         localFileHeader,
                                         entry.getLocalHeaderOffset() - collection.getStartOffset());
+                                if (mUseCache) {
+                                    PartialZipDownloadCache.getDefaultCache()
+                                            .populateCacheFile(
+                                                    targetFile,
+                                                    entry.getFileName(),
+                                                    Long.toString(entry.getCrc()));
+                                }
                             }
                         } finally {
                             FileUtil.deleteFile(partialZipFile);
@@ -220,5 +260,18 @@ public class RemoteZip {
                 files.size(),
                 TimeUtil.formatElapsedTime(System.currentTimeMillis() - startTime),
                 downloadSizes.stream().mapToLong(Long::longValue).sum());
+        if (executor.hasErrors()) {
+            List<Throwable> errors = executor.getErrors();
+            CLog.e(
+                    "%d exceptions raised when downloading partially from remote zip.",
+                    errors.size());
+            for (Throwable e : errors) {
+                CLog.e(e);
+            }
+            if (errors.get(0) instanceof IOException) {
+                throw (IOException) errors.get(0);
+            }
+            throw new RuntimeException(errors.get(0));
+        }
     }
 }

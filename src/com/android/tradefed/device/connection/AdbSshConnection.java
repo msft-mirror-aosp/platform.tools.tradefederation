@@ -329,6 +329,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                                             getInitialUser(),
                                             getInitialDeviceNumOffset()));
                 }
+                CLog.d("Release as idevice: %s", ((IManagedTestDevice) getDevice()).getIDevice());
             }
             ((IManagedTestDevice) getDevice()).setFastbootEnabled(false);
 
@@ -499,6 +500,8 @@ public class AdbSshConnection extends AdbTcpConnection {
      * @throws TargetSetupError
      */
     public CommandResult powerwashGce(String user, Integer offset) throws TargetSetupError {
+        long startTime = System.currentTimeMillis();
+
         if (mGceAvd == null) {
             String errorMsg = String.format("Can not get GCE AVD Info. launch GCE first?");
             throw new TargetSetupError(
@@ -546,7 +549,18 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getRunUtil(),
                         Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
                         powerwashCommand.split(" "));
-        if (!CommandStatus.SUCCESS.equals(powerwashRes.getStatus())) {
+
+        // Time taken for powerwash this invocation
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.POWERWASH_TIME,
+                Long.toString(System.currentTimeMillis() - startTime));
+
+        if (CommandStatus.SUCCESS.equals(powerwashRes.getStatus())) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POWERWASH_SUCCESS_COUNT, 1);
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.POWERWASH_FAILURE_COUNT, 1);
             CLog.e("%s", powerwashRes.getStderr());
             // Log 'adb devices' to confirm device is gone
             CommandResult printAdbDevices = getRunUtil().runTimedCmd(60000L, "adb", "devices");
@@ -554,6 +568,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             // Proceed here, device could have been already gone.
             return powerwashRes;
         }
+
         ((NativeDevice) getDevice()).getMonitor().waitForDeviceAvailable();
         ((NativeDevice) getDevice()).resetContentProviderSetup();
         return powerwashRes;

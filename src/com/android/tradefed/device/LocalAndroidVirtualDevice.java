@@ -21,6 +21,8 @@ import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.cloud.GceAvdInfo;
+import com.android.tradefed.device.connection.AdbTcpConnection;
+import com.android.tradefed.device.connection.DefaultConnection.ConnectionBuilder;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -181,6 +183,7 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
     @Override
     public void setTestLogger(ITestLogger testLogger) {
         mTestLogger = testLogger;
+        super.setTestLogger(testLogger);
     }
 
     /**
@@ -593,5 +596,17 @@ public class LocalAndroidVirtualDevice extends RemoteAndroidDevice implements IT
                 CLog.w("%s doesn't exist.", file.getAbsolutePath());
             }
         }
+    }
+
+    public boolean adbTcpConnect(String host, String port) {
+        AdbTcpConnection conn =
+                new AdbTcpConnection(new ConnectionBuilder(getRunUtil(), this, null, mTestLogger));
+        return conn.adbTcpConnect(host, port);
+    }
+
+    public boolean adbTcpDisconnect(String host, String port) {
+        AdbTcpConnection conn =
+                new AdbTcpConnection(new ConnectionBuilder(getRunUtil(), this, null, mTestLogger));
+        return conn.adbTcpDisconnect(host, port);
     }
 }
