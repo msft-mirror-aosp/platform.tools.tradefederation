@@ -150,6 +150,11 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             FileUtil.recursiveDelete(srcDirectory);
             FileUtil.recursiveDelete(targetDirectory);
             revertToPreviousBuild();
+
+            String afterRevert = getDevice().getBuildId();
+            CLog.d(
+                    "Original build id: %s. after unmount build id: %s",
+                    originalBuildId, afterRevert);
         }
     }
 
