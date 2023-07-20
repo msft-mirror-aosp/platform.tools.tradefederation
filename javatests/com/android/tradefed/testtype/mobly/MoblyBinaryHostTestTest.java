@@ -42,6 +42,7 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.proto.TestRecordProto;
+import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -66,6 +67,7 @@ import java.io.OutputStream;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
@@ -1059,6 +1061,39 @@ public class MoblyBinaryHostTestTest {
                         contains("--log_path="),
                         eq("--tests"),
                         eq("test_baz"));
+    }
+
+    @Test
+    public void testRun_withSharding() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-par-file-name", mMoblyBinary2.getName());
+        Mockito.doReturn(mMoblyTestDir)
+                .when(mTestInfo)
+                .getDependencyFile(eq(mMoblyBinary2.getName()), eq(false));
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        int shardCountHint = 2;
+        Collection<IRemoteTest> shards = mSpyTest.split(shardCountHint, mTestInfo);
+        assertTrue(shards.size() == shardCountHint);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout(
+                                    "test_foo\n"
+                                            + "test_bar\n"
+                                            + "test_cafe\n"
+                                            + "test_baguette\n");
+                            return res;
+                        });
+
+        for (IRemoteTest shard : shards) {
+            ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+            MoblyBinaryHostTest test = Mockito.spy((MoblyBinaryHostTest) shard);
+            Mockito.doReturn(mMockRunUtil).when(test).getRunUtil();
+            test.run(mTestInfo, mockListener);
+            verify(mockListener, times(1)).testRunStarted(anyString(), eq(2));
+        }
     }
 
     @Test
