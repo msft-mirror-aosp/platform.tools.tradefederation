@@ -208,7 +208,7 @@ public class MoblyBinaryHostTest
     }
 
     @Override
-    public Collection<IRemoteTest> split(Integer shardCountHint, TestInformation testInfo) {
+    public Collection<IRemoteTest> split(int shardCountHint)  {
         if (shardCountHint <= 1) {
             return null;
         }
