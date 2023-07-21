@@ -209,7 +209,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     private int totalShards = 1;
 
     @Override
-    public Collection<IRemoteTest> split(Integer shardCountHint, TestInformation testInfo) {
+    public Collection<IRemoteTest> split(int shardCountHint) {
         if (physical || shardCountHint <= 1) {
             // We cannot share the Bluetooth dongle across multiple tests in
             // parallel, and there's no point "sharding" with just one shard.
