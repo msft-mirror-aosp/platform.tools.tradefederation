@@ -5249,6 +5249,7 @@ public class NativeDevice
         mExecuteShellCommandLogs = null;
         FileUtil.recursiveDelete(mUnpackedFastbootDir);
         getConnection().tearDownConnection();
+        mConnectionAvd = null;
         mDeviceActionReceivers.clear();
         // Default implementation
         if (getIDevice() instanceof StubDevice) {
