@@ -744,7 +744,7 @@ public class GceManager {
             gceArgs.add(options.getInstanceUser());
             gceArgs.add("--host-ssh-private-key-path");
             gceArgs.add(options.getSshPrivateKeyPath().getAbsolutePath());
-        } else {
+        } else if (config != null) {
             gceArgs.add("--config_file");
             gceArgs.add(config.getAbsolutePath());
         }
@@ -772,10 +772,13 @@ public class GceManager {
         // Add extra args.
         File config = null;
         try {
-            config = FileUtil.createTempFile(options.getAvdConfigFile().getName(), "config");
-            // Copy the config in case it comes from a dynamic file. In order to ensure Acloud has
-            // the file until it's done with it.
-            FileUtil.copyFile(options.getAvdConfigFile(), config);
+            File originalConfig = options.getAvdConfigFile();
+            if (originalConfig != null) {
+                config = FileUtil.createTempFile(originalConfig.getName(), "config");
+                // Copy the config in case it comes from a dynamic file. In order to ensure Acloud
+                // has the file until it's done with it.
+                FileUtil.copyFile(originalConfig, config);
+            }
             List<String> gceArgs =
                     buildShutdownCommand(
                             config, options, instanceName, hostname, isIpPreconfigured);
@@ -803,8 +806,9 @@ public class GceManager {
                 // Discard the output so the process is not linked to the parent and doesn't die
                 // if the JVM exit.
                 Process p = runUtil.runCmdInBackground(Redirect.DISCARD, gceArgs);
-                AcloudDeleteCleaner cleaner = new AcloudDeleteCleaner(p, config);
-                cleaner.start();
+                if (config != null) {
+                    new AcloudDeleteCleaner(p, config).start();
+                }
             }
         } catch (IOException ioe) {
             CLog.e("failed to create log file for GCE Teardown");
