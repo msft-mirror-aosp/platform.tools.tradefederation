@@ -32,11 +32,11 @@ import com.proto.tradefed.feature.FeatureResponse;
 import com.proto.tradefed.feature.TradefedInformationGrpc.TradefedInformationImplBase;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -53,11 +53,10 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
 
     private Server mServer;
 
-    private Map<String, IConfiguration> mRegisteredInvocation = new ConcurrentHashMap<>();
-    private Map<String, ThreadGroup> mRegisteredGroup =
-            new ConcurrentHashMap<String, ThreadGroup>();
+    private Map<String, IConfiguration> mRegisteredInvocation = new HashMap<>();
+    private Map<String, ThreadGroup> mRegisteredGroup = new HashMap<String, ThreadGroup>();
     private Map<String, List<IScheduledInvocationListener>>
-            mRegisteredScheduledInvocationListeners = new ConcurrentHashMap<>();
+            mRegisteredScheduledInvocationListeners = new HashMap<>();
 
     /** Returns the port used by the server. */
     public static int getPort() {
