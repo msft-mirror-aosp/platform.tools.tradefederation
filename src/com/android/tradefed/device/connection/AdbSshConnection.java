@@ -223,6 +223,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                 getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
                 waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
                 waitForAdbConnect(serial, WAIT_FOR_ADB_CONNECT);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_RECOVERY_FROM_SSH_TUNNEL, 1);
             } catch (Exception e) {
                 // Log the entrance in recovery here to avoid double counting with
                 // super.recoverDevice.
