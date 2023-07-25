@@ -288,39 +288,22 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
 
         // Forward allocated host Pandora Server port to actual DUT Pandora
         // Server ports.
-        hostPandoraServerPort =
-                Integer.parseInt(adbForwardPort(testDevice, 0, PANDORA_SERVER_PORT).trim());
+        hostPandoraServerPort = adbForwardPort(testDevice, 0, PANDORA_SERVER_PORT);
 
         CLog.i("PTS HCI port: %s", getHciPort());
 
         if (!physical) {
             // Forward allocated host Rootcanal ports to DUT Rootcanal ports.
             hostHciRootcanalPort =
-                    Integer.parseInt(
-                            adbForwardVsockPort(
-                                            testDevice,
-                                            0,
-                                            ROOTCANAL_VSOCK_CID,
-                                            HCI_ROOTCANAL_PORT_CF)
-                                    .trim());
+                    adbForwardVsockPort(testDevice, 0, ROOTCANAL_VSOCK_CID, HCI_ROOTCANAL_PORT_CF);
             hostControlRootcanalPort =
-                    Integer.parseInt(
-                            adbForwardVsockPort(
-                                            testDevice,
-                                            0,
-                                            ROOTCANAL_VSOCK_CID,
-                                            CONTROL_ROOTCANAL_PORT_CF)
-                                    .trim());
+                    adbForwardVsockPort(
+                            testDevice, 0, ROOTCANAL_VSOCK_CID, CONTROL_ROOTCANAL_PORT_CF);
 
             // forward host port to DUT modem_simulator vsock
             hostModemSimulatorPort =
-                    Integer.parseInt(
-                            adbForwardVsockPort(
-                                            testDevice,
-                                            0,
-                                            MODEM_SIMULATOR_VSOCK_CID,
-                                            MODEM_SIMULATOR_VSOCK_PORT)
-                                    .trim());
+                    adbForwardVsockPort(
+                            testDevice, 0, MODEM_SIMULATOR_VSOCK_CID, MODEM_SIMULATOR_VSOCK_PORT);
         }
 
         // List all applicable tests in a sorted fashion.
@@ -706,19 +689,26 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         return builder;
     }
 
-    private String adbForwardPort(ITestDevice testDevice, int hostPort, int dutPort)
+    private int adbForwardPort(ITestDevice testDevice, int hostPort, int dutPort)
             throws DeviceNotAvailableException {
-        return testDevice.executeAdbCommand(
-                "forward", String.format("tcp:%s", hostPort), String.format("tcp:%s", dutPort));
+        return Integer.parseInt(
+                testDevice
+                        .executeAdbCommand(
+                                "forward",
+                                String.format("tcp:%s", hostPort),
+                                String.format("tcp:%s", dutPort))
+                        .trim());
     }
 
-    private String adbForwardVsockPort(
-            ITestDevice testDevice, int hostPort, int dutCid, int dutPort)
+    private int adbForwardVsockPort(ITestDevice testDevice, int hostPort, int dutCid, int dutPort)
             throws DeviceNotAvailableException {
-        return testDevice.executeAdbCommand(
-                "forward",
-                String.format("tcp:%s", hostPort),
-                String.format("vsock:%s:%s", dutCid, dutPort));
+        return Integer.parseInt(
+                testDevice
+                        .executeAdbCommand(
+                                "forward",
+                                String.format("tcp:%s", hostPort),
+                                String.format("vsock:%s:%s", dutCid, dutPort))
+                        .trim());
     }
 
     private void adbForwardRemovePort(ITestDevice testDevice, int hostPort)
