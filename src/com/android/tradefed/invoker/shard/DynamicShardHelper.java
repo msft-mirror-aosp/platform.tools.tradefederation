@@ -29,9 +29,6 @@ import com.google.common.base.Strings;
 import com.google.internal.android.engprod.v1.ProvideTestTargetRequest;
 import com.google.internal.android.engprod.v1.SerializedTestTarget;
 
-import io.grpc.StatusRuntimeException;
-import io.grpc.Status;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -39,6 +36,9 @@ import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
+
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 
 /** Sharding strategy to allow work remote work queueing between multiple TF instances */
 public class DynamicShardHelper extends ShardHelper {
@@ -95,7 +95,7 @@ public class DynamicShardHelper extends ShardHelper {
                     moduleMapping.keySet().stream()
                             .map(x -> SerializedTestTarget.newBuilder().setTargetName(x).build())
                             .collect(Collectors.toList());
-            CLog.v(String.format("Uploading test targets: %s", targetsToUpload));
+            CLog.d("Uploading to pool %s test targets: %s", poolId, targetsToUpload);
             ProvideTestTargetRequest request =
                     ProvideTestTargetRequest.newBuilder()
                             .setReferencePoolId(poolId)
@@ -110,7 +110,7 @@ public class DynamicShardHelper extends ShardHelper {
                 throw e;
             }
             // will only reach this point if the error code is ALREADY_EXISTS
-            CLog.v("Another shard has already seeded the pool.");
+            CLog.v("Another shard has already seeded the pool '%'.", poolId);
         }
 
         // if we're any shard, create a test pool poller that polls the sharding server
