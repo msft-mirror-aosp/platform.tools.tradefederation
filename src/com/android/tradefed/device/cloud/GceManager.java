@@ -864,13 +864,19 @@ public class GceManager {
             return null;
         }
         String adbTool = "./bin/adb";
+        String output;
         if (options.useOxygen()) {
             adbTool = "./tools/dynamic_adb_tool";
             // Make sure the Oxygen device is connected.
-            remoteSshCommandExec(gceAvd, options, runUtil, adbTool, "connect", "localhost:6520");
+            output =
+                    remoteSshCommandExec(
+                            gceAvd, options, runUtil, adbTool, "connect", "localhost:6520");
+            if (output.contains("failed to connect to")) {
+                CLog.e("Bugreport collection skipped due to device can't be connected: %s", output);
+                return null;
+            }
         }
 
-        String output;
         // TODO(b/280177749): Remove the special logic after Oxygen side is cleaned up.
         if (options.useOxygen()) {
             output =
