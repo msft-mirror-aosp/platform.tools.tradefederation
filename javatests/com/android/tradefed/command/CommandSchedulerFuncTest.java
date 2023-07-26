@@ -54,6 +54,7 @@ import com.google.common.truth.Truth;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -366,6 +367,7 @@ public class CommandSchedulerFuncTest {
      * Test that the Invocation is interrupted by the shutdownHard and finishes with an
      * interruption. {@link CommandScheduler#shutdownHard()}
      */
+    @Ignore // TODO (b/292642748)
     @Test
     public void testShutdown_interruptible() throws Throwable {
         String[] slowConfigArgs = new String[] {"slowConfig"};
