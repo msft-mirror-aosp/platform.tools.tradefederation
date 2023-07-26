@@ -165,6 +165,7 @@ public class InvocationMetricLogger {
         // Count the number of time device recovery like usb reset are successful.
         DEVICE_RECOVERY("device_recovery", true),
         DEVICE_RECOVERY_FROM_RECOVERY("device_recovery_from_recovery", true),
+        DEVICE_RECOVERY_FROM_SSH_TUNNEL("device_recovered_from_ssh_tunnel", true),
         DEVICE_RECOVERY_FAIL("device_recovery_fail", true),
         SANDBOX_EXIT_CODE("sandbox_exit_code", false),
         CF_FETCH_ARTIFACT_TIME("cf_fetch_artifact_time_ms", false),
