@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.util;
 
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.zip.CentralDirectoryInfo;
 import com.android.tradefed.util.zip.EndCentralDirectoryInfo;
@@ -405,7 +406,11 @@ public class ZipUtil {
             EndCentralDirectoryInfo endCentralDirInfo,
             boolean useZip64)
             throws IOException {
-        return getZipCentralDirectoryInfos(partialZipFile, endCentralDirInfo, 0, useZip64);
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(
+                        "getZipCentralDirectoryInfos:" + partialZipFile.getName())) {
+            return getZipCentralDirectoryInfos(partialZipFile, endCentralDirInfo, 0, useZip64);
+        }
     }
 
     /**
