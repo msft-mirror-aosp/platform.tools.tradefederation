@@ -696,7 +696,10 @@ public class StrictShardHelperTest {
                                 + shards;
 
                 assertEquals(testCase, shardCount, shards.size());
-                assertEquals(testCase, fullList, shards.stream().flatMap(List::stream).toList());
+                assertEquals(
+                        testCase,
+                        fullList,
+                        shards.stream().flatMap(List::stream).collect(Collectors.toList()));
 
                 var maxShardSize = shards.stream().map(List::size).max(Integer::compareTo).get();
                 var minShardSize = shards.stream().map(List::size).min(Integer::compareTo).get();
