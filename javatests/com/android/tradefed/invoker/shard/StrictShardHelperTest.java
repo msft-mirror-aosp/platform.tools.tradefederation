@@ -685,7 +685,7 @@ public class StrictShardHelperTest {
     public void testShardList() {
         for (int shardCount = 1; shardCount < 50; shardCount++) {
             for (int testCount = 0; testCount < 200; testCount++) {
-                var fullList = IntStream.range(0, testCount).boxed().toList();
+                var fullList = IntStream.range(0, testCount).boxed().collect(Collectors.toList());
                 var shards = StrictShardHelper.shardList(fullList, shardCount);
                 var testCase =
                         "shardCount="
