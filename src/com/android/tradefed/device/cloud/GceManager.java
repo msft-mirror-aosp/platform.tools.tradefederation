@@ -58,6 +58,7 @@ import java.io.IOException;
 import java.lang.ProcessBuilder.Redirect;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -77,6 +78,17 @@ public class GceManager {
     private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
     private static final List<String> SCOPES = Arrays.asList(ComputeScopes.COMPUTE_READONLY);
 
+    // Create list of error codes that warrant a lease retry
+    private static final List<InfraErrorIdentifier> RETRIABLE_LEASE_ERRORS =
+            new ArrayList<>(
+                    Arrays.asList(
+                            InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR,
+                            InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_ERROR,
+                            InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE,
+                            InfraErrorIdentifier.OXYGEN_SERVER_LB_CONNECTION_ERROR,
+                            InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN));
+
+    private static final int MAX_LEASE_RETRIES = 3;
     private DeviceDescriptor mDeviceDescriptor;
     private TestDeviceOptions mDeviceOptions;
     private IBuildInfo mBuildInfo;
@@ -278,6 +290,27 @@ public class GceManager {
                     new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             CommandResult res =
                     oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions(), attributes);
+
+            // Retry lease up to 2x if error code is in list of error codes
+            int iteration = 1;
+            while (res.getStatus() != CommandStatus.SUCCESS && iteration < MAX_LEASE_RETRIES) {
+                InfraErrorIdentifier identifier = GceAvdInfo.refineOxygenErrorType(res.getStderr());
+                if (!RETRIABLE_LEASE_ERRORS.contains(identifier)) {
+                    break;
+                }
+                CLog.d("Retrying lease call due to earlier failure of %s", identifier);
+                res = oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions(), attributes);
+                // Update Oxygen lease attempt metrics
+                if (res.getStatus() == CommandStatus.SUCCESS) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.LEASE_RETRY_COUNT_SUCCESS, iteration);
+                } else {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.LEASE_RETRY_COUNT_FAILURE, iteration);
+                }
+                iteration++;
+            }
+
             mGceAvdInfo =
                     GceAvdInfo.parseGceInfoFromOxygenClientOutput(
                                     res, mDeviceOptions.getRemoteAdbPort())
