@@ -275,6 +275,8 @@ public class InvocationMetricLogger {
         POWERWASH_TIME("powerwash_time_ms", true),
         POWERWASH_SUCCESS_COUNT("powerwash_success_count", true),
         POWERWASH_FAILURE_COUNT("powerwash_failure_count", true),
+        LEASE_RETRY_COUNT_SUCCESS("lease_retry_count_success", true),
+        LEASE_RETRY_COUNT_FAILURE("lease_retry_count_failure", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
