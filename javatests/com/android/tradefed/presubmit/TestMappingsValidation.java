@@ -153,6 +153,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "binderRpcTestSingleThreadedNoKernel",
                     "CtsSuspendAppsPermissionTestCases",
                     "CtsAppSecurityHostTestCases",
+                    "CtsPackageManagerTestCases", // Renamed from CtsAppSecurityHostTestCases
                     "FrameworksServicesTests",
                     "NeuralNetworksTest_static",
                     "CtsNNAPITestCases",
