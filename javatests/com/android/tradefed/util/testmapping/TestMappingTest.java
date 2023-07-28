@@ -720,6 +720,11 @@ public class TestMappingTest {
             assertEquals(3, testInfos.size());
             for (TestInfo test : testInfos) {
                 names.add(test.getName());
+                if (test.getName().equals("test1")) {
+                    assertEquals(2, test.getImportPaths().size());
+                    assertTrue(test.getImportPaths().contains("path1"));
+                    assertTrue(test.getImportPaths().contains("path2"));
+                }
             }
             assertTrue(names.contains("import-test1"));
             assertTrue(names.contains("import-test2"));
