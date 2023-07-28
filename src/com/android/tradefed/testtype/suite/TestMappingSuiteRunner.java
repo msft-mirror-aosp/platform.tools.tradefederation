@@ -150,6 +150,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "kernel branches. The option should only be used for kernel tests.")
     private boolean mForceFullRun = false;
 
+    @Option(
+            name = "report-import-paths",
+            description = "Whether or not to report import paths into AnTS.")
+    private boolean mReportImportPaths = false;
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
@@ -195,6 +200,12 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                     "If option --include-filter is set, option --test-mapping-path should "
                             + "not be set.",
                     InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (mReportImportPaths && !mIgnoreTestMappingImports) {
+            CLog.i(
+                    "Option \"no-ignore-test-mapping-imports\" and \"report-import-paths\" are"
+                        + " enabled, TestMapping will report tests with sources and import paths to"
+                        + " AnTS");
         }
 
         if (mTestGroup != null) {
@@ -363,6 +374,9 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                 }
                 List<IRemoteTest> remoteTests = entry.getValue().getTests();
                 addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
+                if (mReportImportPaths && !mIgnoreTestMappingImports) {
+                    addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getImportPaths());
+                }
                 tests.addAll(remoteTests);
             }
         }
