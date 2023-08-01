@@ -751,6 +751,9 @@ public class MoblyBinaryHostTest
                 try (InputStreamSource dataStream = new FileInputStreamSource(subFile, true)) {
                     String cleanName = subFile.getName().replace(",", "_");
                     LogDataType type = LogDataType.TEXT;
+                    if (cleanName.contains("trace")) {
+                        type = LogDataType.PERFETTO;
+                    }
                     if (cleanName.contains("logcat")) {
                         type = LogDataType.LOGCAT;
                     }
