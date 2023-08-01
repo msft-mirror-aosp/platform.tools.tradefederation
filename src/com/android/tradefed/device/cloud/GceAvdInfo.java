@@ -68,7 +68,7 @@ public class GceAvdInfo {
                 InfraErrorIdentifier.OXYGEN_NOT_ENOUGH_RESOURCE,
                 "Oxygen currently doesn't have enough resources to fulfil this request");
         OXYGEN_ERROR_PATTERN_MAP.put(
-                InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "502:Bad Gateway");
+                InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "Bad Gateway");
         OXYGEN_ERROR_PATTERN_MAP.put(
                 InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR, "OxygenClient");
         OXYGEN_ERROR_PATTERN_MAP.put(
