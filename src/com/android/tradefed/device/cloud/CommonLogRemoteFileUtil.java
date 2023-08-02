@@ -189,8 +189,8 @@ public class CommonLogRemoteFileUtil {
             GceAvdInfo gceAvd,
             TestDeviceOptions options,
             IRunUtil runUtil) {
-        if (gceAvd == null) {
-            CLog.e("GceAvdInfo was null, cannot collect remote files.");
+        if (gceAvd == null || gceAvd.hostAndPort() == null) {
+            CLog.e("GceAvdInfo or its host setting was null, cannot collect remote files.");
             return;
         }
         List<KnownLogFileEntry> toFetch = null;
@@ -285,8 +285,8 @@ public class CommonLogRemoteFileUtil {
             IRunUtil runUtil,
             String logName,
             String... remoteCommand) {
-        if (gceAvd == null) {
-            CLog.e("GceAvdInfo was null, cannot collect remote files.");
+        if (gceAvd == null || gceAvd.hostAndPort() == null) {
+            CLog.e("GceAvdInfo or its host setting was null, cannot collect remote files.");
             return;
         }
         CommandResult commandResult =
@@ -319,8 +319,8 @@ public class CommonLogRemoteFileUtil {
             GceAvdInfo gceAvd,
             TestDeviceOptions options,
             IRunUtil runUtil) {
-        if (gceAvd == null) {
-            CLog.e("GceAvdInfo was null, cannot collect remote files.");
+        if (gceAvd == null || gceAvd.hostAndPort() == null) {
+            CLog.e("GceAvdInfo or its host setting was null, cannot collect remote files.");
             return;
         }
         InstanceType type = options.getInstanceType();
