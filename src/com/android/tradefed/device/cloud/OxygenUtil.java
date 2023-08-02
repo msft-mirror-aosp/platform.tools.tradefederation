@@ -95,7 +95,12 @@ public class OxygenUtil {
                                             Pattern.compile("^launcher\\.log.*"),
                                             Pair.create(
                                                     "Unable to connect to vsock server",
-                                                    "unable_to_connect_to_vsock_server")))
+                                                    "unable_to_connect_to_vsock_server")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    "failed to initialize fetch system images",
+                                                    "fetch_cvd_failure")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /** Default constructor of OxygenUtil */
