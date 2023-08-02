@@ -54,6 +54,8 @@ public class XmlResultReporter extends CollectingTestListener implements ILogSav
     private static final String TESTCASE = "testcase";
     private static final String ERROR = "error";
     private static final String FAILURE = "failure";
+    private static final String IGNORED = "ignored";
+    private static final String ASSUMPTION_FAILURE = "assumption_failure";
     private static final String ATTR_NAME = "name";
     private static final String ATTR_TIME = "time";
     private static final String ATTR_ERRORS = "errors";
@@ -174,8 +176,17 @@ public class XmlResultReporter extends CollectingTestListener implements ILogSav
         serializer.attribute(NS, ATTR_CLASSNAME, testId.getClassName());
         serializer.attribute(NS, ATTR_TIME, "0");
 
-        if (!TestStatus.PASSED.equals(testResult.getStatus())) {
-            String result = testResult.getStatus().equals(TestStatus.FAILURE) ? FAILURE : ERROR;
+        if (TestStatus.IGNORED.equals(testResult.getStatus())) {
+            String result = IGNORED;
+            serializer.startTag(NS, result);
+            serializer.endTag(NS, result);
+        } else if (!TestStatus.PASSED.equals(testResult.getStatus())) {
+            String result = ERROR;
+            if (TestStatus.FAILURE.equals(testResult.getStatus())) {
+                result = FAILURE;
+            } else if (TestStatus.ASSUMPTION_FAILURE.equals(testResult.getStatus())) {
+                result = ASSUMPTION_FAILURE;
+            }
             serializer.startTag(NS, result);
             // TODO: get message of stack trace ?
 //            String msg = testResult.getStackTrace();
