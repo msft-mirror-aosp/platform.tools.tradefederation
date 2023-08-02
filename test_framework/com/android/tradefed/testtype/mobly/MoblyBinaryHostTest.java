@@ -216,7 +216,6 @@ public class MoblyBinaryHostTest
         Collection<IRemoteTest> shards = new ArrayList<>(shardCountHint);
 
         // Split tests between shards.
-        int startIndex = 0;
         for (int i = 0; i < shardCountHint; i++) {
             MoblyBinaryHostTest shard = new MoblyBinaryHostTest();
             shard.addAllIncludeFilters(getIncludeFilters());
