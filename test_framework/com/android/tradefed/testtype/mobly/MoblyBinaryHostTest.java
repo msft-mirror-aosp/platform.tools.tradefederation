@@ -50,6 +50,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.env.EnvScalarConstructor;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -60,6 +61,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -67,7 +69,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -208,7 +209,7 @@ public class MoblyBinaryHostTest
     }
 
     @Override
-    public Collection<IRemoteTest> split(int shardCountHint)  {
+    public Collection<IRemoteTest> split(int shardCountHint) {
         if (shardCountHint <= 1) {
             return null;
         }
@@ -583,7 +584,16 @@ public class MoblyBinaryHostTest
     @VisibleForTesting
     protected void updateConfigFile(InputStream configInputStream, Writer writer)
             throws HarnessRuntimeException {
-        Yaml yaml = new Yaml();
+        Yaml yaml =
+                new Yaml(
+                        new EnvScalarConstructor() {
+                            @Override
+                            public String getEnv(String key) {
+                                return mTestInfo.properties().get(key);
+                            }
+                        });
+        yaml.addImplicitResolver(
+                EnvScalarConstructor.ENV_TAG, EnvScalarConstructor.ENV_FORMAT, "$");
         Map<String, Object> configMap = (Map<String, Object>) yaml.load(configInputStream);
         CLog.d("Loaded yaml config: \n%s", configMap);
         List<Object> testBedList = (List<Object>) configMap.get("TestBeds");
