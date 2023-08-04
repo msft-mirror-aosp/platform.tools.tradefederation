@@ -34,6 +34,7 @@ import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
 import com.android.tradefed.device.cloud.OxygenUtil;
+import com.android.tradefed.device.cloud.RemoteFileUtil;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -56,6 +57,9 @@ import com.google.common.net.HostAndPort;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /** Adb connection over an ssh bridge. */
@@ -74,6 +78,7 @@ public class AdbSshConnection extends AdbTcpConnection {
     private static final int WAIT_TIME_DIVISION = 4;
     private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
     private static final long WAIT_FOR_TUNNEL_ONLINE = 2 * 60 * 1000;
+    private static final long FETCH_TOMBSTONES_TIMEOUT_MS = 5 * 60 * 1000;
 
     public AdbSshConnection(ConnectionBuilder builder) {
         super(builder);
@@ -218,6 +223,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                 getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
                 waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
                 waitForAdbConnect(serial, WAIT_FOR_ADB_CONNECT);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_RECOVERY_FROM_SSH_TUNNEL, 1);
             } catch (Exception e) {
                 // Log the entrance in recovery here to avoid double counting with
                 // super.recoverDevice.
@@ -569,9 +576,55 @@ public class AdbSshConnection extends AdbTcpConnection {
             return powerwashRes;
         }
 
-        ((NativeDevice) getDevice()).getMonitor().waitForDeviceAvailable();
-        ((NativeDevice) getDevice()).resetContentProviderSetup();
+        ((IManagedTestDevice) getDevice()).getMonitor().waitForDeviceAvailable();
+        if (getDevice() instanceof NativeDevice) {
+            ((NativeDevice) getDevice()).resetContentProviderSetup();
+        }
         return powerwashRes;
+    }
+
+    /**
+     * Cuttlefish has a special feature that brings the tombstones to the remote host where we can
+     * get them directly.
+     */
+    public List<File> getTombstones() {
+        InstanceType type = getDevice().getOptions().getInstanceType();
+        if (InstanceType.CUTTLEFISH.equals(type) || InstanceType.REMOTE_NESTED_AVD.equals(type)) {
+            List<File> tombs = new ArrayList<>();
+            String remoteRuntimePath =
+                    String.format(
+                                    CommonLogRemoteFileUtil.NESTED_REMOTE_LOG_DIR,
+                                    getDevice().getOptions().getInstanceUser())
+                            + "tombstones/*";
+            File localDir = null;
+            try {
+                localDir = FileUtil.createTempDir("tombstones");
+            } catch (IOException e) {
+                CLog.e(e);
+                return tombs;
+            }
+            if (!fetchRemoteDir(localDir, remoteRuntimePath)) {
+                CLog.e("Failed to pull %s", remoteRuntimePath);
+                FileUtil.recursiveDelete(localDir);
+            } else {
+                tombs.addAll(Arrays.asList(localDir.listFiles()));
+                localDir.deleteOnExit();
+            }
+            return tombs;
+        }
+        // If it's not Cuttlefish, returns nothing
+        return new ArrayList<>();
+    }
+
+    @VisibleForTesting
+    boolean fetchRemoteDir(File localDir, String remotePath) {
+        return RemoteFileUtil.fetchRemoteDir(
+                mGceAvd,
+                getDevice().getOptions(),
+                getRunUtil(),
+                FETCH_TOMBSTONES_TIMEOUT_MS,
+                remotePath,
+                localDir);
     }
 
     /**

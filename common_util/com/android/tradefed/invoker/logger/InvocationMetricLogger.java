@@ -66,6 +66,7 @@ public class InvocationMetricLogger {
                 "sandbox_jar_staging_partial_download_FEATURE_count", true),
         SANDBOX_JAR_STAGING_PARTIAL_DOWNLOAD_SUCCESS_COUNT(
                 "sandbox_jar_staging_partial_download_SUCCESS_count", true),
+        TEST_DISCOVERY_MODULE_COUNT("test_discovery_module_count", true),
         // -- Disk memory usage --
         // Approximate peak disk space usage of the invocation
         // Represent files that would usually live for the full invocation (min usage)
@@ -164,6 +165,7 @@ public class InvocationMetricLogger {
         // Count the number of time device recovery like usb reset are successful.
         DEVICE_RECOVERY("device_recovery", true),
         DEVICE_RECOVERY_FROM_RECOVERY("device_recovery_from_recovery", true),
+        DEVICE_RECOVERY_FROM_SSH_TUNNEL("device_recovered_from_ssh_tunnel", true),
         DEVICE_RECOVERY_FAIL("device_recovery_fail", true),
         SANDBOX_EXIT_CODE("sandbox_exit_code", false),
         CF_FETCH_ARTIFACT_TIME("cf_fetch_artifact_time_ms", false),
@@ -273,6 +275,8 @@ public class InvocationMetricLogger {
         POWERWASH_TIME("powerwash_time_ms", true),
         POWERWASH_SUCCESS_COUNT("powerwash_success_count", true),
         POWERWASH_FAILURE_COUNT("powerwash_failure_count", true),
+        LEASE_RETRY_COUNT_SUCCESS("lease_retry_count_success", true),
+        LEASE_RETRY_COUNT_FAILURE("lease_retry_count_failure", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),

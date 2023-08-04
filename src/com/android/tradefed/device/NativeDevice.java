@@ -107,6 +107,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -198,7 +199,7 @@ public class NativeDevice
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
 
-    
+
     /**
      * The delimiter that separates the actual shell output and the exit status.
      *
@@ -268,6 +269,9 @@ public class NativeDevice
     // If we increase the number of props, then increase the cache size of mPropertiesCache.
     private final Set<String> propsToPrefetch =
             ImmutableSet.of("ro.build.version.sdk", "ro.build.version.codename", "ro.build.id");
+    // Avoid caching any properties in those namespace
+    private static final Set<String> NEVER_CACHE_PROPERTIES =
+            ImmutableSet.of("vendor.debug", "ro.boot");
 
     /** Interface for a generic device communication attempt. */
     abstract interface DeviceAction {
@@ -655,8 +659,10 @@ public class NativeDevice
             }
             property = result.getStdout().trim();
             if (property != null) {
-                // Manage the cache manually to maintain exception handling
-                mPropertiesCache.put(name, property);
+                if (!NEVER_CACHE_PROPERTIES.stream().anyMatch(p -> name.startsWith(p))) {
+                    // Manage the cache manually to maintain exception handling
+                    mPropertiesCache.put(name, property);
+                }
             }
             return property;
         }
@@ -2844,8 +2850,10 @@ public class NativeDevice
      */
     @Override
     public InputStreamSource getLogcatSince(long date) {
+        int deviceApiLevel;
         try {
-            if (getApiLevel() <= 22) {
+            deviceApiLevel = getApiLevel();
+            if (deviceApiLevel <= 22) {
                 CLog.i("Api level too low to use logcat -t 'time' reverting to dump");
                 return getLogcatDump();
             }
@@ -2855,10 +2863,16 @@ public class NativeDevice
             return getLogcatDump();
         }
 
-        // Convert date to format needed by the command:
-        // 'MM-DD HH:mm:ss.mmm' or 'YYYY-MM-DD HH:mm:ss.mmm'
-        SimpleDateFormat format = new SimpleDateFormat("MM-dd HH:mm:ss.mmm");
-        String dateFormatted = format.format(new Date(date));
+        String dateFormatted;
+        if (deviceApiLevel >= 24) {
+            // Use 'sssss.mmm' epoch time format supported since API 24.
+            dateFormatted = String.format(Locale.US, "%d.%03d", date / 1000, date % 1000);
+        } else {
+            // Convert date to format needed by the command:
+            // 'MM-DD HH:mm:ss.mmm' or 'YYYY-MM-DD HH:mm:ss.mmm'
+            SimpleDateFormat format = new SimpleDateFormat("MM-dd HH:mm:ss.SSS");
+            dateFormatted = format.format(new Date(date));
+        }
 
         LargeOutputReceiver largeReceiver = null;
         try {
@@ -5235,6 +5249,7 @@ public class NativeDevice
         mExecuteShellCommandLogs = null;
         FileUtil.recursiveDelete(mUnpackedFastbootDir);
         getConnection().tearDownConnection();
+        mConnectionAvd = null;
         mDeviceActionReceivers.clear();
         // Default implementation
         if (getIDevice() instanceof StubDevice) {

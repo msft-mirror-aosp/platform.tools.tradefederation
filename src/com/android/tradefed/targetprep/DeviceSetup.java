@@ -349,6 +349,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     // setprop ro.test_harness 1
     // setprop persist.sys.test_harness 1
 
+    @Option(name = "hide-error-dialogs", description = "Turn on or off the error dialogs.")
+    protected BinaryState mHideErrorDialogs = BinaryState.ON;
+    // ON:  settings put global hide_error_dialogs 1
+    // OFF: settings put global hide_error_dialogs 0
+
     @Option(
             name = "disable-dalvik-verifier",
             description =
@@ -798,6 +803,10 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                 mTimezone = TimeZone.getDefault().getID();
             }
         }
+
+        setSettingForBinaryState(
+                mHideErrorDialogs, mGlobalSettings, "hide_error_dialogs", "1", "0");
+
         if (mTimezone != null) {
             CLog.i("The actual timezone we set here is  %s", mTimezone);
             mSetProps.put("persist.sys.timezone", mTimezone);

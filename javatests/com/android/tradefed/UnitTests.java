@@ -26,6 +26,7 @@ import com.android.tradefed.build.DeviceFolderBuildInfoTest;
 import com.android.tradefed.build.FileDownloadCacheTest;
 import com.android.tradefed.build.LocalDeviceBuildProviderTest;
 import com.android.tradefed.build.OtaZipfileBuildProviderTest;
+import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
 import com.android.tradefed.cache.ModifiedFilesParserTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
@@ -99,6 +100,7 @@ import com.android.tradefed.device.cloud.OxygenClientTest;
 import com.android.tradefed.device.cloud.OxygenUtilTest;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDeviceTest;
 import com.android.tradefed.device.cloud.RemoteFileUtilTest;
+import com.android.tradefed.device.connection.AdbSshConnectionTest;
 import com.android.tradefed.device.connection.AdbTcpConnectionTest;
 import com.android.tradefed.device.contentprovider.ContentProviderHandlerTest;
 import com.android.tradefed.device.helper.TelephonyHelperTest;
@@ -493,6 +495,9 @@ import org.junit.runners.Suite.SuiteClasses;
     LocalDeviceBuildProviderTest.class,
     OtaZipfileBuildProviderTest.class,
 
+    // build.cache
+    PartialZipDownloadCacheTest.class,
+
     // cache
     ModifiedFilesParserTest.class,
 
@@ -595,6 +600,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RemoteFileUtilTest.class,
 
     // device.connection
+    AdbSshConnectionTest.class,
     AdbTcpConnectionTest.class,
 
     // device.contentprovider

@@ -47,6 +47,7 @@ import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.StubTest;
 import com.android.tradefed.testtype.suite.ITestSuite;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 
 import org.junit.Assert;
@@ -64,6 +65,9 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /** Unit tests for {@link StrictShardHelper}. */
 @RunWith(JUnit4.class)
@@ -266,7 +270,8 @@ public class StrictShardHelperTest {
         }
 
         @Override
-        protected List<List<IRemoteTest>> splitTests(List<IRemoteTest> fullList, int shardCount) {
+        protected List<List<IRemoteTest>> splitTests(
+                List<IRemoteTest> fullList, int shardCount, boolean useEvenModuleSharding) {
             List<List<IRemoteTest>> shards = new ArrayList<>();
             shards.add(new ArrayList<>(fakeModules));
             shards.add(new ArrayList<>(fakeModules));
@@ -289,6 +294,11 @@ public class StrictShardHelperTest {
     }
 
     private List<IRemoteTest> testShard(int shardIndex) throws Exception {
+        return testShard(shardIndex, false);
+    }
+
+    private List<IRemoteTest> testShard(int shardIndex, boolean useEvenModuleSharding)
+            throws Exception {
         mContext.addAllocatedDevice("default", mock(ITestDevice.class));
         List<IRemoteTest> test = new ArrayList<>();
         test.add(createFakeSuite("module2"));
@@ -302,6 +312,7 @@ public class StrictShardHelperTest {
         OptionSetter setter = new OptionSetter(options);
         setter.setOptionValue("shard-count", "3");
         setter.setOptionValue("shard-index", Integer.toString(shardIndex));
+        setter.setOptionValue("use-even-module-sharding", Boolean.toString(useEvenModuleSharding));
         mConfig.setCommandOptions(options);
         mConfig.setCommandLine(new String[] {"empty"});
         mConfig.setTests(test);
@@ -329,6 +340,39 @@ public class StrictShardHelperTest {
         return mConfig.getTests();
     }
 
+    @Test
+    public void testMergeSuite_aggregate() throws Exception {
+        List<List<IRemoteTest>> shards =
+                List.of(testShard(0, true), testShard(1, true), testShard(2, true));
+        List<List<ModuleDefinition>> moduleShards = new ArrayList<>();
+        for (List<IRemoteTest> shard : shards) {
+            List<ModuleDefinition> modules = new ArrayList<>();
+            for (IRemoteTest test : shard) {
+                assertTrue(test instanceof ITestSuite);
+                modules.add(((ITestSuite) test).getDirectModule());
+            }
+            moduleShards.add(modules);
+        }
+
+        // Make sure we still have all modules
+        assertEquals(
+                Set.of("module1", "module2", "module3"),
+                moduleShards.stream()
+                        .flatMap(shard -> shard.stream().map(ModuleDefinition::getId))
+                        .collect(Collectors.toSet()));
+        // .. and all tests
+        assertEquals(
+                14,
+                moduleShards.stream()
+                        .flatMapToInt(shard -> shard.stream().mapToInt(ModuleDefinition::numTests))
+                        .sum());
+
+        for (var shard : moduleShards) {
+            var shardSize = shard.stream().mapToInt(ModuleDefinition::numTests).sum();
+            assertTrue(shardSize <= 5);
+        }
+    }
+
     /**
      * Total for all the _shardX test should be 14 tests (2 per modules). 6 for module1: 3 module1
      * shard * 2 4 for module2: 2 module2 shard * 2 4 for module3: 2 module3 shard * 2
@@ -345,6 +389,24 @@ public class StrictShardHelperTest {
         assertTrue(res.get(1) instanceof ITestSuite);
         assertEquals("module1", ((ITestSuite) res.get(1)).getDirectModule().getId());
         assertEquals(1, ((ITestSuite) res.get(1)).getDirectModule().numTests());
+
+        assertTrue(res.get(2) instanceof ITestSuite);
+        assertEquals("module2", ((ITestSuite) res.get(2)).getDirectModule().getId());
+        assertEquals(1, ((ITestSuite) res.get(2)).getDirectModule().numTests());
+    }
+
+    @Test
+    public void testMergeSuite_shard0_even() throws Exception {
+        List<IRemoteTest> res = testShard(0, true);
+        assertEquals(3, res.size());
+
+        assertTrue(res.get(0) instanceof ITestSuite);
+        assertEquals("module3", ((ITestSuite) res.get(0)).getDirectModule().getId());
+        assertEquals(2, ((ITestSuite) res.get(0)).getDirectModule().numTests());
+
+        assertTrue(res.get(1) instanceof ITestSuite);
+        assertEquals("module1", ((ITestSuite) res.get(1)).getDirectModule().getId());
+        assertEquals(2, ((ITestSuite) res.get(1)).getDirectModule().numTests());
 
         assertTrue(res.get(2) instanceof ITestSuite);
         assertEquals("module2", ((ITestSuite) res.get(2)).getDirectModule().getId());
@@ -422,6 +484,24 @@ public class StrictShardHelperTest {
     }
 
     @Test
+    public void testMergeSuite_shard1_even() throws Exception {
+        List<IRemoteTest> res = testShard(1, true);
+        assertEquals(3, res.size());
+
+        assertTrue(res.get(0) instanceof ITestSuite);
+        assertEquals("module3", ((ITestSuite) res.get(0)).getDirectModule().getId());
+        assertEquals(1, ((ITestSuite) res.get(0)).getDirectModule().numTests());
+
+        assertTrue(res.get(1) instanceof ITestSuite);
+        assertEquals("module2", ((ITestSuite) res.get(1)).getDirectModule().getId());
+        assertEquals(2, ((ITestSuite) res.get(1)).getDirectModule().numTests());
+
+        assertTrue(res.get(2) instanceof ITestSuite);
+        assertEquals("module1", ((ITestSuite) res.get(2)).getDirectModule().getId());
+        assertEquals(2, ((ITestSuite) res.get(2)).getDirectModule().numTests());
+    }
+
+    @Test
     public void testMergeSuite_shard2() throws Exception {
         List<IRemoteTest> res = testShard(2);
         assertEquals(3, res.size());
@@ -429,6 +509,24 @@ public class StrictShardHelperTest {
         assertTrue(res.get(0) instanceof ITestSuite);
         assertEquals("module1", ((ITestSuite) res.get(0)).getDirectModule().getId());
         assertEquals(4, ((ITestSuite) res.get(0)).getDirectModule().numTests());
+
+        assertTrue(res.get(1) instanceof ITestSuite);
+        assertEquals("module2", ((ITestSuite) res.get(1)).getDirectModule().getId());
+        assertEquals(1, ((ITestSuite) res.get(1)).getDirectModule().numTests());
+
+        assertTrue(res.get(1) instanceof ITestSuite);
+        assertEquals("module3", ((ITestSuite) res.get(2)).getDirectModule().getId());
+        assertEquals(1, ((ITestSuite) res.get(2)).getDirectModule().numTests());
+    }
+
+    @Test
+    public void testMergeSuite_shard2_even() throws Exception {
+        List<IRemoteTest> res = testShard(2, true);
+        assertEquals(3, res.size());
+
+        assertTrue(res.get(0) instanceof ITestSuite);
+        assertEquals("module1", ((ITestSuite) res.get(0)).getDirectModule().getId());
+        assertEquals(2, ((ITestSuite) res.get(0)).getDirectModule().numTests());
 
         assertTrue(res.get(1) instanceof ITestSuite);
         assertEquals("module2", ((ITestSuite) res.get(1)).getDirectModule().getId());
@@ -519,7 +617,7 @@ public class StrictShardHelperTest {
     public void testDistribution_hightests_highcount() {
         List<IRemoteTest> testList = createFakeTestList(130);
         int shardCount = 20;
-        List<List<IRemoteTest>> res = mHelper.splitTests(testList, shardCount);
+        List<List<IRemoteTest>> res = mHelper.splitTests(testList, shardCount, false);
         assertEquals(7, res.get(0).size());
         assertEquals(7, res.get(1).size());
         assertEquals(7, res.get(2).size());
@@ -547,7 +645,7 @@ public class StrictShardHelperTest {
     public void testDistribution_lowtests_lowcount() {
         List<IRemoteTest> testList = createFakeTestList(7);
         int shardCount = 6;
-        List<List<IRemoteTest>> res = mHelper.splitTests(testList, shardCount);
+        List<List<IRemoteTest>> res = mHelper.splitTests(testList, shardCount, false);
         assertEquals(2, res.get(0).size());
         assertEquals(1, res.get(1).size());
         assertEquals(1, res.get(2).size());
@@ -561,13 +659,53 @@ public class StrictShardHelperTest {
     public void testDistribution_lowtests_lowcount2() {
         List<IRemoteTest> testList = createFakeTestList(13);
         int shardCount = 6;
-        List<List<IRemoteTest>> res = mHelper.splitTests(testList, shardCount);
+        List<List<IRemoteTest>> res = mHelper.splitTests(testList, shardCount, false);
         assertEquals(3, res.get(0).size());
         assertEquals(2, res.get(1).size());
         assertEquals(2, res.get(2).size());
         assertEquals(2, res.get(3).size());
         assertEquals(2, res.get(4).size());
         assertEquals(2, res.get(5).size());
+    }
+
+    /** Test that the special ratio 9 tests for 5 shards is properly redistributed. */
+    @Test
+    public void testDistribution_lowtests_lowcount3() {
+        List<IRemoteTest> testList = createFakeTestList(9);
+        int shardCount = 5;
+        List<List<IRemoteTest>> res = mHelper.splitTests(testList, shardCount, true);
+        assertEquals(2, res.get(0).size());
+        assertEquals(2, res.get(1).size());
+        assertEquals(2, res.get(2).size());
+        assertEquals(2, res.get(3).size());
+        assertEquals(1, res.get(4).size());
+    }
+
+    @Test
+    public void testShardList() {
+        for (int shardCount = 1; shardCount < 50; shardCount++) {
+            for (int testCount = 0; testCount < 200; testCount++) {
+                var fullList = IntStream.range(0, testCount).boxed().collect(Collectors.toList());
+                var shards = StrictShardHelper.shardList(fullList, shardCount);
+                var testCase =
+                        "shardCount="
+                                + shardCount
+                                + " testCount="
+                                + testCount
+                                + " shards="
+                                + shards;
+
+                assertEquals(testCase, shardCount, shards.size());
+                assertEquals(
+                        testCase,
+                        fullList,
+                        shards.stream().flatMap(List::stream).collect(Collectors.toList()));
+
+                var maxShardSize = shards.stream().map(List::size).max(Integer::compareTo).get();
+                var minShardSize = shards.stream().map(List::size).min(Integer::compareTo).get();
+                assertTrue(testCase, maxShardSize - minShardSize <= 1);
+            }
+        }
     }
 
     private File createTmpConfig(String objType, Object obj) throws IOException {

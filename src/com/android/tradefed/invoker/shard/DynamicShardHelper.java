@@ -37,6 +37,9 @@ import java.util.ServiceLoader;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+
 /** Sharding strategy to allow work remote work queueing between multiple TF instances */
 public class DynamicShardHelper extends ShardHelper {
 
@@ -66,12 +69,17 @@ public class DynamicShardHelper extends ShardHelper {
         // Initialize Dynamic Sharding client
         IDynamicShardingClient client = getClient();
 
-        // TODO: Also include attempt_id in unique poolId.
-        String poolId = testInfo.getContext().getAttribute("invocation_id");
-        if (Strings.isNullOrEmpty(poolId)) {
+        String invocationId = testInfo.getContext().getAttribute("invocation_id");
+        String attemptId = testInfo.getContext().getAttribute("attempt_index");
+
+        // If we don't have sufficient information to properly key the pool, then fall
+        // back to strict sharding.
+        if (Strings.isNullOrEmpty(invocationId) || Strings.isNullOrEmpty(attemptId)) {
             CLog.d("No invocation_id specified, falling back to strict sharding.");
             return super.shardConfig(config, testInfo, rescheduler, logger);
         }
+
+        String poolId = String.format("invocation-%s-attempt-%s", invocationId, attemptId);
 
         List<ITestSuite> allModules = getAllModules(config, testInfo);
 
@@ -81,19 +89,28 @@ public class DynamicShardHelper extends ShardHelper {
         }
 
         // if we're shard 0 populate the pool with the list of tests
-        if (shardIndex == 0) {
+        try {
             // Populate the pool
             List<SerializedTestTarget> targetsToUpload =
                     moduleMapping.keySet().stream()
                             .map(x -> SerializedTestTarget.newBuilder().setTargetName(x).build())
                             .collect(Collectors.toList());
-            CLog.v(String.format("Uploading test targets: %s", targetsToUpload));
+            CLog.d("Uploading to pool %s test targets: %s", poolId, targetsToUpload);
             ProvideTestTargetRequest request =
                     ProvideTestTargetRequest.newBuilder()
                             .setReferencePoolId(poolId)
                             .addAllTestTargets(targetsToUpload)
                             .build();
             client.provideTestTarget(request);
+        } catch (StatusRuntimeException e) {
+            // If it is just the ALREADY_EXISTS error, that's ok; it just means
+            // that one of the other shards got to it before this one.
+            if (Status.fromThrowable(e).getCode() != Status.Code.ALREADY_EXISTS) {
+                // rethrow if it isn't the error we were expecting.
+                throw e;
+            }
+            // will only reach this point if the error code is ALREADY_EXISTS
+            CLog.v("Another shard has already seeded the pool '%'.", poolId);
         }
 
         // if we're any shard, create a test pool poller that polls the sharding server

@@ -642,10 +642,10 @@ public class WifiHelper implements IWifiHelper {
     }
 
     /**
-     * Helper function to wrap the specified String in double-quotes to prevent shell interpretation
+     * Helper function to wrap the specified String in single-quotes to prevent shell interpretation
      */
     private static String quote(String str) {
-        return String.format("\"%s\"", str);
+        return "'" + str.replace("'", "'\\''") + "'";
     }
 
     /**

@@ -228,6 +228,7 @@ public class CommandSchedulerFuncTest {
         int mSlowCountLimit = 40;
         public boolean runInterrupted = false;
         public boolean printedStop = false;
+        public long mSleepTimMs = 200L;
 
         @Override
         public void invoke(
@@ -243,7 +244,7 @@ public class CommandSchedulerFuncTest {
                 }
                 if (config.equals(mSlowConfig)) {
                     // sleep for 2 * fast config time
-                    RunUtil.getDefault().sleep(200);
+                    RunUtil.getDefault().sleep(mSleepTimMs);
                     synchronized (mSlowCountLock) {
                         mSlowCount++;
                     }
@@ -369,6 +370,7 @@ public class CommandSchedulerFuncTest {
     @Test
     public void testShutdown_interruptible() throws Throwable {
         String[] slowConfigArgs = new String[] {"slowConfig"};
+        mMockTestInvoker.mSleepTimMs = 10000L; // Sleep much longer than expected interrupt
         List<String> nullArg = null;
         when(mMockConfigFactory.createConfigurationFromArgs(
                         AdditionalMatchers.aryEq(slowConfigArgs),

@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.build.cache;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 
@@ -46,7 +47,8 @@ public class PartialZipDownloadCache {
         return sDefaultInstance;
     }
 
-    private PartialZipDownloadCache() {
+    @VisibleForTesting
+    protected PartialZipDownloadCache() {
         try {
             mCacheDir = FileUtil.createTempDir("partial_download_cache_dir");
             Runtime.getRuntime()
@@ -138,5 +140,11 @@ public class PartialZipDownloadCache {
                 CLog.e(e);
             }
         }
+    }
+
+    @VisibleForTesting
+    protected void cleanUpCache() {
+        mFileCache.invalidateAll();
+        FileUtil.recursiveDelete(mCacheDir);
     }
 }

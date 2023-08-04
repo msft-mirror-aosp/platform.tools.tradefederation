@@ -56,8 +56,8 @@ public class WifiHelperTest {
     // tests for reimplementation
     @Test
     public void testBuildCommand_simple() {
-        final String expected = "am instrument -e method \"meth\" -w " +
-                WifiHelper.FULL_INSTRUMENTATION_NAME;
+        final String expected =
+                "am instrument -e method \'meth\' -w " + WifiHelper.FULL_INSTRUMENTATION_NAME;
         final String cmd = WifiHelper.buildWifiUtilCmd("meth");
         assertEquals(expected, cmd);
     }
@@ -65,8 +65,8 @@ public class WifiHelperTest {
     @Test
     public void testBuildCommand_oneArg() {
         final String start = "am instrument ";
-        final String piece1 = "-e method \"meth\" ";
-        final String piece2 = "-e id \"45\" ";
+        final String piece1 = "-e method \'meth\' ";
+        final String piece2 = "-e id \'45\' ";
         final String end = "-w " + WifiHelper.FULL_INSTRUMENTATION_NAME;
 
         final String cmd = WifiHelper.buildWifiUtilCmd("meth", "id", "45");
@@ -80,9 +80,9 @@ public class WifiHelperTest {
     @Test
     public void testBuildCommand_withSpace() {
         final String start = "am instrument ";
-        final String piece1 = "-e method \"addWpaPskNetwork\" ";
-        final String piece2 = "-e ssid \"With Space\" ";
-        final String piece3 = "-e psk \"also has space\" ";
+        final String piece1 = "-e method \'addWpaPskNetwork\' ";
+        final String piece2 = "-e ssid \'With Space\' ";
+        final String piece3 = "-e psk \'also has space\' ";
         final String end = "-w " + WifiHelper.FULL_INSTRUMENTATION_NAME;
 
         final String cmd = WifiHelper.buildWifiUtilCmd("addWpaPskNetwork", "ssid", "With Space",

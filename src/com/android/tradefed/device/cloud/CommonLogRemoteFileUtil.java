@@ -189,8 +189,8 @@ public class CommonLogRemoteFileUtil {
             GceAvdInfo gceAvd,
             TestDeviceOptions options,
             IRunUtil runUtil) {
-        if (gceAvd == null) {
-            CLog.e("GceAvdInfo was null, cannot collect remote files.");
+        if (gceAvd == null || gceAvd.hostAndPort() == null) {
+            CLog.e("GceAvdInfo or its host setting was null, cannot collect remote files.");
             return;
         }
         List<KnownLogFileEntry> toFetch = null;
@@ -285,8 +285,8 @@ public class CommonLogRemoteFileUtil {
             IRunUtil runUtil,
             String logName,
             String... remoteCommand) {
-        if (gceAvd == null) {
-            CLog.e("GceAvdInfo was null, cannot collect remote files.");
+        if (gceAvd == null || gceAvd.hostAndPort() == null) {
+            CLog.e("GceAvdInfo or its host setting was null, cannot collect remote files.");
             return;
         }
         CommandResult commandResult =
@@ -319,17 +319,23 @@ public class CommonLogRemoteFileUtil {
             GceAvdInfo gceAvd,
             TestDeviceOptions options,
             IRunUtil runUtil) {
-        if (gceAvd == null) {
-            CLog.e("GceAvdInfo was null, cannot collect remote files.");
+        if (gceAvd == null || gceAvd.hostAndPort() == null) {
+            CLog.e("GceAvdInfo or its host setting was null, cannot collect remote files.");
             return;
         }
         InstanceType type = options.getInstanceType();
         if (!InstanceType.CUTTLEFISH.equals(type) && !InstanceType.REMOTE_AVD.equals(type)) {
             return;
         }
-        String pattern =
-                String.format(
-                        "/home/%s/cuttlefish_runtime/tombstones/*", options.getInstanceUser());
+        String path =
+                String.format("/home/%s/cuttlefish_runtime/tombstones", options.getInstanceUser());
+        for (GceAvdInfo.LogFileEntry entry : gceAvd.getLogs()) {
+            if (entry.name.equals(TOMBSTONES_ZIP_NAME)) {
+                path = entry.path;
+                break;
+            }
+        }
+        String pattern = path + "/*";
         CommandResult resultList =
                 GceManager.remoteSshCommandExecution(
                         gceAvd, options, runUtil, 60000, "ls", "-A1", pattern);
@@ -340,15 +346,7 @@ public class CommonLogRemoteFileUtil {
         if (resultList.getStdout().split("\n").length <= 0) {
             return;
         }
-        File tombstonesDir =
-                RemoteFileUtil.fetchRemoteDir(
-                        gceAvd,
-                        options,
-                        runUtil,
-                        120000,
-                        String.format(
-                                "/home/%s/cuttlefish_runtime/tombstones",
-                                options.getInstanceUser()));
+        File tombstonesDir = RemoteFileUtil.fetchRemoteDir(gceAvd, options, runUtil, 120000, path);
         if (tombstonesDir == null) {
             CLog.w("No tombstones directory was pulled.");
             return;

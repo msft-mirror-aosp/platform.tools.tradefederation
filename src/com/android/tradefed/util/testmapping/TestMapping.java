@@ -181,6 +181,12 @@ public class TestMapping {
                             }
                         }
                     }
+                    for (Path filePath : filePaths) {
+                        Path importPath = testMappingsDir.relativize(filePath).getParent();
+                        if (!test.getSources().contains(importPath.toString())) {
+                            test.addImportPaths(Collections.singleton(importPath.toString()));
+                        }
+                    }
                     testsForGroup.add(test);
                 }
             }
@@ -501,7 +507,6 @@ public class TestMapping {
         } finally {
             FileUtil.recursiveDelete(testMappingsDir);
         }
-        CLog.d("TestInfo found: %s", tests);
         return tests;
     }
 

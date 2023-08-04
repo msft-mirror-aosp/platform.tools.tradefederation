@@ -46,6 +46,7 @@ import com.android.tradefed.util.StringEscapeUtils;
 import com.android.tradefed.util.StringUtil;
 import com.android.tradefed.util.SubprocessEventHelper.InvocationFailedEventInfo;
 import com.android.tradefed.util.SubprocessTestResultsParser;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -53,6 +54,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -60,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -114,6 +117,12 @@ public class ClusterCommandLauncher
             description = "Maximum time to wait for an idle subprocess",
             isTimeVal = true)
     private long mOutputIdleTimeout = 0L;
+
+    @Option(
+            name = "exclude-file-in-java-classpath",
+            description = "The file not to include in the java classpath.")
+    private List<String> mExcludedFilesInClasspath =
+            new ArrayList<>(Arrays.asList("art-run-test.*", "art-gtest-jars.*"));
 
     private IInvocationContext mInvocationContext;
     private IConfiguration mConfiguration;
@@ -284,11 +293,14 @@ public class ClusterCommandLauncher
             throw new RuntimeException("cannot find TF path!");
         }
 
-        // Construct a Java class path based on TF_PATH value.
+        // Construct a Java class path based on TF_PATH and exclude-file-in-java-classpath option.
         // This expects TF_PATH to be a colon(:) separated list of paths where each path
         // points to a specific jar file or folder.
         // (example: path/to/tradefed.jar:path/to/tradefed/folder:...)
-        // TODO(b/162473907): deprecate TF_PATH.
+        List<Pattern> excludedPatterns = new ArrayList<>();
+        for (final String regex : mExcludedFilesInClasspath) {
+            excludedPatterns.add(Pattern.compile(StringUtil.expand(regex, mEnvVars)));
+        }
         final Set<String> jars = new LinkedHashSet<>();
         for (final String path : tfPath.split(":")) {
             final File jarFile = new File(path);
@@ -296,13 +308,16 @@ public class ClusterCommandLauncher
                 CLog.w("TF_PATH %s doesn't exist; ignoring", path);
                 continue;
             }
-            if (jarFile.isFile()) {
+            if (jarFile.isFile() && !matchPatterns(excludedPatterns, jarFile.getAbsolutePath())) {
                 jars.add(jarFile.getAbsolutePath());
             } else {
                 try (Stream<Path> walk = Files.walk(jarFile.toPath())) {
                     List<String> result =
-                            walk.map(p -> p.toString())
-                                    .filter(f -> f.toLowerCase().endsWith(".jar"))
+                            walk.map(Path::toString)
+                                    .filter(
+                                            f ->
+                                                    f.toLowerCase().endsWith(".jar")
+                                                            && !matchPatterns(excludedPatterns, f))
                                     .collect(Collectors.toList());
                     jars.addAll(result);
                 } catch (IOException e) {
@@ -413,6 +428,16 @@ public class ClusterCommandLauncher
             CLog.d("Resetting USB port for device '%s'", serial);
             device.reset();
         }
+    }
+
+    /** Returns true if the given string matches any of the patterns. */
+    private static boolean matchPatterns(List<Pattern> patterns, String str) {
+        for (final Pattern pattern : patterns) {
+            if (pattern.matcher(str).find()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @VisibleForTesting

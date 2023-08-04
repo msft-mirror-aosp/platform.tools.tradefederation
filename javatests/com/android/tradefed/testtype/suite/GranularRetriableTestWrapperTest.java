@@ -37,6 +37,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
+import com.android.tradefed.device.connection.AdbSshConnection;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
 import com.android.tradefed.device.metric.IMetricCollector;
@@ -1025,7 +1026,8 @@ public class GranularRetriableTestWrapperTest {
         test.setRunFailure("I failed!");
 
         RemoteAndroidVirtualDevice avdDevice = Mockito.mock(RemoteAndroidVirtualDevice.class);
-        Mockito.when(avdDevice.powerwashGce()).thenReturn(true);
+        AdbSshConnection avdConnection = Mockito.mock(AdbSshConnection.class);
+        Mockito.when(avdDevice.getConnection()).thenReturn(avdConnection);
 
         ModuleDefinition module = Mockito.mock(ModuleDefinition.class);
         // Suite level preparers failed.
@@ -1073,7 +1075,8 @@ public class GranularRetriableTestWrapperTest {
         test.setRunFailure("I failed!");
 
         RemoteAndroidVirtualDevice device = Mockito.mock(RemoteAndroidVirtualDevice.class);
-        Mockito.when(device.powerwashGce()).thenReturn(false);
+        AdbSshConnection avdConnection = Mockito.mock(AdbSshConnection.class);
+        Mockito.when(device.getConnection()).thenReturn(avdConnection);
         Mockito.when(device.getSerialNumber()).thenReturn("device1");
 
         test.setDevice(device);

@@ -31,6 +31,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
@@ -168,6 +169,20 @@ public class RemoteZip {
             throws BuildRetrievalError, IOException {
         long startTime = System.currentTimeMillis();
 
+        List<CentralDirectoryInfo> toBeRemoved = Collections.synchronizedList(new ArrayList<>());
+        files.parallelStream()
+                .forEach(
+                        info -> {
+                            File targetFile = new File(destDir, info.getFileName());
+                            if (targetFile.exists()) {
+                                toBeRemoved.add(info);
+                            }
+                        });
+        if (!toBeRemoved.isEmpty()) {
+            CLog.d("skip download on already existing files: %s", toBeRemoved);
+            files.removeAll(toBeRemoved);
+        }
+
         // Remove from download anything that is in our cache
         if (mUseCache) {
             CLog.d("RemoteZip caching is enabled, evaluating.");
@@ -227,6 +242,12 @@ public class RemoteZip {
                                         new File(
                                                 Paths.get(destDir.toString(), entry.getFileName())
                                                         .toString());
+                                if (targetFile.exists()) {
+                                    CLog.d(
+                                            "Downloaded %s already exists, skip partial unzip.",
+                                            entry.getFileName());
+                                    continue;
+                                }
                                 CLog.d("Downloaded %s", entry.getFileName());
                                 LocalFileHeader localFileHeader =
                                         new LocalFileHeader(

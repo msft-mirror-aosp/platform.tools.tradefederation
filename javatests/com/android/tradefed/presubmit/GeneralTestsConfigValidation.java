@@ -316,7 +316,8 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             "PtsCoreAuthTestCases.config",
                             "PtsCoreGetclientTestCases.config",
                             "PtsKmsGetfbTestCases.config",
-                            "PtsKmsFlipTestCases.config"));
+                            "PtsKmsFlipTestCases.config",
+                            "s2-geometry-library-java-tests.config"));
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
@@ -335,9 +336,11 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
         File testsDir = deviceBuildInfo.getTestsDir();
         List<File> extraTestCasesDirs = Arrays.asList(testsDir);
         String configPattern = ".*\\." + mConfigExtension + "$";
+        // include config files with same name, but with different contents (for example: host and
+        // device variants of the same config).
         configs.addAll(
                 ConfigurationUtil.getConfigNamesFileFromDirs(
-                        null, extraTestCasesDirs, Arrays.asList(configPattern)));
+                        null, extraTestCasesDirs, Arrays.asList(configPattern), true));
         for (File config : configs) {
             try {
                 IConfiguration c =
