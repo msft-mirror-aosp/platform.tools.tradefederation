@@ -584,6 +584,34 @@ public class AdbSshConnection extends AdbTcpConnection {
     }
 
     /**
+     * Attempt to snapshot a Cuttlefish instance
+     *
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @return returns CommandResult of the snapshot attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult snapshotGce(String user, Integer offset) throws TargetSetupError {
+        throw new TargetSetupError("Not supported yet");
+    }
+
+    /**
+     * Attempt to restore snapshot of a Cuttlefish instance
+     *
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @param snapshotId the snapshot ID
+     * @return returns CommandResult of the restore snapshot attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult restoreSnapshotGce(String user, Integer offset, String snapshotId)
+            throws TargetSetupError {
+        throw new TargetSetupError("Not supported yet");
+    }
+
+    /**
      * Cuttlefish has a special feature that brings the tombstones to the remote host where we can
      * get them directly.
      */
