@@ -203,6 +203,10 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver, 
     }
 
     private void addFiltersToArgs(List<String> args, String filter) {
+        if (mIsBenchmark) {
+            CLog.w("b/294857452 -- filters are not yet supported for rust benchmarks");
+            return;
+        }
         if (!"".equals(filter)) {
             args.add(cleanFilter(filter));
         }
@@ -231,8 +235,12 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver, 
         ArrayList<String> commandTemplate = new ArrayList<>();
         commandTemplate.add(target.getAbsolutePath());
         commandTemplate.addAll(mTestOptions);
-        commandTemplate.add("-Zunstable-options");
-        commandTemplate.add("--report-time");
+
+        // Criterion does not support these options.
+        if (!mIsBenchmark) {
+            commandTemplate.add("-Zunstable-options");
+            commandTemplate.add("--report-time");
+        }
 
         // Pass parameter to criterion so it performs the benchmarking.
         if (mIsBenchmark) {
