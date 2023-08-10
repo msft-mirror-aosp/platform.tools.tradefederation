@@ -2769,6 +2769,10 @@ public class TestDevice extends NativeDevice {
             args.add("--extra-idsig");
             args.add(path);
         }
+        for (String path : builder.mAssignedDevices) {
+            args.add("--devices");
+            args.add(path);
+        }
 
         // Run the VM
         String cid;
@@ -3069,6 +3073,7 @@ public class TestDevice extends NativeDevice {
         private Map<String, String> mTestDeviceOptions;
         private Map<File, String> mBootFiles;
         private long mAdbConnectTimeoutMs;
+        private List<String> mAssignedDevices;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -3084,6 +3089,7 @@ public class TestDevice extends NativeDevice {
             mTestDeviceOptions = new LinkedHashMap<>();
             mBootFiles = new LinkedHashMap<>();
             mAdbConnectTimeoutMs = MICRODROID_DEFAULT_ADB_CONNECT_TIMEOUT_MINUTES * 60 * 1000;
+            mAssignedDevices = new ArrayList<>();
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -3186,6 +3192,17 @@ public class TestDevice extends NativeDevice {
          */
         public MicrodroidBuilder addBootFile(File localFile, String remoteFileName) {
             mBootFiles.put(localFile, remoteFileName);
+            return this;
+        }
+
+        /**
+         * Adds a device to assign to microdroid.
+         *
+         * @param sysfsNode The path to the sysfs node to assign
+         * @return the microdroid builder.
+         */
+        public MicrodroidBuilder addAssignableDevice(String sysfsNode) {
+            mAssignedDevices.add(sysfsNode);
             return this;
         }
 
