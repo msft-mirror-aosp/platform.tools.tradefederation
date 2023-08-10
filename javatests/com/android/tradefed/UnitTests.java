@@ -107,6 +107,8 @@ import com.android.tradefed.device.helper.TelephonyHelperTest;
 import com.android.tradefed.device.internal.DeviceReleaseReporterTest;
 import com.android.tradefed.device.internal.DeviceResetFeatureTest;
 import com.android.tradefed.device.internal.DeviceResetHandlerTest;
+import com.android.tradefed.device.internal.DeviceSnapshotFeatureTest;
+import com.android.tradefed.device.internal.DeviceSnapshotHandlerTest;
 import com.android.tradefed.device.internal.EarlyDeviceReleaseFeatureTest;
 import com.android.tradefed.device.metric.AtraceCollectorTest;
 import com.android.tradefed.device.metric.AtraceRunMetricCollectorTest;
@@ -612,6 +614,8 @@ import org.junit.runners.Suite.SuiteClasses;
     // device.internal
     DeviceResetFeatureTest.class,
     DeviceResetHandlerTest.class,
+    DeviceSnapshotFeatureTest.class,
+    DeviceSnapshotHandlerTest.class,
     EarlyDeviceReleaseFeatureTest.class,
     DeviceReleaseReporterTest.class,
 
