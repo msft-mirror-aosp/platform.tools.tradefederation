@@ -111,7 +111,7 @@ public class AdbTcpConnection extends DefaultConnection {
         throw new DeviceNotAvailableException(
                 String.format("No adb connection after %sms.", waitTime),
                 serial,
-                DeviceErrorIdentifier.FAILED_TO_CONNECT_TO_GCE);
+                DeviceErrorIdentifier.FAILED_TO_CONNECT_TO_TCP_DEVICE);
     }
 
     private boolean confirmAdbTcpConnect(String host, String port) {
