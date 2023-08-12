@@ -107,6 +107,13 @@ public class TestDevice extends NativeDevice {
      */
     static final String DISMISS_KEYGUARD_WM_CMD = "wm dismiss-keyguard";
 
+    /** Maximum time to wait for keyguard to be dismissed. */
+    private static final long DISMISS_KEYGUARD_TIMEOUT = 3 * 1000;
+
+    /** Command to construct KeyguardControllerState. */
+    static final String KEYGUARD_CONTROLLER_CMD =
+            "dumpsys activity activities | grep -A3 KeyguardController:";
+
     /** Timeout to wait for input dispatch to become ready **/
     private static final long INPUT_DISPATCH_READY_TIMEOUT = 5 * 1000;
     /** command to test input dispatch readiness **/
@@ -1165,14 +1172,32 @@ public class TestDevice extends NativeDevice {
                     DISMISS_KEYGUARD_CMD);
             executeShellCommand(DISMISS_KEYGUARD_CMD);
         }
-        // TODO: check that keyguard was actually dismissed.
+        verifyKeyguardDismissed();
+    }
+
+    private void verifyKeyguardDismissed() throws DeviceNotAvailableException {
+        long start = System.currentTimeMillis();
+        while (true) {
+            KeyguardControllerState state = getKeyguardState();
+            if (state == null) {
+                return; // unsupported
+            }
+            if (!state.isKeyguardShowing()) {
+                return; // keyguard dismissed successfully
+            }
+            long timeSpent = System.currentTimeMillis() - start;
+            if (timeSpent > DISMISS_KEYGUARD_TIMEOUT) {
+                CLog.w("Timeout after waiting %dms for keyguard to be dismissed", timeSpent);
+                return; // proceed anyway, may be dismissed in a later step
+            }
+            getRunUtil().sleep(500);
+        }
     }
 
     /** {@inheritDoc} */
     @Override
     public KeyguardControllerState getKeyguardState() throws DeviceNotAvailableException {
-        String output =
-                executeShellCommand("dumpsys activity activities | grep -A3 KeyguardController:");
+        String output = executeShellCommand(KEYGUARD_CONTROLLER_CMD);
         CLog.d("Output from KeyguardController: %s", output);
         KeyguardControllerState state =
                 KeyguardControllerState.create(Arrays.asList(output.trim().split("\n")));
