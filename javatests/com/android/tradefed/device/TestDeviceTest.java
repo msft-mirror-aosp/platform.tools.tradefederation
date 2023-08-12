@@ -871,6 +871,12 @@ public class TestDeviceTest {
                         (IShellOutputReceiver) Mockito.any(),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
+        verify(mMockIDevice, times(times))
+                .executeShellCommand(
+                        Mockito.eq(TestDevice.KEYGUARD_CONTROLLER_CMD),
+                        Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.eq(TimeUnit.MILLISECONDS));
     }
 
     private void assertRecoverySuccess()
