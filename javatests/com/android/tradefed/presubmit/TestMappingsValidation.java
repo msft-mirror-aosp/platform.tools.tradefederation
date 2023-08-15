@@ -21,6 +21,7 @@ import static java.lang.String.format;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.ConfigurationUtil;
@@ -49,6 +50,7 @@ import com.google.gson.JsonObject;
 
 import org.junit.After;
 import org.junit.Assume;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -103,6 +105,8 @@ public class TestMappingsValidation implements IBuildReceiver {
             "https://source.android.com/compatibility/tests/development/test-mapping#packaging_build_script_rules";
     private static final String MODULE_NAME = "module_name";
     private static final String MAINLINE = "mainline";
+    private static final String TEST_TYPE_KEY = "test-type";
+    private static final String TEST_TYPE_VALUE_PERFORMANCE = "performance";
 
     // Pair that shouldn't be overlapping. Test can only exists in one or the other.
     private static final Set<String> INCOMPATIBLE_PAIRS =
@@ -405,6 +409,71 @@ public class TestMappingsValidation implements IBuildReceiver {
                             "Fail include/exclude filter setting check:\n%s",
                             Joiner.on("\n").join(errors)));
         }
+    }
+
+    /** Test to ensure performance test modules are not included for test mapping. */
+    @Test
+    public void testNoPerformanceTests() throws IOException {
+        Set<String> modules = new HashSet<>();
+
+        for (String testGroup : allTests.keySet()) {
+            if (!mTestGroupToValidate.contains(testGroup)) {
+                CLog.d("Skip checking tests with group: %s", testGroup);
+                continue;
+            }
+            for (TestInfo testInfo : allTests.get(testGroup)) {
+                modules.add(testInfo.getName());
+            }
+        }
+
+        File testConfigDir = null;
+        File deviceTestConfigDir = null;
+        try {
+            File configZip = deviceBuildInfo.getFile("general-tests_configs.zip");
+            File deviceConfigZip = deviceBuildInfo.getFile("device-tests_configs.zip");
+            Assume.assumeTrue(configZip != null);
+            List<String> testConfigs = new ArrayList<>();
+            List<File> dirToLoad = new ArrayList<>();
+            testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+            dirToLoad.add(testConfigDir);
+            if (deviceConfigZip != null) {
+                deviceTestConfigDir =
+                        ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                dirToLoad.add(deviceTestConfigDir);
+            }
+            testConfigs.addAll(ConfigurationUtil.getConfigNamesFromDirs(null, dirToLoad));
+            CLog.d("Checking modules: %s. And configs: %s", modules, testConfigs);
+
+            List<String> performanceModules = new ArrayList<>();
+            for (String configName : testConfigs) {
+                String module = FileUtil.getBaseName(new File(configName).getName());
+                if (!modules.contains(module)) {
+                    continue;
+                }
+                if (isPerformanceModule(configName)) {
+                    performanceModules.add(module);
+                }
+            }
+            if (!performanceModules.isEmpty()) {
+                fail(
+                        String.format(
+                                "Performance modules not allowed in test mapping:\n%s",
+                                Joiner.on("\n").join(performanceModules)));
+            }
+        } catch (ConfigurationException e) {
+            fail(e.toString());
+        } finally {
+            FileUtil.recursiveDelete(testConfigDir);
+            FileUtil.recursiveDelete(deviceTestConfigDir);
+        }
+    }
+
+    private boolean isPerformanceModule(String fileName) throws ConfigurationException {
+        IConfiguration config = mConfigFactory.createConfigurationFromArgs(new String[] {fileName});
+        ConfigurationDescriptor cd = config.getConfigurationDescription();
+        Assert.assertNotNull(config + ": configuration descriptor is null", cd);
+        List<String> testTypes = cd.getMetaData(TEST_TYPE_KEY);
+        return (testTypes != null && testTypes.contains(TEST_TYPE_VALUE_PERFORMANCE));
     }
 
     /**
