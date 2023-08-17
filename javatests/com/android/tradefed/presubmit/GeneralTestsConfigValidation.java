@@ -37,10 +37,10 @@ import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.testtype.suite.ValidateSuiteConfigHelper;
 import com.android.tradefed.testtype.suite.params.ModuleParameters;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ModuleTestTypeUtil;
 
 import com.google.common.base.Joiner;
 
-import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -70,8 +70,6 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
             name = "disallowed-test-type",
             description = "The disallowed test type for configs in general-tests.zip")
     private List<String> mDisallowedTestTypes = new ArrayList<>();
-
-    private static final String TEST_TYPE_KEY = "test-type";
 
     private IBuildInfo mBuild;
 
@@ -501,26 +499,27 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
         }
     }
 
+    /**
+     * Check the {@link config} to ensure it's not declared as one of the {#link
+     * disallowedTestTypes}.
+     *
+     * @param config The config to check.
+     * @param ConfigurationException The disallowed test types to check against.
+     * @throws ConfigurationException if the config is of disallowed test types.
+     */
     public static void checkDisallowedTestType(
             IConfiguration config, List<String> disallowedTestTypes) throws ConfigurationException {
         if (disallowedTestTypes == null || disallowedTestTypes.isEmpty()) {
             return;
         }
 
-        ConfigurationDescriptor cd = config.getConfigurationDescription();
-        Assert.assertNotNull(config + ": configuration descriptor is null", cd);
-        List<String> testTypes = cd.getMetaData(TEST_TYPE_KEY);
-        if (testTypes == null || testTypes.isEmpty()) {
-            return;
-        }
-
-        for (String testType : testTypes) {
-            if (disallowedTestTypes.contains(testType)) {
-                throw new ConfigurationException(
-                        String.format(
-                                "Config %s of test type '%s' is not allowed.",
-                                config.getName(), testType));
-            }
+        List<String> matched =
+                ModuleTestTypeUtil.getMatchedConfigTestTypes(config, disallowedTestTypes);
+        if (!matched.isEmpty()) {
+            throw new ConfigurationException(
+                    String.format(
+                            "Config %s of test type '%s' is not allowed.",
+                            config.getName(), Joiner.on(", ").join(matched)));
         }
     }
 }
