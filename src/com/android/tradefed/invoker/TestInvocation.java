@@ -51,6 +51,7 @@ import com.android.tradefed.device.cloud.ManagedRemoteDevice;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.device.internal.DeviceReleaseReporter;
+import com.android.tradefed.error.HarnessException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
@@ -124,6 +125,8 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import javax.annotation.Nullable;
 
 /**
  * Default implementation of {@link ITestInvocation}.
@@ -389,8 +392,11 @@ public class TestInvocation implements ITestInvocation {
                         bugreportName = null;
                     }
                 }
+
+                // reset bugreportName to null if shouldSkipBugreportError(exception) == true
+                bugreportName = shouldSkipBugreportError(exception) ? null : bugreportName;
                 if (bugreportName != null) {
-                    try (CloseableTraceScope ignore =
+                    try (CloseableTraceScope _ignore =
                             new CloseableTraceScope(InvocationMetricKey.bugreport.name())) {
                         if (context.getDevices().size() == 1 || badDevice != null) {
                             ITestDevice collectBugreport = badDevice;
@@ -1918,5 +1924,49 @@ public class TestInvocation implements ITestInvocation {
         return config.getCommandOptions()
                 .getInvocationData()
                 .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME);
+    }
+
+    /** Helper method that identifies errors when the bugreport should be skipped */
+    public static boolean shouldSkipBugreportError(@Nullable Throwable t) {
+        if (t == null) {
+            return false;
+        }
+
+        if (!(t instanceof HarnessException)) {
+            return false;
+        }
+
+        HarnessException e = (HarnessException) t;
+
+        if (e.getErrorId() == null) {
+            // Can't tell, better take a bugreport just in case.
+            return false;
+        }
+
+        long errorId = e.getErrorId().code();
+
+        // Configuration Errors
+        if (errorId >= 505_250 && errorId < 505_300) {
+            return true;
+        }
+
+        // Artifact Errors
+        if (errorId >= 500_501 && errorId < 501_000) {
+            return true;
+        }
+
+        // Certain General Errors
+        if (errorId == 500_501
+                || errorId == 500_003
+                || errorId == 500_008
+                || errorId == 500_009
+                || errorId == 500_010
+                || errorId == 500_013
+                || errorId == 500_014
+                || errorId == 500_017) {
+            return true;
+        }
+
+        return false;
     }
 }
