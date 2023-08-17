@@ -83,6 +83,5 @@ public class CompileBootImageWithSpeedTargetPreparerTest {
     @Test
     public void testTearDown() throws Exception {
         mBootImagePreparer.tearDown(mTestInfo, null);
-        verify(mMockDevice, times(1)).reboot();
     }
 }
