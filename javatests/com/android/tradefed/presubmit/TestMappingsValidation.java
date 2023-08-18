@@ -21,7 +21,6 @@ import static java.lang.String.format;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
-import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.ConfigurationUtil;
@@ -36,6 +35,7 @@ import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ModuleTestTypeUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.testmapping.TestInfo;
 import com.android.tradefed.util.testmapping.TestMapping;
@@ -50,7 +50,6 @@ import com.google.gson.JsonObject;
 
 import org.junit.After;
 import org.junit.Assume;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -105,8 +104,6 @@ public class TestMappingsValidation implements IBuildReceiver {
             "https://source.android.com/compatibility/tests/development/test-mapping#packaging_build_script_rules";
     private static final String MODULE_NAME = "module_name";
     private static final String MAINLINE = "mainline";
-    private static final String TEST_TYPE_KEY = "test-type";
-    private static final String TEST_TYPE_VALUE_PERFORMANCE = "performance";
 
     // Pair that shouldn't be overlapping. Test can only exists in one or the other.
     private static final Set<String> INCOMPATIBLE_PAIRS =
@@ -450,7 +447,9 @@ public class TestMappingsValidation implements IBuildReceiver {
                 if (!modules.contains(module)) {
                     continue;
                 }
-                if (isPerformanceModule(configName)) {
+                IConfiguration config =
+                        mConfigFactory.createConfigurationFromArgs(new String[] {configName});
+                if (ModuleTestTypeUtil.isPerformanceModule(config)) {
                     performanceModules.add(module);
                 }
             }
@@ -466,14 +465,6 @@ public class TestMappingsValidation implements IBuildReceiver {
             FileUtil.recursiveDelete(testConfigDir);
             FileUtil.recursiveDelete(deviceTestConfigDir);
         }
-    }
-
-    private boolean isPerformanceModule(String fileName) throws ConfigurationException {
-        IConfiguration config = mConfigFactory.createConfigurationFromArgs(new String[] {fileName});
-        ConfigurationDescriptor cd = config.getConfigurationDescription();
-        Assert.assertNotNull(config + ": configuration descriptor is null", cd);
-        List<String> testTypes = cd.getMetaData(TEST_TYPE_KEY);
-        return (testTypes != null && testTypes.contains(TEST_TYPE_VALUE_PERFORMANCE));
     }
 
     /**
