@@ -271,7 +271,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                 // Host and port can be null in case of acloud timeout
                 if (mGceAvd.hostAndPort() != null) {
                     // attempt to get a bugreport if Gce Avd is a failure
-                    if (!GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
+                    if (!GceStatus.SUCCESS.equals(mGceAvd.getStatus())
+                            && !mGceAvd.getSkipBugreportCollection()) {
                         // Get a bugreport via ssh
                         getSshBugreport();
                     }
