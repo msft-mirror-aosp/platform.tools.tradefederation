@@ -250,6 +250,7 @@ import com.android.tradefed.targetprep.AllTestAppsInstallSetupTest;
 import com.android.tradefed.targetprep.AoaTargetPreparerTest;
 import com.android.tradefed.targetprep.AppSetupTest;
 import com.android.tradefed.targetprep.BaseTargetPreparerTest;
+import com.android.tradefed.targetprep.CompileBootImageWithSpeedTargetPreparerTest;
 import com.android.tradefed.targetprep.CreateUserPreparerTest;
 import com.android.tradefed.targetprep.DefaultTestsZipInstallerTest;
 import com.android.tradefed.targetprep.DeviceFlashPreparerTest;
@@ -776,7 +777,7 @@ import org.junit.runners.Suite.SuiteClasses;
     AoaTargetPreparerTest.class,
     AppSetupTest.class,
     BaseTargetPreparerTest.class,
-    VisibleBackgroundUserPreparerTest.class,
+    CompileBootImageWithSpeedTargetPreparerTest.class,
     CreateUserPreparerTest.class,
     DefaultTestsZipInstallerTest.class,
     DeviceFlashPreparerTest.class,
@@ -808,6 +809,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RunCommandTargetPreparerTest.class,
     RunHostCommandTargetPreparerTest.class,
     RunHostScriptTargetPreparerTest.class,
+    RunOnCloneProfileTargetPreparerTest.class,
     RunOnSdkSandboxTargetPreparerTest.class,
     RunOnSecondaryUserTargetPreparerTest.class,
     RunOnSystemUserTargetPreparerTest.class,
@@ -820,7 +822,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TestFilePushSetupTest.class,
     SwitchUserTargetPreparerTest.class,
     UserCleanerTest.class,
-    RunOnCloneProfileTargetPreparerTest.class,
+    VisibleBackgroundUserPreparerTest.class,
 
     // targetprep.adb
     AdbStopServerPreparerTest.class,
