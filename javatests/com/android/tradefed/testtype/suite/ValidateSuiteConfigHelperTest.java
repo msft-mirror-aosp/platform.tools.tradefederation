@@ -22,6 +22,8 @@ import com.android.tradefed.build.LocalFolderBuildProvider;
 import com.android.tradefed.build.StubBuildProvider;
 import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.ConfigurationDescriptor;
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.DeviceConfigurationHolder;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
@@ -34,6 +36,7 @@ import com.android.tradefed.result.TextResultReporter;
 import com.android.tradefed.targetprep.StubTargetPreparer;
 import com.android.tradefed.targetprep.multi.StubMultiTargetPreparer;
 import com.android.tradefed.testtype.suite.module.TestFailureModuleController;
+import com.android.tradefed.util.ModuleTestTypeUtil;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -162,6 +165,22 @@ public class ValidateSuiteConfigHelperTest {
                     expected.getMessage()
                             .contains(Configuration.DEVICE_METRICS_COLLECTOR_TYPE_NAME));
         }
+    }
+
+    /** Test that metric collectors can be specified inside a performance module for a suite. */
+    @Test
+    public void testMetricCollectorsForPerformanceModule()
+            throws ConfigurationException, RuntimeException {
+        IConfiguration config = new Configuration("test", "test description");
+        List<IMetricCollector> collectors = new ArrayList<>();
+        collectors.add(new BaseDeviceMetricCollector());
+        config.setDeviceMetricCollectors(collectors);
+        ConfigurationDescriptor configDesc = new ConfigurationDescriptor();
+        configDesc.addMetadata(
+                ModuleTestTypeUtil.TEST_TYPE_KEY, ModuleTestTypeUtil.TEST_TYPE_VALUE_PERFORMANCE);
+        config.setConfigurationObject(
+                Configuration.CONFIGURATION_DESCRIPTION_TYPE_NAME, configDesc);
+        ValidateSuiteConfigHelper.validateConfig(config);
     }
 
     /** Test that metric collectors exempted can run in the module */
