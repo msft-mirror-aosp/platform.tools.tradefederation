@@ -25,6 +25,7 @@ import com.android.tradefed.result.TextResultReporter;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.multi.IMultiTargetPreparer;
 import com.android.tradefed.testtype.suite.module.BaseModuleController;
+import com.android.tradefed.util.ModuleTestTypeUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -109,16 +110,19 @@ public class ValidateSuiteConfigHelper {
         // Check multi target preparers
         checkTargetPrep(config, config.getMultiTargetPreparers());
 
-        // Check metric collectors
-        for (IMetricCollector collector : config.getMetricCollectors()) {
-            // Only some collectors are allowed in the module
-            if (!ALLOWED_COLLECTOR_IN_MODULE.contains(collector.getClass().getCanonicalName())) {
-                throwRuntime(
-                        config,
-                        String.format(
-                                "%s objects are not allowed in module. Except for: %s",
-                                Configuration.DEVICE_METRICS_COLLECTOR_TYPE_NAME,
-                                ALLOWED_COLLECTOR_IN_MODULE));
+        // Check metric collectors if not a performance module
+        if (!ModuleTestTypeUtil.isPerformanceModule(config)) {
+            for (IMetricCollector collector : config.getMetricCollectors()) {
+                // Only some collectors are allowed in the module
+                if (!ALLOWED_COLLECTOR_IN_MODULE.contains(
+                        collector.getClass().getCanonicalName())) {
+                    throwRuntime(
+                            config,
+                            String.format(
+                                    "%s objects are not allowed in module. Except for: %s",
+                                    Configuration.DEVICE_METRICS_COLLECTOR_TYPE_NAME,
+                                    ALLOWED_COLLECTOR_IN_MODULE));
+                }
             }
         }
 
