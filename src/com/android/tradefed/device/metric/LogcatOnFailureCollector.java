@@ -120,6 +120,11 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
     }
 
     @VisibleForTesting
+    CollectingByteOutputReceiver createLegacyCollectingReceiver() {
+        return new CollectingByteOutputReceiver();
+    }
+
+    @VisibleForTesting
     IRunUtil getRunUtil() {
         return RunUtil.getDefault();
     }
@@ -172,16 +177,28 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
 
     private void legacyCollection(ITestDevice device, String testName)
             throws DeviceNotAvailableException {
-        CollectingByteOutputReceiver outputReceiver = new CollectingByteOutputReceiver();
+        CollectingByteOutputReceiver outputReceiver = createLegacyCollectingReceiver();
         device.executeShellCommand(LOGCAT_COLLECT_CMD_LEGACY, outputReceiver);
         saveLogcatSource(
                 testName,
                 new ByteArrayInputStreamSource(outputReceiver.getOutput()),
                 device.getSerialNumber());
+        outputReceiver.cancel();
     }
 
     private void saveLogcatSource(String testName, InputStreamSource source, String serial) {
+        if (source == null) {
+            return;
+        }
         try (InputStreamSource logcatSource = source) {
+            // If the resulting logcat looks wrong or empty, discard it
+            if (logcatSource.size() < 75L) {
+                CLog.e(
+                        "Discarding logcat on failure (size=%s): it failed to collect something"
+                                + " relevant likely due to timings.",
+                        logcatSource.size());
+                return;
+            }
             String name = String.format(NAME_FORMAT, testName, serial);
             super.testLog(name, LogDataType.LOGCAT, logcatSource);
         }
