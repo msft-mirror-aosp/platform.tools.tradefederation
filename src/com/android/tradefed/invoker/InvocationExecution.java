@@ -283,7 +283,9 @@ public class InvocationExecution implements IInvocationExecution {
             TestInformation testInfo,
             IRescheduler rescheduler,
             ITestLogger logger) {
-        return createShardHelper().shardConfig(config, testInfo, rescheduler, logger);
+        IShardHelper helper = createShardHelper();
+        CLog.d("IShardHelper selected: %s", helper);
+        return helper.shardConfig(config, testInfo, rescheduler, logger);
     }
 
     /** Create an return the {@link IShardHelper} to be used. */
