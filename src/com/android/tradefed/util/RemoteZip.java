@@ -20,6 +20,7 @@ import com.android.tradefed.build.IFileDownloader;
 import com.android.tradefed.build.cache.PartialZipDownloadCache;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 import com.android.tradefed.util.zip.CentralDirectoryInfo;
@@ -170,35 +171,41 @@ public class RemoteZip {
         long startTime = System.currentTimeMillis();
 
         List<CentralDirectoryInfo> toBeRemoved = Collections.synchronizedList(new ArrayList<>());
-        files.parallelStream()
-                .forEach(
-                        info -> {
-                            File targetFile = new File(destDir, info.getFileName());
-                            if (targetFile.exists()) {
-                                toBeRemoved.add(info);
-                            }
-                        });
+        List<String> toBeRemovedName = Collections.synchronizedList(new ArrayList<>());
+        try (CloseableTraceScope ignored = new CloseableTraceScope("filter_existing")) {
+            files.parallelStream()
+                    .forEach(
+                            info -> {
+                                File targetFile = new File(destDir, info.getFileName());
+                                if (targetFile.exists()) {
+                                    toBeRemoved.add(info);
+                                    toBeRemovedName.add(info.getFileName());
+                                }
+                            });
+        }
         if (!toBeRemoved.isEmpty()) {
-            CLog.d("skip download on already existing files: %s", toBeRemoved);
+            CLog.d("skip download on already existing files: %s", toBeRemovedName);
             files.removeAll(toBeRemoved);
         }
 
         // Remove from download anything that is in our cache
         if (mUseCache) {
             CLog.d("RemoteZip caching is enabled, evaluating.");
-            for (CentralDirectoryInfo info : new ArrayList<>(files)) {
-                File targetFile = new File(destDir, info.getFileName());
-                boolean cacheHit =
-                        PartialZipDownloadCache.getDefaultCache()
-                                .getCachedFile(
-                                        targetFile,
-                                        info.getFileName(),
-                                        Long.toString(info.getCrc()));
-                if (cacheHit) {
-                    files.remove(info);
-                    CLog.d("Retrieved %s from cache", info.getFileName());
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.ZIP_PARTIAL_DOWNLOAD_CACHE_HIT, 1);
+            try (CloseableTraceScope ignored = new CloseableTraceScope("apply_cache")) {
+                for (CentralDirectoryInfo info : new ArrayList<>(files)) {
+                    File targetFile = new File(destDir, info.getFileName());
+                    boolean cacheHit =
+                            PartialZipDownloadCache.getDefaultCache()
+                                    .getCachedFile(
+                                            targetFile,
+                                            info.getFileName(),
+                                            Long.toString(info.getCrc()));
+                    if (cacheHit) {
+                        files.remove(info);
+                        CLog.d("Retrieved %s from cache", info.getFileName());
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.ZIP_PARTIAL_DOWNLOAD_CACHE_HIT, 1);
+                    }
                 }
             }
         }
