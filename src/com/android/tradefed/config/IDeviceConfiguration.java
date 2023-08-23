@@ -101,16 +101,9 @@ public interface IDeviceConfiguration {
     public List<ITargetPreparer> getLabPreparers();
 
     /**
-     * Return {@link IDeviceRecovery} that the device configuration holder options from
-     * WaitDeviceRecovery.
+     * Return {@link IDeviceRecovery} that the device configuration holder has.
      */
     public IDeviceRecovery getDeviceRecovery();
-
-    /**
-     * Return {@link IDeviceRecovery} that the device configuration holder options from
-     * RecoverVirtualDevice.
-     */
-    public IDeviceRecovery getVirtualDeviceRecovery();
 
     /**
      * Return {@link TestDeviceOptions} that the device configuration holder has.
