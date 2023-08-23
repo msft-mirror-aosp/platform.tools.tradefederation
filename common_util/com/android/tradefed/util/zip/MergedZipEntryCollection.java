@@ -16,6 +16,8 @@
 
 package com.android.tradefed.util.zip;
 
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -68,40 +70,43 @@ public class MergedZipEntryCollection {
             return new ArrayList<MergedZipEntryCollection>();
         }
 
-        // Sort the entries by start offset.
-        List<CentralDirectoryInfo> entries =
-                zipEntries
-                        .stream()
-                        .sorted(Comparator.comparing(CentralDirectoryInfo::getLocalHeaderOffset))
-                        .collect(Collectors.toList());
-        long endOffset = -1;
-        long totalGap = 0;
-        List<MergedZipEntryCollection> collections = new ArrayList<>();
-        List<CentralDirectoryInfo> group = new ArrayList<>();
-        for (CentralDirectoryInfo entry : entries) {
-            if (endOffset >= 0) {
-                long newGap = entry.getLocalHeaderOffset() - endOffset + totalGap;
-                long totalSize =
-                        entry.getLocalHeaderOffset()
-                                + HEADER_SIZE
-                                + entry.getCompressedSize()
-                                - group.get(0).getLocalHeaderOffset();
-                double gapPercentage = (double) newGap / totalSize;
-                if (endOffset < entry.getLocalHeaderOffset() - MAX_GAP
-                        && MAX_GAP_PERCENTAGE < gapPercentage) {
-                    collections.add(new MergedZipEntryCollection(group));
-                    group = new ArrayList<>();
-                    totalGap = 0;
+        try (CloseableTraceScope ignored = new CloseableTraceScope("merge_collections")) {
+            // Sort the entries by start offset.
+            List<CentralDirectoryInfo> entries =
+                    zipEntries.stream()
+                            .sorted(
+                                    Comparator.comparing(
+                                            CentralDirectoryInfo::getLocalHeaderOffset))
+                            .collect(Collectors.toList());
+            long endOffset = -1;
+            long totalGap = 0;
+            List<MergedZipEntryCollection> collections = new ArrayList<>();
+            List<CentralDirectoryInfo> group = new ArrayList<>();
+            for (CentralDirectoryInfo entry : entries) {
+                if (endOffset >= 0) {
+                    long newGap = entry.getLocalHeaderOffset() - endOffset + totalGap;
+                    long totalSize =
+                            entry.getLocalHeaderOffset()
+                                    + HEADER_SIZE
+                                    + entry.getCompressedSize()
+                                    - group.get(0).getLocalHeaderOffset();
+                    double gapPercentage = (double) newGap / totalSize;
+                    if (endOffset < entry.getLocalHeaderOffset() - MAX_GAP
+                            && MAX_GAP_PERCENTAGE < gapPercentage) {
+                        collections.add(new MergedZipEntryCollection(group));
+                        group = new ArrayList<>();
+                        totalGap = 0;
+                    }
                 }
+                group.add(entry);
+                if (group.size() > 1 && entry.getLocalHeaderOffset() > endOffset) {
+                    totalGap += entry.getLocalHeaderOffset() - endOffset;
+                }
+                endOffset = entry.getLocalHeaderOffset() + HEADER_SIZE + entry.getCompressedSize();
             }
-            group.add(entry);
-            if (group.size() > 1 && entry.getLocalHeaderOffset() > endOffset) {
-                totalGap += entry.getLocalHeaderOffset() - endOffset;
-            }
-            endOffset = entry.getLocalHeaderOffset() + HEADER_SIZE + entry.getCompressedSize();
-        }
-        collections.add(new MergedZipEntryCollection(group));
+            collections.add(new MergedZipEntryCollection(group));
 
-        return collections;
+            return collections;
+        }
     }
 }
