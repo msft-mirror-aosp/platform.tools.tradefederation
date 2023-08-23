@@ -34,7 +34,6 @@ import com.android.tradefed.config.filter.GetPreviousPassedHelper;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NativeDevice;
-import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceManager;
@@ -220,9 +219,6 @@ public class InvocationExecution implements IInvocationExecution {
                     info.setDeviceSerial(device.getSerialNumber());
                     testInfo.getContext().addDeviceBuildInfo(currentDeviceName, info);
                     device.setRecovery(deviceConfig.getDeviceRecovery());
-                    if (device instanceof RemoteAndroidDevice) {
-                        device.setVirtualDeviceRecovery(deviceConfig.getVirtualDeviceRecovery());
-                    }
                 } else {
                     CLog.logAndDisplay(
                             LogLevel.WARN,

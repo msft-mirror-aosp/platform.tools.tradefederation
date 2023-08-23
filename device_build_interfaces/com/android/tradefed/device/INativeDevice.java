@@ -1323,14 +1323,6 @@ public interface INativeDevice {
     public void setRecovery(IDeviceRecovery recovery);
 
     /**
-     * Set the {@link IDeviceRecovery} to use for this virtual device. Should be set when device is
-     * first allocated.
-     *
-     * @param recovery the {@link IDeviceRecovery}
-     */
-    public void setVirtualDeviceRecovery(IDeviceRecovery recovery);
-
-    /**
      * Set the current recovery mode to use for the device.
      * <p/>
      * Used to control what recovery method to use when a device communication problem is
