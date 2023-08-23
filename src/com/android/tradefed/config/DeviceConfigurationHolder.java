@@ -20,6 +20,7 @@ import com.android.tradefed.build.StubBuildProvider;
 import com.android.tradefed.device.DeviceSelectionOptions;
 import com.android.tradefed.device.IDeviceRecovery;
 import com.android.tradefed.device.IDeviceSelection;
+import com.android.tradefed.device.RecoverVirtualDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.WaitDeviceRecovery;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -43,6 +44,7 @@ public class DeviceConfigurationHolder implements IDeviceConfiguration {
     private List<ITargetPreparer> mListTargetPreparer = new ArrayList<>();
     private List<ITargetPreparer> mListLabPreparer = new ArrayList<>();
     private IDeviceRecovery mDeviceRecovery = new WaitDeviceRecovery();
+    private IDeviceRecovery mVirtualDeviceRecovery = new RecoverVirtualDevice();
     private IDeviceSelection mDeviceSelection = new DeviceSelectionOptions();
     private TestDeviceOptions mTestDeviceOption = new TestDeviceOptions();
 
@@ -90,6 +92,8 @@ public class DeviceConfigurationHolder implements IDeviceConfiguration {
             mListTargetPreparer.add((ITargetPreparer) config);
         } else if (config instanceof IDeviceRecovery) {
             mDeviceRecovery = (IDeviceRecovery) config;
+        } else if (config instanceof RecoverVirtualDevice) {
+            mVirtualDeviceRecovery = (IDeviceRecovery) config;
         } else if (config instanceof IDeviceSelection) {
             mDeviceSelection = (IDeviceSelection) config;
         } else if (config instanceof TestDeviceOptions) {
@@ -123,6 +127,9 @@ public class DeviceConfigurationHolder implements IDeviceConfiguration {
         } else if (config instanceof IDeviceRecovery
                 && Configuration.DEVICE_RECOVERY_TYPE_NAME.equals(type)) {
             mDeviceRecovery = (IDeviceRecovery) config;
+        } else if (config instanceof IDeviceRecovery
+                && Configuration.VIRTUAL_DEVICE_RECOVERY_TYPE_NAME.equals(type)) {
+            mVirtualDeviceRecovery = (IDeviceRecovery) config;
         } else if (config instanceof IDeviceSelection
                 && Configuration.DEVICE_REQUIREMENTS_TYPE_NAME.equals(type)) {
             mDeviceSelection = (IDeviceSelection) config;
@@ -145,6 +152,8 @@ public class DeviceConfigurationHolder implements IDeviceConfiguration {
             mListTargetPreparer.clear();
         } else if (Configuration.DEVICE_RECOVERY_TYPE_NAME.equals(type)) {
             mDeviceRecovery = null;
+        } else if (Configuration.DEVICE_RECOVERY_TYPE_NAME.equals(type)) {
+            mVirtualDeviceRecovery = null;
         } else if (Configuration.DEVICE_REQUIREMENTS_TYPE_NAME.equals(type)) {
             mDeviceSelection = null;
         } else if (Configuration.DEVICE_OPTIONS_TYPE_NAME.equals(type)) {
@@ -177,6 +186,7 @@ public class DeviceConfigurationHolder implements IDeviceConfiguration {
         allObject.addAll(mListTargetPreparer);
         allObject.addAll(mListLabPreparer);
         allObject.add(mDeviceRecovery);
+        allObject.add(mVirtualDeviceRecovery);
         allObject.add(mDeviceSelection);
         allObject.add(mTestDeviceOption);
         return allObject;
@@ -194,6 +204,8 @@ public class DeviceConfigurationHolder implements IDeviceConfiguration {
                 return new ArrayList<>(mListLabPreparer);
             case Configuration.DEVICE_RECOVERY_TYPE_NAME:
                 return Arrays.asList(mDeviceRecovery);
+            case Configuration.VIRTUAL_DEVICE_RECOVERY_TYPE_NAME:
+                return Arrays.asList(mVirtualDeviceRecovery);
             case Configuration.DEVICE_REQUIREMENTS_TYPE_NAME:
                 return Arrays.asList(mDeviceSelection);
             case Configuration.DEVICE_OPTIONS_TYPE_NAME:
@@ -231,6 +243,11 @@ public class DeviceConfigurationHolder implements IDeviceConfiguration {
     @Override
     public IDeviceRecovery getDeviceRecovery() {
         return mDeviceRecovery;
+    }
+
+    @Override
+    public IDeviceRecovery getVirtualDeviceRecovery() {
+        return mVirtualDeviceRecovery;
     }
 
     /**
