@@ -170,9 +170,6 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
         if (connection instanceof AdbSshConnection) {
             return ((AdbSshConnection) connection).getAvdInfo();
         }
-        if (device instanceof RemoteAndroidVirtualDevice) {
-            return ((RemoteAndroidVirtualDevice) device).getAvdInfo();
-        }
         return null;
     }
 

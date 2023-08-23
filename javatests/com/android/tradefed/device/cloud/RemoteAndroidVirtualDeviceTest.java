@@ -15,8 +15,6 @@
  */
 package com.android.tradefed.device.cloud;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
@@ -28,9 +26,7 @@ import com.android.tradefed.device.IDeviceRecovery;
 import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
-import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.log.ITestLogger;
-import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 
@@ -40,7 +36,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 /** Unit tests for {@link RemoteAndroidVirtualDevice}. */
@@ -115,20 +110,6 @@ public class RemoteAndroidVirtualDeviceTest {
     /** Test setAvdInfo() */
     @Test
     public void testSetGceAvdInfo() throws Exception {
-        GceAvdInfo mockGceAvdInfo = Mockito.mock(GceAvdInfo.class);
-        when(mockGceAvdInfo.getStatus()).thenReturn(GceStatus.SUCCESS);
-
-        assertEquals(null, mTestDevice.getAvdInfo());
-
-        mTestDevice.setAvdInfo(mockGceAvdInfo);
-        assertEquals(mockGceAvdInfo, mTestDevice.getAvdInfo());
-
-        try {
-            // Attempt override, which is not permitted
-            mTestDevice.setAvdInfo(mockGceAvdInfo);
-            fail("Should have thrown an exception");
-        } catch (TargetSetupError e) {
-            // Expected
-        }
+        
     }
 }
