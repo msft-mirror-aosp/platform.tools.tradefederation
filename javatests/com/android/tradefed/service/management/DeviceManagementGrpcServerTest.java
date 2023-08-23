@@ -136,7 +136,6 @@ public class DeviceManagementGrpcServerTest {
         when(mMockCommandScheduler.isDeviceInInvocationThread(Mockito.any())).thenReturn(false);
         IManagedTestDevice mockedDevice = Mockito.mock(IManagedTestDevice.class);
         when(mMockDeviceManager.allocateDevice(Mockito.any())).thenReturn(mockedDevice);
-        when(mMockDeviceManager.getFastbootPath()).thenReturn("fastboot");
         // Allocate a device
         mServer.reserveDevice(
                 ReserveDeviceRequest.newBuilder().setDeviceId("serial1").build(),
@@ -171,7 +170,6 @@ public class DeviceManagementGrpcServerTest {
         ReleaseReservationResponse release = releases.get(0);
         assertThat(release.getResult()).isEqualTo(ReleaseReservationResponse.Result.SUCCEED);
         verify(mMockDeviceManager).freeDevice(mockedDevice, FreeDeviceState.AVAILABLE);
-        verify(mockedDevice).setFastbootPath(Mockito.anyString());
 
         ReleaseReservationResponse untracked = releases.get(1);
         assertThat(untracked.getResult())
