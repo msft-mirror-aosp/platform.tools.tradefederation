@@ -211,7 +211,6 @@ public class NativeDevice
     private IConfiguration mConfiguration;
     private IDevice mIDevice;
     private IDeviceRecovery mRecovery = new WaitDeviceRecovery();
-    private IDeviceRecovery mRecoveryVirtualDevice = new RecoverVirtualDevice();
     protected final IDeviceStateMonitor mStateMonitor;
     private TestDeviceState mState = TestDeviceState.ONLINE;
     private final ReentrantLock mFastbootLock = new ReentrantLock();
@@ -4277,12 +4276,6 @@ public class NativeDevice
     public void setRecovery(IDeviceRecovery recovery) {
         throwIfNull(recovery);
         mRecovery = recovery;
-    }
-
-    @Override
-    public void setVirtualDeviceRecovery(IDeviceRecovery recovery) {
-        throwIfNull(recovery);
-        mRecoveryVirtualDevice = recovery;
     }
 
     /**
