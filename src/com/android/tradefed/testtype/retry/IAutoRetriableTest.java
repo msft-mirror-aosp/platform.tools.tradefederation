@@ -22,6 +22,7 @@ import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Interface for an {@link IRemoteTest} that doesn't implement {@link ITestFilterReceiver} but still
@@ -40,10 +41,12 @@ public interface IAutoRetriableTest extends IRemoteTest {
      *
      * @param attemptJustExecuted The number of the attempt that we just ran.
      * @param previousResults The list of {@link TestRunResult} of the test that just ran.
+     * @param skipList The set of items that shouldn't be retried.
      * @return True if we should retry, False otherwise.
      * @throws DeviceNotAvailableException Can be thrown during device recovery
      */
-    public default boolean shouldRetry(int attemptJustExecuted, List<TestRunResult> previousResults)
+    public default boolean shouldRetry(
+            int attemptJustExecuted, List<TestRunResult> previousResults, Set<String> skipList)
             throws DeviceNotAvailableException {
         // No retry by default
         return false;
