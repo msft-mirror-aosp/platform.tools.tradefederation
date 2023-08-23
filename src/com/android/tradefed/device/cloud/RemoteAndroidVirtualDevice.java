@@ -22,11 +22,9 @@ import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
-import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.connection.AdbSshConnection;
 import com.android.tradefed.device.connection.DefaultConnection;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 
@@ -41,8 +39,6 @@ import javax.annotation.Nullable;
  * <hostname>:<portnumber> in adb.
  */
 public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
-
-    private GceAvdInfo mGceAvd = null;
 
     /**
      * Creates a {@link RemoteAndroidVirtualDevice}.
@@ -72,49 +68,6 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
         return super.getTombstones();
     }
 
-    /** Set the {@link GceAvdInfo} for launched device. */
-    public void setAvdInfo(GceAvdInfo gceAvdInfo) throws TargetSetupError {
-        if (mGceAvd == null) {
-            mGceAvd = gceAvdInfo;
-            setConnectionAvdInfo(gceAvdInfo);
-        } else {
-            throw new TargetSetupError(
-                    String.format(
-                            "The GceAvdInfo of the device %s is already set, override is not"
-                                    + " permitted. Current GceAvdInfo: %s",
-                            getSerialNumber(), mGceAvd),
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-    }
-
-    /**
-     * Returns the {@link GceAvdInfo} from the created remote VM. Returns null if the bring up was
-     * not successful.
-     */
-    public @Nullable GceAvdInfo getAvdInfo() {
-        if (mGceAvd == null) {
-            CLog.w("Requested getAvdInfo() but GceAvdInfo is null.");
-            return null;
-        }
-        if (!GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
-            CLog.w("Requested getAvdInfo() but the bring up was not successful, returning null.");
-            return null;
-        }
-        return mGceAvd;
-    }
-
-    /**
-     * Returns the {@link GceAvdInfo} from the created remote VM. Returns regardless of the status
-     * so we can inspect the info.
-     */
-    public @Nullable GceAvdInfo getAvdInfoAnyState() {
-        if (mGceAvd == null) {
-            CLog.w("Requested getAvdInfo() but GceAvdInfo is null.");
-            return null;
-        }
-        return mGceAvd;
-    }
-
     @Override
     public DeviceDescriptor getDeviceDescriptor() {
         DeviceDescriptor descriptor = super.getDeviceDescriptor();
@@ -130,6 +83,21 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
             }
         }
         return descriptor;
+    }
+
+    /**
+     * Returns the {@link GceAvdInfo} from the created remote VM. Returns null if the bring up was
+     * not successful.
+     *
+     * @deprecated should use the connection API directly
+     */
+    @Deprecated
+    public @Nullable GceAvdInfo getAvdInfo() {
+        if (getConnection() instanceof AdbSshConnection) {
+            CLog.w("Getting GceAvdInfo via deprecated method.");
+            return ((AdbSshConnection) getConnection()).getAvdInfo();
+        }
+        return null;
     }
 
     @Deprecated
