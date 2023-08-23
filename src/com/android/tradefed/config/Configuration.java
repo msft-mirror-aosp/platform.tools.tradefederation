@@ -88,7 +88,6 @@ public class Configuration implements IConfiguration {
     public static final String MULTI_PREPARER_TYPE_NAME = "multi_target_preparer";
     public static final String TEST_TYPE_NAME = "test";
     public static final String DEVICE_RECOVERY_TYPE_NAME = "device_recovery";
-    public static final String VIRTUAL_DEVICE_RECOVERY_TYPE_NAME = "virtual_device_recovery";
     public static final String LOGGER_TYPE_NAME = "logger";
     public static final String LOG_SAVER_TYPE_NAME = "log_saver";
     public static final String RESULT_REPORTER_TYPE_NAME = "result_reporter";
