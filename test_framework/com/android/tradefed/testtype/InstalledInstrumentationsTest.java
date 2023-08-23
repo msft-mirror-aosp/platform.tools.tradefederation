@@ -50,7 +50,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -224,7 +223,8 @@ public class InstalledInstrumentationsTest
     private String mForceAbi = null;
 
     @Override
-    public boolean shouldRetry(int attemptJustExecuted, List<TestRunResult> previousResults)
+    public boolean shouldRetry(
+            int attemptJustExecuted, List<TestRunResult> previousResults, Set<String> skipList)
             throws DeviceNotAvailableException {
         boolean retry = false;
         if (mRunTestsFailureMap == null) {
@@ -235,8 +235,7 @@ public class InstalledInstrumentationsTest
                 continue;
             }
             if (run.isRunFailure() || run.hasFailedTests()) {
-                retry = true;
-                HashSet<TestDescription> excludes =
+                Set<TestDescription> excludes =
                         new LinkedHashSet<>(
                                 run.getTestsInState(
                                         Arrays.asList(
@@ -246,7 +245,11 @@ public class InstalledInstrumentationsTest
                 if (mRunTestsFailureMap.get(run.getName()) != null) {
                     excludes.addAll(mRunTestsFailureMap.get(run.getName()));
                 }
+                Set<TestDescription> skipListDescriptor = convertStringToDescription(skipList);
+                // Complete the excludes with skip list
+                excludes.addAll(skipListDescriptor);
                 // Exclude passed tests from rerunning
+                retry = shouldRetry(run, skipListDescriptor);
                 mRunTestsFailureMap.put(run.getName(), excludes);
             } else {
                 // Set null if we should not rerun it
@@ -259,6 +262,27 @@ public class InstalledInstrumentationsTest
             mRunTestsFailureMap = null;
         }
         return retry;
+    }
+
+    private Set<TestDescription> convertStringToDescription(Set<String> skipList) {
+        Set<TestDescription> descriptions = new LinkedHashSet<TestDescription>();
+        for (String s : skipList) {
+            String[] classMethod = s.split("#", 2);
+            descriptions.add(new TestDescription(classMethod[0], classMethod[1]));
+        }
+        return descriptions;
+    }
+
+    private boolean shouldRetry(TestRunResult run, Set<TestDescription> skipList) {
+        if (run.isRunFailure()) {
+            return true;
+        }
+        Set<TestDescription> failedTests = run.getFailedTests();
+        failedTests.removeAll(skipList);
+        if (failedTests.isEmpty()) {
+            return false;
+        }
+        return true;
     }
 
     @Override
