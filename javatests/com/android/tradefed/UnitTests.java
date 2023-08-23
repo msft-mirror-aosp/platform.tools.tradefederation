@@ -253,6 +253,7 @@ import com.android.tradefed.targetprep.BaseTargetPreparerTest;
 import com.android.tradefed.targetprep.CompileBootImageWithSpeedTargetPreparerTest;
 import com.android.tradefed.targetprep.CreateUserPreparerTest;
 import com.android.tradefed.targetprep.DefaultTestsZipInstallerTest;
+import com.android.tradefed.targetprep.DeviceActionTargetPreparerTest;
 import com.android.tradefed.targetprep.DeviceFlashPreparerTest;
 import com.android.tradefed.targetprep.DeviceOwnerTargetPreparerTest;
 import com.android.tradefed.targetprep.DeviceSetupTest;
@@ -402,6 +403,7 @@ import com.android.tradefed.util.BundletoolUtilTest;
 import com.android.tradefed.util.ByteArrayListTest;
 import com.android.tradefed.util.ClassPathScannerTest;
 import com.android.tradefed.util.ConditionPriorityBlockingQueueTest;
+import com.android.tradefed.util.DeviceActionUtilTest;
 import com.android.tradefed.util.DirectedGraphTest;
 import com.android.tradefed.util.EmailTest;
 import com.android.tradefed.util.FakeTestsZipFolderTest;
@@ -781,6 +783,7 @@ import org.junit.runners.Suite.SuiteClasses;
     CompileBootImageWithSpeedTargetPreparerTest.class,
     CreateUserPreparerTest.class,
     DefaultTestsZipInstallerTest.class,
+    DeviceActionTargetPreparerTest.class,
     DeviceFlashPreparerTest.class,
     DeviceOwnerTargetPreparerTest.class,
     DeviceSetupTest.class,
@@ -991,6 +994,7 @@ import org.junit.runners.Suite.SuiteClasses;
     CentralDirectoryInfoTest.class,
     ClassPathScannerTest.class,
     ConditionPriorityBlockingQueueTest.class,
+    DeviceActionUtilTest.class,
     DirectedGraphTest.class,
     EmailTest.class,
     FakeTestsZipFolderTest.class,
