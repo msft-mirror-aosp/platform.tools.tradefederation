@@ -243,36 +243,42 @@ public class RemoteZip {
                                     collection.getStartOffset(),
                                     downloadedSize);
 
-                            // Extract each file from the partial download.
-                            for (CentralDirectoryInfo entry : collection.getZipEntries()) {
-                                File targetFile =
-                                        new File(
-                                                Paths.get(destDir.toString(), entry.getFileName())
-                                                        .toString());
-                                if (targetFile.exists()) {
-                                    CLog.d(
-                                            "Downloaded %s already exists, skip partial unzip.",
-                                            entry.getFileName());
-                                    continue;
-                                }
-                                CLog.d("Downloaded %s", entry.getFileName());
-                                LocalFileHeader localFileHeader =
-                                        new LocalFileHeader(
-                                                partialZipFile,
-                                                entry.getLocalHeaderOffset()
-                                                        - collection.getStartOffset());
-                                ZipUtil.unzipPartialZipFile(
-                                        partialZipFile,
-                                        targetFile,
-                                        entry,
-                                        localFileHeader,
-                                        entry.getLocalHeaderOffset() - collection.getStartOffset());
-                                if (mUseCache) {
-                                    PartialZipDownloadCache.getDefaultCache()
-                                            .populateCacheFile(
-                                                    targetFile,
-                                                    entry.getFileName(),
-                                                    Long.toString(entry.getCrc()));
+                            try (CloseableTraceScope ignored =
+                                    new CloseableTraceScope("unzip_partial_zip")) {
+                                // Extract each file from the partial download.
+                                for (CentralDirectoryInfo entry : collection.getZipEntries()) {
+                                    File targetFile =
+                                            new File(
+                                                    Paths.get(
+                                                                    destDir.toString(),
+                                                                    entry.getFileName())
+                                                            .toString());
+                                    if (targetFile.exists()) {
+                                        CLog.d(
+                                                "Downloaded %s already exists, skip partial unzip.",
+                                                entry.getFileName());
+                                        continue;
+                                    }
+                                    CLog.d("Downloaded %s", entry.getFileName());
+                                    LocalFileHeader localFileHeader =
+                                            new LocalFileHeader(
+                                                    partialZipFile,
+                                                    entry.getLocalHeaderOffset()
+                                                            - collection.getStartOffset());
+                                    ZipUtil.unzipPartialZipFile(
+                                            partialZipFile,
+                                            targetFile,
+                                            entry,
+                                            localFileHeader,
+                                            entry.getLocalHeaderOffset()
+                                                    - collection.getStartOffset());
+                                    if (mUseCache) {
+                                        PartialZipDownloadCache.getDefaultCache()
+                                                .populateCacheFile(
+                                                        targetFile,
+                                                        entry.getFileName(),
+                                                        Long.toString(entry.getCrc()));
+                                    }
                                 }
                             }
                         } finally {
