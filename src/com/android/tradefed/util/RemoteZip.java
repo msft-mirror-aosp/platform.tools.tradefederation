@@ -213,9 +213,10 @@ public class RemoteZip {
         // Merge the entries into sections to minimize the download attempts.
         List<MergedZipEntryCollection> collections =
                 MergedZipEntryCollection.createCollections(files);
+        File downloadParentDir = FileUtil.createNamedTempDir(new File(mRemoteFilePath).getName());
         CLog.d(
-                "Downloading %d files from remote zip file %s in %d sections.",
-                files.size(), mRemoteFilePath, collections.size());
+                "Downloading %d files from remote zip file %s in %d sections to %s/",
+                files.size(), mRemoteFilePath, collections.size(), downloadParentDir);
         ParallelDeviceExecutor<Long> executor =
                 new ParallelDeviceExecutor<>(Math.min(collections.size(), POOL_MAX_SIZE));
         List<Callable<Long>> callableTasks = new ArrayList<>();
@@ -227,7 +228,8 @@ public class RemoteZip {
                         long downloadedSize = 0;
                         try {
                             partialZipFile =
-                                    FileUtil.createTempFileForRemote(mRemoteFilePath, null);
+                                    FileUtil.createTempFileForRemote(
+                                            mRemoteFilePath, downloadParentDir);
                             // Delete it so name is available
                             partialZipFile.delete();
                             // End offset is based on the maximum guess of local file header size
@@ -294,6 +296,7 @@ public class RemoteZip {
                 files.size(),
                 TimeUtil.formatElapsedTime(System.currentTimeMillis() - startTime),
                 downloadSizes.stream().mapToLong(Long::longValue).sum());
+        FileUtil.recursiveDelete(downloadParentDir);
         if (executor.hasErrors()) {
             List<Throwable> errors = executor.getErrors();
             CLog.e(
