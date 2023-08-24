@@ -242,7 +242,9 @@ public class TradefedSandbox implements ISandbox {
                     result.setStatus(CommandStatus.EXCEPTION);
                 }
                 result.setStderr(
-                        String.format("Event receiver thread did not complete.:\n%s", stderrText));
+                        String.format(
+                                "%s:\n%s",
+                                SubprocessExceptionParser.EVENT_THREAD_JOIN, stderrText));
             }
             PrettyPrintDelimiter.printStageDelimiter(
                     String.format(
