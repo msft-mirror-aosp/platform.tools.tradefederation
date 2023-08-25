@@ -30,7 +30,7 @@ import java.util.List;
 /** A class to download test resource files from file system/GCS/HTTP. */
 public class TestResourceDownloader {
 
-    private static final long DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+    private static final long DOWNLOAD_TIMEOUT_MS = 60 * 60 * 1000;
     private static final long RETRY_INTERVAL_MS = 10 * 1000;
     private static final int MAX_RETRY_COUNT = 2;
 
