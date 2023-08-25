@@ -353,7 +353,7 @@ public class TradefedSandbox implements ISandbox {
                 return res;
             }
             // Prepare the context
-            try {
+            try (CloseableTraceScope ignored = new CloseableTraceScope("prepareContext")) {
                 mSerializedContext = prepareContext(context, config);
             } catch (IOException e) {
                 return e;
@@ -457,7 +457,7 @@ public class TradefedSandbox implements ISandbox {
             if (config.getCommandOptions().shouldUseSandboxTestMode()) {
                 mode = DumpCmd.TEST_MODE;
             }
-            try {
+            try (CloseableTraceScope ignored = new CloseableTraceScope("serialize_test_config")) {
                 mSerializedConfiguration =
                         SandboxConfigUtil.dumpConfigForVersion(
                                 createClasspath(mRootFolder),
