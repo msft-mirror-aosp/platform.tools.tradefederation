@@ -110,7 +110,7 @@ public class DynamicShardHelper extends ShardHelper {
                 throw e;
             }
             // will only reach this point if the error code is ALREADY_EXISTS
-            CLog.v("Another shard has already seeded the pool '%'.", poolId);
+            CLog.v("Another shard has already seeded the pool '%s'.", poolId);
         }
 
         // if we're any shard, create a test pool poller that polls the sharding server
