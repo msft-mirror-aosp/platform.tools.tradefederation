@@ -1628,4 +1628,8 @@ public abstract class ITestSuite
     protected void setMultiDeviceStrategy(MultiDeviceModuleStrategy strategy) {
         mMultiDevicesStrategy = strategy;
     }
+
+    public void setIntraModuleSharding(boolean intraModuleSharding) {
+        mIntraModuleSharding = intraModuleSharding;
+    }
 }
