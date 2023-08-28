@@ -282,6 +282,8 @@ public class InvocationMetricLogger {
         LEASE_RETRY_COUNT_SUCCESS("lease_retry_count_success", true),
         LEASE_RETRY_COUNT_FAILURE("lease_retry_count_failure", true),
 
+        TRACE_INTERNAL_ERROR("trace_internal_error", true),
+
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
         dynamic_download("dynamic_download", true),
