@@ -213,7 +213,7 @@ public class RemoteZip {
         // Merge the entries into sections to minimize the download attempts.
         List<MergedZipEntryCollection> collections =
                 MergedZipEntryCollection.createCollections(files);
-        File downloadParentDir = FileUtil.createNamedTempDir(new File(mRemoteFilePath).getName());
+        File downloadParentDir = FileUtil.createTempDir(new File(mRemoteFilePath).getName());
         CLog.d(
                 "Downloading %d files from remote zip file %s in %d sections to %s/",
                 files.size(), mRemoteFilePath, collections.size(), downloadParentDir);
