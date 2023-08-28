@@ -31,6 +31,7 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
+import com.android.tradefed.util.image.IncrementalImageUtil;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -77,6 +78,23 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
     }
 
     private Map<String, TrackResults> partitionToInfo = new ConcurrentHashMap<>();
+
+    @Test
+    public void testBlockUtility() throws Throwable {
+        File blockCompare = getBuild().getFile("block-compare");
+        FileUtil.chmodGroupRWX(blockCompare);
+        IncrementalImageUtil updateUtil =
+                new IncrementalImageUtil(
+                        getDevice(),
+                        getBuild().getFile("src-image"),
+                        getBuild().getFile("target-image"),
+                        blockCompare);
+        try {
+            updateUtil.updateDevice();
+        } finally {
+            updateUtil.teardownDevice();
+        }
+    }
 
     @Test
     public void testBlockCompareUpdate() throws Throwable {
