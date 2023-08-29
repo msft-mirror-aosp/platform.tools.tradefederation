@@ -1232,10 +1232,8 @@ public class FileUtil {
     public static Set<String> findFiles(File dir, String filter) throws IOException {
         Set<String> files = new HashSet<>();
         try (Stream<Path> stream =
-                        Files.walk(Paths.get(dir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS);
-                Stream<Path> parallelStream = stream.parallel()) {
-            parallelStream
-                    .filter(path -> path.getFileName().toString().matches(filter))
+                Files.walk(Paths.get(dir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)) {
+            stream.filter(path -> path.getFileName().toString().matches(filter))
                     .forEach(path -> files.add(path.toString()));
         }
         return files;
@@ -1334,15 +1332,12 @@ public class FileUtil {
             throws IOException {
         Set<File> files = new LinkedHashSet<>();
         try (Stream<Path> stream =
-                        Files.walk(Paths.get(dir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS);
-                Stream<Path> parallelStream = stream.parallel()) {
+                Files.walk(Paths.get(dir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)) {
             if (includeDirectory) {
-                parallelStream
-                        .filter(path -> path.getFileName().toString().matches(filter))
+                stream.filter(path -> path.getFileName().toString().matches(filter))
                         .forEach(path -> files.add(path.toFile()));
             } else {
-                parallelStream
-                        .filter(
+                stream.filter(
                                 path ->
                                         path.getFileName().toString().matches(filter)
                                                 && path.toFile().isFile())
