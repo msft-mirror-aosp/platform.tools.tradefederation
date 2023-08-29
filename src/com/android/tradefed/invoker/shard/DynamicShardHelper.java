@@ -149,6 +149,9 @@ public class DynamicShardHelper extends ShardHelper {
         List<ITestSuite> allTests = new ArrayList<>();
         for (IRemoteTest test : config.getTests()) {
             if (test instanceof ITestSuite) {
+                // Disable intra-module-sharding when requesting dynamic sharding
+                // as it's currently not supported together.
+                ((ITestSuite) test).setIntraModuleSharding(false);
                 allTests.addAll(
                         ((ITestSuite) test)
                                 .split(1000000, testInfo).stream()
