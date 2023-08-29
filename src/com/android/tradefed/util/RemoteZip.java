@@ -162,37 +162,39 @@ public class RemoteZip {
      * Download the specified files in the remote zip file.
      *
      * @param destDir the directory to place the downloaded files to.
-     * @param files a list of entries to download from the remote zip file.
+     * @param originalFiles a list of entries to download from the remote zip file.
      * @throws BuildRetrievalError
      * @throws IOException
      */
-    public void downloadFiles(File destDir, List<CentralDirectoryInfo> files)
+    public void downloadFiles(File destDir, List<CentralDirectoryInfo> originalFiles)
             throws BuildRetrievalError, IOException {
         long startTime = System.currentTimeMillis();
 
-        List<CentralDirectoryInfo> toBeRemoved = Collections.synchronizedList(new ArrayList<>());
-        List<String> toBeRemovedName = Collections.synchronizedList(new ArrayList<>());
+        List<CentralDirectoryInfo> toBeDownloaded = Collections.synchronizedList(new ArrayList<>());
+        List<String> skipDownloadName = Collections.synchronizedList(new ArrayList<>());
         try (CloseableTraceScope ignored = new CloseableTraceScope("filter_existing")) {
-            files.parallelStream()
+            originalFiles.parallelStream()
                     .forEach(
                             info -> {
                                 File targetFile = new File(destDir, info.getFileName());
                                 if (targetFile.exists()) {
-                                    toBeRemoved.add(info);
-                                    toBeRemovedName.add(info.getFileName());
+                                    skipDownloadName.add(info.getFileName());
+                                } else {
+                                    toBeDownloaded.add(info);
                                 }
                             });
         }
-        if (!toBeRemoved.isEmpty()) {
-            CLog.d("skip download on already existing files: %s", toBeRemovedName);
-            files.removeAll(toBeRemoved);
+
+        if (!skipDownloadName.isEmpty()) {
+            CLog.d("skip download on already existing files: %s", skipDownloadName);
+            skipDownloadName.clear();
         }
 
         // Remove from download anything that is in our cache
         if (mUseCache) {
             CLog.d("RemoteZip caching is enabled, evaluating.");
             try (CloseableTraceScope ignored = new CloseableTraceScope("apply_cache")) {
-                for (CentralDirectoryInfo info : new ArrayList<>(files)) {
+                for (CentralDirectoryInfo info : new ArrayList<>(toBeDownloaded)) {
                     File targetFile = new File(destDir, info.getFileName());
                     boolean cacheHit =
                             PartialZipDownloadCache.getDefaultCache()
@@ -201,7 +203,7 @@ public class RemoteZip {
                                             info.getFileName(),
                                             Long.toString(info.getCrc()));
                     if (cacheHit) {
-                        files.remove(info);
+                        toBeDownloaded.remove(info);
                         CLog.d("Retrieved %s from cache", info.getFileName());
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.ZIP_PARTIAL_DOWNLOAD_CACHE_HIT, 1);
@@ -212,11 +214,11 @@ public class RemoteZip {
 
         // Merge the entries into sections to minimize the download attempts.
         List<MergedZipEntryCollection> collections =
-                MergedZipEntryCollection.createCollections(files);
+                MergedZipEntryCollection.createCollections(toBeDownloaded);
         File downloadParentDir = FileUtil.createTempDir(new File(mRemoteFilePath).getName());
         CLog.d(
                 "Downloading %d files from remote zip file %s in %d sections to %s/",
-                files.size(), mRemoteFilePath, collections.size(), downloadParentDir);
+                toBeDownloaded.size(), mRemoteFilePath, collections.size(), downloadParentDir);
         ParallelDeviceExecutor<Long> executor =
                 new ParallelDeviceExecutor<>(Math.min(collections.size(), POOL_MAX_SIZE));
         List<Callable<Long>> callableTasks = new ArrayList<>();
@@ -292,8 +294,8 @@ public class RemoteZip {
         }
         List<Long> downloadSizes = executor.invokeAll(callableTasks, 0L, TimeUnit.MINUTES);
         CLog.d(
-                "%d files downloaded from remote zip file in %s. Total download size: %,d bytes.",
-                files.size(),
+                "%d files downloaded from remote zip file in %s. Total download size: %d bytes.",
+                toBeDownloaded.size(),
                 TimeUtil.formatElapsedTime(System.currentTimeMillis() - startTime),
                 downloadSizes.stream().mapToLong(Long::longValue).sum());
         FileUtil.recursiveDelete(downloadParentDir);
