@@ -55,18 +55,24 @@ public class HttpRemoteFileResolverTest {
     public void testResolve() throws Exception {
         RemoteFileResolverArgs args = new RemoteFileResolverArgs();
         args.setConsideredFile(new File("http:/fake/HttpRemoteFileResolverTest"));
+        String fakeUrl = "http://fake/HttpRemoteFileResolverTest";
+        Mockito.doReturn(fakeUrl).when(mHttpDownloader).buildUrl(Mockito.eq(fakeUrl),
+                Mockito.any());
         ResolvedFile res = mResolver.resolveRemoteFile(args);
         FileUtil.deleteFile(res.getResolvedFile());
 
         Mockito.verify(mHttpDownloader)
-                .doGet(Mockito.eq("http://fake/HttpRemoteFileResolverTest"), Mockito.any());
+                .doGet(Mockito.eq(fakeUrl), Mockito.any());
     }
 
     @Test
     public void testResolve_error() throws Exception {
+        String fakeUrl = "http://fake/HttpRemoteFileResolverTest";
+        Mockito.doReturn(fakeUrl).when(mHttpDownloader).buildUrl(Mockito.eq(fakeUrl),
+                Mockito.any());
         Mockito.doThrow(new IOException("download failure"))
                 .when(mHttpDownloader)
-                .doGet(Mockito.eq("http://fake/HttpRemoteFileResolverTest"), Mockito.any());
+                .doGet(Mockito.eq(fakeUrl), Mockito.any());
 
         try {
             RemoteFileResolverArgs args = new RemoteFileResolverArgs();
@@ -80,6 +86,6 @@ public class HttpRemoteFileResolverTest {
         }
 
         Mockito.verify(mHttpDownloader)
-                .doGet(Mockito.eq("http://fake/HttpRemoteFileResolverTest"), Mockito.any());
+                .doGet(Mockito.eq(fakeUrl), Mockito.any());
     }
 }
