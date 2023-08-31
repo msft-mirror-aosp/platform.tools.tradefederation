@@ -30,10 +30,12 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
+import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.proto.TestRecordProtoUtil;
 
+import com.google.common.truth.Truth;
 import com.google.protobuf.Any;
 
 import org.junit.After;
@@ -41,6 +43,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -107,13 +110,17 @@ public class FileProtoResultReporterTest {
         context.setConfigurationDescriptor(new ConfigurationDescriptor());
         context.addInvocationAttribute("test", "test");
         mReporter.invocationStarted(context);
-        mReporter.testModuleStarted(createModuleContext("module1"));
+        IInvocationContext module1Context = createModuleContext("module1");
+        mReporter.testModuleStarted(module1Context);
         mReporter.testRunStarted("run1", 1);
         mReporter.testStarted(test1);
         mReporter.testEnded(test1, new HashMap<String, Metric>());
         mReporter.testRunEnded(200L, new HashMap<String, Metric>());
+        module1Context.addInvocationAttribute(ITestSuite.MODULE_END_TIME, "endTime");
         mReporter.testModuleEnded();
-        mReporter.testModuleStarted(createModuleContext("module2"));
+        IInvocationContext module2Context = createModuleContext("module2");
+        mReporter.testModuleStarted(module2Context);
+        module2Context.addInvocationAttribute(ITestSuite.MODULE_END_TIME, "endTime");
         mReporter.testModuleEnded();
         // Run without a module
         mReporter.testRunStarted("run2", 1);
@@ -136,8 +143,10 @@ public class FileProtoResultReporterTest {
             currentOutput = new File(mOutput.getAbsolutePath() + index);
         }
 
+        ArgumentCaptor<IInvocationContext> moduleCaptor =
+                ArgumentCaptor.forClass(IInvocationContext.class);
         verify(mMockListener).invocationStarted(Mockito.any());
-        verify(mMockListener, times(2)).testModuleStarted(Mockito.any());
+        verify(mMockListener, times(2)).testModuleStarted(moduleCaptor.capture());
         verify(mMockListener)
                 .testRunStarted(
                         Mockito.eq("run1"), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
@@ -153,12 +162,17 @@ public class FileProtoResultReporterTest {
                 .testRunStarted(
                         Mockito.eq("run2"), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
         verify(mMockListener).invocationEnded(500L);
+
+        IInvocationContext capturedModuleContext = moduleCaptor.getValue();
+        Truth.assertThat(capturedModuleContext.getAttribute(ITestSuite.MODULE_END_TIME))
+                .isEqualTo("endTime");
     }
 
     private IInvocationContext createModuleContext(String moduleId) {
         IInvocationContext context = new InvocationContext();
         context.addInvocationAttribute(ModuleDefinition.MODULE_ID, moduleId);
         context.setConfigurationDescriptor(new ConfigurationDescriptor());
+        context.addInvocationAttribute(ITestSuite.MODULE_START_TIME, "startTime");
         return context;
     }
 

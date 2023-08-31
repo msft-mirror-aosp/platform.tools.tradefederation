@@ -39,10 +39,12 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
+import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
+import com.google.common.truth.Truth;
 import com.google.protobuf.Any;
 
 import org.junit.Before;
@@ -383,7 +385,8 @@ public class ProtoResultParserTest {
         // Invocation start
         mFinalTestParser.invocationStarted(mInvocationContext);
         // Run modules
-        mFinalTestParser.testModuleStarted(createModuleContext("arm64 module1"));
+        IInvocationContext moduleContext = createModuleContext("arm64 module1");
+        mFinalTestParser.testModuleStarted(moduleContext);
         // test log at module level
         mFinalTestParser.logAssociation("log-module", logModuleFile);
         mFinalTestParser.testRunStarted("run1", 2);
@@ -402,13 +405,18 @@ public class ProtoResultParserTest {
                 "run_log1", new LogFile("path", "url", false, LogDataType.LOGCAT, 5));
         mFinalTestParser.testRunEnded(50L, new HashMap<String, Metric>());
 
+        moduleContext.addInvocationAttribute(ITestSuite.MODULE_END_TIME, "endTime");
         mFinalTestParser.testModuleEnded();
 
         // Invocation ends
         mFinalTestParser.invocationEnded(500L);
+        ArgumentCaptor<IInvocationContext> startCaptor =
+                ArgumentCaptor.forClass(IInvocationContext.class);
         InOrder inOrder = Mockito.inOrder(mMockListener);
         inOrder.verify(mMockListener).invocationStarted(Mockito.any());
-        inOrder.verify(mMockListener).testModuleStarted(Mockito.any());
+        inOrder.verify(mMockListener).testModuleStarted(startCaptor.capture());
+
+        IInvocationContext captureModuleContext = startCaptor.getValue();
         inOrder.verify(mMockListener)
                 .testRunStarted(
                         Mockito.eq("run1"), Mockito.eq(2), Mockito.eq(0), Mockito.anyLong());
@@ -425,6 +433,10 @@ public class ProtoResultParserTest {
         inOrder.verify(mMockListener)
                 .logAssociation(Mockito.eq("subprocess-log-module"), Mockito.any());
         inOrder.verify(mMockListener).testModuleEnded();
+        Truth.assertThat(captureModuleContext.getAttribute(ITestSuite.MODULE_START_TIME))
+                .isEqualTo("startTime");
+        Truth.assertThat(captureModuleContext.getAttribute(ITestSuite.MODULE_END_TIME))
+                .isEqualTo("endTime");
         inOrder.verify(mMockListener).invocationEnded(500L);
     }
 
@@ -827,6 +839,7 @@ public class ProtoResultParserTest {
         context.setConfigurationDescriptor(new ConfigurationDescriptor());
         context.addDeviceBuildInfo(
                 ConfigurationDef.DEFAULT_DEVICE_NAME, mInvocationContext.getBuildInfos().get(0));
+        context.addInvocationAttribute(ITestSuite.MODULE_START_TIME, "startTime");
         return context;
     }
 }
