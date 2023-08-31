@@ -91,6 +91,12 @@ public class DeviceTraceCollector extends BaseDeviceMetricCollector {
                     device.getSerialNumber(), eventName, mTraceCountMap.get(device));
             return;
         }
+        CLog.d(
+                "Collected device trace from %s on event:%s. trace-count:%d. size:%d",
+                device.getSerialNumber(),
+                eventName,
+                mTraceCountMap.get(device),
+                traceFile.length());
         String name =
                 String.format(
                         NAME_FORMAT,
