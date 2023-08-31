@@ -360,7 +360,7 @@ public class GceSshTunnelMonitor extends Thread {
             }
             CLog.d("Setting device %s serial to %s", device.getSerialNumber(), serial);
             ((IManagedTestDevice) device).setIDevice(new RemoteAvdIDevice(serial));
-            ((IManagedTestDevice) device).setFastbootEnabled(false);
+            ((IManagedTestDevice) device).setFastbootEnabled(true);
             // Do not set setDeviceSerial to keep track of it consistently with the placeholder
             // serial
             mBuildInfo.addBuildAttribute(VIRTUAL_DEVICE_SERIAL, serial);
