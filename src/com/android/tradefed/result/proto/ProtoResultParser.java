@@ -97,6 +97,8 @@ public class ProtoResultParser {
     /** Track the name of the module in progress. */
     private String mModuleInProgress = null;
 
+    private IInvocationContext mModuleContext = null;
+
     private boolean mMergeInvocationContext = true;
 
     /** Ctor. */
@@ -435,6 +437,7 @@ public class ProtoResultParser {
                 mModuleInProgress = moduleId;
             }
             log(message);
+            mModuleContext = moduleContext;
             mListener.testModuleStarted(moduleContext);
             if (mFirstModule) {
                 mFirstModule = false;
@@ -449,8 +452,18 @@ public class ProtoResultParser {
     private void handleModuleEnded(TestRecord moduleProto) {
         handleLogs(moduleProto);
         log("Test module ended proto");
+        try {
+            Any anyDescription = moduleProto.getDescription();
+            IInvocationContext moduleContext =
+                    InvocationContext.fromProto(anyDescription.unpack(Context.class));
+            // Merge attributes
+            mModuleContext.addInvocationAttributes(moduleContext.getAttributes());
+        } catch (InvalidProtocolBufferException e) {
+            throw new RuntimeException(e);
+        }
         mListener.testModuleEnded();
         mModuleInProgress = null;
+        mModuleContext = null;
     }
 
     /** Handles the test run level of the invocation. */
