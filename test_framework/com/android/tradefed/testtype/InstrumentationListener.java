@@ -213,18 +213,18 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
             missingTests.removeAll(mTests);
 
             TestDescription lastTest = mLastTest;
+            String lastExecutedLog = "";
+            if (lastTest != null) {
+                lastExecutedLog = "Last executed test was " + lastTest.toString() + ".";
+            }
+            if (runLevelError == null) {
+                runLevelError = "Method was expected to run but didn't.";
+            } else {
+                runLevelError =
+                        String.format("Run level error reported reason: '%s", runLevelError);
+            }
             for (TestDescription miss : missingTests) {
                 super.testStarted(miss);
-                String lastExecutedLog = "";
-                if (lastTest != null) {
-                    lastExecutedLog = "Last executed test was " + lastTest.toString() + ".";
-                }
-                if (runLevelError == null) {
-                    runLevelError = "Method was expected to run but didn't.";
-                } else {
-                    runLevelError =
-                            String.format("Run level error reported reason: '%s", runLevelError);
-                }
                 FailureDescription failure =
                         FailureDescription.create(
                                 String.format(
