@@ -28,7 +28,7 @@
 	<classpathentry exported="true" kind="var" path="TRADEFED_ROOT/prebuilts/misc/common/kxml2/kxml2-2.3.0.jar"/>
 	<classpathentry exported="true" kind="var" path="TRADEFED_ROOT/prebuilts/misc/common/sdklib/sdklib-prebuilt.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/external/error_prone/error_prone/error_prone_annotations-2.15.0.jar"/>
-	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/protobuf/libprotobuf-java-full/linux_glibc_common/javac/classes"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/protobuf/libprotobuf-java-full/linux_glibc_common/javac/libprotobuf-java-full.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/junit-params/junit-params/linux_glibc_common/combined/junit-params.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/junit/junit/linux_glibc_common/combined/junit.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/prebuilts/tools/common/google-api-services-compute/google-api-services-compute/linux_glibc_common/combined/google-api-services-compute.jar"/>
