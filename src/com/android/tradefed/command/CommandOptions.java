@@ -320,6 +320,11 @@ public class CommandOptions implements ICommandOptions {
     public static final String JDK_FOLDER_OPTION_NAME = "jdk-folder-for-subprocess";
 
     @Option(
+            name = "parallel-dynamic-download",
+            description = "Enable parallel download of dynamic files when supported.")
+    private boolean mEnableParallelDynamicDownload = false;
+
+    @Option(
             name = JDK_FOLDER_OPTION_NAME,
             description =
                     "Whenever the java execution is forked to another subprocess, use this jdk"
