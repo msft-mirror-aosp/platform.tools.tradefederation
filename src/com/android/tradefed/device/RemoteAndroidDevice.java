@@ -120,6 +120,11 @@ public class RemoteAndroidDevice extends TestDevice {
     }
 
     @Override
+    public String getFastbootSerialNumber() {
+        return "tcp:" + getSerialNumber();
+    }
+
+    @Override
     public DeviceDescriptor getDeviceDescriptor() {
         DeviceDescriptor descriptor = super.getDeviceDescriptor();
         if (getConnection() instanceof DefaultConnection) {
