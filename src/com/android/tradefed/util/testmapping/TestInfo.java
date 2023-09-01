@@ -22,6 +22,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -102,6 +103,17 @@ public class TestInfo {
     /** Get a {@link Set} of the keywords supported by the test. */
     public Set<String> getKeywords() {
         return new HashSet<>(mKeywords);
+    }
+
+    /**
+     * Get a {@link Set} of the keywords supported by the test.
+     *
+     * @param ignoreKeywords A set of {@link String} of keywords to be ignored.
+     */
+    public Set<String> getKeywords(Set<String> ignoreKeywords) {
+        Set<String> keywords = new LinkedHashSet<>(mKeywords);
+        keywords.removeAll(ignoreKeywords);
+        return keywords;
     }
 
     /**
