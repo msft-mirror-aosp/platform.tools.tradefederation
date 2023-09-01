@@ -15,6 +15,10 @@
     {
       "name": "suite/stub2",
       "keywords": ["key_1"]
+    },
+    {
+      "name": "suite/stub3",
+      "keywords": ["key_2"]
     }
   ],
   "postsubmit": [
