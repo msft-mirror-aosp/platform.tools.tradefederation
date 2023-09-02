@@ -21,6 +21,7 @@ import com.android.tradefed.build.cache.PartialZipDownloadCache;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.invoker.tracing.TracePropagatingExecutorService;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 import com.android.tradefed.util.zip.CentralDirectoryInfo;
@@ -35,6 +36,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /** Utilities to unzip individual files inside a remote zip file. */
@@ -119,6 +123,7 @@ public class RemoteZip {
         File partialZipFile = FileUtil.createTempFileForRemote(mRemoteFilePath, null);
         // Delete it so name is available
         partialZipFile.delete();
+
         try {
             // Get the end central directory of the zip file requested.
             // Download last 64kb (or entire file if the size is less than 64kb)
@@ -169,7 +174,8 @@ public class RemoteZip {
     public void downloadFiles(File destDir, List<CentralDirectoryInfo> originalFiles)
             throws BuildRetrievalError, IOException {
         long startTime = System.currentTimeMillis();
-
+        final TracePropagatingExecutorService service =
+                TracePropagatingExecutorService.create(Executors.newCachedThreadPool());
         List<CentralDirectoryInfo> toBeDownloaded = Collections.synchronizedList(new ArrayList<>());
         List<String> skipDownloadName = Collections.synchronizedList(new ArrayList<>());
         try (CloseableTraceScope ignored = new CloseableTraceScope("filter_existing")) {
@@ -223,6 +229,9 @@ public class RemoteZip {
                 new ParallelDeviceExecutor<>(Math.min(collections.size(), POOL_MAX_SIZE));
         List<Callable<Long>> callableTasks = new ArrayList<>();
 
+        // Extract each file from the partial download.
+        List<Future<IOException>> futures = Collections.synchronizedList(new ArrayList<>());
+
         for (MergedZipEntryCollection collection : collections) {
             Callable<Long> callableTask =
                     () -> {
@@ -246,53 +255,35 @@ public class RemoteZip {
                                     partialZipFile,
                                     collection.getStartOffset(),
                                     downloadedSize);
-
-                            try (CloseableTraceScope ignored =
-                                    new CloseableTraceScope("unzip_partial_zip")) {
-                                // Extract each file from the partial download.
-                                for (CentralDirectoryInfo entry : collection.getZipEntries()) {
-                                    File targetFile =
-                                            new File(
-                                                    Paths.get(
-                                                                    destDir.toString(),
-                                                                    entry.getFileName())
-                                                            .toString());
-                                    if (targetFile.exists()) {
-                                        CLog.d(
-                                                "Downloaded %s already exists, skip partial unzip.",
-                                                entry.getFileName());
-                                        continue;
-                                    }
-                                    CLog.d("Downloaded %s", entry.getFileName());
-                                    LocalFileHeader localFileHeader =
-                                            new LocalFileHeader(
-                                                    partialZipFile,
-                                                    entry.getLocalHeaderOffset()
-                                                            - collection.getStartOffset());
-                                    ZipUtil.unzipPartialZipFile(
-                                            partialZipFile,
-                                            targetFile,
-                                            entry,
-                                            localFileHeader,
-                                            entry.getLocalHeaderOffset()
-                                                    - collection.getStartOffset());
-                                    if (mUseCache) {
-                                        PartialZipDownloadCache.getDefaultCache()
-                                                .populateCacheFile(
-                                                        targetFile,
-                                                        entry.getFileName(),
-                                                        Long.toString(entry.getCrc()));
-                                    }
-                                }
-                            }
+                            final File partialZipFinal = partialZipFile;
+                            Future<IOException> futureClient =
+                                    service.submit(
+                                            () ->
+                                                    unzipDownloadedCollection(
+                                                            destDir, partialZipFinal, collection));
+                            futures.add(futureClient);
                         } finally {
-                            FileUtil.deleteFile(partialZipFile);
+                            // FileUtil.deleteFile(partialZipFile);
                         }
                         return downloadedSize;
                     };
             callableTasks.add(callableTask);
         }
         List<Long> downloadSizes = executor.invokeAll(callableTasks, 0L, TimeUnit.MINUTES);
+        try (CloseableTraceScope finishUnzip = new CloseableTraceScope("finish_unzipping")) {
+            for (Future<IOException> f : futures) {
+                try {
+                    IOException e = f.get();
+                    if (e != null) {
+                        throw e;
+                    }
+                } catch (ExecutionException | InterruptedException ee) {
+                    throw new RuntimeException(ee);
+                }
+            }
+        } finally {
+            service.shutdown();
+        }
         CLog.d(
                 "%d files downloaded from remote zip file in %s. Total download size: %d bytes.",
                 toBeDownloaded.size(),
@@ -311,6 +302,49 @@ public class RemoteZip {
                 throw (IOException) errors.get(0);
             }
             throw new RuntimeException(errors.get(0));
+        }
+    }
+
+    private IOException unzipDownloadedCollection(
+            File destDir, File partialZipFile, MergedZipEntryCollection collection) {
+        try {
+            for (CentralDirectoryInfo entry : collection.getZipEntries()) {
+                File targetFile =
+                        new File(Paths.get(destDir.toString(), entry.getFileName()).toString());
+                if (targetFile.exists()) {
+                    CLog.d(
+                            "Downloaded %s already exists, skip partial unzip.",
+                            entry.getFileName());
+                    continue;
+                }
+                try (CloseableTraceScope unzipTrace =
+                        new CloseableTraceScope("unzipPartialZipFile")) {
+                    LocalFileHeader localFileHeader =
+                            new LocalFileHeader(
+                                    partialZipFile,
+                                    entry.getLocalHeaderOffset() - collection.getStartOffset());
+                    ZipUtil.unzipPartialZipFile(
+                            partialZipFile,
+                            targetFile,
+                            entry,
+                            localFileHeader,
+                            entry.getLocalHeaderOffset() - collection.getStartOffset());
+                    CLog.d(
+                            "Downloaded %s. unzipped size: %s",
+                            entry.getFileName(), targetFile.length());
+                } catch (IOException e) {
+                    CLog.e(e);
+                    return e;
+                }
+                if (mUseCache) {
+                    PartialZipDownloadCache.getDefaultCache()
+                            .populateCacheFile(
+                                    targetFile, entry.getFileName(), Long.toString(entry.getCrc()));
+                }
+            }
+            return null;
+        } finally {
+            FileUtil.deleteFile(partialZipFile);
         }
     }
 }
