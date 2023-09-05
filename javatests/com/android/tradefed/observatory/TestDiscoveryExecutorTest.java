@@ -29,6 +29,7 @@ import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
+import com.android.tradefed.testtype.suite.ITestSuite.MultiDeviceModuleStrategy;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.keystore.DryRunKeyStore;
@@ -255,6 +256,53 @@ public class TestDiscoveryExecutorTest {
             String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
             String expected =
                     "{\"TestModules\":[\"CtsMedia\"],\"TestDependencies\":[],\"PartialFallback\":\"true\"}";
+            assertEquals(expected, output);
+        } finally {
+            FileUtil.recursiveDelete(rootDir);
+        }
+    }
+
+    /** Test the executor when a multi-devices only option is in the config. */
+    @Test
+    public void testDiscoverDependencies_multiDevices() throws Exception {
+        File rootDir = FileUtil.createTempDir("discovery-tests");
+        try {
+            File multiConfig = new File(rootDir, "CtsMulti.config");
+            FileUtil.writeToFile(
+                    "<configuration><option name=\"config-descriptor:metadata\" key=\"component\""
+                            + " value=\"media\" />"
+                            + " <device name=\"one\"/>"
+                            + " <device name=\"two\"/>"
+                            + "</configuration>",
+                    multiConfig);
+            File secondNotRunConfig = new File(rootDir, "another.config");
+            FileUtil.writeToFile("<configuration></configuration>", secondNotRunConfig);
+            mTestDiscoveryExecutor =
+                    new TestDiscoveryExecutor() {
+                        @Override
+                        IConfigurationFactory getConfigurationFactory() {
+                            return mMockConfigFactory;
+                        }
+
+                        @Override
+                        protected String getEnvironment(String var) {
+                            return rootDir.getAbsolutePath();
+                        }
+                    };
+
+            // Mock to return some include filters
+            BaseTestSuite test1 = new BaseTestSuite();
+            test1.setMultiDeviceStrategy(MultiDeviceModuleStrategy.ONLY_MULTI_DEVICES);
+            Set<String> emptyFilters = new HashSet<>();
+            test1.setIncludeFilter(emptyFilters);
+
+            List<IRemoteTest> testList = new ArrayList<>();
+            testList.add(test1);
+            when(mMockedConfiguration.getTests()).thenReturn(testList);
+
+            String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
+            String expected =
+                    "{\"TestModules\":[\"CtsMulti\"],\"TestDependencies\":[],\"PartialFallback\":\"true\"}";
             assertEquals(expected, output);
         } finally {
             FileUtil.recursiveDelete(rootDir);
