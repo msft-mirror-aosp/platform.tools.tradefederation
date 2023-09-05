@@ -107,13 +107,13 @@ public class PartialZipDownloadCache {
                 File cachedFile = mFileCache.getIfPresent(key);
                 if (cachedFile != null) {
                     targetFile.getParentFile().mkdirs();
-                    FileUtil.hardlinkFile(cachedFile, targetFile);
+                    FileUtil.hardlinkFile(cachedFile, targetFile, true);
                     return true;
                 }
                 mFileCache.invalidate(key);
             }
         } catch (IOException e) {
-            // Ignore
+            CLog.e(e);
         }
         return false;
     }

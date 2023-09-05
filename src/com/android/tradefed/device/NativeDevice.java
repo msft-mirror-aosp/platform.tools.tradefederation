@@ -3351,7 +3351,8 @@ public class NativeDevice
      */
     @Override
     public boolean clearErrorDialogs() throws DeviceNotAvailableException {
-        throw new UnsupportedOperationException("No support for Screen's features");
+        CLog.e("No support for Screen's features");
+        return false;
     }
 
     /** {@inheritDoc} */
@@ -5207,13 +5208,8 @@ public class NativeDevice
             if (attributes != null) {
                 builder.addAttributes(attributes);
             }
-            if (getOptions().shouldUseConnection()) {
-                addExtraConnectionBuilderArgs(builder);
-                mConnection = DefaultConnection.createConnection(builder);
-            } else {
-                // Use default inop connection
-                mConnection = DefaultConnection.createInopConnection(builder);
-            }
+            addExtraConnectionBuilderArgs(builder);
+            mConnection = DefaultConnection.createConnection(builder);
             CLog.d("Using connection: %s (%s)", mConnection, getIDevice());
             mConnection.initializeConnection();
         }
