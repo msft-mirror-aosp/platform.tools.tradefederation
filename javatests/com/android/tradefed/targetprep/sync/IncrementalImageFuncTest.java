@@ -79,10 +79,11 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
 
     private Map<String, TrackResults> partitionToInfo = new ConcurrentHashMap<>();
 
+    
+    
     @Test
     public void testBlockUtility() throws Throwable {
-        File blockCompare = getBuild().getFile("block-compare");
-        FileUtil.chmodGroupRWX(blockCompare);
+        File blockCompare = getCreateSnapshot();
         IncrementalImageUtil updateUtil =
                 new IncrementalImageUtil(
                         getDevice(),
@@ -101,8 +102,7 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
         String originalBuildId = getDevice().getBuildId();
         CLog.d("Original build id: %s", originalBuildId);
 
-        File blockCompare = getBuild().getFile("block-compare");
-        FileUtil.chmodGroupRWX(blockCompare);
+        File blockCompare = getCreateSnapshot();
         File srcImage = getBuild().getFile("src-image");
         File srcDirectory = ZipUtil2.extractZipToTemp(srcImage, "incremental_src");
         File targetImage = getBuild().getFile("target-image");
@@ -247,6 +247,17 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             File[] listFiles = workDir.listFiles();
             CLog.e("%s", Arrays.asList(listFiles));
         }
+    }
+
+    private File getCreateSnapshot() throws IOException {
+        File createSnapshotZip = getBuild().getFile("create_snapshot.zip");
+        if (createSnapshotZip == null) {
+            throw new RuntimeException("Cannot find create_snapshot.zip");
+        }
+        File destDir = ZipUtil2.extractZipToTemp(createSnapshotZip, "create_snapshot");
+        File snapshot = FileUtil.findFile(destDir, "create_snapshot");
+        FileUtil.chmodGroupRWX(snapshot);
+        return snapshot;
     }
 
     private void inspectCowPatches(File workDir) throws IOException {
