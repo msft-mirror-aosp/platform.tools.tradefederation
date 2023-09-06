@@ -35,6 +35,7 @@ import com.android.tradefed.util.image.IncrementalImageUtil;
 
 import com.google.common.collect.ImmutableSet;
 
+import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -79,10 +80,20 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
 
     private Map<String, TrackResults> partitionToInfo = new ConcurrentHashMap<>();
 
-    
-    
+    @After
+    public void teardown() throws DeviceNotAvailableException {
+        if (mDisableVerity) {
+            // Reenable verity in case it was disabled.
+            getDevice().executeAdbCommand("enable-verity");
+            getDevice().reboot();
+        }
+    }
+
     @Test
     public void testBlockUtility() throws Throwable {
+        String originalBuildId = getDevice().getBuildId();
+        CLog.d("Original build id: %s", originalBuildId);
+
         File blockCompare = getCreateSnapshot();
         IncrementalImageUtil updateUtil =
                 new IncrementalImageUtil(
@@ -92,9 +103,16 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                         blockCompare);
         try {
             updateUtil.updateDevice();
+
+            String afterMountBuildId = getDevice().getBuildId();
+            CLog.d(
+                    "Original build id: %s. after mount build id: %s",
+                    originalBuildId, afterMountBuildId);
         } finally {
             updateUtil.teardownDevice();
         }
+        String afterRevert = getDevice().getBuildId();
+        CLog.d("Original build id: %s. after unmount build id: %s", originalBuildId, afterRevert);
     }
 
     @Test
