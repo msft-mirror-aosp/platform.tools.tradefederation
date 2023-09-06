@@ -1134,7 +1134,9 @@ public class InvocationExecution implements IInvocationExecution {
                             || test instanceof TestsPoolPoller
                             // If test doesn't support auto-retry
                             || (!(test instanceof ITestFilterReceiver)
-                                    && !(test instanceof IAutoRetriableTest))) {
+                                    && !(test instanceof IAutoRetriableTest)
+                                    && !RetryStrategy.ITERATIONS.equals(
+                                            decision.getRetryStrategy()))) {
                         try {
                             long timeSpentOnTest =
                                     runTest(
