@@ -81,6 +81,9 @@ public class IncrementalImageUtil {
     }
 
     public void updateDevice() throws IOException, DeviceNotAvailableException {
+        if (!mDevice.enableAdbRoot()) {
+            throw new RuntimeException("failed to obtain root.");
+        }
         File srcDirectory = ZipUtil2.extractZipToTemp(mSrcImage, "incremental_src");
         File targetDirectory = ZipUtil2.extractZipToTemp(mTargetImage, "incremental_target");
 
