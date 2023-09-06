@@ -1625,8 +1625,12 @@ public abstract class ITestSuite
         return true;
     }
 
-    protected void setMultiDeviceStrategy(MultiDeviceModuleStrategy strategy) {
+    public void setMultiDeviceStrategy(MultiDeviceModuleStrategy strategy) {
         mMultiDevicesStrategy = strategy;
+    }
+
+    public MultiDeviceModuleStrategy getMultiDeviceStrategy() {
+        return mMultiDevicesStrategy;
     }
 
     public void setIntraModuleSharding(boolean intraModuleSharding) {

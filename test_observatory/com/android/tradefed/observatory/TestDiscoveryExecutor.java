@@ -29,6 +29,7 @@ import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.StdoutLogger;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
+import com.android.tradefed.testtype.suite.ITestSuite.MultiDeviceModuleStrategy;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 import com.android.tradefed.util.FileUtil;
@@ -235,6 +236,29 @@ public class TestDiscoveryExecutor {
                             null,
                             DiscoveryExitCode.COMPONENT_METADATA);
                 }
+            } else if (MultiDeviceModuleStrategy.ONLY_MULTI_DEVICES.equals(
+                    ((BaseTestSuite) test).getMultiDeviceStrategy())) {
+                String rootDirPath =
+                        getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                boolean throwException = true;
+                if (rootDirPath != null) {
+                    File rootDir = new File(rootDirPath);
+                    if (rootDir.exists() && rootDir.isDirectory()) {
+                        Set<String> configs = searchForMultiDevicesConfig(rootDir);
+                        if (configs != null) {
+                            testModules.addAll(configs);
+                            throwException = false;
+                            mReportPartialFallback = true;
+                        }
+                    }
+                }
+                if (throwException) {
+                    throw new TestDiscoveryException(
+                            "Tradefed Observatory can't do test discovery because the existence of"
+                                    + " multi-devices option.",
+                            null,
+                            DiscoveryExitCode.COMPONENT_METADATA);
+                }
             } else if (!Strings.isNullOrEmpty(((BaseTestSuite) test).getRunSuiteTag())) {
                 String rootDirPath =
                         getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
@@ -306,6 +330,43 @@ public class TestDiscoveryExecutor {
             }
         }
         return dependencies;
+    }
+
+    private Set<String> searchForMultiDevicesConfig(File rootDir) {
+        try {
+            Set<File> configFiles = FileUtil.findFilesObject(rootDir, ".*\\.config$");
+            if (configFiles.isEmpty()) {
+                return null;
+            }
+            Set<File> shouldRunFiles =
+                    configFiles.stream()
+                            .filter(
+                                    f -> {
+                                        try {
+                                            IConfiguration c =
+                                                    getConfigurationFactory()
+                                                            .createPartialConfigurationFromArgs(
+                                                                    new String[] {
+                                                                        f.getAbsolutePath()
+                                                                    },
+                                                                    new DryRunKeyStore(),
+                                                                    ImmutableSet.of(
+                                                                            Configuration
+                                                                                    .CONFIGURATION_DESCRIPTION_TYPE_NAME),
+                                                                    null);
+                                            return c.getDeviceConfig().size() > 1;
+                                        } catch (ConfigurationException e) {
+                                            return false;
+                                        }
+                                    })
+                            .collect(Collectors.toSet());
+            return shouldRunFiles.stream()
+                    .map(c -> FileUtil.getBaseName(c.getName()))
+                    .collect(Collectors.toSet());
+        } catch (IOException e) {
+            System.err.println(e);
+        }
+        return null;
     }
 
     private Set<String> searchConfigsForMetadata(
