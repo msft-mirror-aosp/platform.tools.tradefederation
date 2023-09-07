@@ -15,7 +15,11 @@
  */
 package com.android.tradefed.config.remote;
 
+import com.android.tradefed.build.BuildRetrievalError;
+
 import java.io.File;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 /** A extension of standard file to carry a build related metadata. */
 public class ExtendedFile extends File {
@@ -23,6 +27,8 @@ public class ExtendedFile extends File {
     private String mBuildId;
     private String mBuildTarget;
     private String mBranch;
+
+    private Future<BuildRetrievalError> mParallelDownload;
 
     ExtendedFile(String path) {
         super(path);
@@ -52,5 +58,40 @@ public class ExtendedFile extends File {
     /** Returns the branch metadata. */
     public String getBranch() {
         return mBranch;
+    }
+
+    public void setDownloadFuture(Future<BuildRetrievalError> download) {
+        mParallelDownload = download;
+    }
+
+    public void cancelDownload() {
+        if (!isDownloadingInParallel()) {
+            return;
+        }
+        try {
+            mParallelDownload.cancel(true);
+        } catch (RuntimeException ignored) {
+            // Ignore
+        }
+    }
+
+    public void waitForDownload() throws BuildRetrievalError {
+        if (!isDownloadingInParallel()) {
+            return;
+        }
+        try {
+            BuildRetrievalError error = mParallelDownload.get();
+            if (error == null) {
+                return;
+            }
+            throw error;
+        } catch (ExecutionException | InterruptedException e) {
+            throw new BuildRetrievalError(
+                    String.format("Error during parallel download: %s", e.getMessage()), e);
+        }
+    }
+
+    public boolean isDownloadingInParallel() {
+        return mParallelDownload != null;
     }
 }
