@@ -37,6 +37,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.LogFileProto.LogFileInfo;
 import com.android.tradefed.result.proto.TestRecordProto.ChildReference;
 import com.android.tradefed.result.proto.TestRecordProto.DebugInfo;
@@ -385,6 +386,9 @@ public class ProtoResultParser {
                         Throwable invocationError =
                                 (Throwable) SerializationUtil.deserialize(errorType);
                         failure.setCause(invocationError);
+                        if (invocationError instanceof OutOfMemoryError) {
+                            failure.setErrorIdentifier(InfraErrorIdentifier.OUT_OF_MEMORY_ERROR);
+                        }
                     } catch (IOException e) {
                         CLog.e("Failed to deserialize the invocation exception:");
                         CLog.e(e);
@@ -392,6 +396,7 @@ public class ProtoResultParser {
                     }
                 }
             }
+            CLog.d("Invocation failed with: %s", failure);
             mListener.invocationFailed(failure);
             mInvocationFailed = true;
         }

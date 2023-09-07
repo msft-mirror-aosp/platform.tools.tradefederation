@@ -44,6 +44,7 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN(500_016, FailureStatus.CANCELLED),
     SCHEDULING_ERROR(500_017, FailureStatus.INFRA_FAILURE),
     EVENT_PROCESSING_TIMEOUT(500_018, FailureStatus.INFRA_FAILURE),
+    OUT_OF_MEMORY_ERROR(500_019, FailureStatus.INFRA_FAILURE),
 
     // 500_400 - 500_500: General errors - subprocess related
     INTERRUPTED_DURING_SUBPROCESS_SHUTDOWN(500_401, FailureStatus.INFRA_FAILURE),
