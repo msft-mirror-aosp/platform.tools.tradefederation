@@ -42,11 +42,17 @@ public class AdbTcpConnection extends DefaultConnection {
     private static final String ADB_ALREADY_CONNECTED_TAG = "already";
     private static final String ADB_CONN_REFUSED = "Connection refused";
 
-    // TODO: See how to implement the logs
     private File mAdbConnectLogs = null;
 
     public AdbTcpConnection(ConnectionBuilder builder) {
         super(builder);
+    }
+
+    /**
+     * Give a receiver file where we can store all the adb connection logs for debugging purpose.
+     */
+    public void setAdbLogFile(File adbLogFile) {
+        mAdbConnectLogs = adbLogFile;
     }
 
     @Override
