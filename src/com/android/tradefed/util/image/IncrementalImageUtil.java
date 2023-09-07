@@ -70,6 +70,7 @@ public class IncrementalImageUtil {
         mBlockCompare = blockCompare;
     }
 
+    /** Returns whether or not we can use the snapshot logic to update the device */
     public boolean isSnapshotSupported() throws DeviceNotAvailableException {
         // Ensure snapshotctl exists
         CommandResult whichOutput = mDevice.executeShellV2Command("which snapshotctl");
@@ -80,6 +81,7 @@ public class IncrementalImageUtil {
         return false;
     }
 
+    /** Updates the device using the snapshot logic. */
     public void updateDevice() throws IOException, DeviceNotAvailableException {
         if (!mDevice.enableAdbRoot()) {
             throw new RuntimeException("failed to obtain root.");
@@ -158,13 +160,20 @@ public class IncrementalImageUtil {
             CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
         } finally {
             FileUtil.recursiveDelete(workDir);
+            FileUtil.recursiveDelete(targetDirectory);
         }
     }
 
+    /*
+     * Returns the device to its original state.
+     */
     public void teardownDevice() throws DeviceNotAvailableException {
-        mDevice.executeShellV2Command("rm -f /metadata/ota/snapshot-boot");
-        if (mSourceDirectory != null) {
-            flashStaticPartition(mSourceDirectory);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
+            mDevice.executeShellV2Command("rm -f /metadata/ota/snapshot-boot");
+            if (mSourceDirectory != null) {
+                flashStaticPartition(mSourceDirectory);
+            }
+            FileUtil.recursiveDelete(mSourceDirectory);
         }
     }
 
