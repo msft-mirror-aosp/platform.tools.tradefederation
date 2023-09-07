@@ -34,6 +34,7 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.filter.OptionFetcher;
 import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.config.proxy.TradefedDelegator;
+import com.android.tradefed.config.remote.ExtendedFile;
 import com.android.tradefed.dependencies.ExternalDependency;
 import com.android.tradefed.dependencies.IExternalDependency;
 import com.android.tradefed.device.DeviceManager;
@@ -213,6 +214,7 @@ public class TestInvocation implements ITestInvocation {
     private EventsLoggerListener mEventsLogger = null;
     private ClearcutClient mClient = null;
 
+    private List<ExtendedFile> mParallelDynamicDownloads = new ArrayList<>();
     /**
      * Display a log message informing the user of a invocation being started.
      *
@@ -909,6 +911,9 @@ public class TestInvocation implements ITestInvocation {
         try {
             res = invocationPath.fetchBuild(testInfo, config, rescheduler, listener);
             if (res) {
+                for (ExtendedFile file : mParallelDynamicDownloads) {
+                    file.waitForDownload();
+                }
                 // Successful fetch of build.
                 CurrentInvocation.setActionInProgress(ActionInProgress.UNSET);
                 return true;
@@ -921,6 +926,9 @@ public class TestInvocation implements ITestInvocation {
                             "No build found to test.", InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
         } catch (BuildRetrievalError | RuntimeException | DeviceNotAvailableException e) {
             buildException = e;
+        }
+        for (ExtendedFile file : mParallelDynamicDownloads) {
+            file.cancelDownload();
         }
         setExitCode(ExitCode.NO_BUILD, buildException);
         // If somehow we don't have builds
@@ -964,19 +972,24 @@ public class TestInvocation implements ITestInvocation {
             IInvocationExecution invocationPath,
             RunMode mode)
             throws BuildRetrievalError, ConfigurationException {
+        DynamicRemoteFileResolver resolver = new DynamicRemoteFileResolver();
         try {
             // Don't resolve for remote invocation, wait until we are inside the remote.
             if (RunMode.REMOTE_INVOCATION.equals(mode)) {
                 return true;
             }
             CurrentInvocation.setActionInProgress(ActionInProgress.FETCHING_ARTIFACTS);
-            DynamicRemoteFileResolver resolver = new DynamicRemoteFileResolver();
             resolver.setDevice(context.getDevices().get(0));
             resolver.addExtraArgs(config.getCommandOptions().getDynamicDownloadArgs());
             config.resolveDynamicOptions(resolver);
+            mParallelDynamicDownloads.addAll(resolver.getParallelDownloads());
             CurrentInvocation.setActionInProgress(ActionInProgress.UNSET);
             return true;
         } catch (RuntimeException | BuildRetrievalError | ConfigurationException e) {
+            // Cancel running downloads
+            for (ExtendedFile file : resolver.getParallelDownloads()) {
+                file.cancelDownload();
+            }
             // We don't have a reporting buildInfo at this point
             IBuildInfo info = backFillBuildInfoForReporting(config.getCommandLine());
 
