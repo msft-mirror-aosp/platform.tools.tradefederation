@@ -18,6 +18,7 @@ package com.android.tradefed.config;
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.config.OptionSetter.OptionFieldsForName;
+import com.android.tradefed.config.remote.ExtendedFile;
 import com.android.tradefed.config.remote.IRemoteFileResolver;
 import com.android.tradefed.config.remote.IRemoteFileResolver.RemoteFileResolverArgs;
 import com.android.tradefed.config.remote.IRemoteFileResolver.ResolvedFile;
@@ -74,6 +75,8 @@ public class DynamicRemoteFileResolver {
     public static final String UNZIP_KEY = "unzip";
     // Query key for requesting a download to be optional, so if it fails we don't replace it.
     public static final String OPTIONAL_KEY = "optional";
+    // Query key for the option name being resolved.
+    public static final String OPTION_NAME_KEY = "option_name";
 
     /**
      * Loads file resolvers using a dedicated {@link ServiceFileResolverLoader} that is scoped to
@@ -102,6 +105,7 @@ public class DynamicRemoteFileResolver {
     // Populated from {@link ICommandOptions#getDynamicDownloadArgs()}
     private Map<String, String> mExtraArgs = new LinkedHashMap<>();
     private ITestDevice mDevice;
+    private List<ExtendedFile> mParallelExtendedFiles = new ArrayList<>();
 
     public DynamicRemoteFileResolver() {
         this(DEFAULT_FILE_RESOLVER_LOADER);
@@ -125,6 +129,10 @@ public class DynamicRemoteFileResolver {
     /** Add extra args for the query. */
     public void addExtraArgs(Map<String, String> extraArgs) {
         mExtraArgs.putAll(extraArgs);
+    }
+
+    public List<ExtendedFile> getParallelDownloads() {
+        return mParallelExtendedFiles;
     }
 
     /**
@@ -421,18 +429,26 @@ public class DynamicRemoteFileResolver {
             throw new BuildRetrievalError(
                     e.getMessage(), e, InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
+        query.put(OPTION_NAME_KEY, option.name());
 
         try {
             IRemoteFileResolver resolver = getResolver(protocol);
             if (resolver == null) {
                 return null;
             }
-
             CLog.d("Considering option '%s' with path: '%s' for download.", option.name(), path);
             resolver.setPrimaryDevice(mDevice);
             RemoteFileResolverArgs args = new RemoteFileResolverArgs();
             args.setConsideredFile(fileToResolve).addQueryArgs(query);
             ResolvedFile resolvedFile = resolver.resolveRemoteFile(args);
+            if (resolvedFile != null && resolvedFile.getResolvedFile() instanceof ExtendedFile) {
+                // It is possible for dynamic download to download in parallel
+                // as long as they do so for the expected output file location
+                ExtendedFile trackingFile = (ExtendedFile) resolvedFile.getResolvedFile();
+                if (trackingFile.isDownloadingInParallel()) {
+                    mParallelExtendedFiles.add(trackingFile);
+                }
+            }
             return resolvedFile;
         } catch (BuildRetrievalError e) {
             if (isOptional(query)) {
