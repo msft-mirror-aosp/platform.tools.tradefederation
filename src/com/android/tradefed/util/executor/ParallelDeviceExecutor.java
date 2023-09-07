@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.util.executor;
 
+import com.android.tradefed.invoker.tracing.TracePropagatingExecutorService;
 import com.android.tradefed.log.LogUtil.CLog;
 
 import java.util.ArrayList;
@@ -53,16 +54,17 @@ public class ParallelDeviceExecutor<V> {
             return results;
         }
         ExecutorService executor =
-                Executors.newFixedThreadPool(
-                        mPoolSize,
-                        new ThreadFactory() {
-                            @Override
-                            public Thread newThread(Runnable r) {
-                                Thread t = Executors.defaultThreadFactory().newThread(r);
-                                t.setDaemon(true);
-                                return t;
-                            }
-                        });
+                TracePropagatingExecutorService.create(
+                        Executors.newFixedThreadPool(
+                                mPoolSize,
+                                new ThreadFactory() {
+                                    @Override
+                                    public Thread newThread(Runnable r) {
+                                        Thread t = Executors.defaultThreadFactory().newThread(r);
+                                        t.setDaemon(true);
+                                        return t;
+                                    }
+                                }));
         try {
             List<Future<V>> futures =
                     timeout == 0L
