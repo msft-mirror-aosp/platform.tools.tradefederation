@@ -639,6 +639,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     for (Map.Entry<String, String> entry :
                             config.getCommandOptions().getExperimentalFlags().entrySet()) {
                         setter.setOptionValue(entry.getKey(), entry.getValue());
+                        mInvocationContext.addInvocationAttribute(
+                                "experiment:" + entry.getKey(), entry.getValue());
                     }
                 } catch (ConfigurationException e) {
                     CLog.e("Configuration Exception caught while setting experimental flags.");
