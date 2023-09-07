@@ -812,6 +812,12 @@ public class CommandOptions implements ICommandOptions {
 
     /** {@inheritDoc} */
     @Override
+    public void setShouldRemoteDynamicShard(boolean shouldRemoteDynamicShard) {
+        mRemoteDynamicSharding = shouldRemoteDynamicShard;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean shouldUseEvenModuleSharding() {
         return mEvenModuleSharding;
     }
