@@ -711,7 +711,7 @@ public abstract class ITestSuite
      * Opportunity to clean up all the things that were needed during the suites setup but are not
      * required to run the tests.
      */
-    void cleanUpSuiteSetup() {
+    public void cleanUpSuiteSetup() {
         // Empty by default.
     }
 
