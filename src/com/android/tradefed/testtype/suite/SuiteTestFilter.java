@@ -159,6 +159,18 @@ public class SuiteTestFilter {
         return mName;
     }
 
+    public String getModuleId() {
+        StringBuilder sb = new StringBuilder();
+        if (mAbi != null) {
+            sb.append(mAbi.trim());
+            sb.append(" ");
+        }
+        if (mName != null) {
+            sb.append(mName.trim());
+        }
+        return sb.toString();
+    }
+
     /**
      * Returns the base name of the module without any parameterization. If not parameterized, it
      * will return {@link #getName()};

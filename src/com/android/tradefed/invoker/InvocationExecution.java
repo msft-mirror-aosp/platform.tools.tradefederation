@@ -1151,6 +1151,10 @@ public class InvocationExecution implements IInvocationExecution {
                         } finally {
                             CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                             CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                            // Clean the suite internals once done
+                            if (test instanceof BaseTestSuite) {
+                                ((BaseTestSuite) test).cleanUpSuiteSetup();
+                            }
                         }
                         remainingTests.remove(test);
                         continue;
