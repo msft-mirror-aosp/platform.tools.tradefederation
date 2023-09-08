@@ -191,6 +191,10 @@ public final class TestsPoolPoller
                     validationConfig.cleanConfigurationData();
                     CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                     CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                    // Clean the suite internals once done
+                    if (test instanceof BaseTestSuite) {
+                        ((BaseTestSuite) test).cleanUpSuiteSetup();
+                    }
                 }
             }
         } finally {
