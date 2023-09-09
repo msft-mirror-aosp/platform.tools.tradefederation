@@ -169,7 +169,8 @@ public class IncrementalImageUtil {
      */
     public void teardownDevice() throws DeviceNotAvailableException {
         try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
-            mDevice.executeShellV2Command("rm -f /metadata/ota/snapshot-boot");
+            CommandResult revertOutput = mDevice.executeShellV2Command("snapshotctl revert-snapshots");
+            CLog.d("stdout: %s, stderr: %s", revertOutput.getStdout(), revertOutput.getStderr());
             if (mSourceDirectory != null) {
                 flashStaticPartition(mSourceDirectory);
             }
@@ -209,10 +210,10 @@ public class IncrementalImageUtil {
                         "flashall",
                         "--exclude-dynamic-partitions",
                         "--disable-super-optimization");
+        CLog.d("Status: %s", fastbootResult.getStatus());
+        CLog.d("stdout: %s", fastbootResult.getStdout());
+        CLog.d("stderr: %s", fastbootResult.getStderr());
         if (!CommandStatus.SUCCESS.equals(fastbootResult.getStatus())) {
-            CLog.d("Status: %s", fastbootResult.getStatus());
-            CLog.d("stdout: %s", fastbootResult.getStdout());
-            CLog.d("stderr: %s", fastbootResult.getStderr());
             return false;
         }
         mDevice.waitForDeviceAvailable(5 * 60 * 1000L);
