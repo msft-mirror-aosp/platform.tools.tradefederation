@@ -83,6 +83,7 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
     @After
     public void teardown() throws DeviceNotAvailableException {
         if (mDisableVerity) {
+            getDevice().enableAdbRoot();
             // Reenable verity in case it was disabled.
             getDevice().executeAdbCommand("enable-verity");
             getDevice().reboot();
@@ -312,8 +313,9 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
         if (!mDisableVerity) {
             return;
         }
-
-        for (String lines : lsOutput.getStdout().split("\n")) {
+        String[] lineArray = lsOutput.getStdout().split("\n");
+        for (int i = 0; i < lineArray.length; i++) {
+            String lines = lineArray[i];
             if (!lines.contains("->")) {
                 continue;
             }
@@ -321,6 +323,13 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             String partition = pieces[7].substring(0, pieces[7].length() - 2);
             CLog.d("Partition extracted: %s", partition);
             if (partitionToInfo.containsKey(partition)) {
+                // Since there is system_a/_b ensure we capture the right one
+                // for md5 comparison
+                if ("system".equals(partition)) {
+                    if (!lineArray[i +2].contains("-cow-")) {
+                        continue;
+                    }
+                }
                 partitionToInfo.get(partition).mountedBlock = pieces[9];
             }
         }
@@ -357,7 +366,8 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
     }
 
     private void revertToPreviousBuild(File srcDirectory) throws DeviceNotAvailableException {
-        getDevice().executeShellV2Command("rm -f /metadata/ota/snapshot-boot");
+        CommandResult revertOutput = getDevice().executeShellV2Command("snapshotctl revert-snapshots");
+        CLog.d("stdout: %s, stderr: %s", revertOutput.getStdout(), revertOutput.getStderr());
         getDevice().rebootIntoBootloader();
         Map<String, String> envMap = new HashMap<>();
         envMap.put("ANDROID_PRODUCT_OUT", srcDirectory.getAbsolutePath());
