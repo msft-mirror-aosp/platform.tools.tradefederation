@@ -187,8 +187,8 @@ public class IncrementalImageUtil {
                     runUtil.runTimedCmd(
                             0L,
                             mBlockCompare.getAbsolutePath(),
-                            srcImage.getAbsolutePath(),
-                            targetImage.getAbsolutePath());
+                            "--source=" + srcImage.getAbsolutePath(),
+                            "--target=" + targetImage.getAbsolutePath());
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
                 throw new RuntimeException(
                         String.format("%s\n%s", result.getStdout(), result.getStderr()));
