@@ -282,6 +282,9 @@ public interface ICommandOptions {
     /** Returns whether to use remote dynamic sharding server or not */
     public boolean shouldRemoteDynamicShard();
 
+    /** Sets whether to use remote dynamic sharding server or not */
+    public void setShouldRemoteDynamicShard(boolean shouldRemoteDynamicShard);
+
     /** Returns whether to attempt to distribute number of modules evenly across shards */
     public boolean shouldUseEvenModuleSharding();
 
