@@ -41,7 +41,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
 /** Sharding strategy to allow work remote work queueing between multiple TF instances */
-public class DynamicShardHelper extends ShardHelper {
+public class DynamicShardHelper extends StrictShardHelper {
 
     /** {@inheritDoc} */
     @Override
@@ -50,40 +50,54 @@ public class DynamicShardHelper extends ShardHelper {
             TestInformation testInfo,
             IRescheduler rescheduler,
             ITestLogger logger) {
+        // Check preconditions
         Integer shardCount = config.getCommandOptions().getShardCount();
         Integer shardIndex = config.getCommandOptions().getShardIndex();
 
+        String invocationId = testInfo.getContext().getAttribute("invocation_id");
+        String attemptId = testInfo.getContext().getAttribute("attempt_index");
+
+        boolean shouldDelegate = false;
+
+        // We should re-delegate this to strict sharding so it can delegate this case to local
+        // sharding
         if (shardIndex == null) {
-            return super.shardConfig(config, testInfo, rescheduler, logger);
+            shouldDelegate = true;
         }
+
         if (shardCount == null) {
             throw new HarnessRuntimeException(
                     "shard-count is null while shard-index is " + shardIndex,
                     InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
         }
+
         // No sharding needed if shard-count=1
         if (shardCount == 1) {
             return false;
         }
 
-        // Initialize Dynamic Sharding client
-        IDynamicShardingClient client = getClient();
-
-        String invocationId = testInfo.getContext().getAttribute("invocation_id");
-        String attemptId = testInfo.getContext().getAttribute("attempt_index");
-
+        // redelegate to strict sharding
         if (Strings.isNullOrEmpty(attemptId)) {
-            throw new HarnessRuntimeException(
-                    "Attempt index was not set for shard " + shardIndex,
-                    InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
+            shouldDelegate = true;
         }
 
         // If we don't have sufficient information to properly key the pool, then fall
         // back to strict sharding.
         if (Strings.isNullOrEmpty(invocationId)) {
             CLog.d("No invocation_id specified, falling back to strict sharding.");
+            shouldDelegate = true;
+        }
+
+        if (shouldDelegate) {
+            CLog.d(
+                    "Setting option 'remote-dynamic-sharding' to false since precondition checks"
+                            + " failed.");
+            config.getCommandOptions().setShouldRemoteDynamicShard(false);
             return super.shardConfig(config, testInfo, rescheduler, logger);
         }
+
+        // Initialize Dynamic Sharding client
+        IDynamicShardingClient client = getClient();
 
         String poolId = String.format("invocation-%s-attempt-%s", invocationId, attemptId);
 
