@@ -1201,10 +1201,14 @@ public class TestInvocation implements ITestInvocation {
                 resolverSuccess =
                         invokeRemoteDynamic(context, config, listener, invocationPath, mode);
             } finally {
-                InvocationMetricLogger.addInvocationPairMetrics(
-                        InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
-                        startDynamic,
-                        System.currentTimeMillis());
+                // Do not report the pair for subprocess as it would be part
+                // of a test specific setup instead.
+                if (!isSubprocess(config)) {
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
+                            startDynamic,
+                            System.currentTimeMillis());
+                }
             }
             if (!resolverSuccess) {
                 return;
