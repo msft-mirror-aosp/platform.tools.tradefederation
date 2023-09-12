@@ -911,8 +911,11 @@ public class TestInvocation implements ITestInvocation {
         try {
             res = invocationPath.fetchBuild(testInfo, config, rescheduler, listener);
             if (res) {
-                for (ExtendedFile file : mParallelDynamicDownloads) {
-                    file.waitForDownload();
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope("wait_for_dynamic_download")) {
+                    for (ExtendedFile file : mParallelDynamicDownloads) {
+                        file.waitForDownload();
+                    }
                 }
                 // Successful fetch of build.
                 CurrentInvocation.setActionInProgress(ActionInProgress.UNSET);
