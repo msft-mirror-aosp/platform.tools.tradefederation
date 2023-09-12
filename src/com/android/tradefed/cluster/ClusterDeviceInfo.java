@@ -113,6 +113,7 @@ public class ClusterDeviceInfo {
         json.put("sim_state", mDeviceDescriptor.getSimState());
         json.put("sim_operator", mDeviceDescriptor.getSimOperator());
         json.put("state", mDeviceDescriptor.getState());
+        json.put("is_stub_device", mDeviceDescriptor.isStubDevice());
         json.put("group_name", mGroupName);
         JSONArray extraInfoKeyValuePairs = new JSONArray();
         for (Map.Entry<String, String> entry : mExtraInfo.entrySet()) {
