@@ -59,16 +59,28 @@ public class IncrementalImageUtil {
     private final File mSrcImage;
     private final File mTargetImage;
     private final ITestDevice mDevice;
-    private final File mBlockCompare;
+    private final File mCreateSnapshotBinary;
 
     private File mSourceDirectory;
 
     public IncrementalImageUtil(
-            ITestDevice device, File srcImage, File targetImage, File blockCompare) {
+            ITestDevice device, File srcImage, File targetImage, File createSnapshot) {
         mDevice = device;
         mSrcImage = srcImage;
         mTargetImage = targetImage;
-        mBlockCompare = blockCompare;
+        if (createSnapshot != null) {
+            File snapshot = null;
+            try {
+                File destDir = ZipUtil2.extractZipToTemp(createSnapshot, "create_snapshot");
+                snapshot = FileUtil.findFile(destDir, "create_snapshot");
+                FileUtil.chmodGroupRWX(snapshot);
+            } catch (IOException e) {
+                CLog.e(e);
+            }
+            mCreateSnapshotBinary = snapshot;
+        } else {
+            mCreateSnapshotBinary = null;
+        }
     }
 
     /** Returns whether or not we can use the snapshot logic to update the device */
@@ -94,7 +106,7 @@ public class IncrementalImageUtil {
         File targetDirectory = null;
         File workDir = null;
 
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("unzip_device_images")) {
             srcDirectory = ZipUtil2.extractZipToTemp(mSrcImage, "incremental_src");
             targetDirectory = ZipUtil2.extractZipToTemp(mTargetImage, "incremental_target");
             workDir = FileUtil.createTempDir("block_compare_workdir");
@@ -210,10 +222,14 @@ public class IncrementalImageUtil {
             IRunUtil runUtil = new RunUtil();
             runUtil.setWorkingDir(workDir);
 
+            String createSnapshot = "create_snapshot"; // Expected to be on PATH
+            if (mCreateSnapshotBinary != null && mCreateSnapshotBinary.exists()) {
+                createSnapshot = mCreateSnapshotBinary.getAbsolutePath();
+            }
             CommandResult result =
                     runUtil.runTimedCmd(
                             0L,
-                            mBlockCompare.getAbsolutePath(),
+                            createSnapshot,
                             "--source=" + srcImage.getAbsolutePath(),
                             "--target=" + targetImage.getAbsolutePath());
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
