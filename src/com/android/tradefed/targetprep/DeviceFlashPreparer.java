@@ -44,6 +44,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.image.DeviceImageTracker;
 import com.android.tradefed.util.image.IncrementalImageUtil;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -135,6 +136,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             name = "incremental-flashing",
             description = "Leverage the incremental flashing feature for device update.")
     private boolean mUseIncrementalFlashing = false;
+
+    @Option(
+            name = "create-snapshot-binary",
+            description = "Override the create_snapshot binary for incremental flashing.")
+    private File mCreateSnapshotBinary = null;
 
     private IncrementalImageUtil mIncrementalImageUtil;
 
@@ -238,7 +244,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                                 DeviceImageTracker.getDefaultCache()
                                         .getBaselineDeviceImage(device.getSerialNumber()),
                                 deviceBuild.getDeviceImageFile(),
-                                null);
+                                mCreateSnapshotBinary);
             }
         }
         try {
