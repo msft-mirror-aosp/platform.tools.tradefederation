@@ -400,6 +400,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     )
     protected boolean mRestoreSettings = false;
 
+    @Option(
+            name = "optimized-non-persistent-setup",
+            description = "Feature to evaluate a faster non-persistent props setup.")
+    private boolean mOptimizeNonPersistentSetup = false;
+
     private Map<String, String> mPreviousSystemSettings = new HashMap<>();
     private Map<String, String> mPreviousSecureSettings = new HashMap<>();
     private Map<String, String> mPreviousGlobalSettings = new HashMap<>();
@@ -878,7 +883,6 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         Map<String, String> nonpersistentProps = new HashMap<String, String>();
         for (Map.Entry<String, String> prop : mSetProps.entrySet()) {
             if (prop.getKey().startsWith(PERSIST_PREFIX)) {
-                // TODO: Check that set was successful
                 device.setProperty(prop.getKey(), prop.getValue());
             } else if (prop.getKey().equals(MEMTAG_BOOTCTL)) {
                 // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
@@ -888,6 +892,9 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                 needsReboot = true;
             } else {
                 nonpersistentProps.put(prop.getKey(), prop.getValue());
+                if (mOptimizeNonPersistentSetup) {
+                    device.setProperty(prop.getKey(), prop.getValue());
+                }
             }
         }
 
@@ -945,7 +952,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                             resultRampdump.getStderr());
                 }
             }
-            needsReboot = true;
+            if (!mOptimizeNonPersistentSetup) {
+                // non-persistent properties do not trigger a reboot in this
+                // new setup, if not explicitly set.
+                needsReboot = true;
+            }
         }
 
         if (needsReboot) {
