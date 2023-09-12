@@ -72,9 +72,15 @@ public class DynamicShardHelper extends ShardHelper {
         String invocationId = testInfo.getContext().getAttribute("invocation_id");
         String attemptId = testInfo.getContext().getAttribute("attempt_index");
 
+        if (Strings.isNullOrEmpty(attemptId)) {
+            throw new HarnessRuntimeException(
+                    "Attempt index was not set for shard " + shardIndex,
+                    InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
+        }
+
         // If we don't have sufficient information to properly key the pool, then fall
         // back to strict sharding.
-        if (Strings.isNullOrEmpty(invocationId) || Strings.isNullOrEmpty(attemptId)) {
+        if (Strings.isNullOrEmpty(invocationId)) {
             CLog.d("No invocation_id specified, falling back to strict sharding.");
             return super.shardConfig(config, testInfo, rescheduler, logger);
         }
