@@ -16,12 +16,13 @@
 package com.android.tradefed.util.image;
 
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -71,9 +72,10 @@ public class IncrementalImageUtil {
     }
 
     /** Returns whether or not we can use the snapshot logic to update the device */
-    public boolean isSnapshotSupported() throws DeviceNotAvailableException {
+    public static boolean isSnapshotSupported(ITestDevice device)
+            throws DeviceNotAvailableException {
         // Ensure snapshotctl exists
-        CommandResult whichOutput = mDevice.executeShellV2Command("which snapshotctl");
+        CommandResult whichOutput = device.executeShellV2Command("which snapshotctl");
         CLog.d("stdout: %s, stderr: %s", whichOutput.getStdout(), whichOutput.getStderr());
         if (whichOutput.getStdout().contains("/system/bin/snapshotctl")) {
             return true;
@@ -82,24 +84,38 @@ public class IncrementalImageUtil {
     }
 
     /** Updates the device using the snapshot logic. */
-    public void updateDevice() throws IOException, DeviceNotAvailableException {
+    public void updateDevice() throws DeviceNotAvailableException, TargetSetupError {
         if (!mDevice.enableAdbRoot()) {
-            throw new RuntimeException("failed to obtain root.");
+            throw new TargetSetupError(
+                    "Failed to obtain root, this is required for incremental update.",
+                    InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
         }
-        File srcDirectory = ZipUtil2.extractZipToTemp(mSrcImage, "incremental_src");
-        File targetDirectory = ZipUtil2.extractZipToTemp(mTargetImage, "incremental_target");
+        File srcDirectory = null;
+        File targetDirectory = null;
+        File workDir = null;
 
-        File workDir = FileUtil.createTempDir("block_compare_workdir");
+        try {
+            srcDirectory = ZipUtil2.extractZipToTemp(mSrcImage, "incremental_src");
+            targetDirectory = ZipUtil2.extractZipToTemp(mTargetImage, "incremental_target");
+            workDir = FileUtil.createTempDir("block_compare_workdir");
+        } catch (IOException e) {
+            FileUtil.recursiveDelete(srcDirectory);
+            FileUtil.recursiveDelete(targetDirectory);
+            FileUtil.recursiveDelete(workDir);
+            throw new TargetSetupError(e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+        }
+
         try (CloseableTraceScope ignored = new CloseableTraceScope("update_device")) {
             List<Callable<Boolean>> callableTasks = new ArrayList<>();
             for (String partition : srcDirectory.list()) {
                 File possibleSrc = new File(srcDirectory, partition);
                 File possibleTarget = new File(targetDirectory, partition);
+                File workDirectory = workDir;
                 if (possibleSrc.exists() && possibleTarget.exists()) {
                     if (DYNAMIC_PARTITIONS_TO_DIFF.contains(partition)) {
                         callableTasks.add(
                                 () -> {
-                                    blockCompare(possibleSrc, possibleTarget, workDir);
+                                    blockCompare(possibleSrc, possibleTarget, workDirectory);
                                     return true;
                                 });
                     }
@@ -150,7 +166,11 @@ public class IncrementalImageUtil {
                     mDevice.executeShellV2Command("snapshotctl map-snapshots /data/ndb/");
             CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
             if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
-                fail("Failed to map the snapshots.");
+                throw new TargetSetupError(
+                        String.format(
+                                "Failed to map the snapshots.\nstdout:%s\nstderr:%s",
+                                mapOutput.getStdout(), mapOutput.getStderr()),
+                        InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
             }
             flashStaticPartition(targetDirectory);
             mSourceDirectory = srcDirectory;
@@ -158,6 +178,11 @@ public class IncrementalImageUtil {
             mDevice.enableAdbRoot();
             CommandResult psOutput = mDevice.executeShellV2Command("ps -ef | grep snapuserd");
             CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
+        } catch (DeviceNotAvailableException | RuntimeException e) {
+            if (mSourceDirectory == null) {
+                FileUtil.recursiveDelete(srcDirectory);
+            }
+            throw e;
         } finally {
             FileUtil.recursiveDelete(workDir);
             FileUtil.recursiveDelete(targetDirectory);
@@ -169,7 +194,8 @@ public class IncrementalImageUtil {
      */
     public void teardownDevice() throws DeviceNotAvailableException {
         try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
-            CommandResult revertOutput = mDevice.executeShellV2Command("snapshotctl revert-snapshots");
+            CommandResult revertOutput =
+                    mDevice.executeShellV2Command("snapshotctl revert-snapshots");
             CLog.d("stdout: %s, stderr: %s", revertOutput.getStdout(), revertOutput.getStderr());
             if (mSourceDirectory != null) {
                 flashStaticPartition(mSourceDirectory);

@@ -41,6 +41,8 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.image.DeviceImageTracker;
+import com.android.tradefed.util.image.IncrementalImageUtil;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -129,6 +131,13 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             description = "In case an OTA snapshot is in progress, cancel it.")
     private boolean mCancelSnapshot = false;
 
+    @Option(
+            name = "incremental-flashing",
+            description = "Leverage the incremental flashing feature for device update.")
+    private boolean mUseIncrementalFlashing = false;
+
+    private IncrementalImageUtil mIncrementalImageUtil;
+
     /**
      * Sets the device boot time
      * <p/>
@@ -209,6 +218,29 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
         long queueTime = -1;
         long flashingTime = -1;
         long start = -1;
+        boolean useIncrementalFlashing = mUseIncrementalFlashing;
+        if (useIncrementalFlashing) {
+            if (!IncrementalImageUtil.isSnapshotSupported(device)) {
+                CLog.d("Incremental flashing not supported.");
+                useIncrementalFlashing = false;
+            }
+            if (DeviceImageTracker.getDefaultCache()
+                            .getBaselineDeviceImage(device.getSerialNumber())
+                    == null) {
+                CLog.d("Not tracking current baseline image.");
+                useIncrementalFlashing = false;
+            }
+
+            if (useIncrementalFlashing) {
+                mIncrementalImageUtil =
+                        new IncrementalImageUtil(
+                                device,
+                                DeviceImageTracker.getDefaultCache()
+                                        .getBaselineDeviceImage(device.getSerialNumber()),
+                                deviceBuild.getDeviceImageFile(),
+                                null);
+            }
+        }
         try {
             checkDeviceProductType(device, deviceBuild);
             device.setRecoveryMode(RecoveryMode.ONLINE);
@@ -226,6 +258,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 }
                 if (flasher instanceof FastbootDeviceFlasher) {
                     ((FastbootDeviceFlasher) flasher).setFlashOptions(mFastbootFlashOptions);
+                    ((FastbootDeviceFlasher) flasher).setIncrementalFlashing(mIncrementalImageUtil);
                 }
                 start = System.currentTimeMillis();
                 flasher.preFlashOperations(device, deviceBuild);
@@ -261,6 +294,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                         InvocationMetricKey.FLASHING_METHOD,
                         FlashingMethod.FASTBOOT_UNCATEGORIZED.toString());
                 flasher.flash(device, deviceBuild);
+            } catch (DeviceNotAvailableException | TargetSetupError | RuntimeException e) {
+                // Clear tracking in case of error
+                DeviceImageTracker.getDefaultCache().invalidateTracking(device.getSerialNumber());
+                throw e;
             } finally {
                 flashingTime = System.currentTimeMillis() - start;
                 getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
@@ -298,6 +335,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             try {
                 boolean available = device.waitForDeviceAvailableInRecoverPath(mDeviceBootTime);
                 if (!available) {
+                    // Clear tracking in case of error
+                    DeviceImageTracker.getDefaultCache()
+                            .invalidateTracking(device.getSerialNumber());
                     throw new DeviceFailedToBootError(
                             String.format(
                                     "Device %s did not become available after flashing %s",
@@ -306,6 +346,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                             DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
                 }
             } catch (DeviceNotAvailableException e) {
+                // Clear tracking in case of error
+                DeviceImageTracker.getDefaultCache().invalidateTracking(device.getSerialNumber());
                 // Assume this is a build problem
                 throw new DeviceFailedToBootError(
                         String.format(
@@ -316,6 +358,12 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                         DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
             }
             device.postBootSetup();
+            // In case success with full flashing
+            if (mUseIncrementalFlashing && !useIncrementalFlashing) {
+                DeviceImageTracker.getDefaultCache()
+                        .trackUpdatedDeviceImage(
+                                device.getSerialNumber(), deviceBuild.getDeviceImageFile());
+            }
         } finally {
             device.setRecoveryMode(RecoveryMode.AVAILABLE);
             // Allow interruption at the end no matter what.
@@ -416,6 +464,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
         if (testInfo.getDevice().getIDevice() instanceof NullDevice) {
             CLog.i("Skipping device flashing tearDown, this is a null-device.");
             return;
+        }
+        if (mIncrementalImageUtil != null) {
+            CLog.d("Teardown related to incremental update.");
+            mIncrementalImageUtil.teardownDevice();
+            mIncrementalImageUtil = null;
         }
     }
 
