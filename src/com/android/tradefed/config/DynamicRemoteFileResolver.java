@@ -77,6 +77,8 @@ public class DynamicRemoteFileResolver {
     public static final String OPTIONAL_KEY = "optional";
     // Query key for the option name being resolved.
     public static final String OPTION_NAME_KEY = "option_name";
+    // Query key for the parallel setting
+    public static final String OPTION_PARALLEL_KEY = "parallel";
 
     /**
      * Loads file resolvers using a dedicated {@link ServiceFileResolverLoader} that is scoped to
@@ -100,6 +102,7 @@ public class DynamicRemoteFileResolver {
             };
 
     private final FileResolverLoader mFileResolverLoader;
+    private final boolean mAllowParallelization;
 
     private Map<String, OptionFieldsForName> mOptionMap;
     // Populated from {@link ICommandOptions#getDynamicDownloadArgs()}
@@ -111,9 +114,19 @@ public class DynamicRemoteFileResolver {
         this(DEFAULT_FILE_RESOLVER_LOADER);
     }
 
+    public DynamicRemoteFileResolver(boolean allowParallel) {
+        this(DEFAULT_FILE_RESOLVER_LOADER, allowParallel);
+    }
+
     @VisibleForTesting
     public DynamicRemoteFileResolver(FileResolverLoader loader) {
+        this(loader, false);
+    }
+
+    @VisibleForTesting
+    public DynamicRemoteFileResolver(FileResolverLoader loader, boolean allowParallel) {
         this.mFileResolverLoader = loader;
+        this.mAllowParallelization = allowParallel;
     }
 
     /** Sets the map of options coming from {@link OptionSetter} */
@@ -430,6 +443,9 @@ public class DynamicRemoteFileResolver {
                     e.getMessage(), e, InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         query.put(OPTION_NAME_KEY, option.name());
+        if (!mAllowParallelization) {
+            query.put(OPTION_PARALLEL_KEY, "false");
+        }
 
         try {
             IRemoteFileResolver resolver = getResolver(protocol);
