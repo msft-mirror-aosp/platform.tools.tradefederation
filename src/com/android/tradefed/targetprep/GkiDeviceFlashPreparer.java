@@ -40,6 +40,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.io.PatternFilenameFilter;
 
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
 
 import java.io.File;
@@ -50,6 +51,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -747,16 +749,20 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                 }
                 requestedFile = new File(subdir != null ? subdir : destDir, baseFileName);
                 ZipUtil2.extractFileFromZip(sourceZipFile, requestedFileName, requestedFile);
-                if (requestedFile.exists()) {
-                    CLog.i(
-                            "File %s was extracted (size=%d)",
-                            requestedFile.getAbsolutePath(), requestedFile.length());
-                } else {
-                    // If the requested file name uses a regex, then we will
-                    // need to extract the full zip and walk through the files
-                    // looking for a match.
-                    ZipUtil2.extractZip(sourceZipFile, destDir);
-                    requestedFile = FileUtil.findFile(destDir, requestedFileName);
+                if (!requestedFile.exists()) {
+                    /* Let's search for the file within the zip archive in case of a regex
+                     * filename before giving up. */
+                    final Enumeration<ZipArchiveEntry> entries = sourceZipFile.getEntries();
+                    while (entries.hasMoreElements()) {
+                        final ZipArchiveEntry entry = entries.nextElement();
+                        if (entry.isDirectory() || !entry.getName().matches(requestedFileName)) {
+                            continue;
+                        }
+                        requestedFile =
+                                new File(subdir != null ? subdir : destDir, entry.getName());
+                        FileUtil.writeToFile(sourceZipFile.getInputStream(entry), requestedFile);
+                        break;
+                    }
                 }
             } catch (IOException e) {
                 throw new TargetSetupError(
