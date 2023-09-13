@@ -29,6 +29,9 @@ import com.google.common.base.Strings;
 import com.google.internal.android.engprod.v1.ProvideTestTargetRequest;
 import com.google.internal.android.engprod.v1.SerializedTestTarget;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -36,9 +39,6 @@ import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
-
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 
 /** Sharding strategy to allow work remote work queueing between multiple TF instances */
 public class DynamicShardHelper extends StrictShardHelper {
@@ -156,8 +156,13 @@ public class DynamicShardHelper extends StrictShardHelper {
         ServiceLoader<IDynamicShardingClient> serviceLoader =
                 ServiceLoader.load(IDynamicShardingClient.class);
         for (IDynamicShardingClient client : serviceLoader) {
-            // return the first (and should be only) implementation of this feature
-            return client;
+            // the first (and should be only) implementation of this feature
+            // should be the internal one
+            if (IDynamicShardingConnectionInfo.class.isAssignableFrom(client.getClass())) {
+                // use the internal one to configure the generic one
+                return new ConfigurableGrpcDynamicShardingClient(
+                        (IDynamicShardingConnectionInfo) client);
+            }
         }
         throw new HarnessRuntimeException(
                 "Failed to load dynamic sharding client implementation (missing from service"
