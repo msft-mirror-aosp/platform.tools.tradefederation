@@ -1184,6 +1184,7 @@ public class TestInvocation implements ITestInvocation {
         }
         IInvocationExecution invocationPath = createInvocationExec(mode);
         updateInvocationContext(context, config);
+        CurrentInvocation.setInvocationContext(context);
 
         boolean sharding = false;
         try {
