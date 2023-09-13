@@ -97,6 +97,9 @@ public class IncrementalImageUtil {
 
     /** Updates the device using the snapshot logic. */
     public void updateDevice() throws DeviceNotAvailableException, TargetSetupError {
+        if (mDevice.isStateBootloaderOrFastbootd()) {
+            mDevice.reboot();
+        }
         if (!mDevice.enableAdbRoot()) {
             throw new TargetSetupError(
                     "Failed to obtain root, this is required for incremental update.",
