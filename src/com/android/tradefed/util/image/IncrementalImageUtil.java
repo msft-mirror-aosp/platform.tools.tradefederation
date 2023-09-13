@@ -19,6 +19,9 @@ import static org.junit.Assert.assertTrue;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -97,6 +100,18 @@ public class IncrementalImageUtil {
 
     /** Updates the device using the snapshot logic. */
     public void updateDevice() throws DeviceNotAvailableException, TargetSetupError {
+        try {
+            internalUpdateDevice();
+        } catch (DeviceNotAvailableException | TargetSetupError | RuntimeException e) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_FLASHING_UPDATE_FAILURE, 1);
+            throw e;
+        }
+    }
+
+    private void internalUpdateDevice() throws DeviceNotAvailableException, TargetSetupError {
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.INCREMENTAL_FLASHING_ATTEMPT_COUNT, 1);
         if (mDevice.isStateBootloaderOrFastbootd()) {
             mDevice.reboot();
         }
@@ -144,6 +159,8 @@ public class IncrementalImageUtil {
             if (executor.hasErrors()) {
                 throw new RuntimeException(executor.getErrors().get(0));
             }
+            // Once block comparison is successful, log the information
+            logPatchesInformation(workDir);
 
             mDevice.executeShellV2Command("mkdir -p /data/ndb");
             mDevice.executeShellV2Command("rm -rf /data/ndb/*.patch");
@@ -240,7 +257,7 @@ public class IncrementalImageUtil {
                         String.format("%s\n%s", result.getStdout(), result.getStderr()));
             }
             File[] listFiles = workDir.listFiles();
-            CLog.e("%s", Arrays.asList(listFiles));
+            CLog.d("%s", Arrays.asList(listFiles));
         }
     }
 
@@ -263,5 +280,14 @@ public class IncrementalImageUtil {
         }
         mDevice.waitForDeviceAvailable(5 * 60 * 1000L);
         return true;
+    }
+
+    private void logPatchesInformation(File patchesDirectory) {
+        for (File patch : patchesDirectory.listFiles()) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationGroupMetricKey.INCREMENTAL_FLASHING_PATCHES_SIZE,
+                    patch.getName(),
+                    patch.length());
+        }
     }
 }

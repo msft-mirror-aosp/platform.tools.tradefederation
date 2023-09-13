@@ -510,4 +510,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
     protected void setSkipPostFlashBuildIdCheck(boolean skipPostFlashBuildIdCheck) {
         mSkipPostFlashBuildIdCheck = skipPostFlashBuildIdCheck;
     }
+
+    protected void setUseIncrementalFlashing(boolean incrementalFlashing) {
+        mUseIncrementalFlashing = incrementalFlashing;
+    }
 }
