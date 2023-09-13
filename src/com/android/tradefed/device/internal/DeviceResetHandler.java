@@ -49,6 +49,10 @@ public class DeviceResetHandler {
     private final TradefedFeatureClient mClient;
     private final IInvocationContext mContext;
 
+    public DeviceResetHandler() {
+        this(new TradefedFeatureClient(), CurrentInvocation.getInvocationContext());
+    }
+
     public DeviceResetHandler(IInvocationContext context) {
         this(new TradefedFeatureClient(), context);
     }
