@@ -286,6 +286,9 @@ public class InvocationMetricLogger {
 
         TRACE_INTERNAL_ERROR("trace_internal_error", true),
 
+        INCREMENTAL_FLASHING_ATTEMPT_COUNT("incremental_flashing_attempt_count", true),
+        INCREMENTAL_FLASHING_UPDATE_FAILURE("incremental_flashing_update_failure", true),
+
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
         dynamic_download("dynamic_download", true),
@@ -338,7 +341,9 @@ public class InvocationMetricLogger {
         TARGET_PREPARER_TEARDOWN_LATENCY("target-preparer-teardown-latency", true),
         LAB_PREPARER_SETUP_LATENCY("lab-preparer-setup-latency", true),
         LAB_PREPARER_TEARDOWN_LATENCY("lab-preparer-teardown-latency", true),
-        MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true);
+        MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true),
+
+        INCREMENTAL_FLASHING_PATCHES_SIZE("incremental-flashing-patches-size", true);
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.
