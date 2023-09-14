@@ -1148,6 +1148,8 @@ public class DeviceManagerTest {
                         SIM_STATE,
                         SIM_OPERATOR,
                         false,
+                        null,
+                        null,
                         null);
         if (cached) {
             when(mMockTestDevice.getCachedDeviceDescriptor(false)).thenReturn(descriptor);
