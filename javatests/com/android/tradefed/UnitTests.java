@@ -460,6 +460,7 @@ import com.android.tradefed.util.ZipUtilTest;
 import com.android.tradefed.util.executor.ParallelDeviceExecutorTest;
 import com.android.tradefed.util.hostmetric.AbstractHostMonitorTest;
 import com.android.tradefed.util.hostmetric.HeapHostMonitorTest;
+import com.android.tradefed.util.image.DeviceImageTrackerTest;
 import com.android.tradefed.util.keystore.JSONFileKeyStoreClientTest;
 import com.android.tradefed.util.keystore.JSONFileKeyStoreFactoryTest;
 import com.android.tradefed.util.net.HttpHelperTest;
@@ -1055,13 +1056,16 @@ import org.junit.runners.Suite.SuiteClasses;
     AbstractHostMonitorTest.class,
     HeapHostMonitorTest.class,
 
-    // util/net
-    HttpHelperTest.class,
-    HttpMultipartPostTest.class,
+    // util/image
+    DeviceImageTrackerTest.class,
 
     // util/keystore
     JSONFileKeyStoreClientTest.class,
     JSONFileKeyStoreFactoryTest.class,
+
+    // util/net
+    HttpHelperTest.class,
+    HttpMultipartPostTest.class,
 
     // util/proto
     TestRecordProtoUtilTest.class,
