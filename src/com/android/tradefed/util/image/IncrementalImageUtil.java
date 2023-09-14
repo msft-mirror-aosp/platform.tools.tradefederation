@@ -113,7 +113,7 @@ public class IncrementalImageUtil {
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.INCREMENTAL_FLASHING_ATTEMPT_COUNT, 1);
         if (mDevice.isStateBootloaderOrFastbootd()) {
-            mDevice.reboot();
+            mDevice.rebootUntilOnline();
         }
         if (!mDevice.enableAdbRoot()) {
             throw new TargetSetupError(

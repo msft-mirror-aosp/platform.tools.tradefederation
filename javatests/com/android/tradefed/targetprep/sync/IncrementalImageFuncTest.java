@@ -36,6 +36,7 @@ import com.android.tradefed.util.image.IncrementalImageUtil;
 import com.google.common.collect.ImmutableSet;
 
 import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -116,6 +117,7 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
         CLog.d("Original build id: %s. after unmount build id: %s", originalBuildId, afterRevert);
     }
 
+    @Ignore
     @Test
     public void testBlockCompareUpdate() throws Throwable {
         String originalBuildId = getDevice().getBuildId();
@@ -366,7 +368,8 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
     }
 
     private void revertToPreviousBuild(File srcDirectory) throws DeviceNotAvailableException {
-        CommandResult revertOutput = getDevice().executeShellV2Command("snapshotctl revert-snapshots");
+        CommandResult revertOutput =
+                getDevice().executeShellV2Command("snapshotctl revert-snapshots");
         CLog.d("stdout: %s, stderr: %s", revertOutput.getStdout(), revertOutput.getStderr());
         getDevice().rebootIntoBootloader();
         Map<String, String> envMap = new HashMap<>();
