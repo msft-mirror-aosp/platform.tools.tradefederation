@@ -396,7 +396,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             if (GceAvdInfo.GceStatus.BOOT_FAIL.equals(mGceAvd.getStatus())) {
                 String errorMsg =
                         String.format(
-                                "Device failed to boot. Error from Acloud: %s",
+                                "Device failed to boot. Error from device leasing attempt: %s",
                                 mGceAvd.getErrors());
                 throw new TargetSetupError(
                         errorMsg, getDevice().getDeviceDescriptor(), errorIdentifier);
