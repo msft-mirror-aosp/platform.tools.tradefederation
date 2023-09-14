@@ -27,6 +27,7 @@ import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
@@ -731,7 +732,7 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 "Flashing device %s with image %s",
                 device.getSerialNumber(), deviceBuild.getDeviceImageFile().getAbsolutePath());
         // give extra time to the update cmd
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("flash_system")) {
             if (mIncrementalFlashing != null) {
                 mIncrementalFlashing.updateDevice();
             } else if (getHostOptions().shouldFlashWithFuseZip() && getFuseUtil().canMountZip()) {
