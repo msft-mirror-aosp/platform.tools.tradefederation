@@ -37,8 +37,19 @@ public class DeviceImageTracker {
 
     private static DeviceImageTracker sDefaultInstance;
 
-    private final LoadingCache<String, File> mImageCache;
+    private final LoadingCache<String, FileCacheTracker> mImageCache;
     private final File mCacheDir;
+
+    /** Track information of the device image cached and its metadata */
+    public class FileCacheTracker {
+        public File zippedDeviceImage;
+        public String buildId;
+
+        FileCacheTracker(File zippedDeviceImage, String buildId) {
+            this.zippedDeviceImage = zippedDeviceImage;
+            this.buildId = buildId;
+        }
+    }
 
     public static DeviceImageTracker getDefaultCache() {
         if (sDefaultInstance == null) {
@@ -54,12 +65,12 @@ public class DeviceImageTracker {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        RemovalListener<String, File> listener =
-                new RemovalListener<String, File>() {
+        RemovalListener<String, FileCacheTracker> listener =
+                new RemovalListener<String, FileCacheTracker>() {
                     @Override
-                    public void onRemoval(RemovalNotification<String, File> n) {
+                    public void onRemoval(RemovalNotification<String, FileCacheTracker> n) {
                         if (n.wasEvicted()) {
-                            FileUtil.deleteFile(n.getValue());
+                            FileUtil.deleteFile(n.getValue().zippedDeviceImage);
                         }
                     }
                 };
@@ -69,13 +80,11 @@ public class DeviceImageTracker {
                         .expireAfterAccess(1, TimeUnit.DAYS)
                         .removalListener(listener)
                         .build(
-                                new CacheLoader<String, File>() {
+                                new CacheLoader<String, FileCacheTracker>() {
                                     @Override
-                                    public File load(String key) throws IOException {
-                                        File copyInCache = new File(mCacheDir, key);
-                                        if (copyInCache.exists()) {
-                                            return copyInCache;
-                                        }
+                                    public FileCacheTracker load(String key) throws IOException {
+                                        // We manually seed and manage the cache
+                                        // no need to load.
                                         return null;
                                     }
                                 });
@@ -84,8 +93,7 @@ public class DeviceImageTracker {
                         new Thread() {
                             @Override
                             public void run() {
-                                FileUtil.recursiveDelete(mCacheDir);
-                                mImageCache.invalidateAll();
+                                cleanUp();
                             }
                         });
     }
@@ -96,11 +104,11 @@ public class DeviceImageTracker {
      * @param serial The device that was flashed with the image.
      * @param deviceImage The image flashed onto the device.
      */
-    public void trackUpdatedDeviceImage(String serial, File deviceImage) {
+    public void trackUpdatedDeviceImage(String serial, File deviceImage, String buildId) {
         File copyInCache = new File(mCacheDir, serial);
         try {
             FileUtil.hardlinkFile(deviceImage, copyInCache);
-            mImageCache.put(serial, copyInCache);
+            mImageCache.put(serial, new FileCacheTracker(copyInCache, buildId));
         } catch (IOException e) {
             CLog.e(e);
         }
@@ -110,8 +118,14 @@ public class DeviceImageTracker {
         mImageCache.invalidate(serial);
     }
 
+    @VisibleForTesting
+    protected void cleanUp() {
+        mImageCache.invalidateAll();
+        FileUtil.recursiveDelete(mCacheDir);
+    }
+
     /** Returns the device image that was tracked for the device. Null if none was tracked. */
-    public File getBaselineDeviceImage(String serial) {
+    public FileCacheTracker getBaselineDeviceImage(String serial) {
         return mImageCache.getIfPresent(serial);
     }
 }
