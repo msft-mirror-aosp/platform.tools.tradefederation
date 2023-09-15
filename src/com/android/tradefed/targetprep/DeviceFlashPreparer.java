@@ -238,7 +238,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 CLog.d("Not tracking current baseline image.");
                 useIncrementalFlashing = false;
             }
-            if (!tracker.buildId.equals(device.getBuildId())) {
+            if (useIncrementalFlashing && !tracker.buildId.equals(device.getBuildId())) {
                 CLog.d("On-device build isn't matching the cache.");
                 useIncrementalFlashing = false;
                 InvocationMetricLogger.addInvocationMetrics(
