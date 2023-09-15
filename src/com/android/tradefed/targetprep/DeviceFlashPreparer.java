@@ -42,6 +42,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.image.DeviceImageTracker;
+import com.android.tradefed.util.image.DeviceImageTracker.FileCacheTracker;
 import com.android.tradefed.util.image.IncrementalImageUtil;
 
 import java.io.File;
@@ -230,19 +231,25 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 CLog.d("Incremental flashing not supported.");
                 useIncrementalFlashing = false;
             }
-            if (DeviceImageTracker.getDefaultCache()
-                            .getBaselineDeviceImage(device.getSerialNumber())
-                    == null) {
+            FileCacheTracker tracker =
+                    DeviceImageTracker.getDefaultCache()
+                            .getBaselineDeviceImage(device.getSerialNumber());
+            if (tracker == null) {
                 CLog.d("Not tracking current baseline image.");
                 useIncrementalFlashing = false;
+            }
+            if (!tracker.buildId.equals(device.getBuildId())) {
+                CLog.d("On-device build isn't matching the cache.");
+                useIncrementalFlashing = false;
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
             }
 
             if (useIncrementalFlashing) {
                 mIncrementalImageUtil =
                         new IncrementalImageUtil(
                                 device,
-                                DeviceImageTracker.getDefaultCache()
-                                        .getBaselineDeviceImage(device.getSerialNumber()),
+                                tracker.zippedDeviceImage,
                                 deviceBuild.getDeviceImageFile(),
                                 mCreateSnapshotBinary);
             }
@@ -368,7 +375,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             if (mUseIncrementalFlashing && !useIncrementalFlashing) {
                 DeviceImageTracker.getDefaultCache()
                         .trackUpdatedDeviceImage(
-                                device.getSerialNumber(), deviceBuild.getDeviceImageFile());
+                                device.getSerialNumber(),
+                                deviceBuild.getDeviceImageFile(),
+                                deviceBuild.getBuildId());
             }
         } finally {
             device.setRecoveryMode(RecoveryMode.AVAILABLE);

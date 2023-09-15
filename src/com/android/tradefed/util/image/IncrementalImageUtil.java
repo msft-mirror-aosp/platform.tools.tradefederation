@@ -98,6 +98,16 @@ public class IncrementalImageUtil {
         return false;
     }
 
+    /** Returns whether device is currently using snapshots or not. */
+    public static boolean isSnapshotInUse(ITestDevice device) throws DeviceNotAvailableException {
+        CommandResult dumpOutput = device.executeShellV2Command("snapshotctl dump");
+        CLog.d("stdout: %s, stderr: %s", dumpOutput.getStdout(), dumpOutput.getStderr());
+        if (dumpOutput.getStdout().contains("Using snapuserd: 0")) {
+            return false;
+        }
+        return true;
+    }
+
     /** Updates the device using the snapshot logic. */
     public void updateDevice() throws DeviceNotAvailableException, TargetSetupError {
         try {
