@@ -119,7 +119,7 @@ public class DynamicRemoteFileResolverTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
-        mResolver = new DynamicRemoteFileResolver(mResolverLoader);
+        mResolver = new DynamicRemoteFileResolver(mResolverLoader, true);
     }
 
     @Test
@@ -368,7 +368,7 @@ public class DynamicRemoteFileResolverTest {
                     () -> {
                         OptionSetter setter2 = new OptionSetter(object);
                         return setter2.validateRemoteFilePath(
-                                new DynamicRemoteFileResolver(mResolverLoader));
+                                new DynamicRemoteFileResolver(mResolverLoader, true));
                     };
             call.add(callableTask);
             devices.add(Mockito.mock(ITestDevice.class));
