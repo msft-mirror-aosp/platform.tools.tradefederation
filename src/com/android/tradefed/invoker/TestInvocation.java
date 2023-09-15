@@ -975,7 +975,8 @@ public class TestInvocation implements ITestInvocation {
             IInvocationExecution invocationPath,
             RunMode mode)
             throws BuildRetrievalError, ConfigurationException {
-        DynamicRemoteFileResolver resolver = new DynamicRemoteFileResolver();
+        DynamicRemoteFileResolver resolver =
+                new DynamicRemoteFileResolver(true /* allow parallelization */);
         try {
             // Don't resolve for remote invocation, wait until we are inside the remote.
             if (RunMode.REMOTE_INVOCATION.equals(mode)) {
