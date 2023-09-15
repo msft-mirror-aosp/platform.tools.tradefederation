@@ -62,6 +62,13 @@ public class FoldableModePreparer extends BaseTargetPreparer {
                     testInformation.getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
         }
+        result = testInformation.getDevice().executeShellV2Command("input keyevent KEYCODE_WAKEUP");
+        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+            throw new TargetSetupError(
+                    String.format("Could not wake up the screen. stderr: %s", result.getStderr()),
+                    testInformation.getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
     }
 
     @Override
