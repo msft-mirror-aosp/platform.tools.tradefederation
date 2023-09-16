@@ -69,8 +69,8 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
     }
 
     @Override
-    public DeviceDescriptor getDeviceDescriptor() {
-        DeviceDescriptor descriptor = super.getDeviceDescriptor();
+    public DeviceDescriptor getDeviceDescriptor(boolean shortDescriptor) {
+        DeviceDescriptor descriptor = super.getDeviceDescriptor(shortDescriptor);
         if (getConnection() instanceof DefaultConnection) {
             String initialSerial = ((DefaultConnection) getConnection()).getInitialSerial();
             if (!initialSerial.equals(descriptor.getSerial())) {

@@ -147,16 +147,16 @@ public class RemoteAndroidDevice extends TestDevice {
     }
 
     @Override
-    public DeviceDescriptor getDeviceDescriptor() {
-        DeviceDescriptor descriptor = super.getDeviceDescriptor();
+    public DeviceDescriptor getDeviceDescriptor(boolean shortDescriptor) {
+        DeviceDescriptor descriptor = super.getDeviceDescriptor(shortDescriptor);
         if (getConnection() instanceof DefaultConnection) {
             String initialSerial = ((DefaultConnection) getConnection()).getInitialSerial();
             String initialIp = ((DefaultConnection) getConnection()).getInitialIp();
+            Integer initialOffset =
+                    ((DefaultConnection) getConnection()).getInitialDeviceNumOffset();
             if (initialIp != null) {
-                // Alter the display for the console.
-                descriptor =
-                        new DeviceDescriptor(
-                                descriptor, initialSerial, initialSerial + "[" + initialIp + "]");
+                // Specify ip/offset.
+                descriptor = new DeviceDescriptor(descriptor, initialIp, initialOffset);
             }
         }
         return descriptor;
