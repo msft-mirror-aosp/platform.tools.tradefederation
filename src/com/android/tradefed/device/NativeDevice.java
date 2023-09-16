@@ -5362,6 +5362,8 @@ public class NativeDevice
                         null,
                         null,
                         isTemporary,
+                        null,
+                        null,
                         idevice);
             }
             // All the operations to create the descriptor need to be safe (should not trigger any
@@ -5392,6 +5394,8 @@ public class NativeDevice
                     getDisplayString(getSimState()),
                     getDisplayString(getSimOperator()),
                     isTemporary,
+                    null,
+                    null,
                     idevice);
         } catch (RuntimeException|DeviceNotAvailableException e) {
             CLog.e("Exception while building device '%s' description:", getSerialNumber());
