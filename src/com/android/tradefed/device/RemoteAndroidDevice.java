@@ -18,7 +18,14 @@ package com.android.tradefed.device;
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.connection.DefaultConnection;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -94,6 +101,49 @@ public class RemoteAndroidDevice extends TestDevice {
     @Override
     public String getFastbootSerialNumber() {
         return "tcp:" + getSerialNumber();
+    }
+
+    @Override
+    public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk, boolean scanSsid)
+            throws DeviceNotAvailableException {
+        if (!getOptions().useCmdWifiCommands() || !enableAdbRoot()) {
+            return super.connectToWifiNetwork(wifiSsidToPsk, scanSsid);
+        }
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        try {
+            CommandResult enableOutput =
+                    executeShellV2Command(String.format("cmd -w wifi set-wifi-enabled enabled"));
+            if (!CommandStatus.SUCCESS.equals(enableOutput.getStatus())) {
+                CLog.w(
+                        "Failed to enable wifi. stdout: %s\nstderr:%s",
+                        enableOutput.getStdout(), enableOutput.getStderr());
+                return false;
+            }
+            for (Entry<String, String> wifiPair : wifiSsidToPsk.entrySet()) {
+                CommandResult connectOutput =
+                        executeShellV2Command(
+                                String.format(
+                                        "cmd wifi connect-network %s %s open",
+                                        wifiPair.getKey(), wifiPair.getValue()));
+                if (CommandStatus.SUCCESS.equals(connectOutput.getStatus())) {
+                    CLog.i("Successfully connected to wifi network %s", wifiPair.getKey());
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.WIFI_AP_NAME, wifiPair.getKey());
+                    success = true;
+                    break;
+                } else {
+                    CLog.w(
+                            "Failed to connect to wifi wifi. stdout: %s\nstderr:%s",
+                            enableOutput.getStdout(), enableOutput.getStderr());
+                }
+            }
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.WIFI_CONNECT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.WIFI_CONNECT_COUNT, 1);
+        }
+        return success;
     }
 
     @Override
