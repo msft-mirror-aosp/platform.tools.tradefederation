@@ -45,7 +45,17 @@ LOG_PATH = 'logs/cas_uploader.log'
 
 # Configurations of artifacts will be uploaded to CAS.
 # TODO(b/298890453) Add artifacts after this script is attached to build process.
-ARTIFACTS = []
+ARTIFACTS = [
+    # test_suite targets
+    ArtifactConfig('android-cts.zip', True),
+    ArtifactConfig('android-vts.zip', True),
+    ArtifactConfig('bazel-test-suite.zip', True),
+    ArtifactConfig('host-unit-tests.zip', True),
+    ArtifactConfig('general-tests.zip', True),
+    ArtifactConfig('general-tests_configs.zip', True),
+    ArtifactConfig('general-tests_host-shared-libs.zip', True),
+    ArtifactConfig('robolectric-tests.zip', True)
+]
 
 # Artifacts will be uploaded if the config name is set in arguments `--experiment_artifacts`.
 # These configs are usually used to upload artifacts in partial branches/targets for experiment
