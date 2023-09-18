@@ -39,9 +39,11 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
+import java.util.List;
 import java.util.HashMap;
 import java.util.Collection;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** Unit tests for {@link com.android.tradefed.testtype.binary.ExecutableTargetTest}. */
 @RunWith(JUnit4.class)
@@ -376,9 +378,9 @@ public class ExecutableTargetTestTest {
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
     }
 
-    /** Test split() for sharding */
+    /** Test split() for sharding with PER_SHARD type */
     @Test
-    public void testShard_Split() throws ConfigurationException {
+    public void testShard_SplitPerTestCommand() throws ConfigurationException {
         mExecutableTargetTest = new ExecutableTargetTest();
         // Set test commands
         OptionSetter setter = new OptionSetter(mExecutableTargetTest);
@@ -400,6 +402,57 @@ public class ExecutableTargetTestTest {
             if (cmd3 != null) assertEquals(testCmd3, cmd3);
             // The test command should equals to one of them.
             assertEquals(true, cmd1 != null || cmd2 != null || cmd3 != null);
+        }
+    }
+
+    /** Test split() for sharding with PER_SHARD type */
+    @Test
+    public void testShard_SplitPerShard() throws ConfigurationException {
+        int numBinaryTests = 7;
+        int numCmdLineTests = 15;
+        HashMap<String, String> tests = new HashMap<String, String>();
+
+        mExecutableTargetTest = new ExecutableTargetTest();
+        OptionSetter setter = new OptionSetter(mExecutableTargetTest);
+        setter.setOptionValue("shard-split", "PER_SHARD");
+
+        // Set binary commands
+        for (int i = 0; i < numBinaryTests; ++i) {
+            String testCmd = "binary_" + i;
+            setter.setOptionValue("binary", testCmd);
+            tests.put(testCmd, testCmd);
+        }
+
+        // Set test commands
+        for (int i = 0; i < numCmdLineTests; ++i) {
+            String testName = "testName_" + i;
+            String testCmd = "testCmd_" + i;
+            setter.setOptionValue("test-command-line", testName, testCmd);
+            tests.put(testName, testCmd);
+        }
+
+        // Split the shard.
+        Collection<IRemoteTest> testShards = mExecutableTargetTest.split(5);
+        assertEquals(5, testShards.size());
+
+        // The number of tests across the shards should equal the original count
+        assertEquals(
+                numBinaryTests + numCmdLineTests,
+                testShards.stream()
+                        .mapToInt(x -> ((ExecutableTargetTest) x).getAllTestCommands().size())
+                        .sum());
+
+        // Check for the presence of all the tests
+        for (Map.Entry<String, String> entry : tests.entrySet()) {
+            String testName = entry.getKey();
+            String testCmd = entry.getValue();
+            List<String> listOfOne =
+                    testShards.stream()
+                            .map(x -> ((ExecutableTargetTest) x).getAllTestCommands().get(testName))
+                            .filter(x -> x != null)
+                            .collect(Collectors.toList());
+            assertEquals(1, listOfOne.size());
+            assertEquals(testCmd, listOfOne.get(0));
         }
     }
 

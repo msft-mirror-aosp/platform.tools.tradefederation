@@ -38,6 +38,9 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.StreamUtil;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -89,6 +92,14 @@ public abstract class ExecutableBaseTest
         isTimeVal = true
     )
     private long mRuntimeHintMs = 60000L; // 1 minute
+
+    enum ShardSplit {
+        PER_TEST_CMD,
+        PER_SHARD;
+    }
+
+    @Option(name = "shard-split", description = "Shard by test command or shard count")
+    private ShardSplit mShardSplit = ShardSplit.PER_TEST_CMD;
 
     private IAbi mAbi;
     private TestInformation mTestInfo;
@@ -300,14 +311,59 @@ public abstract class ExecutableBaseTest
         if (testCount <= 2) {
             return null;
         }
+
+        if (mShardSplit == ShardSplit.PER_TEST_CMD) {
+            return splitByTestCommand();
+        } else if (mShardSplit == ShardSplit.PER_SHARD) {
+            return splitByShardCount(testCount, shardHint);
+        }
+
+        return null;
+    }
+
+    private Collection<IRemoteTest> splitByTestCommand() {
         Collection<IRemoteTest> tests = new ArrayList<>();
         for (String path : mBinaryPaths) {
-            tests.add(getTestShard(path, null, null));
+            tests.add(getTestShard(ImmutableList.of(path), null));
         }
         Map<String, String> testCommands = new LinkedHashMap<>(mTestCommands);
         for (String testName : testCommands.keySet()) {
             String cmd = testCommands.get(testName);
-            tests.add(getTestShard(null, testName, cmd));
+            tests.add(getTestShard(null, ImmutableMap.of(testName, cmd)));
+        }
+        return tests;
+    }
+
+    private Collection<IRemoteTest> splitByShardCount(int testCount, int shardCount) {
+        int maxTestCntPerShard = (int) Math.ceil((double) testCount / shardCount);
+        int numFullSizeShards = testCount % maxTestCntPerShard;
+        List<Map.Entry<String, String>> testCommands = new ArrayList<>(mTestCommands.entrySet());
+
+        int runningTestCount = 0;
+        int runningTestCountInShard = 0;
+
+        Collection<IRemoteTest> tests = new ArrayList<>();
+        List<String> binaryPathsInShard = new ArrayList<String>();
+        HashMap<String, String> testCommandsInShard = new HashMap<String, String>();
+        while (runningTestCount < testCount) {
+            if (runningTestCount < mBinaryPaths.size()) {
+                binaryPathsInShard.add(mBinaryPaths.get(runningTestCount));
+            } else {
+                Map.Entry<String, String> entry =
+                        testCommands.get(runningTestCount - mBinaryPaths.size());
+                testCommandsInShard.put(entry.getKey(), entry.getValue());
+            }
+            ++runningTestCountInShard;
+
+            if ((tests.size() < numFullSizeShards && runningTestCountInShard == maxTestCntPerShard)
+                    || (tests.size() >= numFullSizeShards
+                            && (runningTestCountInShard >= (maxTestCntPerShard - 1)))) {
+                tests.add(getTestShard(binaryPathsInShard, testCommandsInShard));
+                binaryPathsInShard.clear();
+                testCommandsInShard.clear();
+                runningTestCountInShard = 0;
+            }
+            ++runningTestCount;
         }
         return tests;
     }
@@ -320,19 +376,22 @@ public abstract class ExecutableBaseTest
      * @param cmd the test command for ExecutableTargetTest.
      * @return a shard{@link IRemoteTest} of ExecutableBaseTest{@link ExecutableBaseTest}
      */
-    private IRemoteTest getTestShard(String binaryPath, String testName, String cmd) {
+    private IRemoteTest getTestShard(List<String> binaryPaths, Map<String, String> testCmds) {
         ExecutableBaseTest shard = null;
         try {
             shard = this.getClass().getDeclaredConstructor().newInstance();
             OptionCopier.copyOptionsNoThrow(this, shard);
             shard.mBinaryPaths.clear();
             shard.mTestCommands.clear();
-            if (binaryPath != null) {
-                // Set one binary per shard
-                shard.mBinaryPaths.add(binaryPath);
-            } else if (testName != null && cmd != null) {
-                // Set one test command per shard
-                shard.mTestCommands.put(testName, cmd);
+            if (binaryPaths != null) {
+                for (String binaryPath : binaryPaths) {
+                    shard.mBinaryPaths.add(binaryPath);
+                }
+            }
+            if (testCmds != null) {
+                for (Map.Entry<String, String> entry : testCmds.entrySet()) {
+                    shard.mTestCommands.put(entry.getKey(), entry.getValue());
+                }
             }
             // Copy the filters to each shard
             shard.mExcludeFilters.addAll(mExcludeFilters);
@@ -355,7 +414,8 @@ public abstract class ExecutableBaseTest
      *
      * @return a Map{@link LinkedHashMap}<String, String> of testCommands.
      */
-    private Map<String, String> getAllTestCommands() {
+    @VisibleForTesting
+    Map<String, String> getAllTestCommands() {
         Map<String, String> testCommands = new LinkedHashMap<>(mTestCommands);
         for (String binary : mBinaryPaths) {
             testCommands.put(new File(binary).getName(), binary);
