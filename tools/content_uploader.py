@@ -48,13 +48,23 @@ LOG_PATH = 'logs/cas_uploader.log'
 ARTIFACTS = [
     # test_suite targets
     ArtifactConfig('android-cts.zip', True),
+    ArtifactConfig('android-gts.zip', True),
+    ArtifactConfig('android-mts.zip', True),
+    ArtifactConfig('android-pts.zip', True),
     ArtifactConfig('android-vts.zip', True),
+    ArtifactConfig('art-host-tests.zip', True),
     ArtifactConfig('bazel-test-suite.zip', True),
     ArtifactConfig('host-unit-tests.zip', True),
     ArtifactConfig('general-tests.zip', True),
     ArtifactConfig('general-tests_configs.zip', True),
     ArtifactConfig('general-tests_host-shared-libs.zip', True),
-    ArtifactConfig('robolectric-tests.zip', True)
+    ArtifactConfig('google-tradefed.zip', True),
+    ArtifactConfig('robolectric-tests.zip', True),
+
+    # Device target artifacts
+    ArtifactConfig('androidTest.zip', True),
+    ArtifactConfig('device-tests.zip', True),
+    ArtifactConfig('*-img-*zip', False)
 ]
 
 # Artifacts will be uploaded if the config name is set in arguments `--experiment_artifacts`.
