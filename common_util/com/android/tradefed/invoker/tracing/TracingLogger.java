@@ -51,7 +51,7 @@ public class TracingLogger {
     public static ActiveTrace getMainTrace() {
         synchronized (mPerGroupActiveTrace) {
             for (ActiveTrace t : mPerGroupActiveTrace.values()) {
-                if (t.isMainTradefedProcess()) {
+                if (t != null && t.isMainTradefedProcess()) {
                     return t;
                 }
             }
