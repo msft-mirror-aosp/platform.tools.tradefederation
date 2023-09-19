@@ -225,6 +225,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
         long queueTime = -1;
         long flashingTime = -1;
         long start = -1;
+        // HostOptions can force the incremental flashing to true.
+        if (getHostOptions().isIncrementalFlashingEnabled()) {
+            mUseIncrementalFlashing = true;
+        }
         boolean useIncrementalFlashing = mUseIncrementalFlashing;
         if (useIncrementalFlashing) {
             if (!IncrementalImageUtil.isSnapshotSupported(device)) {
