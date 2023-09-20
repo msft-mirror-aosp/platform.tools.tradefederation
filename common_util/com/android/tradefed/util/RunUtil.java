@@ -55,6 +55,7 @@ public class RunUtil implements IRunUtil {
     private static final int POLL_TIME_INCREASE_FACTOR = 4;
     private static final long THREAD_JOIN_POLL_INTERVAL = 30 * 1000;
     private static final long PROCESS_DESTROY_TIMEOUT_SEC = 2;
+    private long mPollingInterval = THREAD_JOIN_POLL_INTERVAL;
     private static IRunUtil sDefaultInstance = null;
     private File mWorkingDir = null;
     private Map<String, String> mEnvVariables = new HashMap<String, String>();
@@ -62,6 +63,8 @@ public class RunUtil implements IRunUtil {
     private EnvPriority mEnvVariablePriority = EnvPriority.UNSET;
     private boolean mRedirectStderr = false;
     private boolean mLinuxInterruptProcess = false;
+    private static final String PROGRESS_MONITOR_ENV = "RUN_PROGRESS_MONITOR";
+    private static final String PROGRESS_MONITOR_TIMEOUT_ENV = "RUN_PROGRESS_MONITOR_TIMEOUT";
 
     private final CommandInterrupter mInterrupter;
 
@@ -90,6 +93,21 @@ public class RunUtil implements IRunUtil {
             sDefaultInstance = new RunUtil();
         }
         return sDefaultInstance;
+    }
+
+    /**
+     * Sets a new value for the internal polling interval. In most cases, you should never have a
+     * need to change the polling interval except for specific cases such as unit tests.
+     *
+     * @param pollInterval in ms for polling interval. Must be larger than 100ms.
+     */
+    @VisibleForTesting
+    void setPollingInterval(long pollInterval) {
+        if (pollInterval >= 100) {
+            mPollingInterval = pollInterval;
+            return;
+        }
+        throw new IllegalArgumentException("Polling interval set too low. Try 100ms.");
     }
 
     /**
@@ -148,19 +166,40 @@ public class RunUtil implements IRunUtil {
         return runTimedCmd(timeout, (OutputStream) null, (OutputStream) null, command);
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public CommandResult runTimedCmd(final long timeout, OutputStream stdout,
-            OutputStream stderr, final String... command) {
+    public CommandResult runTimedCmdWithOutputMonitor(
+            final long timeout, final long idleOutputTimeout, final String... command) {
+        return runTimedCmdWithOutputMonitor(
+                timeout, idleOutputTimeout, (OutputStream) null, (OutputStream) null, command);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CommandResult runTimedCmd(
+            final long timeout,
+            final OutputStream stdout,
+            OutputStream stderr,
+            final String... command) {
+        return runTimedCmdWithOutputMonitor(timeout, 0, stdout, stderr, command);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CommandResult runTimedCmdWithOutputMonitor(
+            final long timeout,
+            final long idleOutputTimeout,
+            final OutputStream stdout,
+            OutputStream stderr,
+            final String... command) {
         RunnableResult osRunnable = createRunnableResult(stdout, stderr, command);
-        CommandStatus status = runTimed(timeout, osRunnable, true);
+        CommandStatus status =
+                runTimedWithOutputMonitor(timeout, idleOutputTimeout, osRunnable, true);
         CommandResult result = osRunnable.getResult();
         result.setStatus(status);
         return result;
     }
-    
+
     /**
      * Create a {@link com.android.tradefed.util.IRunUtil.IRunnableResult} that will run the
      * command.
@@ -181,10 +220,21 @@ public class RunUtil implements IRunUtil {
     @Override
     public CommandResult runTimedCmdRetry(
             long timeout, long retryInterval, int attempts, String... command) {
+        return runTimedCmdRetryWithOutputMonitor(timeout, 0, retryInterval, attempts, command);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CommandResult runTimedCmdRetryWithOutputMonitor(
+            long timeout,
+            long idleOutputTimeout,
+            long retryInterval,
+            int attempts,
+            String... command) {
         CommandResult result = null;
         int counter = 0;
         while (counter < attempts) {
-            result = runTimedCmd(timeout, command);
+            result = runTimedCmdWithOutputMonitor(timeout, idleOutputTimeout, command);
             if (CommandStatus.SUCCESS.equals(result.getStatus())) {
                 return result;
             }
@@ -390,6 +440,16 @@ public class RunUtil implements IRunUtil {
     @Override
     public CommandStatus runTimed(long timeout, IRunUtil.IRunnableResult runnable,
             boolean logErrors) {
+        return runTimedWithOutputMonitor(timeout, 0, runnable, logErrors);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CommandStatus runTimedWithOutputMonitor(
+            long timeout,
+            long idleOutputTimeout,
+            IRunUtil.IRunnableResult runnable,
+            boolean logErrors) {
         mInterrupter.checkInterrupted();
         RunnableNotifier runThread = new RunnableNotifier(runnable, logErrors);
         if (logErrors) {
@@ -406,14 +466,22 @@ public class RunUtil implements IRunUtil {
             runThread.start();
             long startTime = System.currentTimeMillis();
             long pollInterval = 0;
-            if (timeout > 0L && timeout < THREAD_JOIN_POLL_INTERVAL) {
+            if (timeout > 0L && timeout < mPollingInterval) {
                 // only set the pollInterval if we have a timeout
                 pollInterval = timeout;
             } else {
-                pollInterval = THREAD_JOIN_POLL_INTERVAL;
+                pollInterval = mPollingInterval;
             }
             do {
                 try {
+                    // Check if the command is still making progress.
+                    if (idleOutputTimeout != 0
+                            && runThread.isAlive()
+                            && !runnable.checkOutputMonitor(idleOutputTimeout)) {
+                        // Set to Failed.
+                        runThread.cancel();
+                        break;
+                    }
                     runThread.join(pollInterval);
                 } catch (InterruptedException e) {
                     if (isInterruptAllowed()) {
@@ -448,8 +516,20 @@ public class RunUtil implements IRunUtil {
     @Override
     public boolean runTimedRetry(long opTimeout, long pollInterval, int attempts,
             IRunUtil.IRunnableResult runnable) {
+        return runTimedRetryWithOutputMonitor(opTimeout, 0, pollInterval, attempts, runnable);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean runTimedRetryWithOutputMonitor(
+            long opTimeout,
+            long idleOutputTimeout,
+            long pollInterval,
+            int attempts,
+            IRunUtil.IRunnableResult runnable) {
         for (int i = 0; i < attempts; i++) {
-            if (runTimed(opTimeout, runnable, true) == CommandStatus.SUCCESS) {
+            if (runTimedWithOutputMonitor(opTimeout, idleOutputTimeout, runnable, true)
+                    == CommandStatus.SUCCESS) {
                 return true;
             }
             CLog.d("operation failed, waiting for %d ms", pollInterval);
@@ -464,9 +544,21 @@ public class RunUtil implements IRunUtil {
     @Override
     public boolean runFixedTimedRetry(final long opTimeout, final long pollInterval,
             final long maxTime, final IRunUtil.IRunnableResult runnable) {
+        return runFixedTimedRetryWithOutputMonitor(opTimeout, 0, pollInterval, maxTime, runnable);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean runFixedTimedRetryWithOutputMonitor(
+            final long opTimeout,
+            long idleOutputTimeout,
+            final long pollInterval,
+            final long maxTime,
+            final IRunUtil.IRunnableResult runnable) {
         final long initialTime = getCurrentTime();
         while (getCurrentTime() < (initialTime + maxTime)) {
-            if (runTimed(opTimeout, runnable, true) == CommandStatus.SUCCESS) {
+            if (runTimedWithOutputMonitor(opTimeout, idleOutputTimeout, runnable, true)
+                    == CommandStatus.SUCCESS) {
                 return true;
             }
             CLog.d("operation failed, waiting for %d ms", pollInterval);
@@ -475,18 +567,19 @@ public class RunUtil implements IRunUtil {
         return false;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public boolean runEscalatingTimedRetry(final long opTimeout,
-            final long initialPollInterval, final long maxPollInterval, final long maxTime,
+    public boolean runEscalatingTimedRetry(
+            final long opTimeout,
+            final long initialPollInterval,
+            final long maxPollInterval,
+            final long maxTime,
             final IRunUtil.IRunnableResult runnable) {
         // wait an initial time provided
         long pollInterval = initialPollInterval;
         final long initialTime = getCurrentTime();
         while (true) {
-            if (runTimed(opTimeout, runnable, true) == CommandStatus.SUCCESS) {
+            if (runTimedWithOutputMonitor(opTimeout, 0, runnable, true) == CommandStatus.SUCCESS) {
                 return true;
             }
             long remainingTime = maxTime - (getCurrentTime() - initialTime);
@@ -646,6 +739,10 @@ public class RunUtil implements IRunUtil {
         private final Object mLock = new Object();
         private boolean mCancelled = false;
         private boolean mLogErrors = true;
+        private File mOutputMonitorStdoutFile;
+        private File mOutputMonitorStderrFile;
+        private long mOutputMonitorFileLastSize;
+        private long mOutputMonitorLastChangeTime;
 
         RunnableResult(final String input, final ProcessBuilder processBuilder) {
             this(input, processBuilder, null, null, null, true);
@@ -744,6 +841,11 @@ public class RunUtil implements IRunUtil {
                     stderrFile.deleteOnExit();
                     mProcessBuilder.redirectError(Redirect.appendTo(stderrFile));
                 }
+                // Obtain a reference to the output stream redirect file for progress monitoring.
+                mOutputMonitorStdoutFile = stdoutFile;
+                mOutputMonitorStderrFile = stderrFile;
+                mOutputMonitorFileLastSize = 0;
+                mOutputMonitorLastChangeTime = 0;
                 try {
                     mProcess = startProcess();
                 } catch (IOException | RuntimeException e) {
@@ -778,7 +880,6 @@ public class RunUtil implements IRunUtil {
                                     String.format(
                                             "inheritio-stderr-%s", mProcessBuilder.command()));
                 }
-
             }
             // Wait for process to complete.
             Integer rc = null;
@@ -877,6 +978,70 @@ public class RunUtil implements IRunUtil {
             return "RunnableResult [command="
                     + ((mProcessBuilder != null) ? mProcessBuilder.command() : null)
                     + "]";
+        }
+
+        /**
+         * Checks if the currently running operation has made progress since the last check.
+         *
+         * @param idleOutputTimeout ms idle with no observed progress before beginning to assume no
+         *     progress is being made.
+         * @return true if progress has been detected otherwise false.
+         */
+        @Override
+        public boolean checkOutputMonitor(Long idleOutputTimeout) {
+            synchronized (mLock) {
+                // If we don't have what we need to check for progress, abort the check.
+                if ((mOutputMonitorStdoutFile == null || !mOutputMonitorStdoutFile.exists())
+                        && (mOutputMonitorStderrFile == null
+                                || !mOutputMonitorStderrFile.exists())) {
+                    CLog.w(
+                            "checkOutputMonitor: No streams present to monitor for command progress"
+                                    + " - Progress monitoring is not available.");
+                    // Let the operation timeout on its own.
+                    return true;
+                }
+
+                if (mOutputMonitorLastChangeTime == 0) {
+                    mOutputMonitorLastChangeTime = System.currentTimeMillis();
+                    // If this is the start of a new command invocation, log only once.
+                    CLog.d(
+                            "checkOutputMonitor activated with idle timeout set for %.2f seconds",
+                            idleOutputTimeout / 1000f);
+                }
+
+                // Observing progress by monitoring the size of the output changing.
+                long currentFileSize = getMonitoredStdoutSize() + getMonitoredStderrSize();
+                long idleTime = System.currentTimeMillis() - mOutputMonitorLastChangeTime;
+                if (currentFileSize == mOutputMonitorFileLastSize && idleTime > idleOutputTimeout) {
+                    CLog.d(
+                            "checkOutputMonitor: No new progress detected for over %.2f seconds",
+                            idleTime / 1000f);
+                    return false;
+                }
+
+                // Update change time only when new data appears on the streams.
+                if (currentFileSize != mOutputMonitorFileLastSize) {
+                    mOutputMonitorLastChangeTime = System.currentTimeMillis();
+                    idleTime = 0;
+                }
+                mOutputMonitorFileLastSize = currentFileSize;
+            }
+            // Always default to progress being made.
+            return true;
+        }
+
+        private long getMonitoredStdoutSize() {
+            if (mOutputMonitorStdoutFile != null && mOutputMonitorStdoutFile.exists()) {
+                return mOutputMonitorStdoutFile.length();
+            }
+            return 0;
+        }
+
+        private long getMonitoredStderrSize() {
+            if (mOutputMonitorStderrFile != null && mOutputMonitorStderrFile.exists()) {
+                return mOutputMonitorStderrFile.length();
+            }
+            return 0;
         }
     }
 
