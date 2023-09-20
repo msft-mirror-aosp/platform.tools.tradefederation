@@ -106,7 +106,7 @@ public class RemoteAndroidDevice extends TestDevice {
     @Override
     public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk, boolean scanSsid)
             throws DeviceNotAvailableException {
-        if (!getOptions().useCmdWifiCommands() || !enableAdbRoot()) {
+        if (!getOptions().useCmdWifiCommands() || !enableAdbRoot() || getApiLevel() < 31) {
             return super.connectToWifiNetwork(wifiSsidToPsk, scanSsid);
         }
         long startTime = System.currentTimeMillis();
