@@ -28,6 +28,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -108,13 +109,47 @@ public class TestRunToTestInvocationForwarderTest {
 
         mForwarder.testRunEnded(500L, new HashMap<>());
 
-        verify(mMockListener).testRunStarted(RUN_NAME, 2);
-        verify(mMockListener).testStarted(td1);
-        verify(mMockListener).testFailed(td1, FailureDescription.create("I failed"));
-        verify(mMockListener).testEnded(td1, new HashMap<String, Metric>());
-        verify(mMockListener).testRunFailed(expectedFailure);
-        verify(mMockListener)
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).testRunStarted(RUN_NAME, 2);
+        inOrder.verify(mMockListener).testStarted(td1);
+        inOrder.verify(mMockListener).testFailed(td1, FailureDescription.create("I failed"));
+        inOrder.verify(mMockListener).testEnded(td1, new HashMap<String, Metric>());
+        inOrder.verify(mMockListener).testRunFailed(expectedFailure);
+        inOrder.verify(mMockListener)
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verifyNoMoreInteractions();
+    }
+
+    @Test
+    public void testForwarding_null_ignored() {
+        TestIdentifier tid1 = new TestIdentifier("class", "test1");
+        TestDescription td1 = new TestDescription(tid1.getClassName(), tid1.getTestName());
+        TestIdentifier tid2 = new TestIdentifier("class", "null");
+        TestDescription td2 = new TestDescription(tid2.getClassName(), tid2.getTestName());
+
+        mForwarder.testRunStarted(RUN_NAME, 2);
+
+        mForwarder.testStarted(tid1);
+        mForwarder.testFailed(tid1, "I failed");
+        mForwarder.testEnded(tid1, new HashMap<>());
+
+        mForwarder.testStarted(tid2);
+        mForwarder.testIgnored(tid2);
+        mForwarder.testEnded(tid2, new HashMap<>());
+
+        mForwarder.testRunEnded(500L, new HashMap<>());
+
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener).testRunStarted(RUN_NAME, 2);
+        inOrder.verify(mMockListener).testStarted(td1);
+        inOrder.verify(mMockListener).testFailed(td1, FailureDescription.create("I failed"));
+        inOrder.verify(mMockListener).testEnded(td1, new HashMap<String, Metric>());
+        inOrder.verify(mMockListener).testStarted(td2);
+        inOrder.verify(mMockListener).testIgnored(td2);
+        inOrder.verify(mMockListener).testEnded(td2, new HashMap<String, Metric>());
+        inOrder.verify(mMockListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verifyNoMoreInteractions();
     }
 
     @Test

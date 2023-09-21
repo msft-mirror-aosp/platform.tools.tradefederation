@@ -183,7 +183,12 @@ public class ModuleListener extends CollectingTestListener {
             if (mTrace != null) {
                 message += ": " + mTrace;
             }
-            CLog.logAndDisplay(LogLevel.INFO, message);
+            // Respect log level for passed status, force log for non-passed
+            if (TestStatus.PASSED.equals(status)) {
+                CLog.i(message);
+            } else {
+                CLog.logAndDisplay(LogLevel.INFO, message);
+            }
         }
         mTestsRan++;
     }

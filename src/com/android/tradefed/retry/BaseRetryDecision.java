@@ -311,7 +311,8 @@ public class BaseRetryDecision
         } else if (test instanceof IAutoRetriableTest) {
             // Routine for IRemoteTest that don't support filters but still needs retry.
             IAutoRetriableTest autoRetryTest = (IAutoRetriableTest) test;
-            shouldRetry = autoRetryTest.shouldRetry(attemptJustExecuted, previousResults);
+            shouldRetry =
+                    autoRetryTest.shouldRetry(attemptJustExecuted, previousResults, moduleSkipList);
             if (shouldRetry) {
                 recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
             }

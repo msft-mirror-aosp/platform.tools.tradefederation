@@ -165,7 +165,8 @@ public class InvocationMetricLogger {
         // Count the number of time device recovery like usb reset are successful.
         DEVICE_RECOVERY("device_recovery", true),
         DEVICE_RECOVERY_FROM_RECOVERY("device_recovery_from_recovery", true),
-        DEVICE_RECOVERY_FROM_SSH_TUNNEL("device_recovered_from_ssh_tunnel", true),
+        DEVICE_RECOVERED_FROM_SSH_TUNNEL("device_recovered_from_ssh_tunnel", true),
+        DEVICE_RECOVERED_FROM_DEVICE_RESET("device_recovered_from_device_reset", true),
         DEVICE_RECOVERY_FAIL("device_recovery_fail", true),
         SANDBOX_EXIT_CODE("sandbox_exit_code", false),
         CF_FETCH_ARTIFACT_TIME("cf_fetch_artifact_time_ms", false),
@@ -247,6 +248,7 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_TIME("cas_download_time_ms", true),
         // Records the wait time caused by CAS downloader concurrency limitation.
         CAS_DOWNLOAD_WAIT_TIME("cas_download_wait_time_ms", true),
+        CAS_LOCK_TIMEOUTS("cas_lock_timeout", true),
         CAS_CACHE_FALLBACK_COUNT("cas_cache_fallback_count", true),
         CAS_TIMEOUT_COUNT("cas_timeout_count", true),
         // Records cache hit metrics
@@ -281,6 +283,12 @@ public class InvocationMetricLogger {
         POWERWASH_FAILURE_COUNT("powerwash_failure_count", true),
         LEASE_RETRY_COUNT_SUCCESS("lease_retry_count_success", true),
         LEASE_RETRY_COUNT_FAILURE("lease_retry_count_failure", true),
+
+        TRACE_INTERNAL_ERROR("trace_internal_error", true),
+
+        INCREMENTAL_FLASHING_ATTEMPT_COUNT("incremental_flashing_attempt_count", true),
+        INCREMENTAL_FLASHING_UPDATE_FAILURE("incremental_flashing_update_failure", true),
+        DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
@@ -334,7 +342,9 @@ public class InvocationMetricLogger {
         TARGET_PREPARER_TEARDOWN_LATENCY("target-preparer-teardown-latency", true),
         LAB_PREPARER_SETUP_LATENCY("lab-preparer-setup-latency", true),
         LAB_PREPARER_TEARDOWN_LATENCY("lab-preparer-teardown-latency", true),
-        MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true);
+        MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true),
+
+        INCREMENTAL_FLASHING_PATCHES_SIZE("incremental-flashing-patches-size", true);
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.

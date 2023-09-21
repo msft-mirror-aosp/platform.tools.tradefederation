@@ -9,7 +9,6 @@
     "class_name": "com.android.tradefed.suite.checker.baseline.SettingsBaselineSetter",
     "namespace": "secure",
     "key": "user_setup_complete",
-    "experimental": true,
     "value": "1",
     "min_api_level": "34"
   },
@@ -17,7 +16,6 @@
     "class_name": "com.android.tradefed.suite.checker.baseline.SettingsBaselineSetter",
     "namespace": "global",
     "key": "verifier_engprod",
-    "experimental": true,
     "value": "1",
     "min_api_level": "34"
   },

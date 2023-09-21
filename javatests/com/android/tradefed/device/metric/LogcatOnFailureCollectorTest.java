@@ -24,6 +24,7 @@ import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.config.ConfigurationDef;
+import com.android.tradefed.device.CollectingByteOutputReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ILogcatReceiver;
 import com.android.tradefed.device.ITestDevice;
@@ -51,6 +52,11 @@ import java.util.HashMap;
 /** Unit tests for {@link LogcatOnFailureCollector}. */
 @RunWith(JUnit4.class)
 public class LogcatOnFailureCollectorTest {
+
+    private static final String LOGCAT_MOCK_CONTENT =
+            "========== beginning of new [logcat] output ==========\n"
+                    + "08-22 18:07:39.018  1927  1927 V GraphicsEnvironment: Currently";
+
     private TestableLogcatOnFailureCollector mCollector;
     @Mock ITestInvocationListener mMockListener;
     @Mock ITestDevice mMockDevice;
@@ -82,6 +88,16 @@ public class LogcatOnFailureCollectorTest {
         @Override
         ILogcatReceiver createLogcatReceiver(ITestDevice device) {
             return mMockReceiver;
+        }
+
+        @Override
+        CollectingByteOutputReceiver createLegacyCollectingReceiver() {
+            return new CollectingByteOutputReceiver() {
+                @Override
+                public byte[] getOutput() {
+                    return LOGCAT_MOCK_CONTENT.getBytes();
+                }
+            };
         }
 
         @Override
@@ -117,7 +133,7 @@ public class LogcatOnFailureCollectorTest {
                 .thenReturn(new ByteArrayInputStreamSource("aaa".getBytes()));
         // Buffer to be logged
         when(mMockReceiver.getLogcatData(Mockito.anyInt(), Mockito.eq(3)))
-                .thenReturn(new ByteArrayInputStreamSource("aaabbb".getBytes()));
+                .thenReturn(new ByteArrayInputStreamSource(LOGCAT_MOCK_CONTENT.getBytes()));
 
         mTestListener = mCollector.init(mContext, mMockListener);
         mTestListener.testRunStarted("runName", 1);
@@ -208,17 +224,14 @@ public class LogcatOnFailureCollectorTest {
 
         // Buffer at testRunStarted
         when(mMockReceiver.getLogcatData())
-                .thenReturn(new ByteArrayInputStreamSource("aaa".getBytes()));
+                .thenReturn(
+                        new ByteArrayInputStreamSource("aaa".getBytes()),
+                        new ByteArrayInputStreamSource("aaa".getBytes()));
         // Buffer to be logged
         when(mMockReceiver.getLogcatData(Mockito.anyInt(), Mockito.eq(3)))
-                .thenReturn(new ByteArrayInputStreamSource("aaabbb".getBytes()));
-
-        // Buffer at testRunStarted
-        when(mMockReceiver.getLogcatData())
-                .thenReturn(new ByteArrayInputStreamSource("aaa".getBytes()));
-        // Buffer to be logged
-        when(mMockReceiver.getLogcatData(Mockito.anyInt(), Mockito.eq(3)))
-                .thenReturn(new ByteArrayInputStreamSource("aaabbb".getBytes()));
+                .thenReturn(
+                        new ByteArrayInputStreamSource(LOGCAT_MOCK_CONTENT.getBytes()),
+                        new ByteArrayInputStreamSource(LOGCAT_MOCK_CONTENT.getBytes()));
 
         mTestListener = mCollector.init(mContext, mMockListener);
         mTestListener.testRunStarted("runName", 1);

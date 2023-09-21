@@ -38,6 +38,7 @@ import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.targetprep.TestAppInstallSetup;
 import com.android.tradefed.testtype.suite.params.InstantAppHandler;
 import com.android.tradefed.util.ArrayUtil;
+import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ListInstrumentationParser;
 import com.android.tradefed.util.ResourceUtil;
@@ -418,6 +419,12 @@ public class AndroidJUnitTest extends InstrumentationTest
                                 Integer.parseInt(testInfo.properties().get(RUN_TESTS_AS_USER_KEY)));
                     }
                     serviceInstaller.setUp(testInfo);
+                    // Turn off battery optimization for androidx.test.services
+                    CommandResult dumpsys =
+                            getDevice()
+                                    .executeShellV2Command(
+                                            "dumpsys deviceidle whitelist +androidx.test.services");
+                    CLog.d("stdout: %s\nstderr: %s", dumpsys.getStdout(), dumpsys.getStderr());
                 } else {
                     throw new IOException("Failed to extract test-services.apk");
                 }

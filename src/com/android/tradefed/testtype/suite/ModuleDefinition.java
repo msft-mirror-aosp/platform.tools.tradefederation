@@ -193,6 +193,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
 
     private Set<TestDescription> mPassThroughFilters = new LinkedHashSet<>();
 
+    private boolean mRecoverVirtualDevice = false;
+
     @VisibleForTesting
     public ModuleDefinition() {
         mModuleInvocationContext = null;
@@ -1138,11 +1140,17 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     device.waitForDeviceAvailable();
                 } catch (DeviceNotAvailableException e) {
                     // Wrap exception for better message
-                    throw new DeviceNotAvailableException(
-                            String.format("Device went offline after running module '%s'", mId),
-                            e,
-                            e.getSerial(),
-                            DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                    String error_msg =
+                            String.format("Device went offline after running module '%s'", mId);
+                    if (!mRecoverVirtualDevice) {
+                        throw new DeviceNotAvailableException(
+                                error_msg,
+                                e,
+                                e.getSerial(),
+                                DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                    }
+                    CLog.d(error_msg);
+                    device.getConnection().recoverVirtualDevice(device, e);
                 }
             }
         }
@@ -1156,6 +1164,11 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     @Override
     public void setCollectTestsOnly(boolean collectTestsOnly) {
         mCollectTestsOnly = collectTestsOnly;
+    }
+
+    /** Sets should recover virtual device. */
+    public void setRecoverVirtualDevice(boolean recoverVirtualDevice) {
+        mRecoverVirtualDevice = recoverVirtualDevice;
     }
 
     /** Sets whether or not we should merge results. */

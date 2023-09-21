@@ -224,7 +224,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
                 waitForAdbConnect(serial, WAIT_FOR_ADB_CONNECT);
                 InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.DEVICE_RECOVERY_FROM_SSH_TUNNEL, 1);
+                        InvocationMetricKey.DEVICE_RECOVERED_FROM_SSH_TUNNEL, 1);
             } catch (Exception e) {
                 // Log the entrance in recovery here to avoid double counting with
                 // super.recoverDevice.
@@ -271,7 +271,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                 // Host and port can be null in case of acloud timeout
                 if (mGceAvd.hostAndPort() != null) {
                     // attempt to get a bugreport if Gce Avd is a failure
-                    if (!GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
+                    if (!GceStatus.SUCCESS.equals(mGceAvd.getStatus())
+                            && !mGceAvd.getSkipBugreportCollection()) {
                         // Get a bugreport via ssh
                         getSshBugreport();
                     }
@@ -395,7 +396,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             if (GceAvdInfo.GceStatus.BOOT_FAIL.equals(mGceAvd.getStatus())) {
                 String errorMsg =
                         String.format(
-                                "Device failed to boot. Error from Acloud: %s",
+                                "Device failed to boot. Error from device leasing attempt: %s",
                                 mGceAvd.getErrors());
                 throw new TargetSetupError(
                         errorMsg, getDevice().getDeviceDescriptor(), errorIdentifier);

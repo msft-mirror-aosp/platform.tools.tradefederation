@@ -24,6 +24,7 @@ import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.ConfigurationUtil;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.config.Option;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.PushFilePreparer;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
@@ -59,6 +60,11 @@ import java.util.Set;
  */
 @RunWith(DeviceJUnit4ClassRunner.class)
 public class HostUnitTestsConfigValidation implements IBuildReceiver {
+
+    @Option(
+            name = "disallowed-test-type",
+            description = "The disallowed test type for configs in host-unit-tests.zip")
+    private List<String> mDisallowedTestTypes = new ArrayList<>();
 
     private IBuildInfo mBuild;
 
@@ -104,6 +110,9 @@ public class HostUnitTestsConfigValidation implements IBuildReceiver {
                 checkPreparers(c.getTargetPreparers(), "host-unit-tests");
                 // Check that all the tests runners are well supported.
                 checkRunners(c.getTests(), "host-unit-tests");
+
+                // Check for disallowed test types
+                GeneralTestsConfigValidation.checkDisallowedTestType(c, mDisallowedTestTypes);
 
                 // Add more checks if necessary
             } catch (ConfigurationException e) {
@@ -188,7 +197,11 @@ public class HostUnitTestsConfigValidation implements IBuildReceiver {
         TestMapping testMapping = new TestMapping();
         Set<TestInfo> testInfosToRun =
                 testMapping.getTests(
-                        mBuild, group, /* host */ true, /* keywords */ new HashSet<>());
+                        mBuild,
+                        group, /* host */
+                        true, /* keywords */
+                        new HashSet<>(), /* ignoreKeywords */
+                        new HashSet<>());
 
         List<String> errors = new ArrayList<>();
         List<String> configs = new ArrayList<>();

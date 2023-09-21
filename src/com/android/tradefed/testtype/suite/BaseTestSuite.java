@@ -503,6 +503,17 @@ public class BaseTestSuite extends ITestSuite {
                 mIncludeFilters, mIncludeFiltersParsed, mAbis, mFoldableStates);
         SuiteModuleLoader.addFilters(
                 mExcludeFilters, mExcludeFiltersParsed, mAbis, mFoldableStates);
+        if (getDirectModule() != null) {
+            // Remove all entries for unrelated modules
+            mExcludeFiltersParsed.keySet().removeIf(key -> !key.equals(getDirectModule().getId()));
+            // Also clean exclude filters left over
+            for (String filterString : new HashSet<>(mExcludeFilters)) {
+                SuiteTestFilter parentFilter = SuiteTestFilter.createFrom(filterString);
+                if (!parentFilter.getModuleId().equals(getDirectModule().getId())) {
+                    mExcludeFilters.remove(filterString);
+                }
+            }
+        }
     }
 
     /** Adds module args */
@@ -647,7 +658,7 @@ public class BaseTestSuite extends ITestSuite {
     }
 
     @Override
-    void cleanUpSuiteSetup() {
+    public void cleanUpSuiteSetup() {
         super.cleanUpSuiteSetup();
         // Clean the filters because at that point they have been applied to the runners.
         // This can save several GB of memories during sharding.

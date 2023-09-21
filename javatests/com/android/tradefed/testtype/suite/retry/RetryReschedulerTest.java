@@ -404,6 +404,44 @@ public class RetryReschedulerTest {
         verify(mSuite, times(0)).setExcludeFilter(excludeRun1_1);
     }
 
+    /** Test rescheduling a configuration when some parameterized tests previously failed. */
+    @Test
+    public void testReschedule_new_parameterized_failed() throws Exception {
+        OptionSetter setter = new OptionSetter(mTest);
+        // We specify to exclude "run1"
+        setter.setOptionValue("new-parameterized-handling", "true");
+        populateFakeResults(2, 4, 1, 0, 2, true);
+
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
+
+        mTest.run(null, null);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
+        // Only the passing tests are excluded since we don't want to re-run them
+        Set<String> excludeRun0_pass = new LinkedHashSet<>();
+        excludeRun0_pass.add("run0 test.class#testPass0");
+        verify(mSuite).setExcludeFilter(excludeRun0_pass);
+        Set<String> excludeRun0_0 = new LinkedHashSet<>();
+
+        excludeRun0_0.add("run0 test.class#parameterized0[1]");
+        verify(mSuite, times(1)).setExcludeFilter(excludeRun0_0);
+        Set<String> excludeRun0_1 = new LinkedHashSet<>();
+        excludeRun0_1.add("run0 test.class#parameterized1[1]");
+        verify(mSuite, times(1)).setExcludeFilter(excludeRun0_1);
+        Set<String> excludeRun1_pass = new LinkedHashSet<>();
+        excludeRun1_pass.add("run1 test.class#testPass0");
+        verify(mSuite).setExcludeFilter(excludeRun1_pass);
+        Set<String> excludeRun1_0 = new LinkedHashSet<>();
+        excludeRun1_0.add("run1 test.class#parameterized0[1]");
+        verify(mSuite, times(1)).setExcludeFilter(excludeRun1_0);
+        Set<String> excludeRun1_1 = new LinkedHashSet<>();
+        excludeRun1_1.add("run1 test.class#parameterized1[1]");
+        verify(mSuite, times(1)).setExcludeFilter(excludeRun1_1);
+    }
+
     private void populateFakeResults(
             int numModule,
             int numTests,

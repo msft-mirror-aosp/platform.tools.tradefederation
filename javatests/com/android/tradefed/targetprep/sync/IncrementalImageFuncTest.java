@@ -30,19 +30,28 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
+import com.android.tradefed.util.executor.ParallelDeviceExecutor;
+import com.android.tradefed.util.image.IncrementalImageUtil;
 
 import com.google.common.collect.ImmutableSet;
 
+import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /** Basic test to start iterating on device incremental image. */
 @RunWith(DeviceJUnit4ClassRunner.class)
@@ -72,31 +81,85 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
 
     private Map<String, TrackResults> partitionToInfo = new ConcurrentHashMap<>();
 
+    @After
+    public void teardown() throws DeviceNotAvailableException {
+        if (mDisableVerity) {
+            getDevice().enableAdbRoot();
+            // Reenable verity in case it was disabled.
+            getDevice().executeAdbCommand("enable-verity");
+            getDevice().reboot();
+        }
+    }
+
     @Test
-    public void testBlockCompareUpdate() throws Exception {
+    public void testBlockUtility() throws Throwable {
         String originalBuildId = getDevice().getBuildId();
         CLog.d("Original build id: %s", originalBuildId);
 
-        File blockCompare = getBuild().getFile("block-compare");
-        FileUtil.chmodGroupRWX(blockCompare);
+        IncrementalImageUtil.isSnapshotInUse(getDevice());
+
+        File blockCompare = getCreateSnapshot();
+        IncrementalImageUtil updateUtil =
+                new IncrementalImageUtil(
+                        getDevice(),
+                        getBuild().getFile("src-image"),
+                        getBuild().getFile("target-image"),
+                        blockCompare);
+        try {
+            updateUtil.updateDevice();
+
+            String afterMountBuildId = getDevice().getBuildId();
+            CLog.d(
+                    "Original build id: %s. after mount build id: %s",
+                    originalBuildId, afterMountBuildId);
+        } finally {
+            updateUtil.teardownDevice();
+        }
+        String afterRevert = getDevice().getBuildId();
+        CLog.d("Original build id: %s. after unmount build id: %s", originalBuildId, afterRevert);
+    }
+
+    @Ignore
+    @Test
+    public void testBlockCompareUpdate() throws Throwable {
+        String originalBuildId = getDevice().getBuildId();
+        CLog.d("Original build id: %s", originalBuildId);
+
+        File blockCompare = getCreateSnapshot();
         File srcImage = getBuild().getFile("src-image");
         File srcDirectory = ZipUtil2.extractZipToTemp(srcImage, "incremental_src");
         File targetImage = getBuild().getFile("target-image");
         File targetDirectory = ZipUtil2.extractZipToTemp(targetImage, "incremental_target");
 
         File workDir = FileUtil.createTempDir("block_compare_workdir");
-        try {
-            for (String partition : PARTITIONS_TO_DIFF) {
+        try (CloseableTraceScope e2e = new CloseableTraceScope("end_to_end_update")) {
+            List<Callable<Boolean>> callableTasks = new ArrayList<>();
+            for (String partition : srcDirectory.list()) {
                 File possibleSrc = new File(srcDirectory, partition);
                 File possibleTarget = new File(targetDirectory, partition);
                 if (possibleSrc.exists() && possibleTarget.exists()) {
-                    blockCompare(blockCompare, possibleSrc, possibleTarget, workDir);
-                    TrackResults newRes = new TrackResults();
-                    newRes.imageMd5 = FileUtil.calculateMd5(possibleTarget);
-                    partitionToInfo.put(FileUtil.getBaseName(partition), newRes);
+                    if (PARTITIONS_TO_DIFF.contains(partition)) {
+                        callableTasks.add(
+                                () -> {
+                                    blockCompare(
+                                            blockCompare, possibleSrc, possibleTarget, workDir);
+                                    TrackResults newRes = new TrackResults();
+                                    if (mDisableVerity) {
+                                        newRes.imageMd5 = FileUtil.calculateMd5(possibleTarget);
+                                    }
+                                    partitionToInfo.put(FileUtil.getBaseName(partition), newRes);
+                                    return true;
+                                });
+                    }
                 } else {
                     CLog.e("Skipping %s no src or target", partition);
                 }
+            }
+            ParallelDeviceExecutor<Boolean> executor =
+                    new ParallelDeviceExecutor<Boolean>(callableTasks.size());
+            executor.invokeAll(callableTasks, 0, TimeUnit.MINUTES);
+            if (executor.hasErrors()) {
+                throw executor.getErrors().get(0);
             }
             inspectCowPatches(workDir);
 
@@ -110,17 +173,30 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             getDevice().executeShellV2Command("snapshotctl unmap-snapshots");
             getDevice().executeShellV2Command("snapshotctl delete-snapshots");
 
+            List<Callable<Boolean>> pushTasks = new ArrayList<>();
             for (File f : workDir.listFiles()) {
                 try (CloseableTraceScope ignored = new CloseableTraceScope("push:" + f.getName())) {
-                    boolean success;
-                    if (f.isDirectory()) {
-                        success = getDevice().pushDir(f, "/data/ndb/");
-                    } else {
-                        success = getDevice().pushFile(f, "/data/ndb/" + f.getName());
-                    }
-                    CLog.e("Push successful.: %s. %s->%s", success, f, "/data/ndb/" + f.getName());
-                    assertTrue(success);
+                    pushTasks.add(
+                            () -> {
+                                boolean success;
+                                if (f.isDirectory()) {
+                                    success = getDevice().pushDir(f, "/data/ndb/");
+                                } else {
+                                    success = getDevice().pushFile(f, "/data/ndb/" + f.getName());
+                                }
+                                CLog.e(
+                                        "Push successful.: %s. %s->%s",
+                                        success, f, "/data/ndb/" + f.getName());
+                                assertTrue(success);
+                                return true;
+                            });
                 }
+            }
+            ParallelDeviceExecutor<Boolean> pushExec =
+                    new ParallelDeviceExecutor<Boolean>(pushTasks.size());
+            pushExec.invokeAll(pushTasks, 0, TimeUnit.MINUTES);
+            if (pushExec.hasErrors()) {
+                throw pushExec.getErrors().get(0);
             }
 
             CommandResult mapOutput =
@@ -133,7 +209,21 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             if (mDisableVerity) {
                 getDevice().executeAdbCommand("disable-verity");
             }
-            getDevice().reboot();
+            // flash all static partition in bootloader
+            getDevice().rebootIntoBootloader();
+            Map<String, String> envMap = new HashMap<>();
+            envMap.put("ANDROID_PRODUCT_OUT", targetDirectory.getAbsolutePath());
+            CommandResult fastbootResult =
+                    getDevice()
+                            .executeLongFastbootCommand(
+                                    envMap,
+                                    "flashall",
+                                    "--exclude-dynamic-partitions",
+                                    "--disable-super-optimization");
+            CLog.d("Status: %s", fastbootResult.getStatus());
+            CLog.d("stdout: %s", fastbootResult.getStdout());
+            CLog.d("stderr: %s", fastbootResult.getStderr());
+            getDevice().waitForDeviceAvailable(5 * 60 * 1000L);
             // Do Validation
             getDevice().enableAdbRoot();
             CommandResult psOutput = getDevice().executeShellV2Command("ps -ef | grep snapuserd");
@@ -146,10 +236,13 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                     "Original build id: %s. after mount build id: %s",
                     originalBuildId, afterMountBuildId);
         } finally {
-            FileUtil.recursiveDelete(workDir);
-            FileUtil.recursiveDelete(srcDirectory);
-            FileUtil.recursiveDelete(targetDirectory);
-            revertToPreviousBuild();
+            try (CloseableTraceScope rev = new CloseableTraceScope("revert_to_previous")) {
+                revertToPreviousBuild(srcDirectory);
+            } finally {
+                FileUtil.recursiveDelete(workDir);
+                FileUtil.recursiveDelete(srcDirectory);
+                FileUtil.recursiveDelete(targetDirectory);
+            }
 
             String afterRevert = getDevice().getBuildId();
             CLog.d(
@@ -168,8 +261,8 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                     runUtil.runTimedCmd(
                             0L,
                             blockCompare.getAbsolutePath(),
-                            srcImage.getAbsolutePath(),
-                            targetImage.getAbsolutePath());
+                            "--source=" + srcImage.getAbsolutePath(),
+                            "--target=" + targetImage.getAbsolutePath());
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
                 throw new RuntimeException(
                         String.format("%s\n%s", result.getStdout(), result.getStderr()));
@@ -177,6 +270,17 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             File[] listFiles = workDir.listFiles();
             CLog.e("%s", Arrays.asList(listFiles));
         }
+    }
+
+    private File getCreateSnapshot() throws IOException {
+        File createSnapshotZip = getBuild().getFile("create_snapshot.zip");
+        if (createSnapshotZip == null) {
+            throw new RuntimeException("Cannot find create_snapshot.zip");
+        }
+        File destDir = ZipUtil2.extractZipToTemp(createSnapshotZip, "create_snapshot");
+        File snapshot = FileUtil.findFile(destDir, "create_snapshot");
+        FileUtil.chmodGroupRWX(snapshot);
+        return snapshot;
     }
 
     private void inspectCowPatches(File workDir) throws IOException {
@@ -210,7 +314,12 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
         CommandResult lsOutput = getDevice().executeShellV2Command("ls -l /dev/block/mapper/");
         CLog.d("stdout: %s, stderr: %s", lsOutput.getStdout(), lsOutput.getStderr());
 
-        for (String lines : lsOutput.getStdout().split("\n")) {
+        if (!mDisableVerity) {
+            return;
+        }
+        String[] lineArray = lsOutput.getStdout().split("\n");
+        for (int i = 0; i < lineArray.length; i++) {
+            String lines = lineArray[i];
             if (!lines.contains("->")) {
                 continue;
             }
@@ -218,6 +327,13 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
             String partition = pieces[7].substring(0, pieces[7].length() - 2);
             CLog.d("Partition extracted: %s", partition);
             if (partitionToInfo.containsKey(partition)) {
+                // Since there is system_a/_b ensure we capture the right one
+                // for md5 comparison
+                if ("system".equals(partition)) {
+                    if (!lineArray[i +2].contains("-cow-")) {
+                        continue;
+                    }
+                }
                 partitionToInfo.get(partition).mountedBlock = pieces[9];
             }
         }
@@ -253,8 +369,23 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
         }
     }
 
-    private void revertToPreviousBuild() throws DeviceNotAvailableException {
-        getDevice().executeShellV2Command("rm -f /metadata/ota/snapshot-boot");
-        getDevice().reboot();
+    private void revertToPreviousBuild(File srcDirectory) throws DeviceNotAvailableException {
+        CommandResult revertOutput =
+                getDevice().executeShellV2Command("snapshotctl revert-snapshots");
+        CLog.d("stdout: %s, stderr: %s", revertOutput.getStdout(), revertOutput.getStderr());
+        getDevice().rebootIntoBootloader();
+        Map<String, String> envMap = new HashMap<>();
+        envMap.put("ANDROID_PRODUCT_OUT", srcDirectory.getAbsolutePath());
+        CommandResult fastbootResult =
+                getDevice()
+                        .executeLongFastbootCommand(
+                                envMap,
+                                "flashall",
+                                "--exclude-dynamic-partitions",
+                                "--disable-super-optimization");
+        CLog.d("Status: %s", fastbootResult.getStatus());
+        CLog.d("stdout: %s", fastbootResult.getStdout());
+        CLog.d("stderr: %s", fastbootResult.getStderr());
+        getDevice().waitForDeviceAvailable(5 * 60 * 1000L);
     }
 }

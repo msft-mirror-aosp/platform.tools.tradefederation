@@ -242,7 +242,9 @@ public class TradefedSandbox implements ISandbox {
                     result.setStatus(CommandStatus.EXCEPTION);
                 }
                 result.setStderr(
-                        String.format("Event receiver thread did not complete.:\n%s", stderrText));
+                        String.format(
+                                "%s:\n%s",
+                                SubprocessExceptionParser.EVENT_THREAD_JOIN, stderrText));
             }
             PrettyPrintDelimiter.printStageDelimiter(
                     String.format(
@@ -351,7 +353,7 @@ public class TradefedSandbox implements ISandbox {
                 return res;
             }
             // Prepare the context
-            try {
+            try (CloseableTraceScope ignored = new CloseableTraceScope("prepareContext")) {
                 mSerializedContext = prepareContext(context, config);
             } catch (IOException e) {
                 return e;
@@ -455,7 +457,7 @@ public class TradefedSandbox implements ISandbox {
             if (config.getCommandOptions().shouldUseSandboxTestMode()) {
                 mode = DumpCmd.TEST_MODE;
             }
-            try {
+            try (CloseableTraceScope ignored = new CloseableTraceScope("serialize_test_config")) {
                 mSerializedConfiguration =
                         SandboxConfigUtil.dumpConfigForVersion(
                                 createClasspath(mRootFolder),

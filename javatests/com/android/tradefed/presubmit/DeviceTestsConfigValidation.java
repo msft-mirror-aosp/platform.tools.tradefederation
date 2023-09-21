@@ -55,6 +55,11 @@ public class DeviceTestsConfigValidation implements IBuildReceiver {
             description = "The expected extension from configuration to check.")
     private String mConfigExtension = "config";
 
+    @Option(
+            name = "disallowed-test-type",
+            description = "The disallowed test type for configs in device-tests.zip")
+    private List<String> mDisallowedTestTypes = new ArrayList<>();
+
     private IBuildInfo mBuild;
 
     @Override
@@ -96,6 +101,9 @@ public class DeviceTestsConfigValidation implements IBuildReceiver {
                 ConfigurationDescriptor cd = c.getConfigurationDescription();
                 GeneralTestsConfigValidation.checkModuleParameters(
                         c.getName(), cd.getMetaData(ITestSuite.PARAMETER_KEY));
+
+                // Check for disallowed test types
+                GeneralTestsConfigValidation.checkDisallowedTestType(c, mDisallowedTestTypes);
 
                 // Add more checks if necessary
             } catch (ConfigurationException e) {
