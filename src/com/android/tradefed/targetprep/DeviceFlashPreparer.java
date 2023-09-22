@@ -250,6 +250,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             }
 
             if (useIncrementalFlashing) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
+                        String.format("%s:%s:%s", tracker.branch, tracker.buildId, tracker.flavor));
                 mIncrementalImageUtil =
                         new IncrementalImageUtil(
                                 device,
@@ -381,7 +384,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                         .trackUpdatedDeviceImage(
                                 device.getSerialNumber(),
                                 deviceBuild.getDeviceImageFile(),
-                                deviceBuild.getBuildId());
+                                deviceBuild.getBuildId(),
+                                deviceBuild.getBuildBranch(),
+                                deviceBuild.getBuildFlavor());
             }
         } finally {
             device.setRecoveryMode(RecoveryMode.AVAILABLE);
