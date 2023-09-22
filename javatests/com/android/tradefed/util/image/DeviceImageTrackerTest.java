@@ -55,7 +55,8 @@ public class DeviceImageTrackerTest {
         File deviceImage = FileUtil.createTempFile("cache-image", ".zip");
         FileUtil.writeToFile("content", deviceImage);
         try {
-            mTestableCache.trackUpdatedDeviceImage("serial", deviceImage, "8888");
+            mTestableCache.trackUpdatedDeviceImage(
+                    "serial", deviceImage, "8888", "branch", "flavor");
             FileCacheTracker tracker = mTestableCache.getBaselineDeviceImage("serial");
             assertNotNull(tracker);
             assertEquals("8888", tracker.buildId);
