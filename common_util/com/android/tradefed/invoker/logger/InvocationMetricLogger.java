@@ -289,6 +289,7 @@ public class InvocationMetricLogger {
         INCREMENTAL_FLASHING_ATTEMPT_COUNT("incremental_flashing_attempt_count", true),
         INCREMENTAL_FLASHING_UPDATE_FAILURE("incremental_flashing_update_failure", true),
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
+        DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),

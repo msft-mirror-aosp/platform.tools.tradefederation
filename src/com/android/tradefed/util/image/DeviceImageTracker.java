@@ -44,10 +44,14 @@ public class DeviceImageTracker {
     public class FileCacheTracker {
         public File zippedDeviceImage;
         public String buildId;
+        public String branch;
+        public String flavor;
 
-        FileCacheTracker(File zippedDeviceImage, String buildId) {
+        FileCacheTracker(File zippedDeviceImage, String buildId, String branch, String flavor) {
             this.zippedDeviceImage = zippedDeviceImage;
             this.buildId = buildId;
+            this.branch = branch;
+            this.flavor = flavor;
         }
     }
 
@@ -103,12 +107,16 @@ public class DeviceImageTracker {
      *
      * @param serial The device that was flashed with the image.
      * @param deviceImage The image flashed onto the device.
+     * @param buildId The build id associated with the device image.
+     * @param branch The branch associated with the device image.
+     * @param flavor The build flavor associated with the device image.
      */
-    public void trackUpdatedDeviceImage(String serial, File deviceImage, String buildId) {
+    public void trackUpdatedDeviceImage(
+            String serial, File deviceImage, String buildId, String branch, String flavor) {
         File copyInCache = new File(mCacheDir, serial);
         try {
             FileUtil.hardlinkFile(deviceImage, copyInCache);
-            mImageCache.put(serial, new FileCacheTracker(copyInCache, buildId));
+            mImageCache.put(serial, new FileCacheTracker(copyInCache, buildId, branch, flavor));
         } catch (IOException e) {
             CLog.e(e);
         }
