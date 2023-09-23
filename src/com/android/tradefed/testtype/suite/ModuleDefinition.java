@@ -131,6 +131,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String MODULE_ID = "module-id";
     /** This property is set to true if the module was running on a freshly prepared device. */
     public static final String MODULE_ISOLATED = "module-isolated";
+    /** This property is set to true if the test module results were cached. */
+    public static final String MODULE_CACHED = "module-cached";
 
     public static final String MODULE_CONTROLLER = "module_controller";
 
