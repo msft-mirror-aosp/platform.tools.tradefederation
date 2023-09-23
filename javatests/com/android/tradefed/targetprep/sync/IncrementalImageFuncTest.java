@@ -97,14 +97,12 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
         CLog.d("Original build id: %s", originalBuildId);
 
         IncrementalImageUtil.isSnapshotInUse(getDevice());
-
-        File blockCompare = getCreateSnapshot();
         IncrementalImageUtil updateUtil =
                 new IncrementalImageUtil(
                         getDevice(),
                         getBuild().getFile("src-image"),
                         getBuild().getFile("target-image"),
-                        blockCompare);
+                        getBuild().getFile("create_snapshot.zip"));
         try {
             updateUtil.updateDevice();
 
