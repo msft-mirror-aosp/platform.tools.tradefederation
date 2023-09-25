@@ -403,7 +403,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     @Option(
             name = "optimized-non-persistent-setup",
             description = "Feature to evaluate a faster non-persistent props setup.")
-    private boolean mOptimizeNonPersistentSetup = false;
+    private boolean mOptimizeNonPersistentSetup = true;
 
     private Map<String, String> mPreviousSystemSettings = new HashMap<>();
     private Map<String, String> mPreviousSecureSettings = new HashMap<>();
