@@ -1221,7 +1221,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice, atLeastOnce()).getOptions();
         // doSetupExpectations, changeSystemProps, tearDown
-        verify(mMockDevice, times(3)).reboot();
+        verify(mMockDevice, times(2)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
         verify(mMockDevice, times(1)).pushFile(f, "/data/local.prop");
     }
@@ -1241,7 +1241,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice, atLeastOnce()).getOptions();
         // doSetupExpectations, changeSystemProps, tearDown
-        verify(mMockDevice, times(3)).reboot();
+        verify(mMockDevice, times(2)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
         verify(mMockDevice).deleteFile("/data/local.prop");
     }
