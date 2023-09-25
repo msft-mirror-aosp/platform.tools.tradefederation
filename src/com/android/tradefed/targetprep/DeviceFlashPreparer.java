@@ -229,6 +229,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
         if (getHostOptions().isIncrementalFlashingEnabled()) {
             mUseIncrementalFlashing = true;
         }
+        if (getHostOptions().isOptOutOfIncrementalFlashing()) {
+            mUseIncrementalFlashing = false;
+        }
         boolean useIncrementalFlashing = mUseIncrementalFlashing;
         if (useIncrementalFlashing) {
             if (!IncrementalImageUtil.isSnapshotSupported(device)) {
@@ -383,14 +386,16 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
             }
             device.postBootSetup();
             // In case success with full flashing
-            if (mUseIncrementalFlashing && !useIncrementalFlashing) {
-                DeviceImageTracker.getDefaultCache()
-                        .trackUpdatedDeviceImage(
-                                device.getSerialNumber(),
-                                deviceBuild.getDeviceImageFile(),
-                                deviceBuild.getBuildId(),
-                                deviceBuild.getBuildBranch(),
-                                deviceBuild.getBuildFlavor());
+            if (!getHostOptions().isOptOutOfIncrementalFlashing()) {
+                if (mUseIncrementalFlashing && !useIncrementalFlashing) {
+                    DeviceImageTracker.getDefaultCache()
+                            .trackUpdatedDeviceImage(
+                                    device.getSerialNumber(),
+                                    deviceBuild.getDeviceImageFile(),
+                                    deviceBuild.getBuildId(),
+                                    deviceBuild.getBuildBranch(),
+                                    deviceBuild.getBuildFlavor());
+                }
             }
         } finally {
             device.setRecoveryMode(RecoveryMode.AVAILABLE);
