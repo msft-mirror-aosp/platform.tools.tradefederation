@@ -55,30 +55,38 @@ public class DefaultConnection extends AbstractConnection {
 
     /** Create the requested connection. */
     public static DefaultConnection createConnection(ConnectionBuilder builder) {
-        if (builder.device != null && builder.device instanceof RemoteAndroidVirtualDevice) {
-            ((NativeDevice) builder.device).setLogStartDelay(0);
-            ((NativeDevice) builder.device).setFastbootEnabled(false);
+        ITestDevice device = builder.device;
+        if (device == null) {
+            return new DefaultConnection(builder);
+        }
+
+        final InstanceType type = device.getOptions().getInstanceType();
+        CLog.d("Instance type for connection: %s", type);
+
+        final boolean isCuttlefish = type.equals(InstanceType.CUTTLEFISH)
+                || type.equals(InstanceType.REMOTE_NESTED_AVD);
+
+        if (device instanceof RemoteAndroidVirtualDevice) {
+            ((NativeDevice) device).setFastbootEnabled(isCuttlefish);
+            ((NativeDevice) device).setLogStartDelay(0);
             return new AdbSshConnection(builder);
         }
-        if (builder.device != null && builder.device instanceof RemoteAndroidDevice) {
+        if (device instanceof RemoteAndroidDevice) {
             return new AdbTcpConnection(builder);
         }
-        if (builder.device != null) {
-            InstanceType type = builder.device.getOptions().getInstanceType();
-            CLog.d("Instance type for connection: %s", type);
-            if (InstanceType.CUTTLEFISH.equals(type)
-                    || InstanceType.REMOTE_NESTED_AVD.equals(type)) {
-                if (ManagedTestDeviceFactory.isTcpDeviceSerial(builder.device.getSerialNumber())) {
-                    // TODO: Add support for remote environment
-                    // If the device is already started just go for TcpConnection
-                    return new AdbTcpConnection(builder);
-                } else {
-                    ((NativeDevice) builder.device).setLogStartDelay(0);
-                    ((NativeDevice) builder.device).setFastbootEnabled(false);
-                    return new AdbSshConnection(builder);
-                }
+
+        CLog.d("Instance type for connection: %s", type);
+        if (isCuttlefish) {
+            if (ManagedTestDeviceFactory.isTcpDeviceSerial(device.getSerialNumber())) {
+                // TODO: Add support for remote environment
+                // If the device is already started just go for TcpConnection
+                return new AdbTcpConnection(builder);
+            } else {
+                ((NativeDevice) device).setLogStartDelay(0);
+                return new AdbSshConnection(builder);
             }
         }
+
         return new DefaultConnection(builder);
     }
 
