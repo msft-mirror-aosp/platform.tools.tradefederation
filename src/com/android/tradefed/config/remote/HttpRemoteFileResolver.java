@@ -19,6 +19,7 @@ import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.net.HttpHelper;
 import com.android.tradefed.util.net.IHttpHelper;
 
@@ -48,7 +49,8 @@ public class HttpRemoteFileResolver implements IRemoteFileResolver {
                     FileUtil.createTempFile(
                             FileUtil.getBaseName(consideredFile.getName()),
                             FileUtil.getExtension(consideredFile.getName()));
-            downloader.doGet(path, new FileOutputStream(downloadedFile));
+            downloader.doGet(downloader.buildUrl(path, new MultiMap<>(args.getQueryArgs())),
+                    new FileOutputStream(downloadedFile));
             return new ResolvedFile(
                     DynamicRemoteFileResolver.unzipIfRequired(downloadedFile, args.getQueryArgs()));
         } catch (IOException | RuntimeException e) {
