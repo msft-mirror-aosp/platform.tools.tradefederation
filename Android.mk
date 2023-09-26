@@ -32,13 +32,13 @@ $(HOST_OUT_JAVA_LIBRARIES)/tradefed.jar : $(HOST_OUT)/tradefed/loganalysis.jar
 tradefed-core: tradefed tradefed-test-framework atest_tradefed.sh tradefed-contrib script_help.sh tradefed.sh
 
 .PHONY: tradefed-all
-tradefed-all: tradefed-core tradefed-tests tradefed_win compatibility-host-util compatibility-tradefed
+tradefed-all: tradefed-core tradefed-tests tradefed_win compatibility-host-util compatibility-tradefed casuploader
 
 ########################################################
 # Zip up the built files and dist it as tradefed.zip
 
 tradefed_dist_host_jars := tradefed tradefed-test-framework tradefed-tests loganalysis tradefed-contrib compatibility-tradefed compatibility-host-util
-tradefed_dist_host_exes := tradefed.sh tradefed_win.bat script_help.sh atest_tradefed.sh
+tradefed_dist_host_exes := tradefed.sh script_help.sh atest_tradefed.sh casuploader
 tradefed_dist_test_apks := TradeFedUiTestApp TradeFedTestApp
 
 # Generate a src:dest list of copies to perform.
@@ -47,7 +47,7 @@ tradefed_dist_test_apks := TradeFedUiTestApp TradeFedTestApp
 # regenerated too often during incremental builds.
 
 tradefed_dist_copy_pairs := $(foreach m, $(tradefed_dist_host_jars), $(call intermediates-dir-for,JAVA_LIBRARIES,$(m),HOST,COMMON)/javalib.jar:$(m).jar)
-tradefed_dist_copy_pairs += $(foreach m, $(tradefed_dist_host_exes), $(LOCAL_PATH)/$(m):$(m))
+tradefed_dist_copy_pairs += $(foreach m, $(tradefed_dist_host_exes), $(call intermediates-dir-for,EXECUTABLES,$(m),HOST)/$(m):$(m))
 tradefed_dist_copy_pairs += $(foreach m, $(tradefed_dist_test_apks), $(call intermediates-dir-for,APPS,$(m))/package.apk:$(m).apk)
 
 tradefed_dist_host_jars :=
