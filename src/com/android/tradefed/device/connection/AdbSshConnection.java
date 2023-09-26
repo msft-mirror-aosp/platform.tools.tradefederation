@@ -240,7 +240,10 @@ public class AdbSshConnection extends AdbTcpConnection {
 
     @Override
     public void notifyAdbRebootCalled() {
-        getGceSshMonitor().isAdbRebootCalled(true);
+        final GceSshTunnelMonitor tunnelMonitor = getGceSshMonitor();
+        if (tunnelMonitor != null) {
+            tunnelMonitor.isAdbRebootCalled(true);
+        }
     }
 
     @Override
