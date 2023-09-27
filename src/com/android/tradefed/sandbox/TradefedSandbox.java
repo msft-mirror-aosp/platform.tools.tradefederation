@@ -130,7 +130,8 @@ public class TradefedSandbox implements ISandbox {
         SandboxOptions sandboxOptions = getSandboxOptions(config);
         mCmdArgs.addAll(sandboxOptions.getJavaOptions());
         if (System.getenv(SANDBOX_JVM_OPTIONS_ENV_VAR_KEY) != null) {
-            mCmdArgs.add(System.getenv(SANDBOX_JVM_OPTIONS_ENV_VAR_KEY));
+            mCmdArgs.addAll(
+                    Arrays.asList(System.getenv(SANDBOX_JVM_OPTIONS_ENV_VAR_KEY).split(",")));
         }
         mCmdArgs.add("-cp");
         mCmdArgs.add(createClasspath(mRootFolder));
