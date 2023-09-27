@@ -2423,16 +2423,19 @@ public class NativeDevice
         final String[] fullCmd = buildFastbootCommand(cmdArgs);
 
         for (int i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
-            CommandResult result = simpleFastbootCommand(timeout, envVarMap, fullCmd);
-            if (!isRecoveryNeeded(result)) {
-                return result;
+            try (CloseableTraceScope ignored = new CloseableTraceScope("fastboot " + cmdArgs[0])) {
+                CommandResult result = simpleFastbootCommand(timeout, envVarMap, fullCmd);
+                if (!isRecoveryNeeded(result)) {
+                    return result;
+                }
+                CLog.w("Recovery needed after executing fastboot command");
+                if (result != null) {
+                    CLog.v(
+                            "fastboot command output:\nstdout: %s\nstderr:%s",
+                            result.getStdout(), result.getStderr());
+                }
+                recoverDeviceFromBootloader();
             }
-            CLog.w("Recovery needed after executing fastboot command");
-            if (result != null) {
-                CLog.v("fastboot command output:\nstdout: %s\nstderr:%s",
-                        result.getStdout(), result.getStderr());
-            }
-            recoverDeviceFromBootloader();
         }
         throw new DeviceUnresponsiveException(
                 String.format(
@@ -3520,7 +3523,8 @@ public class NativeDevice
         }
         long startTime = System.currentTimeMillis();
 
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("reboot_in_" + mode.toString())) {
             // Update fastboot serial number before entering fastboot mode
             mStateMonitor.setFastbootSerialNumber(getFastbootSerialNumber());
 
