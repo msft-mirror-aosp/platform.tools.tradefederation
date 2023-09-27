@@ -246,10 +246,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                 useIncrementalFlashing = false;
             }
             if (useIncrementalFlashing
-                    && !tracker.buildId.equals(device.getBuildId())
-                    &&
+                    && (!tracker.buildId.equals(device.getBuildId())
+                    ||
                     // TODO: Support cross-branch by handling bootloader
-                    !tracker.branch.equals(deviceBuild.getBuildBranch())) {
+                    !tracker.branch.equals(deviceBuild.getBuildBranch()))) {
                 CLog.d("On-device build isn't matching the cache.");
                 useIncrementalFlashing = false;
                 InvocationMetricLogger.addInvocationMetrics(
