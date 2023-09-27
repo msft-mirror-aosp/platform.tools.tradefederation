@@ -172,6 +172,15 @@ public interface ICommandScheduler {
     }
 
     /**
+     * Stops scheduling and accepting new tests but does not stop Tradefed. This is meant to enable
+     * a two steps shutdown where first we drain all the running tests, then terminate Tradefed
+     * process.
+     */
+    default void stopScheduling() {
+        // Empty
+    }
+
+    /**
      * Attempt to gracefully shutdown the command scheduler.
      *
      * @param notifyStop if true, notifies invocations of TF shutdown.
