@@ -65,7 +65,9 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, DeviceNotAvailableException {
-        int secondaryUserId = getSecondaryUserId(testInfo.getDevice());
+        removeNonForTestingUsers(testInfo.getDevice());
+
+        int secondaryUserId = getForTestingSecondaryUserId(testInfo.getDevice());
 
         if (secondaryUserId == -1) {
             if (!assumeTrue(
@@ -99,10 +101,15 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
         testInfo.properties().put(RUN_TESTS_AS_USER_KEY, Integer.toString(secondaryUserId));
     }
 
-    /** Get the id of a secondary user currently on the device. -1 if there is none */
-    private static int getSecondaryUserId(ITestDevice device) throws DeviceNotAvailableException {
+    /**
+     * Get the id of a for-testing or main secondary user currently on the device. -1 if there is
+     * none.
+     */
+    private static int getForTestingSecondaryUserId(ITestDevice device)
+            throws DeviceNotAvailableException {
         for (Map.Entry<Integer, UserInfo> userInfo : device.getUserInfos().entrySet()) {
-            if (userInfo.getValue().isSecondary()) {
+            if ((userInfo.getValue().isFlagForTesting() || userInfo.getValue().isMain())
+                    && userInfo.getValue().isSecondary()) {
                 return userInfo.getKey();
             }
         }
@@ -124,12 +131,15 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
         }
 
         testInfo.properties().remove(RUN_TESTS_AS_USER_KEY);
-        int currentUser = testInfo.getDevice().getCurrentUser();
+
+        ITestDevice device = testInfo.getDevice();
+        int currentUser = device.getCurrentUser();
+
         if (currentUser != originalUserId) {
-            testInfo.getDevice().switchUser(originalUserId);
+            device.switchUser(originalUserId);
         }
         if (userIdToDelete != -1) {
-            testInfo.getDevice().removeUser(userIdToDelete);
+            device.removeUser(userIdToDelete);
         }
     }
 
@@ -144,6 +154,27 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
         }
 
         return value;
+    }
+
+    /**
+     * Remove all non for-testing users.
+     *
+     * <p>For a headless device, it would remove every non for-testing user except the first
+     * secondary user and the system user.
+     *
+     * <p>For a non-headless device, it would remove every non for-testing user except the system
+     * user.
+     */
+    private static void removeNonForTestingUsers(ITestDevice device)
+            throws DeviceNotAvailableException {
+        for (Map.Entry<Integer, UserInfo> userInfo : device.getUserInfos().entrySet()) {
+            if (userInfo.getValue().isSystem()
+                    || userInfo.getValue().isFlagForTesting()
+                    || userInfo.getValue().isMain()) {
+                continue;
+            }
+            device.removeUser(userInfo.getValue().userId());
+        }
     }
 
     /** Checks whether it is possible to create the desired number of users. */
