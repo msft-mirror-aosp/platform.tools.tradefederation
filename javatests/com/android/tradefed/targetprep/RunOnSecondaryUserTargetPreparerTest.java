@@ -16,6 +16,7 @@
 
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.device.UserInfo.FLAG_FOR_TESTING;
 import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
 import static com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparer.TEST_PACKAGE_NAME_OPTION;
 
@@ -112,7 +113,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void setUp_secondaryUserAlreadyExists_doesNotCreateSecondaryUser() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(2, new UserInfo(2, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                2,
+                new UserInfo(2, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
 
         mPreparer.setUp(mTestInfo);
@@ -125,7 +128,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
     public void setUp_secondaryUserAlreadyExists_startsAndSwitchesToSecondaryUser()
             throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(2, new UserInfo(2, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                2,
+                new UserInfo(2, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(0);
 
@@ -152,7 +157,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void tearDown_secondaryUserAlreadyExists_switchesBackToInitialUser() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(2, new UserInfo(2, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                2,
+                new UserInfo(2, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(0);
         mPreparer.setUp(mTestInfo);
@@ -167,7 +174,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void setUp_secondaryUserAlreadyExists_runsTestAsExistingUser() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                3,
+                new UserInfo(3, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
 
         mPreparer.setUp(mTestInfo);
@@ -188,7 +197,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void setUp_secondaryUserAlreadyExists_installsPackagesInExistingUser() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                3,
+                new UserInfo(3, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         mOptionSetter.setOptionValue(
                 RunOnWorkProfileTargetPreparer.TEST_PACKAGE_NAME_OPTION, "com.android.testpackage");
@@ -216,7 +227,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void setUp_secondaryUserAlreadyExists_doesNotRemoveSecondaryUser() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                3,
+                new UserInfo(3, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         mOptionSetter.setOptionValue("disable-tear-down", "false");
         mPreparer.setUp(mTestInfo);
@@ -224,6 +237,68 @@ public class RunOnSecondaryUserTargetPreparerTest {
         mPreparer.tearDown(mTestInfo, /* throwable= */ null);
 
         verify(mTestInfo.getDevice(), never()).removeUser(3);
+    }
+
+    @Test
+    public void setUp_secondaryUserIsNonForTesting_createsNewSecondaryUser() throws Exception {
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+        mOptionSetter.setOptionValue("disable-tear-down", "false");
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice())
+                .createUser(
+                        "secondary",
+                        /* guest= */ false,
+                        /* ephemeral= */ false,
+                        /* forTesting= */ true);
+    }
+
+    @Test
+    public void setUp_secondaryUserIsNonForTesting_removedNonForTestingSecondaryUser()
+            throws Exception {
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+        mOptionSetter.setOptionValue("disable-tear-down", "false");
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice()).removeUser(3);
+    }
+
+    @Test
+    public void setUp_existingUserIsSystemUser_doesNotRemove() throws Exception {
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(0, new UserInfo(3, "system", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+        mOptionSetter.setOptionValue("disable-tear-down", "false");
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice(), never()).removeUser(0);
+    }
+
+    @Test
+    public void
+            setUp_headlessDevice_multipleNonForTestingSecondaryUsers_doesNotRemoveFirstSecondaryUser()
+                    throws Exception {
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(
+                3,
+                new UserInfo(
+                        3, "secondary", /* flag= */ UserInfo.FLAG_MAIN, /* isRunning= */ true));
+        userInfos.put(4, new UserInfo(4, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+        when(mTestInfo.getDevice().isHeadless()).thenReturn(true);
+        mOptionSetter.setOptionValue("disable-tear-down", "false");
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice(), never()).removeUser(3);
+        verify(mTestInfo.getDevice()).removeUser(4);
     }
 
     @Test
@@ -281,7 +356,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
             throws Exception {
         when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(1);
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                3,
+                new UserInfo(3, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         mOptionSetter.setOptionValue(TEST_PACKAGE_NAME_OPTION, "com.android.testpackage");
 
@@ -296,7 +373,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
             throws Exception {
         when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(1);
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                3,
+                new UserInfo(3, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         mOptionSetter.setOptionValue(TEST_PACKAGE_NAME_OPTION, "com.android.testpackage");
 
