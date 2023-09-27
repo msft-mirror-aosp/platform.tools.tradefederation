@@ -237,7 +237,7 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
 
         // Notify to stop leasing
         try {
-            mCommandScheduler.shutdown();
+            mCommandScheduler.stopScheduling();
             responseBuilder.setResult(StopLeasingResponse.Result.SUCCEED);
         } catch (RuntimeException e) {
             // This might happen in case scheduler isn't started or in bad state.

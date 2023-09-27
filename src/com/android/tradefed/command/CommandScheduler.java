@@ -177,6 +177,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
     /** flag for instructing scheduler to exit when no commands are present */
     private boolean mShutdownOnEmpty = false;
+    /** Prevent new tests from being scheduled. */
+    private boolean mStopScheduling = false;
 
     private boolean mStarted = false;
 
@@ -2076,7 +2078,14 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     }
 
     public synchronized boolean isShuttingDown() {
-        return mCommandTimer.isShutdown() || mShutdownOnEmpty;
+        return mCommandTimer.isShutdown() || mShutdownOnEmpty || mStopScheduling;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public synchronized void stopScheduling() {
+        mStopScheduling = true;
+        setHostState(HostState.QUITTING);
     }
 
     /** {@inheritDoc} */
