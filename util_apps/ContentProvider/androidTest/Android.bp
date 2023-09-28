@@ -27,7 +27,7 @@ android_test {
         "androidx.test.runner",
         "junit",
         "mockito-target-minus-junit4",
-	"TradefedContentProvider",
+        "TradefedContentProvider",
     ],
 
     sdk_version: "30",
