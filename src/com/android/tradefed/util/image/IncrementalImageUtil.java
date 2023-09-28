@@ -17,6 +17,7 @@ package com.android.tradefed.util.image;
 
 import static org.junit.Assert.assertTrue;
 
+import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -33,6 +34,7 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
+import com.android.tradefed.util.image.DeviceImageTracker.FileCacheTracker;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -66,6 +68,38 @@ public class IncrementalImageUtil {
 
     private File mSourceDirectory;
 
+    private ParallelPreparation mParallelSetup;
+
+    public static IncrementalImageUtil initialize(
+            ITestDevice device, IDeviceBuildInfo build, File createSnapshot)
+            throws DeviceNotAvailableException {
+        if (!isSnapshotSupported(device)) {
+            CLog.d("Incremental flashing not supported.");
+            return null;
+        }
+        FileCacheTracker tracker =
+                DeviceImageTracker.getDefaultCache()
+                        .getBaselineDeviceImage(device.getSerialNumber());
+        if (tracker == null) {
+            CLog.d("Not tracking current baseline image.");
+            return null;
+        }
+        if ((!tracker.buildId.equals(device.getBuildId())
+                ||
+                // TODO: Support cross-branch by handling bootloader
+                !tracker.branch.equals(build.getBuildBranch()))) {
+            CLog.d("On-device build isn't matching the cache.");
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
+            return null;
+        }
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
+                String.format("%s:%s:%s", tracker.branch, tracker.buildId, tracker.flavor));
+        return new IncrementalImageUtil(
+                device, tracker.zippedDeviceImage, build.getDeviceImageFile(), createSnapshot);
+    }
+
     public IncrementalImageUtil(
             ITestDevice device, File srcImage, File targetImage, File createSnapshot) {
         mDevice = device;
@@ -84,6 +118,10 @@ public class IncrementalImageUtil {
         } else {
             mCreateSnapshotBinary = null;
         }
+        mParallelSetup =
+                new ParallelPreparation(
+                        Thread.currentThread().getThreadGroup(), mSrcImage, mTargetImage);
+        mParallelSetup.start();
     }
 
     /** Returns whether or not we can use the snapshot logic to update the device */
@@ -130,20 +168,25 @@ public class IncrementalImageUtil {
                     "Failed to obtain root, this is required for incremental update.",
                     InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
         }
-        File srcDirectory = null;
-        File targetDirectory = null;
-        File workDir = null;
 
-        try (CloseableTraceScope ignored = new CloseableTraceScope("unzip_device_images")) {
-            srcDirectory = ZipUtil2.extractZipToTemp(mSrcImage, "incremental_src");
-            targetDirectory = ZipUtil2.extractZipToTemp(mTargetImage, "incremental_target");
+        File workDir = null;
+        try {
             workDir = FileUtil.createTempDir("block_compare_workdir");
         } catch (IOException e) {
-            FileUtil.recursiveDelete(srcDirectory);
-            FileUtil.recursiveDelete(targetDirectory);
             FileUtil.recursiveDelete(workDir);
             throw new TargetSetupError(e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
+        // Join the unzip thread
+        try {
+            mParallelSetup.join();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        if (mParallelSetup.getError() != null) {
+            throw mParallelSetup.getError();
+        }
+        File srcDirectory = mParallelSetup.getSrcDirectory();
+        File targetDirectory = mParallelSetup.getTargetDirectory();
 
         try (CloseableTraceScope ignored = new CloseableTraceScope("update_device")) {
             List<Callable<Boolean>> callableTasks = new ArrayList<>();
@@ -298,6 +341,52 @@ public class IncrementalImageUtil {
                     InvocationGroupMetricKey.INCREMENTAL_FLASHING_PATCHES_SIZE,
                     patch.getName(),
                     patch.length());
+        }
+    }
+
+    private class ParallelPreparation extends Thread {
+
+        private final File mSetupSrcImage;
+        private final File mSetupTargetImage;
+
+        private File mSrcDirectory;
+        private File mTargetDirectory;
+        private TargetSetupError mError;
+
+        public ParallelPreparation(ThreadGroup currentGroup, File srcImage, File targetImage) {
+            super(currentGroup, "incremental-flashing-preparation");
+            setDaemon(true);
+            this.mSetupSrcImage = srcImage;
+            this.mSetupTargetImage = targetImage;
+        }
+
+        @Override
+        public void run() {
+            try (CloseableTraceScope ignored = new CloseableTraceScope("unzip_device_images")) {
+                mSrcDirectory = ZipUtil2.extractZipToTemp(mSetupSrcImage, "incremental_src");
+                mTargetDirectory =
+                        ZipUtil2.extractZipToTemp(mSetupTargetImage, "incremental_target");
+            } catch (IOException e) {
+                FileUtil.recursiveDelete(mSrcDirectory);
+                FileUtil.recursiveDelete(mTargetDirectory);
+                mSrcDirectory = null;
+                mTargetDirectory = null;
+                mError =
+                        new TargetSetupError(
+                                e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+            }
+        }
+
+        public File getSrcDirectory() {
+            return mSrcDirectory;
+        }
+
+        public File getTargetDirectory() {
+            return mTargetDirectory;
+        }
+
+        public TargetSetupError getError() {
+            return mError;
         }
     }
 }

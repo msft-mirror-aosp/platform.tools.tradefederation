@@ -42,7 +42,6 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.image.DeviceImageTracker;
-import com.android.tradefed.util.image.DeviceImageTracker.FileCacheTracker;
 import com.android.tradefed.util.image.IncrementalImageUtil;
 
 import java.io.File;
@@ -139,6 +138,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
     private boolean mUseIncrementalFlashing = false;
 
     @Option(
+            name = "force-disable-incremental-flashing",
+            description = "Ignore HostOptions and disable the feature if true.")
+    private boolean mForceDisableIncrementalFlashing = false;
+
+    @Option(
             name = "create-snapshot-binary",
             description = "Override the create_snapshot binary for incremental flashing.")
     private File mCreateSnapshotBinary = null;
@@ -229,43 +233,18 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
         if (getHostOptions().isIncrementalFlashingEnabled()) {
             mUseIncrementalFlashing = true;
         }
+        if (mForceDisableIncrementalFlashing) {
+            mUseIncrementalFlashing = false;
+        }
         if (getHostOptions().isOptOutOfIncrementalFlashing()) {
             mUseIncrementalFlashing = false;
         }
         boolean useIncrementalFlashing = mUseIncrementalFlashing;
         if (useIncrementalFlashing) {
-            if (!IncrementalImageUtil.isSnapshotSupported(device)) {
-                CLog.d("Incremental flashing not supported.");
+            mIncrementalImageUtil =
+                    IncrementalImageUtil.initialize(device, deviceBuild, mCreateSnapshotBinary);
+            if (mIncrementalImageUtil == null) {
                 useIncrementalFlashing = false;
-            }
-            FileCacheTracker tracker =
-                    DeviceImageTracker.getDefaultCache()
-                            .getBaselineDeviceImage(device.getSerialNumber());
-            if (tracker == null) {
-                CLog.d("Not tracking current baseline image.");
-                useIncrementalFlashing = false;
-            }
-            if (useIncrementalFlashing
-                    && (!tracker.buildId.equals(device.getBuildId())
-                    ||
-                    // TODO: Support cross-branch by handling bootloader
-                    !tracker.branch.equals(deviceBuild.getBuildBranch()))) {
-                CLog.d("On-device build isn't matching the cache.");
-                useIncrementalFlashing = false;
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
-            }
-
-            if (useIncrementalFlashing) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
-                        String.format("%s:%s:%s", tracker.branch, tracker.buildId, tracker.flavor));
-                mIncrementalImageUtil =
-                        new IncrementalImageUtil(
-                                device,
-                                tracker.zippedDeviceImage,
-                                deviceBuild.getDeviceImageFile(),
-                                mCreateSnapshotBinary);
             }
         }
         try {
