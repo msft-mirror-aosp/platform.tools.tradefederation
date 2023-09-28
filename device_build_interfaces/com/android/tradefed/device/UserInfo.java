@@ -32,6 +32,7 @@ public final class UserInfo {
     public static final int FLAG_PROFILE = 0x00001000;
     public static final int USER_SYSTEM = 0;
     public static final int FLAG_MAIN = 0x00004000;
+    public static final int FLAG_FOR_TESTING = 0x00008000;
 
     public static final int FLAGS_NOT_SECONDARY =
             FLAG_PRIMARY | FLAG_MANAGED_PROFILE | FLAG_GUEST | FLAG_RESTRICTED;
@@ -164,6 +165,10 @@ public final class UserInfo {
 
     public boolean isEphemeral() {
         return (mFlag & FLAG_EPHEMERAL) == FLAG_EPHEMERAL;
+    }
+
+    public boolean isFlagForTesting() {
+        return (mFlag & FLAG_FOR_TESTING) == FLAG_FOR_TESTING;
     }
 
     /** Return whether this instance is of the specified type. */

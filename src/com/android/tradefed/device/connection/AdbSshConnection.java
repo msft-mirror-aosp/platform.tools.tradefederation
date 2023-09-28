@@ -342,7 +342,6 @@ public class AdbSshConnection extends AdbTcpConnection {
                 }
                 CLog.d("Release as idevice: %s", ((IManagedTestDevice) getDevice()).getIDevice());
             }
-            ((IManagedTestDevice) getDevice()).setFastbootEnabled(false);
 
             if (getGceHandler() != null) {
                 getGceHandler().cleanUp();

@@ -94,4 +94,11 @@ public class ExtendedFile extends File {
     public boolean isDownloadingInParallel() {
         return mParallelDownload != null;
     }
+
+    public boolean isDoneDownloadingInParallel() {
+        if (mParallelDownload == null) {
+            return true;
+        }
+        return mParallelDownload.isDone();
+    }
 }
