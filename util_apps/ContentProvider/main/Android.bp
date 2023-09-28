@@ -19,7 +19,7 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-android_test {
+android_test_helper_app {
     name: "TradefedContentProvider",
     // Restrict visibility to only those targets that need to access it.
     visibility: [
