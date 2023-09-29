@@ -114,10 +114,12 @@ public class DeviceImageTracker {
     public void trackUpdatedDeviceImage(
             String serial, File deviceImage, String buildId, String branch, String flavor) {
         File copyInCache = new File(mCacheDir, serial);
+        FileUtil.deleteFile(copyInCache);
         try {
             FileUtil.hardlinkFile(deviceImage, copyInCache);
             mImageCache.put(serial, new FileCacheTracker(copyInCache, buildId, branch, flavor));
         } catch (IOException e) {
+            invalidateTracking(serial);
             CLog.e(e);
         }
     }
