@@ -199,7 +199,7 @@ public class DeviceSnapshotHandlerTest {
                 InvocationMetricLogger.getInvocationMetrics()
                         .getOrDefault(
                                 InvocationMetricLogger.InvocationMetricKey
-                                        .DEVICE_SNAPSHOT_RESTORE_COUNT
+                                        .DEVICE_SNAPSHOT_RESTORE_SUCCESS_COUNT
                                         .toString(),
                                 "0");
         assertEquals("2", count);
