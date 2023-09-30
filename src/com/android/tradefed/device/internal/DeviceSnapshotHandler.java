@@ -116,7 +116,7 @@ public class DeviceSnapshotHandler {
         matcher = durationPattern.matcher(response.getResponse());
         if (matcher.find()) {
             InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_COUNT, 1);
+                    InvocationMetricKey.DEVICE_SNAPSHOT_SUCCESS_COUNT, 1);
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_SNAPSHOT_DURATIONS, matcher.group(1));
         }
@@ -190,7 +190,7 @@ public class DeviceSnapshotHandler {
         matcher = durationPattern.matcher(response.getResponse());
         if (matcher.find()) {
             InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_COUNT, 1);
+                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_SUCCESS_COUNT, 1);
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_DURATIONS, matcher.group(1));
         }
