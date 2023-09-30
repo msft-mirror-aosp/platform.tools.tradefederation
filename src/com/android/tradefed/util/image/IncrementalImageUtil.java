@@ -73,10 +73,6 @@ public class IncrementalImageUtil {
     public static IncrementalImageUtil initialize(
             ITestDevice device, IDeviceBuildInfo build, File createSnapshot)
             throws DeviceNotAvailableException {
-        if (!isSnapshotSupported(device)) {
-            CLog.d("Incremental flashing not supported.");
-            return null;
-        }
         FileCacheTracker tracker =
                 DeviceImageTracker.getDefaultCache()
                         .getBaselineDeviceImage(device.getSerialNumber());
@@ -91,6 +87,10 @@ public class IncrementalImageUtil {
             CLog.d("On-device build isn't matching the cache.");
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
+            return null;
+        }
+        if (!isSnapshotSupported(device)) {
+            CLog.d("Incremental flashing not supported.");
             return null;
         }
         InvocationMetricLogger.addInvocationMetrics(
@@ -286,6 +286,10 @@ public class IncrementalImageUtil {
                 flashStaticPartition(mSourceDirectory);
             }
             FileUtil.recursiveDelete(mSourceDirectory);
+        } catch (DeviceNotAvailableException e) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
+            throw e;
         }
     }
 

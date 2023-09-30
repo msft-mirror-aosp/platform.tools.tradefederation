@@ -30,6 +30,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TimeUtil;
 
 import com.google.common.base.Strings;
+import com.google.common.primitives.Longs;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -708,6 +709,10 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
         }
         String output = receiver.getOutput().trim();
         CLog.v("'%s' returned %s", statCommand, output);
+        if (Longs.tryParse(output) == null) {
+            CLog.w("stat command return value should be a number. output: %s", output);
+            return null;
+        }
         return output;
     }
 

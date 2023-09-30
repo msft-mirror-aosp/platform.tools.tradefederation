@@ -245,6 +245,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
                     IncrementalImageUtil.initialize(device, deviceBuild, mCreateSnapshotBinary);
             if (mIncrementalImageUtil == null) {
                 useIncrementalFlashing = false;
+            } else if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                // No need to reboot yet, it will happen later in the sequence
+                String verityOutput = device.executeAdbCommand("enable-verity");
+                CLog.d("%s", verityOutput);
             }
         }
         try {
