@@ -39,6 +39,7 @@ import com.android.tradefed.util.FuseUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
+import com.android.tradefed.util.image.DeviceImageTracker;
 import com.android.tradefed.util.image.IncrementalImageUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -733,18 +734,32 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 device.getSerialNumber(), deviceBuild.getDeviceImageFile().getAbsolutePath());
         // give extra time to the update cmd
         try (CloseableTraceScope ignored = new CloseableTraceScope("flash_system")) {
+            boolean shouldFlash = true;
             if (mIncrementalFlashing != null) {
-                mIncrementalFlashing.updateDevice();
-            } else if (getHostOptions().shouldFlashWithFuseZip() && getFuseUtil().canMountZip()) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.FLASHING_METHOD,
-                        FlashingMethod.FASTBOOT_FLASH_ALL_FUSE_ZIP.toString());
-                flashWithFuseZip(device, deviceBuild);
-            } else {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.FLASHING_METHOD,
-                        FlashingMethod.FASTBOOT_UPDATE.toString());
-                flashWithUpdateCommand(device, deviceBuild);
+                try {
+                    mIncrementalFlashing.updateDevice();
+                    shouldFlash = false;
+                } catch (TargetSetupError e) {
+                    // In case of TargetSetupError for incremental flashing,
+                    // fallback to full flashing.
+                    CLog.e(e);
+                    DeviceImageTracker.getDefaultCache()
+                            .invalidateTracking(device.getSerialNumber());
+                }
+            }
+
+            if (shouldFlash) {
+                if (getHostOptions().shouldFlashWithFuseZip() && getFuseUtil().canMountZip()) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_METHOD,
+                            FlashingMethod.FASTBOOT_FLASH_ALL_FUSE_ZIP.toString());
+                    flashWithFuseZip(device, deviceBuild);
+                } else {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_METHOD,
+                            FlashingMethod.FASTBOOT_UPDATE.toString());
+                    flashWithUpdateCommand(device, deviceBuild);
+                }
             }
             flashRamdiskIfNeeded(device, deviceBuild);
             // only transfer last fastboot command status over to system flash status after having
