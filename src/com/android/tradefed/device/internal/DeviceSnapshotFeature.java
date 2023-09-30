@@ -106,7 +106,7 @@ public class DeviceSnapshotFeature
 
                 String snapshotId = request.getArgsMap().get(SNAPSHOT_ID);
                 if (Strings.isNullOrEmpty(snapshotId)) {
-                    snapshot(responseBuilder, connection, user, offset);
+                    snapshot(responseBuilder, connection, user, offset, snapshotId);
                 } else {
                     restoreSnapshot(responseBuilder, connection, user, offset, snapshotId);
                 }
@@ -134,7 +134,8 @@ public class DeviceSnapshotFeature
             FeatureResponse.Builder responseBuilder,
             AbstractConnection connection,
             String user,
-            int offset)
+            int offset,
+            String snapshotId)
             throws DeviceNotAvailableException, TargetSetupError {
         String response =
                 String.format(
@@ -143,7 +144,8 @@ public class DeviceSnapshotFeature
                         mTestInformation.getDevice().getClass().getSimpleName());
         try {
             long startTime = System.currentTimeMillis();
-            CommandResult result = ((AdbSshConnection) connection).snapshotGce(user, offset);
+            CommandResult result =
+                    ((AdbSshConnection) connection).snapshotGce(user, offset, snapshotId);
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
                 throw new DeviceNotAvailableException(
                         String.format(
@@ -214,10 +216,11 @@ public class DeviceSnapshotFeature
         return null;
     }
 
-    private CommandResult snapshotGce(AbstractConnection connection, String user, Integer offset)
+    private CommandResult snapshotGce(
+            AbstractConnection connection, String user, Integer offset, String snapshotId)
             throws TargetSetupError {
         if (connection instanceof AdbSshConnection) {
-            return ((AdbSshConnection) connection).snapshotGce(user, offset);
+            return ((AdbSshConnection) connection).snapshotGce(user, offset, snapshotId);
         }
         return new CommandResult(CommandStatus.EXCEPTION);
     }
