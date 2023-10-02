@@ -901,7 +901,9 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         // If the reboot optimization is enabled, only set nonpersistent props if
         // there are changed values from what the device is running.
         boolean shouldSetProps = true;
-        if (mOptimizedPropertySetting && !nonpersistentProps.isEmpty()) {
+        if (!mOptimizeNonPersistentSetup
+                && mOptimizedPropertySetting
+                && !nonpersistentProps.isEmpty()) {
             boolean allPropsAlreadySet = true;
             for (Map.Entry<String, String> prop : nonpersistentProps.entrySet()) {
                 if (!prop.getValue().equals(device.getProperty(prop.getKey()))) {
