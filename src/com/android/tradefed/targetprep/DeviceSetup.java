@@ -405,6 +405,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             description = "Feature to evaluate a faster non-persistent props setup.")
     private boolean mOptimizeNonPersistentSetup = true;
 
+    @Option(
+            name = "dismiss-setup-wizard",
+            description = "Attempt to dismiss the setup wizard if present.")
+    private boolean mDismissSetupWizard = true;
+
     private Map<String, String> mPreviousSystemSettings = new HashMap<>();
     private Map<String, String> mPreviousSecureSettings = new HashMap<>();
     private Map<String, String> mPreviousGlobalSettings = new HashMap<>();
@@ -548,6 +553,17 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     checkExternalStoreSpace(device);
                     return true;
                 });
+        if (mDismissSetupWizard) {
+            callableTasks.add(
+                    () -> {
+                        device.executeShellCommand(
+                                "am start -a com.android.setupwizard.FOUR_CORNER_EXIT"); // Android
+                        // UDC+
+                        device.executeShellCommand(
+                                "am start -a com.android.setupwizard.EXIT"); // Android L - T
+                        return true;
+                    });
+        }
         if (mParallelCoreSetup) {
             ParallelDeviceExecutor<Boolean> executor =
                     new ParallelDeviceExecutor<Boolean>(callableTasks.size());
