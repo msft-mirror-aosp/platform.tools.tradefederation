@@ -1383,6 +1383,7 @@ public class DeviceSetupTest {
         when(mMockDevice.getProperty("fooProperty")).thenReturn("1");
 
         OptionSetter setter = new OptionSetter(mDeviceSetup);
+        setter.setOptionValue("optimized-non-persistent-setup", "false");
         setter.setOptionValue("optimized-property-setting", "true");
         setter.setOptionValue("set-property", "fooProperty", "1");
         mDeviceSetup.setUp(mTestInfo);
