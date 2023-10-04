@@ -16,6 +16,7 @@
 
 package com.android.tradefed.targetprep;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -43,6 +44,8 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.ZipUtil;
 
+import com.google.common.io.PatternFilenameFilter;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -52,7 +55,13 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /** Unit tests for {@link GkiDeviceFlashPreparer}. */
 @RunWith(JUnit4.class)
@@ -97,6 +106,65 @@ public class GkiDeviceFlashPreparerTest {
                     @Override
                     protected IHostOptions getHostOptions() {
                         return new HostOptions();
+                    }
+
+                    /**
+                     * Create a system_dlkm staging directory with 3 kernel modules to test moving
+                     * the kernel artifacts under the /lib/modules folder directly. Here is what the
+                     * file structure should look like:
+                     *
+                     * <p>lib/modules/<kernel-version>/modules.load
+                     * lib/modules/<kernel-version>/modules.order
+                     * lib/modules/<kernel-version>/modules.dep.bin
+                     * lib/modules/<kernel-version>/modules.dep
+                     * lib/modules/<kernel-version>/modules.alias.bin
+                     * lib/modules/<kernel-version>/modules.alias
+                     * lib/modules/<kernel-version>/kernel/a.ko
+                     * lib/modules/<kernel-version>/kernel/b.ko
+                     * lib/modules/<kernel-version>/kernel/foo/c.ko
+                     *
+                     * @param systemDlkmArchive the system_dlkm tar gzip file containing GKI
+                     *     modules.
+                     * @return File containing the system_dlkm tar gzip contents.
+                     * @throws IOException
+                     */
+                    @Override
+                    protected File extractSystemDlkmTarGzip(File systemDlkmArchive)
+                            throws IOException {
+                        File systemDlkmStagingDir =
+                                FileUtil.createTempDir("system_dlkm_staging", mTmpDir);
+                        File stagingLibDir =
+                                FileUtil.createNamedTempDir(systemDlkmStagingDir, "lib");
+                        File stagingLibModulesDir =
+                                FileUtil.createNamedTempDir(stagingLibDir, "modules");
+                        File stagingVersionDir =
+                                FileUtil.createNamedTempDir(
+                                        stagingLibModulesDir,
+                                        "5.15.110-android14-11-g3abb2ec8d273-ab10716785");
+                        File stagingKernelDir =
+                                FileUtil.createNamedTempDir(stagingVersionDir, "kernel");
+                        File stagingKernelFooDir =
+                                FileUtil.createNamedTempDir(stagingKernelDir, "foo");
+                        File modulesLoad = new File(stagingVersionDir, "modules.load");
+                        File modulesOrder = new File(stagingVersionDir, "modules.order");
+                        File modulesDepBin = new File(stagingVersionDir, "modules.dep.bin");
+                        File modulesDep = new File(stagingVersionDir, "modules.dep");
+                        File modulesAliasBin = new File(stagingVersionDir, "modules.alias.bin");
+                        File modulesAlias = new File(stagingVersionDir, "modules.alias");
+                        File moduleA = new File(stagingKernelDir, "a.ko");
+                        File moduleB = new File(stagingKernelDir, "b.ko");
+                        File moduleFooC = new File(stagingKernelFooDir, "c.ko");
+                        FileUtil.writeToFile("mmm", modulesLoad);
+                        FileUtil.writeToFile("mmm", modulesOrder);
+                        FileUtil.writeToFile("mmm", modulesDepBin);
+                        FileUtil.writeToFile("mmm", modulesDep);
+                        FileUtil.writeToFile("mmm", modulesAliasBin);
+                        FileUtil.writeToFile("mmm", modulesAlias);
+                        FileUtil.writeToFile("aaa", moduleA);
+                        FileUtil.writeToFile("bbb", moduleB);
+                        FileUtil.writeToFile("ccc", moduleFooC);
+
+                        return systemDlkmStagingDir;
                     }
                 };
         // Reset default settings
@@ -233,10 +301,11 @@ public class GkiDeviceFlashPreparerTest {
         mBuildInfo.setFile("gki_boot.img", bootImg, "0");
 
         File otaDir = FileUtil.createTempDir("otatool_folder", mTmpDir);
-        File avbtoolFile = new File(otaDir, "avbtool");
+        File otaBinDir = FileUtil.createNamedTempDir(otaDir, "bin");
+        File avbtoolFile = new File(otaBinDir, "avbtool");
         FileUtil.writeToFile("ddd", avbtoolFile);
         File otatoolsZip = FileUtil.createTempFile("otatools", ".zip", mTmpDir);
-        ZipUtil.createZip(List.of(avbtoolFile), otatoolsZip);
+        ZipUtil.createZip(List.of(otaDir.listFiles()), otatoolsZip);
         mBuildInfo.setFile("otatools.zip", otatoolsZip, "0");
 
         when(mMockDevice.getProperty("ro.build.version.release")).thenReturn("13");
@@ -480,5 +549,112 @@ public class GkiDeviceFlashPreparerTest {
         verify(mMockRunUtil).allowInterrupt(false);
         verify(mMockRunUtil).allowInterrupt(true);
         verify(mMockRunUtil).sleep(anyLong());
+    }
+
+    /* Verifies that getRequestedFile() extracts files properly from a zip
+     * file. */
+    @Test
+    public void testGetRequestedFile_VerifyExtractingFromZip() throws Exception {
+        File otaDir = FileUtil.createTempDir("otatool_folder", mTmpDir);
+        File otaFooDir = FileUtil.createNamedTempDir(otaDir, "foo");
+        File otaBarDir = FileUtil.createNamedTempDir(otaDir, "bar");
+
+        List<File> fileList = new ArrayList<>();
+        fileList.add(new File(otaDir, "test"));
+        fileList.add(new File(otaFooDir, "buzz"));
+        fileList.add(new File(otaBarDir, "baz"));
+        fileList.add(new File(otaBarDir, "withSuffix.zip"));
+        for (File f : fileList) {
+            FileUtil.writeToFile("ddd", f);
+        }
+
+        List<String> fileListNames = new ArrayList<>();
+        try (Stream<Path> otaDirPaths = Files.walk(otaDir.toPath())) {
+            otaDirPaths
+                    .filter(path -> path.toFile().isFile())
+                    .forEach(
+                            path -> {
+                                fileListNames.add(otaDir.toPath().relativize(path).toString());
+                            });
+        }
+        // Test using a regex to find the file "foo/buzz"
+        fileListNames.add(".*buzz");
+
+        File otatoolsZip = FileUtil.createTempFile("otatools", ".zip", mTmpDir);
+        ZipUtil.createZip(List.of(otaDir.listFiles()), otatoolsZip);
+        mBuildInfo.setFile("otatools.zip", otatoolsZip, "0");
+
+        for (String filename : fileListNames) {
+            assertTrue(
+                    String.format("Expected to extract the file: %s", filename),
+                    mPreparer
+                            .getRequestedFile(mMockDevice, filename, otatoolsZip, mTmpDir)
+                            .exists());
+        }
+    }
+
+    /* Verifies a system_dlkm tarball is flattened correctly. */
+    @Test
+    public void testFlattenSystemDlkm() throws Exception {
+        /* Create the system_dlkm staging directory with 3 modules */
+        File systemDlkmArchive =
+                FileUtil.createTempFile("system_dlkm_staging_archive", ".tar.gz", mTmpDir);
+        mBuildInfo.setFile("system_dlkm_staging_archive.tar.gz", systemDlkmArchive, "0");
+
+        File systemDlkmStagingDir = mPreparer.extractSystemDlkmTarGzip(systemDlkmArchive);
+        File stagingLibModulesDir = new File(systemDlkmStagingDir, "lib/modules");
+        mPreparer.flattenSystemDlkm(mMockDevice, systemDlkmStagingDir);
+        assertTrue(
+                "Expected to find 3 modules under /lib/modules",
+                stagingLibModulesDir.listFiles(new PatternFilenameFilter(".*\\.ko")).length == 3);
+
+        /* Tests flattening an already flat system_dlkm staging directory. */
+        mPreparer.flattenSystemDlkm(mMockDevice, systemDlkmStagingDir);
+        assertTrue(
+                "Expected to find 3 modules under /lib/modules",
+                stagingLibModulesDir.listFiles(new PatternFilenameFilter(".*\\.ko")).length == 3);
+    }
+
+    /* Verifies building a GKI system_dlkm image from a tarball. */
+    @Test
+    public void testBuildGkiSystemDlkmImg() throws Exception {
+        File systemDlkmArchive =
+                FileUtil.createTempFile("system_dlkm_staging_archive", ".tar.gz", mTmpDir);
+        mBuildInfo.setFile("system_dlkm_staging_archive.tar.gz", systemDlkmArchive, "0");
+
+        File otaDir = FileUtil.createTempDir("otatool_folder", mTmpDir);
+        File otaBinDir = FileUtil.createNamedTempDir(otaDir, "bin");
+        File avbtoolFile = new File(otaBinDir, "avbtool");
+        File buildImageFile = new File(otaBinDir, "build_image");
+        File mkuserimgFile = new File(otaBinDir, "mkuserimg_mke2fs");
+        File mke2fsFile = new File(otaBinDir, "mke2fs");
+        File e2fsdroidFile = new File(otaBinDir, "e2fsdroid");
+        FileUtil.writeToFile("ddd", avbtoolFile);
+        FileUtil.writeToFile("ddd", buildImageFile);
+        FileUtil.writeToFile("ddd", mkuserimgFile);
+        FileUtil.writeToFile("ddd", mke2fsFile);
+        FileUtil.writeToFile("ddd", e2fsdroidFile);
+        File otatoolsZip = FileUtil.createTempFile("otatools", ".zip", mTmpDir);
+        ZipUtil.createZip(List.of(otaDir.listFiles()), otatoolsZip);
+        mBuildInfo.setFile("otatools.zip", otatoolsZip, "0");
+
+        when(mMockRunUtil.runTimedCmd(
+                        anyLong(),
+                        matches(".*build_image"),
+                        matches(".*system_dlkm_staging.*"),
+                        matches(".*system_dlkm.props"),
+                        matches(".*system_dlkm.img"),
+                        eq("/dev/null")))
+                .thenReturn(mSuccessResult);
+
+        try {
+            mPreparer.buildGkiSystemDlkmImg(mMockDevice, mBuildInfo, mTmpDir);
+            fail("TargetSetupError is expected");
+        } catch (TargetSetupError e) {
+            // Double check the error message
+            if (!Pattern.matches(".*build_image tool.*system_dlkm.*size=0.*", e.toString())) {
+                throw e;
+            }
+        }
     }
 }

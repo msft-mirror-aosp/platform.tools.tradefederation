@@ -349,6 +349,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     // setprop ro.test_harness 1
     // setprop persist.sys.test_harness 1
 
+    @Option(name = "hide-error-dialogs", description = "Turn on or off the error dialogs.")
+    protected BinaryState mHideErrorDialogs = BinaryState.ON;
+    // ON:  settings put global hide_error_dialogs 1
+    // OFF: settings put global hide_error_dialogs 0
+
     @Option(
             name = "disable-dalvik-verifier",
             description =
@@ -394,6 +399,16 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         description = "Restore settings modified by this preparer on tear down."
     )
     protected boolean mRestoreSettings = false;
+
+    @Option(
+            name = "optimized-non-persistent-setup",
+            description = "Feature to evaluate a faster non-persistent props setup.")
+    private boolean mOptimizeNonPersistentSetup = true;
+
+    @Option(
+            name = "dismiss-setup-wizard",
+            description = "Attempt to dismiss the setup wizard if present.")
+    private boolean mDismissSetupWizard = true;
 
     private Map<String, String> mPreviousSystemSettings = new HashMap<>();
     private Map<String, String> mPreviousSecureSettings = new HashMap<>();
@@ -538,6 +553,17 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     checkExternalStoreSpace(device);
                     return true;
                 });
+        if (mDismissSetupWizard) {
+            callableTasks.add(
+                    () -> {
+                        device.executeShellCommand(
+                                "am start -a com.android.setupwizard.FOUR_CORNER_EXIT"); // Android
+                        // UDC+
+                        device.executeShellCommand(
+                                "am start -a com.android.setupwizard.EXIT"); // Android L - T
+                        return true;
+                    });
+        }
         if (mParallelCoreSetup) {
             ParallelDeviceExecutor<Boolean> executor =
                     new ParallelDeviceExecutor<Boolean>(callableTasks.size());
@@ -798,6 +824,10 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                 mTimezone = TimeZone.getDefault().getID();
             }
         }
+
+        setSettingForBinaryState(
+                mHideErrorDialogs, mGlobalSettings, "hide_error_dialogs", "1", "0");
+
         if (mTimezone != null) {
             CLog.i("The actual timezone we set here is  %s", mTimezone);
             mSetProps.put("persist.sys.timezone", mTimezone);
@@ -869,7 +899,6 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         Map<String, String> nonpersistentProps = new HashMap<String, String>();
         for (Map.Entry<String, String> prop : mSetProps.entrySet()) {
             if (prop.getKey().startsWith(PERSIST_PREFIX)) {
-                // TODO: Check that set was successful
                 device.setProperty(prop.getKey(), prop.getValue());
             } else if (prop.getKey().equals(MEMTAG_BOOTCTL)) {
                 // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
@@ -879,13 +908,18 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                 needsReboot = true;
             } else {
                 nonpersistentProps.put(prop.getKey(), prop.getValue());
+                if (mOptimizeNonPersistentSetup) {
+                    device.setProperty(prop.getKey(), prop.getValue());
+                }
             }
         }
 
         // If the reboot optimization is enabled, only set nonpersistent props if
         // there are changed values from what the device is running.
         boolean shouldSetProps = true;
-        if (mOptimizedPropertySetting && !nonpersistentProps.isEmpty()) {
+        if (!mOptimizeNonPersistentSetup
+                && mOptimizedPropertySetting
+                && !nonpersistentProps.isEmpty()) {
             boolean allPropsAlreadySet = true;
             for (Map.Entry<String, String> prop : nonpersistentProps.entrySet()) {
                 if (!prop.getValue().equals(device.getProperty(prop.getKey()))) {
@@ -936,7 +970,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                             resultRampdump.getStderr());
                 }
             }
-            needsReboot = true;
+            if (!mOptimizeNonPersistentSetup) {
+                // non-persistent properties do not trigger a reboot in this
+                // new setup, if not explicitly set.
+                needsReboot = true;
+            }
         }
 
         if (needsReboot) {

@@ -1221,7 +1221,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice, atLeastOnce()).getOptions();
         // doSetupExpectations, changeSystemProps, tearDown
-        verify(mMockDevice, times(3)).reboot();
+        verify(mMockDevice, times(2)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
         verify(mMockDevice, times(1)).pushFile(f, "/data/local.prop");
     }
@@ -1241,7 +1241,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice, atLeastOnce()).getOptions();
         // doSetupExpectations, changeSystemProps, tearDown
-        verify(mMockDevice, times(3)).reboot();
+        verify(mMockDevice, times(2)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
         verify(mMockDevice).deleteFile("/data/local.prop");
     }
@@ -1383,6 +1383,7 @@ public class DeviceSetupTest {
         when(mMockDevice.getProperty("fooProperty")).thenReturn("1");
 
         OptionSetter setter = new OptionSetter(mDeviceSetup);
+        setter.setOptionValue("optimized-non-persistent-setup", "false");
         setter.setOptionValue("optimized-property-setting", "true");
         setter.setOptionValue("set-property", "fooProperty", "1");
         mDeviceSetup.setUp(mTestInfo);

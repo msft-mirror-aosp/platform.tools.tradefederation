@@ -37,6 +37,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.LogFileProto.LogFileInfo;
 import com.android.tradefed.result.proto.TestRecordProto.ChildReference;
 import com.android.tradefed.result.proto.TestRecordProto.DebugInfo;
@@ -96,6 +97,8 @@ public class ProtoResultParser {
     private boolean mFirstModule = true;
     /** Track the name of the module in progress. */
     private String mModuleInProgress = null;
+
+    private IInvocationContext mModuleContext = null;
 
     private boolean mMergeInvocationContext = true;
 
@@ -383,6 +386,9 @@ public class ProtoResultParser {
                         Throwable invocationError =
                                 (Throwable) SerializationUtil.deserialize(errorType);
                         failure.setCause(invocationError);
+                        if (invocationError instanceof OutOfMemoryError) {
+                            failure.setErrorIdentifier(InfraErrorIdentifier.OUT_OF_MEMORY_ERROR);
+                        }
                     } catch (IOException e) {
                         CLog.e("Failed to deserialize the invocation exception:");
                         CLog.e(e);
@@ -390,6 +396,7 @@ public class ProtoResultParser {
                     }
                 }
             }
+            CLog.d("Invocation failed with: %s", failure);
             mListener.invocationFailed(failure);
             mInvocationFailed = true;
         }
@@ -435,6 +442,7 @@ public class ProtoResultParser {
                 mModuleInProgress = moduleId;
             }
             log(message);
+            mModuleContext = moduleContext;
             mListener.testModuleStarted(moduleContext);
             if (mFirstModule) {
                 mFirstModule = false;
@@ -449,8 +457,18 @@ public class ProtoResultParser {
     private void handleModuleEnded(TestRecord moduleProto) {
         handleLogs(moduleProto);
         log("Test module ended proto");
+        try {
+            Any anyDescription = moduleProto.getDescription();
+            IInvocationContext moduleContext =
+                    InvocationContext.fromProto(anyDescription.unpack(Context.class));
+            // Merge attributes
+            mModuleContext.addInvocationAttributes(moduleContext.getAttributes());
+        } catch (InvalidProtocolBufferException e) {
+            throw new RuntimeException(e);
+        }
         mListener.testModuleEnded();
         mModuleInProgress = null;
+        mModuleContext = null;
     }
 
     /** Handles the test run level of the invocation. */

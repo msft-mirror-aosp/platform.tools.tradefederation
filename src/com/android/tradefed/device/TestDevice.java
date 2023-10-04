@@ -92,6 +92,12 @@ public class TestDevice extends NativeDevice {
     private static final int NUM_CLEAR_ATTEMPTS = 5;
     /** the command used to dismiss a error dialog. Currently sends a DPAD_CENTER key event */
     static final String DISMISS_DIALOG_CMD = "input keyevent 23";
+
+    private static final String DISMISS_DIALOG_BROADCAST =
+            "am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOG";
+    // Collapse notifications
+    private static final String COLLAPSE_STATUS_BAR = "cmd statusbar collapse";
+
     /** Commands that can be used to dismiss the keyguard. */
     public static final String DISMISS_KEYGUARD_CMD = "input keyevent 82";
 
@@ -100,6 +106,13 @@ public class TestDevice extends NativeDevice {
      * it. Api 23 and after.
      */
     static final String DISMISS_KEYGUARD_WM_CMD = "wm dismiss-keyguard";
+
+    /** Maximum time to wait for keyguard to be dismissed. */
+    private static final long DISMISS_KEYGUARD_TIMEOUT = 3 * 1000;
+
+    /** Command to construct KeyguardControllerState. */
+    static final String KEYGUARD_CONTROLLER_CMD =
+            "dumpsys activity activities | grep -A3 KeyguardController:";
 
     /** Timeout to wait for input dispatch to become ready **/
     private static final long INPUT_DISPATCH_READY_TIMEOUT = 5 * 1000;
@@ -1067,6 +1080,8 @@ public class TestDevice extends NativeDevice {
      */
     @Override
     public boolean clearErrorDialogs() throws DeviceNotAvailableException {
+        executeShellCommand(DISMISS_DIALOG_BROADCAST);
+        executeShellCommand(COLLAPSE_STATUS_BAR);
         // attempt to clear error dialogs multiple times
         for (int i = 0; i < NUM_CLEAR_ATTEMPTS; i++) {
             int numErrorDialogs = getErrorDialogCount();
@@ -1157,14 +1172,36 @@ public class TestDevice extends NativeDevice {
                     DISMISS_KEYGUARD_CMD);
             executeShellCommand(DISMISS_KEYGUARD_CMD);
         }
-        // TODO: check that keyguard was actually dismissed.
+        verifyKeyguardDismissed();
+    }
+
+    private void verifyKeyguardDismissed() throws DeviceNotAvailableException {
+        long start = System.currentTimeMillis();
+        while (true) {
+            KeyguardControllerState state = getKeyguardState();
+            if (state == null) {
+                return; // unsupported
+            }
+            if (!state.isKeyguardShowing()) {
+                return; // keyguard dismissed successfully
+            }
+            long timeSpent = System.currentTimeMillis() - start;
+            if (timeSpent > DISMISS_KEYGUARD_TIMEOUT) {
+                if (state.isKeyguardGoingAway()) {
+                    CLog.w("Keyguard still going away %dms after being dismissed", timeSpent);
+                } else {
+                    CLog.w("No response from keyguard %dms after being dismissed", timeSpent);
+                }
+                return; // proceed anyway, may be dismissed in a later step
+            }
+            getRunUtil().sleep(500);
+        }
     }
 
     /** {@inheritDoc} */
     @Override
     public KeyguardControllerState getKeyguardState() throws DeviceNotAvailableException {
-        String output =
-                executeShellCommand("dumpsys activity activities | grep -A3 KeyguardController:");
+        String output = executeShellCommand(KEYGUARD_CONTROLLER_CMD);
         CLog.d("Output from KeyguardController: %s", output);
         KeyguardControllerState state =
                 KeyguardControllerState.create(Arrays.asList(output.trim().split("\n")));
@@ -2119,7 +2156,15 @@ public class TestDevice extends NativeDevice {
             feature = "feature:" + feature;
         }
         final String versionedFeature = feature + "=";
-        String commandOutput = executeShellCommand("pm list features");
+        CommandResult commandResult = executeShellV2Command("pm list features");
+        if (!CommandStatus.SUCCESS.equals(commandResult.getStatus())) {
+            throw new DeviceRuntimeException(
+                    String.format(
+                            "Failed to list features, command returned: stdout: %s, stderr: %s",
+                            commandResult.getStdout(), commandResult.getStderr()),
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+        String commandOutput = commandResult.getStdout();
         for (String line: commandOutput.split("\\s+")) {
             // Each line in the output of the command has the format
             // "feature:{FEATURE_VALUE}[={FEATURE_VERSION}]".
@@ -2681,24 +2726,6 @@ public class TestDevice extends NativeDevice {
                                     + " another one.",
                             mStartedMicrodroids.values().iterator().next().cid));
 
-        String microdroidSerial;
-        int vmAdbPort = -1;
-        try {
-            ServerSocket microdroidServerSocket = new ServerSocket(0);
-            vmAdbPort = microdroidServerSocket.getLocalPort();
-            microdroidServerSocket.close();
-        } catch (IOException e) {
-            throw new DeviceRuntimeException(
-                    "Unable to get an unused port for Microdroid.",
-                    e,
-                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
-        }
-
-        microdroidSerial = "localhost:" + vmAdbPort;
-
-        // disconnect from microdroid
-        getRunUtil().runTimedCmd(10000, deviceManager.getAdbPath(), "disconnect", microdroidSerial);
-
         // remove any leftover files under test root
         executeShellV2Command("rm -rf " + TEST_ROOT + "*");
 
@@ -2771,6 +2798,10 @@ public class TestDevice extends NativeDevice {
             args.add("--extra-idsig");
             args.add(path);
         }
+        for (String path : builder.mAssignedDevices) {
+            args.add("--devices");
+            args.add(path);
+        }
 
         // Run the VM
         String cid;
@@ -2812,6 +2843,9 @@ public class TestDevice extends NativeDevice {
                     forwardFileToLog(logPath, "MicrodroidLog");
                 });
 
+        int vmAdbPort = forwardMicrodroidAdbPort(cid);
+        String microdroidSerial = "localhost:" + vmAdbPort;
+
         DeviceSelectionOptions microSelection = new DeviceSelectionOptions();
         microSelection.setSerial(microdroidSerial);
         microSelection.setBaseDeviceTypeRequested(BaseDeviceType.NATIVE_DEVICE);
@@ -2849,6 +2883,53 @@ public class TestDevice extends NativeDevice {
         tracker.cid = cid;
         mStartedMicrodroids.put(process, tracker);
         return microdroid;
+    }
+
+    /** Find an unused port and forward microdroid's adb connection. Returns the port number. */
+    private int forwardMicrodroidAdbPort(String cid) {
+        IDeviceManager deviceManager = GlobalConfiguration.getDeviceManagerInstance();
+        boolean forwarded = false;
+        for (int trial = 0; trial < 10; trial++) {
+            int vmAdbPort;
+            String microdroidSerial;
+            try (ServerSocket serverSocket = new ServerSocket(0)) {
+                vmAdbPort = serverSocket.getLocalPort();
+                microdroidSerial = "localhost:" + vmAdbPort;
+            } catch (IOException e) {
+                throw new DeviceRuntimeException(
+                        "Unable to get an unused port for Microdroid.",
+                        e,
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
+            String from = "tcp:" + vmAdbPort;
+            String to = "vsock:" + cid + ":5555";
+
+            CommandResult result =
+                    getRunUtil()
+                            .runTimedCmd(
+                                    10000,
+                                    deviceManager.getAdbPath(),
+                                    "-s",
+                                    getSerialNumber(),
+                                    "forward",
+                                    from,
+                                    to);
+            if (result.getStatus() == CommandStatus.SUCCESS) {
+                return vmAdbPort;
+            }
+
+            if (result.getStderr().contains("Address already in use")) {
+                // retry with other ports
+                continue;
+            } else {
+                throw new DeviceRuntimeException(
+                        "Unable to forward vsock:" + cid + ":5555: " + result.getStderr(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
+        }
+        throw new DeviceRuntimeException(
+                "Unable to get an unused port for Microdroid.",
+                DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
     }
 
     /**
@@ -3021,6 +3102,7 @@ public class TestDevice extends NativeDevice {
         private Map<String, String> mTestDeviceOptions;
         private Map<File, String> mBootFiles;
         private long mAdbConnectTimeoutMs;
+        private List<String> mAssignedDevices;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -3036,6 +3118,7 @@ public class TestDevice extends NativeDevice {
             mTestDeviceOptions = new LinkedHashMap<>();
             mBootFiles = new LinkedHashMap<>();
             mAdbConnectTimeoutMs = MICRODROID_DEFAULT_ADB_CONNECT_TIMEOUT_MINUTES * 60 * 1000;
+            mAssignedDevices = new ArrayList<>();
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -3138,6 +3221,17 @@ public class TestDevice extends NativeDevice {
          */
         public MicrodroidBuilder addBootFile(File localFile, String remoteFileName) {
             mBootFiles.put(localFile, remoteFileName);
+            return this;
+        }
+
+        /**
+         * Adds a device to assign to microdroid.
+         *
+         * @param sysfsNode The path to the sysfs node to assign
+         * @return the microdroid builder.
+         */
+        public MicrodroidBuilder addAssignableDevice(String sysfsNode) {
+            mAssignedDevices.add(sysfsNode);
             return this;
         }
 

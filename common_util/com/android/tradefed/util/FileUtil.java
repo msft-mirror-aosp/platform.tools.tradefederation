@@ -17,12 +17,11 @@ package com.android.tradefed.util;
 
 import com.android.tradefed.command.FatalHostError;
 import com.android.tradefed.config.Option;
-import com.android.tradefed.error.IHarnessException;
+import com.android.tradefed.error.HarnessIOException;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.LogDataType;
-import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
 
@@ -121,32 +120,6 @@ public class FileUtil {
             super(msg, InfraErrorIdentifier.LAB_HOST_FILESYSTEM_FULL);
         }
 
-    }
-
-    /** Harness exception that helps carrying file issues. */
-    public static class HarnessIOException extends IOException implements IHarnessException {
-
-        private ErrorIdentifier mErrorId;
-        private String mOrigin;
-
-        HarnessIOException(Throwable cause, ErrorIdentifier errorId) {
-            super(cause);
-            mErrorId = errorId;
-            mOrigin =
-                    StackWalker.getInstance(java.lang.StackWalker.Option.RETAIN_CLASS_REFERENCE)
-                            .getCallerClass()
-                            .getCanonicalName();
-        }
-
-        @Override
-        public ErrorIdentifier getErrorId() {
-            return mErrorId;
-        }
-
-        @Override
-        public String getOrigin() {
-            return mOrigin;
-        }
     }
 
     /**

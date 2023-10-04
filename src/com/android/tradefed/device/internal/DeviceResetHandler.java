@@ -49,6 +49,10 @@ public class DeviceResetHandler {
     private final TradefedFeatureClient mClient;
     private final IInvocationContext mContext;
 
+    public DeviceResetHandler() {
+        this(new TradefedFeatureClient(), CurrentInvocation.getInvocationContext());
+    }
+
     public DeviceResetHandler(IInvocationContext context) {
         this(new TradefedFeatureClient(), context);
     }
@@ -86,6 +90,7 @@ public class DeviceResetHandler {
             Object o = null;
             try {
                 o = SerializationUtil.deserialize(trace);
+                CLog.e("Reset failed: %s", o);
             } catch (IOException | RuntimeException e) {
                 CLog.e(e);
             }
@@ -100,8 +105,6 @@ public class DeviceResetHandler {
                         "Exception while resetting the device.",
                         (Exception) o, InfraErrorIdentifier.UNDETERMINED);
             }
-
-            CLog.e("Reset failed: %s", response.getErrorInfo().getErrorTrace());
             return false;
         }
         if (device instanceof NativeDevice) {

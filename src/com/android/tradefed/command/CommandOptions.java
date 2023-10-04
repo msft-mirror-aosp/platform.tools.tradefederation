@@ -146,6 +146,13 @@ public class CommandOptions implements ICommandOptions {
                             + " hosts.")
     private boolean mRemoteDynamicSharding = false;
 
+    @Option(
+            name = "use-even-module-sharding",
+            description =
+                    "Enable use of a strategy that attempts to distribute number of "
+                            + "modules evenly across shards")
+    private boolean mEvenModuleSharding = false;
+
     public static final String INVOCATION_DATA = "invocation-data";
 
     @Option(
@@ -311,6 +318,11 @@ public class CommandOptions implements ICommandOptions {
     private boolean mTracingEnabled = true;
 
     public static final String JDK_FOLDER_OPTION_NAME = "jdk-folder-for-subprocess";
+
+    @Option(
+            name = "parallel-dynamic-download",
+            description = "Enable parallel download of dynamic files when supported.")
+    private boolean mEnableParallelDynamicDownload = false;
 
     @Option(
             name = JDK_FOLDER_OPTION_NAME,
@@ -796,5 +808,23 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public boolean shouldRemoteDynamicShard() {
         return mRemoteDynamicSharding;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setShouldRemoteDynamicShard(boolean shouldRemoteDynamicShard) {
+        mRemoteDynamicSharding = shouldRemoteDynamicShard;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldUseEvenModuleSharding() {
+        return mEvenModuleSharding;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setShouldUseEvenModuleSharding(boolean useEvenModuleSharding) {
+        mEvenModuleSharding = useEvenModuleSharding;
     }
 }

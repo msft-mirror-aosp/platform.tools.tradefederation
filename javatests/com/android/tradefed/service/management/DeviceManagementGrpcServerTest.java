@@ -28,6 +28,7 @@ import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.FreeDeviceState;
 import com.android.tradefed.device.IDeviceManager;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.IManagedTestDevice;
 
 import com.proto.tradefed.device.DeviceStatus.ReservationStatus;
 import com.proto.tradefed.device.GetDevicesStatusRequest;
@@ -133,7 +134,7 @@ public class DeviceManagementGrpcServerTest {
                 .thenReturn(createDescriptor("serial1", DeviceAllocationState.Available))
                 .thenReturn(createDescriptor("serial1", DeviceAllocationState.Allocated));
         when(mMockCommandScheduler.isDeviceInInvocationThread(Mockito.any())).thenReturn(false);
-        ITestDevice mockedDevice = Mockito.mock(ITestDevice.class);
+        IManagedTestDevice mockedDevice = Mockito.mock(IManagedTestDevice.class);
         when(mMockDeviceManager.allocateDevice(Mockito.any())).thenReturn(mockedDevice);
         // Allocate a device
         mServer.reserveDevice(

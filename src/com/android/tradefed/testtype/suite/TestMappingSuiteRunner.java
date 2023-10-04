@@ -70,16 +70,25 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     private String mTestGroup = null;
 
     @Option(
-        name = "test-mapping-keyword",
-        description =
-                "Keyword to be matched to the `keywords` setting of a test configured in "
-                        + "a TEST_MAPPING file. The test will only run if it has all the keywords "
-                        + "specified in the option. If option test-mapping-test-group is not set, "
-                        + "test-mapping-keyword option is ignored as the tests to run are not "
-                        + "loaded directly from TEST_MAPPING files but is supplied via the "
-                        + "--include-filter arg."
-    )
-    private Set<String> mKeywords = new HashSet<>();
+            name = "test-mapping-keyword",
+            description =
+                    "Keyword to be matched to the `keywords` setting of a test configured in a"
+                        + " TEST_MAPPING file. The test will only run if it has all the keywords"
+                        + " specified in the option. If option test-mapping-test-group is not set,"
+                        + " test-mapping-keyword option is ignored as the tests to run are not"
+                        + " loaded directly from TEST_MAPPING files but is supplied via the"
+                        + " --include-filter arg.")
+    private Set<String> mKeywords = new LinkedHashSet<>();
+
+    @Option(
+            name = "test-mapping-ignore-keyword",
+            description =
+                    "Keyword to be ignored to the `keywords` setting of a test configured in "
+                            + "a TEST_MAPPING file. If a test entry has specified keywords in "
+                            + "their `keywords` attribute, the given keywords will be ignored. "
+                            + "This allows a test mapping suite to support test entries requiring "
+                            + "a keyword without running them on a new test suite.")
+    private Set<String> mIgnoreKeywords = new LinkedHashSet<>();
 
     @Option(
         name = "force-test-mapping-module",
@@ -150,6 +159,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "kernel branches. The option should only be used for kernel tests.")
     private boolean mForceFullRun = false;
 
+    @Option(
+            name = "report-import-paths",
+            description = "Whether or not to report import paths into AnTS.")
+    private boolean mReportImportPaths = false;
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
@@ -178,6 +192,15 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                     "Must specify --test-mapping-test-group when applying --test-mapping-keyword.",
                     InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
+        if (!mIgnoreKeywords.isEmpty() && !mKeywords.isEmpty()) {
+            for (String keyword : mKeywords) {
+                if (mIgnoreKeywords.contains(keyword)) {
+                    throw new HarnessRuntimeException(
+                            "Keyword cannot be in both required and ignored.",
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                }
+            }
+        }
         if (mTestGroup == null && !mTestModulesForced.isEmpty()) {
             throw new HarnessRuntimeException(
                     "Must specify --test-mapping-test-group when applying "
@@ -196,6 +219,12 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "not be set.",
                     InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
+        if (mReportImportPaths && !mIgnoreTestMappingImports) {
+            CLog.i(
+                    "Option \"no-ignore-test-mapping-imports\" and \"report-import-paths\" are"
+                        + " enabled, TestMapping will report tests with sources and import paths to"
+                        + " AnTS");
+        }
 
         if (mTestGroup != null) {
             if (mForceFullRun) {
@@ -210,6 +239,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             mTestGroup,
                             getPrioritizeHostConfig(),
                             mKeywords,
+                            mIgnoreKeywords,
                             mAdditionalTestMappingZips,
                             mMatchedPatternPaths);
             if (!mTestModulesForced.isEmpty()) {
@@ -363,6 +393,9 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                 }
                 List<IRemoteTest> remoteTests = entry.getValue().getTests();
                 addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
+                if (mReportImportPaths && !mIgnoreTestMappingImports) {
+                    addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getImportPaths());
+                }
                 tests.addAll(remoteTests);
             }
         }

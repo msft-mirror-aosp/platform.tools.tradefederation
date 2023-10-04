@@ -19,6 +19,7 @@ package com.android.tradefed.config;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.config.proxy.TradefedDelegator;
+import com.android.tradefed.config.remote.ExtendedFile;
 import com.android.tradefed.config.remote.IRemoteFileResolver.ResolvedFile;
 import com.android.tradefed.config.yaml.ConfigurationYamlParser;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -745,6 +746,9 @@ public class ConfigurationFactory implements IConfigurationFactory {
 
             ResolvedFile resolvedConfigFile = resolveRemoteFile(configURI, destDir.toURI());
             File configFile = resolvedConfigFile.getResolvedFile();
+            if (configFile instanceof ExtendedFile) {
+                ((ExtendedFile) configFile).waitForDownload();
+            }
 
             CLog.i("Attempting to read from file: %s", configFile.getPath());
             try (BufferedInputStream configInputStream =

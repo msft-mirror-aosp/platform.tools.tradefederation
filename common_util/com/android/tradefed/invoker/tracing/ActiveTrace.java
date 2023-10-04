@@ -16,6 +16,8 @@
 package com.android.tradefed.invoker.tracing;
 
 import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 
@@ -45,10 +47,10 @@ public class ActiveTrace {
     private final long traceUuid;
     private final int uid = 5555; // TODO: collect a real uid
     private final boolean mainTradefedProcess;
-    private final Map<Long, Long> mThreadToTracker;
+    private final Map<String, Long> mThreadToTracker;
     // File where the final trace gets outputed
     private File mTraceOutput;
-
+    
     public ActiveTrace(long pid, long tid) {
         this(pid, tid, false);
     }
@@ -132,12 +134,21 @@ public class ActiveTrace {
             String categories, String name, int threadId, String threadName, TrackEvent.Type type) {
         long traceIdentifier = traceUuid;
         if (threadId != this.tid) {
-            if (mThreadToTracker.containsKey(Long.valueOf(threadId))) {
-                traceIdentifier = mThreadToTracker.get(Long.valueOf(threadId));
-            } else {
-                traceIdentifier = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
-                createThreadTracker((int) pid, threadId, threadName, traceIdentifier);
-                mThreadToTracker.put(Long.valueOf(threadId), Long.valueOf(traceIdentifier));
+            synchronized (mThreadToTracker) {
+                if (mThreadToTracker.containsKey(Integer.toString(threadId))) {
+                    Long returnedValue = mThreadToTracker.get(Integer.toString(threadId));
+                    if (returnedValue == null) {
+                        CLog.e("Consistency error in trace identifier.");
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.TRACE_INTERNAL_ERROR, 1);
+                        return;
+                    }
+                    traceIdentifier = returnedValue;
+                } else {
+                    traceIdentifier = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
+                    createThreadTracker((int) pid, threadId, threadName, traceIdentifier);
+                    mThreadToTracker.put(Integer.toString(threadId), Long.valueOf(traceIdentifier));
+                }
             }
         }
         TracePacket.Builder tracePacket =

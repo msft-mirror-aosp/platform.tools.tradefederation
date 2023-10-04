@@ -29,6 +29,7 @@ import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.StdoutLogger;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
+import com.android.tradefed.testtype.suite.ITestSuite.MultiDeviceModuleStrategy;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 import com.android.tradefed.util.FileUtil;
@@ -180,7 +181,8 @@ public class TestDiscoveryExecutor {
     private Set<String> discoverTestModulesFromTests(List<IRemoteTest> testList)
             throws IllegalStateException, TestDiscoveryException {
         Set<String> testModules = new LinkedHashSet<String>();
-        Set<String> includeFilters = new LinkedHashSet<>();
+        Set<String> includeFilters = new LinkedHashSet<String>();
+        Set<String> excludeFilters = new LinkedHashSet<String>();
         // Collect include filters from every test.
         for (IRemoteTest test : testList) {
             if (!(test instanceof BaseTestSuite)) {
@@ -202,6 +204,7 @@ public class TestDiscoveryExecutor {
                 ((TestMappingSuiteRunner) test).loadTestInfos();
             }
             Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
+            excludeFilters.addAll(((BaseTestSuite) test).getExcludeFilter());
             MultiMap<String, String> moduleMetadataIncludeFilters =
                     ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
             // Include/Exclude filters in suites are evaluated first,
@@ -230,6 +233,29 @@ public class TestDiscoveryExecutor {
                     throw new TestDiscoveryException(
                             "Tradefed Observatory can't do test discovery because the existence of"
                                     + " metadata include filter option.",
+                            null,
+                            DiscoveryExitCode.COMPONENT_METADATA);
+                }
+            } else if (MultiDeviceModuleStrategy.ONLY_MULTI_DEVICES.equals(
+                    ((BaseTestSuite) test).getMultiDeviceStrategy())) {
+                String rootDirPath =
+                        getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                boolean throwException = true;
+                if (rootDirPath != null) {
+                    File rootDir = new File(rootDirPath);
+                    if (rootDir.exists() && rootDir.isDirectory()) {
+                        Set<String> configs = searchForMultiDevicesConfig(rootDir);
+                        if (configs != null) {
+                            testModules.addAll(configs);
+                            throwException = false;
+                            mReportPartialFallback = true;
+                        }
+                    }
+                }
+                if (throwException) {
+                    throw new TestDiscoveryException(
+                            "Tradefed Observatory can't do test discovery because the existence of"
+                                    + " multi-devices option.",
                             null,
                             DiscoveryExitCode.COMPONENT_METADATA);
                 }
@@ -264,6 +290,8 @@ public class TestDiscoveryExecutor {
             System.out.println(String.format("include filters: %s", includeFilters));
         }
         testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
+        // Any directly excluded won't be discovered since it shouldn't run
+        testModules.removeAll(excludeFilters);
         return testModules;
     }
 
@@ -302,6 +330,43 @@ public class TestDiscoveryExecutor {
             }
         }
         return dependencies;
+    }
+
+    private Set<String> searchForMultiDevicesConfig(File rootDir) {
+        try {
+            Set<File> configFiles = FileUtil.findFilesObject(rootDir, ".*\\.config$");
+            if (configFiles.isEmpty()) {
+                return null;
+            }
+            Set<File> shouldRunFiles =
+                    configFiles.stream()
+                            .filter(
+                                    f -> {
+                                        try {
+                                            IConfiguration c =
+                                                    getConfigurationFactory()
+                                                            .createPartialConfigurationFromArgs(
+                                                                    new String[] {
+                                                                        f.getAbsolutePath()
+                                                                    },
+                                                                    new DryRunKeyStore(),
+                                                                    ImmutableSet.of(
+                                                                            Configuration
+                                                                                    .CONFIGURATION_DESCRIPTION_TYPE_NAME),
+                                                                    null);
+                                            return c.getDeviceConfig().size() > 1;
+                                        } catch (ConfigurationException e) {
+                                            return false;
+                                        }
+                                    })
+                            .collect(Collectors.toSet());
+            return shouldRunFiles.stream()
+                    .map(c -> FileUtil.getBaseName(c.getName()))
+                    .collect(Collectors.toSet());
+        } catch (IOException e) {
+            System.err.println(e);
+        }
+        return null;
     }
 
     private Set<String> searchConfigsForMetadata(

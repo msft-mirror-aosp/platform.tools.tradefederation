@@ -42,7 +42,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.ServerSocket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -209,7 +208,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     private int totalShards = 1;
 
     @Override
-    public Collection<IRemoteTest> split(Integer shardCountHint, TestInformation testInfo) {
+    public Collection<IRemoteTest> split(int shardCountHint) {
         if (physical || shardCountHint <= 1) {
             // We cannot share the Bluetooth dongle across multiple tests in
             // parallel, and there's no point "sharding" with just one shard.
@@ -289,30 +288,22 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
 
         // Forward allocated host Pandora Server port to actual DUT Pandora
         // Server ports.
-        hostPandoraServerPort = getUnusedPort();
-        adbForwardPort(testDevice, hostPandoraServerPort, PANDORA_SERVER_PORT);
+        hostPandoraServerPort = adbForwardPort(testDevice, 0, PANDORA_SERVER_PORT);
 
         CLog.i("PTS HCI port: %s", getHciPort());
 
         if (!physical) {
             // Forward allocated host Rootcanal ports to DUT Rootcanal ports.
-            hostHciRootcanalPort = getUnusedPort();
-            adbForwardVsockPort(
-                    testDevice, hostHciRootcanalPort, ROOTCANAL_VSOCK_CID, HCI_ROOTCANAL_PORT_CF);
-            hostControlRootcanalPort = getUnusedPort();
-            adbForwardVsockPort(
-                    testDevice,
-                    hostControlRootcanalPort,
-                    ROOTCANAL_VSOCK_CID,
-                    CONTROL_ROOTCANAL_PORT_CF);
+            hostHciRootcanalPort =
+                    adbForwardVsockPort(testDevice, 0, ROOTCANAL_VSOCK_CID, HCI_ROOTCANAL_PORT_CF);
+            hostControlRootcanalPort =
+                    adbForwardVsockPort(
+                            testDevice, 0, ROOTCANAL_VSOCK_CID, CONTROL_ROOTCANAL_PORT_CF);
 
             // forward host port to DUT modem_simulator vsock
-            hostModemSimulatorPort = getUnusedPort();
-            adbForwardVsockPort(
-                    testDevice,
-                    hostModemSimulatorPort,
-                    MODEM_SIMULATOR_VSOCK_CID,
-                    MODEM_SIMULATOR_VSOCK_PORT);
+            hostModemSimulatorPort =
+                    adbForwardVsockPort(
+                            testDevice, 0, MODEM_SIMULATOR_VSOCK_CID, MODEM_SIMULATOR_VSOCK_PORT);
         }
 
         // List all applicable tests in a sorted fashion.
@@ -373,18 +364,6 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
      */
     private int getHciPort() {
         return physical ? HCI_PROXY_PORT : hostHciRootcanalPort;
-    }
-
-    private int getUnusedPort() {
-        try {
-            ServerSocket serverSocket = new ServerSocket(0);
-            int unusedPort = serverSocket.getLocalPort();
-            serverSocket.close();
-            return unusedPort;
-        } catch (IOException e) {
-            CLog.e("Unable to get an unused port");
-            return -1;
-        }
     }
 
     private SortedSet<String> getAllFilteredTests(TestInformation testInfo) {
@@ -710,18 +689,26 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         return builder;
     }
 
-    private void adbForwardPort(ITestDevice testDevice, int hostPort, int dutPort)
+    private int adbForwardPort(ITestDevice testDevice, int hostPort, int dutPort)
             throws DeviceNotAvailableException {
-        testDevice.executeAdbCommand(
-                "forward", String.format("tcp:%s", hostPort), String.format("tcp:%s", dutPort));
+        return Integer.parseInt(
+                testDevice
+                        .executeAdbCommand(
+                                "forward",
+                                String.format("tcp:%s", hostPort),
+                                String.format("tcp:%s", dutPort))
+                        .trim());
     }
 
-    private void adbForwardVsockPort(ITestDevice testDevice, int hostPort, int dutCid, int dutPort)
+    private int adbForwardVsockPort(ITestDevice testDevice, int hostPort, int dutCid, int dutPort)
             throws DeviceNotAvailableException {
-        testDevice.executeAdbCommand(
-                "forward",
-                String.format("tcp:%s", hostPort),
-                String.format("vsock:%s:%s", dutCid, dutPort));
+        return Integer.parseInt(
+                testDevice
+                        .executeAdbCommand(
+                                "forward",
+                                String.format("tcp:%s", hostPort),
+                                String.format("vsock:%s:%s", dutCid, dutPort))
+                        .trim());
     }
 
     private void adbForwardRemovePort(ITestDevice testDevice, int hostPort)

@@ -607,14 +607,17 @@ public class TestDeviceTest {
         // construct a string with 2 error dialogs of each type to ensure proper detection
         final String fourErrors = anrOutput + anrOutput + crashOutput + crashOutput;
         mMockShellResponse = mock(IShellResponse.class);
-        when(mMockShellResponse.getResponse()).thenReturn(fourErrors, "");
+        when(mMockShellResponse.getResponse())
+                .thenReturn("")
+                .thenReturn("")
+                .thenReturn(fourErrors, "");
         injectShellResponse(null, mMockShellResponse);
 
         mTestDevice.clearErrorDialogs();
-
+        // expect 2 dismisses
         // expect 4 key events to be sent - one for each dialog
         // and expect another dialog query - but return nothing
-        verify(mMockIDevice, times(1 + 4 + 1))
+        verify(mMockIDevice, times(2 + 1 + 4 + 1))
                 .executeShellCommand(
                         (String) Mockito.any(),
                         (IShellOutputReceiver) Mockito.any(),
@@ -868,6 +871,12 @@ public class TestDeviceTest {
                         (IShellOutputReceiver) Mockito.any(),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
+        verify(mMockIDevice, times(times))
+                .executeShellCommand(
+                        Mockito.eq(TestDevice.KEYGUARD_CONTROLLER_CMD),
+                        Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.eq(TimeUnit.MILLISECONDS));
     }
 
     private void assertRecoverySuccess()
@@ -4861,11 +4870,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertTrue(mTestDevice.hasFeature("feature:com.google.android.feature.EXCHANGE_6_2"));
@@ -4876,11 +4888,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertTrue(mTestDevice.hasFeature("com.google.android.feature.EXCHANGE_6_2"));
@@ -4892,11 +4907,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:test"));
@@ -4908,11 +4926,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:com.google.android.feature"));
@@ -4930,12 +4951,15 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD_VERSIONED=2\n"
-                                + "feature:org.com.google.android.feature.GOOGLE_BUILD_ORG=1\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD_EXT";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                    + "feature:com.google.android.feature.GOOGLE_BUILD_VERSIONED=2\n"
+                                    + "feature:org.com.google.android.feature.GOOGLE_BUILD_ORG=1\n"
+                                    + "feature:com.google.android.feature.GOOGLE_BUILD_EXT");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:com.google.android.feature"));
@@ -5463,13 +5487,14 @@ public class TestDeviceTest {
                             throws DeviceNotAvailableException {
                         return "KeyguardController:\n"
                                 + "  mKeyguardShowing=true\n"
-                                + "  mKeyguardGoingAway=false\n"
+                                + "  mKeyguardGoingAway=true\n"
                                 + "  mOccluded=false\n";
                     }
                 };
         KeyguardControllerState state = mTestDevice.getKeyguardState();
         Assert.assertTrue(state.isKeyguardShowing());
         Assert.assertFalse(state.isKeyguardOccluded());
+        Assert.assertTrue(state.isKeyguardGoingAway());
     }
 
     /** New output of dumpsys is not as clean and has stuff in front. */
@@ -5489,6 +5514,7 @@ public class TestDeviceTest {
         KeyguardControllerState state = mTestDevice.getKeyguardState();
         Assert.assertTrue(state.isKeyguardShowing());
         Assert.assertFalse(state.isKeyguardOccluded());
+        Assert.assertFalse(state.isKeyguardGoingAway());
     }
 
     /** Test for {@link TestDevice#getKeyguardState()} when the device does not support it. */

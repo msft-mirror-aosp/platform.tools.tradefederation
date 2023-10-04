@@ -34,6 +34,7 @@ import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
 import com.android.tradefed.device.cloud.OxygenUtil;
+import com.android.tradefed.device.cloud.RemoteFileUtil;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -52,10 +53,14 @@ import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 import com.google.common.net.HostAndPort;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /** Adb connection over an ssh bridge. */
@@ -74,6 +79,7 @@ public class AdbSshConnection extends AdbTcpConnection {
     private static final int WAIT_TIME_DIVISION = 4;
     private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
     private static final long WAIT_FOR_TUNNEL_ONLINE = 2 * 60 * 1000;
+    private static final long FETCH_TOMBSTONES_TIMEOUT_MS = 5 * 60 * 1000;
 
     public AdbSshConnection(ConnectionBuilder builder) {
         super(builder);
@@ -218,6 +224,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                 getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
                 waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
                 waitForAdbConnect(serial, WAIT_FOR_ADB_CONNECT);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_RECOVERED_FROM_SSH_TUNNEL, 1);
             } catch (Exception e) {
                 // Log the entrance in recovery here to avoid double counting with
                 // super.recoverDevice.
@@ -233,7 +241,10 @@ public class AdbSshConnection extends AdbTcpConnection {
 
     @Override
     public void notifyAdbRebootCalled() {
-        getGceSshMonitor().isAdbRebootCalled(true);
+        final GceSshTunnelMonitor tunnelMonitor = getGceSshMonitor();
+        if (tunnelMonitor != null) {
+            tunnelMonitor.isAdbRebootCalled(true);
+        }
     }
 
     @Override
@@ -264,7 +275,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                 // Host and port can be null in case of acloud timeout
                 if (mGceAvd.hostAndPort() != null) {
                     // attempt to get a bugreport if Gce Avd is a failure
-                    if (!GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
+                    if (!GceStatus.SUCCESS.equals(mGceAvd.getStatus())
+                            && !mGceAvd.getSkipBugreportCollection()) {
                         // Get a bugreport via ssh
                         getSshBugreport();
                     }
@@ -331,7 +343,6 @@ public class AdbSshConnection extends AdbTcpConnection {
                 }
                 CLog.d("Release as idevice: %s", ((IManagedTestDevice) getDevice()).getIDevice());
             }
-            ((IManagedTestDevice) getDevice()).setFastbootEnabled(false);
 
             if (getGceHandler() != null) {
                 getGceHandler().cleanUp();
@@ -388,7 +399,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             if (GceAvdInfo.GceStatus.BOOT_FAIL.equals(mGceAvd.getStatus())) {
                 String errorMsg =
                         String.format(
-                                "Device failed to boot. Error from Acloud: %s",
+                                "Device failed to boot. Error from device leasing attempt: %s",
                                 mGceAvd.getErrors());
                 throw new TargetSetupError(
                         errorMsg, getDevice().getDeviceDescriptor(), errorIdentifier);
@@ -569,9 +580,386 @@ public class AdbSshConnection extends AdbTcpConnection {
             return powerwashRes;
         }
 
-        ((NativeDevice) getDevice()).getMonitor().waitForDeviceAvailable();
-        ((NativeDevice) getDevice()).resetContentProviderSetup();
+        ((IManagedTestDevice) getDevice()).getMonitor().waitForDeviceAvailable();
+        if (getDevice() instanceof NativeDevice) {
+            ((NativeDevice) getDevice()).resetContentProviderSetup();
+        }
         return powerwashRes;
+    }
+
+    /**
+     * Create command string
+     *
+     * @param command to be run
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @return returns String of the command to be run
+     */
+    String commandBuilder(String command, String user, Integer offset) {
+        String builtCommand = String.format("/home/%s/bin/%s", user, command);
+        if (offset != null) {
+            builtCommand =
+                    String.format(
+                            "HOME=/home/%s/acloud_cf_%d acloud_cf_%d/bin/%s -instance_num %d",
+                            user, offset + 1, offset + 1, command, offset + 1);
+        }
+
+        if (getDevice().getOptions().useOxygen()) {
+            CommandResult result =
+                    GceManager.remoteSshCommandExecution(
+                            mGceAvd,
+                            getDevice().getOptions(),
+                            getRunUtil(),
+                            10000L,
+                            String.format("toybox find /tmp -name %s", command).split(" "));
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                CLog.e("Failed to locate %s: %s", command, result.getStderr());
+                return "";
+            }
+            String commandPath = result.getStdout();
+            // Remove tailing `/bin/COMMAND`
+            String tmpDir = commandPath.substring(0, commandPath.length() - (command.length() + 5));
+            builtCommand = String.format("HOME=%s %s", tmpDir, commandPath);
+        }
+        return builtCommand;
+    }
+
+    /**
+     * Attempt to snapshot a Cuttlefish instance
+     *
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @return returns CommandResult of the snapshot attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult snapshotGce(String user, Integer offset, String snapshotId)
+            throws TargetSetupError {
+        long startTime = System.currentTimeMillis();
+
+        if (mGceAvd == null) {
+            String errorMsg = "Can not get GCE AVD Info. launch GCE first?";
+            throw new TargetSetupError(
+                    errorMsg,
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+        }
+        // Get the user from options instance-user if user is null.
+        if (user == null) {
+            user = getDevice().getOptions().getInstanceUser();
+        }
+
+        String snapshotCommand =
+                commandBuilder(
+                        String.format(
+                                "cvd snapshot_take --snapshot_path=/tmp/%s/snapshots/%s",
+                                user, snapshotId),
+                        user,
+                        offset);
+        if (Strings.isNullOrEmpty(snapshotCommand)) {
+            throw new TargetSetupError(
+                    "failed to set up snapshot command, invalid path",
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_SNAPSHOT);
+        }
+
+        CommandResult snapshotRes =
+                GceManager.remoteSshCommandExecution(
+                        mGceAvd,
+                        getDevice().getOptions(),
+                        getRunUtil(),
+                        // TODO(khei): explore shorter timeouts.
+                        Math.max(30000L, getDevice().getOptions().getGceCmdTimeout()),
+                        snapshotCommand);
+
+        if (CommandStatus.SUCCESS.equals(snapshotRes.getStatus())) {
+            // Time taken for snapshot this invocation
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SNAPSHOT_DURATIONS,
+                    Long.toString(System.currentTimeMillis() - startTime));
+
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SNAPSHOT_SUCCESS_COUNT, 1);
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SNAPSHOT_FAILURE_COUNT, 1);
+            CLog.e("%s", snapshotRes.getStderr());
+            throw new TargetSetupError(
+                    "failed to snapshot device",
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_SNAPSHOT);
+        }
+
+        return snapshotRes;
+    }
+
+    /**
+     * Attempt to suspend a Cuttlefish instance
+     *
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @return returns CommandResult of the suspend attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult suspendGce(String user, Integer offset) throws TargetSetupError {
+        long startTime = System.currentTimeMillis();
+
+        // Get the user from options instance-user if user is null.
+        if (user == null) {
+            user = getDevice().getOptions().getInstanceUser();
+        }
+
+        String suspendCommand = commandBuilder("cvd suspend", user, offset);
+        if (suspendCommand.length() == 0) {
+            throw new TargetSetupError(
+                    "failed to set up suspend command, invalid path",
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_SUSPEND);
+        }
+
+        CommandResult suspendRes =
+                GceManager.remoteSshCommandExecution(
+                        mGceAvd,
+                        getDevice().getOptions(),
+                        getRunUtil(),
+                        // TODO(khei): explore shorter timeouts.
+                        Math.max(30000L, getDevice().getOptions().getGceCmdTimeout()),
+                        suspendCommand);
+
+        if (CommandStatus.SUCCESS.equals(suspendRes.getStatus())) {
+            // Time taken for suspend this invocation
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SUSPEND_DURATIONS,
+                    Long.toString(System.currentTimeMillis() - startTime));
+
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SUSPEND_SUCCESS_COUNT, 1);
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SUSPEND_FAILURE_COUNT, 1);
+            CLog.e("%s", suspendRes.getStderr());
+            throw new TargetSetupError(
+                    "failed to suspend device",
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_SUSPEND);
+        }
+
+        return suspendRes;
+    }
+
+    /**
+     * Attempt to resume a Cuttlefish instance
+     *
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @return returns CommandResult of the resume attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult resumeGce(String user, Integer offset) throws TargetSetupError {
+        long startTime = System.currentTimeMillis();
+
+        // Get the user from options instance-user if user is null.
+        if (user == null) {
+            user = getDevice().getOptions().getInstanceUser();
+        }
+
+        String resumeCommand = commandBuilder("cvd resume", user, offset);
+        if (resumeCommand.length() == 0) {
+            throw new TargetSetupError(
+                    "failed to set up resume command, invalid path",
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESUME);
+        }
+
+        CommandResult resumeRes =
+                GceManager.remoteSshCommandExecution(
+                        mGceAvd,
+                        getDevice().getOptions(),
+                        getRunUtil(),
+                        Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
+                        resumeCommand);
+
+        if (CommandStatus.SUCCESS.equals(resumeRes.getStatus())) {
+            // Time taken for resume this invocation
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_RESUME_DURATIONS,
+                    Long.toString(System.currentTimeMillis() - startTime));
+
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_RESUME_SUCCESS_COUNT, 1);
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_RESUME_FAILURE_COUNT, 1);
+            CLog.e("%s", resumeRes.getStderr());
+            throw new TargetSetupError(
+                    "failed to resume device",
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESUME);
+        }
+
+        return resumeRes;
+    }
+
+    /**
+     * Attempt to restore snapshot of a Cuttlefish instance
+     *
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @param snapshotId the snapshot ID
+     * @return returns CommandResult of the restore snapshot attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult restoreSnapshotGce(String user, Integer offset, String snapshotId)
+            throws TargetSetupError {
+        long startTime = System.currentTimeMillis();
+
+        // Get the user from options instance-user if user is null.
+        if (user == null) {
+            user = getDevice().getOptions().getInstanceUser();
+        }
+
+        String restoreCommand =
+                commandBuilder(
+                        String.format(
+                                "cvd start --snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
+                        user,
+                        offset);
+        if (restoreCommand.length() == 0) {
+            throw new TargetSetupError(
+                    "failed to set up restore command, invalid path",
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
+        }
+
+        CommandResult restoreRes =
+                GceManager.remoteSshCommandExecution(
+                        mGceAvd,
+                        getDevice().getOptions(),
+                        getRunUtil(),
+                        Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
+                        restoreCommand);
+
+        if (CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
+            // Time taken for restore this invocation
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_RESUME_DURATIONS,
+                    Long.toString(System.currentTimeMillis() - startTime));
+
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_SUCCESS_COUNT, 1);
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT, 1);
+            CLog.e("%s", restoreRes.getStderr());
+            throw new TargetSetupError(
+                    "failed to restore device",
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
+        }
+
+        return restoreRes;
+    }
+
+    /**
+     * Attempt to stop a Cuttlefish instance
+     *
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @param offset the device num offset of the AVD in the host, <code>null</code> if not
+     *     applicable
+     * @return returns CommandResult of the stop attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult stopGce(String user, Integer offset) throws TargetSetupError {
+        long startTime = System.currentTimeMillis();
+
+        // Get the user from options instance-user if user is null.
+        if (user == null) {
+            user = getDevice().getOptions().getInstanceUser();
+        }
+
+        String stopCommand = commandBuilder("cvd stop", user, offset);
+        if (stopCommand.length() == 0) {
+            throw new TargetSetupError(
+                    "failed to set up stop command, invalid path",
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_STOP);
+        }
+
+        CommandResult stopRes =
+                GceManager.remoteSshCommandExecution(
+                        mGceAvd,
+                        getDevice().getOptions(),
+                        getRunUtil(),
+                        Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
+                        stopCommand);
+
+        if (CommandStatus.SUCCESS.equals(stopRes.getStatus())) {
+            // Time taken for stop this invocation
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_STOP_DURATIONS,
+                    Long.toString(System.currentTimeMillis() - startTime));
+
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_STOP_SUCCESS_COUNT, 1);
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_STOP_FAILURE_COUNT, 1);
+            CLog.e("%s", stopRes.getStderr());
+            throw new TargetSetupError(
+                    "failed to stop device",
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_STOP);
+        }
+
+        return stopRes;
+    }
+
+    /**
+     * Cuttlefish has a special feature that brings the tombstones to the remote host where we can
+     * get them directly.
+     */
+    public List<File> getTombstones() {
+        InstanceType type = getDevice().getOptions().getInstanceType();
+        if (InstanceType.CUTTLEFISH.equals(type) || InstanceType.REMOTE_NESTED_AVD.equals(type)) {
+            List<File> tombs = new ArrayList<>();
+            String remoteRuntimePath =
+                    String.format(
+                                    CommonLogRemoteFileUtil.NESTED_REMOTE_LOG_DIR,
+                                    getDevice().getOptions().getInstanceUser())
+                            + "tombstones/*";
+            File localDir = null;
+            try {
+                localDir = FileUtil.createTempDir("tombstones");
+            } catch (IOException e) {
+                CLog.e(e);
+                return tombs;
+            }
+            if (!fetchRemoteDir(localDir, remoteRuntimePath)) {
+                CLog.e("Failed to pull %s", remoteRuntimePath);
+                FileUtil.recursiveDelete(localDir);
+            } else {
+                tombs.addAll(Arrays.asList(localDir.listFiles()));
+                localDir.deleteOnExit();
+            }
+            return tombs;
+        }
+        // If it's not Cuttlefish, returns nothing
+        return new ArrayList<>();
+    }
+
+    @VisibleForTesting
+    boolean fetchRemoteDir(File localDir, String remotePath) {
+        return RemoteFileUtil.fetchRemoteDir(
+                mGceAvd,
+                getDevice().getOptions(),
+                getRunUtil(),
+                FETCH_TOMBSTONES_TIMEOUT_MS,
+                remotePath,
+                localDir);
     }
 
     /**

@@ -472,6 +472,11 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         }
     }
 
+    @VisibleForTesting
+    File createTempFile(String remoteFilePath, File rootDir) throws BuildRetrievalError {
+        return createTempFileForRemote(remoteFilePath, rootDir);
+    }
+
     /**
      * Creates a unique file on temporary disk to house downloaded file with given path.
      *
@@ -479,8 +484,8 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
      *
      * @param remoteFilePath the remote path to construct the name from
      */
-    @VisibleForTesting
-    File createTempFile(String remoteFilePath, File rootDir) throws BuildRetrievalError {
+    public static File createTempFileForRemote(String remoteFilePath, File rootDir)
+            throws BuildRetrievalError {
         try {
             // create a unique file.
             File tmpFile = FileUtil.createTempFileForRemote(remoteFilePath, rootDir);

@@ -34,6 +34,7 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.filter.OptionFetcher;
 import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.config.proxy.TradefedDelegator;
+import com.android.tradefed.config.remote.ExtendedFile;
 import com.android.tradefed.dependencies.ExternalDependency;
 import com.android.tradefed.dependencies.IExternalDependency;
 import com.android.tradefed.device.DeviceManager;
@@ -51,6 +52,7 @@ import com.android.tradefed.device.cloud.ManagedRemoteDevice;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.device.internal.DeviceReleaseReporter;
+import com.android.tradefed.error.HarnessException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
@@ -124,6 +126,8 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import javax.annotation.Nullable;
 
 /**
  * Default implementation of {@link ITestInvocation}.
@@ -210,6 +214,7 @@ public class TestInvocation implements ITestInvocation {
     private EventsLoggerListener mEventsLogger = null;
     private ClearcutClient mClient = null;
 
+    private List<ExtendedFile> mParallelDynamicDownloads = new ArrayList<>();
     /**
      * Display a log message informing the user of a invocation being started.
      *
@@ -389,8 +394,11 @@ public class TestInvocation implements ITestInvocation {
                         bugreportName = null;
                     }
                 }
+
+                // reset bugreportName to null if shouldSkipBugreportError(exception) == true
+                bugreportName = shouldSkipBugreportError(exception) ? null : bugreportName;
                 if (bugreportName != null) {
-                    try (CloseableTraceScope ignore =
+                    try (CloseableTraceScope _ignore =
                             new CloseableTraceScope(InvocationMetricKey.bugreport.name())) {
                         if (context.getDevices().size() == 1 || badDevice != null) {
                             ITestDevice collectBugreport = badDevice;
@@ -903,6 +911,12 @@ public class TestInvocation implements ITestInvocation {
         try {
             res = invocationPath.fetchBuild(testInfo, config, rescheduler, listener);
             if (res) {
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope("wait_for_dynamic_download")) {
+                    for (ExtendedFile file : mParallelDynamicDownloads) {
+                        file.waitForDownload();
+                    }
+                }
                 // Successful fetch of build.
                 CurrentInvocation.setActionInProgress(ActionInProgress.UNSET);
                 return true;
@@ -915,6 +929,9 @@ public class TestInvocation implements ITestInvocation {
                             "No build found to test.", InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
         } catch (BuildRetrievalError | RuntimeException | DeviceNotAvailableException e) {
             buildException = e;
+        }
+        for (ExtendedFile file : mParallelDynamicDownloads) {
+            file.cancelDownload();
         }
         setExitCode(ExitCode.NO_BUILD, buildException);
         // If somehow we don't have builds
@@ -958,19 +975,25 @@ public class TestInvocation implements ITestInvocation {
             IInvocationExecution invocationPath,
             RunMode mode)
             throws BuildRetrievalError, ConfigurationException {
+        DynamicRemoteFileResolver resolver =
+                new DynamicRemoteFileResolver(true /* allow parallelization */);
         try {
             // Don't resolve for remote invocation, wait until we are inside the remote.
             if (RunMode.REMOTE_INVOCATION.equals(mode)) {
                 return true;
             }
             CurrentInvocation.setActionInProgress(ActionInProgress.FETCHING_ARTIFACTS);
-            DynamicRemoteFileResolver resolver = new DynamicRemoteFileResolver();
             resolver.setDevice(context.getDevices().get(0));
             resolver.addExtraArgs(config.getCommandOptions().getDynamicDownloadArgs());
             config.resolveDynamicOptions(resolver);
+            mParallelDynamicDownloads.addAll(resolver.getParallelDownloads());
             CurrentInvocation.setActionInProgress(ActionInProgress.UNSET);
             return true;
         } catch (RuntimeException | BuildRetrievalError | ConfigurationException e) {
+            // Cancel running downloads
+            for (ExtendedFile file : resolver.getParallelDownloads()) {
+                file.cancelDownload();
+            }
             // We don't have a reporting buildInfo at this point
             IBuildInfo info = backFillBuildInfoForReporting(config.getCommandLine());
 
@@ -1162,6 +1185,7 @@ public class TestInvocation implements ITestInvocation {
         }
         IInvocationExecution invocationPath = createInvocationExec(mode);
         updateInvocationContext(context, config);
+        CurrentInvocation.setInvocationContext(context);
 
         boolean sharding = false;
         try {
@@ -1179,10 +1203,14 @@ public class TestInvocation implements ITestInvocation {
                 resolverSuccess =
                         invokeRemoteDynamic(context, config, listener, invocationPath, mode);
             } finally {
-                InvocationMetricLogger.addInvocationPairMetrics(
-                        InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
-                        startDynamic,
-                        System.currentTimeMillis());
+                // Do not report the pair for subprocess as it would be part
+                // of a test specific setup instead.
+                if (!isSubprocess(config)) {
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
+                            startDynamic,
+                            System.currentTimeMillis());
+                }
             }
             if (!resolverSuccess) {
                 return;
@@ -1918,5 +1946,49 @@ public class TestInvocation implements ITestInvocation {
         return config.getCommandOptions()
                 .getInvocationData()
                 .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME);
+    }
+
+    /** Helper method that identifies errors when the bugreport should be skipped */
+    public static boolean shouldSkipBugreportError(@Nullable Throwable t) {
+        if (t == null) {
+            return false;
+        }
+
+        if (!(t instanceof HarnessException)) {
+            return false;
+        }
+
+        HarnessException e = (HarnessException) t;
+
+        if (e.getErrorId() == null) {
+            // Can't tell, better take a bugreport just in case.
+            return false;
+        }
+
+        long errorId = e.getErrorId().code();
+
+        // Configuration Errors
+        if (errorId >= 505_250 && errorId < 505_300) {
+            return true;
+        }
+
+        // Artifact Errors
+        if (errorId >= 500_501 && errorId < 501_000) {
+            return true;
+        }
+
+        // Certain General Errors
+        if (errorId == 500_501
+                || errorId == 500_003
+                || errorId == 500_008
+                || errorId == 500_009
+                || errorId == 500_010
+                || errorId == 500_013
+                || errorId == 500_014
+                || errorId == 500_017) {
+            return true;
+        }
+
+        return false;
     }
 }

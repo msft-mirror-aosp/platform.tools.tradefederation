@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.util;
 
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.zip.CentralDirectoryInfo;
 import com.android.tradefed.util.zip.EndCentralDirectoryInfo;
@@ -405,7 +406,11 @@ public class ZipUtil {
             EndCentralDirectoryInfo endCentralDirInfo,
             boolean useZip64)
             throws IOException {
-        return getZipCentralDirectoryInfos(partialZipFile, endCentralDirInfo, 0, useZip64);
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(
+                        "getZipCentralDirectoryInfos:" + partialZipFile.getName())) {
+            return getZipCentralDirectoryInfos(partialZipFile, endCentralDirInfo, 0, useZip64);
+        }
     }
 
     /**
@@ -637,8 +642,12 @@ public class ZipUtil {
         }
 
         // Validate CRC
-        if (FileUtil.calculateCrc32(targetFile) != zipEntry.getCrc()) {
-            throw new IOException(String.format("Failed to match CRC for file %s", targetFile));
+        long targetFileCrc = FileUtil.calculateCrc32(targetFile);
+        if (targetFileCrc != zipEntry.getCrc()) {
+            throw new IOException(
+                    String.format(
+                            "Failed to match CRC for file %s [expected=%s, actual=%s]",
+                            targetFile, zipEntry.getCrc(), targetFileCrc));
         }
     }
 }

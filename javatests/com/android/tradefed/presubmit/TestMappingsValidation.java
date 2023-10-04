@@ -35,6 +35,7 @@ import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ModuleTestTypeUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.testmapping.TestInfo;
 import com.android.tradefed.util.testmapping.TestMapping;
@@ -153,6 +154,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "binderRpcTestSingleThreadedNoKernel",
                     "CtsSuspendAppsPermissionTestCases",
                     "CtsAppSecurityHostTestCases",
+                    "CtsPackageManagerTestCases", // Renamed from CtsAppSecurityHostTestCases
                     "FrameworksServicesTests",
                     "NeuralNetworksTest_static",
                     "CtsNNAPITestCases",
@@ -403,6 +405,65 @@ public class TestMappingsValidation implements IBuildReceiver {
                     String.format(
                             "Fail include/exclude filter setting check:\n%s",
                             Joiner.on("\n").join(errors)));
+        }
+    }
+
+    /** Test to ensure performance test modules are not included for test mapping. */
+    @Test
+    public void testNoPerformanceTests() throws IOException {
+        Set<String> modules = new HashSet<>();
+
+        for (String testGroup : allTests.keySet()) {
+            if (!mTestGroupToValidate.contains(testGroup)) {
+                CLog.d("Skip checking tests with group: %s", testGroup);
+                continue;
+            }
+            for (TestInfo testInfo : allTests.get(testGroup)) {
+                modules.add(testInfo.getName());
+            }
+        }
+
+        File testConfigDir = null;
+        File deviceTestConfigDir = null;
+        try {
+            File configZip = deviceBuildInfo.getFile("general-tests_configs.zip");
+            File deviceConfigZip = deviceBuildInfo.getFile("device-tests_configs.zip");
+            Assume.assumeTrue(configZip != null);
+            List<String> testConfigs = new ArrayList<>();
+            List<File> dirToLoad = new ArrayList<>();
+            testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+            dirToLoad.add(testConfigDir);
+            if (deviceConfigZip != null) {
+                deviceTestConfigDir =
+                        ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                dirToLoad.add(deviceTestConfigDir);
+            }
+            testConfigs.addAll(ConfigurationUtil.getConfigNamesFromDirs(null, dirToLoad));
+            CLog.d("Checking modules: %s. And configs: %s", modules, testConfigs);
+
+            List<String> performanceModules = new ArrayList<>();
+            for (String configName : testConfigs) {
+                String module = FileUtil.getBaseName(new File(configName).getName());
+                if (!modules.contains(module)) {
+                    continue;
+                }
+                IConfiguration config =
+                        mConfigFactory.createConfigurationFromArgs(new String[] {configName});
+                if (ModuleTestTypeUtil.isPerformanceModule(config)) {
+                    performanceModules.add(module);
+                }
+            }
+            if (!performanceModules.isEmpty()) {
+                fail(
+                        String.format(
+                                "Performance modules not allowed in test mapping:\n%s",
+                                Joiner.on("\n").join(performanceModules)));
+            }
+        } catch (ConfigurationException e) {
+            fail(e.toString());
+        } finally {
+            FileUtil.recursiveDelete(testConfigDir);
+            FileUtil.recursiveDelete(deviceTestConfigDir);
         }
     }
 

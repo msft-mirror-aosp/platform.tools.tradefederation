@@ -68,7 +68,7 @@ public class GceAvdInfo {
                 InfraErrorIdentifier.OXYGEN_NOT_ENOUGH_RESOURCE,
                 "Oxygen currently doesn't have enough resources to fulfil this request");
         OXYGEN_ERROR_PATTERN_MAP.put(
-                InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "502:Bad Gateway");
+                InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "Bad Gateway");
         OXYGEN_ERROR_PATTERN_MAP.put(
                 InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR, "OxygenClient");
         OXYGEN_ERROR_PATTERN_MAP.put(
@@ -155,6 +155,8 @@ public class GceAvdInfo {
     private boolean mIsIpPreconfigured = false;
     private Integer mDeviceOffset = null;
     private String mInstanceUser = null;
+    // Skip collecting bugreport if set to true.
+    private boolean mSkipBugreportCollection = false;
 
     public static enum GceStatus {
         SUCCESS,
@@ -283,6 +285,14 @@ public class GceAvdInfo {
      */
     public HashMap<String, String> getBuildVars() {
         return new HashMap<String, String>(mBuildVars);
+    }
+
+    public boolean getSkipBugreportCollection() {
+        return mSkipBugreportCollection;
+    }
+
+    public void setSkipBugreportCollection(boolean skipBugreportCollection) {
+        mSkipBugreportCollection = skipBugreportCollection;
     }
 
     /**

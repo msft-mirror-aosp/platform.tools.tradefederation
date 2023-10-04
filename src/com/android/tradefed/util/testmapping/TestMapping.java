@@ -181,6 +181,12 @@ public class TestMapping {
                             }
                         }
                     }
+                    for (Path filePath : filePaths) {
+                        Path importPath = testMappingsDir.relativize(filePath).getParent();
+                        if (!test.getSources().contains(importPath.toString())) {
+                            test.addImportPaths(Collections.singleton(importPath.toString()));
+                        }
+                    }
                     testsForGroup.add(test);
                 }
             }
@@ -382,6 +388,7 @@ public class TestMapping {
      *     returned. false to return tests that require device to run.
      * @param keywords A set of {@link String} to be matched when filtering tests to run in a Test
      *     Mapping suite.
+     * @param ignoreKeywords A set of {@link String} of keywords to be ignored.
      * @return A {@code Set<TestInfo>} of the test infos.
      */
     @VisibleForTesting
@@ -390,7 +397,8 @@ public class TestMapping {
             String testGroup,
             Set<String> disabledTests,
             boolean hostOnly,
-            Set<String> keywords) {
+            Set<String> keywords,
+            Set<String> ignoreKeywords) {
         Set<TestInfo> tests = new LinkedHashSet<TestInfo>();
         for (TestInfo test : testCollection.getOrDefault(testGroup, new HashSet<>())) {
             if (disabledTests != null && disabledTests.contains(test.getName())) {
@@ -399,15 +407,16 @@ public class TestMapping {
             if (test.getHostOnly() != hostOnly) {
                 continue;
             }
+            Set<String> testKeywords = test.getKeywords(ignoreKeywords);
             // Skip the test if no keyword is specified but the test requires certain keywords.
-            if ((keywords == null || keywords.isEmpty()) && !test.getKeywords().isEmpty()) {
+            if ((keywords == null || keywords.isEmpty()) && !testKeywords.isEmpty()) {
                 continue;
             }
             // Skip the test if any of the required keywords is not specified by the test.
             if (keywords != null) {
                 boolean allKeywordsFound = true;
                 for (String keyword : keywords) {
-                    if (!test.getKeywords().contains(keyword)) {
+                    if (!testKeywords.contains(keyword)) {
                         allKeywordsFound = false;
                         break;
                     }
@@ -432,12 +441,23 @@ public class TestMapping {
      *     returned. false to return tests that require device to run.
      * @param keywords A set of {@link String} to be matched when filtering tests to run in a Test
      *     Mapping suite.
+     * @param ignoreKeywords A set of {@link String} of keywords to be ignored.
      * @return A {@code Set<TestInfo>} of tests set in the build artifact, test_mappings.zip.
      */
     public Set<TestInfo> getTests(
-            IBuildInfo buildInfo, String testGroup, boolean hostOnly, Set<String> keywords) {
+            IBuildInfo buildInfo,
+            String testGroup,
+            boolean hostOnly,
+            Set<String> keywords,
+            Set<String> ignoreKeywords) {
         return getTests(
-                buildInfo, testGroup, hostOnly, keywords, new ArrayList<>(), new HashSet<>());
+                buildInfo,
+                testGroup,
+                hostOnly,
+                keywords,
+                ignoreKeywords,
+                new ArrayList<>(),
+                new HashSet<>());
     }
 
     /**
@@ -451,6 +471,7 @@ public class TestMapping {
      *     returned. false to return tests that require device to run.
      * @param keywords A set of {@link String} to be matched when filtering tests to run in a Test
      *     Mapping suite.
+     * @param ignoreKeywords A set of {@link String} of keywords to be ignored.
      * @param extraZipNames A set of {@link String} for the name of additional test_mappings.zip
      *     that will be merged.
      * @param matchedPatternPaths The {@link Set<String>} to file paths matched patterns.
@@ -461,6 +482,7 @@ public class TestMapping {
             String testGroup,
             boolean hostOnly,
             Set<String> keywords,
+            Set<String> ignoreKeywords,
             List<String> extraZipNames,
             Set<String> matchedPatternPaths) {
         Set<TestInfo> tests = Collections.synchronizedSet(new LinkedHashSet<TestInfo>());
@@ -491,7 +513,8 @@ public class TestMapping {
                                                     testGroup,
                                                     disabledTests,
                                                     hostOnly,
-                                                    keywords)));
+                                                    keywords,
+                                                    ignoreKeywords)));
 
         } catch (IOException e) {
             throw new RuntimeException(
@@ -501,7 +524,6 @@ public class TestMapping {
         } finally {
             FileUtil.recursiveDelete(testMappingsDir);
         }
-        CLog.d("TestInfo found: %s", tests);
         return tests;
     }
 

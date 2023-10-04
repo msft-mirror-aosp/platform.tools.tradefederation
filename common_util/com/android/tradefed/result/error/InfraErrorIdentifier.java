@@ -43,6 +43,10 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     LAB_HOST_FILESYSTEM_FULL(500_015, FailureStatus.INFRA_FAILURE),
     TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN(500_016, FailureStatus.CANCELLED),
     SCHEDULING_ERROR(500_017, FailureStatus.INFRA_FAILURE),
+    EVENT_PROCESSING_TIMEOUT(500_018, FailureStatus.INFRA_FAILURE),
+    OUT_OF_MEMORY_ERROR(500_019, FailureStatus.INFRA_FAILURE),
+    // Use a catch-all error during bring up of the new feature
+    INCREMENTAL_FLASHING_ERROR(500_020, FailureStatus.INFRA_FAILURE),
 
     // 500_400 - 500_500: General errors - subprocess related
     INTERRUPTED_DURING_SUBPROCESS_SHUTDOWN(500_401, FailureStatus.INFRA_FAILURE),
@@ -53,6 +57,7 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     ARTIFACT_DOWNLOAD_ERROR(500_503, FailureStatus.DEPENDENCY_ISSUE),
     GCS_ERROR(500_504, FailureStatus.DEPENDENCY_ISSUE),
     ANDROID_PARTNER_SERVER_ERROR(500_505, FailureStatus.DEPENDENCY_ISSUE),
+    ARTIFACT_INVALID(500_506, FailureStatus.DEPENDENCY_ISSUE),
 
     // 501_001 - 501_500: environment issues: For example: lab wifi
     WIFI_FAILED_CONNECT(501_001, FailureStatus.DEPENDENCY_ISSUE),
@@ -91,6 +96,7 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     OXYGEN_NOT_ENOUGH_RESOURCE(505_021, FailureStatus.INFRA_FAILURE),
     OXYGEN_DEVICE_LAUNCHER_TIMEOUT(505_022, FailureStatus.INFRA_FAILURE),
     OXYGEN_SERVER_LB_CONNECTION_ERROR(505_023, FailureStatus.INFRA_FAILURE),
+    ACLOUD_INVALID_SERVICE_ACCOUNT_KEY(505_024, FailureStatus.DEPENDENCY_ISSUE),
 
     // 505_251 - 505_300: Configuration errors
     INTERNAL_CONFIG_ERROR(505_251, FailureStatus.INFRA_FAILURE),

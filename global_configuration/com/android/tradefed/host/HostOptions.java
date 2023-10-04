@@ -62,7 +62,7 @@ public class HostOptions implements IHostOptions {
             description =
                     "The maximum number of concurrent virtual device startup to avoid resource"
                             + " contentions depending on factors such as network, CPU, I/O etc.")
-    private Integer mConcurrentVirtualDeviceStartupLimit = Integer.MAX_VALUE;
+    private Integer mConcurrentVirtualDeviceStartupLimit = null;
 
     @Option(name = "concurrent-limits", description =
             "The maximum number of concurrent actions of a given type.")
@@ -163,6 +163,16 @@ public class HostOptions implements IHostOptions {
             name = "cl-flashstation",
             description = "cl_flashstation script stored in remote GCS bucket.")
     private File mClFlashstation = new File("/tradefed/cl_flashstation");
+
+    @Option(
+            name = "enable-incremental-flashing",
+            description = "Feature flag to enable incremental flashing on one host.")
+    private boolean mEnableIncrementalFlashing = false;
+
+    @Option(
+            name = "opt-out-incremental-flashing",
+            description = "Allows an host to fully opt-out of incremental flashing.")
+    private boolean mOptOutFromIncrementalFlashing = false;
 
     @Option(
             name = "disable-host-metric-reporting",
@@ -405,6 +415,18 @@ public class HostOptions implements IHostOptions {
     @Override
     public File getClFlashstation() {
         return mClFlashstation;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isIncrementalFlashingEnabled() {
+        return mEnableIncrementalFlashing;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isOptOutOfIncrementalFlashing() {
+        return mOptOutFromIncrementalFlashing;
     }
 
     /** {@inheritDoc} */

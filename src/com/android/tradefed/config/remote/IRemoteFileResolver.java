@@ -95,6 +95,11 @@ public interface IRemoteFileResolver {
             return this;
         }
 
+        public RemoteFileResolverArgs addQueryArg(String key, String value) {
+            mQueryArgs.put(key, value);
+            return this;
+        }
+
         public RemoteFileResolverArgs addQueryArgs(Map<String, String> queryArgs) {
             mQueryArgs.putAll(queryArgs);
             return this;

@@ -17,9 +17,11 @@ package com.android.tradefed.testtype.mobly;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
@@ -35,6 +37,7 @@ import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.util.AdbUtils;
 import com.android.tradefed.util.CommandResult;
@@ -47,6 +50,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.env.EnvScalarConstructor;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -57,6 +61,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -73,7 +78,7 @@ import java.util.stream.Collectors;
 /** Host test meant to run a mobly python binary file from the Android Build system (Soong) */
 @OptionClass(alias = "mobly-host")
 public class MoblyBinaryHostTest
-        implements IRemoteTest, IDeviceTest, IBuildReceiver, ITestFilterReceiver {
+        implements IRemoteTest, IDeviceTest, IBuildReceiver, ITestFilterReceiver, IShardableTest {
 
     private static final String ANDROID_SERIAL_VAR = "ANDROID_SERIAL";
     private static final String MOBLY_TEST_SUMMARY = "test_summary.yaml";
@@ -137,6 +142,8 @@ public class MoblyBinaryHostTest
     private IRunUtil mRunUtil;
     private Set<String> mIncludeFilters = new LinkedHashSet<>();
     private Set<String> mExcludeFilters = new LinkedHashSet<>();
+    private int shardIndex = 0;
+    private int totalShards = 1;
 
     /** {@inheritDoc} */
     @Override
@@ -199,6 +206,33 @@ public class MoblyBinaryHostTest
     @Override
     public void setBuild(IBuildInfo buildInfo) {
         mBuildInfo = buildInfo;
+    }
+
+    @Override
+    public Collection<IRemoteTest> split(int shardCountHint) {
+        if (shardCountHint <= 1) {
+            return null;
+        }
+
+        Collection<IRemoteTest> shards = new ArrayList<>(shardCountHint);
+
+        // Split tests between shards.
+        for (int i = 0; i < shardCountHint; i++) {
+            MoblyBinaryHostTest shard = new MoblyBinaryHostTest();
+            shard.addAllIncludeFilters(getIncludeFilters());
+            shard.addAllExcludeFilters(getExcludeFilters());
+            // Copy all options.
+            try {
+                OptionCopier.copyOptions(this, shard);
+            } catch (ConfigurationException e) {
+                CLog.e("Failed to copy options: %s", e.getMessage());
+            }
+            shard.shardIndex = i;
+            shard.totalShards = shardCountHint;
+            shards.add(shard);
+        }
+
+        return shards;
     }
 
     @Override
@@ -388,7 +422,7 @@ public class MoblyBinaryHostTest
             }
         }
         CommandResult list_result =
-                getRunUtil().runTimedCmd(6000, parFilePath, "--", "--list_tests");
+                getRunUtil().runTimedCmd(60000, parFilePath, "--", "--list_tests");
         if (!CommandStatus.SUCCESS.equals(list_result.getStatus())) {
             String message;
             if (CommandStatus.TIMED_OUT.equals(list_result.getStatus())) {
@@ -416,11 +450,23 @@ public class MoblyBinaryHostTest
         List<String> includedTests = filteredTests.get().second;
         CLog.d("All tests: %s", allTests);
         CLog.d("Included tests: %s", includedTests);
+
+        // Split test across shards.
+        int chunkSize = includedTests.size() / totalShards;
+        if (includedTests.size() % totalShards > 0) chunkSize++;
+        int startIndex = shardIndex * chunkSize;
+        int endIndex =
+                (totalShards == 1 || shardIndex == totalShards - 1)
+                        ? includedTests.size()
+                        : (shardIndex + 1) * chunkSize;
+        includedTests = includedTests.subList(startIndex, endIndex);
+        int testCount = includedTests.size();
+
         // Start run.
         long startTime = System.currentTimeMillis();
-        listener.testRunStarted(runName, includedTests.size());
+        listener.testRunStarted(runName, testCount);
         // No test to run, abort early.
-        if (includedTests.isEmpty()) {
+        if (testCount == 0) {
             listener.testRunEnded(0, new HashMap<String, String>());
             return;
         }
@@ -538,7 +584,16 @@ public class MoblyBinaryHostTest
     @VisibleForTesting
     protected void updateConfigFile(InputStream configInputStream, Writer writer)
             throws HarnessRuntimeException {
-        Yaml yaml = new Yaml();
+        Yaml yaml =
+                new Yaml(
+                        new EnvScalarConstructor() {
+                            @Override
+                            public String getEnv(String key) {
+                                return mTestInfo.properties().get(key);
+                            }
+                        });
+        yaml.addImplicitResolver(
+                EnvScalarConstructor.ENV_TAG, EnvScalarConstructor.ENV_FORMAT, "$");
         Map<String, Object> configMap = (Map<String, Object>) yaml.load(configInputStream);
         CLog.d("Loaded yaml config: \n%s", configMap);
         List<Object> testBedList = (List<Object>) configMap.get("TestBeds");
@@ -705,6 +760,9 @@ public class MoblyBinaryHostTest
                 try (InputStreamSource dataStream = new FileInputStreamSource(subFile, true)) {
                     String cleanName = subFile.getName().replace(",", "_");
                     LogDataType type = LogDataType.TEXT;
+                    if (cleanName.contains("trace")) {
+                        type = LogDataType.PERFETTO;
+                    }
                     if (cleanName.contains("logcat")) {
                         type = LogDataType.LOGCAT;
                     }

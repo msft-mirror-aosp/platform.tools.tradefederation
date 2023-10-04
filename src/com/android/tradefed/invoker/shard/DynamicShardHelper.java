@@ -29,6 +29,9 @@ import com.google.common.base.Strings;
 import com.google.internal.android.engprod.v1.ProvideTestTargetRequest;
 import com.google.internal.android.engprod.v1.SerializedTestTarget;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -38,7 +41,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 
 /** Sharding strategy to allow work remote work queueing between multiple TF instances */
-public class DynamicShardHelper extends ShardHelper {
+public class DynamicShardHelper extends StrictShardHelper {
 
     /** {@inheritDoc} */
     @Override
@@ -47,31 +50,56 @@ public class DynamicShardHelper extends ShardHelper {
             TestInformation testInfo,
             IRescheduler rescheduler,
             ITestLogger logger) {
+        // Check preconditions
         Integer shardCount = config.getCommandOptions().getShardCount();
         Integer shardIndex = config.getCommandOptions().getShardIndex();
 
+        String invocationId = testInfo.getContext().getAttribute("invocation_id");
+        String attemptId = testInfo.getContext().getAttribute("attempt_index");
+
+        boolean shouldDelegate = false;
+
+        // We should re-delegate this to strict sharding so it can delegate this case to local
+        // sharding
         if (shardIndex == null) {
-            return super.shardConfig(config, testInfo, rescheduler, logger);
+            shouldDelegate = true;
         }
+
         if (shardCount == null) {
             throw new HarnessRuntimeException(
                     "shard-count is null while shard-index is " + shardIndex,
                     InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
         }
+
         // No sharding needed if shard-count=1
         if (shardCount == 1) {
             return false;
         }
 
+        // redelegate to strict sharding
+        if (Strings.isNullOrEmpty(attemptId)) {
+            shouldDelegate = true;
+        }
+
+        // If we don't have sufficient information to properly key the pool, then fall
+        // back to strict sharding.
+        if (Strings.isNullOrEmpty(invocationId)) {
+            CLog.d("No invocation_id specified, falling back to strict sharding.");
+            shouldDelegate = true;
+        }
+
+        if (shouldDelegate) {
+            CLog.d(
+                    "Setting option 'remote-dynamic-sharding' to false since precondition checks"
+                            + " failed.");
+            config.getCommandOptions().setShouldRemoteDynamicShard(false);
+            return super.shardConfig(config, testInfo, rescheduler, logger);
+        }
+
         // Initialize Dynamic Sharding client
         IDynamicShardingClient client = getClient();
 
-        // TODO: Also include attempt_id in unique poolId.
-        String poolId = testInfo.getContext().getAttribute("invocation_id");
-        if (Strings.isNullOrEmpty(poolId)) {
-            CLog.d("No invocation_id specified, falling back to strict sharding.");
-            return super.shardConfig(config, testInfo, rescheduler, logger);
-        }
+        String poolId = String.format("invocation-%s-attempt-%s", invocationId, attemptId);
 
         List<ITestSuite> allModules = getAllModules(config, testInfo);
 
@@ -81,19 +109,28 @@ public class DynamicShardHelper extends ShardHelper {
         }
 
         // if we're shard 0 populate the pool with the list of tests
-        if (shardIndex == 0) {
+        try {
             // Populate the pool
             List<SerializedTestTarget> targetsToUpload =
                     moduleMapping.keySet().stream()
                             .map(x -> SerializedTestTarget.newBuilder().setTargetName(x).build())
                             .collect(Collectors.toList());
-            CLog.v(String.format("Uploading test targets: %s", targetsToUpload));
+            CLog.d("Uploading to pool %s test targets: %s", poolId, targetsToUpload);
             ProvideTestTargetRequest request =
                     ProvideTestTargetRequest.newBuilder()
                             .setReferencePoolId(poolId)
                             .addAllTestTargets(targetsToUpload)
                             .build();
             client.provideTestTarget(request);
+        } catch (StatusRuntimeException e) {
+            // If it is just the ALREADY_EXISTS error, that's ok; it just means
+            // that one of the other shards got to it before this one.
+            if (Status.fromThrowable(e).getCode() != Status.Code.ALREADY_EXISTS) {
+                // rethrow if it isn't the error we were expecting.
+                throw e;
+            }
+            // will only reach this point if the error code is ALREADY_EXISTS
+            CLog.v("Another shard has already seeded the pool '%s'.", poolId);
         }
 
         // if we're any shard, create a test pool poller that polls the sharding server
@@ -119,8 +156,13 @@ public class DynamicShardHelper extends ShardHelper {
         ServiceLoader<IDynamicShardingClient> serviceLoader =
                 ServiceLoader.load(IDynamicShardingClient.class);
         for (IDynamicShardingClient client : serviceLoader) {
-            // return the first (and should be only) implementation of this feature
-            return client;
+            // the first (and should be only) implementation of this feature
+            // should be the internal one
+            if (IDynamicShardingConnectionInfo.class.isAssignableFrom(client.getClass())) {
+                // use the internal one to configure the generic one
+                return new ConfigurableGrpcDynamicShardingClient(
+                        (IDynamicShardingConnectionInfo) client);
+            }
         }
         throw new HarnessRuntimeException(
                 "Failed to load dynamic sharding client implementation (missing from service"
@@ -132,6 +174,9 @@ public class DynamicShardHelper extends ShardHelper {
         List<ITestSuite> allTests = new ArrayList<>();
         for (IRemoteTest test : config.getTests()) {
             if (test instanceof ITestSuite) {
+                // Disable intra-module-sharding when requesting dynamic sharding
+                // as it's currently not supported together.
+                ((ITestSuite) test).setIntraModuleSharding(false);
                 allTests.addAll(
                         ((ITestSuite) test)
                                 .split(1000000, testInfo).stream()
