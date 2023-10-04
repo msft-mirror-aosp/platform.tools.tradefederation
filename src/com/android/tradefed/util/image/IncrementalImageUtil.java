@@ -80,15 +80,21 @@ public class IncrementalImageUtil {
             CLog.d("Not tracking current baseline image.");
             return null;
         }
-        if ((!tracker.buildId.equals(device.getBuildId())
-                ||
-                // TODO: Support cross-branch by handling bootloader
-                !tracker.branch.equals(build.getBuildBranch()))) {
+        if (!tracker.buildId.equals(device.getBuildId())) {
             CLog.d("On-device build isn't matching the cache.");
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
             return null;
         }
+        if (!tracker.branch.equals(build.getBuildBranch())) {
+            CLog.d("Newer build is not on the same branch.");
+            return null;
+        }
+        if (!tracker.flavor.equals(build.getBuildFlavor())) {
+            CLog.d("Newer build is not on the build flavor.");
+            return null;
+        }
+
         if (!isSnapshotSupported(device)) {
             CLog.d("Incremental flashing not supported.");
             return null;
