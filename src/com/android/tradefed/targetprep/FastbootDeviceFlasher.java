@@ -745,6 +745,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                     CLog.e(e);
                     DeviceImageTracker.getDefaultCache()
                             .invalidateTracking(device.getSerialNumber());
+                    if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                        device.rebootIntoBootloader();
+                    }
                 }
             }
 
