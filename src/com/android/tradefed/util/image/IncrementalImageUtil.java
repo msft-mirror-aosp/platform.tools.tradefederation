@@ -71,8 +71,15 @@ public class IncrementalImageUtil {
     private ParallelPreparation mParallelSetup;
 
     public static IncrementalImageUtil initialize(
-            ITestDevice device, IDeviceBuildInfo build, File createSnapshot)
+            ITestDevice device,
+            IDeviceBuildInfo build,
+            File createSnapshot,
+            boolean isIsolatedSetup)
             throws DeviceNotAvailableException {
+        if (isIsolatedSetup) {
+            CLog.d("test is configured with isolation grade, doesn't support incremental yet.");
+            return null;
+        }
         FileCacheTracker tracker =
                 DeviceImageTracker.getDefaultCache()
                         .getBaselineDeviceImage(device.getSerialNumber());
