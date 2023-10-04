@@ -20,6 +20,8 @@ import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.GlobalConfiguration;
+import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -31,11 +33,13 @@ import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.targetprep.IDeviceFlasher.UserDataFlashOption;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -52,7 +56,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** A {@link ITargetPreparer} that flashes an image on physical Android hardware. */
-public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
+public abstract class DeviceFlashPreparer extends BaseTargetPreparer
+        implements IConfigurationReceiver {
 
     private static final int BOOT_POLL_TIME_MS = 5 * 1000;
     private static final long SNAPSHOT_CANCEL_TIMEOUT = 20000L;
@@ -148,6 +153,12 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
     private File mCreateSnapshotBinary = null;
 
     private IncrementalImageUtil mIncrementalImageUtil;
+    private IConfiguration mConfig;
+
+    @Override
+    public void setConfiguration(IConfiguration configuration) {
+        mConfig = configuration;
+    }
 
     /**
      * Sets the device boot time
@@ -241,8 +252,16 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer {
         }
         boolean useIncrementalFlashing = mUseIncrementalFlashing;
         if (useIncrementalFlashing) {
+            boolean isIsolated = false;
+            if (mConfig.getRetryDecision() instanceof BaseRetryDecision) {
+                isIsolated =
+                        IsolationGrade.FULLY_ISOLATED.equals(
+                                ((BaseRetryDecision) mConfig.getRetryDecision())
+                                        .getIsolationGrade());
+            }
             mIncrementalImageUtil =
-                    IncrementalImageUtil.initialize(device, deviceBuild, mCreateSnapshotBinary);
+                    IncrementalImageUtil.initialize(
+                            device, deviceBuild, mCreateSnapshotBinary, isIsolated);
             if (mIncrementalImageUtil == null) {
                 useIncrementalFlashing = false;
             } else if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
