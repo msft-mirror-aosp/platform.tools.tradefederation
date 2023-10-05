@@ -244,13 +244,15 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         if (getHostOptions().isIncrementalFlashingEnabled()) {
             mUseIncrementalFlashing = true;
         }
-        if (mForceDisableIncrementalFlashing) {
-            mUseIncrementalFlashing = false;
-        }
         if (getHostOptions().isOptOutOfIncrementalFlashing()) {
             mUseIncrementalFlashing = false;
         }
         boolean useIncrementalFlashing = mUseIncrementalFlashing;
+        if (mForceDisableIncrementalFlashing) {
+            // The local option disable the feature, but doesn't prevent to
+            // continue tracking baseline
+            useIncrementalFlashing = false;
+        }
         if (useIncrementalFlashing) {
             boolean isIsolated = false;
             if (mConfig.getRetryDecision() instanceof BaseRetryDecision) {
