@@ -640,9 +640,19 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     OptionSetter setter = new OptionSetter(config.getCommandOptions());
                     for (Map.Entry<String, String> entry :
                             config.getCommandOptions().getExperimentalFlags().entrySet()) {
-                        setter.setOptionValue(entry.getKey(), entry.getValue());
+                        String optionName = entry.getKey();
+                        String optionValue = entry.getValue();
+                        // Support map experiments, where optionValue is a key=value pair
+                        int equalsIndex = optionValue.indexOf('=');
+                        if (equalsIndex != -1) {
+                            String mapKey = optionValue.substring(0, equalsIndex);
+                            String mapValue = optionValue.substring(equalsIndex + 1);
+                            setter.setOptionValue(optionName, mapKey, mapValue);
+                        } else {
+                            setter.setOptionValue(optionName, optionValue);
+                        }
                         mInvocationContext.addInvocationAttribute(
-                                "experiment:" + entry.getKey(), entry.getValue());
+                                "experiment:" + optionName, optionValue);
                     }
                 } catch (ConfigurationException e) {
                     CLog.e("Configuration Exception caught while setting experimental flags.");
