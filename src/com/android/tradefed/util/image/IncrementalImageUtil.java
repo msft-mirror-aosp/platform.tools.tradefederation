@@ -47,6 +47,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /** A utility to leverage the incremental image and device update. */
@@ -182,13 +185,6 @@ public class IncrementalImageUtil {
                     InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
         }
 
-        File workDir = null;
-        try {
-            workDir = FileUtil.createTempDir("block_compare_workdir");
-        } catch (IOException e) {
-            FileUtil.recursiveDelete(workDir);
-            throw new TargetSetupError(e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
-        }
         // Join the unzip thread
         try {
             mParallelSetup.join();
@@ -200,32 +196,10 @@ public class IncrementalImageUtil {
         }
         File srcDirectory = mParallelSetup.getSrcDirectory();
         File targetDirectory = mParallelSetup.getTargetDirectory();
-
+        File workDir = mParallelSetup.getWorkDir();
         try (CloseableTraceScope ignored = new CloseableTraceScope("update_device")) {
-            List<Callable<Boolean>> callableTasks = new ArrayList<>();
-            for (String partition : srcDirectory.list()) {
-                File possibleSrc = new File(srcDirectory, partition);
-                File possibleTarget = new File(targetDirectory, partition);
-                File workDirectory = workDir;
-                if (possibleSrc.exists() && possibleTarget.exists()) {
-                    if (DYNAMIC_PARTITIONS_TO_DIFF.contains(partition)) {
-                        callableTasks.add(
-                                () -> {
-                                    blockCompare(possibleSrc, possibleTarget, workDirectory);
-                                    return true;
-                                });
-                    }
-                } else {
-                    CLog.e("Skipping %s no src or target", partition);
-                }
-            }
-            ParallelDeviceExecutor<Boolean> executor =
-                    new ParallelDeviceExecutor<Boolean>(callableTasks.size());
-            executor.invokeAll(callableTasks, 0, TimeUnit.MINUTES);
-            if (executor.hasErrors()) {
-                throw new RuntimeException(executor.getErrors().get(0));
-            }
             // Once block comparison is successful, log the information
+            logTargetInformation(targetDirectory);
             logPatchesInformation(workDir);
 
             mDevice.executeShellV2Command("mkdir -p /data/ndb");
@@ -361,6 +335,17 @@ public class IncrementalImageUtil {
         }
     }
 
+    private void logTargetInformation(File targetDirectory) {
+        for (File patch : targetDirectory.listFiles()) {
+            if (DYNAMIC_PARTITIONS_TO_DIFF.contains(patch.getName())) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationGroupMetricKey.INCREMENTAL_FLASHING_TARGET_SIZE,
+                        patch.getName(),
+                        patch.length());
+            }
+        }
+    }
+
     private class ParallelPreparation extends Thread {
 
         private final File mSetupSrcImage;
@@ -368,6 +353,7 @@ public class IncrementalImageUtil {
 
         private File mSrcDirectory;
         private File mTargetDirectory;
+        private File mWorkDir;
         private TargetSetupError mError;
 
         public ParallelPreparation(ThreadGroup currentGroup, File srcImage, File targetImage) {
@@ -380,10 +366,30 @@ public class IncrementalImageUtil {
         @Override
         public void run() {
             try (CloseableTraceScope ignored = new CloseableTraceScope("unzip_device_images")) {
-                mSrcDirectory = ZipUtil2.extractZipToTemp(mSetupSrcImage, "incremental_src");
-                mTargetDirectory =
-                        ZipUtil2.extractZipToTemp(mSetupTargetImage, "incremental_target");
-            } catch (IOException e) {
+                Future<File> futureSrcDir =
+                        CompletableFuture.supplyAsync(
+                                () -> {
+                                    try {
+                                        return ZipUtil2.extractZipToTemp(
+                                                mSetupSrcImage, "incremental_src");
+                                    } catch (IOException ioe) {
+                                        throw new RuntimeException(ioe);
+                                    }
+                                });
+                Future<File> futureTargetDir =
+                        CompletableFuture.supplyAsync(
+                                () -> {
+                                    try {
+                                        return ZipUtil2.extractZipToTemp(
+                                                mSetupTargetImage, "incremental_target");
+                                    } catch (IOException ioe) {
+                                        throw new RuntimeException(ioe);
+                                    }
+                                });
+
+                mSrcDirectory = futureSrcDir.get();
+                mTargetDirectory = futureTargetDir.get();
+            } catch (InterruptedException | ExecutionException e) {
                 FileUtil.recursiveDelete(mSrcDirectory);
                 FileUtil.recursiveDelete(mTargetDirectory);
                 mSrcDirectory = null;
@@ -391,6 +397,49 @@ public class IncrementalImageUtil {
                 mError =
                         new TargetSetupError(
                                 e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+                return;
+            }
+
+            try {
+                mWorkDir = FileUtil.createTempDir("block_compare_workdir");
+            } catch (IOException e) {
+                FileUtil.recursiveDelete(mWorkDir);
+                FileUtil.recursiveDelete(mSrcDirectory);
+                FileUtil.recursiveDelete(mTargetDirectory);
+                mSrcDirectory = null;
+                mTargetDirectory = null;
+                mError =
+                        new TargetSetupError(
+                                e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+                return;
+            }
+
+            List<Callable<Boolean>> callableTasks = new ArrayList<>();
+            for (String partition : mSrcDirectory.list()) {
+                File possibleSrc = new File(mSrcDirectory, partition);
+                File possibleTarget = new File(mTargetDirectory, partition);
+                File workDirectory = mWorkDir;
+                if (possibleSrc.exists() && possibleTarget.exists()) {
+                    if (DYNAMIC_PARTITIONS_TO_DIFF.contains(partition)) {
+                        callableTasks.add(
+                                () -> {
+                                    blockCompare(possibleSrc, possibleTarget, workDirectory);
+                                    return true;
+                                });
+                    }
+                } else {
+                    CLog.e("Skipping %s no src or target", partition);
+                }
+            }
+            ParallelDeviceExecutor<Boolean> executor =
+                    new ParallelDeviceExecutor<Boolean>(callableTasks.size());
+            executor.invokeAll(callableTasks, 0, TimeUnit.MINUTES);
+            if (executor.hasErrors()) {
+                mError =
+                        new TargetSetupError(
+                                executor.getErrors().get(0).getMessage(),
+                                executor.getErrors().get(0),
+                                InfraErrorIdentifier.BLOCK_COMPARE_ERROR);
             }
         }
 
@@ -400,6 +449,10 @@ public class IncrementalImageUtil {
 
         public File getTargetDirectory() {
             return mTargetDirectory;
+        }
+
+        public File getWorkDir() {
+            return mWorkDir;
         }
 
         public TargetSetupError getError() {
