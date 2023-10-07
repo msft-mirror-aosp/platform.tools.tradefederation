@@ -92,7 +92,7 @@ public class DeviceImageTracker {
                 };
         mImageCache =
                 CacheBuilder.newBuilder()
-                        .maximumSize(10)
+                        .maximumSize(20)
                         .expireAfterAccess(1, TimeUnit.DAYS)
                         .removalListener(listener)
                         .build(
