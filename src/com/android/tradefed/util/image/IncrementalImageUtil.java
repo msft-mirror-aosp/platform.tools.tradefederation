@@ -65,6 +65,8 @@ public class IncrementalImageUtil {
                     "vendor_dlkm.img");
 
     private final File mSrcImage;
+    private final File mSrcBootloader;
+    private final File mSrcBaseband;
     private final File mTargetImage;
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
@@ -111,17 +113,46 @@ public class IncrementalImageUtil {
             CLog.d("Incremental flashing not supported.");
             return null;
         }
+        File deviceImage = null;
+        File bootloader = null;
+        File baseband = null;
+        try {
+            deviceImage = copyImage(tracker.zippedDeviceImage);
+            bootloader = copyImage(tracker.zippedBootloaderImage);
+            baseband = copyImage(tracker.zippedBasebandImage);
+        } catch (IOException e) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
+            CLog.e(e);
+            FileUtil.deleteFile(deviceImage);
+            FileUtil.deleteFile(bootloader);
+            FileUtil.deleteFile(baseband);
+            return null;
+        }
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
                 String.format("%s:%s:%s", tracker.branch, tracker.buildId, tracker.flavor));
         return new IncrementalImageUtil(
-                device, tracker.zippedDeviceImage, build.getDeviceImageFile(), createSnapshot);
+                device,
+                deviceImage,
+                bootloader,
+                baseband,
+                build.getDeviceImageFile(),
+                createSnapshot);
     }
 
     public IncrementalImageUtil(
-            ITestDevice device, File srcImage, File targetImage, File createSnapshot) {
+            ITestDevice device,
+            File deviceImage,
+            File bootloader,
+            File baseband,
+            File targetImage,
+            File createSnapshot) {
         mDevice = device;
-        mSrcImage = srcImage;
+        mSrcImage = deviceImage;
+        mSrcBootloader = bootloader;
+        mSrcBaseband = baseband;
+
         mTargetImage = targetImage;
         if (createSnapshot != null) {
             File snapshot = null;
@@ -140,6 +171,13 @@ public class IncrementalImageUtil {
                 new ParallelPreparation(
                         Thread.currentThread().getThreadGroup(), mSrcImage, mTargetImage);
         mParallelSetup.start();
+    }
+
+    private static File copyImage(File originalImage) throws IOException {
+        File copy = FileUtil.createTempFile(FileUtil.getBaseName(originalImage.getName()), ".img");
+        copy.delete();
+        FileUtil.hardlinkFile(originalImage, copy);
+        return copy;
     }
 
     /** Returns whether or not we can use the snapshot logic to update the device */
@@ -276,17 +314,12 @@ public class IncrementalImageUtil {
      */
     public void teardownDevice() throws DeviceNotAvailableException {
         try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
-            FileCacheTracker tracker =
-                    DeviceImageTracker.getDefaultCache()
-                            .getBaselineDeviceImage(mDevice.getSerialNumber());
             if (mBootloaderNeedsRevert) {
                 mDevice.rebootIntoBootloader();
 
                 CommandResult bootloaderFlashTarget =
                         mDevice.executeFastbootCommand(
-                                "flash",
-                                "bootloader",
-                                tracker.zippedBootloaderImage.getAbsolutePath());
+                                "flash", "bootloader", mSrcBootloader.getAbsolutePath());
                 CLog.d("Status: %s", bootloaderFlashTarget.getStatus());
                 CLog.d("stdout: %s", bootloaderFlashTarget.getStdout());
                 CLog.d("stderr: %s", bootloaderFlashTarget.getStderr());
@@ -296,7 +329,7 @@ public class IncrementalImageUtil {
 
                 CommandResult radioFlashTarget =
                         mDevice.executeFastbootCommand(
-                                "flash", "radio", tracker.zippedBasebandImage.getAbsolutePath());
+                                "flash", "radio", mSrcBaseband.getAbsolutePath());
                 CLog.d("Status: %s", radioFlashTarget.getStatus());
                 CLog.d("stdout: %s", radioFlashTarget.getStdout());
                 CLog.d("stderr: %s", radioFlashTarget.getStderr());
@@ -310,11 +343,16 @@ public class IncrementalImageUtil {
             if (mSourceDirectory != null) {
                 flashStaticPartition(mSourceDirectory);
             }
-            FileUtil.recursiveDelete(mSourceDirectory);
         } catch (DeviceNotAvailableException e) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
             throw e;
+        } finally {
+            // Delete the copy we made to use the incremental update
+            FileUtil.recursiveDelete(mSourceDirectory);
+            FileUtil.deleteFile(mSrcImage);
+            FileUtil.deleteFile(mSrcBootloader);
+            FileUtil.deleteFile(mSrcBaseband);
         }
     }
 
