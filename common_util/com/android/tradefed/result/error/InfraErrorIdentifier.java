@@ -47,6 +47,7 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     OUT_OF_MEMORY_ERROR(500_019, FailureStatus.INFRA_FAILURE),
     // Use a catch-all error during bring up of the new feature
     INCREMENTAL_FLASHING_ERROR(500_020, FailureStatus.INFRA_FAILURE),
+    BLOCK_COMPARE_ERROR(500_021, FailureStatus.INFRA_FAILURE),
 
     // 500_400 - 500_500: General errors - subprocess related
     INTERRUPTED_DURING_SUBPROCESS_SHUTDOWN(500_401, FailureStatus.INFRA_FAILURE),
