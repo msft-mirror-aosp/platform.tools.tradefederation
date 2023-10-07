@@ -54,15 +54,19 @@ public class DeviceImageTrackerTest {
 
         File deviceImage = FileUtil.createTempFile("cache-image", ".zip");
         FileUtil.writeToFile("content", deviceImage);
+        File bootloader = FileUtil.createTempFile("cache-bootloader", ".zip");
+        File baseband = FileUtil.createTempFile("cache-baseband", ".zip");
         try {
             mTestableCache.trackUpdatedDeviceImage(
-                    "serial", deviceImage, "8888", "branch", "flavor");
+                    "serial", deviceImage, bootloader, baseband, "8888", "branch", "flavor");
             FileCacheTracker tracker = mTestableCache.getBaselineDeviceImage("serial");
             assertNotNull(tracker);
             assertEquals("8888", tracker.buildId);
             assertEquals("content", FileUtil.readStringFromFile(tracker.zippedDeviceImage));
         } finally {
             FileUtil.deleteFile(deviceImage);
+            FileUtil.deleteFile(bootloader);
+            FileUtil.deleteFile(baseband);
         }
     }
 }
