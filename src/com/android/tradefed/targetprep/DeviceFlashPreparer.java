@@ -400,6 +400,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                             .trackUpdatedDeviceImage(
                                     device.getSerialNumber(),
                                     deviceBuild.getDeviceImageFile(),
+                                    deviceBuild.getBootloaderImageFile(),
+                                    deviceBuild.getBasebandImageFile(),
                                     deviceBuild.getBuildId(),
                                     deviceBuild.getBuildBranch(),
                                     deviceBuild.getBuildFlavor());
