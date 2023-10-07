@@ -69,6 +69,8 @@ public class IncrementalImageUtil {
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
 
+    private boolean mBootloaderNeedsRevert = false;
+    private boolean mBasebandNeedsRevert = false;
     private File mSourceDirectory;
 
     private ParallelPreparation mParallelSetup;
@@ -150,6 +152,14 @@ public class IncrementalImageUtil {
             return true;
         }
         return false;
+    }
+
+    public void notifyBootloaderNeedsRevert() {
+        mBootloaderNeedsRevert = true;
+    }
+
+    public void notifyBasebadNeedsRevert() {
+        mBasebandNeedsRevert = true;
     }
 
     /** Returns whether device is currently using snapshots or not. */
@@ -266,6 +276,34 @@ public class IncrementalImageUtil {
      */
     public void teardownDevice() throws DeviceNotAvailableException {
         try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
+            FileCacheTracker tracker =
+                    DeviceImageTracker.getDefaultCache()
+                            .getBaselineDeviceImage(mDevice.getSerialNumber());
+            if (mBootloaderNeedsRevert) {
+                mDevice.rebootIntoBootloader();
+
+                CommandResult bootloaderFlashTarget =
+                        mDevice.executeFastbootCommand(
+                                "flash",
+                                "bootloader",
+                                tracker.zippedBootloaderImage.getAbsolutePath());
+                CLog.d("Status: %s", bootloaderFlashTarget.getStatus());
+                CLog.d("stdout: %s", bootloaderFlashTarget.getStdout());
+                CLog.d("stderr: %s", bootloaderFlashTarget.getStderr());
+            }
+            if (mBasebandNeedsRevert) {
+                mDevice.rebootIntoBootloader();
+
+                CommandResult radioFlashTarget =
+                        mDevice.executeFastbootCommand(
+                                "flash", "radio", tracker.zippedBasebandImage.getAbsolutePath());
+                CLog.d("Status: %s", radioFlashTarget.getStatus());
+                CLog.d("stdout: %s", radioFlashTarget.getStdout());
+                CLog.d("stderr: %s", radioFlashTarget.getStderr());
+            }
+            if (mDevice.isStateBootloaderOrFastbootd()) {
+                mDevice.reboot();
+            }
             CommandResult revertOutput =
                     mDevice.executeShellV2Command("snapshotctl revert-snapshots");
             CLog.d("stdout: %s, stderr: %s", revertOutput.getStdout(), revertOutput.getStderr());

@@ -43,12 +43,22 @@ public class DeviceImageTracker {
     /** Track information of the device image cached and its metadata */
     public class FileCacheTracker {
         public File zippedDeviceImage;
+        public File zippedBootloaderImage;
+        public File zippedBasebandImage;
         public String buildId;
         public String branch;
         public String flavor;
 
-        FileCacheTracker(File zippedDeviceImage, String buildId, String branch, String flavor) {
+        FileCacheTracker(
+                File zippedDeviceImage,
+                File zippedBootloaderImage,
+                File zippedBasebandImage,
+                String buildId,
+                String branch,
+                String flavor) {
             this.zippedDeviceImage = zippedDeviceImage;
+            this.zippedBootloaderImage = zippedBootloaderImage;
+            this.zippedBasebandImage = zippedBasebandImage;
             this.buildId = buildId;
             this.branch = branch;
             this.flavor = flavor;
@@ -75,6 +85,8 @@ public class DeviceImageTracker {
                     public void onRemoval(RemovalNotification<String, FileCacheTracker> n) {
                         if (n.wasEvicted()) {
                             FileUtil.deleteFile(n.getValue().zippedDeviceImage);
+                            FileUtil.deleteFile(n.getValue().zippedBootloaderImage);
+                            FileUtil.deleteFile(n.getValue().zippedBasebandImage);
                         }
                     }
                 };
@@ -112,12 +124,32 @@ public class DeviceImageTracker {
      * @param flavor The build flavor associated with the device image.
      */
     public void trackUpdatedDeviceImage(
-            String serial, File deviceImage, String buildId, String branch, String flavor) {
-        File copyInCache = new File(mCacheDir, serial);
-        FileUtil.deleteFile(copyInCache);
+            String serial,
+            File deviceImage,
+            File bootloader,
+            File baseband,
+            String buildId,
+            String branch,
+            String flavor) {
+        File copyInCacheDeviceImage = new File(mCacheDir, serial + "_device_image");
+        FileUtil.deleteFile(copyInCacheDeviceImage);
+        File copyInCacheBootloader = new File(mCacheDir, serial + "_bootloader");
+        FileUtil.deleteFile(copyInCacheBootloader);
+        File copyInCacheBaseband = new File(mCacheDir, serial + "_baseband");
+        FileUtil.deleteFile(copyInCacheBaseband);
         try {
-            FileUtil.hardlinkFile(deviceImage, copyInCache);
-            mImageCache.put(serial, new FileCacheTracker(copyInCache, buildId, branch, flavor));
+            FileUtil.hardlinkFile(deviceImage, copyInCacheDeviceImage);
+            FileUtil.hardlinkFile(bootloader, copyInCacheBootloader);
+            FileUtil.hardlinkFile(baseband, copyInCacheBaseband);
+            mImageCache.put(
+                    serial,
+                    new FileCacheTracker(
+                            copyInCacheDeviceImage,
+                            copyInCacheBootloader,
+                            copyInCacheBaseband,
+                            buildId,
+                            branch,
+                            flavor));
         } catch (IOException e) {
             invalidateTracking(serial);
             CLog.e(e);
