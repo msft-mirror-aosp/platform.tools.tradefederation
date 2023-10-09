@@ -16,6 +16,7 @@
 package com.android.tradefed.testtype.rust;
 
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.FileListingService;
@@ -444,6 +445,39 @@ public class RustBinaryTestTest {
         mockShellCommand(testPath1 + " --option");
         mockTestRunEnded();
         callReplayRunVerify();
+    }
+
+    @Test
+    public void testLdLibraryPathOption() throws Exception {
+        OptionSetter setter = new OptionSetter(mRustBinaryTest);
+        setter.setOptionValue("ld-library-path", "/library/path");
+
+        final String testPath = RustBinaryTest.DEFAULT_TEST_PATH;
+        final String test1 = "test1";
+        final String testPath1 = String.format("%s/%s", testPath, test1);
+        final String[] files = new String[] {test1};
+
+        // Find files
+        MockitoFileUtil.setMockDirContents(mMockITestDevice, testPath, test1);
+        when(mMockITestDevice.doesFileExist(testPath)).thenReturn(true);
+        when(mMockITestDevice.isDirectory(testPath)).thenReturn(true);
+        when(mMockITestDevice.getChildren(testPath)).thenReturn(files);
+        when(mMockITestDevice.isDirectory(testPath1)).thenReturn(false);
+        when(mMockITestDevice.isExecutable(testPath1)).thenReturn(true);
+
+        callReplayRunVerify();
+
+        // Verify that the LD_LIBRARY_PATH environment variable is specified, and it's right before
+        // the command for executing the test.
+        verify(mMockITestDevice, Mockito.atLeastOnce())
+                .executeShellCommand(
+                        Mockito.contains(
+                                "RUST_BACKTRACE=full LD_LIBRARY_PATH=/library/path"
+                                        + " /data/local/tmp/test1"),
+                        Mockito.same(mMockReceiver),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt());
     }
 
     /** Test the benchmark run for a couple tests */
