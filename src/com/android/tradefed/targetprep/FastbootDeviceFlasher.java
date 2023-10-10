@@ -446,6 +446,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 !deviceBuild.getBootloaderVersion().equals(currentBootloaderVersion)) {
             CLog.i("Flashing bootloader %s", deviceBuild.getBootloaderVersion());
             flashBootloader(device, deviceBuild.getBootloaderImageFile());
+            if (mIncrementalFlashing != null) {
+                mIncrementalFlashing.notifyBootloaderNeedsRevert();
+            }
             return true;
         } else {
             CLog.i("Bootloader is already version %s, skipping flashing", currentBootloaderVersion);
@@ -508,12 +511,12 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
      */
     protected void checkAndFlashBaseband(ITestDevice device, IDeviceBuildInfo deviceBuild)
             throws DeviceNotAvailableException, TargetSetupError {
-        String currentBasebandVersion = getImageVersion(device, "baseband");
         if (checkShouldFlashBaseband(device, deviceBuild)) {
             CLog.i("Flashing baseband %s", deviceBuild.getBasebandVersion());
             flashBaseband(device, deviceBuild.getBasebandImageFile());
-        } else {
-            CLog.i("Baseband is already version %s, skipping flashing", currentBasebandVersion);
+            if (mIncrementalFlashing != null) {
+                mIncrementalFlashing.notifyBasebadNeedsRevert();
+            }
         }
     }
 
@@ -528,8 +531,13 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     protected boolean checkShouldFlashBaseband(ITestDevice device, IDeviceBuildInfo deviceBuild)
             throws DeviceNotAvailableException, TargetSetupError {
         String currentBasebandVersion = getImageVersion(device, "baseband");
-        return (deviceBuild.getBasebandVersion() != null &&
-                !deviceBuild.getBasebandVersion().equals(currentBasebandVersion));
+        boolean shouldFlash =
+                (deviceBuild.getBasebandVersion() != null
+                        && !deviceBuild.getBasebandVersion().equals(currentBasebandVersion));
+        if (!shouldFlash) {
+            CLog.i("Baseband is already version %s, skipping flashing", currentBasebandVersion);
+        }
+        return shouldFlash;
     }
 
     /**

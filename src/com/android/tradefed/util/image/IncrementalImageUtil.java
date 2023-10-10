@@ -47,6 +47,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /** A utility to leverage the incremental image and device update. */
@@ -62,10 +65,14 @@ public class IncrementalImageUtil {
                     "vendor_dlkm.img");
 
     private final File mSrcImage;
+    private final File mSrcBootloader;
+    private final File mSrcBaseband;
     private final File mTargetImage;
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
 
+    private boolean mBootloaderNeedsRevert = false;
+    private boolean mBasebandNeedsRevert = false;
     private File mSourceDirectory;
 
     private ParallelPreparation mParallelSetup;
@@ -106,17 +113,46 @@ public class IncrementalImageUtil {
             CLog.d("Incremental flashing not supported.");
             return null;
         }
+        File deviceImage = null;
+        File bootloader = null;
+        File baseband = null;
+        try {
+            deviceImage = copyImage(tracker.zippedDeviceImage);
+            bootloader = copyImage(tracker.zippedBootloaderImage);
+            baseband = copyImage(tracker.zippedBasebandImage);
+        } catch (IOException e) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
+            CLog.e(e);
+            FileUtil.deleteFile(deviceImage);
+            FileUtil.deleteFile(bootloader);
+            FileUtil.deleteFile(baseband);
+            return null;
+        }
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
                 String.format("%s:%s:%s", tracker.branch, tracker.buildId, tracker.flavor));
         return new IncrementalImageUtil(
-                device, tracker.zippedDeviceImage, build.getDeviceImageFile(), createSnapshot);
+                device,
+                deviceImage,
+                bootloader,
+                baseband,
+                build.getDeviceImageFile(),
+                createSnapshot);
     }
 
     public IncrementalImageUtil(
-            ITestDevice device, File srcImage, File targetImage, File createSnapshot) {
+            ITestDevice device,
+            File deviceImage,
+            File bootloader,
+            File baseband,
+            File targetImage,
+            File createSnapshot) {
         mDevice = device;
-        mSrcImage = srcImage;
+        mSrcImage = deviceImage;
+        mSrcBootloader = bootloader;
+        mSrcBaseband = baseband;
+
         mTargetImage = targetImage;
         if (createSnapshot != null) {
             File snapshot = null;
@@ -137,6 +173,13 @@ public class IncrementalImageUtil {
         mParallelSetup.start();
     }
 
+    private static File copyImage(File originalImage) throws IOException {
+        File copy = FileUtil.createTempFile(FileUtil.getBaseName(originalImage.getName()), ".img");
+        copy.delete();
+        FileUtil.hardlinkFile(originalImage, copy);
+        return copy;
+    }
+
     /** Returns whether or not we can use the snapshot logic to update the device */
     public static boolean isSnapshotSupported(ITestDevice device)
             throws DeviceNotAvailableException {
@@ -146,7 +189,21 @@ public class IncrementalImageUtil {
         if (whichOutput.getStdout().contains("/system/bin/snapshotctl")) {
             return true;
         }
+        CommandResult helpOutput = device.executeShellV2Command("snapshotctl");
+        CLog.d("stdout: %s, stderr: %s", helpOutput.getStdout(), helpOutput.getStderr());
+        if (helpOutput.getStdout().contains("map-snapshots")
+                || helpOutput.getStderr().contains("map-snapshots")) {
+            return true;
+        }
         return false;
+    }
+
+    public void notifyBootloaderNeedsRevert() {
+        mBootloaderNeedsRevert = true;
+    }
+
+    public void notifyBasebadNeedsRevert() {
+        mBasebandNeedsRevert = true;
     }
 
     /** Returns whether device is currently using snapshots or not. */
@@ -182,13 +239,6 @@ public class IncrementalImageUtil {
                     InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
         }
 
-        File workDir = null;
-        try {
-            workDir = FileUtil.createTempDir("block_compare_workdir");
-        } catch (IOException e) {
-            FileUtil.recursiveDelete(workDir);
-            throw new TargetSetupError(e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
-        }
         // Join the unzip thread
         try {
             mParallelSetup.join();
@@ -200,32 +250,10 @@ public class IncrementalImageUtil {
         }
         File srcDirectory = mParallelSetup.getSrcDirectory();
         File targetDirectory = mParallelSetup.getTargetDirectory();
-
+        File workDir = mParallelSetup.getWorkDir();
         try (CloseableTraceScope ignored = new CloseableTraceScope("update_device")) {
-            List<Callable<Boolean>> callableTasks = new ArrayList<>();
-            for (String partition : srcDirectory.list()) {
-                File possibleSrc = new File(srcDirectory, partition);
-                File possibleTarget = new File(targetDirectory, partition);
-                File workDirectory = workDir;
-                if (possibleSrc.exists() && possibleTarget.exists()) {
-                    if (DYNAMIC_PARTITIONS_TO_DIFF.contains(partition)) {
-                        callableTasks.add(
-                                () -> {
-                                    blockCompare(possibleSrc, possibleTarget, workDirectory);
-                                    return true;
-                                });
-                    }
-                } else {
-                    CLog.e("Skipping %s no src or target", partition);
-                }
-            }
-            ParallelDeviceExecutor<Boolean> executor =
-                    new ParallelDeviceExecutor<Boolean>(callableTasks.size());
-            executor.invokeAll(callableTasks, 0, TimeUnit.MINUTES);
-            if (executor.hasErrors()) {
-                throw new RuntimeException(executor.getErrors().get(0));
-            }
             // Once block comparison is successful, log the information
+            logTargetInformation(targetDirectory);
             logPatchesInformation(workDir);
 
             mDevice.executeShellV2Command("mkdir -p /data/ndb");
@@ -292,17 +320,45 @@ public class IncrementalImageUtil {
      */
     public void teardownDevice() throws DeviceNotAvailableException {
         try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
+            if (mBootloaderNeedsRevert) {
+                mDevice.rebootIntoBootloader();
+
+                CommandResult bootloaderFlashTarget =
+                        mDevice.executeFastbootCommand(
+                                "flash", "bootloader", mSrcBootloader.getAbsolutePath());
+                CLog.d("Status: %s", bootloaderFlashTarget.getStatus());
+                CLog.d("stdout: %s", bootloaderFlashTarget.getStdout());
+                CLog.d("stderr: %s", bootloaderFlashTarget.getStderr());
+            }
+            if (mBasebandNeedsRevert) {
+                mDevice.rebootIntoBootloader();
+
+                CommandResult radioFlashTarget =
+                        mDevice.executeFastbootCommand(
+                                "flash", "radio", mSrcBaseband.getAbsolutePath());
+                CLog.d("Status: %s", radioFlashTarget.getStatus());
+                CLog.d("stdout: %s", radioFlashTarget.getStdout());
+                CLog.d("stderr: %s", radioFlashTarget.getStderr());
+            }
+            if (mDevice.isStateBootloaderOrFastbootd()) {
+                mDevice.reboot();
+            }
             CommandResult revertOutput =
                     mDevice.executeShellV2Command("snapshotctl revert-snapshots");
             CLog.d("stdout: %s, stderr: %s", revertOutput.getStdout(), revertOutput.getStderr());
             if (mSourceDirectory != null) {
                 flashStaticPartition(mSourceDirectory);
             }
-            FileUtil.recursiveDelete(mSourceDirectory);
         } catch (DeviceNotAvailableException e) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
             throw e;
+        } finally {
+            // Delete the copy we made to use the incremental update
+            FileUtil.recursiveDelete(mSourceDirectory);
+            FileUtil.deleteFile(mSrcImage);
+            FileUtil.deleteFile(mSrcBootloader);
+            FileUtil.deleteFile(mSrcBaseband);
         }
     }
 
@@ -361,6 +417,17 @@ public class IncrementalImageUtil {
         }
     }
 
+    private void logTargetInformation(File targetDirectory) {
+        for (File patch : targetDirectory.listFiles()) {
+            if (DYNAMIC_PARTITIONS_TO_DIFF.contains(patch.getName())) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationGroupMetricKey.INCREMENTAL_FLASHING_TARGET_SIZE,
+                        patch.getName(),
+                        patch.length());
+            }
+        }
+    }
+
     private class ParallelPreparation extends Thread {
 
         private final File mSetupSrcImage;
@@ -368,6 +435,7 @@ public class IncrementalImageUtil {
 
         private File mSrcDirectory;
         private File mTargetDirectory;
+        private File mWorkDir;
         private TargetSetupError mError;
 
         public ParallelPreparation(ThreadGroup currentGroup, File srcImage, File targetImage) {
@@ -380,10 +448,30 @@ public class IncrementalImageUtil {
         @Override
         public void run() {
             try (CloseableTraceScope ignored = new CloseableTraceScope("unzip_device_images")) {
-                mSrcDirectory = ZipUtil2.extractZipToTemp(mSetupSrcImage, "incremental_src");
-                mTargetDirectory =
-                        ZipUtil2.extractZipToTemp(mSetupTargetImage, "incremental_target");
-            } catch (IOException e) {
+                Future<File> futureSrcDir =
+                        CompletableFuture.supplyAsync(
+                                () -> {
+                                    try {
+                                        return ZipUtil2.extractZipToTemp(
+                                                mSetupSrcImage, "incremental_src");
+                                    } catch (IOException ioe) {
+                                        throw new RuntimeException(ioe);
+                                    }
+                                });
+                Future<File> futureTargetDir =
+                        CompletableFuture.supplyAsync(
+                                () -> {
+                                    try {
+                                        return ZipUtil2.extractZipToTemp(
+                                                mSetupTargetImage, "incremental_target");
+                                    } catch (IOException ioe) {
+                                        throw new RuntimeException(ioe);
+                                    }
+                                });
+
+                mSrcDirectory = futureSrcDir.get();
+                mTargetDirectory = futureTargetDir.get();
+            } catch (InterruptedException | ExecutionException e) {
                 FileUtil.recursiveDelete(mSrcDirectory);
                 FileUtil.recursiveDelete(mTargetDirectory);
                 mSrcDirectory = null;
@@ -391,6 +479,49 @@ public class IncrementalImageUtil {
                 mError =
                         new TargetSetupError(
                                 e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+                return;
+            }
+
+            try {
+                mWorkDir = FileUtil.createTempDir("block_compare_workdir");
+            } catch (IOException e) {
+                FileUtil.recursiveDelete(mWorkDir);
+                FileUtil.recursiveDelete(mSrcDirectory);
+                FileUtil.recursiveDelete(mTargetDirectory);
+                mSrcDirectory = null;
+                mTargetDirectory = null;
+                mError =
+                        new TargetSetupError(
+                                e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+                return;
+            }
+
+            List<Callable<Boolean>> callableTasks = new ArrayList<>();
+            for (String partition : mSrcDirectory.list()) {
+                File possibleSrc = new File(mSrcDirectory, partition);
+                File possibleTarget = new File(mTargetDirectory, partition);
+                File workDirectory = mWorkDir;
+                if (possibleSrc.exists() && possibleTarget.exists()) {
+                    if (DYNAMIC_PARTITIONS_TO_DIFF.contains(partition)) {
+                        callableTasks.add(
+                                () -> {
+                                    blockCompare(possibleSrc, possibleTarget, workDirectory);
+                                    return true;
+                                });
+                    }
+                } else {
+                    CLog.e("Skipping %s no src or target", partition);
+                }
+            }
+            ParallelDeviceExecutor<Boolean> executor =
+                    new ParallelDeviceExecutor<Boolean>(callableTasks.size());
+            executor.invokeAll(callableTasks, 0, TimeUnit.MINUTES);
+            if (executor.hasErrors()) {
+                mError =
+                        new TargetSetupError(
+                                executor.getErrors().get(0).getMessage(),
+                                executor.getErrors().get(0),
+                                InfraErrorIdentifier.BLOCK_COMPARE_ERROR);
             }
         }
 
@@ -400,6 +531,10 @@ public class IncrementalImageUtil {
 
         public File getTargetDirectory() {
             return mTargetDirectory;
+        }
+
+        public File getWorkDir() {
+            return mWorkDir;
         }
 
         public TargetSetupError getError() {

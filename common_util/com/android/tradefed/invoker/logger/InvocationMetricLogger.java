@@ -358,7 +358,8 @@ public class InvocationMetricLogger {
         LAB_PREPARER_TEARDOWN_LATENCY("lab-preparer-teardown-latency", true),
         MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true),
 
-        INCREMENTAL_FLASHING_PATCHES_SIZE("incremental-flashing-patches-size", true);
+        INCREMENTAL_FLASHING_PATCHES_SIZE("incremental-flashing-patches-size", true),
+        INCREMENTAL_FLASHING_TARGET_SIZE("incremental-flashing-target-size", true);
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.
