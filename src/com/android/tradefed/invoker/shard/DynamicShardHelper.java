@@ -22,12 +22,14 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.ITestSuite;
 
 import com.google.common.base.Strings;
 import com.google.internal.android.engprod.v1.ProvideTestTargetRequest;
 import com.google.internal.android.engprod.v1.SerializedTestTarget;
+import com.proto.tradefed.feature.FeatureResponse;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -153,21 +155,34 @@ public class DynamicShardHelper extends StrictShardHelper {
     }
 
     private IDynamicShardingClient getClient() {
-        ServiceLoader<IDynamicShardingClient> serviceLoader =
-                ServiceLoader.load(IDynamicShardingClient.class);
-        for (IDynamicShardingClient client : serviceLoader) {
-            // the first (and should be only) implementation of this feature
-            // should be the internal one
-            if (IDynamicShardingConnectionInfo.class.isAssignableFrom(client.getClass())) {
-                // use the internal one to configure the generic one
-                return new ConfigurableGrpcDynamicShardingClient(
-                        (IDynamicShardingConnectionInfo) client);
+        TradefedFeatureClient featureClient = new TradefedFeatureClient();
+        FeatureResponse resp =
+                featureClient.triggerFeature(
+                        "getDynamicShardingConnectionInfo", new HashMap<String, String>());
+        if (resp.hasMultiPartResponse()) {
+            DynamicShardingConnectionInfoMessage msg =
+                    DynamicShardingConnectionInfoMessage.fromMultiPartResponse(
+                            resp.getMultiPartResponse());
+            return new ConfigurableGrpcDynamicShardingClient(msg);
+        } else {
+            CLog.v(
+                    "Failed to get connection info from feature client, will attempt to load a"
+                            + " client using the service loader");
+            ServiceLoader<IDynamicShardingClient> serviceLoader =
+                    ServiceLoader.load(IDynamicShardingClient.class);
+            for (IDynamicShardingClient client : serviceLoader) {
+                // the first (and should be only) implementation of this feature should be the
+                // internal one
+                if (IDynamicShardingConnectionInfo.class.isAssignableFrom(client.getClass())) {
+                    // use the internal one to configure the generic one
+                    return new ConfigurableGrpcDynamicShardingClient(
+                            (IDynamicShardingConnectionInfo) client);
+                }
             }
         }
         throw new HarnessRuntimeException(
-                "Failed to load dynamic sharding client implementation (missing from service"
-                        + " loader?)",
-                InfraErrorIdentifier.CLASS_NOT_FOUND);
+                "Failed to retrieve dynamic sharding connection info, feature server problem?",
+                InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
     }
 
     private List<ITestSuite> getAllModules(IConfiguration config, TestInformation testInfo) {
