@@ -1402,6 +1402,39 @@ public class DeviceSetupTest {
                 .executeShellCommand("device_config set_sync_disabled_for_tests persistent");
     }
 
+    @Test
+    public void testSetup_no_reboot_on_generic_persist_property() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+
+        mDeviceSetup.setProperty("persist.key", "value");
+        mDeviceSetup.setUp(mTestInfo);
+
+        verify(mMockDevice, times(0)).reboot();
+    }
+
+    @Test
+    public void testSetup_reboot_on_memtag() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+
+        mDeviceSetup.setProperty("arm64.memtag.bootctl", "memtag");
+        mDeviceSetup.setUp(mTestInfo);
+
+        verify(mMockDevice).reboot();
+    }
+
+    @Test
+    public void testSetup_reboot_on_enable_jdwp() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+
+        mDeviceSetup.setProperty("persist.debug.dalvik.vm.jdwp.enabled", "1");
+        mDeviceSetup.setUp(mTestInfo);
+
+        verify(mMockDevice).reboot();
+    }
+
     /** Set EasyMock expectations for a normal setup call */
     private void doSetupExpectations() throws DeviceNotAvailableException, ConfigurationException {
         doSetupExpectations(
