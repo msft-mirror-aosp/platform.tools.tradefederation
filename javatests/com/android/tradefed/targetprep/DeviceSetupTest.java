@@ -1220,8 +1220,8 @@ public class DeviceSetupTest {
         mDeviceSetup.tearDown(mTestInfo, null);
 
         verify(mMockDevice, atLeastOnce()).getOptions();
-        // doSetupExpectations, changeSystemProps, tearDown
-        verify(mMockDevice, times(2)).reboot();
+        // tearDown
+        verify(mMockDevice, times(1)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
         verify(mMockDevice, times(1)).pushFile(f, "/data/local.prop");
     }
@@ -1240,8 +1240,8 @@ public class DeviceSetupTest {
         mDeviceSetup.tearDown(mTestInfo, null);
 
         verify(mMockDevice, atLeastOnce()).getOptions();
-        // doSetupExpectations, changeSystemProps, tearDown
-        verify(mMockDevice, times(2)).reboot();
+        // tearDown
+        verify(mMockDevice, times(1)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
         verify(mMockDevice).deleteFile("/data/local.prop");
     }
@@ -1499,7 +1499,6 @@ public class DeviceSetupTest {
                     .thenReturn(Boolean.TRUE);
             when(mMockDevice.executeShellCommand(Mockito.matches("chmod 644 .*local.prop")))
                     .thenReturn("");
-            mMockDevice.reboot();
         }
         if (screenOn) {
             when(mMockDevice.executeShellCommand("svc power stayon true")).thenReturn("");
