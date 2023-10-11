@@ -277,6 +277,7 @@ public class InvocationMetricLogger {
         // Ab downloader metrics
         AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
         ZIP_PARTIAL_DOWNLOAD_CACHE_HIT("zip_partial_download_cache_hit", true),
+        DOWNLOAD_BOTH_ZIPS_AND_TS("download_both_zips_and_ts", true),
 
         DUPLICATE_MAPPING_DIFFERENT_OPTIONS("duplicate_mapping_different_options", true),
 
