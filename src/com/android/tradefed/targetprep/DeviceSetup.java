@@ -495,6 +495,15 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     private static final String PERSIST_PREFIX = "persist.";
     private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
 
+    private static final List<String> PROPERTIES_NEEDING_REBOOT =
+            List.of(
+                    // MEMTAG_BOOTCTL stores a value in the misc partition that gets applied on
+                    // reboot.
+                    MEMTAG_BOOTCTL,
+                    // Zygote caches the value of this property because it's expected to reboot the
+                    // system whenever this property changes.
+                    "persist.debug.dalvik.vm.jdwp.enabled");
+
     public ITestDevice getDevice(TestInformation testInfo) {
         return testInfo.getDevice();
     }
@@ -898,19 +907,23 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         // Set persistent props and build a map of all the nonpersistent ones
         Map<String, String> nonpersistentProps = new HashMap<String, String>();
         for (Map.Entry<String, String> prop : mSetProps.entrySet()) {
-            if (prop.getKey().startsWith(PERSIST_PREFIX)) {
+            // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
+            // stores the value in the misc partition, and gets applied and restored on
+            // reboot.
+            boolean isPersistProperty =
+                    prop.getKey().startsWith(PERSIST_PREFIX)
+                            || prop.getKey().equals(MEMTAG_BOOTCTL);
+
+            if (isPersistProperty || mOptimizeNonPersistentSetup) {
                 device.setProperty(prop.getKey(), prop.getValue());
-            } else if (prop.getKey().equals(MEMTAG_BOOTCTL)) {
-                // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
-                // stores the value in the misc partition, and gets applied and restored on
-                // reboot.
-                device.setProperty(prop.getKey(), prop.getValue());
-                needsReboot = true;
-            } else {
+            }
+
+            if (!isPersistProperty) {
                 nonpersistentProps.put(prop.getKey(), prop.getValue());
-                if (mOptimizeNonPersistentSetup) {
-                    device.setProperty(prop.getKey(), prop.getValue());
-                }
+            }
+
+            if (PROPERTIES_NEEDING_REBOOT.contains(prop.getKey())) {
+                needsReboot = true;
             }
         }
 
