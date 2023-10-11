@@ -189,6 +189,12 @@ public class IncrementalImageUtil {
         if (whichOutput.getStdout().contains("/system/bin/snapshotctl")) {
             return true;
         }
+        CommandResult helpOutput = device.executeShellV2Command("snapshotctl");
+        CLog.d("stdout: %s, stderr: %s", helpOutput.getStdout(), helpOutput.getStderr());
+        if (helpOutput.getStdout().contains("map-snapshots")
+                || helpOutput.getStderr().contains("map-snapshots")) {
+            return true;
+        }
         return false;
     }
 
