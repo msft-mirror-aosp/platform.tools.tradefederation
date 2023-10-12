@@ -49,6 +49,7 @@ tradefed_dist_test_apks := TradeFedUiTestApp TradeFedTestApp
 tradefed_dist_copy_pairs := $(foreach m, $(tradefed_dist_host_jars), $(call intermediates-dir-for,JAVA_LIBRARIES,$(m),HOST,COMMON)/javalib.jar:$(m).jar)
 tradefed_dist_copy_pairs += $(foreach m, $(tradefed_dist_host_exes), $(call intermediates-dir-for,EXECUTABLES,$(m),HOST)/$(m):$(m))
 tradefed_dist_copy_pairs += $(foreach m, $(tradefed_dist_test_apks), $(call intermediates-dir-for,APPS,$(m))/package.apk:$(m).apk)
+tradefed_dist_copy_pairs += tools/tradefederation/core/tools/content_uploader.py:content_uploader.py
 
 tradefed_dist_host_jars :=
 tradefed_dist_host_exes :=
