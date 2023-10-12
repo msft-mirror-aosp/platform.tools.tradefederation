@@ -22,7 +22,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.ArrayList;
 
-import org.junit.Assert;
 
 /** Contains common utility methods for checking module. */
 public class ModuleTestTypeUtil {
@@ -31,7 +30,7 @@ public class ModuleTestTypeUtil {
     public static final String TEST_TYPE_VALUE_PERFORMANCE = "performance";
 
     /**
-     * Check whether the {@link config} is a performance module.
+     * Check whether the configuration is a performance module.
      *
      * @param config The config to check.
      * @return true if the config is a performance module.
@@ -43,8 +42,7 @@ public class ModuleTestTypeUtil {
     }
 
     /**
-     * Get the declared test types of the {@link config} with a match in the {#link
-     * testTypesToMatch}.
+     * Get the declared test types of the configuration with a match in the allowed list.
      *
      * @param config The config to check.
      * @param testTypesToMatch The test types to match.
@@ -54,7 +52,9 @@ public class ModuleTestTypeUtil {
             IConfiguration config, List<String> testTypesToMatch) {
         List<String> matchedTypes = new ArrayList<>();
         ConfigurationDescriptor cd = config.getConfigurationDescription();
-        Assert.assertNotNull(config + ": configuration descriptor is null", cd);
+        if (cd == null) {
+            throw new RuntimeException(config + ": configuration descriptor is null");
+        }
         List<String> testTypes = cd.getMetaData(TEST_TYPE_KEY);
         if (testTypes != null) {
             for (String testType : testTypes) {
