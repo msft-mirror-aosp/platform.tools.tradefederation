@@ -39,8 +39,10 @@ class ArtifactConfig:
     unzip: bool
     exclude_filters: list[str] = dataclasses.field(default_factory=list)
 
+CAS_UPLOADER_PREBUILT_PATH = 'tools/tradefederation/prebuilts/'
+CAS_UPLOADER_PATH = 'tools/content_addressed_storage/prebuilts/'
+CAS_UPLOADER_BIN = 'casuploader'
 
-CAS_UPLOADER_BIN = 'tools/content_addressed_storage/prebuilts/casuploader'
 LOG_PATH = 'logs/cas_uploader.log'
 
 # Configurations of artifacts will be uploaded to CAS.
@@ -72,6 +74,16 @@ ARTIFACTS = [
 # purpose.
 EXPERIMENT_ARTIFACT_CONFIGS = []
 
+def _get_client():
+    bin_path = os.path.join(CAS_UPLOADER_PATH, CAS_UPLOADER_BIN)
+    if os.path.isfile(bin_path):
+        logging.info('Using client at %s', bin_path)
+        return bin_path
+    client = glob.glob(CAS_UPLOADER_PREBUILT_PATH + '**/' + CAS_UPLOADER_BIN, recursive=True)
+    if not client:
+        raise ValueError('Could not find casuploader binary')
+    logging.info('Using client at %s', client[0])
+    return client[0]
 
 def _get_env_var(key: str, default=None, check=False):
     value = os.environ.get(key, default)
@@ -118,7 +130,7 @@ def _upload(
         )
 
         cmd = [
-            CAS_UPLOADER_BIN,
+            _get_client(),
             '-cas-instance',
             cas_instance,
             '-cas-addr',
