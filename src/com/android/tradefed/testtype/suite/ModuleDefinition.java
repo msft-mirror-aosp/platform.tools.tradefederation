@@ -133,6 +133,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String MODULE_ISOLATED = "module-isolated";
     /** This property is set to true if the test module results were cached. */
     public static final String MODULE_CACHED = "module-cached";
+    /** This property is set to true if only module level events are reported. */
+    public static final String SPARSE_MODULE = "sparse-module";
 
     public static final String MODULE_CONTROLLER = "module_controller";
 
