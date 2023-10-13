@@ -94,6 +94,17 @@ public class GTest extends GTestBase implements IDeviceTest {
                             + "match abi under test.")
     private boolean mFilterAbiFolders = true;
 
+    @Option(
+            name = "use-updated-shard-retry",
+            description = "Whether to use the updated logic for retry with sharding.")
+    private boolean mUseUpdatedShardRetry = true;
+
+    /** Whether any incomplete test is found in the current run. */
+    private boolean mIncompleteTestFound = false;
+
+    /** List of tests that failed in the current test run when test run was complete. */
+    private Set<String> mCurFailedTests = new LinkedHashSet<>();
+
     // Max characters allowed for executing GTest via command line
     private static final int GTEST_CMD_CHAR_LIMIT = 1000;
     /**
@@ -339,6 +350,14 @@ public class GTest extends GTestBase implements IDeviceTest {
             // TODO: consider moving the flush of parser data on exceptions to TestDevice or
             // AdbHelper
             resultParser.flush();
+            if (resultParser instanceof GTestResultParser) {
+                if (((GTestResultParser) resultParser).isTestRunIncomplete()) {
+                    mIncompleteTestFound = true;
+                } else {
+                    // if test run is complete, collect the failed tests so that they can be retried
+                    mCurFailedTests.addAll(((GTestResultParser) resultParser).getFailedTests());
+                }
+            }
             for (String cmd : getAfterTestCmd()) {
                 testDevice.executeShellCommand(cmd);
             }
@@ -380,6 +399,12 @@ public class GTest extends GTestBase implements IDeviceTest {
             // Attempt to parse the file, doesn't matter if the content is invalid.
             if (tmpOutput.exists()) {
                 parser.parseResult(tmpOutput, outputCollector);
+                if (parser.isTestRunIncomplete()) {
+                    mIncompleteTestFound = true;
+                } else {
+                    // if test run is complete, collect the failed tests so that they can be retried
+                    mCurFailedTests.addAll(parser.getFailedTests());
+                }
             }
         } catch (DeviceNotAvailableException | RuntimeException e) {
             throw e;
@@ -409,6 +434,10 @@ public class GTest extends GTestBase implements IDeviceTest {
                     mDevice.getSerialNumber());
             return;
         }
+        // Reset flags that are used to track results of current test run.
+        mIncompleteTestFound = false;
+        mCurFailedTests = new LinkedHashSet<>();
+
         if (mStopRuntime) {
             mDevice.executeShellCommand("stop");
         }
@@ -419,8 +448,16 @@ public class GTest extends GTestBase implements IDeviceTest {
             doRunAllTestsInSubdirectory(testPath, mDevice, listener);
         } catch (Throwable t) {
             throwable = t;
+            // if we encounter any errors, count it as test Incomplete so that retry attempts
+            // during sharding uses a full retry.
+            mIncompleteTestFound = true;
             throw t;
         } finally {
+            if (mUseUpdatedShardRetry) {
+                // notify of test execution will enable the new sharding retry behavior since Gtest
+                // will be aware of retries.
+                notifyTestExecution(mIncompleteTestFound, mCurFailedTests);
+            }
             if (!(throwable instanceof DeviceNotAvailableException)) {
                 if (mStopRuntime) {
                     mDevice.executeShellCommand("start");
