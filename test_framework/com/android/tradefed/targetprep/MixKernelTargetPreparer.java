@@ -17,10 +17,13 @@ package com.android.tradefed.targetprep;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.config.ConfigurationException;
+import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -34,17 +37,18 @@ import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.regex.Pattern;
 import java.util.regex.Matcher;
-import java.time.Duration;
+import java.util.regex.Pattern;
 
 /** A {@link ITargetPreparer} that allows to mix a kernel image with the device image. */
 @OptionClass(alias = "mix-kernel-target-preparer")
-public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabPreparer {
+public class MixKernelTargetPreparer extends BaseTargetPreparer
+        implements ILabPreparer, IConfigurationReceiver {
 
     @Option(
             name = "device-file-label",
@@ -107,6 +111,13 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
                     "Additional arguments to be passed to mix-kernel-script command, "
                             + "including leading dash, e.g. \"--nocompress\"")
     private Collection<String> mMixKernelArgs = new ArrayList<>();
+
+    private IConfiguration mConfig;
+
+    @Override
+    public void setConfiguration(IConfiguration configuration) {
+        mConfig = configuration;
+    }
 
     @Override
     public void setUp(TestInformation testInfo)
@@ -290,6 +301,15 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
         buildInfo.getFile(BuildInfoFileKey.DEVICE_IMAGE.getFileKey()).delete();
         FileUtil.hardlinkFile(newDeviceImage, new File(deviceImagePath));
 
+        try {
+            // Modifying device image cannot work with incremental flashing so
+            // self disable it.
+            mConfig.injectOptionValue("incremental-flashing", "false");
+            mConfig.injectOptionValue("force-disable-incremental-flashing", "false");
+        } catch (ConfigurationException ignore) {
+            CLog.e(ignore);
+        }
+
         CLog.i(
                 "After mixing kernel, the device image %s is of size %d",
                 buildInfo.getFile(BuildInfoFileKey.DEVICE_IMAGE.getFileKey()).toString(),
@@ -311,7 +331,7 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer implements ILabP
      */
     protected void runMixKernelTool(
             ITestDevice device, File oldDeviceDir, File kernelDir, File gkiDir, File newDeviceDir)
-            throws TargetSetupError, DeviceNotAvailableException {
+            throws TargetSetupError {
         List<String> cmd = ArrayUtil.list(mMixKernelToolPath.getAbsolutePath());
         // Tool command line: $0 [<options>] --gki_dir gkiDir oldDeviceDir kernelDir newDeviceDir
         cmd.addAll(mMixKernelArgs);
