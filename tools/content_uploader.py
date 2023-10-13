@@ -43,6 +43,7 @@ CAS_UPLOADER_PREBUILT_PATH = 'tools/tradefederation/prebuilts/'
 CAS_UPLOADER_PATH = 'tools/content_addressed_storage/prebuilts/'
 CAS_UPLOADER_BIN = 'casuploader'
 
+UPLOADER_TIMEOUT_SECS = 600 # 10 minutes
 LOG_PATH = 'logs/cas_uploader.log'
 
 # Configurations of artifacts will be uploaded to CAS.
@@ -160,6 +161,7 @@ def _upload(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 encoding='utf-8',
+                timeout=UPLOADER_TIMEOUT_SECS
             )
             logging.info(
                 'Elapsed time of uploading %s: %d seconds',
