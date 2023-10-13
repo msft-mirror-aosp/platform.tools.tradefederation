@@ -32,8 +32,8 @@ import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -51,8 +51,6 @@ import com.android.tradefed.util.image.IncrementalImageUtil;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** A {@link ITargetPreparer} that flashes an image on physical Android hardware. */
@@ -81,8 +79,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
      * A temporary workaround for special builds. Should be removed after changes from build team.
      * Bug: 18078421
      */
-    @Option(name = "skip-post-flash-flavor-check", description =
-            "specify if system flavor should not be checked after flash")
+    @Deprecated
+    @Option(
+            name = "skip-post-flash-flavor-check",
+            description = "specify if system flavor should not be checked after flash")
     private boolean mSkipPostFlashFlavorCheck = false;
 
     /*
@@ -440,15 +440,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             checkBuildAttribute(deviceBuild.getDeviceBuildId(), device.getBuildId(),
                     device.getSerialNumber());
         }
-        if (!mSkipPostFlashFlavorCheck) {
-            // Consider turning off this by default as it could lead to a lot
-            // of false positive.
-            checkBuildAttributeWithVariant(
-                    deviceBuild.getDeviceBuildFlavor(),
-                    device.getBuildFlavor(),
-                    device.getSerialNumber());
-        }
-        // TODO: check bootloader and baseband versions too
     }
 
     private void checkBuildAttribute(String expectedBuildAttr, String actualBuildAttr,
@@ -461,35 +452,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                     String.format(
                             "Unexpected build after flashing. Expected %s, actual %s",
                             expectedBuildAttr, actualBuildAttr),
-                    serial,
-                    DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
-        }
-    }
-
-    private void checkBuildAttributeWithVariant(
-            String expectedBuildAttr, String actualBuildAttr, String serial)
-            throws DeviceNotAvailableException {
-        if (expectedBuildAttr == null || actualBuildAttr == null) {
-            throw new DeviceNotAvailableException(
-                    String.format(
-                            "Unexpected build after flashing. Expected %s, actual %s",
-                            expectedBuildAttr, actualBuildAttr),
-                    serial,
-                    DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
-        }
-        Set<String> variants = new LinkedHashSet<>();
-        variants.add(actualBuildAttr); // Add the actual device attribute
-        variants.add(actualBuildAttr.replace("-userdebug", "-trunk_staging-userdebug"));
-        variants.add(actualBuildAttr.replace("-userdebug", "-trunk_food-userdebug"));
-        variants.add(actualBuildAttr.replace("-userdebug", "-next-userdebug"));
-        variants.add(actualBuildAttr.replace("-userdebug", "-trunk-userdebug"));
-        if (!variants.contains(expectedBuildAttr)) {
-            // throw DNAE - assume device hardware problem - we think flash was successful but
-            // device is not running right bits
-            throw new DeviceNotAvailableException(
-                    String.format(
-                            "Unexpected build after flashing. Expected %s, actual not in %s",
-                            expectedBuildAttr, variants),
                     serial,
                     DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
         }
@@ -538,10 +500,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     @VisibleForTesting
     void setShouldFlashRamdisk(boolean shouldFlashRamdisk) {
         mShouldFlashRamdisk = shouldFlashRamdisk;
-    }
-
-    protected void setSkipPostFlashFlavorCheck(boolean skipPostFlashFlavorCheck) {
-        mSkipPostFlashFlavorCheck = skipPostFlashFlavorCheck;
     }
 
     protected void setSkipPostFlashBuildIdCheck(boolean skipPostFlashBuildIdCheck) {
