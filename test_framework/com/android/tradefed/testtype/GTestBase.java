@@ -88,11 +88,17 @@ public abstract class GTestBase
     )
     private Set<String> mIncludeFilters = new LinkedHashSet<>();
 
+    /** GTest-based positive filters that are added during retry attempts. */
+    private Set<String> mRetryIncludeFilters = new LinkedHashSet<>();
+
     @Option(
         name = "exclude-filter",
         description = "The GTest-based negative filter of the test names to run."
     )
     private Set<String> mExcludeFilters = new LinkedHashSet<>();
+
+    /** GTest-based negative filters that are added during retry attempts. */
+    private Set<String> mRetryExcludeFilters = new LinkedHashSet<>();
 
     @Option(
             name = "native-test-timeout",
@@ -228,6 +234,15 @@ public abstract class GTestBase
     private IConfiguration mConfiguration = null;
     private IAbi mAbi;
 
+    /** Track if test is executed or not. If executed, subsequent runs will be retry attempts. */
+    private boolean mTestExecutedBefore = false;
+
+    /** Whether the prev test run was complete or not. */
+    private boolean mPrevTestRunCompleted = false;
+
+    /** Track failed tests from the previous run. */
+    private Set<String> mPrevFailedTests = new LinkedHashSet<>();
+
     @Override
     public void setAbi(IAbi abi) {
         mAbi = abi;
@@ -328,13 +343,18 @@ public abstract class GTestBase
             mShardCount = 0;
         }
         mIncludeFilters.add(cleanFilter(filter));
+        if (mTestExecutedBefore) {
+            // if test is already executed, newly added filters are intended for retry attempts. so
+            // track them.
+            mRetryIncludeFilters.add(cleanFilter(filter));
+        }
     }
 
     /** {@inheritDoc} */
     @Override
     public void addAllIncludeFilters(Set<String> filters) {
         for (String filter : filters) {
-            mIncludeFilters.add(cleanFilter(filter));
+            addIncludeFilter(cleanFilter(filter));
         }
     }
 
@@ -342,13 +362,18 @@ public abstract class GTestBase
     @Override
     public void addExcludeFilter(String filter) {
         mExcludeFilters.add(cleanFilter(filter));
+        if (mTestExecutedBefore) {
+            // if test is already executed, newly added filters are intended for retry attempts. so
+            // track them.
+            mRetryExcludeFilters.add(cleanFilter(filter));
+        }
     }
 
     /** {@inheritDoc} */
     @Override
     public void addAllExcludeFilters(Set<String> filters) {
         for (String filter : filters) {
-            mExcludeFilters.add(cleanFilter(filter));
+            addExcludeFilter(cleanFilter(filter));
         }
     }
 
@@ -450,32 +475,74 @@ public abstract class GTestBase
      */
     protected String getGTestFilters(String path) throws DeviceNotAvailableException {
         StringBuilder filter = new StringBuilder();
-        if (mTestNamePositiveFilter != null) {
-            mIncludeFilters.add(mTestNamePositiveFilter);
-        }
-        if (mTestNameNegativeFilter != null) {
-            mExcludeFilters.add(mTestNameNegativeFilter);
-        }
-        if (mTestFilterKey != null) {
-            String fileFilters = loadFilter(path);
-            if (fileFilters != null && !fileFilters.isEmpty()) {
-                if (fileFilters.startsWith("-")) {
-                    for (String filterString : fileFilters.substring(1).split(":")) {
-                        mExcludeFilters.add(filterString);
+        if (isShardRetry()) {
+            CLog.d("Using updated logic for retry attempt when sharding is involved.");
+            // During retry attempts with sharding, apply new partial or full retry logic.
+            if (usePartialRetry()) {
+                CLog.d("Using partial retry logic since previous run was complete.");
+                // if prev test run was complete and we know a list of test failures from prev run,
+                // do partial retry by explicitly including failed tests
+                clearIncludeFilters();
+                clearExcludeFilters();
+                mTestNamePositiveFilter = null;
+                mTestNameNegativeFilter = null;
+                // Remove non-retriable failed tests from prev-failed tests list. non-retriable
+                // failed tests are provided as exclusion filters during retry.
+                for (String retryExcludeFilter : mRetryExcludeFilters) {
+                    if (mPrevFailedTests.contains(retryExcludeFilter)) {
+                        mPrevFailedTests.remove(retryExcludeFilter);
                     }
-                } else {
-                    String[] filterStrings = fileFilters.split("-");
-                    for (String filterString : filterStrings[0].split(":")) {
-                        mIncludeFilters.add(filterString);
-                    }
-                    if (filterStrings.length == 2) {
-                        for (String filterString : filterStrings[1].split(":")) {
+                }
+                // Use the includeFilter method to turnoff sharding during partial retry.
+                addAllIncludeFilters(mPrevFailedTests);
+                // clear retryFilters list for next retry attempt
+                mRetryIncludeFilters.clear();
+                mRetryExcludeFilters.clear();
+            } else {
+                CLog.d("Using full retry logic since previous run was incomplete");
+                // if prev test run was incomplete when sharding is involved, do full retry
+                // by ignoring newly added filters
+                // Don't use the include/excludeFilter methods to avoid stopping sharding.
+                for (String excludeFilter : mRetryExcludeFilters) {
+                    mExcludeFilters.remove(excludeFilter);
+                }
+                for (String includeFilter : mRetryIncludeFilters) {
+                    mIncludeFilters.remove(includeFilter);
+                }
+
+                // clear retryFilters list for next retry attempt
+                mRetryIncludeFilters.clear();
+                mRetryExcludeFilters.clear();
+            }
+        } else {
+            if (mTestNamePositiveFilter != null) {
+                mIncludeFilters.add(mTestNamePositiveFilter);
+            }
+            if (mTestNameNegativeFilter != null) {
+                mExcludeFilters.add(mTestNameNegativeFilter);
+            }
+            if (mTestFilterKey != null) {
+                String fileFilters = loadFilter(path);
+                if (fileFilters != null && !fileFilters.isEmpty()) {
+                    if (fileFilters.startsWith("-")) {
+                        for (String filterString : fileFilters.substring(1).split(":")) {
                             mExcludeFilters.add(filterString);
+                        }
+                    } else {
+                        String[] filterStrings = fileFilters.split("-");
+                        for (String filterString : filterStrings[0].split(":")) {
+                            mIncludeFilters.add(filterString);
+                        }
+                        if (filterStrings.length == 2) {
+                            for (String filterString : filterStrings[1].split(":")) {
+                                mExcludeFilters.add(filterString);
+                            }
                         }
                     }
                 }
             }
         }
+
         if (!mIncludeFilters.isEmpty() || !mExcludeFilters.isEmpty()) {
             filter.append(GTEST_FLAG_FILTER);
             filter.append("=");
@@ -487,6 +554,7 @@ public abstract class GTestBase
                 filter.append(ArrayUtil.join(":", mExcludeFilters));
             }
         }
+
         String filterFlag = filter.toString();
         // Handle long args
         if (filterFlag.length() > 500) {
@@ -750,5 +818,32 @@ public abstract class GTestBase
         }
 
         return new GTestListener(listener);
+    }
+
+    /**
+     * Notify parent of test execution, so that inclusion/exclusion filters can be handled properly
+     * for the retry attempts.
+     */
+    public void notifyTestExecution(boolean incompleteTestFound, Set<String> failedTests) {
+        mTestExecutedBefore = true;
+        mPrevTestRunCompleted = !incompleteTestFound;
+        mPrevFailedTests = failedTests;
+    }
+
+    /** Whether the current run is a retry attempt with sharding involved. */
+    private boolean isShardRetry() {
+        return mTestExecutedBefore && (mShardCount > 0);
+    }
+
+    /**
+     * Whether the current retry attempt should be a partial retry or full retry.
+     *
+     * @return true, if partial retry. false, if full retry.
+     */
+    private boolean usePartialRetry() {
+        return mTestExecutedBefore
+                && mPrevTestRunCompleted
+                && mPrevFailedTests != null
+                && !mPrevFailedTests.isEmpty();
     }
 }
