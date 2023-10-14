@@ -112,6 +112,7 @@ def _upload(
         cas_service: str,
         artifact: ArtifactConfig,
         working_dir: str,
+        log_file: str,
 ) -> str:
     """Upload the artifact to CAS by casuploader binary.
 
@@ -120,6 +121,7 @@ def _upload(
       cas_service: the address of CAS service.
       artifact: the artifact to be uploaded to CAS.
       working_dir: the directory for intermediate files.
+      log_file: the file where to add the upload logs.
 
     Returns: the digest of the uploaded artifact, formatted as "<hash>/<size>".
       returns None if artifact upload fails.
@@ -154,21 +156,21 @@ def _upload(
             cmd = cmd + ['-exclude-filters', exclude_filter]
 
         try:
-            proc = subprocess.run(
-                cmd,
-                check=True,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                encoding='utf-8',
-                timeout=UPLOADER_TIMEOUT_SECS
-            )
+            with open(log_file, "a") as outfile:
+                subprocess.run(
+                    cmd,
+                    check=True,
+                    text=True,
+                    stdout=outfile,
+                    stderr=subprocess.STDOUT,
+                    encoding='utf-8',
+                    timeout=UPLOADER_TIMEOUT_SECS
+                )
             logging.info(
                 'Elapsed time of uploading %s: %d seconds',
                 artifact.source_path,
                 time.time() - start,
             )
-            logging.info('Log of command %s:\n%s', cmd, proc.stdout)
         except subprocess.CalledProcessError as e:
             logging.warning(
                 'Failed to upload %s to CAS instance %s. Skip.\nError message: %s\nLog: %s',
@@ -218,12 +220,12 @@ def main():
     cas_service = _get_env_var('RBE_service', check=True)
     dist_dir = _get_env_var('DIST_DIR', check=True)
 
-    print('content_uploader.py will export logs to:', f'{dist_dir}/{LOG_PATH}')
-
+    log_file = f'{dist_dir}/{LOG_PATH}'
+    print('content_uploader.py will export logs to:', log_file)
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(asctime)s %(levelname)s %(message)s',
-        filename=f'{dist_dir}/{LOG_PATH}',
+        filename=log_file,
     )
 
     logging.info('Environment variables of running server: %s', os.environ)
@@ -240,7 +242,7 @@ def main():
             for f in glob.glob(dist_dir + '/**/' + source_path, recursive=True):
                 name = os.path.basename(f)
                 artifact.source_path = f
-                digest = _upload(cas_instance, cas_service, artifact, working_dir)
+                digest = _upload(cas_instance, cas_service, artifact, working_dir, log_file)
                 if digest:
                     file_digests[name] = digest
                 else:
