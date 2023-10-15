@@ -343,9 +343,16 @@ public class IncrementalImageUtil {
             if (mDevice.isStateBootloaderOrFastbootd()) {
                 mDevice.reboot();
             }
+            mDevice.enableAdbRoot();
             CommandResult revertOutput =
                     mDevice.executeShellV2Command("snapshotctl revert-snapshots");
-            CLog.d("stdout: %s, stderr: %s", revertOutput.getStdout(), revertOutput.getStderr());
+            if (!CommandStatus.SUCCESS.equals(revertOutput.getStatus())) {
+                CLog.d(
+                        "Failed revert-snapshots. stdout: %s, stderr: %s",
+                        revertOutput.getStdout(), revertOutput.getStderr());
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
+            }
             if (mSourceDirectory != null) {
                 flashStaticPartition(mSourceDirectory);
             }
