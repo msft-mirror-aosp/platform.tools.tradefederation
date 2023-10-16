@@ -105,9 +105,6 @@ public class JsonHttpTestResultReporter extends CollectingTestListener {
     public void invocationStarted(IInvocationContext context) {
         super.invocationStarted(context);
         mInvocationContext = context;
-        if (mDeviceDetails) {
-            parseAdditionalDeviceDetails(getDevice(context));
-        }
     }
 
     @Override
@@ -124,6 +121,9 @@ public class JsonHttpTestResultReporter extends CollectingTestListener {
             CLog.d("Skipping reporting beacuse there are invocation failures.");
         } else {
             try {
+                if (mDeviceDetails) {
+                    parseAdditionalDeviceDetails(getDevice(mInvocationContext));
+                }
                 postResults(convertMetricsToJson(getMergedTestRunResults()));
             } catch (JSONException e) {
                 CLog.e("JSONException while converting test metrics.");

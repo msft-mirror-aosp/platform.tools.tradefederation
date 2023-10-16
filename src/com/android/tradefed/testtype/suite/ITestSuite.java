@@ -307,6 +307,13 @@ public abstract class ITestSuite
     )
     private boolean mIsolatedModule = false;
 
+    @Option(
+            name = "recover-device-by-cvd",
+            description =
+                    "Try to recover the device by cvd tool when the device is gone during test"
+                            + " running.")
+    protected boolean mRecoverDeviceByCvd = false;
+
     /** @deprecated to be deleted when next version is deployed */
     @Deprecated
     @Option(
@@ -711,7 +718,7 @@ public abstract class ITestSuite
      * Opportunity to clean up all the things that were needed during the suites setup but are not
      * required to run the tests.
      */
-    void cleanUpSuiteSetup() {
+    public void cleanUpSuiteSetup() {
         // Empty by default.
     }
 
@@ -922,6 +929,9 @@ public abstract class ITestSuite
             }
             if (mCollectTestsOnly) {
                 module.setCollectTestsOnly(mCollectTestsOnly);
+            }
+            if (mRecoverDeviceByCvd) {
+                module.setRecoverVirtualDevice(mRecoverDeviceByCvd);
             }
             // Pass the run defined collectors to be used.
             module.setMetricCollectors(CollectorHelper.cloneCollectors(mMetricCollectors));
@@ -1625,7 +1635,15 @@ public abstract class ITestSuite
         return true;
     }
 
-    protected void setMultiDeviceStrategy(MultiDeviceModuleStrategy strategy) {
+    public void setMultiDeviceStrategy(MultiDeviceModuleStrategy strategy) {
         mMultiDevicesStrategy = strategy;
+    }
+
+    public MultiDeviceModuleStrategy getMultiDeviceStrategy() {
+        return mMultiDevicesStrategy;
+    }
+
+    public void setIntraModuleSharding(boolean intraModuleSharding) {
+        mIntraModuleSharding = intraModuleSharding;
     }
 }

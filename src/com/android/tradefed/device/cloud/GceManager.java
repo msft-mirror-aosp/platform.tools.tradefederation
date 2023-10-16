@@ -72,7 +72,8 @@ public class GceManager {
     public static final String GCE_INSTANCE_CLEANED_KEY = "gce-instance-clean-called";
     public static final String GCE_IP_PRECONFIGURED_KEY = "gce-ip-pre-configured";
 
-    private static final long BUGREPORT_TIMEOUT = 15 * 60 * 1000L;
+    // Align default value of bugreport timeout with option bugreportz-timeout
+    private static final long BUGREPORT_TIMEOUT = 5 * 60 * 1000L;
     private static final long REMOTE_FILE_OP_TIMEOUT = 10 * 60 * 1000L;
     private static final Pattern BUGREPORTZ_RESPONSE_PATTERN = Pattern.compile("(OK:)(.*)");
     private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();

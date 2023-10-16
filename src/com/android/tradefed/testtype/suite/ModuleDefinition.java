@@ -131,6 +131,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String MODULE_ID = "module-id";
     /** This property is set to true if the module was running on a freshly prepared device. */
     public static final String MODULE_ISOLATED = "module-isolated";
+    /** This property is set to true if the test module results were cached. */
+    public static final String MODULE_CACHED = "module-cached";
+    /** This property is set to true if only module level events are reported. */
+    public static final String SPARSE_MODULE = "sparse-module";
 
     public static final String MODULE_CONTROLLER = "module_controller";
 
@@ -192,6 +196,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     private int mTargetPreparerRetryCount = 0;
 
     private Set<TestDescription> mPassThroughFilters = new LinkedHashSet<>();
+
+    private boolean mRecoverVirtualDevice = false;
 
     @VisibleForTesting
     public ModuleDefinition() {
@@ -1138,11 +1144,17 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     device.waitForDeviceAvailable();
                 } catch (DeviceNotAvailableException e) {
                     // Wrap exception for better message
-                    throw new DeviceNotAvailableException(
-                            String.format("Device went offline after running module '%s'", mId),
-                            e,
-                            e.getSerial(),
-                            DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                    String error_msg =
+                            String.format("Device went offline after running module '%s'", mId);
+                    if (!mRecoverVirtualDevice) {
+                        throw new DeviceNotAvailableException(
+                                error_msg,
+                                e,
+                                e.getSerial(),
+                                DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                    }
+                    CLog.d(error_msg);
+                    device.getConnection().recoverVirtualDevice(device, e);
                 }
             }
         }
@@ -1156,6 +1168,11 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     @Override
     public void setCollectTestsOnly(boolean collectTestsOnly) {
         mCollectTestsOnly = collectTestsOnly;
+    }
+
+    /** Sets should recover virtual device. */
+    public void setRecoverVirtualDevice(boolean recoverVirtualDevice) {
+        mRecoverVirtualDevice = recoverVirtualDevice;
     }
 
     /** Sets whether or not we should merge results. */

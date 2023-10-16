@@ -271,22 +271,27 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
                         DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
             }
 
-            // We specify the root's user id here, 0, because framework services may be stopped
-            // which would cause the non-user id version of this method to fail when it attempts to
-            // tget the current user id which isn't needed.
-            File coverageTar = device.pullFile(tarFullPath, 0);
-            verifyNotNull(
-                    coverageTar,
-                    "Failed to pull the native kernel coverage file %s for %s",
-                    tarFullPath,
-                    name);
+            try {
+                // We specify the root's user id here, 0, because framework services may be stopped
+                // which would cause the non-user id version of this method to fail when it attempts
+                // to get the current user id which isn't needed.
+                File coverageTar = device.pullFile(tarFullPath, 0);
+                verifyNotNull(
+                        coverageTar,
+                        "Failed to pull the native kernel coverage file %s for %s",
+                        tarFullPath,
+                        name);
 
-            try (FileInputStreamSource source = new FileInputStreamSource(coverageTar, true)) {
-                String fileName =
-                        String.format("%s_%d_kernel_coverage", name, System.currentTimeMillis());
-                testLog(fileName, LogDataType.GCOV_KERNEL_COVERAGE, source);
+                try (FileInputStreamSource source = new FileInputStreamSource(coverageTar, true)) {
+                    String fileName =
+                            String.format(
+                                    "%s_%d_kernel_coverage", name, System.currentTimeMillis());
+                    testLog(fileName, LogDataType.GCOV_KERNEL_COVERAGE, source);
+                } finally {
+                    FileUtil.deleteFile(coverageTar);
+                }
             } finally {
-                FileUtil.deleteFile(coverageTar);
+                device.deleteFile(tempDir);
             }
         }
     }

@@ -1220,8 +1220,8 @@ public class DeviceSetupTest {
         mDeviceSetup.tearDown(mTestInfo, null);
 
         verify(mMockDevice, atLeastOnce()).getOptions();
-        // doSetupExpectations, changeSystemProps, tearDown
-        verify(mMockDevice, times(3)).reboot();
+        // tearDown
+        verify(mMockDevice, times(1)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
         verify(mMockDevice, times(1)).pushFile(f, "/data/local.prop");
     }
@@ -1240,8 +1240,8 @@ public class DeviceSetupTest {
         mDeviceSetup.tearDown(mTestInfo, null);
 
         verify(mMockDevice, atLeastOnce()).getOptions();
-        // doSetupExpectations, changeSystemProps, tearDown
-        verify(mMockDevice, times(3)).reboot();
+        // tearDown
+        verify(mMockDevice, times(1)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
         verify(mMockDevice).deleteFile("/data/local.prop");
     }
@@ -1383,6 +1383,7 @@ public class DeviceSetupTest {
         when(mMockDevice.getProperty("fooProperty")).thenReturn("1");
 
         OptionSetter setter = new OptionSetter(mDeviceSetup);
+        setter.setOptionValue("optimized-non-persistent-setup", "false");
         setter.setOptionValue("optimized-property-setting", "true");
         setter.setOptionValue("set-property", "fooProperty", "1");
         mDeviceSetup.setUp(mTestInfo);
@@ -1399,6 +1400,39 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
         verify(mMockDevice)
                 .executeShellCommand("device_config set_sync_disabled_for_tests persistent");
+    }
+
+    @Test
+    public void testSetup_no_reboot_on_generic_persist_property() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+
+        mDeviceSetup.setProperty("persist.key", "value");
+        mDeviceSetup.setUp(mTestInfo);
+
+        verify(mMockDevice, times(0)).reboot();
+    }
+
+    @Test
+    public void testSetup_reboot_on_memtag() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+
+        mDeviceSetup.setProperty("arm64.memtag.bootctl", "memtag");
+        mDeviceSetup.setUp(mTestInfo);
+
+        verify(mMockDevice).reboot();
+    }
+
+    @Test
+    public void testSetup_reboot_on_enable_jdwp() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+
+        mDeviceSetup.setProperty("persist.debug.dalvik.vm.jdwp.enabled", "1");
+        mDeviceSetup.setUp(mTestInfo);
+
+        verify(mMockDevice).reboot();
     }
 
     /** Set EasyMock expectations for a normal setup call */
@@ -1498,7 +1532,6 @@ public class DeviceSetupTest {
                     .thenReturn(Boolean.TRUE);
             when(mMockDevice.executeShellCommand(Mockito.matches("chmod 644 .*local.prop")))
                     .thenReturn("");
-            mMockDevice.reboot();
         }
         if (screenOn) {
             when(mMockDevice.executeShellCommand("svc power stayon true")).thenReturn("");

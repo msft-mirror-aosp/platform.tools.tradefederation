@@ -250,8 +250,10 @@ import com.android.tradefed.targetprep.AllTestAppsInstallSetupTest;
 import com.android.tradefed.targetprep.AoaTargetPreparerTest;
 import com.android.tradefed.targetprep.AppSetupTest;
 import com.android.tradefed.targetprep.BaseTargetPreparerTest;
+import com.android.tradefed.targetprep.CompileBootImageWithSpeedTargetPreparerTest;
 import com.android.tradefed.targetprep.CreateUserPreparerTest;
 import com.android.tradefed.targetprep.DefaultTestsZipInstallerTest;
+import com.android.tradefed.targetprep.DeviceActionTargetPreparerTest;
 import com.android.tradefed.targetprep.DeviceFlashPreparerTest;
 import com.android.tradefed.targetprep.DeviceOwnerTargetPreparerTest;
 import com.android.tradefed.targetprep.DeviceSetupTest;
@@ -401,6 +403,7 @@ import com.android.tradefed.util.BundletoolUtilTest;
 import com.android.tradefed.util.ByteArrayListTest;
 import com.android.tradefed.util.ClassPathScannerTest;
 import com.android.tradefed.util.ConditionPriorityBlockingQueueTest;
+import com.android.tradefed.util.DeviceActionUtilTest;
 import com.android.tradefed.util.DirectedGraphTest;
 import com.android.tradefed.util.EmailTest;
 import com.android.tradefed.util.FakeTestsZipFolderTest;
@@ -418,6 +421,7 @@ import com.android.tradefed.util.ListInstrumentationParserTest;
 import com.android.tradefed.util.LocalRunInstructionBuilderTest;
 import com.android.tradefed.util.LogcatEventParserTest;
 import com.android.tradefed.util.MetricUtilityTest;
+import com.android.tradefed.util.ModuleTestTypeUtilTest;
 import com.android.tradefed.util.MultiMapTest;
 import com.android.tradefed.util.NativeCodeCoverageFlusherTest;
 import com.android.tradefed.util.PairTest;
@@ -456,6 +460,7 @@ import com.android.tradefed.util.ZipUtilTest;
 import com.android.tradefed.util.executor.ParallelDeviceExecutorTest;
 import com.android.tradefed.util.hostmetric.AbstractHostMonitorTest;
 import com.android.tradefed.util.hostmetric.HeapHostMonitorTest;
+import com.android.tradefed.util.image.DeviceImageTrackerTest;
 import com.android.tradefed.util.keystore.JSONFileKeyStoreClientTest;
 import com.android.tradefed.util.keystore.JSONFileKeyStoreFactoryTest;
 import com.android.tradefed.util.net.HttpHelperTest;
@@ -776,9 +781,10 @@ import org.junit.runners.Suite.SuiteClasses;
     AoaTargetPreparerTest.class,
     AppSetupTest.class,
     BaseTargetPreparerTest.class,
-    VisibleBackgroundUserPreparerTest.class,
+    CompileBootImageWithSpeedTargetPreparerTest.class,
     CreateUserPreparerTest.class,
     DefaultTestsZipInstallerTest.class,
+    DeviceActionTargetPreparerTest.class,
     DeviceFlashPreparerTest.class,
     DeviceOwnerTargetPreparerTest.class,
     DeviceSetupTest.class,
@@ -808,6 +814,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RunCommandTargetPreparerTest.class,
     RunHostCommandTargetPreparerTest.class,
     RunHostScriptTargetPreparerTest.class,
+    RunOnCloneProfileTargetPreparerTest.class,
     RunOnSdkSandboxTargetPreparerTest.class,
     RunOnSecondaryUserTargetPreparerTest.class,
     RunOnSystemUserTargetPreparerTest.class,
@@ -820,7 +827,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TestFilePushSetupTest.class,
     SwitchUserTargetPreparerTest.class,
     UserCleanerTest.class,
-    RunOnCloneProfileTargetPreparerTest.class,
+    VisibleBackgroundUserPreparerTest.class,
 
     // targetprep.adb
     AdbStopServerPreparerTest.class,
@@ -988,6 +995,7 @@ import org.junit.runners.Suite.SuiteClasses;
     CentralDirectoryInfoTest.class,
     ClassPathScannerTest.class,
     ConditionPriorityBlockingQueueTest.class,
+    DeviceActionUtilTest.class,
     DirectedGraphTest.class,
     EmailTest.class,
     FakeTestsZipFolderTest.class,
@@ -1005,6 +1013,7 @@ import org.junit.runners.Suite.SuiteClasses;
     ListInstrumentationParserTest.class,
     LogcatEventParserTest.class,
     MetricUtilityTest.class,
+    ModuleTestTypeUtilTest.class,
     MultiMapTest.class,
     MergedZipEntryCollectionTest.class,
     NativeCodeCoverageFlusherTest.class,
@@ -1047,13 +1056,16 @@ import org.junit.runners.Suite.SuiteClasses;
     AbstractHostMonitorTest.class,
     HeapHostMonitorTest.class,
 
-    // util/net
-    HttpHelperTest.class,
-    HttpMultipartPostTest.class,
+    // util/image
+    DeviceImageTrackerTest.class,
 
     // util/keystore
     JSONFileKeyStoreClientTest.class,
     JSONFileKeyStoreFactoryTest.class,
+
+    // util/net
+    HttpHelperTest.class,
+    HttpMultipartPostTest.class,
 
     // util/proto
     TestRecordProtoUtilTest.class,

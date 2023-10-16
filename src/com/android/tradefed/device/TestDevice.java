@@ -1187,7 +1187,11 @@ public class TestDevice extends NativeDevice {
             }
             long timeSpent = System.currentTimeMillis() - start;
             if (timeSpent > DISMISS_KEYGUARD_TIMEOUT) {
-                CLog.w("Timeout after waiting %dms for keyguard to be dismissed", timeSpent);
+                if (state.isKeyguardGoingAway()) {
+                    CLog.w("Keyguard still going away %dms after being dismissed", timeSpent);
+                } else {
+                    CLog.w("No response from keyguard %dms after being dismissed", timeSpent);
+                }
                 return; // proceed anyway, may be dismissed in a later step
             }
             getRunUtil().sleep(500);

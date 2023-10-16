@@ -283,7 +283,9 @@ public class InvocationExecution implements IInvocationExecution {
             TestInformation testInfo,
             IRescheduler rescheduler,
             ITestLogger logger) {
-        return createShardHelper().shardConfig(config, testInfo, rescheduler, logger);
+        IShardHelper helper = createShardHelper();
+        CLog.d("IShardHelper selected: %s", helper);
+        return helper.shardConfig(config, testInfo, rescheduler, logger);
     }
 
     /** Create an return the {@link IShardHelper} to be used. */
@@ -1132,7 +1134,9 @@ public class InvocationExecution implements IInvocationExecution {
                             || test instanceof TestsPoolPoller
                             // If test doesn't support auto-retry
                             || (!(test instanceof ITestFilterReceiver)
-                                    && !(test instanceof IAutoRetriableTest))) {
+                                    && !(test instanceof IAutoRetriableTest)
+                                    && !RetryStrategy.ITERATIONS.equals(
+                                            decision.getRetryStrategy()))) {
                         try {
                             long timeSpentOnTest =
                                     runTest(
@@ -1147,6 +1151,10 @@ public class InvocationExecution implements IInvocationExecution {
                         } finally {
                             CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                             CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                            // Clean the suite internals once done
+                            if (test instanceof BaseTestSuite) {
+                                ((BaseTestSuite) test).cleanUpSuiteSetup();
+                            }
                         }
                         remainingTests.remove(test);
                         continue;

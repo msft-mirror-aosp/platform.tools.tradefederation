@@ -18,9 +18,14 @@ package com.android.tradefed.device;
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.connection.DefaultConnection;
-import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 
-import java.io.File;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -39,12 +44,6 @@ public class RemoteAndroidDevice extends TestDevice {
     private static final Pattern IP_PATTERN =
             Pattern.compile(ManagedTestDeviceFactory.IPADDRESS_PATTERN);
 
-    private File mAdbConnectLogs = null;
-    private String mInitialSerial;
-    private String mInitialIpDevice;
-    private String mInitialUser;
-    private Integer mInitialDeviceNumOffset;
-
     /**
      * Creates a {@link RemoteAndroidDevice}.
      *
@@ -55,19 +54,6 @@ public class RemoteAndroidDevice extends TestDevice {
     public RemoteAndroidDevice(IDevice device, IDeviceStateMonitor stateMonitor,
             IDeviceMonitor allocationMonitor) {
         super(device, stateMonitor, allocationMonitor);
-        if (getIDevice() instanceof IConfigurableVirtualDevice) {
-            mInitialIpDevice = ((IConfigurableVirtualDevice) getIDevice()).getKnownDeviceIp();
-            mInitialUser = ((IConfigurableVirtualDevice) getIDevice()).getKnownUser();
-            mInitialDeviceNumOffset =
-                    ((IConfigurableVirtualDevice) getIDevice()).getDeviceNumOffset();
-        }
-        mInitialSerial = getSerialNumber();
-    }
-
-    @Override
-    public void postInvocationTearDown(Throwable exception) {
-        super.postInvocationTearDown(exception);
-        FileUtil.deleteFile(mAdbConnectLogs);
     }
 
     /**
@@ -105,13 +91,6 @@ public class RemoteAndroidDevice extends TestDevice {
     }
 
     /**
-     * Give a receiver file where we can store all the adb connection logs for debugging purpose.
-     */
-    public void setAdbLogFile(File adbLogFile) {
-        mAdbConnectLogs = adbLogFile;
-    }
-
-    /**
      * {@inheritDoc}
      */
     @Override
@@ -120,40 +99,66 @@ public class RemoteAndroidDevice extends TestDevice {
     }
 
     @Override
-    public DeviceDescriptor getDeviceDescriptor() {
-        DeviceDescriptor descriptor = super.getDeviceDescriptor();
+    public String getFastbootSerialNumber() {
+        return "tcp:" + getSerialNumber();
+    }
+
+    @Override
+    public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk, boolean scanSsid)
+            throws DeviceNotAvailableException {
+        if (!getOptions().useCmdWifiCommands() || !enableAdbRoot() || getApiLevel() < 31) {
+            return super.connectToWifiNetwork(wifiSsidToPsk, scanSsid);
+        }
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        try {
+            CommandResult enableOutput =
+                    executeShellV2Command(String.format("cmd -w wifi set-wifi-enabled enabled"));
+            if (!CommandStatus.SUCCESS.equals(enableOutput.getStatus())) {
+                CLog.w(
+                        "Failed to enable wifi. stdout: %s\nstderr:%s",
+                        enableOutput.getStdout(), enableOutput.getStderr());
+                return false;
+            }
+            for (Entry<String, String> wifiPair : wifiSsidToPsk.entrySet()) {
+                CommandResult connectOutput =
+                        executeShellV2Command(
+                                String.format(
+                                        "cmd wifi connect-network %s %s open",
+                                        wifiPair.getKey(), wifiPair.getValue()));
+                if (CommandStatus.SUCCESS.equals(connectOutput.getStatus())) {
+                    CLog.i("Successfully connected to wifi network %s", wifiPair.getKey());
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.WIFI_AP_NAME, wifiPair.getKey());
+                    success = true;
+                    break;
+                } else {
+                    CLog.w(
+                            "Failed to connect to wifi wifi. stdout: %s\nstderr:%s",
+                            enableOutput.getStdout(), enableOutput.getStderr());
+                }
+            }
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.WIFI_CONNECT_TIME, System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.WIFI_CONNECT_COUNT, 1);
+        }
+        return success;
+    }
+
+    @Override
+    public DeviceDescriptor getDeviceDescriptor(boolean shortDescriptor) {
+        DeviceDescriptor descriptor = super.getDeviceDescriptor(shortDescriptor);
         if (getConnection() instanceof DefaultConnection) {
             String initialSerial = ((DefaultConnection) getConnection()).getInitialSerial();
             String initialIp = ((DefaultConnection) getConnection()).getInitialIp();
+            Integer initialOffset =
+                    ((DefaultConnection) getConnection()).getInitialDeviceNumOffset();
             if (initialIp != null) {
-                // Alter the display for the console.
-                descriptor =
-                        new DeviceDescriptor(
-                                descriptor, initialSerial, initialSerial + "[" + initialIp + "]");
+                // Specify ip/offset.
+                descriptor = new DeviceDescriptor(descriptor, initialIp, initialOffset);
             }
         }
         return descriptor;
-    }
-
-    /**
-     * Returns the initial associated ip to the device if any. Returns null if no known initial ip.
-     */
-    public String getInitialIp() {
-        return mInitialIpDevice;
-    }
-
-    /** Returns the initial known user if any. Returns null if no initial known user. */
-    public String getInitialUser() {
-        return mInitialUser;
-    }
-
-    /** Returns the known device num offset if any. Returns null if not available. */
-    public Integer getInitialDeviceNumOffset() {
-        return mInitialDeviceNumOffset;
-    }
-
-    /** Returns the initial serial name of the device. */
-    public String getInitialSerial() {
-        return mInitialSerial;
     }
 }

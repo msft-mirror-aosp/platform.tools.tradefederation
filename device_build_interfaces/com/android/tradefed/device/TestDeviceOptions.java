@@ -377,6 +377,11 @@ public class TestDeviceOptions {
                     "Path of extra files need to upload GCE instance during Acloud create."
                             + "Key is local file, value is GCE destination path.")
     private MultiMap<File, String> mGceExtraFiles = new MultiMap<>();
+
+    @Option(
+            name = "use-cmd-wifi",
+            description = "Feature flag to switch the wifi connection to using cmd commands.")
+    private boolean mUseCmdWidi = false;
     // END ====================== Options Related to Virtual Devices ======================
 
     // Option related to Remote Device only
@@ -872,6 +877,11 @@ public class TestDeviceOptions {
     /** Set the extra files need to upload to GCE during acloud create. */
     public void setExtraFiles(MultiMap<File, String> extraFiles) {
         mGceExtraFiles = extraFiles;
+    }
+
+    /** Returns whether or not to use cmd wifi commands instead of apk. */
+    public boolean useCmdWifiCommands() {
+        return mUseCmdWidi;
     }
 
     public static String getCreateCommandByInstanceType(InstanceType type) {

@@ -5487,13 +5487,14 @@ public class TestDeviceTest {
                             throws DeviceNotAvailableException {
                         return "KeyguardController:\n"
                                 + "  mKeyguardShowing=true\n"
-                                + "  mKeyguardGoingAway=false\n"
+                                + "  mKeyguardGoingAway=true\n"
                                 + "  mOccluded=false\n";
                     }
                 };
         KeyguardControllerState state = mTestDevice.getKeyguardState();
         Assert.assertTrue(state.isKeyguardShowing());
         Assert.assertFalse(state.isKeyguardOccluded());
+        Assert.assertTrue(state.isKeyguardGoingAway());
     }
 
     /** New output of dumpsys is not as clean and has stuff in front. */
@@ -5513,6 +5514,7 @@ public class TestDeviceTest {
         KeyguardControllerState state = mTestDevice.getKeyguardState();
         Assert.assertTrue(state.isKeyguardShowing());
         Assert.assertFalse(state.isKeyguardOccluded());
+        Assert.assertFalse(state.isKeyguardGoingAway());
     }
 
     /** Test for {@link TestDevice#getKeyguardState()} when the device does not support it. */

@@ -71,6 +71,12 @@ public final class RetryRescheduler implements IRemoteTest, IConfigurationReceiv
     private RetryType mRetryType = null;
 
     @Option(
+            name = "new-parameterized-handling",
+            description =
+                    "Feature flag to test out the newer parameterized method handling for retry.")
+    private boolean mParameterizedHandling = false;
+
+    @Option(
         name = BaseTestSuite.MODULE_OPTION,
         shortName = BaseTestSuite.MODULE_OPTION_SHORT_NAME,
         description = "the test module to run. Only works for configuration in the tests dir."
@@ -265,10 +271,12 @@ public final class RetryRescheduler implements IRemoteTest, IConfigurationReceiv
 
                 for (Entry<TestDescription, TestResult> result :
                         moduleResult.getTestResults().entrySet()) {
-                    // Put aside all parameterized methods
-                    if (isParameterized(result.getKey())) {
-                        parameterizedMethods.put(result.getKey(), result.getValue());
-                        continue;
+                    if (!mParameterizedHandling) {
+                        // Put aside all parameterized methods
+                        if (isParameterized(result.getKey())) {
+                            parameterizedMethods.put(result.getKey(), result.getValue());
+                            continue;
+                        }
                     }
                     if (!RetryResultHelper.shouldRunTest(result.getValue(), types)) {
                         addExcludeToConfig(suite, moduleResult, result.getKey().toString());
@@ -279,29 +287,30 @@ public final class RetryRescheduler implements IRemoteTest, IConfigurationReceiv
                     }
                 }
 
-                // Handle parameterized methods
-                for (Entry<String, Map<TestDescription, TestResult>> subMap :
-                        sortMethodToClass(parameterizedMethods).entrySet()) {
-                    boolean shouldNotrerunAnything =
-                            subMap.getValue()
-                                    .entrySet()
-                                    .stream()
-                                    .noneMatch(
-                                            (v) ->
-                                                    RetryResultHelper.shouldRunTest(
-                                                                    v.getValue(), types)
-                                                            == true);
-                    // If None of the base method need to be rerun exclude it
-                    if (shouldNotrerunAnything) {
-                        // Exclude the base method
-                        addExcludeToConfig(suite, moduleResult, subMap.getKey());
-                        // Replay all test cases
-                        for (Entry<TestDescription, TestResult> result :
-                                subMap.getValue().entrySet()) {
-                            replayer.addToReplay(
-                                    results.getModuleContextForRunResult(moduleResult.getName()),
-                                    moduleResult,
-                                    result);
+                if (!mParameterizedHandling) {
+                    // Handle parameterized methods
+                    for (Entry<String, Map<TestDescription, TestResult>> subMap :
+                            sortMethodToClass(parameterizedMethods).entrySet()) {
+                        boolean shouldNotrerunAnything =
+                                subMap.getValue().entrySet().stream()
+                                        .noneMatch(
+                                                (v) ->
+                                                        RetryResultHelper.shouldRunTest(
+                                                                        v.getValue(), types)
+                                                                == true);
+                        // If None of the base method need to be rerun exclude it
+                        if (shouldNotrerunAnything) {
+                            // Exclude the base method
+                            addExcludeToConfig(suite, moduleResult, subMap.getKey());
+                            // Replay all test cases
+                            for (Entry<TestDescription, TestResult> result :
+                                    subMap.getValue().entrySet()) {
+                                replayer.addToReplay(
+                                        results.getModuleContextForRunResult(
+                                                moduleResult.getName()),
+                                        moduleResult,
+                                        result);
+                            }
                         }
                     }
                 }

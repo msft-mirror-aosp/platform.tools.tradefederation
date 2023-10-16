@@ -22,12 +22,17 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.ITestSuite;
 
 import com.google.common.base.Strings;
 import com.google.internal.android.engprod.v1.ProvideTestTargetRequest;
 import com.google.internal.android.engprod.v1.SerializedTestTarget;
+import com.proto.tradefed.feature.FeatureResponse;
+
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -37,11 +42,8 @@ import java.util.ServiceLoader;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
-
 /** Sharding strategy to allow work remote work queueing between multiple TF instances */
-public class DynamicShardHelper extends ShardHelper {
+public class DynamicShardHelper extends StrictShardHelper {
 
     /** {@inheritDoc} */
     @Override
@@ -50,34 +52,54 @@ public class DynamicShardHelper extends ShardHelper {
             TestInformation testInfo,
             IRescheduler rescheduler,
             ITestLogger logger) {
+        // Check preconditions
         Integer shardCount = config.getCommandOptions().getShardCount();
         Integer shardIndex = config.getCommandOptions().getShardIndex();
 
+        String invocationId = testInfo.getContext().getAttribute("invocation_id");
+        String attemptId = testInfo.getContext().getAttribute("attempt_index");
+
+        boolean shouldDelegate = false;
+
+        // We should re-delegate this to strict sharding so it can delegate this case to local
+        // sharding
         if (shardIndex == null) {
-            return super.shardConfig(config, testInfo, rescheduler, logger);
+            shouldDelegate = true;
         }
+
         if (shardCount == null) {
             throw new HarnessRuntimeException(
                     "shard-count is null while shard-index is " + shardIndex,
                     InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
         }
+
         // No sharding needed if shard-count=1
         if (shardCount == 1) {
             return false;
         }
 
-        // Initialize Dynamic Sharding client
-        IDynamicShardingClient client = getClient();
-
-        String invocationId = testInfo.getContext().getAttribute("invocation_id");
-        String attemptId = testInfo.getContext().getAttribute("attempt_index");
+        // redelegate to strict sharding
+        if (Strings.isNullOrEmpty(attemptId)) {
+            shouldDelegate = true;
+        }
 
         // If we don't have sufficient information to properly key the pool, then fall
         // back to strict sharding.
-        if (Strings.isNullOrEmpty(invocationId) || Strings.isNullOrEmpty(attemptId)) {
+        if (Strings.isNullOrEmpty(invocationId)) {
             CLog.d("No invocation_id specified, falling back to strict sharding.");
+            shouldDelegate = true;
+        }
+
+        if (shouldDelegate) {
+            CLog.d(
+                    "Setting option 'remote-dynamic-sharding' to false since precondition checks"
+                            + " failed.");
+            config.getCommandOptions().setShouldRemoteDynamicShard(false);
             return super.shardConfig(config, testInfo, rescheduler, logger);
         }
+
+        // Initialize Dynamic Sharding client
+        IDynamicShardingClient client = getClient();
 
         String poolId = String.format("invocation-%s-attempt-%s", invocationId, attemptId);
 
@@ -110,7 +132,7 @@ public class DynamicShardHelper extends ShardHelper {
                 throw e;
             }
             // will only reach this point if the error code is ALREADY_EXISTS
-            CLog.v("Another shard has already seeded the pool '%'.", poolId);
+            CLog.v("Another shard has already seeded the pool '%s'.", poolId);
         }
 
         // if we're any shard, create a test pool poller that polls the sharding server
@@ -133,22 +155,43 @@ public class DynamicShardHelper extends ShardHelper {
     }
 
     private IDynamicShardingClient getClient() {
-        ServiceLoader<IDynamicShardingClient> serviceLoader =
-                ServiceLoader.load(IDynamicShardingClient.class);
-        for (IDynamicShardingClient client : serviceLoader) {
-            // return the first (and should be only) implementation of this feature
-            return client;
+        TradefedFeatureClient featureClient = new TradefedFeatureClient();
+        FeatureResponse resp =
+                featureClient.triggerFeature(
+                        "getDynamicShardingConnectionInfo", new HashMap<String, String>());
+        if (resp.hasMultiPartResponse()) {
+            DynamicShardingConnectionInfoMessage msg =
+                    DynamicShardingConnectionInfoMessage.fromMultiPartResponse(
+                            resp.getMultiPartResponse());
+            return new ConfigurableGrpcDynamicShardingClient(msg);
+        } else {
+            CLog.v(
+                    "Failed to get connection info from feature client, will attempt to load a"
+                            + " client using the service loader");
+            ServiceLoader<IDynamicShardingClient> serviceLoader =
+                    ServiceLoader.load(IDynamicShardingClient.class);
+            for (IDynamicShardingClient client : serviceLoader) {
+                // the first (and should be only) implementation of this feature should be the
+                // internal one
+                if (IDynamicShardingConnectionInfo.class.isAssignableFrom(client.getClass())) {
+                    // use the internal one to configure the generic one
+                    return new ConfigurableGrpcDynamicShardingClient(
+                            (IDynamicShardingConnectionInfo) client);
+                }
+            }
         }
         throw new HarnessRuntimeException(
-                "Failed to load dynamic sharding client implementation (missing from service"
-                        + " loader?)",
-                InfraErrorIdentifier.CLASS_NOT_FOUND);
+                "Failed to retrieve dynamic sharding connection info, feature server problem?",
+                InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
     }
 
     private List<ITestSuite> getAllModules(IConfiguration config, TestInformation testInfo) {
         List<ITestSuite> allTests = new ArrayList<>();
         for (IRemoteTest test : config.getTests()) {
             if (test instanceof ITestSuite) {
+                // Disable intra-module-sharding when requesting dynamic sharding
+                // as it's currently not supported together.
+                ((ITestSuite) test).setIntraModuleSharding(false);
                 allTests.addAll(
                         ((ITestSuite) test)
                                 .split(1000000, testInfo).stream()

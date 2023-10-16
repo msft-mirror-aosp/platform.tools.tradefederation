@@ -71,6 +71,8 @@ public abstract class ProtoResultReporter
     private FailureDescription mInvocationFailureDescription = null;
     /** Whether or not a testModuleStart had currently been called. */
     private boolean mModuleInProgress = false;
+
+    private IInvocationContext mModuleContext;
     /** Track whether or not invocation ended has been reported. */
     private boolean mInvocationEnded = false;
     /** Whether or not to inline test record of child events */
@@ -256,6 +258,7 @@ public abstract class ProtoResultReporter
         moduleBuilder.setDescription(Any.pack(moduleContext.toProto()));
         mLatestChild.add(moduleBuilder);
         mModuleInProgress = true;
+        mModuleContext = moduleContext;
         try {
             processTestModuleStarted(moduleBuilder.build());
         } catch (RuntimeException e) {
@@ -268,11 +271,14 @@ public abstract class ProtoResultReporter
     public final void testModuleEnded() {
         TestRecord.Builder moduleBuilder = mLatestChild.pop();
         mModuleInProgress = false;
+
         moduleBuilder.setEndTime(createTimeStamp(System.currentTimeMillis()));
         // Module do not have a fail status
         moduleBuilder.setStatus(TestStatus.PASS);
+        // Repack module for updated properties
+        moduleBuilder.setDescription(Any.pack(mModuleContext.toProto()));
         TestRecord.Builder parentBuilder = mLatestChild.peek();
-
+        mModuleContext = null;
         // Finalize the module and track it in the child
         TestRecord moduleRecord = moduleBuilder.build();
         ChildReference moduleReference = createModuleChildReference(moduleRecord);

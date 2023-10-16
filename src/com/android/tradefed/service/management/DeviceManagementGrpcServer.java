@@ -9,7 +9,6 @@ import com.android.tradefed.device.DeviceSelectionOptions;
 import com.android.tradefed.device.FreeDeviceState;
 import com.android.tradefed.device.IDeviceManager;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
 
 import com.google.common.base.Strings;
@@ -26,16 +25,16 @@ import com.proto.tradefed.device.ReserveDeviceResponse.Result;
 import com.proto.tradefed.device.StopLeasingRequest;
 import com.proto.tradefed.device.StopLeasingResponse;
 
-import io.grpc.Server;
-import io.grpc.ServerBuilder;
-import io.grpc.stub.ServerCallStreamObserver;
-import io.grpc.stub.StreamObserver;
-
 import java.io.IOException;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
+import io.grpc.stub.ServerCallStreamObserver;
+import io.grpc.stub.StreamObserver;
 
 /** GRPC server allowing to reserve a device from Tradefed. */
 public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
@@ -238,7 +237,7 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
 
         // Notify to stop leasing
         try {
-            mCommandScheduler.shutdown();
+            mCommandScheduler.stopScheduling();
             responseBuilder.setResult(StopLeasingResponse.Result.SUCCEED);
         } catch (RuntimeException e) {
             // This might happen in case scheduler isn't started or in bad state.
@@ -253,12 +252,6 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
     private void releaseReservationInternal(String reservationId) {
         ITestDevice device = getDeviceFromReservationAndClear(reservationId);
         if (device != null) {
-            if (device instanceof IManagedTestDevice) {
-                // This quite an important setting so we do make sure it's reset.
-                // Unfortunately we forgot to copy this over the first time.
-                // TODO(b/295529124) Rework fastboot path setting
-                ((IManagedTestDevice) device).setFastbootPath(mDeviceManager.getFastbootPath());
-            }
             mDeviceManager.freeDevice(device, FreeDeviceState.AVAILABLE);
         }
     }

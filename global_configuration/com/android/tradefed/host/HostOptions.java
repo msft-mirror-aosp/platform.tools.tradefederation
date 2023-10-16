@@ -165,6 +165,16 @@ public class HostOptions implements IHostOptions {
     private File mClFlashstation = new File("/tradefed/cl_flashstation");
 
     @Option(
+            name = "enable-incremental-flashing",
+            description = "Feature flag to enable incremental flashing on one host.")
+    private boolean mEnableIncrementalFlashing = false;
+
+    @Option(
+            name = "opt-out-incremental-flashing",
+            description = "Allows an host to fully opt-out of incremental flashing.")
+    private boolean mOptOutFromIncrementalFlashing = false;
+
+    @Option(
             name = "disable-host-metric-reporting",
             description = "Feature flag to disable the support for host metric reporting.")
     private boolean mDisableHostMetricReporting = false;
@@ -405,6 +415,18 @@ public class HostOptions implements IHostOptions {
     @Override
     public File getClFlashstation() {
         return mClFlashstation;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isIncrementalFlashingEnabled() {
+        return mEnableIncrementalFlashing;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isOptOutOfIncrementalFlashing() {
+        return mOptOutFromIncrementalFlashing;
     }
 
     /** {@inheritDoc} */

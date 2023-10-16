@@ -400,6 +400,16 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     )
     protected boolean mRestoreSettings = false;
 
+    @Option(
+            name = "optimized-non-persistent-setup",
+            description = "Feature to evaluate a faster non-persistent props setup.")
+    private boolean mOptimizeNonPersistentSetup = true;
+
+    @Option(
+            name = "dismiss-setup-wizard",
+            description = "Attempt to dismiss the setup wizard if present.")
+    private boolean mDismissSetupWizard = true;
+
     private Map<String, String> mPreviousSystemSettings = new HashMap<>();
     private Map<String, String> mPreviousSecureSettings = new HashMap<>();
     private Map<String, String> mPreviousGlobalSettings = new HashMap<>();
@@ -485,6 +495,15 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     private static final String PERSIST_PREFIX = "persist.";
     private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
 
+    private static final List<String> PROPERTIES_NEEDING_REBOOT =
+            List.of(
+                    // MEMTAG_BOOTCTL stores a value in the misc partition that gets applied on
+                    // reboot.
+                    MEMTAG_BOOTCTL,
+                    // Zygote caches the value of this property because it's expected to reboot the
+                    // system whenever this property changes.
+                    "persist.debug.dalvik.vm.jdwp.enabled");
+
     public ITestDevice getDevice(TestInformation testInfo) {
         return testInfo.getDevice();
     }
@@ -543,6 +562,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     checkExternalStoreSpace(device);
                     return true;
                 });
+        if (mDismissSetupWizard) {
+            callableTasks.add(
+                    () -> {
+                        dismissSetupWiward(device);
+                        return true;
+                    });
+        }
         if (mParallelCoreSetup) {
             ParallelDeviceExecutor<Boolean> executor =
                     new ParallelDeviceExecutor<Boolean>(callableTasks.size());
@@ -574,6 +600,9 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             syncTestData(device);
             // Throw an error if there is not enough storage space
             checkExternalStoreSpace(device);
+            if (mDismissSetupWizard) {
+                dismissSetupWiward(device);
+            }
         }
         // Run commands designated to be run after changing settings
         runCommands(device, mRunCommandAfterSettings);
@@ -877,24 +906,32 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         // Set persistent props and build a map of all the nonpersistent ones
         Map<String, String> nonpersistentProps = new HashMap<String, String>();
         for (Map.Entry<String, String> prop : mSetProps.entrySet()) {
-            if (prop.getKey().startsWith(PERSIST_PREFIX)) {
-                // TODO: Check that set was successful
+            // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
+            // stores the value in the misc partition, and gets applied and restored on
+            // reboot.
+            boolean isPersistProperty =
+                    prop.getKey().startsWith(PERSIST_PREFIX)
+                            || prop.getKey().equals(MEMTAG_BOOTCTL);
+
+            if (isPersistProperty || mOptimizeNonPersistentSetup) {
                 device.setProperty(prop.getKey(), prop.getValue());
-            } else if (prop.getKey().equals(MEMTAG_BOOTCTL)) {
-                // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
-                // stores the value in the misc partition, and gets applied and restored on
-                // reboot.
-                device.setProperty(prop.getKey(), prop.getValue());
-                needsReboot = true;
-            } else {
+            }
+
+            if (!isPersistProperty) {
                 nonpersistentProps.put(prop.getKey(), prop.getValue());
+            }
+
+            if (PROPERTIES_NEEDING_REBOOT.contains(prop.getKey())) {
+                needsReboot = true;
             }
         }
 
         // If the reboot optimization is enabled, only set nonpersistent props if
         // there are changed values from what the device is running.
         boolean shouldSetProps = true;
-        if (mOptimizedPropertySetting && !nonpersistentProps.isEmpty()) {
+        if (!mOptimizeNonPersistentSetup
+                && mOptimizedPropertySetting
+                && !nonpersistentProps.isEmpty()) {
             boolean allPropsAlreadySet = true;
             for (Map.Entry<String, String> prop : nonpersistentProps.entrySet()) {
                 if (!prop.getValue().equals(device.getProperty(prop.getKey()))) {
@@ -945,7 +982,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                             resultRampdump.getStderr());
                 }
             }
-            needsReboot = true;
+            if (!mOptimizeNonPersistentSetup) {
+                // non-persistent properties do not trigger a reboot in this
+                // new setup, if not explicitly set.
+                needsReboot = true;
+            }
         }
 
         if (needsReboot) {
@@ -1219,6 +1260,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     device.getSerialNumber(),
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
         }
+    }
+
+    private void dismissSetupWiward(ITestDevice device) throws DeviceNotAvailableException {
+        device.executeShellCommand(
+                "am start -a com.android.setupwizard.FOUR_CORNER_EXIT"); // Android
+        // UDC+
+        device.executeShellCommand("am start -a com.android.setupwizard.EXIT"); // Android L - T
     }
 
     /**

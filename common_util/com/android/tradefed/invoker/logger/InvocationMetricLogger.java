@@ -165,7 +165,8 @@ public class InvocationMetricLogger {
         // Count the number of time device recovery like usb reset are successful.
         DEVICE_RECOVERY("device_recovery", true),
         DEVICE_RECOVERY_FROM_RECOVERY("device_recovery_from_recovery", true),
-        DEVICE_RECOVERY_FROM_SSH_TUNNEL("device_recovered_from_ssh_tunnel", true),
+        DEVICE_RECOVERED_FROM_SSH_TUNNEL("device_recovered_from_ssh_tunnel", true),
+        DEVICE_RECOVERED_FROM_DEVICE_RESET("device_recovered_from_device_reset", true),
         DEVICE_RECOVERY_FAIL("device_recovery_fail", true),
         SANDBOX_EXIT_CODE("sandbox_exit_code", false),
         CF_FETCH_ARTIFACT_TIME("cf_fetch_artifact_time_ms", false),
@@ -184,10 +185,21 @@ public class InvocationMetricLogger {
         DEVICE_RESET_MODULES("device_reset_modules", true),
         DEVICE_POWERWASH_DURATIONS("device_powerwash_durations", true),
         DEVICE_RESET_MODULES_FOR_TARGET_PREPARER("device_reset_modules_for_target_preparer", true),
-        DEVICE_SNAPSHOT_COUNT("device_snapshot_count", true),
+        DEVICE_SNAPSHOT_SUCCESS_COUNT("device_snapshot_success_count", true),
+        DEVICE_SNAPSHOT_FAILURE_COUNT("device_snapshot_failure_count", true),
         DEVICE_SNAPSHOT_DURATIONS("device_snapshot_durations", true),
-        DEVICE_SNAPSHOT_RESTORE_COUNT("device_snapshot_restore_count", true),
+        DEVICE_SNAPSHOT_RESTORE_SUCCESS_COUNT("device_snapshot_restore_success_count", true),
+        DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT("device_snapshot_restore_failure_count", true),
         DEVICE_SNAPSHOT_RESTORE_DURATIONS("device_snapshot_restore_durations", true),
+        DEVICE_SUSPEND_SUCCESS_COUNT("device_suspend_success_count", true),
+        DEVICE_SUSPEND_FAILURE_COUNT("device_suspend_failure_count", true),
+        DEVICE_SUSPEND_DURATIONS("device_suspend_durations", true),
+        DEVICE_RESUME_SUCCESS_COUNT("device_resume_success_count", true),
+        DEVICE_RESUME_FAILURE_COUNT("device_resume_failure_count", true),
+        DEVICE_RESUME_DURATIONS("device_resume_durations", true),
+        DEVICE_STOP_SUCCESS_COUNT("device_stop_success_count", true),
+        DEVICE_STOP_FAILURE_COUNT("device_stop_failure_count", true),
+        DEVICE_STOP_DURATIONS("device_stop_durations", true),
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
         INVOCATION_START("tf_invocation_start_timestamp", false),
@@ -247,6 +259,7 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_TIME("cas_download_time_ms", true),
         // Records the wait time caused by CAS downloader concurrency limitation.
         CAS_DOWNLOAD_WAIT_TIME("cas_download_wait_time_ms", true),
+        CAS_LOCK_TIMEOUTS("cas_lock_timeout", true),
         CAS_CACHE_FALLBACK_COUNT("cas_cache_fallback_count", true),
         CAS_TIMEOUT_COUNT("cas_timeout_count", true),
         // Records cache hit metrics
@@ -264,6 +277,7 @@ public class InvocationMetricLogger {
         // Ab downloader metrics
         AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
         ZIP_PARTIAL_DOWNLOAD_CACHE_HIT("zip_partial_download_cache_hit", true),
+        DOWNLOAD_BOTH_ZIPS_AND_TS("download_both_zips_and_ts", true),
 
         DUPLICATE_MAPPING_DIFFERENT_OPTIONS("duplicate_mapping_different_options", true),
 
@@ -281,6 +295,15 @@ public class InvocationMetricLogger {
         POWERWASH_FAILURE_COUNT("powerwash_failure_count", true),
         LEASE_RETRY_COUNT_SUCCESS("lease_retry_count_success", true),
         LEASE_RETRY_COUNT_FAILURE("lease_retry_count_failure", true),
+
+        TRACE_INTERNAL_ERROR("trace_internal_error", true),
+
+        INCREMENTAL_FLASHING_TIME("incremental_flashing_time", true),
+        INCREMENTAL_FLASHING_ATTEMPT_COUNT("incremental_flashing_attempt_count", true),
+        INCREMENTAL_FLASHING_TEARDOWN_FAILURE("incremental_flashing_teardown_failure", true),
+        INCREMENTAL_FLASHING_UPDATE_FAILURE("incremental_flashing_update_failure", true),
+        DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
+        DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
@@ -334,7 +357,10 @@ public class InvocationMetricLogger {
         TARGET_PREPARER_TEARDOWN_LATENCY("target-preparer-teardown-latency", true),
         LAB_PREPARER_SETUP_LATENCY("lab-preparer-setup-latency", true),
         LAB_PREPARER_TEARDOWN_LATENCY("lab-preparer-teardown-latency", true),
-        MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true);
+        MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true),
+
+        INCREMENTAL_FLASHING_PATCHES_SIZE("incremental-flashing-patches-size", true),
+        INCREMENTAL_FLASHING_TARGET_SIZE("incremental-flashing-target-size", true);
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.

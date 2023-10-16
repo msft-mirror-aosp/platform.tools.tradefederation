@@ -159,7 +159,7 @@ public final class SandboxOptions {
     @Option(
             name = SANDBOX_PARTIAL_DOWNLOAD_CACHE,
             description = "Feature flag to use partial download cache")
-    private boolean mUsePartialDownloadCache = false;
+    private boolean mUsePartialDownloadCache = true;
 
     /**
      * Returns the provided directories containing the Trade Federation version to use for
