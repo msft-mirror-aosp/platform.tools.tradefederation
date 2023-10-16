@@ -488,8 +488,11 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
     @Override
     public void recoverDeviceRecovery(IDeviceStateMonitor monitor)
             throws DeviceNotAvailableException {
-        throw new DeviceNotAvailableException("device recovery not implemented",
-                monitor.getSerialNumber());
+        // TODO(b/305735893): Root and capture logs
+        throw new DeviceNotAvailableException(
+                "device unexpectedly went into recovery mode.",
+                monitor.getSerialNumber(),
+                DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
     }
 
     /** Recovery routine for device unavailable errors. */
@@ -497,9 +500,12 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
             IDeviceStateMonitor monitor, boolean recoverTillOnline)
             throws DeviceNotAvailableException {
         TestDeviceState state = monitor.getDeviceState();
-        if (TestDeviceState.FASTBOOT.equals(state)
-                || TestDeviceState.FASTBOOTD.equals(state)
-                || TestDeviceState.RECOVERY.equals(state)) {
+        if (TestDeviceState.RECOVERY.equals(state)) {
+            CLog.d("Device is in '%s' state skipping USB reset attempt.", state);
+            recoverDeviceRecovery(monitor);
+            return false;
+        }
+        if (TestDeviceState.FASTBOOT.equals(state) || TestDeviceState.FASTBOOTD.equals(state)) {
             CLog.d("Device is in '%s' state skipping USB reset attempt.", state);
             return false;
         }
