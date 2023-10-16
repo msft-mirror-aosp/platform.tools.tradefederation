@@ -17,6 +17,7 @@ package com.android.tradefed.util.image;
 
 import static org.junit.Assert.assertTrue;
 
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -113,6 +114,14 @@ public class IncrementalImageUtil {
             CLog.d("Incremental flashing not supported.");
             return null;
         }
+
+        String splTarget = getSplVersion(build);
+        String splBaseline = device.getProperty("ro.build.version.security_patch");
+        if (splTarget != null && !splBaseline.equals(splTarget)) {
+            CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
+            return null;
+        }
+
         File deviceImage = null;
         File bootloader = null;
         File baseband = null;
@@ -433,6 +442,25 @@ public class IncrementalImageUtil {
                         patch.length());
             }
         }
+    }
+
+    private static String getSplVersion(IBuildInfo build) {
+        File buildProp = build.getFile("build.prop");
+        if (buildProp == null) {
+            CLog.d("No target build.prop found for comparison.");
+            return null;
+        }
+        try {
+            String props = FileUtil.readStringFromFile(buildProp);
+            for (String line : props.split("\n")) {
+                if (line.startsWith("ro.build.version.security_patch=")) {
+                    return line.split("=")[1];
+                }
+            }
+        } catch (IOException e) {
+            CLog.e(e);
+        }
+        return null;
     }
 
     private class ParallelPreparation extends Thread {
