@@ -195,8 +195,8 @@ public class IncrementalImageUtil {
         // Ensure snapshotctl exists
         CommandResult whichOutput = device.executeShellV2Command("which snapshotctl");
         CLog.d("stdout: %s, stderr: %s", whichOutput.getStdout(), whichOutput.getStderr());
-        if (whichOutput.getStdout().contains("/system/bin/snapshotctl")) {
-            return true;
+        if (!whichOutput.getStdout().contains("/system/bin/snapshotctl")) {
+            return false;
         }
         CommandResult helpOutput = device.executeShellV2Command("snapshotctl");
         CLog.d("stdout: %s, stderr: %s", helpOutput.getStdout(), helpOutput.getStderr());
