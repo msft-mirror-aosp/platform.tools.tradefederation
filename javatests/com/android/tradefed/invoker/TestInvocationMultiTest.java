@@ -50,6 +50,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipManager;
 import com.android.tradefed.retry.BaseRetryDecision;
 
 import org.junit.Before;
@@ -93,6 +94,7 @@ public class TestInvocationMultiTest {
         mContext = new InvocationContext();
         mPostProcessors = new ArrayList<>();
 
+        when(mMockConfig.getSkipManager()).thenReturn(new SkipManager());
         when(mMockConfig.getPostProcessors()).thenReturn(mPostProcessors);
         when(mMockConfig.getRetryDecision()).thenReturn(new BaseRetryDecision());
         when(mMockConfig.getConfigurationObject(ShardHelper.SHARED_TEST_INFORMATION))
