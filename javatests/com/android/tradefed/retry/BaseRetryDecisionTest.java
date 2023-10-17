@@ -233,12 +233,14 @@ public class BaseRetryDecisionTest {
         Mockito.when(module1.getId()).thenReturn(moduleID1);
         OptionSetter setter = new OptionSetter(mRetryDecision);
         setter.setOptionValue(SKIP_RETRYING_LIST, moduleID1);
-        boolean res = mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result));
+        boolean res =
+                mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result), null);
         assertFalse(res);
         // module2 is not in the skip-retrying-list, it should return true.
         ModuleDefinition module2 = Mockito.mock(ModuleDefinition.class);
         Mockito.when(module2.getId()).thenReturn(moduleID2);
-        boolean res2 = mRetryDecision.shouldRetry(mTestClass, module2, 0, Arrays.asList(result));
+        boolean res2 =
+                mRetryDecision.shouldRetry(mTestClass, module2, 0, Arrays.asList(result), null);
         assertTrue(res2);
     }
 
@@ -255,7 +257,8 @@ public class BaseRetryDecisionTest {
         Mockito.when(module1.getId()).thenReturn(moduleID1);
         OptionSetter setter = new OptionSetter(mRetryDecision);
         setter.setOptionValue(SKIP_RETRYING_LIST, moduleID1_test);
-        boolean res = mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result1));
+        boolean res =
+                mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result1), null);
         assertTrue(res);
         Truth.assertThat(mTestClass.getExcludeFilters()).containsExactly("class#method2");
     }
@@ -273,7 +276,8 @@ public class BaseRetryDecisionTest {
         Mockito.when(module1.getId()).thenReturn(moduleID1);
         OptionSetter setter = new OptionSetter(mRetryDecision);
         setter.setOptionValue(SKIP_RETRYING_LIST, moduleID1_test);
-        boolean res = mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result1));
+        boolean res =
+                mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result1), null);
         assertTrue(res);
         Truth.assertThat(mTestClass.getExcludeFilters()).containsExactly("class#method2");
     }
@@ -306,7 +310,7 @@ public class BaseRetryDecisionTest {
                         FailureDescription.create("failure2"));
         OptionSetter setter = new OptionSetter(mRetryDecision);
         setter.setOptionValue(SKIP_RETRYING_LIST, noModuleTest1);
-        boolean res = mRetryDecision.shouldRetry(mTestClass, null, 0, Arrays.asList(result1));
+        boolean res = mRetryDecision.shouldRetry(mTestClass, null, 0, Arrays.asList(result1), null);
         assertTrue(res);
         Truth.assertThat(mTestClass.getExcludeFilters()).containsExactly("class#method2");
     }

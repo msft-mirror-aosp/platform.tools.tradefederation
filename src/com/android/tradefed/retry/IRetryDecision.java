@@ -73,6 +73,7 @@ public interface IRetryDecision {
      * @param module The {@link ModuleDefinition} object for the test module.
      * @param attemptJustExecuted The number of the attempt that we just ran.
      * @param previousResults The list of {@link TestRunResult} of the test that just ran.
+     * @param dnae The {@link DeviceNotAvailableException} of device not available exception.
      * @return True if we should retry, False otherwise.
      * @throws DeviceNotAvailableException Can be thrown during device recovery
      */
@@ -80,7 +81,8 @@ public interface IRetryDecision {
             IRemoteTest test,
             ModuleDefinition module,
             int attemptJustExecuted,
-            List<TestRunResult> previousResults)
+            List<TestRunResult> previousResults,
+            DeviceNotAvailableException dnae)
             throws DeviceNotAvailableException;
 
     /**
