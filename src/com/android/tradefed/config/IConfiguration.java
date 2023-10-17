@@ -28,6 +28,7 @@ import com.android.tradefed.log.ILeveledLogOutput;
 import com.android.tradefed.postprocessor.IPostProcessor;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.skipped.SkipManager;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.targetprep.ITargetPreparer;
@@ -176,6 +177,9 @@ public interface IConfiguration {
 
     /** Gets the {@link GlobalTestFilter} for the invocation. */
     public GlobalTestFilter getGlobalFilters();
+
+    /** Gets the {@link SkipManager} for the invocation. */
+    public SkipManager getSkipManager();
 
     /**
      * Generic interface to get the configuration object with the given type name.
