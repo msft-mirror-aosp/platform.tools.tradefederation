@@ -31,8 +31,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -123,6 +125,12 @@ public class GTestResultParser extends MultiLineReceiver {
 
     /** Whether or not to prepend filename to classname. */
     private boolean mPrependFileName = false;
+
+    /** Whether the test run was incomplete(test crashed or failed to parse test results). */
+    private boolean mTestRunIncomplete = false;
+
+    /** List of tests that failed in the current run */
+    private Set<String> mFailedTests = new LinkedHashSet<>();
 
     /** The final status of the test. */
     enum TestStatus {
@@ -445,6 +453,10 @@ public class GTestResultParser extends MultiLineReceiver {
             mTestRunStartReported = true;
             mSeenOneTestRunStart = true;
             mTrackLogsBeforeRunStart.clear();
+            // Reset test run completion flag for the new test run
+            mTestRunIncomplete = false;
+            // Clear failed tests list for new test run
+            mFailedTests = new LinkedHashSet<>();
         }
     }
 
@@ -456,6 +468,7 @@ public class GTestResultParser extends MultiLineReceiver {
             listener.testRunEnded(mTotalRunTime, getRunMetrics());
         }
         mTestRunStartReported = false;
+        mTestRunIncomplete = false;
     }
 
     /**
@@ -667,6 +680,7 @@ public class GTestResultParser extends MultiLineReceiver {
             for (ITestInvocationListener listener : mTestListeners) {
                 listener.testFailed(testId, mCurrentTestResult.getTrace());
             }
+            mFailedTests.add(String.format("%s.%s", testId.getClassName(), testId.getTestName()));
         } else if (TestStatus.SKIPPED.equals(testStatus)) { // test was skipped
             for (ITestInvocationListener listener : mTestListeners) {
                 listener.testIgnored(testId);
@@ -797,6 +811,7 @@ public class GTestResultParser extends MultiLineReceiver {
                             "Test run incomplete. Expected %d tests, received %d",
                             mNumTestsExpected, mNumTestsRun),
                     InfraErrorIdentifier.EXPECTED_TESTS_MISMATCH);
+            mTestRunIncomplete = true;
             // Reset TestRunStart flag to prevent report twice in the same run.
             mTestRunStartReported = false;
             mTestRunInProgress = false;
@@ -820,6 +835,20 @@ public class GTestResultParser extends MultiLineReceiver {
             }
             mFailureReported = true;
         }
+    }
+
+    /**
+     * Whether the test run was incomplete or not.
+     *
+     * @return true, if the test run was incomplete due to parsing issues or crashes.
+     */
+    public boolean isTestRunIncomplete() {
+        return mTestRunIncomplete;
+    }
+
+    /** Returns a list of tests that failed during the current test run. */
+    public Set<String> getFailedTests() {
+        return mFailedTests;
     }
 
     private FailureDescription createFailure(String message) {

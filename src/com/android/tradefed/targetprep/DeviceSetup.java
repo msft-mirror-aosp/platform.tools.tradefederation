@@ -565,11 +565,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         if (mDismissSetupWizard) {
             callableTasks.add(
                     () -> {
-                        device.executeShellCommand(
-                                "am start -a com.android.setupwizard.FOUR_CORNER_EXIT"); // Android
-                        // UDC+
-                        device.executeShellCommand(
-                                "am start -a com.android.setupwizard.EXIT"); // Android L - T
+                        dismissSetupWiward(device);
                         return true;
                     });
         }
@@ -604,6 +600,9 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             syncTestData(device);
             // Throw an error if there is not enough storage space
             checkExternalStoreSpace(device);
+            if (mDismissSetupWizard) {
+                dismissSetupWiward(device);
+            }
         }
         // Run commands designated to be run after changing settings
         runCommands(device, mRunCommandAfterSettings);
@@ -1261,6 +1260,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     device.getSerialNumber(),
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
         }
+    }
+
+    private void dismissSetupWiward(ITestDevice device) throws DeviceNotAvailableException {
+        device.executeShellCommand(
+                "am start -a com.android.setupwizard.FOUR_CORNER_EXIT"); // Android
+        // UDC+
+        device.executeShellCommand("am start -a com.android.setupwizard.EXIT"); // Android L - T
     }
 
     /**

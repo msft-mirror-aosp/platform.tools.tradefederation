@@ -88,7 +88,6 @@ public class FastbootUpdateBootstrapPreparer extends DeviceFlashPreparer {
         deviceBuildInfo.setBasebandImage(mBasebandImage, "0");
         deviceBuildInfo.setDeviceImageFile(mDeviceImage, "0");
         setSkipPostFlashBuildIdCheck(true);
-        setSkipPostFlashFlavorCheck(true);
         // performs the actual flashing
         super.setUp(testInfo);
 

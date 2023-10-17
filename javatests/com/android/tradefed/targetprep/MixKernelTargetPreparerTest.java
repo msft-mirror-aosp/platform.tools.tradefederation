@@ -17,8 +17,8 @@ package com.android.tradefed.targetprep;
 
 import com.android.tradefed.build.DeviceBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.OptionSetter;
-import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
@@ -153,7 +153,7 @@ public class MixKernelTargetPreparerTest {
                             File kernelDir,
                             File gkiDir,
                             File newDeviceDir)
-                            throws TargetSetupError, DeviceNotAvailableException {
+                            throws TargetSetupError {
                         throw new TargetSetupError("Failed to run mixing tool");
                     }
                 };
@@ -190,7 +190,7 @@ public class MixKernelTargetPreparerTest {
                             File kernelDir,
                             File gkiDir,
                             File newDeviceDir)
-                            throws TargetSetupError, DeviceNotAvailableException {
+                            throws TargetSetupError {
                         return;
                     }
                 };
@@ -228,7 +228,7 @@ public class MixKernelTargetPreparerTest {
                             File kernelDir,
                             File gkiDir,
                             File newDeviceDir)
-                            throws TargetSetupError, DeviceNotAvailableException {
+                            throws TargetSetupError {
                         try {
                             File newFile =
                                     FileUtil.createTempFile(
@@ -240,7 +240,7 @@ public class MixKernelTargetPreparerTest {
                         }
                     }
                 };
-
+        mk.setConfiguration(new Configuration("name", "desc"));
         File deviceImage = FileUtil.createTempFile("device-img-12345", "zip");
         File kernelImage = FileUtil.createTempFile("dtbo", "img");
         File testsDir = FileUtil.createTempDir("testsdir");
@@ -271,7 +271,7 @@ public class MixKernelTargetPreparerTest {
                             File kernelDir,
                             File gkiDir,
                             File newDeviceDir)
-                            throws TargetSetupError, DeviceNotAvailableException {
+                            throws TargetSetupError {
                         try {
                             File newFile =
                                     FileUtil.createTempFile(
@@ -283,7 +283,7 @@ public class MixKernelTargetPreparerTest {
                         }
                     }
                 };
-
+        mk.setConfiguration(new Configuration("name", "desc"));
         File deviceImage = FileUtil.createTempFile("device-img-12345", "zip");
         File kernelImage = FileUtil.createTempFile("dtbo", "img");
         File toolDir = FileUtil.createTempDir("tooldir");
@@ -304,6 +304,7 @@ public class MixKernelTargetPreparerTest {
     @Test
     public void testSetNewDeviceImage() throws Exception {
         MixKernelTargetPreparer mk = new MixKernelTargetPreparer();
+        mk.setConfiguration(new Configuration("name", "desc"));
         // Create a device image in lc cache
         File deviceImageInLcCache = FileUtil.createTempFile("device-img-12345", ".zip");
         FileUtil.writeToFile("old_image_12345", deviceImageInLcCache);

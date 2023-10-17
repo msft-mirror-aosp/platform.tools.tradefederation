@@ -41,5 +41,7 @@
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/tools/tradefederation/core/tradefed-device-manager-grpc/linux_glibc_common/javac/tradefed-device-manager-grpc.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/perfetto/perfetto_trace-full/linux_glibc_common/combined/perfetto_trace-full.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/gson/gson/linux_glibc_common/javac/gson.jar"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/apache-commons-compress/apache-commons-compress/linux_glibc_common/combined/apache-commons-compress.jar"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/prebuilts/misc/common/kxml2/kxml2-2.3.0.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

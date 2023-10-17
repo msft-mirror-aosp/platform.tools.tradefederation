@@ -133,6 +133,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String MODULE_ISOLATED = "module-isolated";
     /** This property is set to true if the test module results were cached. */
     public static final String MODULE_CACHED = "module-cached";
+    /** This property is set to true if only module level events are reported. */
+    public static final String SPARSE_MODULE = "sparse-module";
 
     public static final String MODULE_CONTROLLER = "module_controller";
 
@@ -1144,6 +1146,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     // Wrap exception for better message
                     String error_msg =
                             String.format("Device went offline after running module '%s'", mId);
+                    // TODO: If module is the last one, it won't need to do device recovery.
                     if (!mRecoverVirtualDevice) {
                         throw new DeviceNotAvailableException(
                                 error_msg,
@@ -1171,6 +1174,11 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     /** Sets should recover virtual device. */
     public void setRecoverVirtualDevice(boolean recoverVirtualDevice) {
         mRecoverVirtualDevice = recoverVirtualDevice;
+    }
+
+    /** Returns if we should recover virtual device. */
+    public boolean shouldRecoverVirtualDevice() {
+        return mRecoverVirtualDevice;
     }
 
     /** Sets whether or not we should merge results. */
