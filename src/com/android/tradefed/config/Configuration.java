@@ -39,6 +39,7 @@ import com.android.tradefed.result.TextResultReporter;
 import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.sandbox.SandboxOptions;
+import com.android.tradefed.sandbox.TradefedSandbox;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.targetprep.ILabPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
@@ -584,7 +585,12 @@ public class Configuration implements IConfiguration {
 
     /** Return a copy of all config objects that are not disabled via {@link IDisableable}. */
     private Collection<Object> getAllNonDisabledConfigurationObjects() {
-        return getAllConfigurationObjects(null, false);
+        String excluded = null;
+        // Inside the sandbox disable lab preparers
+        if (System.getenv(TradefedSandbox.SANDBOX_ENABLED) != null) {
+            excluded = LAB_PREPARER_TYPE_NAME;
+        }
+        return getAllConfigurationObjects(excluded, false);
     }
 
     /**
