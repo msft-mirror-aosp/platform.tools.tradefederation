@@ -99,6 +99,7 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
     public void extraInit(IInvocationContext context, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         super.extraInit(context, listener);
+        setDisableReceiver(false);
 
         verifyNotNull(mConfiguration);
         setCoverageOptions(mConfiguration.getCoverageOptions());
@@ -117,6 +118,14 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
     @Override
     public void setConfiguration(IConfiguration configuration) {
         mConfiguration = configuration;
+    }
+
+    @Override
+    public void rebootEnded(ITestDevice device) throws DeviceNotAvailableException {
+        if (isClangCoverageEnabled()
+                && mConfiguration.getCoverageOptions().shouldResetCoverageBeforeTest()) {
+            getCoverageFlusher(device).deleteCoverageMeasurements();
+        }
     }
 
     @VisibleForTesting
