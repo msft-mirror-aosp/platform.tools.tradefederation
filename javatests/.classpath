@@ -43,5 +43,6 @@
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/gson/gson/linux_glibc_common/javac/gson.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/apache-commons-compress/apache-commons-compress/linux_glibc_common/combined/apache-commons-compress.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/prebuilts/misc/common/kxml2/kxml2-2.3.0.jar"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/prebuilts/misc/common/json/json-prebuilt/linux_glibc_common/combined/json-prebuilt.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

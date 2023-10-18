@@ -51,8 +51,17 @@ public class SkipManager implements IDisableable {
                             + " validation, not for production demotion.")
     private Map<String, String> mDemotionFilterOption = new LinkedHashMap<>();
 
+    @Option(
+            name = "silent-invocation-skip",
+            description =
+                    "Only report a property for when we would have skipped the invocation instead"
+                            + " of actually skipping.")
+    private boolean mSilentInvocationSkip = true;
+
     // Contains the filter and reason for demotion
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
+
+    private boolean mNoTestsDiscovered = false;
 
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
@@ -69,6 +78,27 @@ public class SkipManager implements IDisableable {
     /** Returns the demoted tests and the reason for demotion */
     public Map<String, SkipReason> getDemotedTests() {
         return mDemotionFilters;
+    }
+
+    /**
+     * In the early download and discovery process, report to the skip manager that no tests are
+     * expected to be run. This should lead to skipping the invocation.
+     */
+    public void reportDiscoveryWithNoTests() {
+        CLog.d("Test discovery reported that no tests were found.");
+        mNoTestsDiscovered = true;
+    }
+
+    /** Reports whether we should skip the current invocation. */
+    public boolean shouldSkipInvocation() {
+        boolean shouldskip = mNoTestsDiscovered;
+        // Build heuristic for skipping invocation
+        if (mSilentInvocationSkip && shouldskip) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.SILENT_INVOCATION_SKIP_COUNT, 1);
+            return false;
+        }
+        return shouldskip;
     }
 
     /**
