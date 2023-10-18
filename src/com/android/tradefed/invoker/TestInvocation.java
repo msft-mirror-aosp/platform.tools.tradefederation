@@ -1049,8 +1049,8 @@ public class TestInvocation implements ITestInvocation {
                                 .get(TradefedFeatureServer.SERVER_REFERENCE));
             }
             // Only log invocation_start in parent
-            boolean isSuprocess = isSubprocess(config);
-            if (!isSuprocess) {
+            boolean isCurrentlySubprocess = isSubprocess(config);
+            if (!isCurrentlySubprocess) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.INVOCATION_START, System.currentTimeMillis());
             } else {
@@ -1195,6 +1195,10 @@ public class TestInvocation implements ITestInvocation {
                 ((BaseLeveledLogOutput) leveledLogOutput).initFilters(config);
             }
             getLogRegistry().registerLogger(leveledLogOutput);
+
+            // Only in parent fetch demotion information
+            config.getSkipManager().setup(config, context);
+
             mStatus = "resolving dynamic options";
             long startDynamic = System.currentTimeMillis();
             boolean resolverSuccess = false;
@@ -1319,9 +1323,9 @@ public class TestInvocation implements ITestInvocation {
                         return;
                     }
                 }
-
                 // Apply global filters before sharding so they are taken into account.
-                config.getGlobalFilters().setUpFilters(config);
+                config.getGlobalFilters()
+                        .setUpFilters(config, config.getSkipManager().getDemotedTests().keySet());
 
                 try (CloseableTraceScope ignored =
                         new CloseableTraceScope(InvocationMetricKey.sharding.name())) {
