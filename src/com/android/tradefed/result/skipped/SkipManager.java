@@ -20,6 +20,8 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInvocation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.util.IDisableable;
@@ -30,6 +32,7 @@ import com.proto.tradefed.feature.PartResponse;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * Based on a variety of criteria the skip manager helps to decide what should be skipped at
@@ -41,6 +44,13 @@ public class SkipManager implements IDisableable {
     @Option(name = "disable-skip-manager", description = "Disable the skip manager feature.")
     private boolean mIsDisabled = false;
 
+    @Option(
+            name = "demotion-filters",
+            description =
+                    "An option to manually inject demotion filters. Intended for testing and"
+                            + " validation, not for production demotion.")
+    private Map<String, String> mDemotionFilterOption = new LinkedHashMap<>();
+
     // Contains the filter and reason for demotion
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
 
@@ -49,6 +59,9 @@ public class SkipManager implements IDisableable {
         if (TestInvocation.isSubprocess(config)) {
             // Information is going to flow through GlobalFilters mechanism
             return;
+        }
+        for (Entry<String, String> filterReason : mDemotionFilterOption.entrySet()) {
+            mDemotionFilters.put(filterReason.getKey(), new SkipReason(filterReason.getValue()));
         }
         fetchDemotionInformation(context);
     }
@@ -83,6 +96,8 @@ public class SkipManager implements IDisableable {
         }
         if (!mDemotionFilters.isEmpty()) {
             CLog.d("Demotion filters size '%s': %s", mDemotionFilters.size(), mDemotionFilters);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEMOTION_FILTERS_RECEIVED_COUNT, mDemotionFilters.size());
         }
     }
 
