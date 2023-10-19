@@ -109,7 +109,7 @@ public final class GlobalTestFilter {
     }
 
     /** Initialize the global filters by passing them to the tests. */
-    public void setUpFilters(IConfiguration config) {
+    public void setUpFilters(IConfiguration config, Set<String> demotedList) {
         if (mDisable) {
             CLog.d("Global filters are disabled.");
             return;
@@ -122,6 +122,8 @@ public final class GlobalTestFilter {
         // If it's a subprocess, fetch filters
         if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
             populateGlobalFilters();
+        } else {
+            mExcludeFilters.addAll(demotedList);
         }
         // Apply filters
         if (mStrictIncludeFilters.isEmpty()) {
