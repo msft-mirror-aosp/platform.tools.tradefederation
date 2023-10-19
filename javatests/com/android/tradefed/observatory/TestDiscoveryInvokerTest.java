@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import com.android.tradefed.command.ICommandOptions;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.result.skipped.SkipManager;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -71,6 +72,7 @@ public class TestDiscoveryInvokerTest {
         mConfiguration = Mockito.mock(IConfiguration.class);
         mCommandOptions = Mockito.mock(ICommandOptions.class);
         when(mConfiguration.getCommandOptions()).thenReturn(mCommandOptions);
+        when(mConfiguration.getSkipManager()).thenReturn(new SkipManager());
         when(mCommandOptions.getInvocationData()).thenReturn(new UniqueMultiMap<String, String>());
         mRootDir = FileUtil.createTempDir("test_suite_root");
         File mainDir = FileUtil.createNamedTempDir(mRootDir, "android-xts");
