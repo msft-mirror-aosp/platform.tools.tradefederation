@@ -100,7 +100,12 @@ public class OxygenUtil {
                                             Pattern.compile("^launcher\\.log.*"),
                                             Pair.create(
                                                     "failed to initialize fetch system images",
-                                                    "fetch_cvd_failure")))
+                                                    "fetch_cvd_failure")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    "failed to read from socket, retry",
+                                                    "rootcanal_socket_error")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /** Default constructor of OxygenUtil */
