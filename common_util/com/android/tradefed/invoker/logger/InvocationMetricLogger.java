@@ -305,6 +305,9 @@ public class InvocationMetricLogger {
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
+        SILENT_INVOCATION_SKIP_COUNT("silent_invocation_skip_count", true),
+        DEMOTION_FILTERS_RECEIVED_COUNT("demotion_filters_received_count", true),
+
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
         dynamic_download("dynamic_download", true),

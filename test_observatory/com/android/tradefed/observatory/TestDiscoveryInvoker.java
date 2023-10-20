@@ -522,6 +522,9 @@ public class TestDiscoveryInvoker {
         }
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
+        if (testModules.isEmpty()) {
+            mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+        }
         return testModules;
     }
 
