@@ -230,6 +230,23 @@ public class AndroidJUnitTestTest {
         verifyRunTestExpectations();
     }
 
+    /** Test list of parameterized tests to run is filtered by include filters. */
+    @Test
+    public void testRun_includeFilterParameterizedTest() throws Exception {
+        // expect this call
+
+        setRunTestExpectations();
+
+        mAndroidJUnitTest.addIncludeFilter("a.b.c#myTestClass[abc(1)]");
+        mAndroidJUnitTest.addIncludeFilter("a.b.c#myTestClass[[2,3],37]");
+        mAndroidJUnitTest.run(mTestInfo, mMockListener);
+
+        verify(mMockRemoteRunner)
+                .addInstrumentationArg(
+                        "class", "a.b.c#myTestClass[abc(1)],a.b.c#myTestClass[[2,3],37]");
+        verifyRunTestExpectations();
+    }
+
     /** Test list of tests to run is filtered by include filters using invalid regex. */
     @Test
     public void testRun_includeFilterInvalidTestsRegex() throws Exception {
