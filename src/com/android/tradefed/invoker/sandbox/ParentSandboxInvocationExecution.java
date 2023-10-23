@@ -81,42 +81,51 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             return true;
         }
 
-        CompletableFuture<Exception> futureClient =
-                CompletableFuture.supplyAsync(
-                        () -> {
-                            try {
-                                getSandbox(config)
-                                        .fetchSandboxExtraArtifacts(
-                                                testInfo.getContext(),
-                                                config,
-                                                QuotationAwareTokenizer.tokenizeLine(
-                                                        config.getCommandLine(),
-                                                        /** no logging */
-                                                        false));
-                                return null;
-                            } catch (BuildRetrievalError | IOException | ConfigurationException e) {
-                                return e;
-                            }
-                        },
-                        TracePropagatingExecutorService.create(ForkJoinPool.commonPool()));
-        boolean res = super.fetchBuild(testInfo, config, rescheduler, listener);
-        Exception e = null;
-        try {
-            e = futureClient.get();
-            if (e != null) {
-                if (e instanceof BuildRetrievalError) {
-                    throw (BuildRetrievalError) e;
-                } else {
-                    throw new HarnessRuntimeException(
-                            e.getMessage(), e, InfraErrorIdentifier.SANDBOX_SETUP_ERROR);
-                }
-            }
-        } catch (InterruptedException | ExecutionException execError) {
-            throw new BuildRetrievalError(
-                    execError.getMessage(), execError, InfraErrorIdentifier.SANDBOX_SETUP_ERROR);
+        CompletableFuture<Exception> futureClient = null;
+        if (getSandboxOptions(config).shouldUseSplitDiscovery()) {
+            futureClient =
+                    CompletableFuture.supplyAsync(
+                            () -> {
+                                try {
+                                    getSandbox(config)
+                                            .fetchSandboxExtraArtifacts(
+                                                    testInfo.getContext(),
+                                                    config,
+                                                    QuotationAwareTokenizer.tokenizeLine(
+                                                            config.getCommandLine(),
+                                                            /** no logging */
+                                                            false));
+                                    return null;
+                                } catch (BuildRetrievalError
+                                        | IOException
+                                        | ConfigurationException e) {
+                                    return e;
+                                }
+                            },
+                            TracePropagatingExecutorService.create(ForkJoinPool.commonPool()));
         }
-        if (res && e == null) {
-            getSandbox(config).discoverTests(testInfo.getContext(), config);
+        boolean res = super.fetchBuild(testInfo, config, rescheduler, listener);
+        if (getSandboxOptions(config).shouldUseSplitDiscovery()) {
+            Exception e = null;
+            try {
+                e = futureClient.get();
+                if (e != null) {
+                    if (e instanceof BuildRetrievalError) {
+                        throw (BuildRetrievalError) e;
+                    } else {
+                        throw new HarnessRuntimeException(
+                                e.getMessage(), e, InfraErrorIdentifier.SANDBOX_SETUP_ERROR);
+                    }
+                }
+            } catch (InterruptedException | ExecutionException execError) {
+                throw new BuildRetrievalError(
+                        execError.getMessage(),
+                        execError,
+                        InfraErrorIdentifier.SANDBOX_SETUP_ERROR);
+            }
+            if (res && e == null) {
+                getSandbox(config).discoverTests(testInfo.getContext(), config);
+            }
         }
         return res;
     }
