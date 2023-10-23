@@ -63,10 +63,12 @@ public class DeviceSnapshotHandler {
      * Calls snapshot of the given device.
      *
      * @param device The device to snapshot.
+     * @param snapshotId Snapshot ID for the device to be saved to.
      * @return True if snapshot was successful, false otherwise.
      * @throws DeviceNotAvailableException
      */
-    public boolean snapshotDevice(ITestDevice device) throws DeviceNotAvailableException {
+    public boolean snapshotDevice(ITestDevice device, String snapshotId)
+            throws DeviceNotAvailableException {
         if (device.getIDevice() instanceof StubDevice) {
             CLog.d("Device '%s' is a stub device. skipping snapshot.", device.getSerialNumber());
             return true;
@@ -75,6 +77,7 @@ public class DeviceSnapshotHandler {
         try {
             Map<String, String> args = new HashMap<>();
             args.put(DeviceSnapshotFeature.DEVICE_NAME, mContext.getDeviceName(device));
+            args.put(DeviceSnapshotFeature.SNAPSHOT_ID, snapshotId);
             response =
                     mClient.triggerFeature(
                             DeviceSnapshotFeature.DEVICE_SNAPSHOT_FEATURE_NAME, args);
@@ -126,9 +129,9 @@ public class DeviceSnapshotHandler {
     /**
      * Calls restore snapshot of the given device.
      *
-     * @param device The device to snapshot.
+     * @param device The device to restore.
      * @param snapshotId Snapshot ID for the device to be restored to.
-     * @return True if snapshot was successful, false otherwise.
+     * @return True if restore was successful, false otherwise.
      * @throws DeviceNotAvailableException
      */
     public boolean restoreSnapshotDevice(ITestDevice device, String snapshotId)
@@ -143,6 +146,7 @@ public class DeviceSnapshotHandler {
         try {
             Map<String, String> args = new HashMap<>();
             args.put(DeviceSnapshotFeature.SNAPSHOT_ID, snapshotId);
+            args.put(DeviceSnapshotFeature.RESTORE_FLAG, "true");
             args.put(DeviceSnapshotFeature.DEVICE_NAME, mContext.getDeviceName(device));
             response =
                     mClient.triggerFeature(

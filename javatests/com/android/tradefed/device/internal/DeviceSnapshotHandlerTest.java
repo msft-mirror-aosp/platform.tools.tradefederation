@@ -62,7 +62,7 @@ public class DeviceSnapshotHandlerTest {
         FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
         when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
 
-        assertTrue(mHandler.snapshotDevice(mMockDevice));
+        assertTrue(mHandler.snapshotDevice(mMockDevice, "random_id"));
     }
 
     @Test
@@ -71,7 +71,7 @@ public class DeviceSnapshotHandlerTest {
         responseBuilder.setErrorInfo(ErrorInfo.newBuilder().setErrorTrace("random error"));
         when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
 
-        assertFalse(mHandler.snapshotDevice(mMockDevice));
+        assertFalse(mHandler.snapshotDevice(mMockDevice, "random_id"));
     }
 
     @Test
@@ -83,7 +83,7 @@ public class DeviceSnapshotHandlerTest {
         when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
 
         try {
-            mHandler.snapshotDevice(mMockDevice);
+            mHandler.snapshotDevice(mMockDevice, "random_id");
             fail("Should have thrown an exception");
         } catch (DeviceNotAvailableException expected) {
             // Expected
@@ -99,7 +99,7 @@ public class DeviceSnapshotHandlerTest {
         when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
 
         try {
-            mHandler.snapshotDevice(mMockDevice);
+            mHandler.snapshotDevice(mMockDevice, "random_id");
             fail("Should have thrown an exception");
         } catch (HarnessRuntimeException expected) {
             // Expected
@@ -115,8 +115,8 @@ public class DeviceSnapshotHandlerTest {
         when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
 
         InvocationMetricLogger.clearInvocationMetrics();
-        assertTrue(mHandler.snapshotDevice(mMockDevice));
-        assertTrue(mHandler.snapshotDevice(mMockDevice));
+        assertTrue(mHandler.snapshotDevice(mMockDevice, "random_id"));
+        assertTrue(mHandler.snapshotDevice(mMockDevice, "random_id2"));
         String durations =
                 InvocationMetricLogger.getInvocationMetrics()
                         .getOrDefault(
