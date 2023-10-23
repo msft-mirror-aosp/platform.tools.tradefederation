@@ -18,12 +18,14 @@ package com.android.tradefed.invoker.sandbox;
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.InvocationExecution;
@@ -32,19 +34,27 @@ import com.android.tradefed.invoker.TestInvocation.Stage;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.invoker.tracing.TracePropagatingExecutorService;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.sandbox.ISandbox;
 import com.android.tradefed.sandbox.SandboxInvocationRunner;
 import com.android.tradefed.sandbox.SandboxOptions;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
 
 /**
  * Version of {@link InvocationExecution} for the parent invocation special actions when running a
@@ -70,7 +80,45 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                     testInfo.getContext().getBuildInfos());
             return true;
         }
-        return super.fetchBuild(testInfo, config, rescheduler, listener);
+
+        CompletableFuture<Exception> futureClient =
+                CompletableFuture.supplyAsync(
+                        () -> {
+                            try {
+                                getSandbox(config)
+                                        .fetchSandboxExtraArtifacts(
+                                                testInfo.getContext(),
+                                                config,
+                                                QuotationAwareTokenizer.tokenizeLine(
+                                                        config.getCommandLine(),
+                                                        /** no logging */
+                                                        false));
+                                return null;
+                            } catch (BuildRetrievalError | IOException | ConfigurationException e) {
+                                return e;
+                            }
+                        },
+                        TracePropagatingExecutorService.create(ForkJoinPool.commonPool()));
+        boolean res = super.fetchBuild(testInfo, config, rescheduler, listener);
+        Exception e = null;
+        try {
+            e = futureClient.get();
+            if (e != null) {
+                if (e instanceof BuildRetrievalError) {
+                    throw (BuildRetrievalError) e;
+                } else {
+                    throw new HarnessRuntimeException(
+                            e.getMessage(), e, InfraErrorIdentifier.SANDBOX_SETUP_ERROR);
+                }
+            }
+        } catch (InterruptedException | ExecutionException execError) {
+            throw new BuildRetrievalError(
+                    execError.getMessage(), execError, InfraErrorIdentifier.SANDBOX_SETUP_ERROR);
+        }
+        if (res && e == null) {
+            getSandbox(config).discoverTests(testInfo.getContext(), config);
+        }
+        return res;
     }
 
     /** {@inheritDoc} */
@@ -250,6 +298,10 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
     private SandboxOptions getSandboxOptions(IConfiguration config) {
         return (SandboxOptions)
                 config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME);
+    }
+
+    private ISandbox getSandbox(IConfiguration config) {
+        return (ISandbox) config.getConfigurationObject(Configuration.SANDBOX_TYPE_NAME);
     }
 
     private class SandboxSetupThread extends Thread {
