@@ -182,7 +182,12 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
 
     @Override
     public void doCleanUp(IInvocationContext context, IConfiguration config, Throwable exception) {
+        try {
         super.doCleanUp(context, config, exception);
+        } finally {
+            // Always clean up sandbox when we get to the end.
+            SandboxInvocationRunner.teardownSandbox(config);
+        }
     }
 
     /** {@inheritDoc} */
