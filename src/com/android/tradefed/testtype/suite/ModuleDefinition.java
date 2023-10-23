@@ -670,8 +670,20 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             RuntimeException tearDownException = null;
             try (CloseableTraceScope ignored = new CloseableTraceScope("module_teardown")) {
                 Throwable exception = (runException != null) ? runException : preparationException;
-                // Tear down
-                runTearDown(moduleInfo, exception);
+                try {
+                    // Tear down
+                    runTearDown(moduleInfo, exception);
+                } catch (DeviceNotAvailableException dnae) {
+                    if (runException == null) {
+                        // Ignore the exception and attempt recovery.
+                        CLog.e(
+                                "Module %s failed during tearDown with: %s",
+                                getId(), StreamUtil.getStackTrace(dnae));
+                        recoverDevice(moduleInfo, dnae);
+                    } else {
+                        throw dnae;
+                    }
+                }
                 // If still available, verify that device didn't crash
                 if (runException == null) {
                     checkEndModuleDevice(moduleInfo);
@@ -1157,6 +1169,26 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     CLog.d(error_msg);
                     device.getConnection().recoverVirtualDevice(device, e);
                 }
+            }
+        }
+    }
+
+    private void recoverDevice(TestInformation testInfo, DeviceNotAvailableException e)
+            throws DeviceNotAvailableException {
+        if (SystemUtil.isLocalMode()) {
+            CLog.d("Skipping device recovery for local run.");
+            throw e;
+        }
+        if (!mRecoverVirtualDevice) {
+            CLog.d("Skipping device recovery for as option recover-device-by-cvd is not enabled.");
+            throw e;
+        }
+        try (CloseableTraceScope check = new CloseableTraceScope("recover_device")) {
+            for (ITestDevice device : testInfo.getDevices()) {
+                if (device.getIDevice() instanceof StubDevice) {
+                    continue;
+                }
+                device.getConnection().recoverVirtualDevice(device, e);
             }
         }
     }
