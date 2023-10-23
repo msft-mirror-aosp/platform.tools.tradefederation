@@ -36,6 +36,7 @@ import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.sandbox.TradefedSandbox;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.util.IRunUtil;
 
@@ -60,7 +61,7 @@ public class ParentSandboxInvocationExecutionTest {
     private IRunUtil mMockRunUtil;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         mMockFactory = Mockito.mock(IConfigurationFactory.class);
         mMockDevice = Mockito.mock(ITestDevice.class);
         mMockLogger = Mockito.mock(ITestLogger.class);
@@ -103,6 +104,7 @@ public class ParentSandboxInvocationExecutionTest {
         mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
         mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
         mConfig = new Configuration("test", "test");
+        mConfig.setConfigurationObject(Configuration.SANDBOX_TYPE_NAME, new TradefedSandbox());
     }
 
     @Test
