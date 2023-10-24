@@ -213,6 +213,8 @@ public class SandboxConfigDump {
             }
             // Reset device requested type, we don't need it in the sandbox
             requirements.setBaseDeviceTypeRequested(null);
+            // In sandbox it's pointless to check again for battery for allocation
+            requirements.setRequireBatteryCheck(false);
         }
     }
 }

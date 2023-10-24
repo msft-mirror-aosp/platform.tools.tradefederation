@@ -265,6 +265,8 @@ public class InvocationMetricLogger {
         // Records cache hit metrics
         CAS_DOWNLOAD_HOT_BYTES("cas_download_hot_bytes", true),
         CAS_DOWNLOAD_COLD_BYTES("cas_download_cold_bytes", true),
+        CAS_DOWNLOAD_HOT_FILES_COUNT("cas_download_hot_files_count", true),
+        CAS_DOWNLOAD_COLD_FILES_COUNT("cas_download_cold_files_count", true),
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),

@@ -35,7 +35,6 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.SerializationUtil;
 
-import com.google.common.base.Strings;
 import com.proto.tradefed.feature.ErrorInfo;
 import com.proto.tradefed.feature.FeatureRequest;
 import com.proto.tradefed.feature.FeatureResponse;
@@ -49,6 +48,7 @@ public class DeviceSnapshotFeature
     public static final String DEVICE_SNAPSHOT_FEATURE_NAME = "snapshotDevice";
     public static final String DEVICE_NAME = "device_name";
     public static final String SNAPSHOT_ID = "snapshot_id";
+    public static final String RESTORE_FLAG = "restore_flag";
 
     private IConfiguration mConfig;
     private TestInformation mTestInformation;
@@ -105,10 +105,11 @@ public class DeviceSnapshotFeature
                 String user = info.getInstanceUser();
 
                 String snapshotId = request.getArgsMap().get(SNAPSHOT_ID);
-                if (Strings.isNullOrEmpty(snapshotId)) {
-                    snapshot(responseBuilder, connection, user, offset, snapshotId);
-                } else {
+                boolean restoreFlag = Boolean.parseBoolean(request.getArgsMap().get(RESTORE_FLAG));
+                if (restoreFlag) {
                     restoreSnapshot(responseBuilder, connection, user, offset, snapshotId);
+                } else {
+                    snapshot(responseBuilder, connection, user, offset, snapshotId);
                 }
             } else if (mTestInformation.getDevice() instanceof RemoteAndroidDevice) {
                 responseBuilder.setResponse(" RemoteAndroidDevice has no snapshot support.");
