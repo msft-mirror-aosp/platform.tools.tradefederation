@@ -51,6 +51,7 @@ public final class SandboxOptions {
             "sandbox-force-partial-download-file-regex";
     private static final String SANDBOX_PARTIAL_DOWNLOAD_CACHE =
             "sandbox-use-partial-download-cache";
+    private static final String SANDBOX_SPLIT_DISCOVERY = "sandbox-split-discovery";
 
     @Option(
         name = TF_LOCATION,
@@ -161,6 +162,11 @@ public final class SandboxOptions {
             description = "Feature flag to use partial download cache")
     private boolean mUsePartialDownloadCache = true;
 
+    @Option(
+            name = SANDBOX_SPLIT_DISCOVERY,
+            description = "Enable setup where discovery is done independently.")
+    private boolean mUseSandboxSplitDiscovery = false;
+
     /**
      * Returns the provided directories containing the Trade Federation version to use for
      * sandboxing the run.
@@ -257,5 +263,10 @@ public final class SandboxOptions {
      */
     public Set<String> getForcePartialDownloadFileRegexList() {
         return mSandboxForcePartialDownloadFileRegexList;
+    }
+
+    /** Returns whether to use setup with independent discovery. */
+    public boolean shouldUseSplitDiscovery() {
+        return mUseSandboxSplitDiscovery;
     }
 }
