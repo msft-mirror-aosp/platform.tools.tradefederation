@@ -19,6 +19,7 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -93,8 +94,13 @@ public class SkipManager implements IDisableable {
     }
 
     /** Reports whether we should skip the current invocation. */
-    public boolean shouldSkipInvocation() {
+    public boolean shouldSkipInvocation(TestInformation information) {
         boolean shouldskip = mNoTestsDiscovered;
+        if (!shouldskip) {
+            ArtifactsAnalyzer analyzer = new ArtifactsAnalyzer(information);
+            // TODO: Use analysis.
+            analyzer.analyzeArtifacts();
+        }
         // Build heuristic for skipping invocation
         if (mSilentInvocationSkip && shouldskip) {
             InvocationMetricLogger.addInvocationMetrics(
@@ -142,5 +148,9 @@ public class SkipManager implements IDisableable {
     @Override
     public void setDisable(boolean isDisabled) {
         mIsDisabled = isDisabled;
+    }
+
+    public void setSilentInvocationSkip(boolean silentSkip) {
+        mSilentInvocationSkip = silentSkip;
     }
 }
