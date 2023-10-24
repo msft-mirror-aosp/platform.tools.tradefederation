@@ -193,14 +193,6 @@ public class TestDiscoveryExecutor {
                         DiscoveryExitCode.ERROR);
             }
             if (test instanceof TestMappingSuiteRunner) {
-                if (getEnvironment(TestDiscoveryInvoker.TEST_DIRECTORY_ENV_VARIABLE_KEY) == null) {
-                    throw new TestDiscoveryException(
-                            "The TestDiscoveryInvoker need test "
-                                    + "directory to be set to do test mapping "
-                                    + "discovery.",
-                            null,
-                            DiscoveryExitCode.ERROR);
-                }
                 ((TestMappingSuiteRunner) test).loadTestInfos();
             }
             Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
