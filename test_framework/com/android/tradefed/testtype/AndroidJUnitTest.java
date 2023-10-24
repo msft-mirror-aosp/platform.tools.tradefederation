@@ -623,10 +623,6 @@ public class AndroidJUnitTest extends InstrumentationTest
     /** Return if a string is a regex for filter. */
     @VisibleForTesting
     public boolean isRegex(String filter) {
-        if (isParameterizedTest(filter)) {
-            return false;
-        }
-
         // If filter contains any special regex character, return true.
         // Throw RuntimeException if the regex is invalid.
         if (Pattern.matches(".*[\\?\\*\\^\\$\\(\\)\\[\\]\\{\\}\\|\\\\].*", filter)) {
@@ -639,18 +635,6 @@ public class AndroidJUnitTest extends InstrumentationTest
             return true;
         }
 
-        return false;
-    }
-
-    /** Return if a string is a parameterized test. */
-    @VisibleForTesting
-    public boolean isParameterizedTest(String filter) {
-        // If filter contains '#', '[' and ']' and ends with ']' and no other regex special
-        // character between [] except ',', '()', '[]' which is allowed to be a parameterized test.
-        if (Pattern.matches(".*#.*\\[[^\\?\\*\\^\\$\\{\\}\\|\\\\]*\\]$", filter)) {
-            CLog.i("Filter %s is a parameterized string.", filter);
-            return true;
-        }
         return false;
     }
 
