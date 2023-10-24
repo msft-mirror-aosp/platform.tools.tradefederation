@@ -15,16 +15,66 @@
  */
 package com.android.tradefed.result.skipped;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /** Provide a reason and its metadata for skipping a test. */
 public class SkipReason {
 
     private final String reason;
+    private final String trigger;
+    private final String bugId;
 
-    public SkipReason(String message) {
-        this.reason = message;
+    // Limit the possibilities for reported trigger type, but store as a string.
+    public static enum DemotionTrigger {
+        UNKNOWN_TRIGGER, // Unspecified trigger
+        MANUAL, // Inserted directly via API
+        LATENCY, // Test is out of SLO on latency
+        ERROR_RATE, // Test is out of SLO on error rate
+        FLAKINESS; // Test is out of SLO on flakiness score
     }
 
+    public SkipReason(String message, DemotionTrigger trigger) {
+        this(message, trigger, "");
+    }
+
+    public SkipReason(String message, DemotionTrigger trigger, String bugId) {
+        this.reason = message;
+        this.trigger = trigger.name();
+        this.bugId = bugId;
+    }
+
+    /** Returns the reason associated with the skip status. */
     public String getReason() {
         return reason;
+    }
+
+    /** Returns the trigger associated with the skip status. */
+    public String getTrigger() {
+        return trigger;
+    }
+
+    /** Returns the bug id associated with skip status. Optional. */
+    public String getBugId() {
+        return bugId;
+    }
+
+    @Override
+    public String toString() {
+        return "SkipReason[reason=" + reason + ", trigger=" + trigger + ", bugId=" + bugId + "]";
+    }
+
+    /** Parses {@link #toString()} into a {@link SkipReason}. */
+    public static SkipReason fromString(String skipReasonMessage) {
+        Pattern p = Pattern.compile("SkipReason\\[reason=(.*), trigger=(.*), bugId=(.*)\\]");
+        Matcher m = p.matcher(skipReasonMessage);
+        if (m.find()) {
+            String reason = m.group(1);
+            String trigger = m.group(2);
+            String bugId = m.group(3);
+            return new SkipReason(reason, DemotionTrigger.valueOf(trigger), bugId);
+        }
+        throw new RuntimeException(
+                String.format("Cannot parse '%s' as SkipReason.", skipReasonMessage));
     }
 }
