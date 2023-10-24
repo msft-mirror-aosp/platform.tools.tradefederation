@@ -758,33 +758,18 @@ public class TestMapping {
     }
 
     /**
-     * Helper to locate the test mapping zip file in the test directory. Will match file in test
-     * directory, like test_mapping_174371283.zip to "test_mapping.zip"
+     * Helper to locate the test mapping zip file from environment.
      *
-     * @param zipName The original name of a test mappings zip, like test_mapping.zip or
-     *     test_mapping_platform.zip
-     * @return The test mapping file, or null if unable to locate one.
+     * @param zipName The original name of a test mappings zip.
+     * @return The test mapping file, or throw if unable to find.
      */
     private File lookupTestMappingZip(String zipName) {
         String directFile = System.getenv(TestDiscoveryInvoker.TEST_MAPPING_ZIP_FILE);
         if (directFile != null && new File(directFile).exists()) {
             return new File(directFile);
         }
-        String testDirPath = System.getenv(TestDiscoveryInvoker.TEST_DIRECTORY_ENV_VARIABLE_KEY);
-        if (testDirPath == null) {
-            return null;
-        }
-        File testDir = new File(testDirPath);
-        String zipRegex = zipName.replace(".zip", "_[^_]*\\.zip");
-        File testMappingZipFile = FileUtil.findFile(testDir, zipRegex);
-        CLog.i(
-                String.format(
-                        "Found test mapping zip file %s for name %s", testMappingZipFile, zipName));
-        if (testMappingZipFile == null) {
-            throw new HarnessRuntimeException(
-                    String.format("Unable to locate the test mapping zip file %s", zipName),
-                    InfraErrorIdentifier.TEST_MAPPING_FILE_NOT_EXIST);
-        }
-        return testMappingZipFile;
+        throw new HarnessRuntimeException(
+                String.format("Unable to locate the test mapping zip file %s", zipName),
+                InfraErrorIdentifier.TEST_MAPPING_FILE_NOT_EXIST);
     }
 }

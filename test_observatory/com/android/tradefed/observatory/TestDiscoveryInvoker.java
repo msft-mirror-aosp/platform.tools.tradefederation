@@ -76,8 +76,6 @@ public class TestDiscoveryInvoker {
     public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
     public static final String TEST_MODULES_LIST_KEY = "TestModules";
     public static final String PARTIAL_FALLBACK_KEY = "PartialFallback";
-    public static final String TEST_DIRECTORY_ENV_VARIABLE_KEY =
-            "TF_TEST_DISCOVERY_USE_TEST_DIRECTORY";
     public static final String TEST_MAPPING_ZIP_FILE = "TF_TEST_MAPPING_ZIP_FILE";
     public static final String ROOT_DIRECTORY_ENV_VARIABLE_KEY =
             "ROOT_TEST_DISCOVERY_USE_TEST_DIRECTORY";
@@ -263,12 +261,7 @@ public class TestDiscoveryInvoker {
             List<String> args = buildJavaCmdForTestMappingDiscovery(classPath);
             String[] subprocessArgs = args.toArray(new String[args.size()]);
 
-            // Pass the test directory path to subprocess by environment variable
-            if (mTestDir != null) {
-                getRunUtil()
-                        .setEnvVariable(
-                                TEST_DIRECTORY_ENV_VARIABLE_KEY, mTestDir.getAbsolutePath());
-            }
+            // Pass the test mapping zip path to subprocess by environment variable
             if (mTestMappingZip != null) {
                 getRunUtil()
                         .setEnvVariable(TEST_MAPPING_ZIP_FILE, mTestMappingZip.getAbsolutePath());
