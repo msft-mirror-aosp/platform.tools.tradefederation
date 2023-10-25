@@ -1018,6 +1018,11 @@ public class GceManager {
                     RemoteFileUtil.fetchRemoteDir(
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
 
+            if (remoteFile != null && remoteFile.listFiles().length == 0) {
+                // If the retrieved directory is empty, delete it as there is no file to log anyway
+                FileUtil.recursiveDelete(remoteFile);
+                return false;
+            }
             // Search log files for known failures for devices hosted by Oxygen
             if (options.useOxygen() && remoteFile != null) {
                 try (CloseableTraceScope ignore =
