@@ -1635,6 +1635,13 @@ public class Configuration implements IConfiguration {
                 excludeFilters,
                 printDeprecatedOptions,
                 printUnchangedOptions);
+        ConfigurationUtil.dumpClassToXml(
+                serializer,
+                SKIP_MANAGER_TYPE_NAME,
+                getSkipManager(),
+                excludeFilters,
+                printDeprecatedOptions,
+                printUnchangedOptions);
 
         serializer.endTag(null, ConfigurationUtil.CONFIGURATION_NAME);
         serializer.endDocument();
