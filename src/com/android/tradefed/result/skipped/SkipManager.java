@@ -23,6 +23,7 @@ import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.skipped.SkipReason.DemotionTrigger;
 import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.util.IDisableable;
 
@@ -70,7 +71,9 @@ public class SkipManager implements IDisableable {
             return;
         }
         for (Entry<String, String> filterReason : mDemotionFilterOption.entrySet()) {
-            mDemotionFilters.put(filterReason.getKey(), new SkipReason(filterReason.getValue()));
+            mDemotionFilters.put(
+                    filterReason.getKey(),
+                    new SkipReason(filterReason.getValue(), DemotionTrigger.UNKNOWN_TRIGGER));
         }
         fetchDemotionInformation(context);
     }
