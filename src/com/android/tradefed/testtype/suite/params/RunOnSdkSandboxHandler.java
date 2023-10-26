@@ -56,6 +56,8 @@ public class RunOnSdkSandboxHandler implements IModuleParameterHandler {
                 Set<String> excludeAnnotations = new HashSet<>(filterTest.getExcludeAnnotations());
                 // The sandbox is more restrictive than instant apps, ignore @AppModeFull tests.
                 excludeAnnotations.add("android.platform.test.annotations.AppModeFull");
+                // Ignore tests that are not applicable to the sandbox.
+                excludeAnnotations.add("android.platform.test.annotations.AppModeNonSdkSandbox");
 
                 // Reset the annotations of the tests.
                 filterTest.clearIncludeAnnotations();
