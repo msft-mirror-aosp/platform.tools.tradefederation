@@ -128,8 +128,7 @@ public class SkipManager implements IDisableable {
             if (!response.hasErrorInfo()) {
                 for (PartResponse part : response.getMultiPartResponse().getResponsePartList()) {
                     String filter = part.getKey();
-                    // TODO: Eventually parse the skip reason
-                    mDemotionFilters.put(filter, null);
+                    mDemotionFilters.put(filter, SkipReason.fromString(part.getValue()));
                 }
             }
         }
@@ -138,6 +137,11 @@ public class SkipManager implements IDisableable {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEMOTION_FILTERS_RECEIVED_COUNT, mDemotionFilters.size());
         }
+    }
+
+    public void clearManager() {
+        mDemotionFilters.clear();
+        mDemotionFilterOption.clear();
     }
 
     @Override

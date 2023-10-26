@@ -1414,6 +1414,7 @@ public class TestInvocation implements ITestInvocation {
         } finally {
             TfObjectTracker.clearTracking();
             CurrentInvocation.clearInvocationInfos();
+            config.getSkipManager().clearManager();
             // Ensure build infos are always cleaned up at the end of invocation.
             CLog.i("Cleaning up builds");
             invocationPath.cleanUpBuilds(context, config);
