@@ -1241,29 +1241,33 @@ public class TestInvocation implements ITestInvocation {
             if (!providerSuccess) {
                 return;
             }
-            if (config.getSkipManager().shouldSkipInvocation()) {
-                CLog.d("Skipping invocation early.");
-                startInvocation(config, info.getContext(), listener);
-                // Backfill accounting metrics with zeros
-                long timestamp = System.currentTimeMillis();
-                InvocationMetricLogger.addInvocationPairMetrics(
-                        InvocationMetricKey.TEST_SETUP_PAIR, timestamp, timestamp);
-                InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP, 0);
-                InvocationMetricLogger.addInvocationPairMetrics(
-                        InvocationMetricKey.SETUP_PAIR, timestamp, timestamp);
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.SETUP_START, timestamp);
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.SETUP_END, timestamp);
-                InvocationMetricLogger.addInvocationPairMetrics(
-                        InvocationMetricKey.TEST_PAIR, timestamp, timestamp);
-                InvocationMetricLogger.addInvocationPairMetrics(
-                        InvocationMetricKey.TEARDOWN_PAIR, timestamp, timestamp);
-                InvocationMetricLogger.addInvocationPairMetrics(
-                        InvocationMetricKey.TEST_TEARDOWN_PAIR, timestamp, timestamp);
-                reportHostLog(listener, config);
-                reportInvocationEnded(config, info.getContext(), listener, 0L);
-                return;
+            // Skip invocation can only happen in the parent process
+            if (!config.getCommandOptions().getInvocationData()
+                        .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)) {
+                if (config.getSkipManager().shouldSkipInvocation(info)) {
+                    CLog.d("Skipping invocation early.");
+                    startInvocation(config, info.getContext(), listener);
+                    // Backfill accounting metrics with zeros
+                    long timestamp = System.currentTimeMillis();
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEST_SETUP_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP, 0);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.SETUP_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.SETUP_START, timestamp);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.SETUP_END, timestamp);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEST_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEARDOWN_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEST_TEARDOWN_PAIR, timestamp, timestamp);
+                    reportHostLog(listener, config);
+                    reportInvocationEnded(config, info.getContext(), listener, 0L);
+                    return;
+                }
             }
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope(InvocationMetricKey.start_logcat.name())) {
