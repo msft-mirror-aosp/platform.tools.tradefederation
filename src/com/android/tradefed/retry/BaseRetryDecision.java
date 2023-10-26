@@ -270,6 +270,13 @@ public class BaseRetryDecision
             }
             recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
             isAlreadyRecovered = true;
+            // Add metrics towards device is recovered by device reset.
+            if (IsolationGrade.FULLY_ISOLATED.equals(mRetryIsolationGrade)) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricLogger.InvocationMetricKey
+                                .DEVICE_RECOVERED_FROM_DEVICE_RESET,
+                        1);
+            }
         }
 
         switch (mRetryStrategy) {
