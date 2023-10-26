@@ -109,7 +109,7 @@ public final class ClangCodeCoverageCollector extends BaseDeviceMetricCollector
             for (ITestDevice device : getRealDevices()) {
                 // Clear coverage measurements on the device.
                 try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-                    getCoverageFlusher(device).resetCoverage();
+                    getCoverageFlusher(device).deleteCoverageMeasurements();
                 }
             }
         }
