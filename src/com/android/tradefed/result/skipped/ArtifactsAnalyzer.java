@@ -20,7 +20,10 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.util.SystemUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,6 +42,9 @@ public class ArtifactsAnalyzer {
     }
 
     public void analyzeArtifacts() {
+        if (SystemUtil.isLocalMode()) {
+            return;
+        }
         List<BuildAnalysis> reports = new ArrayList<>();
         for (Entry<ITestDevice, IBuildInfo> deviceBuild :
                 information.getContext().getDeviceBuildMap().entrySet()) {
@@ -47,6 +53,15 @@ public class ArtifactsAnalyzer {
         }
         BuildAnalysis finalReport = BuildAnalysis.mergeReports(reports);
         CLog.d("Build analysis report: %s", finalReport.toString());
+        if (finalReport.deviceImageChanged()) {
+            if (finalReport.hasTestsArtifacts()) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.TEST_ARTIFACT_CHANGE_ONLY, 1);
+            } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.PURE_DEVICE_IMAGE_UNCHANGED, 1);
+            }
+        }
     }
 
     private BuildAnalysis analyzeArtifact(Entry<ITestDevice, IBuildInfo> deviceBuild) {
