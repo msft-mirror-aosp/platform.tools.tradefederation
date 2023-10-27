@@ -15,9 +15,13 @@
  */
 package com.android.tradefed.result.skipped;
 
+import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.result.skipped.SkipReason.DemotionTrigger;
 
 import com.google.common.truth.Truth;
 
@@ -32,6 +36,7 @@ public class SkipManagerTest {
 
     private SkipManager mManager;
     private TestInformation mTestInformation;
+    private IConfiguration mConfiguration;
     private IInvocationContext mContext;
 
     @Before
@@ -39,6 +44,7 @@ public class SkipManagerTest {
         mManager = new SkipManager();
         mManager.setSilentInvocationSkip(false);
         mContext = new InvocationContext();
+        mConfiguration = new Configuration("test", "name");
         mTestInformation = TestInformation.newBuilder().setInvocationContext(mContext).build();
     }
 
@@ -47,5 +53,22 @@ public class SkipManagerTest {
         Truth.assertThat(mManager.shouldSkipInvocation(mTestInformation)).isFalse();
         mManager.reportDiscoveryWithNoTests();
         Truth.assertThat(mManager.shouldSkipInvocation(mTestInformation)).isTrue();
+    }
+
+    @Test
+    public void testEmptySetup() {
+        mManager.setup(mConfiguration, mContext);
+        Truth.assertThat(mManager.getDemotedTests()).isEmpty();
+    }
+
+    @Test
+    public void testSetupAndFilters() throws Exception {
+        OptionSetter setter = new OptionSetter(mManager);
+        setter.setOptionValue(
+                "demotion-filters",
+                "x86 module-name",
+                new SkipReason("message", DemotionTrigger.ERROR_RATE).toString());
+        mManager.setup(mConfiguration, mContext);
+        Truth.assertThat(mManager.getDemotedTests().size()).isEqualTo(1);
     }
 }
