@@ -98,8 +98,7 @@ public class SkipManager implements IDisableable {
         boolean shouldskip = mNoTestsDiscovered;
         if (!shouldskip) {
             ArtifactsAnalyzer analyzer = new ArtifactsAnalyzer(information);
-            // TODO: Use analysis.
-            analyzer.analyzeArtifacts();
+            shouldskip = buildAnalysisDecision(information, analyzer.analyzeArtifacts());
         }
         // Build heuristic for skipping invocation
         if (mSilentInvocationSkip && shouldskip) {
@@ -137,6 +136,26 @@ public class SkipManager implements IDisableable {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEMOTION_FILTERS_RECEIVED_COUNT, mDemotionFilters.size());
         }
+    }
+
+    /** Based on environment of the run and the build analysis, decide to skip or not. */
+    private boolean buildAnalysisDecision(TestInformation information, BuildAnalysis results) {
+        if (results == null) {
+            return false;
+        }
+        if (!"WORK_NODE".equals(information.getContext().getAttribute("trigger"))) {
+            // Eventually support postsubmit analysis.
+            return false;
+        }
+        // Presubmit analysis
+        if (results.hasTestsArtifacts()) {
+            // TODO: Eventually make the analysis granular to tests artifacts
+            return false;
+        }
+        if (results.deviceImageChanged()) {
+            return false;
+        }
+        return true;
     }
 
     public void clearManager() {

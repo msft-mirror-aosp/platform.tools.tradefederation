@@ -41,9 +41,9 @@ public class ArtifactsAnalyzer {
         this.information = information;
     }
 
-    public void analyzeArtifacts() {
+    public BuildAnalysis analyzeArtifacts() {
         if (SystemUtil.isLocalMode()) {
-            return;
+            return null;
         }
         List<BuildAnalysis> reports = new ArrayList<>();
         for (Entry<ITestDevice, IBuildInfo> deviceBuild :
@@ -62,6 +62,7 @@ public class ArtifactsAnalyzer {
                         InvocationMetricKey.PURE_DEVICE_IMAGE_UNCHANGED, 1);
             }
         }
+        return finalReport;
     }
 
     private BuildAnalysis analyzeArtifact(Entry<ITestDevice, IBuildInfo> deviceBuild) {
