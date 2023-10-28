@@ -164,13 +164,16 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
      *
      * <p>For a non-headless device, it would remove every non for-testing user except the system
      * user.
+     *
+     * <p>A communal profile is never removed.
      */
     private static void removeNonForTestingUsers(ITestDevice device)
             throws DeviceNotAvailableException {
         for (Map.Entry<Integer, UserInfo> userInfo : device.getUserInfos().entrySet()) {
             if (userInfo.getValue().isSystem()
                     || userInfo.getValue().isFlagForTesting()
-                    || userInfo.getValue().isMain()) {
+                    || userInfo.getValue().isMain()
+                    || userInfo.getValue().isCommunalProfile()) {
                 continue;
             }
             device.removeUser(userInfo.getValue().userId());

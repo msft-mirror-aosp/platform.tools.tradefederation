@@ -38,6 +38,8 @@ public final class UserInfo {
             FLAG_PRIMARY | FLAG_MANAGED_PROFILE | FLAG_GUEST | FLAG_RESTRICTED;
     public static final String CLONE_PROFILE_TYPE = "profile.CLONE";
 
+    public static final String COMMUNAL_PROFILE_TYPE = "profile.COMMUNAL";
+
     private final int mUserId;
     private final String mUserName;
     private final int mFlag;
@@ -66,7 +68,9 @@ public final class UserInfo {
         /** managed profile user, e.g. work profile. */
         MANAGED_PROFILE,
         /** clone profile user */
-        CLONE_PROFILE;
+        CLONE_PROFILE,
+        /** communal profile user */
+        COMMUNAL_PROFILE;
 
         public boolean isCurrent() {
             return this == CURRENT;
@@ -163,6 +167,10 @@ public final class UserInfo {
         return CLONE_PROFILE_TYPE.equals(mUserType);
     }
 
+    public boolean isCommunalProfile() {
+        return COMMUNAL_PROFILE_TYPE.equals(mUserType);
+    }
+
     public boolean isEphemeral() {
         return (mFlag & FLAG_EPHEMERAL) == FLAG_EPHEMERAL;
     }
@@ -190,6 +198,8 @@ public final class UserInfo {
                 return isManagedProfile();
             case CLONE_PROFILE:
                 return isCloneProfile();
+            case COMMUNAL_PROFILE:
+                return isCommunalProfile();
             default:
                 throw new RuntimeException("Variant not covered: " + userType);
         }
