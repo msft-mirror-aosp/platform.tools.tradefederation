@@ -41,9 +41,9 @@ public class ArtifactsAnalyzer {
         this.information = information;
     }
 
-    public void analyzeArtifacts() {
+    public BuildAnalysis analyzeArtifacts() {
         if (SystemUtil.isLocalMode()) {
-            return;
+            return null;
         }
         List<BuildAnalysis> reports = new ArrayList<>();
         for (Entry<ITestDevice, IBuildInfo> deviceBuild :
@@ -62,18 +62,19 @@ public class ArtifactsAnalyzer {
                         InvocationMetricKey.PURE_DEVICE_IMAGE_UNCHANGED, 1);
             }
         }
+        return finalReport;
     }
 
     private BuildAnalysis analyzeArtifact(Entry<ITestDevice, IBuildInfo> deviceBuild) {
         ITestDevice device = deviceBuild.getKey();
         IBuildInfo build = deviceBuild.getValue();
-        boolean deviceImageChanged;
+        boolean deviceImageChanged = true; // anchor toward changing
         if (device.getIDevice() != null
                 && device.getIDevice().getClass().isAssignableFrom(NullDevice.class)) {
             deviceImageChanged = false; // No device image
         } else {
             deviceImageChanged =
-                    "true".equals(build.getBuildAttributes().get(DEVICE_IMAGE_NOT_CHANGED));
+                    !"true".equals(build.getBuildAttributes().get(DEVICE_IMAGE_NOT_CHANGED));
         }
         boolean hasTestsArtifacts = true;
         if (build.getFile(BuildInfoFileKey.TESTDIR_IMAGE) == null

@@ -67,6 +67,7 @@ public class RunUtilTest {
     @Before
     public void setUp() throws Exception {
         mRunUtil = new RunUtil(new CommandInterrupter());
+        mRunUtil.setPollingInterval(SHORT_TIMEOUT_MS);
         mMockRunnableResult = null;
     }
 
@@ -171,6 +172,52 @@ public class RunUtilTest {
         assertEquals(CommandStatus.EXCEPTION, result.getStatus());
         assertEquals("", result.getStdout());
         assertTrue(result.getStderr().contains("Cannot run program \"blahggggwarggg\""));
+    }
+
+    /**
+     * Test {@link RunUtil#runTimedCmd(long, String[])} exits with status SUCCESS since the output
+     * monitor observed output on streams through the command time until finished.
+     */
+    @Test
+    public void testRunTimed_output_monitor() {
+        // Long-running operation with changing output stream.
+        String[] command = {"/bin/bash", "-c", "for i in {1..5}; do echo hello; sleep 1; done"};
+
+        // Should succeed and return sooner regardless of timeout.
+        CommandResult result =
+                mRunUtil.runTimedCmdWithOutputMonitor(VERY_LONG_TIMEOUT_MS * 5, 1200, command);
+        assertEquals(CommandStatus.SUCCESS, result.getStatus());
+    }
+
+    /**
+     * Test {@link RunUtil#runTimedCmd(long, String[])} exits with status FAILED due to the output
+     * monitor not observing any output on the streams.
+     */
+    @Test
+    public void testRunTimed_output_monitor_failed() {
+        // Long-running operation with no output sent to stream.
+        String[] command = {"sleep", String.valueOf(VERY_LONG_TIMEOUT_MS * 5)};
+
+        // Should fail and return sooner regardless of timeout.
+        CommandResult result =
+                mRunUtil.runTimedCmdWithOutputMonitor(VERY_LONG_TIMEOUT_MS * 5, 1200, command);
+        assertEquals(CommandStatus.FAILED, result.getStatus());
+    }
+
+    /**
+     * Test {@link RunUtil#runTimedCmd(long, String[])} exits with status TIMED_OUT even if the
+     * output monitor is observing new output on the output streams since the timeout is short.
+     */
+    @Test
+    public void testRunTimed_output_monitor_timeout() {
+        // Long-running operation with no output.
+        String[] command = {"sleep", String.valueOf(VERY_LONG_TIMEOUT_MS * 5)};
+
+        // Should run out of time and timeout.
+        CommandResult result =
+                mRunUtil.runTimedCmdWithOutputMonitor(
+                        SHORT_TIMEOUT_MS, SHORT_TIMEOUT_MS * 2, command);
+        assertEquals(CommandStatus.TIMED_OUT, result.getStatus());
     }
 
     /**
