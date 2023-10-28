@@ -124,7 +124,10 @@ public class SkipManager implements IDisableable {
         try (TradefedFeatureClient client = new TradefedFeatureClient()) {
             Map<String, String> args = new HashMap<>();
             FeatureResponse response = client.triggerFeature("FetchDemotionInformation", args);
-            if (!response.hasErrorInfo()) {
+            if (response.hasErrorInfo()) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEMOTION_ERROR_RESPONSE, 1);
+            } else {
                 for (PartResponse part : response.getMultiPartResponse().getResponsePartList()) {
                     String filter = part.getKey();
                     mDemotionFilters.put(filter, SkipReason.fromString(part.getValue()));
