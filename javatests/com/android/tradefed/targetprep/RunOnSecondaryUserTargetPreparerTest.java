@@ -302,6 +302,25 @@ public class RunOnSecondaryUserTargetPreparerTest {
     }
 
     @Test
+    public void setUp_existingUserIsCommunalProfile_doesNotRemove() throws Exception {
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(
+                13,
+                new UserInfo(
+                        13,
+                        "communal",
+                        /* flag= */ 0,
+                        /* isRunning= */ false,
+                        UserInfo.COMMUNAL_PROFILE_TYPE));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+        mOptionSetter.setOptionValue("disable-tear-down", "false");
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice(), never()).removeUser(13);
+    }
+
+    @Test
     public void setUp_doesNotDisableTearDown() throws Exception {
         when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
                 .thenReturn(2);
