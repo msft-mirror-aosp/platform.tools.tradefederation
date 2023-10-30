@@ -337,52 +337,57 @@ public class InvocationExecution implements IInvocationExecution {
             mTrackLabPreparers.put(deviceName, new HashSet<>());
             mTrackTargetPreparers.put(deviceName, new HashSet<>());
         }
-        try (CloseableTraceScope ignored =
-                new CloseableTraceScope(InvocationMetricKey.pre_multi_preparer.name())) {
-            // Before all the individual setup, make the multi-pre-target-preparer devices setup
-            runMultiTargetPreparers(
-                    config.getMultiPreTargetPreparers(),
-                    listener,
-                    testInfo,
-                    "multi pre target preparer setup");
-        } finally {
-            long end = System.currentTimeMillis();
-            // Pre-multi-preparer are test specific and account toward test setup
-            InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.TEST_SETUP_PAIR, start, end);
-        }
-        start = System.currentTimeMillis();
-        try (CloseableTraceScope ignored =
-                new CloseableTraceScope(InvocationMetricKey.lab_setup.name())) {
-            runLabPreparersSetup(testInfo, config, listener);
-        } finally {
-            long end = System.currentTimeMillis();
-            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_END, end);
-            InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.SETUP_PAIR, start, end);
-        }
-        long startPreparer = System.currentTimeMillis();
-        try (CloseableTraceScope ignored =
-                new CloseableTraceScope(InvocationMetricKey.test_setup.name())) {
-            runPreparersSetup(testInfo, config, listener);
+        try {
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(InvocationMetricKey.pre_multi_preparer.name())) {
+                // Before all the individual setup, make the multi-pre-target-preparer devices setup
+                runMultiTargetPreparers(
+                        config.getMultiPreTargetPreparers(),
+                        listener,
+                        testInfo,
+                        "multi pre target preparer setup");
+            } finally {
+                long end = System.currentTimeMillis();
+                // Pre-multi-preparer are test specific and account toward test setup
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.TEST_SETUP_PAIR, start, end);
+            }
+            start = System.currentTimeMillis();
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(InvocationMetricKey.lab_setup.name())) {
+                runLabPreparersSetup(testInfo, config, listener);
+            } finally {
+                long end = System.currentTimeMillis();
+                InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_END, end);
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.SETUP_PAIR, start, end);
+            }
+            long startPreparer = System.currentTimeMillis();
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(InvocationMetricKey.test_setup.name())) {
+                runPreparersSetup(testInfo, config, listener);
 
-            // After all the individual setup, make the multi-devices setup
-            runMultiTargetPreparers(
-                    config.getMultiTargetPreparers(),
-                    listener,
-                    testInfo,
-                    "multi target preparer setup");
-            // Collect some info automatically after setup
-            collectAutoInfo(config, testInfo);
+                // After all the individual setup, make the multi-devices setup
+                runMultiTargetPreparers(
+                        config.getMultiTargetPreparers(),
+                        listener,
+                        testInfo,
+                        "multi target preparer setup");
+                // Collect some info automatically after setup
+                collectAutoInfo(config, testInfo);
+            } finally {
+                // Note: These metrics are handled in a try in case of a kernel reset or device
+                // issue.
+                // Setup timing metric. It does not include flashing time on boot tests.
+                long end = System.currentTimeMillis();
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.TEST_SETUP_PAIR, startPreparer, end);
+                long setupDuration = end - start;
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.SETUP, setupDuration);
+                CLog.d("Total setup duration: %s'", TimeUtil.formatElapsedTime(setupDuration));
+            }
         } finally {
-            // Note: These metrics are handled in a try in case of a kernel reset or device issue.
-            // Setup timing metric. It does not include flashing time on boot tests.
-            long end = System.currentTimeMillis();
-            InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.TEST_SETUP_PAIR, startPreparer, end);
-            long setupDuration = end - start;
-            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP, setupDuration);
-            CLog.d("Total setup duration: %s'", TimeUtil.formatElapsedTime(setupDuration));
             // Upload the setup logcat after setup is complete.
             for (ITestDevice device : testInfo.getDevices()) {
                 reportLogs(device, listener, Stage.SETUP);
