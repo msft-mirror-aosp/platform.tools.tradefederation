@@ -36,9 +36,11 @@ import com.android.tradefed.result.FileSystemLogSaver;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TextResultReporter;
+import com.android.tradefed.result.skipped.SkipManager;
 import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.sandbox.SandboxOptions;
+import com.android.tradefed.sandbox.TradefedSandbox;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.targetprep.ILabPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
@@ -104,6 +106,7 @@ public class Configuration implements IConfiguration {
     public static final String RETRY_DECISION_TYPE_NAME = "retry_decision";
     public static final String COVERAGE_OPTIONS_TYPE_NAME = "coverage";
     public static final String GLOBAL_FILTERS_TYPE_NAME = "global_filters";
+    public static final String SKIP_MANAGER_TYPE_NAME = "skip_manager";
 
     private static Map<String, ObjTypeInfo> sObjTypeMap = null;
     private static Set<String> sMultiDeviceSupportedTag =
@@ -202,6 +205,7 @@ public class Configuration implements IConfiguration {
                     COVERAGE_OPTIONS_TYPE_NAME, new ObjTypeInfo(CoverageOptions.class, false));
             sObjTypeMap.put(
                     GLOBAL_FILTERS_TYPE_NAME, new ObjTypeInfo(GlobalTestFilter.class, false));
+            sObjTypeMap.put(SKIP_MANAGER_TYPE_NAME, new ObjTypeInfo(SkipManager.class, false));
         }
         return sObjTypeMap;
     }
@@ -253,6 +257,7 @@ public class Configuration implements IConfiguration {
         setConfigurationObjectNoThrow(SANBOX_OPTIONS_TYPE_NAME, new SandboxOptions());
         setConfigurationObjectNoThrow(RETRY_DECISION_TYPE_NAME, new BaseRetryDecision());
         setConfigurationObjectNoThrow(GLOBAL_FILTERS_TYPE_NAME, new GlobalTestFilter());
+        setConfigurationObjectNoThrow(SKIP_MANAGER_TYPE_NAME, new SkipManager());
     }
 
     /**
@@ -508,6 +513,13 @@ public class Configuration implements IConfiguration {
         return (GlobalTestFilter) getConfigurationObject(GLOBAL_FILTERS_TYPE_NAME);
     }
 
+    /** {@inheritDoc} */
+    @SuppressWarnings("unchecked")
+    @Override
+    public SkipManager getSkipManager() {
+        return (SkipManager) getConfigurationObject(SKIP_MANAGER_TYPE_NAME);
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -584,7 +596,12 @@ public class Configuration implements IConfiguration {
 
     /** Return a copy of all config objects that are not disabled via {@link IDisableable}. */
     private Collection<Object> getAllNonDisabledConfigurationObjects() {
-        return getAllConfigurationObjects(null, false);
+        String excluded = null;
+        // Inside the sandbox disable lab preparers
+        if (System.getenv(TradefedSandbox.SANDBOX_ENABLED) != null) {
+            excluded = LAB_PREPARER_TYPE_NAME;
+        }
+        return getAllConfigurationObjects(excluded, false);
     }
 
     /**
@@ -1615,6 +1632,13 @@ public class Configuration implements IConfiguration {
                 serializer,
                 GLOBAL_FILTERS_TYPE_NAME,
                 getGlobalFilters(),
+                excludeFilters,
+                printDeprecatedOptions,
+                printUnchangedOptions);
+        ConfigurationUtil.dumpClassToXml(
+                serializer,
+                SKIP_MANAGER_TYPE_NAME,
+                getSkipManager(),
                 excludeFilters,
                 printDeprecatedOptions,
                 printUnchangedOptions);

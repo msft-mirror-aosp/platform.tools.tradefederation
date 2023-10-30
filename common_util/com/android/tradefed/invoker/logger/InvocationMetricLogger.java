@@ -265,6 +265,8 @@ public class InvocationMetricLogger {
         // Records cache hit metrics
         CAS_DOWNLOAD_HOT_BYTES("cas_download_hot_bytes", true),
         CAS_DOWNLOAD_COLD_BYTES("cas_download_cold_bytes", true),
+        CAS_DOWNLOAD_HOT_FILES_COUNT("cas_download_hot_files_count", true),
+        CAS_DOWNLOAD_COLD_FILES_COUNT("cas_download_cold_files_count", true),
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
@@ -289,6 +291,8 @@ public class InvocationMetricLogger {
 
         DEVICE_IMAGE_NOT_CHANGED("device_image_not_changed", false),
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
+        PURE_DEVICE_IMAGE_UNCHANGED("pure_device_image_unchanged", true),
+        TEST_ARTIFACT_CHANGE_ONLY("test_artifact_change_only", true),
 
         POWERWASH_TIME("powerwash_time_ms", true),
         POWERWASH_SUCCESS_COUNT("powerwash_success_count", true),
@@ -304,6 +308,10 @@ public class InvocationMetricLogger {
         INCREMENTAL_FLASHING_UPDATE_FAILURE("incremental_flashing_update_failure", true),
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
+
+        SILENT_INVOCATION_SKIP_COUNT("silent_invocation_skip_count", true),
+        DEMOTION_FILTERS_RECEIVED_COUNT("demotion_filters_received_count", true),
+        DEMOTION_ERROR_RESPONSE("demotion_error_response", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),

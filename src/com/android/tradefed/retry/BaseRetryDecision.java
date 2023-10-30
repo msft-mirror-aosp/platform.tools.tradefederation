@@ -240,7 +240,7 @@ public class BaseRetryDecision
     public boolean shouldRetry(
             IRemoteTest test, int attemptJustExecuted, List<TestRunResult> previousResults)
             throws DeviceNotAvailableException {
-        return shouldRetry(test, null, attemptJustExecuted, previousResults);
+        return shouldRetry(test, null, attemptJustExecuted, previousResults, null);
     }
 
     @Override
@@ -248,7 +248,8 @@ public class BaseRetryDecision
             IRemoteTest test,
             ModuleDefinition module,
             int attemptJustExecuted,
-            List<TestRunResult> previousResults)
+            List<TestRunResult> previousResults,
+            DeviceNotAvailableException dnae)
             throws DeviceNotAvailableException {
         // Keep track of some results for the test in progress for statistics purpose.
         if (test != mCurrentlyConsideredTest) {
@@ -262,13 +263,31 @@ public class BaseRetryDecision
             return false;
         }
 
+        boolean isAlreadyRecovered = false;
+        if (dnae != null) {
+            if (!module.shouldRecoverVirtualDevice()) {
+                throw dnae;
+            }
+            recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
+            isAlreadyRecovered = true;
+            // Add metrics towards device is recovered by device reset.
+            if (IsolationGrade.FULLY_ISOLATED.equals(mRetryIsolationGrade)) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricLogger.InvocationMetricKey
+                                .DEVICE_RECOVERED_FROM_DEVICE_RESET,
+                        1);
+            }
+        }
+
         switch (mRetryStrategy) {
             case NO_RETRY:
                 // Return directly if we are not considering retry at all.
                 return false;
             case ITERATIONS:
                 // Still support isolating the iterations if that's configured
-                recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
+                if (!isAlreadyRecovered) {
+                    recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
+                }
                 // For iterations, retry directly, we have nothing to setup
                 return true;
             case RERUN_UNTIL_FAILURE:
@@ -304,7 +323,7 @@ public class BaseRetryDecision
             // support ITestFile*Filter*Receiver in the future.
             ITestFilterReceiver filterableTest = (ITestFilterReceiver) test;
             shouldRetry = handleRetryFailures(filterableTest, previousResults, moduleSkipList);
-            if (shouldRetry) {
+            if (shouldRetry && !isAlreadyRecovered) {
                 // In case of retry, go through the recovery routine
                 recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
             }
@@ -313,7 +332,7 @@ public class BaseRetryDecision
             IAutoRetriableTest autoRetryTest = (IAutoRetriableTest) test;
             shouldRetry =
                     autoRetryTest.shouldRetry(attemptJustExecuted, previousResults, moduleSkipList);
-            if (shouldRetry) {
+            if (shouldRetry && !isAlreadyRecovered) {
                 recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
             }
         } else {

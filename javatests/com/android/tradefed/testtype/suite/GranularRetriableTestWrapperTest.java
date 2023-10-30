@@ -351,8 +351,12 @@ public class GranularRetriableTestWrapperTest {
         Mockito.doThrow(new DeviceNotAvailableException("fake message", "serial"))
                 .when(mockTest)
                 .run(Mockito.any(), Mockito.any(ITestInvocationListener.class));
+        ModuleDefinition module = Mockito.mock(ModuleDefinition.class);
+        Mockito.when(module.shouldRecoverVirtualDevice()).thenReturn(false);
+        Mockito.when(module.getModuleInvocationContext()).thenReturn(mModuleInvocationContext);
 
-        GranularRetriableTestWrapper granularTestWrapper = createGranularTestWrapper(mockTest, 1);
+        GranularRetriableTestWrapper granularTestWrapper =
+                createGranularTestWrapper(mockTest, 1, new ArrayList<>(), module);
         try {
             granularTestWrapper.run(mModuleInfo, new CollectingTestListener());
             fail("Should have thrown an exception.");

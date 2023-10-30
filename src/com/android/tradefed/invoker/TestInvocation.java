@@ -203,6 +203,7 @@ public class TestInvocation implements ITestInvocation {
     private boolean mTestStarted = false;
     private boolean mTestDone = false;
     private boolean mForcedStopRequestedAfterTest = false;
+    private boolean mIsRemoteInvocation = false;
 
     private boolean mInvocationFailed = false;
     private boolean mDelegatedInvocation = false;
@@ -587,16 +588,8 @@ public class TestInvocation implements ITestInvocation {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.TEAR_DOWN_DISK_USAGE, size);
                 }
-                // Only log Invocation ended in parent
-                if (invocationPath instanceof RemoteInvocationExecution || !isSubprocess(config)) {
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.INVOCATION_END, System.currentTimeMillis());
-                }
                 elapsedTime = System.currentTimeMillis() - startTime;
                 reportInvocationEnded(config, context, listener, elapsedTime);
-            } finally {
-                TfObjectTracker.clearTracking();
-                CurrentInvocation.clearInvocationInfos();
             }
         }
         if (tearDownException != null) {
@@ -1049,8 +1042,8 @@ public class TestInvocation implements ITestInvocation {
                                 .get(TradefedFeatureServer.SERVER_REFERENCE));
             }
             // Only log invocation_start in parent
-            boolean isSuprocess = isSubprocess(config);
-            if (!isSuprocess) {
+            boolean isCurrentlySubprocess = isSubprocess(config);
+            if (!isCurrentlySubprocess) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.INVOCATION_START, System.currentTimeMillis());
             } else {
@@ -1195,6 +1188,10 @@ public class TestInvocation implements ITestInvocation {
                 ((BaseLeveledLogOutput) leveledLogOutput).initFilters(config);
             }
             getLogRegistry().registerLogger(leveledLogOutput);
+
+            // Only in parent fetch demotion information
+            config.getSkipManager().setup(config, context);
+
             mStatus = "resolving dynamic options";
             long startDynamic = System.currentTimeMillis();
             boolean resolverSuccess = false;
@@ -1243,6 +1240,34 @@ public class TestInvocation implements ITestInvocation {
             }
             if (!providerSuccess) {
                 return;
+            }
+            // Skip invocation can only happen in the parent process
+            if (!config.getCommandOptions().getInvocationData()
+                        .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)) {
+                if (config.getSkipManager().shouldSkipInvocation(info)) {
+                    CLog.d("Skipping invocation early.");
+                    startInvocation(config, info.getContext(), listener);
+                    // Backfill accounting metrics with zeros
+                    long timestamp = System.currentTimeMillis();
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEST_SETUP_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP, 0);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.SETUP_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.SETUP_START, timestamp);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.SETUP_END, timestamp);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEST_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEARDOWN_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEST_TEARDOWN_PAIR, timestamp, timestamp);
+                    reportHostLog(listener, config);
+                    reportInvocationEnded(config, info.getContext(), listener, 0L);
+                    return;
+                }
             }
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope(InvocationMetricKey.start_logcat.name())) {
@@ -1319,9 +1344,9 @@ public class TestInvocation implements ITestInvocation {
                         return;
                     }
                 }
-
                 // Apply global filters before sharding so they are taken into account.
-                config.getGlobalFilters().setUpFilters(config);
+                config.getGlobalFilters()
+                        .setUpFilters(config, config.getSkipManager().getDemotedTests().keySet());
 
                 try (CloseableTraceScope ignored =
                         new CloseableTraceScope(InvocationMetricKey.sharding.name())) {
@@ -1387,6 +1412,9 @@ public class TestInvocation implements ITestInvocation {
         } catch (IOException e) {
             CLog.e(e);
         } finally {
+            TfObjectTracker.clearTracking();
+            CurrentInvocation.clearInvocationInfos();
+            config.getSkipManager().clearManager();
             // Ensure build infos are always cleaned up at the end of invocation.
             CLog.i("Cleaning up builds");
             invocationPath.cleanUpBuilds(context, config);
@@ -1473,6 +1501,7 @@ public class TestInvocation implements ITestInvocation {
             case SANDBOX:
                 return new SandboxedInvocationExecution();
             case REMOTE_INVOCATION:
+                mIsRemoteInvocation = true;
                 return new RemoteInvocationExecution();
             case DELEGATED_INVOCATION:
                 return new DelegatedInvocationExecution();
@@ -1704,6 +1733,11 @@ public class TestInvocation implements ITestInvocation {
             IInvocationContext context,
             ITestInvocationListener listener,
             long elapsedTime) {
+        // Only log Invocation ended in parent
+        if (mIsRemoteInvocation || !isSubprocess(config)) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INVOCATION_END, System.currentTimeMillis());
+        }
         // Init a log for the end of the host_log.
         ILeveledLogOutput endHostLog = config.getLogOutput();
         try {

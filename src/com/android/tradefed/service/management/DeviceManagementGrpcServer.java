@@ -250,9 +250,11 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
     }
 
     private void releaseReservationInternal(String reservationId) {
-        ITestDevice device = getDeviceFromReservationAndClear(reservationId);
-        if (device != null) {
-            mDeviceManager.freeDevice(device, FreeDeviceState.AVAILABLE);
+        Entry<String, ReservationInformation> entry = getDeviceEntryFromReservation(reservationId);
+        if (entry != null) {
+            mDeviceManager.freeDevice(entry.getValue().device, FreeDeviceState.AVAILABLE);
+            // Only release reservation when done with free.
+            mSerialToReservation.remove(entry.getKey());
         }
     }
 
@@ -290,15 +292,6 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
             if (info.getValue().reservationId.equals(reservationId)) {
                 return info;
             }
-        }
-        return null;
-    }
-
-    private ITestDevice getDeviceFromReservationAndClear(String reservationId) {
-        Entry<String, ReservationInformation> entry = getDeviceEntryFromReservation(reservationId);
-        if (entry != null) {
-            mSerialToReservation.remove(entry.getKey());
-            return entry.getValue().device;
         }
         return null;
     }
