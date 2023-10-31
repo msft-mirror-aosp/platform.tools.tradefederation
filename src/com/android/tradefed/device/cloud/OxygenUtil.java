@@ -105,7 +105,12 @@ public class OxygenUtil {
                                             Pattern.compile("^launcher\\.log.*"),
                                             Pair.create(
                                                     "failed to read from socket, retry",
-                                                    "rootcanal_socket_error")))
+                                                    "rootcanal_socket_error")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^logcat.*"),
+                                            Pair.create(
+                                                    "System zygote died with fatal exception",
+                                                    "zygote_fatal_exception")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /** Default constructor of OxygenUtil */
