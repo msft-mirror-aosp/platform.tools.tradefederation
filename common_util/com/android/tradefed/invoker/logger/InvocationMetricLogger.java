@@ -309,6 +309,8 @@ public class InvocationMetricLogger {
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
+        SKIP_NO_TESTS_DISCOVERED("skip_no_tests_discovered", true),
+        SKIP_NO_CHANGES("skip_no_changes", true),
         SILENT_INVOCATION_SKIP_COUNT("silent_invocation_skip_count", true),
         DEMOTION_FILTERS_RECEIVED_COUNT("demotion_filters_received_count", true),
         DEMOTION_ERROR_RESPONSE("demotion_error_response", true),

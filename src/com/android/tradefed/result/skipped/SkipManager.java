@@ -54,11 +54,14 @@ public class SkipManager implements IDisableable {
     private Map<String, String> mDemotionFilterOption = new LinkedHashMap<>();
 
     @Option(
-            name = "silent-invocation-skip",
-            description =
-                    "Only report a property for when we would have skipped the invocation instead"
-                            + " of actually skipping.")
-    private boolean mSilentInvocationSkip = true;
+            name = "skip-on-no-change",
+            description = "Enable the layer of skipping when there is no changes to artifacts.")
+    private boolean mSkipOnNoChange = false;
+
+    @Option(
+            name = "skip-on-no-tests-discovered",
+            description = "Enable the layer of skipping when there is no discovered tests to run.")
+    private boolean mSkipOnNoTestsDiscovered = false;
 
     // Contains the filter and reason for demotion
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
@@ -95,18 +98,20 @@ public class SkipManager implements IDisableable {
 
     /** Reports whether we should skip the current invocation. */
     public boolean shouldSkipInvocation(TestInformation information) {
-        boolean shouldskip = mNoTestsDiscovered;
-        if (!shouldskip) {
-            ArtifactsAnalyzer analyzer = new ArtifactsAnalyzer(information);
-            shouldskip = buildAnalysisDecision(information, analyzer.analyzeArtifacts());
-        }
         // Build heuristic for skipping invocation
-        if (mSilentInvocationSkip && shouldskip) {
+        if (mNoTestsDiscovered) {
             InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.SILENT_INVOCATION_SKIP_COUNT, 1);
-            return false;
+                    InvocationMetricKey.SKIP_NO_TESTS_DISCOVERED, 1);
+            if (mSkipOnNoTestsDiscovered) {
+                return true;
+            } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.SILENT_INVOCATION_SKIP_COUNT, 1);
+                return false;
+            }
         }
-        return shouldskip;
+        ArtifactsAnalyzer analyzer = new ArtifactsAnalyzer(information);
+        return buildAnalysisDecision(information, analyzer.analyzeArtifacts());
     }
 
     /**
@@ -158,7 +163,13 @@ public class SkipManager implements IDisableable {
         if (results.deviceImageChanged()) {
             return false;
         }
-        return true;
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SKIP_NO_CHANGES, 1);
+        if (mSkipOnNoChange) {
+            return true;
+        }
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.SILENT_INVOCATION_SKIP_COUNT, 1);
+        return false;
     }
 
     public void clearManager() {
@@ -176,7 +187,8 @@ public class SkipManager implements IDisableable {
         mIsDisabled = isDisabled;
     }
 
-    public void setSilentInvocationSkip(boolean silentSkip) {
-        mSilentInvocationSkip = silentSkip;
+    public void setSkipDecision(boolean shouldSkip) {
+        mSkipOnNoChange = shouldSkip;
+        mSkipOnNoTestsDiscovered = shouldSkip;
     }
 }
