@@ -42,7 +42,7 @@ public class SkipManagerTest {
     @Before
     public void setup() {
         mManager = new SkipManager();
-        mManager.setSilentInvocationSkip(false);
+        mManager.setSkipDecision(true);
         mContext = new InvocationContext();
         mConfiguration = new Configuration("test", "name");
         mTestInformation = TestInformation.newBuilder().setInvocationContext(mContext).build();
