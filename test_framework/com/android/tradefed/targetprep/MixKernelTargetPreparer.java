@@ -304,8 +304,9 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer
         try {
             // Modifying device image cannot work with incremental flashing so
             // self disable it.
+            CLog.d("Disabling incremental flashing.");
             mConfig.injectOptionValue("incremental-flashing", "false");
-            mConfig.injectOptionValue("force-disable-incremental-flashing", "false");
+            mConfig.injectOptionValue("force-disable-incremental-flashing", "true");
         } catch (ConfigurationException ignore) {
             CLog.e(ignore);
         }

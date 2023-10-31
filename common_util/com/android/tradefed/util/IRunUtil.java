@@ -57,6 +57,18 @@ public interface IRunUtil {
         public default CommandResult getResult() {
             return null;
         }
+
+        /**
+         * Checks if the currently running operation has made progress since the last check.
+         *
+         * @param idleOutputTimeout ms idle with no observed progress before beginning to assume no
+         *     progress is being made.
+         * @return true if progress has been detected otherwise false.
+         */
+        public default boolean checkOutputMonitor(Long idleOutputTimeout) {
+            // Allow existing implementations not to implement this method.
+            throw new UnsupportedOperationException("checkOutputMonitor() has no implementation.");
+        }
     }
 
     /**
@@ -108,6 +120,39 @@ public interface IRunUtil {
     public CommandResult runTimedCmd(final long timeout, final String... command);
 
     /**
+     * Helper method to execute a system command, and aborting if it takes longer than a specified
+     * time. Also monitors the output streams for activity, aborting if no stream activity is
+     * observed for a specified time. If the idleOutputTimeout is set to zero, no stream monitoring
+     * will occur.
+     *
+     * @param timeout maximum time to wait in ms. 0 means no timeout.
+     * @param idleOutputTimeout maximum time to wait in ms for output on the output streams
+     * @param command the specified system command and optionally arguments to exec
+     * @return a {@link CommandResult} containing result from command run
+     */
+    public CommandResult runTimedCmdWithOutputMonitor(
+            final long timeout, final long idleOutputTimeout, final String... command);
+
+    /**
+     * Helper method to execute a system command, abort if it takes longer than a specified time,
+     * and redirect output to files if specified. When {@link OutputStream} are provided this way,
+     * they will be left open at the end of the function.
+     *
+     * @param timeout timeout maximum time to wait in ms. 0 means no timeout.
+     * @param idleOutputTimeout maximum time to wait in ms for output on the output streams
+     * @param stdout {@link OutputStream} where the std output will be redirected. Can be null.
+     * @param stderr {@link OutputStream} where the error output will be redirected. Can be null.
+     * @param command the specified system command and optionally arguments to exec
+     * @return a {@link CommandResult} containing result from command run
+     */
+    public CommandResult runTimedCmdWithOutputMonitor(
+            final long timeout,
+            final long idleOutputTimeout,
+            OutputStream stdout,
+            OutputStream stderr,
+            final String... command);
+
+    /**
      * Helper method to execute a system command, abort if it takes longer than a specified time,
      * and redirect output to files if specified. When {@link OutputStream} are provided this way,
      * they will be left open at the end of the function.
@@ -133,6 +178,26 @@ public interface IRunUtil {
      */
     public CommandResult runTimedCmdRetry(final long timeout, long retryInterval,
             int attempts, final String... command);
+
+    /**
+     * Helper method to execute a system command, and aborting if it takes longer than a specified
+     * time. Also monitors the output streams for activity, aborting if no stream activity is
+     * observed for a specified time. If the idleOutputTimeout is set to zero, no stream monitoring
+     * will occur.
+     *
+     * @param timeout maximum time to wait in ms for each attempt
+     * @param idleOutputTimeout maximum time to wait in ms for output on the output streams
+     * @param command the specified system command and optionally arguments to exec
+     * @param retryInterval time to wait between command retries
+     * @param attempts the maximum number of attempts to try
+     * @return a {@link CommandResult} containing result from command run
+     */
+    public CommandResult runTimedCmdRetryWithOutputMonitor(
+            final long timeout,
+            final long idleOutputTimeout,
+            long retryInterval,
+            int attempts,
+            final String... command);
 
     /**
      * Helper method to execute a system command, and aborting if it takes longer than a specified
@@ -278,6 +343,23 @@ public interface IRunUtil {
             boolean logErrors);
 
     /**
+     * Block and executes an operation, aborting if it takes longer than a specified time. Also
+     * monitors the output streams for activity, aborting if no stream activity is observed for a
+     * specified time. If the idleOutputTimeout is set to zero, no stream monitoring will occur.
+     *
+     * @param timeout maximum time to wait in ms
+     * @param idleOutputTimeout maximum time to wait in ms for output on the output streams
+     * @param runnable {@link IRunUtil.IRunnableResult} to execute
+     * @param logErrors log errors on exception or not.
+     * @return the {@link CommandStatus} result of operation.
+     */
+    public CommandStatus runTimedWithOutputMonitor(
+            final long timeout,
+            final long idleOutputTimeout,
+            IRunUtil.IRunnableResult runnable,
+            boolean logErrors);
+
+    /**
      * Block and executes an operation multiple times until it is successful.
      *
      * @param opTimeout maximum time to wait in ms for one operation attempt
@@ -287,6 +369,25 @@ public interface IRunUtil {
      * @return <code>true</code> if operation completed successfully before attempts reached.
      */
     public boolean runTimedRetry(long opTimeout, long pollInterval, int attempts,
+            IRunUtil.IRunnableResult runnable);
+
+    /**
+     * Block and executes an operation multiple times until it is successful. Also monitors the
+     * output streams for activity, aborting if no stream activity is observed for a specified time.
+     * If the idleOutputTimeout is set to zero, no stream monitoring will occur.
+     *
+     * @param opTimeout maximum time to wait in ms for one operation attempt
+     * @param idleOutputTimeout maximum time to wait in ms for output on the output streams
+     * @param pollInterval time to wait between command retries
+     * @param attempts the maximum number of attempts to try
+     * @param runnable {@link IRunUtil.IRunnableResult} to execute
+     * @return <code>true</code> if operation completed successfully before attempts reached.
+     */
+    public boolean runTimedRetryWithOutputMonitor(
+            final long opTimeout,
+            final long idleOutputTimeout,
+            long pollInterval,
+            int attempts,
             IRunUtil.IRunnableResult runnable);
 
     /**
@@ -300,6 +401,25 @@ public interface IRunUtil {
      */
     public boolean runFixedTimedRetry(final long opTimeout, final long pollInterval,
             final long maxTime, final IRunUtil.IRunnableResult runnable);
+
+    /**
+     * Block and executes an operation multiple times until it is successful. Also monitors the
+     * output streams for activity, aborting if no stream activity is observed for a specified time.
+     * If the idleOutputTimeout is set to zero, no stream monitoring will occur.
+     *
+     * @param opTimeout maximum time to wait in ms for a single operation attempt
+     * @param idleOutputTimeout maximum time to wait in ms for output on the output streams
+     * @param pollInterval initial time to wait between operation attempts
+     * @param maxTime the total approximate maximum time to keep trying the operation
+     * @param runnable {@link IRunUtil.IRunnableResult} to execute
+     * @return <code>true</code> if operation completed successfully before maxTime expired
+     */
+    public boolean runFixedTimedRetryWithOutputMonitor(
+            final long opTimeout,
+            final long idleOutputTimeout,
+            final long pollInterval,
+            final long maxTime,
+            final IRunUtil.IRunnableResult runnable);
 
     /**
      * Block and executes an operation multiple times until it is successful.
