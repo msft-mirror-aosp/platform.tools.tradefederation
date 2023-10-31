@@ -209,6 +209,10 @@ public class TestDiscoveryInvoker {
             List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
             if (!testModules.isEmpty()) {
                 dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+            } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
+                mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
             }
 
             List<String> testDependencies =
@@ -314,6 +318,10 @@ public class TestDiscoveryInvoker {
             List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
             if (!testModules.isEmpty()) {
                 dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+            } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
+                mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
             }
             String partialFallback = parsePartialFallback(result);
             if (partialFallback != null) {
@@ -512,11 +520,6 @@ public class TestDiscoveryInvoker {
             for (int i = 0; i < jsonArray.length(); i++) {
                 testModules.add(jsonArray.getString(i));
             }
-        }
-        InvocationMetricLogger.addInvocationMetrics(
-                InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
-        if (testModules.isEmpty()) {
-            mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
         }
         return testModules;
     }

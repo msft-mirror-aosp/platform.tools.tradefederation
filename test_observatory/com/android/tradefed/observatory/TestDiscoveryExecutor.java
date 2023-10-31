@@ -184,6 +184,7 @@ public class TestDiscoveryExecutor {
         Set<String> includeFilters = new LinkedHashSet<String>();
         Set<String> excludeFilters = new LinkedHashSet<String>();
         // Collect include filters from every test.
+        boolean discoveredLogic = true;
         for (IRemoteTest test : testList) {
             if (!(test instanceof BaseTestSuite)) {
                 throw new TestDiscoveryException(
@@ -275,7 +276,16 @@ public class TestDiscoveryExecutor {
                             null,
                             DiscoveryExitCode.COMPONENT_METADATA);
                 }
+            } else {
+                discoveredLogic = false;
             }
+        }
+        if (!discoveredLogic) {
+            throw new TestDiscoveryException(
+                    "Tradefed Observatory didn't match any relevant properties to filter test"
+                            + " modules",
+                    null,
+                    DiscoveryExitCode.NO_DISCOVERY_POSSIBLE);
         }
         // Extract test module names from included filters.
         if (hasOutputResultFile()) {
