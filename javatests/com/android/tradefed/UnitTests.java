@@ -27,6 +27,7 @@ import com.android.tradefed.build.FileDownloadCacheTest;
 import com.android.tradefed.build.LocalDeviceBuildProviderTest;
 import com.android.tradefed.build.OtaZipfileBuildProviderTest;
 import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
+import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.cache.ModifiedFilesParserTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
@@ -506,6 +507,9 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // build.cache
     PartialZipDownloadCacheTest.class,
+
+    // build.content
+    ArtifactDetailsTest.class,
 
     // cache
     ModifiedFilesParserTest.class,
