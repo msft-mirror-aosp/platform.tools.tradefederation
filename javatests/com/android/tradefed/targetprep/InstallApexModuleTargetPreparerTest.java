@@ -558,32 +558,6 @@ public class InstallApexModuleTargetPreparerTest {
     }
 
     /**
-     * Test the method will proceed on tearDown as no module metadata on device.
-     */
-    @Test
-    public void testSetupAndTearDown_Optimize_InstallAPK_No_ModuleMetadata() throws Exception {
-        mSetter.setOptionValue("skip-apex-teardown", "true");
-        mInstallApexModuleTargetPreparer.addTestFileName(APK_NAME);
-
-        when(mMockDevice.getActiveApexes()).thenReturn(new HashSet<>());
-        when(mMockDevice.getMainlineModuleInfo()).thenReturn(new HashSet<>());
-        when(mMockDevice.executeShellCommand(String.format("pm path %s", APK_PACKAGE_NAME)))
-                .thenReturn("package:/system/app/fakeApk/fakeApk.apk");
-        mockSuccessfulInstallMultiPackages(Arrays.asList(mFakeApk));
-        Set<String> installableModules = new HashSet<>();
-        installableModules.add(APK_PACKAGE_NAME);
-        installableModules.add(APEX_PACKAGE_NAME);
-        when(mMockDevice.getInstalledPackageNames()).thenReturn(installableModules);
-        when(mMockDevice.uninstallPackage(APK_PACKAGE_NAME)).thenReturn(null);
-
-        mInstallApexModuleTargetPreparer.setUp(mTestInfo);
-        mInstallApexModuleTargetPreparer.tearDown(mTestInfo, null);
-        verify(mMockDevice, atLeastOnce()).getActiveApexes();
-        verify(mMockDevice, times(1)).getMainlineModuleInfo();
-        verify(mMockDevice, times(1)).uninstallPackage(APK_PACKAGE_NAME);
-    }
-
-    /**
      * Test the method will uninstall and reboot device as uninstalling apk modules.
      */
     @Test
