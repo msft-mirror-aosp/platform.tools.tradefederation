@@ -27,6 +27,7 @@ import com.android.tradefed.build.FileDownloadCacheTest;
 import com.android.tradefed.build.LocalDeviceBuildProviderTest;
 import com.android.tradefed.build.OtaZipfileBuildProviderTest;
 import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
+import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.cache.ModifiedFilesParserTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
@@ -203,6 +204,7 @@ import com.android.tradefed.result.JsonHttpTestResultReporterTest;
 import com.android.tradefed.result.LegacySubprocessResultsReporterTest;
 import com.android.tradefed.result.LogFileSaverTest;
 import com.android.tradefed.result.LogcatCrashResultForwarderTest;
+import com.android.tradefed.result.LUCIResultReporterTest;
 import com.android.tradefed.result.MetricsXMLResultReporterTest;
 import com.android.tradefed.result.MultiFailureDescriptionTest;
 import com.android.tradefed.result.PassingTestFileReporterTest;
@@ -507,6 +509,9 @@ import org.junit.runners.Suite.SuiteClasses;
     // build.cache
     PartialZipDownloadCacheTest.class,
 
+    // build.content
+    ArtifactDetailsTest.class,
+
     // cache
     ModifiedFilesParserTest.class,
 
@@ -745,6 +750,7 @@ import org.junit.runners.Suite.SuiteClasses;
     LocalRunInstructionBuilderTest.class,
     LogcatCrashResultForwarderTest.class,
     LogFileSaverTest.class,
+    LUCIResultReporterTest.class,
     MetricsXMLResultReporterTest.class,
     MultiFailureDescriptionTest.class,
     SnapshotInputStreamSourceTest.class,
