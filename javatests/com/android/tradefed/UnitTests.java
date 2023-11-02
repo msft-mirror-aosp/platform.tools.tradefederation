@@ -204,6 +204,7 @@ import com.android.tradefed.result.JsonHttpTestResultReporterTest;
 import com.android.tradefed.result.LegacySubprocessResultsReporterTest;
 import com.android.tradefed.result.LogFileSaverTest;
 import com.android.tradefed.result.LogcatCrashResultForwarderTest;
+import com.android.tradefed.result.LUCIResultReporterTest;
 import com.android.tradefed.result.MetricsXMLResultReporterTest;
 import com.android.tradefed.result.MultiFailureDescriptionTest;
 import com.android.tradefed.result.PassingTestFileReporterTest;
@@ -749,6 +750,7 @@ import org.junit.runners.Suite.SuiteClasses;
     LocalRunInstructionBuilderTest.class,
     LogcatCrashResultForwarderTest.class,
     LogFileSaverTest.class,
+    LUCIResultReporterTest.class,
     MetricsXMLResultReporterTest.class,
     MultiFailureDescriptionTest.class,
     SnapshotInputStreamSourceTest.class,
