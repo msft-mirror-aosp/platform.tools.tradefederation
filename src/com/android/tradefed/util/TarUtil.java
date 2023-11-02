@@ -186,7 +186,7 @@ public class TarUtil {
     }
 
     /**
-     * UnGZip a file: a tar.gz file will become a tar file.
+     * UnGZip a file: a tar.gz or tgz file will become a tar file.
      *
      * @param inputFile The {@link File} to ungzip
      * @param outputDir The directory where to put the ungzipped file.
@@ -198,9 +198,12 @@ public class TarUtil {
             throws FileNotFoundException, IOException {
         CLog.i(String.format("Ungzipping %s to dir %s.", inputFile.getAbsolutePath(),
                 outputDir.getAbsolutePath()));
-        // rename '-3' to remove the '.gz' extension.
-        final File outputFile = new File(outputDir, inputFile.getName().substring(0,
-                inputFile.getName().length() - 3));
+        // Updates the file format from ".tar.gz" or ".tgz" to ".tar".
+        String outputFileName =
+                inputFile.getName().endsWith(".tgz")
+                        ? inputFile.getName().replace(".tgz", ".tar")
+                        : inputFile.getName().substring(0, inputFile.getName().length() - 3);
+        final File outputFile = new File(outputDir, outputFileName);
         GZIPInputStream in = null;
         FileOutputStream out = null;
         try {
