@@ -309,6 +309,7 @@ public class InvocationMetricLogger {
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
+        CONTENT_BASED_ANALYSIS_ATTEMPT("content_based_analysis_attempt", true),
         SKIP_NO_TESTS_DISCOVERED("skip_no_tests_discovered", true),
         SKIP_NO_CHANGES("skip_no_changes", true),
         SILENT_INVOCATION_SKIP_COUNT("silent_invocation_skip_count", true),
