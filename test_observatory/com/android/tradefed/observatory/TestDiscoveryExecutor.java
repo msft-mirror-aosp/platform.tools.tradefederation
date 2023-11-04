@@ -67,6 +67,7 @@ public class TestDiscoveryExecutor {
     }
 
     private boolean mReportPartialFallback = false;
+    private boolean mReportNoPossibleDiscovery = false;
 
     private static boolean hasOutputResultFile() {
         return System.getenv(TestDiscoveryInvoker.OUTPUT_FILE) != null;
@@ -139,7 +140,6 @@ public class TestDiscoveryExecutor {
             }
 
             List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));
-
             List<String> testDependencies = new ArrayList<>(discoverDependencies(config));
             Collections.sort(testModules);
             Collections.sort(testDependencies);
@@ -152,6 +152,9 @@ public class TestDiscoveryExecutor {
             jsonObject.add(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
             if (mReportPartialFallback) {
                 jsonObject.addProperty(TestDiscoveryInvoker.PARTIAL_FALLBACK_KEY, "true");
+            }
+            if (mReportNoPossibleDiscovery) {
+                jsonObject.addProperty(TestDiscoveryInvoker.NO_POSSIBLE_TEST_DISCOVERY_KEY, "true");
             }
             return jsonObject.toString();
         } finally {
@@ -281,11 +284,7 @@ public class TestDiscoveryExecutor {
             }
         }
         if (!discoveredLogic) {
-            throw new TestDiscoveryException(
-                    "Tradefed Observatory didn't match any relevant properties to filter test"
-                            + " modules",
-                    null,
-                    DiscoveryExitCode.NO_DISCOVERY_POSSIBLE);
+            mReportNoPossibleDiscovery = true;
         }
         // Extract test module names from included filters.
         if (hasOutputResultFile()) {
