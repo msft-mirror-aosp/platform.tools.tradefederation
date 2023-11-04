@@ -76,6 +76,7 @@ public class TestDiscoveryInvoker {
     public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
     public static final String TEST_MODULES_LIST_KEY = "TestModules";
     public static final String PARTIAL_FALLBACK_KEY = "PartialFallback";
+    public static final String NO_POSSIBLE_TEST_DISCOVERY_KEY = "NoPossibleTestDiscovery";
     public static final String TEST_MAPPING_ZIP_FILE = "TF_TEST_MAPPING_ZIP_FILE";
     public static final String ROOT_DIRECTORY_ENV_VARIABLE_KEY =
             "ROOT_TEST_DISCOVERY_USE_TEST_DIRECTORY";
@@ -206,13 +207,22 @@ public class TestDiscoveryInvoker {
                 result = stdout;
             }
 
+            boolean noDiscovery = hasNoPossibleDiscovery(result);
+            if (noDiscovery) {
+                dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
+            }
             List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+            if (!noDiscovery) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
+            }
             if (!testModules.isEmpty()) {
                 dependencies.put(TEST_MODULES_LIST_KEY, testModules);
             } else {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
-                mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                // Only report no finding if discovery actually took effect
+                if (!noDiscovery) {
+                    mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                }
             }
 
             List<String> testDependencies =
@@ -315,13 +325,21 @@ public class TestDiscoveryInvoker {
 
             String result = FileUtil.readStringFromFile(outputFile);
 
+            boolean noDiscovery = hasNoPossibleDiscovery(result);
+            if (noDiscovery) {
+                dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
+            }
             List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+            if (!noDiscovery) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
+            }
             if (!testModules.isEmpty()) {
                 dependencies.put(TEST_MODULES_LIST_KEY, testModules);
             } else {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
-                mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                if (!noDiscovery) {
+                    mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                }
             }
             String partialFallback = parsePartialFallback(result);
             if (partialFallback != null) {
@@ -530,5 +548,13 @@ public class TestDiscoveryInvoker {
             return jsonObject.getString(PARTIAL_FALLBACK_KEY);
         }
         return null;
+    }
+
+    private boolean hasNoPossibleDiscovery(String discoveryOutput) throws JSONException {
+        JSONObject jsonObject = new JSONObject(discoveryOutput);
+        if (jsonObject.has(NO_POSSIBLE_TEST_DISCOVERY_KEY)) {
+            return true;
+        }
+        return false;
     }
 }
