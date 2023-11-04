@@ -17,7 +17,6 @@ package com.android.tradefed.cluster;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
-import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.cluster.ClusterHostEvent.HostEventType;
 import com.android.tradefed.command.CommandScheduler;
 import com.android.tradefed.command.ICommandScheduler;
@@ -38,7 +37,6 @@ import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.IInvocationContext;
-import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.CollectingTestListener;
@@ -856,13 +854,7 @@ public class ClusterCommandScheduler extends CommandScheduler {
             throw new ConfigurationException("Failed to create dry-run config", e);
         }
         if (config.getCommandOptions().isDryRunMode()) {
-            IInvocationContext context = new InvocationContext();
-            context.addDeviceBuildInfo("stub", new BuildInfo());
-            handler.invocationStarted(context);
-            config.validateOptions();
-            handler.invocationEnded(0);
-            IInvocationContext nullMeta = null;
-            handler.invocationComplete(nullMeta, null);
+            dryRunCommandReporting(handler, config);
             return true;
         }
         return false;
