@@ -43,6 +43,7 @@ import com.android.tradefed.util.BinaryState;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -410,6 +411,16 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             description = "Attempt to dismiss the setup wizard if present.")
     private boolean mDismissSetupWizard = true;
 
+    @Option(
+            name = "dismiss-setup-wizard-timeout",
+            description = "Set the timeout for dismissing setup wizard in milli seconds.")
+    private Long mDismissSetupWizardTimeout = 60 * 1000L;
+
+    @Option(
+            name = "dismiss-setup-wizard-retry-count",
+            description = "Number of times to retry to dismiss setup wizard.")
+    private int mDismissSetupWizardRetry = 2;
+
     private Map<String, String> mPreviousSystemSettings = new HashMap<>();
     private Map<String, String> mPreviousSecureSettings = new HashMap<>();
     private Map<String, String> mPreviousGlobalSettings = new HashMap<>();
@@ -565,7 +576,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         if (mDismissSetupWizard) {
             callableTasks.add(
                     () -> {
-                        dismissSetupWiward(device);
+                        dismissSetupWizard(device);
                         return true;
                     });
         }
@@ -601,7 +612,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             // Throw an error if there is not enough storage space
             checkExternalStoreSpace(device);
             if (mDismissSetupWizard) {
-                dismissSetupWiward(device);
+                dismissSetupWizard(device);
             }
         }
         // Run commands designated to be run after changing settings
@@ -1262,11 +1273,42 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         }
     }
 
-    private void dismissSetupWiward(ITestDevice device) throws DeviceNotAvailableException {
-        device.executeShellCommand(
-                "am start -a com.android.setupwizard.FOUR_CORNER_EXIT"); // Android
-        // UDC+
-        device.executeShellCommand("am start -a com.android.setupwizard.EXIT"); // Android L - T
+    private void dismissSetupWizard(ITestDevice device) throws DeviceNotAvailableException {
+        for (int i = 0; i < mDismissSetupWizardRetry; i++) {
+            CommandResult cmd1 =
+                    device.executeShellV2Command(
+                            "am start -a com.android.setupwizard.FOUR_CORNER_EXIT"); // Android
+            // UDC+
+            CommandResult cmd2 =
+                    device.executeShellV2Command(
+                            "am start -a com.android.setupwizard.EXIT"); // Android L - T
+            // if either of the command is successful, count it as success. Otherwise, retry.
+            if (CommandStatus.SUCCESS.equals(cmd1.getStatus())
+                    || CommandStatus.SUCCESS.equals(cmd2.getStatus())) {
+                break;
+            }
+        }
+        // verify setup wizard is dismissed
+        CLog.d("Waiting %d ms for setup wizard to be dismissed.", mDismissSetupWizardTimeout);
+        boolean dismissed = false;
+        long startTime = System.currentTimeMillis();
+        while (System.currentTimeMillis() - startTime < mDismissSetupWizardTimeout) {
+            CommandResult cmdOut =
+                    device.executeShellV2Command("dumpsys window displays | grep mCurrentFocus");
+            if (CommandStatus.SUCCESS.equals(cmdOut.getStatus())
+                    && !cmdOut.getStdout().contains("setupwizard")) {
+                CLog.d("Setup wizard is dismissed.");
+                dismissed = true;
+                break;
+            } else {
+                RunUtil.getDefault().sleep(2 * 1000);
+            }
+        }
+        if (!dismissed) {
+            CLog.w(
+                    "Setup wizard was not dismissed within the timeout limit: %d ms.",
+                    mDismissSetupWizardTimeout);
+        }
     }
 
     /**
