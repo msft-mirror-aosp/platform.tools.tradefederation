@@ -53,7 +53,7 @@ public class ArtifactsAnalyzer {
         }
         BuildAnalysis finalReport = BuildAnalysis.mergeReports(reports);
         CLog.d("Build analysis report: %s", finalReport.toString());
-        if (finalReport.deviceImageChanged()) {
+        if (!finalReport.deviceImageChanged()) {
             if (finalReport.hasTestsArtifacts()) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.TEST_ARTIFACT_CHANGE_ONLY, 1);
