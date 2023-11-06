@@ -91,6 +91,7 @@ public class SkipManager implements IDisableable {
     }
 
     public void setTestArtifactsAnalysis(ContentAnalysisContext analysisContext) {
+        CLog.d("Received test artifact analysis.");
         mTestArtifactsAnalysisContent = analysisContext;
     }
 
@@ -158,11 +159,7 @@ public class SkipManager implements IDisableable {
         if (results == null) {
             return false;
         }
-        if (!"WORK_NODE".equals(information.getContext().getAttribute("trigger"))) {
-            // Eventually support postsubmit analysis.
-            return false;
-        }
-        // Presubmit analysis
+        // Do the analysis regardless
         if (results.hasTestsArtifacts()) {
             if (mTestArtifactsAnalysisContent != null) {
                 TestContentAnalyzer analyzer =
@@ -175,6 +172,13 @@ public class SkipManager implements IDisableable {
         if (results.deviceImageChanged()) {
             return false;
         }
+        if (!"WORK_NODE".equals(information.getContext().getAttribute("trigger"))) {
+            // Eventually support postsubmit analysis.
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.NO_CHANGES_POSTSUBMIT, 1);
+            return false;
+        }
+        // Currently only consider skipping in presubmit
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SKIP_NO_CHANGES, 1);
         if (mSkipOnNoChange) {
             return true;
