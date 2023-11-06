@@ -480,9 +480,9 @@ public class RunUtil implements IRunUtil {
                             && !runnable.checkOutputMonitor(idleOutputTimeout)) {
                         // Set to Failed.
                         runThread.cancel();
-                        break;
+                    } else {
+                        runThread.join(pollInterval);
                     }
-                    runThread.join(pollInterval);
                 } catch (InterruptedException e) {
                     if (isInterruptAllowed()) {
                         CLog.i("runTimed: interrupted while joining the runnable");
