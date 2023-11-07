@@ -56,6 +56,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -119,13 +120,13 @@ public class AndroidJUnitTest extends InstrumentationTest
             name = "include-filter",
             description = "The include filters of the test name to run.",
             requiredForRerun = true)
-    private Set<String> mIncludeFilters = new HashSet<>();
+    private Set<String> mIncludeFilters = new LinkedHashSet<>();
 
     @Option(
             name = "exclude-filter",
             description = "The exclude filters of the test name to run.",
             requiredForRerun = true)
-    private Set<String> mExcludeFilters = new HashSet<>();
+    private Set<String> mExcludeFilters = new LinkedHashSet<>();
 
     @Option(
             name = "include-annotation",
