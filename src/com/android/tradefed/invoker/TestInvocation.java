@@ -1297,6 +1297,9 @@ public class TestInvocation implements ITestInvocation {
                 return;
             }
 
+            // Apply global filters before sharding so they are taken into account.
+            config.getGlobalFilters()
+                    .setUpFilters(config, config.getSkipManager().getDemotedTests().keySet());
             boolean deviceInit = false;
             // If the top level invocation has --use-sandbox do not shard there. It will shard in
             // the child invocation.
@@ -1344,9 +1347,6 @@ public class TestInvocation implements ITestInvocation {
                         return;
                     }
                 }
-                // Apply global filters before sharding so they are taken into account.
-                config.getGlobalFilters()
-                        .setUpFilters(config, config.getSkipManager().getDemotedTests().keySet());
 
                 try (CloseableTraceScope ignored =
                         new CloseableTraceScope(InvocationMetricKey.sharding.name())) {
