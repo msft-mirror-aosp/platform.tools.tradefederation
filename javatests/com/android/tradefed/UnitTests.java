@@ -343,6 +343,7 @@ import com.android.tradefed.testtype.TfTestLauncherTest;
 import com.android.tradefed.testtype.UsbResetTestTest;
 import com.android.tradefed.testtype.binary.ExecutableHostTestTest;
 import com.android.tradefed.testtype.binary.ExecutableTargetTestTest;
+import com.android.tradefed.testtype.binary.KernelTargetTestTest;
 import com.android.tradefed.testtype.host.CoverageMeasurementForwarderTest;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4TestTest;
 import com.android.tradefed.testtype.junit4.DeviceParameterizedRunnerTest;
@@ -925,6 +926,7 @@ import org.junit.runners.Suite.SuiteClasses;
     // testtype/binary
     ExecutableHostTestTest.class,
     ExecutableTargetTestTest.class,
+    KernelTargetTestTest.class,
 
     // testtype/junit4
     BaseHostJUnit4TestTest.class,
