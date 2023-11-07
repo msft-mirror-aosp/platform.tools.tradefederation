@@ -312,6 +312,7 @@ public class InvocationMetricLogger {
         CONTENT_BASED_ANALYSIS_ATTEMPT("content_based_analysis_attempt", true),
         SKIP_NO_TESTS_DISCOVERED("skip_no_tests_discovered", true),
         SKIP_NO_CHANGES("skip_no_changes", true),
+        NO_CHANGES_POSTSUBMIT("no_changes_postsubmit", true),
         SILENT_INVOCATION_SKIP_COUNT("silent_invocation_skip_count", true),
         DEMOTION_FILTERS_RECEIVED_COUNT("demotion_filters_received_count", true),
         DEMOTION_ERROR_RESPONSE("demotion_error_response", true),
