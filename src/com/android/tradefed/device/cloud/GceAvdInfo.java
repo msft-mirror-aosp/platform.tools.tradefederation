@@ -338,6 +338,12 @@ public class GceAvdInfo {
             String status = res.getString("status");
             GceStatus gceStatus = GceStatus.valueOf(status);
             String errorType = res.has("error_type") ? res.getString("error_type") : null;
+            if (errorType == null) {
+                // Parse more detailed error type if we can.
+                if (errors.contains("QUOTA_EXCEED") && errors.contains("GPU")) {
+                    errorType = "ACLOUD_QUOTA_EXCEED_GPU";
+                }
+            }
             errorId =
                     GceStatus.SUCCESS.equals(gceStatus)
                             ? null
