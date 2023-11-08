@@ -107,6 +107,11 @@ public class OxygenUtil {
                                                     "failed to read from socket, retry",
                                                     "rootcanal_socket_error")),
                                     new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    "VIRTUAL_DEVICE_BOOT_PENDING: Bluetooth",
+                                                    "bluetooth_pending")),
+                                    new AbstractMap.SimpleEntry<>(
                                             Pattern.compile("^logcat.*"),
                                             Pair.create(
                                                     "System zygote died with fatal exception",

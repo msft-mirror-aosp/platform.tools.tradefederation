@@ -44,7 +44,9 @@ import java.util.List;
 public class TarUtilTest {
 
     // This archive contains TEST.log and TEST2.log.
-    private static final String EMMA_METADATA_RESOURCE_PATH = "/testdata/LOG.tar.gz";
+    private static final String TAR_GZ_RESOURCE_PATH = "/testdata/LOG.tar.gz";
+    // This archive contains TEST.log and TEST2.log.
+    private static final String TGZ_RESOURCE_PATH = "/testdata/LOG.tgz";
     // This archive contains TEST.log and LINK.log.
     private static final String SYMLINK_TAR_PATH = "/testdata/symlink.tar";
     private static final String TAR_ENTRY_NAME = "TEST.log";
@@ -64,7 +66,7 @@ public class TarUtilTest {
     /** Test that {@link TarUtil#isGzip(File)} determines the file type. */
     @Test
     public void testIsGzip() throws IOException {
-        InputStream logTarGz = getClass().getResourceAsStream(EMMA_METADATA_RESOURCE_PATH);
+        InputStream logTarGz = getClass().getResourceAsStream(TAR_GZ_RESOURCE_PATH);
         File tmpFile = FileUtil.createTempFile("log_tarutil_test", ".tar.gz");
         try {
             FileUtil.writeToFile(logTarGz, tmpFile);
@@ -82,8 +84,8 @@ public class TarUtilTest {
 
     /** Test that {TarUtil#unGzip(File, File)} can ungzip properly a tar.gz file. */
     @Test
-    public void testUnGzip() throws Exception {
-        InputStream logTarGz = getClass().getResourceAsStream(EMMA_METADATA_RESOURCE_PATH);
+    public void testUnGzip_withTargzFormat() throws Exception {
+        InputStream logTarGz = getClass().getResourceAsStream(TAR_GZ_RESOURCE_PATH);
         File logTarGzFile = FileUtil.createTempFile("log_tarutil_test", ".tar.gz");
         try {
             FileUtil.writeToFile(logTarGz, logTarGzFile);
@@ -98,10 +100,27 @@ public class TarUtilTest {
         }
     }
 
+    /** Test that {TarUtil#unGzip(File, File)} can ungzip properly a tgz file. */
+    @Test
+    public void testUnGzip_withTgzFormat() throws Exception {
+        InputStream logTgz = getClass().getResourceAsStream(TGZ_RESOURCE_PATH);
+        File logTgzFile = FileUtil.createTempFile("log_tarutil_test", ".tgz");
+        try {
+            FileUtil.writeToFile(logTgz, logTgzFile);
+            File testFile = TarUtil.unGzip(logTgzFile, mWorkDir);
+            Assert.assertTrue(testFile.exists());
+            // Expect same name without the .gz extension.
+            String expectedName = logTgzFile.getName().replace(".tgz", ".tar");
+            Assert.assertEquals(expectedName, testFile.getName());
+        } finally {
+            FileUtil.deleteFile(logTgzFile);
+        }
+    }
+
     /** Test that {TarUtil#unTar(File, File)} can untar properly a tar file. */
     @Test
     public void testUntar() throws Exception {
-        InputStream logTarGz = getClass().getResourceAsStream(EMMA_METADATA_RESOURCE_PATH);
+        InputStream logTarGz = getClass().getResourceAsStream(TAR_GZ_RESOURCE_PATH);
         File logTarGzFile = FileUtil.createTempFile("log_tarutil_test", ".tar.gz");
         try {
             FileUtil.writeToFile(logTarGz, logTarGzFile);
@@ -135,7 +154,7 @@ public class TarUtilTest {
     /** Test that {TarUtil#unTar(File, File, Collection<String>)} can untar properly a tar file. */
     @Test
     public void testUnTar_withFileNames() throws IOException {
-        InputStream logTarGz = getClass().getResourceAsStream(EMMA_METADATA_RESOURCE_PATH);
+        InputStream logTarGz = getClass().getResourceAsStream(TAR_GZ_RESOURCE_PATH);
         File logTarGzFile = FileUtil.createTempFile("log_tarutil_test", ".tar.gz");
         try {
             FileUtil.writeToFile(logTarGz, logTarGzFile);
@@ -152,7 +171,7 @@ public class TarUtilTest {
     /** Test that {TarUtil#unTar(File, File, Collection<String>)} can untar properly a tar file. */
     @Test
     public void testUnTar_withFileNamesNotFound() throws IOException {
-        InputStream logTarGz = getClass().getResourceAsStream(EMMA_METADATA_RESOURCE_PATH);
+        InputStream logTarGz = getClass().getResourceAsStream(TAR_GZ_RESOURCE_PATH);
         File logTarGzFile = FileUtil.createTempFile("log_tarutil_test", ".tar.gz");
         try {
             FileUtil.writeToFile(logTarGz, logTarGzFile);
@@ -172,7 +191,7 @@ public class TarUtilTest {
      */
     @Test
     public void testExtractTarGzipToTemp() throws Exception {
-        InputStream logTarGz = getClass().getResourceAsStream(EMMA_METADATA_RESOURCE_PATH);
+        InputStream logTarGz = getClass().getResourceAsStream(TAR_GZ_RESOURCE_PATH);
         File tarGzFile = FileUtil.createTempFile("extract_tar_gz_test", ".tar.gz");
         File tempDir = null;
         try {
@@ -192,7 +211,7 @@ public class TarUtilTest {
     @Test
     public void testExtractAndLog() throws Exception {
         final String baseName = "BASE_NAME";
-        InputStream logTarGz = getClass().getResourceAsStream(EMMA_METADATA_RESOURCE_PATH);
+        InputStream logTarGz = getClass().getResourceAsStream(TAR_GZ_RESOURCE_PATH);
         File logTarGzFile = FileUtil.createTempFile("log_tarutil_test", ".tar.gz");
         try {
             FileUtil.writeToFile(logTarGz, logTarGzFile);

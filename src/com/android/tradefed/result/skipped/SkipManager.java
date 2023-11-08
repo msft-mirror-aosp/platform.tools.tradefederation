@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.result.skipped;
 
+import com.android.tradefed.build.content.ContentAnalysisContext;
+import com.android.tradefed.build.content.TestContentAnalyzer;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -67,6 +69,7 @@ public class SkipManager implements IDisableable {
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
 
     private boolean mNoTestsDiscovered = false;
+    private ContentAnalysisContext mTestArtifactsAnalysisContent;
 
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
@@ -85,6 +88,11 @@ public class SkipManager implements IDisableable {
     /** Returns the demoted tests and the reason for demotion */
     public Map<String, SkipReason> getDemotedTests() {
         return mDemotionFilters;
+    }
+
+    public void setTestArtifactsAnalysis(ContentAnalysisContext analysisContext) {
+        CLog.d("Received test artifact analysis.");
+        mTestArtifactsAnalysisContent = analysisContext;
     }
 
     /**
@@ -151,18 +159,26 @@ public class SkipManager implements IDisableable {
         if (results == null) {
             return false;
         }
-        if (!"WORK_NODE".equals(information.getContext().getAttribute("trigger"))) {
-            // Eventually support postsubmit analysis.
-            return false;
-        }
-        // Presubmit analysis
+        // Do the analysis regardless
         if (results.hasTestsArtifacts()) {
-            // TODO: Eventually make the analysis granular to tests artifacts
+            if (mTestArtifactsAnalysisContent != null) {
+                TestContentAnalyzer analyzer =
+                        new TestContentAnalyzer(information, mTestArtifactsAnalysisContent);
+                analyzer.evaluate();
+                // TODO: continue analysis
+            }
             return false;
         }
         if (results.deviceImageChanged()) {
             return false;
         }
+        if (!"WORK_NODE".equals(information.getContext().getAttribute("trigger"))) {
+            // Eventually support postsubmit analysis.
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.NO_CHANGES_POSTSUBMIT, 1);
+            return false;
+        }
+        // Currently only consider skipping in presubmit
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SKIP_NO_CHANGES, 1);
         if (mSkipOnNoChange) {
             return true;
@@ -175,6 +191,10 @@ public class SkipManager implements IDisableable {
     public void clearManager() {
         mDemotionFilters.clear();
         mDemotionFilterOption.clear();
+        if (mTestArtifactsAnalysisContent != null
+                && mTestArtifactsAnalysisContent.contentInformation() != null) {
+            mTestArtifactsAnalysisContent.contentInformation().clean();
+        }
     }
 
     @Override

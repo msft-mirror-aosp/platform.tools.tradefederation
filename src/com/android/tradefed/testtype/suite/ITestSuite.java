@@ -52,6 +52,7 @@ import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.postprocessor.IPostProcessor;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
@@ -147,6 +148,9 @@ public abstract class ITestSuite
     public static final String SKIP_STAGING_ARTIFACTS = "skip-staging-artifacts";
 
     private static final String PRODUCT_CPU_ABI_KEY = "ro.product.cpu.abi";
+
+    public static final String TEST_TYPE_KEY = "test-type";
+    public static final String TEST_TYPE_VALUE_PERFORMANCE = "performance";
 
     private static final Set<String> ALLOWED_PREPARERS_CONFIGS =
             ImmutableSet.of("/suite/allowed-preparers.txt", "/suite/google-allowed-preparers.txt");
@@ -793,6 +797,8 @@ public abstract class ITestSuite
                                         ModuleDefinition.MODULE_ISOLATED,
                                         CurrentInvocation.moduleCurrentIsolation().toString());
                     }
+                    // Add module speicifc post processors.
+                    listener = listenerWithPostProcessorsForPerfModule(module, listener);
                     // Only the module callback will be called here.
                     ITestInvocationListener listenerWithCollectors = listener;
                     if (mMetricCollectors != null) {
@@ -858,6 +864,34 @@ public abstract class ITestSuite
             reportNotExecuted(listener, "Module did not run due to device not available.");
             throw e;
         }
+    }
+
+    /**
+     * Returns a listener with module-level post processors (for perf modules) instered to the
+     * listener chain.
+     */
+    private ITestInvocationListener listenerWithPostProcessorsForPerfModule(
+            ModuleDefinition module, ITestInvocationListener listener) {
+        IConfiguration config = module.getModuleConfiguration();
+        List<String> testTypes = config.getConfigurationDescription().getMetaData(TEST_TYPE_KEY);
+        if (testTypes == null || !testTypes.contains(TEST_TYPE_VALUE_PERFORMANCE)) {
+            return listener; // not a perf module
+        }
+        List<IPostProcessor> topLevelPostProcessors = mMainConfiguration.getPostProcessors();
+        List<IPostProcessor> modulePostProcessors = config.getPostProcessors();
+        if (modulePostProcessors.size() > 0 && topLevelPostProcessors.size() > 0) {
+            CLog.w("Post processors specified at both top level and module level (%s)", module);
+        }
+        for (IPostProcessor postProcessor : modulePostProcessors) {
+            try {
+                listener = postProcessor.init(listener);
+            } catch (Exception e) {
+                CLog.e(
+                        "Post processor %s is ignored as it fails to init() with exception: %s",
+                        postProcessor.getClass().getSimpleName(), e);
+            }
+        }
+        return listener;
     }
 
     /**

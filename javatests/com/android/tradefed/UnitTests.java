@@ -343,6 +343,7 @@ import com.android.tradefed.testtype.TfTestLauncherTest;
 import com.android.tradefed.testtype.UsbResetTestTest;
 import com.android.tradefed.testtype.binary.ExecutableHostTestTest;
 import com.android.tradefed.testtype.binary.ExecutableTargetTestTest;
+import com.android.tradefed.testtype.binary.KernelTargetTestTest;
 import com.android.tradefed.testtype.host.CoverageMeasurementForwarderTest;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4TestTest;
 import com.android.tradefed.testtype.junit4.DeviceParameterizedRunnerTest;
@@ -378,6 +379,7 @@ import com.android.tradefed.testtype.suite.module.ArchModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.BaseModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.CarModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.DeviceFeatureModuleControllerTest;
+import com.android.tradefed.testtype.suite.module.KernelTestModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.MaxSdkModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.MinApiLevelModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.NativeBridgeModuleControllerTest;
@@ -925,6 +927,7 @@ import org.junit.runners.Suite.SuiteClasses;
     // testtype/binary
     ExecutableHostTestTest.class,
     ExecutableTargetTestTest.class,
+    KernelTargetTestTest.class,
 
     // testtype/junit4
     BaseHostJUnit4TestTest.class,
@@ -971,6 +974,7 @@ import org.junit.runners.Suite.SuiteClasses;
     BaseModuleControllerTest.class,
     CarModuleControllerTest.class,
     DeviceFeatureModuleControllerTest.class,
+    KernelTestModuleControllerTest.class,
     MaxSdkModuleControllerTest.class,
     MinApiLevelModuleControllerTest.class,
     NativeBridgeModuleControllerTest.class,
