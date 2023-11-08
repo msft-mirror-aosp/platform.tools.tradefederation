@@ -23,9 +23,13 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.util.FileUtil;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** The analyzer takes context for the analysis and determine what is interesting. */
 public class TestContentAnalyzer {
@@ -50,6 +54,9 @@ public class TestContentAnalyzer {
             case MODULE_XTS:
                 xtsAnalysis(information.getBuildInfo(), context);
                 break;
+            case FILE:
+                fileAnalysis(information.getBuildInfo(), context);
+                break;
             default:
                 // do nothing for the rest for now.
         }
@@ -58,6 +65,60 @@ public class TestContentAnalyzer {
     private void xtsAnalysis(IBuildInfo build, ContentAnalysisContext context) {
         if (build.getFile(BuildInfoFileKey.ROOT_DIRECTORY) == null) {
             CLog.d("Mismatch: we would expect a root directory for MODULE_XTS analysis");
+            return;
+        }
+        List<ArtifactFileDescriptor> diffs =
+                analyzeContentDiff(context.contentInformation(), context.contentEntry());
+        if (diffs == null) {
+            CLog.d("Analysis failed.");
+            return;
+        }
+        mapDiffsToModule(
+                context.contentEntry(), diffs, build.getFile(BuildInfoFileKey.ROOT_DIRECTORY));
+    }
+
+    private void mapDiffsToModule(
+            String contentEntry, List<ArtifactFileDescriptor> diffs, File rootDir) {
+        String rootPackage = contentEntry.replaceAll(".zip", "");
+        Set<String> diffPaths = diffs.parallelStream().map(d -> d.path).collect(Collectors.toSet());
+        // First check common packages
+        Set<String> commonDiff =
+                diffPaths.parallelStream()
+                        .filter(p -> p.startsWith(rootPackage + "/tools/"))
+                        .collect(Collectors.toSet());
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.XTS_DIFFS_IN_COMMON, commonDiff.size());
+        if (!commonDiff.isEmpty()) {
+            CLog.d("Tools folder has diffs: %s", commonDiff);
+        }
+        File testcasesRoot = FileUtil.findFile(rootDir, "testcases");
+        if (testcasesRoot == null) {
+            CLog.e("Could find a testcases directory, something went wrong.");
+            return;
+        }
+        // Then check changes in modules
+        for (File moduleDir : testcasesRoot.listFiles()) {
+            String relativeModulePath =
+                    String.format("%s/testcases/%s/", rootPackage, moduleDir.getName());
+            Set<String> moduleDiff =
+                    diffPaths.parallelStream()
+                            .filter(p -> p.startsWith(relativeModulePath))
+                            .collect(Collectors.toSet());
+            if (moduleDiff.isEmpty()) {
+                CLog.d("Module %s directory is unchanged.", moduleDir.getName());
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.XTS_UNCHANGED_MODULES, 1);
+            } else {
+                CLog.d("Module %s directory has changed: %s", moduleDiff);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.XTS_MODULE_WITH_DIFFS, 1);
+            }
+        }
+    }
+
+    private void fileAnalysis(IBuildInfo build, ContentAnalysisContext context) {
+        if (build.getFile(BuildInfoFileKey.TESTDIR_IMAGE) == null) {
+            CLog.d("Mismatch: we would expect a testsdir directory for FILE analysis");
             return;
         }
         List<ArtifactFileDescriptor> diffs =

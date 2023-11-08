@@ -293,6 +293,9 @@ public class InvocationMetricLogger {
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
         PURE_DEVICE_IMAGE_UNCHANGED("pure_device_image_unchanged", true),
         TEST_ARTIFACT_CHANGE_ONLY("test_artifact_change_only", true),
+        XTS_DIFFS_IN_COMMON("xts_diffs_in_common", true),
+        XTS_MODULE_WITH_DIFFS("xts_module_with_diffs", true),
+        XTS_UNCHANGED_MODULES("xts_unchanged_modules", true),
 
         POWERWASH_TIME("powerwash_time_ms", true),
         POWERWASH_SUCCESS_COUNT("powerwash_success_count", true),
