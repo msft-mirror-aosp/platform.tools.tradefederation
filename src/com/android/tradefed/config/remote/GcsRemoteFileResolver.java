@@ -19,6 +19,8 @@ import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.gcs.GCSDownloaderHelper;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.invoker.tracing.TracePropagatingExecutorService;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -26,6 +28,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GCSFileDownloader;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.ZipUtil2;
 
 import java.io.File;
 import java.io.IOException;
@@ -123,27 +126,45 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
     }
 
     private Entry<File, Future<BuildRetrievalError>> fetchResourceWithRetryParallel(
-            String path, Map<String, String> queryArgs, File destFile) {
+            String path, Map<String, String> queryArgs, File destFile) throws IOException {
+        String unzipValue = queryArgs.get(DynamicRemoteFileResolver.UNZIP_KEY);
+        boolean useDirectory = unzipValue != null && "true".equals(unzipValue.toLowerCase());
+        File possibleDir = null;
+        if (useDirectory) {
+            possibleDir =
+                    FileUtil.createTempDir(
+                            FileUtil.getBaseName(destFile.getName()),
+                            CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER));
+        }
+        File destDir = possibleDir;
         CompletableFuture<BuildRetrievalError> futureClient =
                 CompletableFuture.supplyAsync(
                         () -> {
                             try {
                                 fetchResourceWithRetry(path, queryArgs, destFile);
+                                if (useDirectory) {
+                                    ZipUtil2.extractZip(destFile, destDir);
+                                    FileUtil.deleteFile(destFile);
+                                }
                                 return null;
+                            } catch (IOException ioe) {
+                                FileUtil.deleteFile(destFile);
+                                return new BuildRetrievalError(ioe.getMessage(), ioe);
                             } catch (BuildRetrievalError e) {
                                 return e;
                             }
                         },
                         TracePropagatingExecutorService.create(ForkJoinPool.commonPool()));
-        return new AbstractMap.SimpleEntry<File, Future<BuildRetrievalError>>(
-                destFile, futureClient);
+        if (useDirectory) {
+            return new AbstractMap.SimpleEntry<File, Future<BuildRetrievalError>>(
+                    destDir, futureClient);
+        } else {
+            return new AbstractMap.SimpleEntry<File, Future<BuildRetrievalError>>(
+                    destFile, futureClient);
+        }
     }
 
     private boolean canUseParallelDownload(Map<String, String> query) {
-        String unzipValue = query.get(DynamicRemoteFileResolver.UNZIP_KEY);
-        if (unzipValue != null && "true".equals(unzipValue.toLowerCase())) {
-            return false;
-        }
         String parallelValue = query.get("parallel");
         if (parallelValue != null && "false".equals(parallelValue.toLowerCase())) {
             return false;
