@@ -166,7 +166,7 @@ public final class SandboxOptions {
     @Option(
             name = SANDBOX_SPLIT_DISCOVERY,
             description = "Enable setup where discovery is done independently.")
-    private boolean mUseSandboxSplitDiscovery = false;
+    private boolean mUseSandboxSplitDiscovery = true;
 
     @Option(
             name = SANDBOX_PARALLEL_DOWNLOAD,
