@@ -112,6 +112,16 @@ public class OxygenUtil {
                                                     "VIRTUAL_DEVICE_BOOT_PENDING: Bluetooth",
                                                     "bluetooth_pending")),
                                     new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    "another cuttlefish device already running",
+                                                    "another_device_running")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    "Setup failed for cuttlefish::ConfigServer",
+                                                    "config_server_failed")),
+                                    new AbstractMap.SimpleEntry<>(
                                             Pattern.compile("^logcat.*"),
                                             Pair.create(
                                                     "System zygote died with fatal exception",
