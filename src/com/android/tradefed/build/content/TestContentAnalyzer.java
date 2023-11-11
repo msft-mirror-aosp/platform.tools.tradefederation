@@ -86,6 +86,8 @@ public class TestContentAnalyzer {
                 diffPaths.parallelStream()
                         .filter(p -> p.startsWith(rootPackage + "/tools/"))
                         .collect(Collectors.toSet());
+        // Exclude version.txt has it always change
+        commonDiff.remove(rootPackage + "tools/version.txt");
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.XTS_DIFFS_IN_COMMON, commonDiff.size());
         if (!commonDiff.isEmpty()) {
@@ -97,21 +99,40 @@ public class TestContentAnalyzer {
             return;
         }
         // Then check changes in modules
-        for (File moduleDir : testcasesRoot.listFiles()) {
-            String relativeModulePath =
-                    String.format("%s/testcases/%s/", rootPackage, moduleDir.getName());
-            Set<String> moduleDiff =
-                    diffPaths.parallelStream()
-                            .filter(p -> p.startsWith(relativeModulePath))
-                            .collect(Collectors.toSet());
-            if (moduleDiff.isEmpty()) {
-                CLog.d("Module %s directory is unchanged.", moduleDir.getName());
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.XTS_UNCHANGED_MODULES, 1);
-            } else {
-                CLog.d("Module %s directory has changed: %s", moduleDiff);
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.XTS_MODULE_WITH_DIFFS, 1);
+        for (File rootFile : testcasesRoot.listFiles()) {
+            if (rootFile.isDirectory()) {
+                File moduleDir = rootFile;
+                String relativeModulePath =
+                        String.format("%s/testcases/%s/", rootPackage, moduleDir.getName());
+                Set<String> moduleDiff =
+                        diffPaths.parallelStream()
+                                .filter(p -> p.startsWith(relativeModulePath))
+                                .collect(Collectors.toSet());
+                if (moduleDiff.isEmpty()) {
+                    CLog.d("Module %s directory is unchanged.", moduleDir.getName());
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.XTS_UNCHANGED_MODULES, 1);
+                } else {
+                    CLog.d("Module %s directory has changed: %s", moduleDir.getName(), moduleDiff);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.XTS_MODULE_WITH_DIFFS, 1);
+                }
+            } else if (rootFile.isFile()) {
+                String relativeRootFilePath =
+                        String.format("%s/testcases/%s", rootPackage, rootFile.getName());
+                Set<String> rootFileDiff =
+                        diffPaths.parallelStream()
+                                .filter(p -> p.equals(relativeRootFilePath))
+                                .collect(Collectors.toSet());
+                if (rootFileDiff.isEmpty()) {
+                    CLog.d("File %s is unchanged.", rootFile.getName());
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FILE_WITH_DIFFS, 1);
+                } else {
+                    CLog.d("File %s has changed: %s", rootFile.getName(), rootFileDiff);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.UNCHANGED_FILE, 1);
+                }
             }
         }
     }
