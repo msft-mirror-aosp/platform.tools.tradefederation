@@ -296,6 +296,8 @@ public class InvocationMetricLogger {
         XTS_DIFFS_IN_COMMON("xts_diffs_in_common", true),
         XTS_MODULE_WITH_DIFFS("xts_module_with_diffs", true),
         XTS_UNCHANGED_MODULES("xts_unchanged_modules", true),
+        FILE_WITH_DIFFS("file_with_diffs", true),
+        UNCHANGED_FILE("unchanged_file", true),
 
         POWERWASH_TIME("powerwash_time_ms", true),
         POWERWASH_SUCCESS_COUNT("powerwash_success_count", true),
