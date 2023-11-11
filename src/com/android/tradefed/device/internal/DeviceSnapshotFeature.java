@@ -137,7 +137,7 @@ public class DeviceSnapshotFeature
             FeatureResponse.Builder responseBuilder,
             AbstractConnection connection,
             String user,
-            int offset,
+            Integer offset,
             String snapshotId)
             throws DeviceNotAvailableException, TargetSetupError {
         String response =
@@ -173,7 +173,7 @@ public class DeviceSnapshotFeature
             FeatureResponse.Builder responseBuilder,
             AbstractConnection connection,
             String user,
-            int offset,
+            Integer offset,
             String snapshotId)
             throws DeviceNotAvailableException, TargetSetupError {
         String response =
@@ -211,7 +211,7 @@ public class DeviceSnapshotFeature
             FeatureResponse.Builder responseBuilder,
             AbstractConnection connection,
             String user,
-            int offset)
+            Integer offset)
             throws DeviceNotAvailableException, TargetSetupError {
         String response =
                 String.format(
@@ -246,7 +246,7 @@ public class DeviceSnapshotFeature
             FeatureResponse.Builder responseBuilder,
             AbstractConnection connection,
             String user,
-            int offset)
+            Integer offset)
             throws DeviceNotAvailableException, TargetSetupError {
         String response =
                 String.format(
