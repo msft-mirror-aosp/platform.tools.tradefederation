@@ -590,19 +590,20 @@ public class AdbSshConnection extends AdbTcpConnection {
     /**
      * Create command string
      *
-     * @param command to be run
+     * @param bin binary to use.
+     * @param args arguments passed for the binary.
      * @param user the host running user of AVD, <code>null</code> if not applicable.
      * @param offset the device num offset of the AVD in the host, <code>null</code> if not
      *     applicable
      * @return returns String of the command to be run
      */
-    String commandBuilder(String command, String user, Integer offset) {
-        String builtCommand = String.format("/home/%s/bin/%s", user, command);
+    String commandBuilder(String bin, String args, String user, Integer offset) {
+        String builtCommand = String.format("/home/%s/bin/%s %s", user, bin, args);
         if (offset != null) {
             builtCommand =
                     String.format(
-                            "HOME=/home/%s/acloud_cf_%d acloud_cf_%d/bin/%s -instance_num %d",
-                            user, offset + 1, offset + 1, command, offset + 1);
+                            "HOME=/home/%s/acloud_cf_%d acloud_cf_%d/bin/%s %s -instance_num %d",
+                            user, offset + 1, offset + 1, bin, args, offset + 1);
         }
 
         if (getDevice().getOptions().useOxygen()) {
@@ -612,15 +613,15 @@ public class AdbSshConnection extends AdbTcpConnection {
                             getDevice().getOptions(),
                             getRunUtil(),
                             10000L,
-                            String.format("toybox find /tmp -name %s", command).split(" "));
+                            String.format("toybox find /tmp -name %s", bin).split(" "));
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                CLog.e("Failed to locate %s: %s", command, result.getStderr());
+                CLog.e("Failed to locate %s: %s", bin, result.getStderr());
                 return "";
             }
             String commandPath = result.getStdout();
             // Remove tailing `/bin/COMMAND`
-            String tmpDir = commandPath.substring(0, commandPath.length() - (command.length() + 5));
-            builtCommand = String.format("HOME=%s %s", tmpDir, commandPath);
+            String tmpDir = commandPath.substring(0, commandPath.length() - (bin.length() + 5));
+            builtCommand = String.format("HOME=%s %s %s", tmpDir, commandPath, args);
         }
         return builtCommand;
     }
@@ -652,8 +653,9 @@ public class AdbSshConnection extends AdbTcpConnection {
 
         String snapshotCommand =
                 commandBuilder(
+                        "cvd",
                         String.format(
-                                "cvd snapshot_take --snapshot_path=/tmp/%s/snapshots/%s",
+                                "snapshot_take --snapshot_path=/tmp/%s/snapshots/%s",
                                 user, snapshotId),
                         user,
                         offset);
@@ -711,7 +713,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             user = getDevice().getOptions().getInstanceUser();
         }
 
-        String suspendCommand = commandBuilder("cvd suspend", user, offset);
+        String suspendCommand = commandBuilder("cvd", "suspend", user, offset);
         if (suspendCommand.length() == 0) {
             throw new TargetSetupError(
                     "failed to set up suspend command, invalid path",
@@ -766,7 +768,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             user = getDevice().getOptions().getInstanceUser();
         }
 
-        String resumeCommand = commandBuilder("cvd resume", user, offset);
+        String resumeCommand = commandBuilder("cvd", "resume", user, offset);
         if (resumeCommand.length() == 0) {
             throw new TargetSetupError(
                     "failed to set up resume command, invalid path",
@@ -824,8 +826,9 @@ public class AdbSshConnection extends AdbTcpConnection {
 
         String restoreCommand =
                 commandBuilder(
+                        "cvd",
                         String.format(
-                                "cvd start --snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
+                                "start --snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
                         user,
                         offset);
         if (restoreCommand.length() == 0) {
@@ -881,7 +884,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             user = getDevice().getOptions().getInstanceUser();
         }
 
-        String stopCommand = commandBuilder("cvd stop", user, offset);
+        String stopCommand = commandBuilder("cvd", "stop", user, offset);
         if (stopCommand.length() == 0) {
             throw new TargetSetupError(
                     "failed to set up stop command, invalid path",
