@@ -117,7 +117,7 @@ public class TestContentAnalyzer {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.XTS_MODULE_WITH_DIFFS, 1);
                 }
-            } else if (rootFile.isFile()) {
+            } else {
                 String relativeRootFilePath =
                         String.format("%s/testcases/%s", rootPackage, rootFile.getName());
                 Set<String> rootFileDiff =
@@ -127,11 +127,11 @@ public class TestContentAnalyzer {
                 if (rootFileDiff.isEmpty()) {
                     CLog.d("File %s is unchanged.", rootFile.getName());
                     InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.FILE_WITH_DIFFS, 1);
+                            InvocationMetricKey.UNCHANGED_FILE, 1);
                 } else {
                     CLog.d("File %s has changed: %s", rootFile.getName(), rootFileDiff);
                     InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.UNCHANGED_FILE, 1);
+                            InvocationMetricKey.FILE_WITH_DIFFS, 1);
                 }
             }
         }
@@ -148,7 +148,13 @@ public class TestContentAnalyzer {
             CLog.d("Analysis failed.");
             return;
         }
-        // TODO: Continue analysis
+        File rootDir = build.getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        for (ArtifactFileDescriptor afd : diffs) {
+            File possibleFile = new File(rootDir, afd.path);
+            if (possibleFile.exists()) {
+                InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.FILE_WITH_DIFFS, 1);
+            }
+        }
     }
 
     private List<ArtifactFileDescriptor> analyzeContentDiff(
