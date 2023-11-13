@@ -103,6 +103,7 @@ ARTIFACTS = [
     # Device target artifacts
     ArtifactConfig('androidTest.zip', True),
     ArtifactConfig('device-tests.zip', True),
+    ArtifactConfig('device-tests_configs.zip', True),
     ArtifactConfig('*-tests-*zip', True),
     ArtifactConfig('*-img-*zip', False)
 ]
