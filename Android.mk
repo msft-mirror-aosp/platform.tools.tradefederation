@@ -37,7 +37,7 @@ tradefed-all: tradefed-core tradefed-tests tradefed_win compatibility-host-util 
 ########################################################
 # Zip up the built files and dist it as tradefed.zip
 
-tradefed_dist_host_jars := tradefed tradefed-test-framework tradefed-tests loganalysis tradefed-contrib compatibility-tradefed compatibility-host-util
+tradefed_dist_host_jars := tradefed tradefed-tests loganalysis tradefed-contrib compatibility-tradefed compatibility-host-util
 tradefed_dist_host_exes := tradefed.sh script_help.sh atest_tradefed.sh casuploader
 tradefed_dist_test_apks := TradeFedUiTestApp TradeFedTestApp
 
