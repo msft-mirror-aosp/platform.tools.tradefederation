@@ -101,7 +101,7 @@ public class DynamicShardHelper extends StrictShardHelper {
         // Initialize Dynamic Sharding client
         IDynamicShardingClient client = getClient();
 
-        String poolId = String.format("invocation-%s-attempt-%s", invocationId, attemptId);
+        String poolId = String.format("invocation-%s", invocationId);
 
         List<ITestSuite> allModules = getAllModules(config, testInfo);
 
@@ -121,6 +121,7 @@ public class DynamicShardHelper extends StrictShardHelper {
             ProvideTestTargetRequest request =
                     ProvideTestTargetRequest.newBuilder()
                             .setReferencePoolId(poolId)
+                            .setUseOneShotSeeding(true)
                             .addAllTestTargets(targetsToUpload)
                             .build();
             client.provideTestTarget(request);
