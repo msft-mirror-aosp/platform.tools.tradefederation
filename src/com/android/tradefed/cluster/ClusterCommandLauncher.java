@@ -405,15 +405,25 @@ public class ClusterCommandLauncher
     /** Performs reset on all devices. */
     private void resetDevices() {
         CLog.i("Subprocess output idle for %d ms, attempting device reset.", mOutputIdleTimeout);
-        try (UsbHelper usb = new UsbHelper()) {
-            List<ITestDevice> devices = mInvocationContext.getDevices();
+        List<ITestDevice> devices = mInvocationContext.getDevices();
+        UsbHelper usb = null;
+        try {
             for (ITestDevice device : devices) {
                 if (device instanceof LocalAndroidVirtualDevice) {
                     CLog.d("Shutting down local virtual device '%s'", device.getSerialNumber());
                     ((LocalAndroidVirtualDevice) device).shutdown();
                 } else {
+                    if (usb == null) {
+                        usb = new UsbHelper();
+                    }
                     resetUsbPort(usb, device.getSerialNumber());
                 }
+            }
+        } catch (RuntimeException e) {
+            CLog.e(e);
+        } finally {
+            if (usb != null) {
+                usb.close();
             }
         }
     }
