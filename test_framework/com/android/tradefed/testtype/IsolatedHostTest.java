@@ -376,6 +376,10 @@ public class IsolatedHostTest
                 mExcludePaths.add("org/robolectric");
             }
         }
+        if (mRavenwoodResources) {
+            // For the moment, swap in the default JUnit upstream runner
+            cmdArgs.add("-Dandroid.junit.runner=org.junit.runners.JUnit4");
+        }
 
         if (this.debug) {
             cmdArgs.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8656");
