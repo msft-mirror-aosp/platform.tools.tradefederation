@@ -22,11 +22,20 @@ import java.io.File;
 /** Represents the content for a given build target of its base and current version. */
 public class ContentInformation {
     public final File baseContent;
+    public final String baseBuildId;
     public final File currentContent;
+    public final String currentBuildId;
 
     public ContentInformation(File baseContent, File currentContent) {
+        this(baseContent, null, currentContent, null);
+    }
+
+    public ContentInformation(
+            File baseContent, String baseBuildId, File currentContent, String currentBuildId) {
         this.baseContent = baseContent;
+        this.baseBuildId = baseBuildId;
         this.currentContent = currentContent;
+        this.currentBuildId = currentBuildId;
     }
 
     public void clean() {

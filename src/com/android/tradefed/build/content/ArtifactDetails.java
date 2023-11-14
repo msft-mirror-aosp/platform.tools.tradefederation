@@ -56,6 +56,22 @@ public class ArtifactDetails {
                 return d;
             }
         }
+        // TODO: Use build-id instead to clean up
+        if (targetArtifact.contains("-tests-")) {
+            String prefix = targetArtifact.substring(0, targetArtifact.indexOf("-tests-") + 7);
+            // approximate for artifact that contains a build id
+            for (JsonElement e : mainArray) {
+                JsonObject o = e.getAsJsonObject();
+                JsonElement name = o.asMap().get("artifact");
+                if (name.getAsString().startsWith(prefix)) {
+                    ArtifactDetails d = gson.fromJson(e, ArtifactDetails.class);
+                    if (d == null) {
+                        throw new RuntimeException("Failed to parse for content.");
+                    }
+                    return d;
+                }
+            }
+        }
         throw new RuntimeException(targetArtifact + " entry was not found.");
     }
 
@@ -63,10 +79,9 @@ public class ArtifactDetails {
     public static List<ArtifactFileDescriptor> diffContents(
             ArtifactDetails base, ArtifactDetails current) {
         if (!base.artifact.equals(current.artifact)) {
-            throw new IllegalStateException(
-                    String.format(
-                            "Not comparing the same artifact entries ! %s != %s",
-                            base.artifact, current.artifact));
+            CLog.w(
+                    "Not comparing the same artifact entries ! %s != %s",
+                    base.artifact, current.artifact);
         }
         Map<String, ArtifactFileDescriptor> mappingBase =
                 base.details.stream().map(e -> e).collect(Collectors.toMap(e -> e.path, e -> e));
