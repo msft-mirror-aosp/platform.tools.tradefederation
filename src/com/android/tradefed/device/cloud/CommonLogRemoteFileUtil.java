@@ -202,10 +202,10 @@ public class CommonLogRemoteFileUtil {
             CLog.e("GceAvdInfo or its host setting was null, cannot collect remote files.");
             return;
         }
-        List<KnownLogFileEntry> toFetch = null;
+        List<KnownLogFileEntry> toFetch = new ArrayList<>(NETSIM_LOG_FILES);
         if (options.useOxygen()) {
             // Override the list of logs to collect when the device is hosted by Oxygen service.
-            toFetch = new ArrayList<>(OXYGEN_LOG_FILES);
+            toFetch.addAll(OXYGEN_LOG_FILES);
             if (!RemoteFileUtil.doesRemoteFileExist(
                     gceAvd, options, runUtil, 60000, OXYGEN_CUTTLEFISH_LOG_DIR)) {
                 toFetch.addAll(OXYGEN_LOG_FILES_FALLBACK);
@@ -226,22 +226,19 @@ public class CommonLogRemoteFileUtil {
             }
             if (!reported) {
                 CLog.i("GceAvdInfo does not contain logs. Fall back to known log files.");
-                toFetch = KNOWN_FILES_TO_FETCH.get(options.getInstanceType());
+                toFetch.addAll(KNOWN_FILES_TO_FETCH.get(options.getInstanceType()));
             }
         }
-        if (toFetch != null) {
-            toFetch.addAll(NETSIM_LOG_FILES);
-            for (KnownLogFileEntry entry : toFetch) {
-                logRemoteFile(
-                        testLogger,
-                        gceAvd,
-                        options,
-                        runUtil,
-                        // Default fetch rely on main user
-                        String.format(entry.path, options.getInstanceUser()),
-                        entry.type,
-                        entry.logName);
-            }
+        for (KnownLogFileEntry entry : toFetch) {
+            logRemoteFile(
+                    testLogger,
+                    gceAvd,
+                    options,
+                    runUtil,
+                    // Default fetch rely on main user
+                    String.format(entry.path, options.getInstanceUser()),
+                    entry.type,
+                    entry.logName);
         }
 
         if (options.getRemoteFetchFilePattern().isEmpty()) {
