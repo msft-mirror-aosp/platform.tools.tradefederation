@@ -146,6 +146,9 @@ public class IsolatedHostTestTest {
         doReturn(36000).when(mMockServer).getLocalPort();
         doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
         assertTrue(mHostTest.compileClassPath().contains("ravenwood-runtime"));
+
+        List<String> commandArgs = mHostTest.compileCommandArgs("", null);
+        assertTrue(commandArgs.contains("-Dandroid.junit.runner=org.junit.runners.JUnit4"));
     }
 
     @Test
@@ -183,6 +186,9 @@ public class IsolatedHostTestTest {
         doReturn(36000).when(mMockServer).getLocalPort();
         doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
         assertFalse(mHostTest.compileClassPath().contains("ravenwood-runtime"));
+
+        List<String> commandArgs = mHostTest.compileCommandArgs("", null);
+        assertFalse(commandArgs.contains("-Dandroid.junit.runner=org.junit.runners.JUnit4"));
     }
 
     @Test
