@@ -48,12 +48,45 @@ public class ArtifactDetailsTest {
         }
     }
 
+    @Test
+    public void testCompareWithBuildId() throws Exception {
+        File baseJson = generateBaseContent();
+        File currentJson = generateCurrentContent();
+        try {
+            String artifactName = "mine-tests-P9999.zip";
+            ArtifactDetails base = ArtifactDetails.parseFile(baseJson, artifactName);
+            ArtifactDetails presubmit = ArtifactDetails.parseFile(currentJson, artifactName);
+            List<ArtifactFileDescriptor> diffs = ArtifactDetails.diffContents(base, presubmit);
+            assertEquals(1, diffs.size());
+        } finally {
+            FileUtil.deleteFile(baseJson);
+            FileUtil.deleteFile(currentJson);
+        }
+    }
+
     private File generateBaseContent() throws IOException {
         File content = FileUtil.createTempFile("artifacts-details-test", ".json");
         String baseContent =
                 "[\n"
                         + "  {\n"
                         + "  \"artifact\": \"mysuite.zip\",\n"
+                        + "  \"details\": [\n"
+                        + "      {\n"
+                        + "        \"digest\":"
+                        + " \"acc469f0e5461328f89bd3afb3cfac52b40e35481d90a9899cfcdeb3c8eac627\",\n"
+                        + "        \"path\": \"host/testcases/module1/someapk.apk\",\n"
+                        + "        \"size\": 8542\n"
+                        + "      },\n"
+                        + "      {\n"
+                        + "        \"digest\":"
+                        + " \"b69ad7f80ed55963c5782bee548e19b167406a03d5ae9204031f2ca7ff8b6304\",\n"
+                        + "        \"path\": \"host/testcases/module2/otherfile.xml\",\n"
+                        + "        \"size\": 762\n"
+                        + "      }\n"
+                        + "    ]\n"
+                        + "  },\n"
+                        + "  {\n"
+                        + "  \"artifact\": \"mine-tests-8888.zip\",\n"
                         + "  \"details\": [\n"
                         + "      {\n"
                         + "        \"digest\":"
@@ -95,6 +128,23 @@ public class ArtifactDetailsTest {
                         + "      {\n"
                         + "        \"digest\": \"9999\",\n"
                         + "        \"path\": \"host/testcases/module2/newfile.xml\",\n"
+                        + "        \"size\": 762\n"
+                        + "      }\n"
+                        + "    ]\n"
+                        + "  },\n"
+                        + "  {\n"
+                        + "  \"artifact\": \"mine-tests-P9999.zip\",\n"
+                        + "  \"details\": [\n"
+                        + "      {\n"
+                        + "        \"digest\":"
+                        + " \"acc469f0e5461328f89bd3afb3cfac52b40e35481d90a9899cfcdeb3c8eac627\",\n"
+                        + "        \"path\": \"host/testcases/module1/someapk.apk\",\n"
+                        + "        \"size\": 8542\n"
+                        + "      },\n"
+                        + "      {\n"
+                        + "        \"digest\":"
+                        + " \"b69ad7f80ed55963c5782bee54aaaaaaaaaaaaaaaaa31f2ca7ff8b6304\",\n"
+                        + "        \"path\": \"host/testcases/module2/otherfile.xml\",\n"
                         + "        \"size\": 762\n"
                         + "      }\n"
                         + "    ]\n"
