@@ -226,7 +226,11 @@ public class CommonLogRemoteFileUtil {
             }
             if (!reported) {
                 CLog.i("GceAvdInfo does not contain logs. Fall back to known log files.");
-                toFetch.addAll(KNOWN_FILES_TO_FETCH.get(options.getInstanceType()));
+                List<KnownLogFileEntry> knownFileFetch =
+                        KNOWN_FILES_TO_FETCH.get(options.getInstanceType());
+                if (knownFileFetch != null) {
+                    toFetch.addAll(knownFileFetch);
+                }
             }
         }
         for (KnownLogFileEntry entry : toFetch) {
