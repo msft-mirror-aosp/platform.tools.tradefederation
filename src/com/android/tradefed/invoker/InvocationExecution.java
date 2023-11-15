@@ -658,21 +658,46 @@ public class InvocationExecution implements IInvocationExecution {
         } else {
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope("device_pre_invocation_setup")) {
-                for (String deviceName : context.getDeviceConfigNames()) {
-                    ITestDevice device = context.getDevice(deviceName);
-                    CLog.d(
-                            "Starting device pre invocation setup for : '%s'",
-                            device.getSerialNumber());
-                    if (device instanceof ITestLoggerReceiver) {
-                        ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+                List<String> deviceNames = context.getDeviceConfigNames();
+                if (config.getCommandOptions().shouldUseParallelPreInvocationSetup()
+                        && deviceNames.size() > 1) {
+                    CLog.d("Using parallel preInvocationSetup.");
+                    List<Callable<Void>> callableTasks = new ArrayList<>();
+                    for (String deviceName : deviceNames) {
+                        callableTasks.add(
+                                () -> {
+                                    runSingleDevicePreInvocationSetup(
+                                            deviceName, context, config, logger);
+                                    return null;
+                                });
                     }
-                    IDeviceConfiguration deviceConfig = config.getDeviceConfigByName(deviceName);
-                    if (deviceConfig != null && deviceConfig.isFake()) {
-                        CLog.d("Skip preInvocationSetup on fake device %s", device);
-                        continue;
+                    // The threads are also controlled by
+                    // host_options:concurrent-virtual-device-startup-limit.
+                    ParallelDeviceExecutor<Void> executor =
+                            new ParallelDeviceExecutor<>(callableTasks.size());
+                    executor.invokeAll(
+                            callableTasks,
+                            config.getCommandOptions()
+                                    .getParallelPreInvocationSetupTimeout()
+                                    .toMillis(),
+                            TimeUnit.MILLISECONDS);
+                    // TODO: Handle throwing multi-exceptions, right now throw the first one.
+                    for (Throwable error : executor.getErrors()) {
+                        if (error instanceof DeviceNotAvailableException) {
+                            throw (DeviceNotAvailableException) error;
+                        }
+                        if (error instanceof TargetSetupError) {
+                            throw (TargetSetupError) error;
+                        }
+                        throw new RuntimeException(error);
                     }
-                    device.preInvocationSetup(
-                            context.getBuildInfo(deviceName), context.getAttributes());
+                } else {
+                    if (config.getCommandOptions().shouldUseParallelPreInvocationSetup()) {
+                        CLog.w("Parallel pre-invocation setup is enabled but device count <= 1.");
+                    }
+                    for (String deviceName : deviceNames) {
+                        runSingleDevicePreInvocationSetup(deviceName, context, config, logger);
+                    }
                 }
             }
         }
@@ -737,6 +762,35 @@ public class InvocationExecution implements IInvocationExecution {
                         device.getSerialNumber());
                 device.getOptions().setSkipTearDown(true);
             }
+        }
+    }
+
+    /**
+     * Run preInvocationSetup for one device.
+     *
+     * @param deviceName the name of the device to be set up.
+     * @param context the {@link IInvocationContext} of the invocation.
+     * @param config the {@link IConfiguration} of this test run.
+     * @param logger the {@link ITestLogger} to report logs.
+     * @throws DeviceNotAvailableException
+     * @throws TargetSetupError
+     */
+    private void runSingleDevicePreInvocationSetup(
+            String deviceName,
+            IInvocationContext context,
+            IConfiguration config,
+            ITestLogger logger)
+            throws DeviceNotAvailableException, TargetSetupError {
+        ITestDevice device = context.getDevice(deviceName);
+        CLog.d("Starting device pre invocation setup for : '%s'", device.getSerialNumber());
+        if (device instanceof ITestLoggerReceiver) {
+            ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+        }
+        IDeviceConfiguration deviceConfig = config.getDeviceConfigByName(deviceName);
+        if (deviceConfig != null && deviceConfig.isFake()) {
+            CLog.d("Skip preInvocationSetup on fake device %s", device);
+        } else {
+            device.preInvocationSetup(context.getBuildInfo(deviceName), context.getAttributes());
         }
     }
 

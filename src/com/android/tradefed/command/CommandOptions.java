@@ -203,6 +203,16 @@ public class CommandOptions implements ICommandOptions {
                             + " parallel.")
     private boolean mUseParallelRemoteSetup = false;
 
+    @Option(
+            name = "parallel-pre-invocation-setup",
+            description = "Whether to execute pre-invocation setup in parallel.")
+    private boolean mUseParallelPreInvocationSetup = false;
+
+    @Option(
+            name = "parallel-pre-invocation-setup-timeout",
+            description = "Timeout for parallel pre-invocation setup.")
+    private Duration mParallelPreInvocationSetupTimeout = Duration.ofMinutes(30L);
+
     @Option(name = "parallel-setup", description = "Whether to attempt the setup in parallel.")
     private boolean mUseParallelSetup = false;
 
@@ -659,13 +669,23 @@ public class CommandOptions implements ICommandOptions {
     public void setHostLogSuffix(String suffix) {
         mHostLogSuffix = suffix;
     }
-
     /** {@inheritDoc} */
     @Override
     public boolean shouldUseParallelRemoteSetup() {
         return mUseParallelRemoteSetup;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldUseParallelPreInvocationSetup() {
+        return mUseParallelPreInvocationSetup;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Duration getParallelPreInvocationSetupTimeout() {
+        return mParallelPreInvocationSetupTimeout;
+    }
     /** {@inheritDoc} */
     @Override
     public boolean shouldUseParallelSetup() {
