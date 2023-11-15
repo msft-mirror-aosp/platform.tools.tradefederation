@@ -17,13 +17,18 @@ package com.android.tradefed.invoker;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.any;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.config.Configuration;
@@ -61,6 +66,8 @@ import org.junit.runners.JUnit4;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -303,6 +310,60 @@ public class InvocationExecutionTest {
         mExec.runTests(info, mConfig, mMockListener);
         // Init was called twice in total on the class, but only once per instance.
         assertEquals(1, RemoteTestCollector.sTotalInit);
+    }
+
+    /** Test parallel pre-invocation setup. */
+    @Test
+    public void testRunPreInvocationSetup_parallel() throws Throwable {
+        ITestDevice mockDevice1 = mock(ITestDevice.class);
+        ITestDevice mockDevice2 = mock(ITestDevice.class);
+        CountDownLatch latch = new CountDownLatch(2);
+        Answer answer =
+                new Answer() {
+                    @Override
+                    public Object answer(InvocationOnMock invocation) throws InterruptedException {
+                        latch.countDown();
+                        assertTrue(
+                                "preInvocationSetup does not run in parallel.",
+                                latch.await(1L, TimeUnit.SECONDS));
+                        return null;
+                    }
+                };
+        doAnswer(answer).when(mockDevice1).preInvocationSetup(any(), any());
+        doAnswer(answer).when(mockDevice2).preInvocationSetup(any(), any());
+        mContext.addAllocatedDevice("device1", mockDevice1);
+        mContext.addAllocatedDevice("device2", mockDevice2);
+
+        OptionSetter setter = new OptionSetter(mConfig.getCommandOptions());
+        setter.setOptionValue("parallel-pre-invocation-setup", "true");
+        setter.setOptionValue("parallel-pre-invocation-setup-timeout", "2s");
+
+        mExec.runDevicePreInvocationSetup(mContext, mConfig, mMockLogger);
+
+        verify(mockDevice1).preInvocationSetup(any(), any());
+        verify(mockDevice2).preInvocationSetup(any(), any());
+    }
+
+    /** Test parallel pre-invocation setup with an exception. */
+    @Test
+    public void testRunPreInvocationSetup_parallelException() throws Throwable {
+        ITestDevice mockDevice1 = mock(ITestDevice.class);
+        ITestDevice mockDevice2 = mock(ITestDevice.class);
+        doThrow(new DeviceNotAvailableException("msg", "serial"))
+                .when(mockDevice2)
+                .preInvocationSetup(any(), any());
+        mContext.addAllocatedDevice("device1", mockDevice1);
+        mContext.addAllocatedDevice("device2", mockDevice2);
+
+        OptionSetter setter = new OptionSetter(mConfig.getCommandOptions());
+        setter.setOptionValue("parallel-pre-invocation-setup", "true");
+        setter.setOptionValue("parallel-pre-invocation-setup-timeout", "2s");
+
+        assertThrows(
+                DeviceNotAvailableException.class,
+                () -> {
+                    mExec.runDevicePreInvocationSetup(mContext, mConfig, mMockLogger);
+                });
     }
 
     /**
