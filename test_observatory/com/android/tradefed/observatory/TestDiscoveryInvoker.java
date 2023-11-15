@@ -455,28 +455,30 @@ public class TestDiscoveryInvoker {
      * @throws IOException
      */
     private String buildTestMappingClasspath(File workingDir) throws IOException {
-        List<String> classpathList = new ArrayList<>();
+        try (CloseableTraceScope ignored = new CloseableTraceScope("build_classpath")) {
+            List<String> classpathList = new ArrayList<>();
 
-        if (!workingDir.exists()) {
-            throw new FileNotFoundException("Couldn't find the build directory");
-        }
-
-        if (workingDir.listFiles().length == 0) {
-            throw new FileNotFoundException(
-                    String.format(
-                            "Could not find any files under %s", workingDir.getAbsolutePath()));
-        }
-        for (File toolsFile : workingDir.listFiles()) {
-            if (toolsFile.getName().endsWith(".jar")) {
-                classpathList.add(toolsFile.getAbsolutePath());
+            if (!workingDir.exists()) {
+                throw new FileNotFoundException("Couldn't find the build directory");
             }
-        }
-        Collections.sort(classpathList);
-        if (mUseCurrentTradefed) {
-            classpathList.add(getCurrentClassPath());
-        }
 
-        return Joiner.on(":").join(classpathList);
+            if (workingDir.listFiles().length == 0) {
+                throw new FileNotFoundException(
+                        String.format(
+                                "Could not find any files under %s", workingDir.getAbsolutePath()));
+            }
+            for (File toolsFile : workingDir.listFiles()) {
+                if (toolsFile.getName().endsWith(".jar")) {
+                    classpathList.add(toolsFile.getAbsolutePath());
+                }
+            }
+            Collections.sort(classpathList);
+            if (mUseCurrentTradefed) {
+                classpathList.add(getCurrentClassPath());
+            }
+
+            return Joiner.on(":").join(classpathList);
+        }
     }
 
     private String getCurrentClassPath() {
