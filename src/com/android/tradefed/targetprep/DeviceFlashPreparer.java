@@ -509,4 +509,12 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     protected void setUseIncrementalFlashing(boolean incrementalFlashing) {
         mUseIncrementalFlashing = incrementalFlashing;
     }
+
+    public boolean isIncrementalFlashingEnabled() {
+        return mUseIncrementalFlashing;
+    }
+
+    public boolean isIncrementalFlashingForceDisabled() {
+        return mForceDisableIncrementalFlashing;
+    }
 }

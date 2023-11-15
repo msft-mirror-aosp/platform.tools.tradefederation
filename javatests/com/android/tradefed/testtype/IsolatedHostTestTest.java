@@ -110,6 +110,7 @@ public class IsolatedHostTestTest {
     @After
     public void tearDown() throws Exception {
         FileUtil.recursiveDelete(mMockTestDir);
+        mHostTest.deleteTempFiles();
     }
 
     @Test
@@ -137,6 +138,20 @@ public class IsolatedHostTestTest {
     }
 
     @Test
+    public void testRavenwoodResourcesPositive() throws Exception {
+        OptionSetter setter = new OptionSetter(mHostTest);
+        setter.setOptionValue("use-ravenwood-resources", "true");
+        new File(mMockTestDir, "ravenwood-runtime").mkdirs();
+        doReturn(mMockTestDir).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
+        doReturn(36000).when(mMockServer).getLocalPort();
+        doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
+        assertTrue(mHostTest.compileClassPath().contains("ravenwood-runtime"));
+
+        List<String> commandArgs = mHostTest.compileCommandArgs("", null);
+        assertTrue(commandArgs.contains("-Dandroid.junit.runner=org.junit.runners.JUnit4"));
+    }
+
+    @Test
     public void testUploadReportArtifacts() throws Exception {
         File artifactsDir =
                 FileUtil.createTempDir("isolatedhosttesttest-robolectric-screenshot-artifacts-dir");
@@ -161,6 +176,19 @@ public class IsolatedHostTestTest {
         assertFalse(commandArgs.contains("-Drobolectric.resourcesMode=binary"));
         assertFalse(
                 commandArgs.stream().anyMatch(s -> s.contains("-Drobolectric.dependency.dir=")));
+    }
+
+    @Test
+    public void testRavenwoodResourcesNegative() throws Exception {
+        OptionSetter setter = new OptionSetter(mHostTest);
+        setter.setOptionValue("use-ravenwood-resources", "false");
+        doReturn(mMockTestDir).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
+        doReturn(36000).when(mMockServer).getLocalPort();
+        doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
+        assertFalse(mHostTest.compileClassPath().contains("ravenwood-runtime"));
+
+        List<String> commandArgs = mHostTest.compileCommandArgs("", null);
+        assertFalse(commandArgs.contains("-Dandroid.junit.runner=org.junit.runners.JUnit4"));
     }
 
     @Test

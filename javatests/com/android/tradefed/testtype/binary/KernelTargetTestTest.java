@@ -240,4 +240,32 @@ public class KernelTargetTestTest {
                         Mockito.anyLong(),
                         Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
     }
+
+    /** Test skipping findBinary(). */
+    @Test
+    public void testRun_ignoreBinaryCheck()
+            throws DeviceNotAvailableException, ConfigurationException {
+        mKernelTargetTest =
+                new KernelTargetTest() {
+                    @Override
+                    protected void checkCommandResult(
+                            CommandResult result,
+                            ITestInvocationListener listener,
+                            TestDescription description) {}
+                };
+        mKernelTargetTest.setDevice(mMockITestDevice);
+        // Set test commands
+        OptionSetter setter = new OptionSetter(mKernelTargetTest);
+        setter.setOptionValue("test-command-line", testName1, testCmd1);
+        setter.setOptionValue("ignore-binary-check", "true");
+        mKernelTargetTest.run(mTestInfo, mListener);
+        // run cmd1 test
+        TestDescription testDescription = new TestDescription(testName1, testName1);
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName1), eq(1));
+        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testEnded(
+                        Mockito.eq(testDescription),
+                        Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
+    }
 }

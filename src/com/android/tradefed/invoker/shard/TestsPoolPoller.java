@@ -48,6 +48,7 @@ import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.IReportNotExecuted;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
+import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
@@ -181,7 +182,7 @@ public final class TestsPoolPoller
                     CLog.w(due);
                     CLog.w("Proceeding to the next test.");
                 } catch (DeviceNotAvailableException dnae) {
-                    HandleDeviceNotAvailable(dnae, test);
+                    handleDeviceNotAvailable(dnae, test);
                 } catch (ConfigurationException | BuildRetrievalError e) {
                     CLog.w(
                             "Failed to validate the @options of test: %s. Proceeding to next test.",
@@ -211,37 +212,74 @@ public final class TestsPoolPoller
      * Helper to wait for the device to maybe come back online, in that case we reboot it to refresh
      * the state and proceed with execution.
      */
-    void HandleDeviceNotAvailable(DeviceNotAvailableException originalException, IRemoteTest test)
+    void handleDeviceNotAvailable(DeviceNotAvailableException originalException, IRemoteTest test)
             throws DeviceNotAvailableException {
-        ITestDevice device = mTestInfo.getDevice();
-        try {
-            if (device instanceof NestedRemoteDevice) {
-                // If it's not the last device, reset it.
-                // TODO: Attempt reset when fixed
-            } else if (mTracker.getCount() > 1) {
-                CLog.d(
-                        "Wait %s for device to maybe come back online.",
-                        TimeUtil.formatElapsedTime(WAIT_RECOVERY_TIME));
-                device.waitForDeviceAvailable(WAIT_RECOVERY_TIME);
-                device.reboot();
-                CLog.d("TestPoller was recovered after %s went offline", device.getSerialNumber());
-                return;
+        // If `mTestsPool` is a RemoteDynamicPool, then `test` should always be
+        // an instance of ITestSuite, but just checking here in case.
+        if (mTestsPool instanceof RemoteDynamicPool && test instanceof ITestSuite) {
+            ITestDevice device = mTestInfo.getDevice();
+            RemoteDynamicPool remotePool = (RemoteDynamicPool) mTestsPool;
+            ITestSuite testModule = (ITestSuite) test;
+            int attemptNumber = remotePool.getAttemptNumber(testModule);
+            if (attemptNumber + 1 <= mConfig.getRetryDecision().getMaxRetryCount()) {
+                // requeue the module for execution
+                remotePool.returnToRemotePool(testModule, attemptNumber + 1);
+            } else {
+                // module has run out of retries
             }
-        } catch (DeviceNotAvailableException e) {
-            // ignore this exception
+
+            // We catch and rethrow in order to log that the poller associated with the device
+            // that went offline is terminating.
+            CLog.e(
+                    "Test %s threw DeviceNotAvailableException. Test poller associated with "
+                            + "device %s is terminating.",
+                    test.getClass(), device.getSerialNumber());
+            // Log an event to track more easily the failure
+            logDeviceEvent(
+                    EventType.SHARD_POLLER_EARLY_TERMINATION,
+                    device.getSerialNumber(),
+                    originalException);
+
+            // re-throw error
+            throw originalException;
+        } else if (mTestsPool instanceof RemoteDynamicPool) {
+            CLog.w("RemoteDynamicPool should only use ITestSuite, but found IRemoteTest.");
+            throw originalException;
+        } else {
+            ITestDevice device = mTestInfo.getDevice();
+            try {
+                if (device instanceof NestedRemoteDevice) {
+                    // If it's not the last device, reset it.
+                    // TODO: Attempt reset when fixed
+                } else if (mTracker.getCount() > 1) {
+                    CLog.d(
+                            "Wait %s for device to maybe come back online.",
+                            TimeUtil.formatElapsedTime(WAIT_RECOVERY_TIME));
+                    device.waitForDeviceAvailable(WAIT_RECOVERY_TIME);
+                    device.reboot();
+                    CLog.d(
+                            "TestPoller was recovered after %s went offline",
+                            device.getSerialNumber());
+                    return;
+                }
+            } catch (DeviceNotAvailableException e) {
+                // ignore this exception
+            }
+
+            // We catch and rethrow in order to log that the poller associated with the device
+            // that went offline is terminating.
+            CLog.e(
+                    "Test %s threw DeviceNotAvailableException. Test poller associated with "
+                            + "device %s is terminating.",
+                    test.getClass(), device.getSerialNumber());
+            // Log an event to track more easily the failure
+            logDeviceEvent(
+                    EventType.SHARD_POLLER_EARLY_TERMINATION,
+                    device.getSerialNumber(),
+                    originalException);
+
+            throw originalException;
         }
-        // We catch and rethrow in order to log that the poller associated with the device
-        // that went offline is terminating.
-        CLog.e(
-                "Test %s threw DeviceNotAvailableException. Test poller associated with "
-                        + "device %s is terminating.",
-                test.getClass(), device.getSerialNumber());
-        // Log an event to track more easily the failure
-        logDeviceEvent(
-                EventType.SHARD_POLLER_EARLY_TERMINATION,
-                device.getSerialNumber(),
-                originalException);
-        throw originalException;
     }
 
     /** Go through the remaining IRemoteTest and report them as not executed. */

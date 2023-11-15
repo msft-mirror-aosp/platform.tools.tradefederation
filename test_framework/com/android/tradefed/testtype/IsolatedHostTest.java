@@ -172,6 +172,13 @@ public class IsolatedHostTest
             description = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_DESCRIPTION)
     private Duration mTestCaseTimeout = Duration.ofSeconds(0L);
 
+    @Option(
+            name = "use-ravenwood-resources",
+            description =
+                    "Option to put the Ravenwood specific resources directory option on "
+                            + "the Java command line.")
+    private boolean mRavenwoodResources = false;
+
     private static final String QUALIFIED_PATH = "/com/android/tradefed/isolation";
     private IBuildInfo mBuildInfo;
     private Set<String> mIncludeFilters = new HashSet<>();
@@ -369,6 +376,10 @@ public class IsolatedHostTest
                 mExcludePaths.add("org/robolectric");
             }
         }
+        if (mRavenwoodResources) {
+            // For the moment, swap in the default JUnit upstream runner
+            cmdArgs.add("-Dandroid.junit.runner=org.junit.runners.JUnit4");
+        }
 
         if (this.debug) {
             cmdArgs.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8656");
@@ -454,7 +465,7 @@ public class IsolatedHostTest
      *
      * @return a string specifying the colon separated classpath.
      */
-    private String compileClassPath() {
+    public String compileClassPath() {
         List<String> paths = new ArrayList<>();
         File testDir = findTestDirectory();
 
@@ -477,6 +488,14 @@ public class IsolatedHostTest
                             InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
                 }
                 paths.add(androidAllJar.getAbsolutePath());
+            } else if (mRavenwoodResources) {
+                File ravenwoodRuntime = FileUtil.findFile(testDir, "ravenwood-runtime");
+                if (ravenwoodRuntime == null) {
+                    throw new HarnessRuntimeException(
+                            "Could not find Ravenwood runtime needed for execution. " + testDir,
+                            InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
+                }
+                paths.add(ravenwoodRuntime.getAbsolutePath() + "/*");
             }
 
             for (String jar : mJars) {
@@ -965,6 +984,10 @@ public class IsolatedHostTest
         return mRobolectricResources;
     }
 
+    public boolean useRavenwoodResources() {
+        return mRavenwoodResources;
+    }
+
     private ITestInvocationListener wrapListener(ITestInvocationListener listener) {
         if (mTestCaseTimeout.toMillis() > 0L) {
             listener =
@@ -986,5 +1009,11 @@ public class IsolatedHostTest
             throw new RuntimeException("/tradefed-isolation.jar not found.");
         }
         return isolationJar;
+    }
+
+    public void deleteTempFiles() {
+        if (mIsolationJar != null) {
+            FileUtil.deleteFile(mIsolationJar);
+        }
     }
 }

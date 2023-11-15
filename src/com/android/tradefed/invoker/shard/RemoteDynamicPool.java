@@ -21,10 +21,14 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.ITestSuite;
 
+import com.google.internal.android.engprod.v1.ProvideTestTargetRequest;
+import com.google.internal.android.engprod.v1.ProvideTestTargetResponse;
 import com.google.internal.android.engprod.v1.RequestTestTargetRequest;
 import com.google.internal.android.engprod.v1.RequestTestTargetResponse;
+import com.google.internal.android.engprod.v1.SerializedTestTarget;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -33,6 +37,7 @@ import java.util.stream.Collectors;
 public class RemoteDynamicPool implements ITestsPool {
     private IDynamicShardingClient mClient;
     private Map<String, ITestSuite> mModuleMapping;
+    private Map<String, Integer> mAttemptNumberByTestTarget;
     private String mPoolId;
     private List<IRemoteTest> mQueuedTests = new ArrayList<>();
 
@@ -46,11 +51,37 @@ public class RemoteDynamicPool implements ITestsPool {
         mClient = client;
         mModuleMapping = moduleMapping;
         mPoolId = poolId;
+        mAttemptNumberByTestTarget = new HashMap<>();
+    }
+
+    public int getAttemptNumber(ITestSuite test) {
+        String testTargetName = test.getDirectModule().getId();
+        return mAttemptNumberByTestTarget.get(testTargetName);
+    }
+
+    public void returnToRemotePool(ITestSuite test, int attemptNumber) {
+        String testTargetName = test.getDirectModule().getId();
+        SerializedTestTarget testTarget =
+                SerializedTestTarget.newBuilder()
+                        .setTargetName(testTargetName)
+                        .setAttemptNumber(attemptNumber + 1)
+                        .build();
+        ProvideTestTargetRequest request =
+                ProvideTestTargetRequest.newBuilder()
+                        .setReferencePoolId(mPoolId)
+                        .setUseOneShotSeeding(false)
+                        .addTestTargets(testTarget)
+                        .build();
+        ProvideTestTargetResponse response = mClient.provideTestTarget(request);
     }
 
     @Override
     public IRemoteTest poll(TestInformation info, boolean reportNotExecuted) {
         if (mQueuedTests.isEmpty()) {
+            // Ensure there are no carried over attempt numbers before polling
+            // the server.
+            mAttemptNumberByTestTarget.clear();
+
             RequestTestTargetRequest request =
                     RequestTestTargetRequest.newBuilder().setReferencePoolId(mPoolId).build();
             RequestTestTargetResponse response = mClient.requestTestTarget(request);
@@ -59,6 +90,12 @@ public class RemoteDynamicPool implements ITestsPool {
                     response.getTestTargetsList().stream()
                             .map(x -> mModuleMapping.get(x.getTargetName()))
                             .collect(Collectors.toList()));
+            response.getTestTargetsList().stream()
+                    .forEach(
+                            x -> {
+                                mAttemptNumberByTestTarget.put(
+                                        x.getTargetName(), x.getAttemptNumber());
+                            });
             if (mQueuedTests.isEmpty()) {
                 return null;
             } else {
