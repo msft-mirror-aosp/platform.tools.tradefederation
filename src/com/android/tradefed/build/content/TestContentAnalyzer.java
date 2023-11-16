@@ -27,9 +27,15 @@ import com.android.tradefed.util.FileUtil;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** The analyzer takes context for the analysis and determine what is interesting. */
 public class TestContentAnalyzer {
@@ -139,19 +145,39 @@ public class TestContentAnalyzer {
 
     private void fileAnalysis(IBuildInfo build, ContentAnalysisContext context) {
         if (build.getFile(BuildInfoFileKey.TESTDIR_IMAGE) == null) {
-            CLog.d("Mismatch: we would expect a testsdir directory for FILE analysis");
+            CLog.w("Mismatch: we would expect a testsdir directory for FILE analysis");
             return;
         }
         List<ArtifactFileDescriptor> diffs =
                 analyzeContentDiff(context.contentInformation(), context.contentEntry());
         if (diffs == null) {
-            CLog.d("Analysis failed.");
+            CLog.w("Analysis failed.");
             return;
         }
+        Set<String> diffPaths = diffs.parallelStream().map(d -> d.path).collect(Collectors.toSet());
         File rootDir = build.getFile(BuildInfoFileKey.TESTDIR_IMAGE);
-        for (ArtifactFileDescriptor afd : diffs) {
-            File possibleFile = new File(rootDir, afd.path);
-            if (possibleFile.exists()) {
+        Set<Path> files = new HashSet<>();
+        try (Stream<Path> stream =
+                Files.walk(Paths.get(rootDir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)) {
+            stream.filter(path -> !path.toFile().isDirectory()).forEach(path -> files.add(path));
+        } catch (IOException e) {
+            CLog.e("Analysis failed.");
+            CLog.e(e);
+            return;
+        }
+        // Match the actual downloaded files with possible differences in content to under
+        // how much of the downloaded artifacts actually changed.
+        for (Path p : files) {
+            Path relativeRootFilePath = rootDir.toPath().relativize(p);
+            Set<String> fileDiff =
+                    diffPaths.parallelStream()
+                            .filter(diffPath -> diffPath.equals(relativeRootFilePath.toString()))
+                            .collect(Collectors.toSet());
+            if (fileDiff.isEmpty()) {
+                CLog.d("File %s is unchanged.", p);
+                InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.UNCHANGED_FILE, 1);
+            } else {
+                CLog.d("File %s has changed: %s", p, fileDiff);
                 InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.FILE_WITH_DIFFS, 1);
             }
         }
