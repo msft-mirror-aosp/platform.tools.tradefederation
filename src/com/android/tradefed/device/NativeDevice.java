@@ -5441,15 +5441,15 @@ public class NativeDevice
 
             String dateInSeconds;
 
-            // toybox has a bug that prevents this more explicit command
-            // from working on newer devices, but it's the only thing that works
-            // on the older ones.
+            // On API 28 and lower, there is a bug in toybox that prevents date from parsing
+            // timestamps containing a space, e.g. -D"%Y-%m-%d %H:%M:%S" cannot be used to parse
+            // the stime:19 output from ps. Instead, we'll reconstruct the timestamp.
             if (getApiLevel() <= 28) {
                 dateInSeconds =
                         executeShellCommand(
-                                "date -d \"$(date +%Y:%m:%e):"
+                                "date -d \"$(date +%Y:%m:%d):"
                                         + output
-                                        + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+                                        + "\" +%s -D \"%Y:%m:%d:%H:%M:%S\"");
             } else {
                 dateInSeconds = executeShellCommand("date -d\"" + output + "\" +%s");
             }
