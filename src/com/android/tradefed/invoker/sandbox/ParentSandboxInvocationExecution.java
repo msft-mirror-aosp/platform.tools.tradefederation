@@ -34,7 +34,6 @@ import com.android.tradefed.invoker.TestInvocation.Stage;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
-import com.android.tradefed.invoker.tracing.TracePropagatingExecutorService;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -52,9 +51,6 @@ import com.android.tradefed.util.RunUtil;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
 
 /**
  * Version of {@link InvocationExecution} for the parent invocation special actions when running a
@@ -81,34 +77,28 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             return true;
         }
 
-        CompletableFuture<Exception> futureClient = null;
+        SandboxFetchThread fetchThread = null;
         if (getSandboxOptions(config).shouldUseSplitDiscovery()) {
-            futureClient =
-                    CompletableFuture.supplyAsync(
-                            () -> {
-                                try {
-                                    getSandbox(config)
-                                            .fetchSandboxExtraArtifacts(
-                                                    testInfo.getContext(),
-                                                    config,
-                                                    QuotationAwareTokenizer.tokenizeLine(
-                                                            config.getCommandLine(),
-                                                            /** no logging */
-                                                            false));
-                                    return null;
-                                } catch (BuildRetrievalError
-                                        | IOException
-                                        | ConfigurationException e) {
-                                    return e;
-                                }
-                            },
-                            TracePropagatingExecutorService.create(ForkJoinPool.commonPool()));
+            fetchThread =
+                    new SandboxFetchThread(
+                            Thread.currentThread().getThreadGroup(), testInfo, config);
+            fetchThread.start();
         }
-        boolean res = super.fetchBuild(testInfo, config, rescheduler, listener);
+        boolean res = false;
+        try {
+            res = super.fetchBuild(testInfo, config, rescheduler, listener);
+        } catch (DeviceNotAvailableException | BuildRetrievalError | RuntimeException e) {
+            if (fetchThread != null) {
+                fetchThread.interrupt();
+            }
+            SandboxInvocationRunner.teardownSandbox(config);
+            throw e;
+        }
         if (getSandboxOptions(config).shouldUseSplitDiscovery()) {
-            Exception e = null;
+            Throwable e = null;
             try {
-                e = futureClient.get();
+                fetchThread.join();
+                e = fetchThread.error;
                 if (e != null) {
                     if (e instanceof BuildRetrievalError) {
                         throw (BuildRetrievalError) e;
@@ -117,7 +107,8 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                                 e.getMessage(), e, InfraErrorIdentifier.SANDBOX_SETUP_ERROR);
                     }
                 }
-            } catch (InterruptedException | ExecutionException execError) {
+            } catch (InterruptedException execError) {
+                SandboxInvocationRunner.teardownSandbox(config);
                 throw new BuildRetrievalError(
                         execError.getMessage(),
                         execError,
@@ -316,6 +307,38 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
 
     private ISandbox getSandbox(IConfiguration config) {
         return (ISandbox) config.getConfigurationObject(Configuration.SANDBOX_TYPE_NAME);
+    }
+
+    private class SandboxFetchThread extends Thread {
+        private final TestInformation info;
+        private final IConfiguration config;
+
+        // The error that might be returned by the setup
+        public Throwable error;
+
+        public SandboxFetchThread(
+                ThreadGroup currentGroup, TestInformation info, IConfiguration config) {
+            super(currentGroup, "SandboxFetchThread");
+            setDaemon(true);
+            this.info = info;
+            this.config = config;
+        }
+
+        @Override
+        public void run() {
+            try {
+                getSandbox(config)
+                        .fetchSandboxExtraArtifacts(
+                                info.getContext(),
+                                config,
+                                QuotationAwareTokenizer.tokenizeLine(
+                                        config.getCommandLine(),
+                                        /** no logging */
+                                        false));
+            } catch (BuildRetrievalError | IOException | ConfigurationException e) {
+                error = e;
+            }
+        }
     }
 
     private class SandboxSetupThread extends Thread {
