@@ -16,6 +16,7 @@
 package com.android.tradefed.result.skipped;
 
 import com.android.tradefed.build.content.ContentAnalysisContext;
+import com.android.tradefed.build.content.ContentAnalysisResults;
 import com.android.tradefed.build.content.TestContentAnalyzer;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
@@ -25,6 +26,7 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.skipped.SkipReason.DemotionTrigger;
 import com.android.tradefed.service.TradefedFeatureClient;
@@ -161,13 +163,28 @@ public class SkipManager implements IDisableable {
         }
         // Do the analysis regardless
         if (results.hasTestsArtifacts()) {
-            if (mTestArtifactsAnalysisContent != null) {
-                TestContentAnalyzer analyzer =
-                        new TestContentAnalyzer(information, mTestArtifactsAnalysisContent);
-                analyzer.evaluate();
-                // TODO: continue analysis
+            if (mTestArtifactsAnalysisContent == null) {
+                return false;
+            } else {
+                try (CloseableTraceScope ignored = new CloseableTraceScope("TestContentAnalyzer")) {
+                    TestContentAnalyzer analyzer =
+                            new TestContentAnalyzer(information, mTestArtifactsAnalysisContent);
+                    ContentAnalysisResults analysisResults = analyzer.evaluate();
+                    if (analysisResults == null) {
+                        return false;
+                    }
+                    CLog.d("%s", analysisResults.toString());
+                    if (analysisResults.hasAnyTestsChange()) {
+                        if (!results.deviceImageChanged()) {
+                            InvocationMetricLogger.addInvocationMetrics(
+                                    InvocationMetricKey.TEST_ARTIFACT_CHANGE_ONLY, 1);
+                        }
+                        return false;
+                    }
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.TEST_ARTIFACT_NOT_CHANGED, 1);
+                }
             }
-            return false;
         }
         if (results.deviceImageChanged()) {
             return false;

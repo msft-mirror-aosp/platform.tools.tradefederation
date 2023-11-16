@@ -48,43 +48,43 @@ public class TestContentAnalyzer {
         this.context = context;
     }
 
-    public void evaluate() {
+    public ContentAnalysisResults evaluate() {
         if (information.getContext().getBuildInfos().size() > 1) {
             CLog.d("Analysis doesn't currently support multi-builds.");
-            return;
+            return null;
         }
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.CONTENT_BASED_ANALYSIS_ATTEMPT, 1);
         AnalysisMethod method = context.analysisMethod();
         switch (method) {
             case MODULE_XTS:
-                xtsAnalysis(information.getBuildInfo(), context);
-                break;
+                return xtsAnalysis(information.getBuildInfo(), context);
             case FILE:
-                fileAnalysis(information.getBuildInfo(), context);
-                break;
+                return fileAnalysis(information.getBuildInfo(), context);
             default:
                 // do nothing for the rest for now.
+                return null;
         }
     }
 
-    private void xtsAnalysis(IBuildInfo build, ContentAnalysisContext context) {
+    private ContentAnalysisResults xtsAnalysis(IBuildInfo build, ContentAnalysisContext context) {
         if (build.getFile(BuildInfoFileKey.ROOT_DIRECTORY) == null) {
             CLog.d("Mismatch: we would expect a root directory for MODULE_XTS analysis");
-            return;
+            return null;
         }
         List<ArtifactFileDescriptor> diffs =
                 analyzeContentDiff(context.contentInformation(), context.contentEntry());
         if (diffs == null) {
             CLog.d("Analysis failed.");
-            return;
+            return null;
         }
-        mapDiffsToModule(
+        return mapDiffsToModule(
                 context.contentEntry(), diffs, build.getFile(BuildInfoFileKey.ROOT_DIRECTORY));
     }
 
-    private void mapDiffsToModule(
+    private ContentAnalysisResults mapDiffsToModule(
             String contentEntry, List<ArtifactFileDescriptor> diffs, File rootDir) {
+        ContentAnalysisResults results = new ContentAnalysisResults();
         String rootPackage = contentEntry.replaceAll(".zip", "");
         Set<String> diffPaths = diffs.parallelStream().map(d -> d.path).collect(Collectors.toSet());
         // First check common packages
@@ -96,13 +96,14 @@ public class TestContentAnalyzer {
         commonDiff.remove(rootPackage + "tools/version.txt");
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.XTS_DIFFS_IN_COMMON, commonDiff.size());
+        results.addModifiedSharedFolder(commonDiff.size());
         if (!commonDiff.isEmpty()) {
             CLog.d("Tools folder has diffs: %s", commonDiff);
         }
         File testcasesRoot = FileUtil.findFile(rootDir, "testcases");
         if (testcasesRoot == null) {
             CLog.e("Could find a testcases directory, something went wrong.");
-            return;
+            return null;
         }
         // Then check changes in modules
         for (File rootFile : testcasesRoot.listFiles()) {
@@ -118,10 +119,12 @@ public class TestContentAnalyzer {
                     CLog.d("Module %s directory is unchanged.", moduleDir.getName());
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.XTS_UNCHANGED_MODULES, 1);
+                    results.addUnchangedModule(moduleDir.getName());
                 } else {
                     CLog.d("Module %s directory has changed: %s", moduleDir.getName(), moduleDiff);
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.XTS_MODULE_WITH_DIFFS, 1);
+                    results.addModifiedModule();
                 }
             } else {
                 String relativeRootFilePath =
@@ -134,25 +137,28 @@ public class TestContentAnalyzer {
                     CLog.d("File %s is unchanged.", rootFile.getName());
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.UNCHANGED_FILE, 1);
+                    results.addUnchangedFile();
                 } else {
                     CLog.d("File %s has changed: %s", rootFile.getName(), rootFileDiff);
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.FILE_WITH_DIFFS, 1);
+                    results.addModifiedFile();
                 }
             }
         }
+        return results;
     }
 
-    private void fileAnalysis(IBuildInfo build, ContentAnalysisContext context) {
+    private ContentAnalysisResults fileAnalysis(IBuildInfo build, ContentAnalysisContext context) {
         if (build.getFile(BuildInfoFileKey.TESTDIR_IMAGE) == null) {
             CLog.w("Mismatch: we would expect a testsdir directory for FILE analysis");
-            return;
+            return null;
         }
         List<ArtifactFileDescriptor> diffs =
                 analyzeContentDiff(context.contentInformation(), context.contentEntry());
         if (diffs == null) {
             CLog.w("Analysis failed.");
-            return;
+            return null;
         }
         Set<String> diffPaths = diffs.parallelStream().map(d -> d.path).collect(Collectors.toSet());
         File rootDir = build.getFile(BuildInfoFileKey.TESTDIR_IMAGE);
@@ -163,10 +169,11 @@ public class TestContentAnalyzer {
         } catch (IOException e) {
             CLog.e("Analysis failed.");
             CLog.e(e);
-            return;
+            return null;
         }
         // Match the actual downloaded files with possible differences in content to under
         // how much of the downloaded artifacts actually changed.
+        ContentAnalysisResults results = new ContentAnalysisResults();
         for (Path p : files) {
             Path relativeRootFilePath = rootDir.toPath().relativize(p);
             Set<String> fileDiff =
@@ -176,11 +183,14 @@ public class TestContentAnalyzer {
             if (fileDiff.isEmpty()) {
                 CLog.d("File %s is unchanged.", p);
                 InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.UNCHANGED_FILE, 1);
+                results.addUnchangedFile();
             } else {
                 CLog.d("File %s has changed: %s", p, fileDiff);
                 InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.FILE_WITH_DIFFS, 1);
+                results.addModifiedFile();
             }
         }
+        return results;
     }
 
     private List<ArtifactFileDescriptor> analyzeContentDiff(
