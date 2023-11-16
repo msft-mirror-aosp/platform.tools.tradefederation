@@ -28,6 +28,8 @@ import com.android.tradefed.build.LocalDeviceBuildProviderTest;
 import com.android.tradefed.build.OtaZipfileBuildProviderTest;
 import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
 import com.android.tradefed.build.content.ArtifactDetailsTest;
+import com.android.tradefed.build.content.ContentAnalysisResultsTest;
+import com.android.tradefed.build.content.TestContentAnalyzerTest;
 import com.android.tradefed.cache.ModifiedFilesParserTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
@@ -201,10 +203,10 @@ import com.android.tradefed.result.FileSystemLogSaverTest;
 import com.android.tradefed.result.InvocationToJUnitResultForwarderTest;
 import com.android.tradefed.result.JUnitToInvocationResultForwarderTest;
 import com.android.tradefed.result.JsonHttpTestResultReporterTest;
+import com.android.tradefed.result.LUCIResultReporterTest;
 import com.android.tradefed.result.LegacySubprocessResultsReporterTest;
 import com.android.tradefed.result.LogFileSaverTest;
 import com.android.tradefed.result.LogcatCrashResultForwarderTest;
-import com.android.tradefed.result.LUCIResultReporterTest;
 import com.android.tradefed.result.MetricsXMLResultReporterTest;
 import com.android.tradefed.result.MultiFailureDescriptionTest;
 import com.android.tradefed.result.PassingTestFileReporterTest;
@@ -343,8 +345,8 @@ import com.android.tradefed.testtype.TfTestLauncherTest;
 import com.android.tradefed.testtype.UsbResetTestTest;
 import com.android.tradefed.testtype.binary.ExecutableHostTestTest;
 import com.android.tradefed.testtype.binary.ExecutableTargetTestTest;
-import com.android.tradefed.testtype.binary.KernelTargetTestTest;
 import com.android.tradefed.testtype.binary.KTapResultParserTest;
+import com.android.tradefed.testtype.binary.KernelTargetTestTest;
 import com.android.tradefed.testtype.host.CoverageMeasurementForwarderTest;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4TestTest;
 import com.android.tradefed.testtype.junit4.DeviceParameterizedRunnerTest;
@@ -514,6 +516,8 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // build.content
     ArtifactDetailsTest.class,
+    ContentAnalysisResultsTest.class,
+    TestContentAnalyzerTest.class,
 
     // cache
     ModifiedFilesParserTest.class,
