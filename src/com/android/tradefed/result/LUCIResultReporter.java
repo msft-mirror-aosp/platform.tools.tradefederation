@@ -87,7 +87,7 @@ public class LUCIResultReporter extends CollectingTestListener
         TestStatus.FAILURE, "FAIL",
         TestStatus.PASSED, "PASS",
         TestStatus.INCOMPLETE, "CRASH",
-        TestStatus.ASSUMPTION_FAILURE, "ABORT",
+        TestStatus.ASSUMPTION_FAILURE, "SKIP",
         TestStatus.IGNORED, "SKIP"
     );
 
