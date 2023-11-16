@@ -143,6 +143,11 @@ public class InvocationMetricLogger {
         RETRY_TEST_SKIPPED_COUNT("retry_test_skipped_count", true),
         RETRY_SKIPPED_ALL_FILTERED_COUNT("retry_skipped_all_filtered_count", true),
 
+        // Track dynamic sharding total request latency
+        DYNAMIC_SHARDING_REQUEST_LATENCY("dynamic-sharding-request-latency", true),
+        // Track dynamic sharding total request count
+        DYNAMIC_SHARDING_REQUEST_COUNT("dynamic-sharding-request-count", true),
+
         // The time spent inside metric collectors
         COLLECTOR_TIME("collector_time_ms", true),
         // Track if soft restart is occurring after test module
@@ -378,6 +383,7 @@ public class InvocationMetricLogger {
 
         INCREMENTAL_FLASHING_PATCHES_SIZE("incremental-flashing-patches-size", true),
         INCREMENTAL_FLASHING_TARGET_SIZE("incremental-flashing-target-size", true);
+
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.
