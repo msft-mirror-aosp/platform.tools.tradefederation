@@ -1136,6 +1136,7 @@ public class ClusterCommandSchedulerTest {
 
         Map<String, String> envVars = new TreeMap<>();
         envVars.put("TF_WORK_DIR", workDir.getAbsolutePath());
+        envVars.put("TF_ATTEMPT_ID", cmd.getAttemptId());
         envVars.putAll(testEnvironment.getEnvVars());
         assertEquals(envVars, test.getEnvVars());
         assertEquals(testEnvironment.getJvmOptions(), test.getJvmOptions());
