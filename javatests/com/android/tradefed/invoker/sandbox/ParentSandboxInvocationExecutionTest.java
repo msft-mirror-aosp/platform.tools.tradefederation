@@ -104,6 +104,7 @@ public class ParentSandboxInvocationExecutionTest {
         mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
         mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
         mConfig = new Configuration("test", "test");
+        mConfig.setCommandLine(new String[] {"empty"});
         mConfig.setConfigurationObject(Configuration.SANDBOX_TYPE_NAME, new TradefedSandbox());
     }
 
