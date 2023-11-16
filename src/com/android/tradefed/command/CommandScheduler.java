@@ -202,7 +202,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     @Option(
             name = "max-poll-time",
             description = "ms between forced command scheduler execution time")
-    private long mPollTime = 30 * 1000; // 30 seconds
+    private long mPollTime = 60 * 1000; // 60 seconds
 
     @Option(
             name = "shutdown-on-cmdfile-error",

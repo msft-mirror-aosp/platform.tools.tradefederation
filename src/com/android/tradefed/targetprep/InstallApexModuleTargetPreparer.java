@@ -421,13 +421,8 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     @Override
     public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
         if (mOptimizeMainlineTest) {
-            if (!mApkInstalled.isEmpty() && mMainlineModuleInfos.isEmpty()) {
-                CLog.d("Proceeding tearDown as no MODULE METADATA existing on the device.");
-            }
-            else {
-                CLog.d("Skipping tearDown as the installed modules may be used for the next test.");
-                return;
-            }
+            CLog.d("Skipping tearDown as the installed modules may be used for the next test.");
+            return;
         }
         ITestDevice device = testInfo.getDevice();
         if (e instanceof DeviceNotAvailableException) {
