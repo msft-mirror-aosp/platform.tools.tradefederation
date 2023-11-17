@@ -47,7 +47,7 @@ final class IsolationResultForwarder extends RunListener {
     @Override
     public void testFailure(Failure failure) throws IOException {
         Description desc = failure.getDescription();
-        System.err.println("ERROR: Test failed due to following exception:" + failure.getTrace());
+        System.err.println("ERROR: Test failed due to following exception: " + failure.getTrace());
         RunnerReply.newBuilder()
                 .setRunnerStatus(RunnerStatus.RUNNER_STATUS_UNSPECIFIED)
                 .setTestEvent(
