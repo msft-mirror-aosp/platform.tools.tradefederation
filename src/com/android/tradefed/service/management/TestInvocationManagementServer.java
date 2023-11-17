@@ -129,6 +129,12 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
         }
     }
 
+    /** Stop the tradefed process. */
+    public void exitTradefed() throws InterruptedException {
+        CLog.d("Stopping tradefed process.");
+        System.exit(0);
+    }
+
     @Override
     public void submitTestCommand(
             NewTestCommandRequest request,
