@@ -38,7 +38,6 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.IGlobalConfiguration;
 import com.android.tradefed.config.Option;
-import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.config.RetryConfigurationFactory;
 import com.android.tradefed.config.SandboxConfigurationFactory;
 import com.android.tradefed.config.proxy.ProxyConfiguration;
@@ -638,7 +637,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             if (config.getCommandOptions().isExperimentEnabled()
                     && !isPresubmitBuild(mInvocationContext)) {
                 try {
-                    OptionSetter setter = new OptionSetter(config.getCommandOptions());
                     for (Map.Entry<String, String> entry :
                             config.getCommandOptions().getExperimentalFlags().entrySet()) {
                         String optionName = entry.getKey();
@@ -648,9 +646,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         if (equalsIndex != -1) {
                             String mapKey = optionValue.substring(0, equalsIndex);
                             String mapValue = optionValue.substring(equalsIndex + 1);
-                            setter.setOptionValue(optionName, mapKey, mapValue);
+                            config.injectOptionValue(optionName, mapKey, mapValue);
                         } else {
-                            setter.setOptionValue(optionName, optionValue);
+                            config.injectOptionValue(optionName, optionValue);
                         }
                         mInvocationContext.addInvocationAttribute(
                                 "experiment:" + optionName, optionValue);
