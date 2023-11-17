@@ -208,6 +208,9 @@ public class InvocationExecution implements IInvocationExecution {
                     ((IInvocationContextReceiver) provider)
                             .setInvocationContext(testInfo.getContext());
                 }
+                if (provider instanceof ITestLoggerReceiver) {
+                    ((ITestLoggerReceiver) provider).setTestLogger(listener);
+                }
                 // Get the build
                 if (provider instanceof IDeviceBuildProvider) {
                     // Download a device build if the provider can handle it.
