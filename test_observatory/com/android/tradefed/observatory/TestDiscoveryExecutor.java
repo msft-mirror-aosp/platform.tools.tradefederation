@@ -25,6 +25,9 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.invoker.tracing.ActiveTrace;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.StdoutLogger;
 import com.android.tradefed.testtype.IRemoteTest;
@@ -85,9 +88,13 @@ public class TestDiscoveryExecutor {
      * <p>Expected arguments: [commands options] (config to run)
      */
     public static void main(String[] args) {
+        long pid = ProcessHandle.current().pid();
+        long tid = Thread.currentThread().getId();
+        ActiveTrace trace = TracingLogger.createActiveTrace(pid, tid);
+        trace.startTracing(false);
         DiscoveryExitCode exitCode = DiscoveryExitCode.SUCCESS;
         TestDiscoveryExecutor testDiscoveryExecutor = new TestDiscoveryExecutor();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("main_discovery")) {
             String testModules = testDiscoveryExecutor.discoverDependencies(args);
             if (hasOutputResultFile()) {
                 FileUtil.writeToFile(
@@ -104,6 +111,19 @@ public class TestDiscoveryExecutor {
         } catch (Exception e) {
             System.err.print(e.getMessage());
             exitCode = DiscoveryExitCode.ERROR;
+        }
+        File traceFile = trace.finalizeTracing();
+        if (traceFile != null) {
+            if (System.getenv(TestDiscoveryInvoker.DISCOVERY_TRACE_FILE) != null) {
+                try {
+                    FileUtil.copyFile(
+                            traceFile,
+                            new File(System.getenv(TestDiscoveryInvoker.DISCOVERY_TRACE_FILE)));
+                } catch (IOException | RuntimeException e) {
+                    System.err.print(e.getMessage());
+                }
+            }
+            FileUtil.deleteFile(traceFile);
         }
         System.exit(exitCode.exitCode());
     }
