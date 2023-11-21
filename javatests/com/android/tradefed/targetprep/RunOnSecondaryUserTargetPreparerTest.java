@@ -70,6 +70,11 @@ public class RunOnSecondaryUserTargetPreparerTest {
         when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(2);
         when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(30);
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(false);
+
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(0, new UserInfo(0, "system", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
     }
 
     @Test
@@ -243,7 +248,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
     public void setUp_secondaryUserIsNonForTesting_createsNewSecondaryUser() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
         userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
-        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+        Map<Integer, UserInfo> emptyUserInfos = new HashMap<>(); // Used after the user is removed
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos).thenReturn(emptyUserInfos);
         mOptionSetter.setOptionValue("disable-tear-down", "false");
 
         mPreparer.setUp(mTestInfo);
@@ -289,10 +295,10 @@ public class RunOnSecondaryUserTargetPreparerTest {
         userInfos.put(
                 3,
                 new UserInfo(
-                        3, "secondary", /* flag= */ UserInfo.FLAG_MAIN, /* isRunning= */ true));
+                        3, "secondary", /* flag= */ 0, /* isRunning= */ true));
         userInfos.put(4, new UserInfo(4, "secondary", /* flag= */ 0, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
-        when(mTestInfo.getDevice().isHeadless()).thenReturn(true);
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(true);
         mOptionSetter.setOptionValue("disable-tear-down", "false");
 
         mPreparer.setUp(mTestInfo);
