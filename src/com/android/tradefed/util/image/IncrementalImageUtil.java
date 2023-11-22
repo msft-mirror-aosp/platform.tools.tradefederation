@@ -297,6 +297,9 @@ public class IncrementalImageUtil {
                 throw new RuntimeException(pushExec.getErrors().get(0));
             }
 
+            CommandResult listSnapshots = mDevice.executeShellV2Command("ls -l /data/ndb/");
+            CLog.d("stdout: %s, stderr: %s", listSnapshots.getStdout(), listSnapshots.getStderr());
+
             CommandResult mapOutput =
                     mDevice.executeShellV2Command("snapshotctl map-snapshots /data/ndb/");
             CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());

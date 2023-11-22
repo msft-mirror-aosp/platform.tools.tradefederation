@@ -25,6 +25,9 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.invoker.tracing.ActiveTrace;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.StdoutLogger;
 import com.android.tradefed.testtype.IRemoteTest;
@@ -67,6 +70,7 @@ public class TestDiscoveryExecutor {
     }
 
     private boolean mReportPartialFallback = false;
+    private boolean mReportNoPossibleDiscovery = false;
 
     private static boolean hasOutputResultFile() {
         return System.getenv(TestDiscoveryInvoker.OUTPUT_FILE) != null;
@@ -84,9 +88,13 @@ public class TestDiscoveryExecutor {
      * <p>Expected arguments: [commands options] (config to run)
      */
     public static void main(String[] args) {
+        long pid = ProcessHandle.current().pid();
+        long tid = Thread.currentThread().getId();
+        ActiveTrace trace = TracingLogger.createActiveTrace(pid, tid);
+        trace.startTracing(false);
         DiscoveryExitCode exitCode = DiscoveryExitCode.SUCCESS;
         TestDiscoveryExecutor testDiscoveryExecutor = new TestDiscoveryExecutor();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("main_discovery")) {
             String testModules = testDiscoveryExecutor.discoverDependencies(args);
             if (hasOutputResultFile()) {
                 FileUtil.writeToFile(
@@ -103,6 +111,19 @@ public class TestDiscoveryExecutor {
         } catch (Exception e) {
             System.err.print(e.getMessage());
             exitCode = DiscoveryExitCode.ERROR;
+        }
+        File traceFile = trace.finalizeTracing();
+        if (traceFile != null) {
+            if (System.getenv(TestDiscoveryInvoker.DISCOVERY_TRACE_FILE) != null) {
+                try {
+                    FileUtil.copyFile(
+                            traceFile,
+                            new File(System.getenv(TestDiscoveryInvoker.DISCOVERY_TRACE_FILE)));
+                } catch (IOException | RuntimeException e) {
+                    System.err.print(e.getMessage());
+                }
+            }
+            FileUtil.deleteFile(traceFile);
         }
         System.exit(exitCode.exitCode());
     }
@@ -139,7 +160,6 @@ public class TestDiscoveryExecutor {
             }
 
             List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));
-
             List<String> testDependencies = new ArrayList<>(discoverDependencies(config));
             Collections.sort(testModules);
             Collections.sort(testDependencies);
@@ -152,6 +172,9 @@ public class TestDiscoveryExecutor {
             jsonObject.add(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
             if (mReportPartialFallback) {
                 jsonObject.addProperty(TestDiscoveryInvoker.PARTIAL_FALLBACK_KEY, "true");
+            }
+            if (mReportNoPossibleDiscovery) {
+                jsonObject.addProperty(TestDiscoveryInvoker.NO_POSSIBLE_TEST_DISCOVERY_KEY, "true");
             }
             return jsonObject.toString();
         } finally {
@@ -184,6 +207,7 @@ public class TestDiscoveryExecutor {
         Set<String> includeFilters = new LinkedHashSet<String>();
         Set<String> excludeFilters = new LinkedHashSet<String>();
         // Collect include filters from every test.
+        boolean discoveredLogic = true;
         for (IRemoteTest test : testList) {
             if (!(test instanceof BaseTestSuite)) {
                 throw new TestDiscoveryException(
@@ -275,7 +299,12 @@ public class TestDiscoveryExecutor {
                             null,
                             DiscoveryExitCode.COMPONENT_METADATA);
                 }
+            } else {
+                discoveredLogic = false;
             }
+        }
+        if (!discoveredLogic) {
+            mReportNoPossibleDiscovery = true;
         }
         // Extract test module names from included filters.
         if (hasOutputResultFile()) {

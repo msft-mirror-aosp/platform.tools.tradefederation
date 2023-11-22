@@ -15,6 +15,9 @@
  */
 package com.android.tradefed.result.skipped;
 
+import com.android.tradefed.build.content.ContentAnalysisContext;
+import com.android.tradefed.build.content.ContentAnalysisResults;
+import com.android.tradefed.build.content.TestContentAnalyzer;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -23,6 +26,7 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.skipped.SkipReason.DemotionTrigger;
 import com.android.tradefed.service.TradefedFeatureClient;
@@ -54,16 +58,20 @@ public class SkipManager implements IDisableable {
     private Map<String, String> mDemotionFilterOption = new LinkedHashMap<>();
 
     @Option(
-            name = "silent-invocation-skip",
-            description =
-                    "Only report a property for when we would have skipped the invocation instead"
-                            + " of actually skipping.")
-    private boolean mSilentInvocationSkip = true;
+            name = "skip-on-no-change",
+            description = "Enable the layer of skipping when there is no changes to artifacts.")
+    private boolean mSkipOnNoChange = false;
+
+    @Option(
+            name = "skip-on-no-tests-discovered",
+            description = "Enable the layer of skipping when there is no discovered tests to run.")
+    private boolean mSkipOnNoTestsDiscovered = false;
 
     // Contains the filter and reason for demotion
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
 
     private boolean mNoTestsDiscovered = false;
+    private ContentAnalysisContext mTestArtifactsAnalysisContent;
 
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
@@ -84,6 +92,11 @@ public class SkipManager implements IDisableable {
         return mDemotionFilters;
     }
 
+    public void setTestArtifactsAnalysis(ContentAnalysisContext analysisContext) {
+        CLog.d("Received test artifact analysis.");
+        mTestArtifactsAnalysisContent = analysisContext;
+    }
+
     /**
      * In the early download and discovery process, report to the skip manager that no tests are
      * expected to be run. This should lead to skipping the invocation.
@@ -95,18 +108,20 @@ public class SkipManager implements IDisableable {
 
     /** Reports whether we should skip the current invocation. */
     public boolean shouldSkipInvocation(TestInformation information) {
-        boolean shouldskip = mNoTestsDiscovered;
-        if (!shouldskip) {
-            ArtifactsAnalyzer analyzer = new ArtifactsAnalyzer(information);
-            shouldskip = buildAnalysisDecision(information, analyzer.analyzeArtifacts());
-        }
         // Build heuristic for skipping invocation
-        if (mSilentInvocationSkip && shouldskip) {
+        if (mNoTestsDiscovered) {
             InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.SILENT_INVOCATION_SKIP_COUNT, 1);
-            return false;
+                    InvocationMetricKey.SKIP_NO_TESTS_DISCOVERED, 1);
+            if (mSkipOnNoTestsDiscovered) {
+                return true;
+            } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.SILENT_INVOCATION_SKIP_COUNT, 1);
+                return false;
+            }
         }
-        return shouldskip;
+        ArtifactsAnalyzer analyzer = new ArtifactsAnalyzer(information);
+        return buildAnalysisDecision(information, analyzer.analyzeArtifacts());
     }
 
     /**
@@ -146,24 +161,57 @@ public class SkipManager implements IDisableable {
         if (results == null) {
             return false;
         }
-        if (!"WORK_NODE".equals(information.getContext().getAttribute("trigger"))) {
-            // Eventually support postsubmit analysis.
-            return false;
-        }
-        // Presubmit analysis
+        // Do the analysis regardless
         if (results.hasTestsArtifacts()) {
-            // TODO: Eventually make the analysis granular to tests artifacts
-            return false;
+            if (mTestArtifactsAnalysisContent == null) {
+                return false;
+            } else {
+                try (CloseableTraceScope ignored = new CloseableTraceScope("TestContentAnalyzer")) {
+                    TestContentAnalyzer analyzer =
+                            new TestContentAnalyzer(information, mTestArtifactsAnalysisContent);
+                    ContentAnalysisResults analysisResults = analyzer.evaluate();
+                    if (analysisResults == null) {
+                        return false;
+                    }
+                    CLog.d("%s", analysisResults.toString());
+                    if (analysisResults.hasAnyTestsChange()) {
+                        if (!results.deviceImageChanged()) {
+                            InvocationMetricLogger.addInvocationMetrics(
+                                    InvocationMetricKey.TEST_ARTIFACT_CHANGE_ONLY, 1);
+                        }
+                        return false;
+                    }
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.TEST_ARTIFACT_NOT_CHANGED, 1);
+                }
+            }
         }
         if (results.deviceImageChanged()) {
             return false;
         }
-        return true;
+        if (!"WORK_NODE".equals(information.getContext().getAttribute("trigger"))) {
+            // Eventually support postsubmit analysis.
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.NO_CHANGES_POSTSUBMIT, 1);
+            return false;
+        }
+        // Currently only consider skipping in presubmit
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SKIP_NO_CHANGES, 1);
+        if (mSkipOnNoChange) {
+            return true;
+        }
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.SILENT_INVOCATION_SKIP_COUNT, 1);
+        return false;
     }
 
     public void clearManager() {
         mDemotionFilters.clear();
         mDemotionFilterOption.clear();
+        if (mTestArtifactsAnalysisContent != null
+                && mTestArtifactsAnalysisContent.contentInformation() != null) {
+            mTestArtifactsAnalysisContent.contentInformation().clean();
+        }
     }
 
     @Override
@@ -176,7 +224,8 @@ public class SkipManager implements IDisableable {
         mIsDisabled = isDisabled;
     }
 
-    public void setSilentInvocationSkip(boolean silentSkip) {
-        mSilentInvocationSkip = silentSkip;
+    public void setSkipDecision(boolean shouldSkip) {
+        mSkipOnNoChange = shouldSkip;
+        mSkipOnNoTestsDiscovered = shouldSkip;
     }
 }

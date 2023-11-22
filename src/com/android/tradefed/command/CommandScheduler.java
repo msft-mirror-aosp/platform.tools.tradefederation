@@ -19,6 +19,7 @@ package com.android.tradefed.command;
 import com.android.ddmlib.DdmPreferences;
 import com.android.ddmlib.Log;
 import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.clearcut.ClearcutClient;
 import com.android.tradefed.command.CommandFileParser.CommandLine;
@@ -37,7 +38,6 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.IGlobalConfiguration;
 import com.android.tradefed.config.Option;
-import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.config.RetryConfigurationFactory;
 import com.android.tradefed.config.SandboxConfigurationFactory;
 import com.android.tradefed.config.proxy.ProxyConfiguration;
@@ -201,7 +201,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     @Option(
             name = "max-poll-time",
             description = "ms between forced command scheduler execution time")
-    private long mPollTime = 30 * 1000; // 30 seconds
+    private long mPollTime = 60 * 1000; // 60 seconds
 
     @Option(
             name = "shutdown-on-cmdfile-error",
@@ -637,7 +637,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             if (config.getCommandOptions().isExperimentEnabled()
                     && !isPresubmitBuild(mInvocationContext)) {
                 try {
-                    OptionSetter setter = new OptionSetter(config.getCommandOptions());
                     for (Map.Entry<String, String> entry :
                             config.getCommandOptions().getExperimentalFlags().entrySet()) {
                         String optionName = entry.getKey();
@@ -647,9 +646,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         if (equalsIndex != -1) {
                             String mapKey = optionValue.substring(0, equalsIndex);
                             String mapValue = optionValue.substring(equalsIndex + 1);
-                            setter.setOptionValue(optionName, mapKey, mapValue);
+                            config.injectOptionValue(optionName, mapKey, mapValue);
                         } else {
-                            setter.setOptionValue(optionName, optionValue);
+                            config.injectOptionValue(optionName, optionValue);
                         }
                         mInvocationContext.addInvocationAttribute(
                                 "experiment:" + optionName, optionValue);
@@ -1814,6 +1813,27 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         return execCommand(null, listener, reservedDevices, args);
     }
 
+    /**
+     * Determines if a given command is a dry-run. If the command is a dry-run, validate it. If
+     * there are any configs issue, it will throw a ConfigurationException.
+     *
+     * @param handler {@link InvocationEventHandler} to report events for dry-run validation.
+     * @param args the command to validate.
+     * @return true if the command are a dry run, false otherwise.
+     * @throws ConfigurationException
+     */
+    protected void dryRunCommandReporting(
+            final IScheduledInvocationListener handler, IConfiguration config)
+            throws ConfigurationException {
+        IInvocationContext context = new InvocationContext();
+        context.addDeviceBuildInfo("stub", new BuildInfo());
+        handler.invocationStarted(context);
+        config.validateOptions();
+        handler.invocationEnded(0);
+        IInvocationContext nullMeta = null;
+        handler.invocationComplete(nullMeta, null);
+    }
+
     @VisibleForTesting
     protected long execCommand(
             IInvocationContext context,
@@ -1823,9 +1843,13 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             throws ConfigurationException {
         assertStarted();
         IDeviceManager manager = getDeviceManager();
-        CommandTracker cmdTracker = createCommandTracker(args, null);
-        IConfiguration config = createConfiguration(cmdTracker.getArgs());
+        IConfiguration config = createConfiguration(args);
         config.validateOptions();
+        if (config.getCommandOptions().isDryRunMode()) {
+            dryRunCommandReporting(listener, config);
+            return -2L;
+        }
+        CommandTracker cmdTracker = createCommandTracker(args, null);
 
         if (isShuttingDown()) {
             if (context != null) {

@@ -207,6 +207,12 @@ public interface ICommandOptions {
     /** Whether or not to attempt parallel setup of the remote devices. */
     public boolean shouldUseParallelRemoteSetup();
 
+    /** Return whether to execute pre-invocation setup in parallel. */
+    public boolean shouldUseParallelPreInvocationSetup();
+
+    /** Return the timeout for parallel pre-invocation setup. */
+    public Duration getParallelPreInvocationSetupTimeout();
+
     /** Whether or not to attempt parallel setup. */
     public boolean shouldUseParallelSetup();
 

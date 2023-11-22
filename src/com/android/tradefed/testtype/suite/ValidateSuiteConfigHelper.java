@@ -124,14 +124,14 @@ public class ValidateSuiteConfigHelper {
                                     ALLOWED_COLLECTOR_IN_MODULE));
                 }
             }
-        }
 
-        if (!config.getPostProcessors().isEmpty()) {
-            throwRuntime(
-                    config,
-                    String.format(
-                            "%s objects are not allowed in module.",
-                            Configuration.METRIC_POST_PROCESSOR_TYPE_NAME));
+            if (!config.getPostProcessors().isEmpty()) {
+                throwRuntime(
+                        config,
+                        String.format(
+                                "%s objects are not allowed in module.",
+                                Configuration.METRIC_POST_PROCESSOR_TYPE_NAME));
+            }
         }
 
         // Check that we validate the module_controller.

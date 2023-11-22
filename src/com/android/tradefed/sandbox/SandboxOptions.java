@@ -52,6 +52,7 @@ public final class SandboxOptions {
     private static final String SANDBOX_PARTIAL_DOWNLOAD_CACHE =
             "sandbox-use-partial-download-cache";
     private static final String SANDBOX_SPLIT_DISCOVERY = "sandbox-split-discovery";
+    private static final String SANDBOX_PARALLEL_DOWNLOAD = "sandbox-parallel-download";
 
     @Option(
         name = TF_LOCATION,
@@ -165,7 +166,12 @@ public final class SandboxOptions {
     @Option(
             name = SANDBOX_SPLIT_DISCOVERY,
             description = "Enable setup where discovery is done independently.")
-    private boolean mUseSandboxSplitDiscovery = false;
+    private boolean mUseSandboxSplitDiscovery = true;
+
+    @Option(
+            name = SANDBOX_PARALLEL_DOWNLOAD,
+            description = "Enable parallel download during sandbox setup.")
+    private boolean mUseSandboxParallelDownload = true;
 
     /**
      * Returns the provided directories containing the Trade Federation version to use for
@@ -268,5 +274,10 @@ public final class SandboxOptions {
     /** Returns whether to use setup with independent discovery. */
     public boolean shouldUseSplitDiscovery() {
         return mUseSandboxSplitDiscovery;
+    }
+
+    /** Returns whether or not to use parallel download during setup. */
+    public boolean shouldUseParallelDownload() {
+        return mUseSandboxParallelDownload;
     }
 }

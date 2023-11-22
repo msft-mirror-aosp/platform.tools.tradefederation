@@ -23,7 +23,10 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.FileInputStreamSource;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -71,16 +74,20 @@ public class TestDiscoveryInvoker {
     private File mTestDir;
     private File mTestMappingZip;
     private IBuildInfo mBuildInfo;
+    private ITestLogger mLogger;
+
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
     public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
     public static final String TEST_MODULES_LIST_KEY = "TestModules";
     public static final String PARTIAL_FALLBACK_KEY = "PartialFallback";
+    public static final String NO_POSSIBLE_TEST_DISCOVERY_KEY = "NoPossibleTestDiscovery";
     public static final String TEST_MAPPING_ZIP_FILE = "TF_TEST_MAPPING_ZIP_FILE";
     public static final String ROOT_DIRECTORY_ENV_VARIABLE_KEY =
             "ROOT_TEST_DISCOVERY_USE_TEST_DIRECTORY";
 
     public static final String OUTPUT_FILE = "DISCOVERY_OUTPUT_FILE";
+    public static final String DISCOVERY_TRACE_FILE = "DISCOVERY_TRACE_FILE";
 
     private static final long DISCOVERY_TIMEOUT_MS = 120000L;
 
@@ -99,6 +106,11 @@ public class TestDiscoveryInvoker {
         return FileUtil.createTempFile("discovery-output", ".txt");
     }
 
+    @VisibleForTesting
+    File createTraceFile() throws IOException {
+        return FileUtil.createTempFile("discovery-trace", ".txt");
+    }
+
     public File getTestDir() {
         return mTestDir;
     }
@@ -113,6 +125,10 @@ public class TestDiscoveryInvoker {
 
     public void setBuildInfo(IBuildInfo buildInfo) {
         mBuildInfo = buildInfo;
+    }
+
+    public void setTestLogger(ITestLogger logger) {
+        mLogger = logger;
     }
 
     /** Creates an {@link TestDiscoveryInvoker} with a {@link IConfiguration} and root directory. */
@@ -160,6 +176,7 @@ public class TestDiscoveryInvoker {
     public Map<String, List<String>> discoverTestDependencies()
             throws IOException, JSONException, ConfigurationException, TestDiscoveryException {
         File outputFile = createOutputFile();
+        File traceFile = createTraceFile();
         try (CloseableTraceScope ignored = new CloseableTraceScope("discoverTestDependencies")) {
             Map<String, List<String>> dependencies = new HashMap<>();
             // Build the classpath base on test root directory which should contain all the jars
@@ -174,6 +191,7 @@ public class TestDiscoveryInvoker {
                                 ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
             }
             getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
+            getRunUtil().setEnvVariable(DISCOVERY_TRACE_FILE, traceFile.getAbsolutePath());
             CommandResult res = getRunUtil().runTimedCmd(DISCOVERY_TIMEOUT_MS, subprocessArgs);
             if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
                 DiscoveryExitCode exitCode = null;
@@ -206,9 +224,22 @@ public class TestDiscoveryInvoker {
                 result = stdout;
             }
 
+            boolean noDiscovery = hasNoPossibleDiscovery(result);
+            if (noDiscovery) {
+                dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
+            }
             List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+            if (!noDiscovery) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
+            }
             if (!testModules.isEmpty()) {
                 dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+            } else {
+                // Only report no finding if discovery actually took effect
+                if (!noDiscovery) {
+                    mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                }
             }
 
             List<String> testDependencies =
@@ -224,6 +255,11 @@ public class TestDiscoveryInvoker {
             return dependencies;
         } finally {
             FileUtil.deleteFile(outputFile);
+            try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
+                if (mLogger != null) {
+                    mLogger.testLog("discovery-trace", LogDataType.PERFETTO, source);
+                }
+            }
         }
     }
 
@@ -239,6 +275,7 @@ public class TestDiscoveryInvoker {
     public Map<String, List<String>> discoverTestMappingDependencies()
             throws IOException, JSONException, ConfigurationException, TestDiscoveryException {
         File outputFile = createOutputFile();
+        File traceFile = createTraceFile();
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("discoverTestMappingDependencies")) {
             List<String> fullCommandLineArgs =
@@ -296,6 +333,7 @@ public class TestDiscoveryInvoker {
                         .setEnvVariable(
                                 ROOT_DIRECTORY_ENV_VARIABLE_KEY, mRootDir.getAbsolutePath());
             }
+            getRunUtil().setEnvVariable(DISCOVERY_TRACE_FILE, traceFile.getAbsolutePath());
             getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
             CommandResult res = getRunUtil().runTimedCmd(DISCOVERY_TIMEOUT_MS, subprocessArgs);
             if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
@@ -311,9 +349,21 @@ public class TestDiscoveryInvoker {
 
             String result = FileUtil.readStringFromFile(outputFile);
 
+            boolean noDiscovery = hasNoPossibleDiscovery(result);
+            if (noDiscovery) {
+                dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
+            }
             List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+            if (!noDiscovery) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
+            }
             if (!testModules.isEmpty()) {
                 dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+            } else {
+                if (!noDiscovery) {
+                    mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                }
             }
             String partialFallback = parsePartialFallback(result);
             if (partialFallback != null) {
@@ -322,6 +372,11 @@ public class TestDiscoveryInvoker {
             return dependencies;
         } finally {
             FileUtil.deleteFile(outputFile);
+            try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
+                if (mLogger != null) {
+                    mLogger.testLog("discovery-trace", LogDataType.PERFETTO, source);
+                }
+            }
         }
     }
 
@@ -429,28 +484,30 @@ public class TestDiscoveryInvoker {
      * @throws IOException
      */
     private String buildTestMappingClasspath(File workingDir) throws IOException {
-        List<String> classpathList = new ArrayList<>();
+        try (CloseableTraceScope ignored = new CloseableTraceScope("build_classpath")) {
+            List<String> classpathList = new ArrayList<>();
 
-        if (!workingDir.exists()) {
-            throw new FileNotFoundException("Couldn't find the build directory");
-        }
-
-        if (workingDir.listFiles().length == 0) {
-            throw new FileNotFoundException(
-                    String.format(
-                            "Could not find any files under %s", workingDir.getAbsolutePath()));
-        }
-        for (File toolsFile : workingDir.listFiles()) {
-            if (toolsFile.getName().endsWith(".jar")) {
-                classpathList.add(toolsFile.getAbsolutePath());
+            if (!workingDir.exists()) {
+                throw new FileNotFoundException("Couldn't find the build directory");
             }
-        }
-        Collections.sort(classpathList);
-        if (mUseCurrentTradefed) {
-            classpathList.add(getCurrentClassPath());
-        }
 
-        return Joiner.on(":").join(classpathList);
+            if (workingDir.listFiles().length == 0) {
+                throw new FileNotFoundException(
+                        String.format(
+                                "Could not find any files under %s", workingDir.getAbsolutePath()));
+            }
+            for (File toolsFile : workingDir.listFiles()) {
+                if (toolsFile.getName().endsWith(".jar")) {
+                    classpathList.add(toolsFile.getAbsolutePath());
+                }
+            }
+            Collections.sort(classpathList);
+            if (mUseCurrentTradefed) {
+                classpathList.add(getCurrentClassPath());
+            }
+
+            return Joiner.on(":").join(classpathList);
+        }
     }
 
     private String getCurrentClassPath() {
@@ -513,11 +570,6 @@ public class TestDiscoveryInvoker {
                 testModules.add(jsonArray.getString(i));
             }
         }
-        InvocationMetricLogger.addInvocationMetrics(
-                InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
-        if (testModules.isEmpty()) {
-            mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
-        }
         return testModules;
     }
 
@@ -527,5 +579,13 @@ public class TestDiscoveryInvoker {
             return jsonObject.getString(PARTIAL_FALLBACK_KEY);
         }
         return null;
+    }
+
+    private boolean hasNoPossibleDiscovery(String discoveryOutput) throws JSONException {
+        JSONObject jsonObject = new JSONObject(discoveryOutput);
+        if (jsonObject.has(NO_POSSIBLE_TEST_DISCOVERY_KEY)) {
+            return true;
+        }
+        return false;
     }
 }

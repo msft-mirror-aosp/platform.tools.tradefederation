@@ -590,19 +590,20 @@ public class AdbSshConnection extends AdbTcpConnection {
     /**
      * Create command string
      *
-     * @param command to be run
+     * @param bin binary to use.
+     * @param args arguments passed for the binary.
      * @param user the host running user of AVD, <code>null</code> if not applicable.
      * @param offset the device num offset of the AVD in the host, <code>null</code> if not
      *     applicable
      * @return returns String of the command to be run
      */
-    String commandBuilder(String command, String user, Integer offset) {
-        String builtCommand = String.format("/home/%s/bin/%s", user, command);
+    String commandBuilder(String bin, String args, String user, Integer offset) {
+        String builtCommand = String.format("/home/%s/bin/%s %s", user, bin, args);
         if (offset != null) {
             builtCommand =
                     String.format(
-                            "HOME=/home/%s/acloud_cf_%d acloud_cf_%d/bin/%s -instance_num %d",
-                            user, offset + 1, offset + 1, command, offset + 1);
+                            "HOME=/home/%s/acloud_cf_%d acloud_cf_%d/bin/%s %s -instance_num %d",
+                            user, offset + 1, offset + 1, bin, args, offset + 1);
         }
 
         if (getDevice().getOptions().useOxygen()) {
@@ -612,15 +613,15 @@ public class AdbSshConnection extends AdbTcpConnection {
                             getDevice().getOptions(),
                             getRunUtil(),
                             10000L,
-                            String.format("toybox find /tmp -name %s", command).split(" "));
+                            String.format("toybox find /tmp -name %s", bin).split(" "));
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                CLog.e("Failed to locate %s: %s", command, result.getStderr());
+                CLog.e("Failed to locate %s: %s", bin, result.getStderr());
                 return "";
             }
-            String commandPath = result.getStdout();
+            String commandPath = result.getStdout().trim();
             // Remove tailing `/bin/COMMAND`
-            String tmpDir = commandPath.substring(0, commandPath.length() - (command.length() + 5));
-            builtCommand = String.format("HOME=%s %s", tmpDir, commandPath);
+            String tmpDir = commandPath.substring(0, commandPath.length() - (bin.length() + 5));
+            builtCommand = String.format("HOME=%s %s %s", tmpDir, commandPath, args);
         }
         return builtCommand;
     }
@@ -652,8 +653,9 @@ public class AdbSshConnection extends AdbTcpConnection {
 
         String snapshotCommand =
                 commandBuilder(
+                        "cvd",
                         String.format(
-                                "cvd snapshot_take --snapshot_path=/tmp/%s/snapshots/%s",
+                                "snapshot_take --snapshot_path=/tmp/%s/snapshots/%s",
                                 user, snapshotId),
                         user,
                         offset);
@@ -671,7 +673,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getRunUtil(),
                         // TODO(khei): explore shorter timeouts.
                         Math.max(30000L, getDevice().getOptions().getGceCmdTimeout()),
-                        snapshotCommand);
+                        snapshotCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(snapshotRes.getStatus())) {
             // Time taken for snapshot this invocation
@@ -686,7 +688,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     InvocationMetricKey.DEVICE_SNAPSHOT_FAILURE_COUNT, 1);
             CLog.e("%s", snapshotRes.getStderr());
             throw new TargetSetupError(
-                    "failed to snapshot device",
+                    String.format("failed to snapshot device: %s", snapshotRes.getStderr()),
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_SNAPSHOT);
         }
@@ -711,7 +713,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             user = getDevice().getOptions().getInstanceUser();
         }
 
-        String suspendCommand = commandBuilder("cvd suspend", user, offset);
+        String suspendCommand = commandBuilder("cvd", "suspend", user, offset);
         if (suspendCommand.length() == 0) {
             throw new TargetSetupError(
                     "failed to set up suspend command, invalid path",
@@ -726,7 +728,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getRunUtil(),
                         // TODO(khei): explore shorter timeouts.
                         Math.max(30000L, getDevice().getOptions().getGceCmdTimeout()),
-                        suspendCommand);
+                        suspendCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(suspendRes.getStatus())) {
             // Time taken for suspend this invocation
@@ -741,7 +743,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     InvocationMetricKey.DEVICE_SUSPEND_FAILURE_COUNT, 1);
             CLog.e("%s", suspendRes.getStderr());
             throw new TargetSetupError(
-                    "failed to suspend device",
+                    String.format("failed to suspend device: %s", suspendRes.getStderr()),
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_SUSPEND);
         }
@@ -766,7 +768,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             user = getDevice().getOptions().getInstanceUser();
         }
 
-        String resumeCommand = commandBuilder("cvd resume", user, offset);
+        String resumeCommand = commandBuilder("cvd", "resume", user, offset);
         if (resumeCommand.length() == 0) {
             throw new TargetSetupError(
                     "failed to set up resume command, invalid path",
@@ -780,7 +782,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getOptions(),
                         getRunUtil(),
                         Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        resumeCommand);
+                        resumeCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(resumeRes.getStatus())) {
             // Time taken for resume this invocation
@@ -795,7 +797,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     InvocationMetricKey.DEVICE_RESUME_FAILURE_COUNT, 1);
             CLog.e("%s", resumeRes.getStderr());
             throw new TargetSetupError(
-                    "failed to resume device",
+                    String.format("failed to resume device: %s", resumeRes.getStderr()),
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_RESUME);
         }
@@ -824,8 +826,9 @@ public class AdbSshConnection extends AdbTcpConnection {
 
         String restoreCommand =
                 commandBuilder(
+                        "cvd",
                         String.format(
-                                "cvd start --snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
+                                "start --snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
                         user,
                         offset);
         if (restoreCommand.length() == 0) {
@@ -841,7 +844,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getOptions(),
                         getRunUtil(),
                         Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        restoreCommand);
+                        restoreCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
             // Time taken for restore this invocation
@@ -856,7 +859,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT, 1);
             CLog.e("%s", restoreRes.getStderr());
             throw new TargetSetupError(
-                    "failed to restore device",
+                    String.format("failed to restore device: %s", restoreRes.getStderr()),
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
         }
@@ -881,7 +884,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             user = getDevice().getOptions().getInstanceUser();
         }
 
-        String stopCommand = commandBuilder("cvd stop", user, offset);
+        String stopCommand = commandBuilder("cvd", "stop", user, offset);
         if (stopCommand.length() == 0) {
             throw new TargetSetupError(
                     "failed to set up stop command, invalid path",
@@ -895,7 +898,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getOptions(),
                         getRunUtil(),
                         Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        stopCommand);
+                        stopCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(stopRes.getStatus())) {
             // Time taken for stop this invocation

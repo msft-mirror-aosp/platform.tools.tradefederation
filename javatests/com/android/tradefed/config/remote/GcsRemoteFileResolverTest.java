@@ -139,10 +139,16 @@ public class GcsRemoteFileResolverTest {
                     .fetchTestResource(Mockito.any(), Mockito.eq("gs:/fake/file"));
             Map<String, String> query = new HashMap<>();
             query.put(DynamicRemoteFileResolver.UNZIP_KEY, /* Case doesn't matter */ "TrUe");
+            query.put(
+                    DynamicRemoteFileResolver.OPTION_PARALLEL_KEY, /* Case doesn't matter */
+                    "false");
             RemoteFileResolverArgs args = new RemoteFileResolverArgs();
             args.setConsideredFile(new File("gs:/fake/file")).addQueryArgs(query);
             ResolvedFile resolvedFile = mResolver.resolveRemoteFile(args);
             file = resolvedFile.getResolvedFile();
+            if (file instanceof ExtendedFile) {
+                ((ExtendedFile) file).waitForDownload();
+            }
 
             // File was unzipped
             assertTrue(file.isDirectory());
@@ -174,15 +180,58 @@ public class GcsRemoteFileResolverTest {
                     .fetchTestResource(Mockito.any(), Mockito.eq("gs:/fake/file"));
             Map<String, String> query = new HashMap<>();
             query.put(DynamicRemoteFileResolver.UNZIP_KEY, /* Case doesn't matter */ "TrUe");
+            query.put(
+                    DynamicRemoteFileResolver.OPTION_PARALLEL_KEY, /* Case doesn't matter */
+                    "false");
             RemoteFileResolverArgs args = new RemoteFileResolverArgs();
             args.setConsideredFile(new File("gs:/fake/file")).addQueryArgs(query);
-            ResolvedFile resFile = mResolver.resolveRemoteFile(args);
+            mResolver.resolveRemoteFile(args);
             fail("Should have thrown an exception");
         } catch (BuildRetrievalError expected) {
             // Expected
             assertTrue(expected.getMessage().contains("not a valid zip."));
         } finally {
             FileUtil.deleteFile(testFile);
+        }
+        Mockito.verify(mMockHelper, times(1))
+                .fetchTestResource(Mockito.any(), Mockito.eq("gs:/fake/file"));
+    }
+
+    /** Test that if we request to unzip a non-zip file it throws an exception. */
+    @Test
+    public void testResolve_notZip_parallel() throws Exception {
+        File testFile = FileUtil.createTempFile("test-resolve-file", ".txt");
+        FileUtil.writeToFile("some non zip content", testFile);
+        File downloadedFile = null;
+        try {
+            doAnswer(
+                            invocation -> {
+                                File destFile = (File) invocation.getArgument(0);
+                                FileUtil.hardlinkFile(testFile, destFile);
+                                FileUtil.deleteFile(testFile);
+                                return null;
+                            })
+                    .when(mMockHelper)
+                    .fetchTestResource(Mockito.any(), Mockito.eq("gs:/fake/file"));
+            Map<String, String> query = new HashMap<>();
+            query.put(DynamicRemoteFileResolver.UNZIP_KEY, /* Case doesn't matter */ "TrUe");
+            query.put(
+                    DynamicRemoteFileResolver.OPTION_PARALLEL_KEY, /* Case doesn't matter */
+                    "true");
+            RemoteFileResolverArgs args = new RemoteFileResolverArgs();
+            args.setConsideredFile(new File("gs:/fake/file")).addQueryArgs(query);
+            ResolvedFile resolvedFile = mResolver.resolveRemoteFile(args);
+            downloadedFile = resolvedFile.getResolvedFile();
+            if (downloadedFile instanceof ExtendedFile) {
+                ((ExtendedFile) downloadedFile).waitForDownload();
+            }
+            fail("Should have thrown an exception");
+        } catch (BuildRetrievalError expected) {
+            // Expected
+            assertTrue(expected.getMessage().contains("zip"));
+        } finally {
+            FileUtil.deleteFile(testFile);
+            FileUtil.recursiveDelete(downloadedFile);
         }
         Mockito.verify(mMockHelper, times(1))
                 .fetchTestResource(Mockito.any(), Mockito.eq("gs:/fake/file"));

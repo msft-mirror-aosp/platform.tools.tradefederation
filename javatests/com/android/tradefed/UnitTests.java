@@ -27,6 +27,9 @@ import com.android.tradefed.build.FileDownloadCacheTest;
 import com.android.tradefed.build.LocalDeviceBuildProviderTest;
 import com.android.tradefed.build.OtaZipfileBuildProviderTest;
 import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
+import com.android.tradefed.build.content.ArtifactDetailsTest;
+import com.android.tradefed.build.content.ContentAnalysisResultsTest;
+import com.android.tradefed.build.content.TestContentAnalyzerTest;
 import com.android.tradefed.cache.ModifiedFilesParserTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
@@ -200,6 +203,7 @@ import com.android.tradefed.result.FileSystemLogSaverTest;
 import com.android.tradefed.result.InvocationToJUnitResultForwarderTest;
 import com.android.tradefed.result.JUnitToInvocationResultForwarderTest;
 import com.android.tradefed.result.JsonHttpTestResultReporterTest;
+import com.android.tradefed.result.LUCIResultReporterTest;
 import com.android.tradefed.result.LegacySubprocessResultsReporterTest;
 import com.android.tradefed.result.LogFileSaverTest;
 import com.android.tradefed.result.LogcatCrashResultForwarderTest;
@@ -341,6 +345,8 @@ import com.android.tradefed.testtype.TfTestLauncherTest;
 import com.android.tradefed.testtype.UsbResetTestTest;
 import com.android.tradefed.testtype.binary.ExecutableHostTestTest;
 import com.android.tradefed.testtype.binary.ExecutableTargetTestTest;
+import com.android.tradefed.testtype.binary.KTapResultParserTest;
+import com.android.tradefed.testtype.binary.KernelTargetTestTest;
 import com.android.tradefed.testtype.host.CoverageMeasurementForwarderTest;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4TestTest;
 import com.android.tradefed.testtype.junit4.DeviceParameterizedRunnerTest;
@@ -376,6 +382,7 @@ import com.android.tradefed.testtype.suite.module.ArchModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.BaseModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.CarModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.DeviceFeatureModuleControllerTest;
+import com.android.tradefed.testtype.suite.module.KernelTestModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.MaxSdkModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.MinApiLevelModuleControllerTest;
 import com.android.tradefed.testtype.suite.module.NativeBridgeModuleControllerTest;
@@ -506,6 +513,11 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // build.cache
     PartialZipDownloadCacheTest.class,
+
+    // build.content
+    ArtifactDetailsTest.class,
+    ContentAnalysisResultsTest.class,
+    TestContentAnalyzerTest.class,
 
     // cache
     ModifiedFilesParserTest.class,
@@ -745,6 +757,7 @@ import org.junit.runners.Suite.SuiteClasses;
     LocalRunInstructionBuilderTest.class,
     LogcatCrashResultForwarderTest.class,
     LogFileSaverTest.class,
+    LUCIResultReporterTest.class,
     MetricsXMLResultReporterTest.class,
     MultiFailureDescriptionTest.class,
     SnapshotInputStreamSourceTest.class,
@@ -919,6 +932,8 @@ import org.junit.runners.Suite.SuiteClasses;
     // testtype/binary
     ExecutableHostTestTest.class,
     ExecutableTargetTestTest.class,
+    KernelTargetTestTest.class,
+    KTapResultParserTest.class,
 
     // testtype/junit4
     BaseHostJUnit4TestTest.class,
@@ -965,6 +980,7 @@ import org.junit.runners.Suite.SuiteClasses;
     BaseModuleControllerTest.class,
     CarModuleControllerTest.class,
     DeviceFeatureModuleControllerTest.class,
+    KernelTestModuleControllerTest.class,
     MaxSdkModuleControllerTest.class,
     MinApiLevelModuleControllerTest.class,
     NativeBridgeModuleControllerTest.class,

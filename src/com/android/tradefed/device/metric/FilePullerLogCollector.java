@@ -57,6 +57,8 @@ public class FilePullerLogCollector extends FilePullerDeviceMetricCollector {
                 } else if (".textproto".equals(ext)
                         && FileUtil.getBaseName(metricFile.getName()).contains("_goldResult")) {
                     type = LogDataType.GOLDEN_RESULT_PROTO;
+                } else if (".log".equals(ext)) {
+                    type = LogDataType.BT_SNOOP_LOG;
                 }
                 testLog(FileUtil.getBaseName(metricFile.getName()), type, source);
             }

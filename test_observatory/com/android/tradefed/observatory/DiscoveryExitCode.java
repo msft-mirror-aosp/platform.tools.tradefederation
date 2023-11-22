@@ -19,6 +19,7 @@ package com.android.tradefed.observatory;
 public enum DiscoveryExitCode {
     SUCCESS(0),
     COMPONENT_METADATA(5),
+    NO_DISCOVERY_POSSIBLE(6), // When the command doesn't have any properties useful for discovery.
     ERROR(1);
 
     private final int code;

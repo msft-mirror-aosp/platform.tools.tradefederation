@@ -43,6 +43,8 @@ import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.BinaryState;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 
 import org.junit.After;
@@ -1547,6 +1549,16 @@ public class DeviceSetupTest {
         when(mMockDevice.getProperty("ro.audio.silent")).thenReturn("1");
         when(mMockDevice.getProperty("ro.test_harness")).thenReturn("1");
         when(mMockDevice.getProperty("ro.monkey")).thenReturn("1");
+        CommandResult successResult = new CommandResult();
+        successResult.setStatus(CommandStatus.SUCCESS);
+        successResult.setStdout("");
+        when(mMockDevice.executeShellV2Command(
+                        "am start -a com.android.setupwizard.FOUR_CORNER_EXIT"))
+                .thenReturn(successResult);
+        when(mMockDevice.executeShellV2Command("am start -a com.android.setupwizard.EXIT"))
+                .thenReturn(successResult);
+        when(mMockDevice.executeShellV2Command("dumpsys window displays | grep mCurrentFocus"))
+                .thenReturn(successResult);
     }
 
     /** Perform common EasyMock expect operations for a setUp call which syncs local data */

@@ -143,6 +143,11 @@ public class InvocationMetricLogger {
         RETRY_TEST_SKIPPED_COUNT("retry_test_skipped_count", true),
         RETRY_SKIPPED_ALL_FILTERED_COUNT("retry_skipped_all_filtered_count", true),
 
+        // Track dynamic sharding total request latency
+        DYNAMIC_SHARDING_REQUEST_LATENCY("dynamic-sharding-request-latency", true),
+        // Track dynamic sharding total request count
+        DYNAMIC_SHARDING_REQUEST_COUNT("dynamic-sharding-request-count", true),
+
         // The time spent inside metric collectors
         COLLECTOR_TIME("collector_time_ms", true),
         // Track if soft restart is occurring after test module
@@ -293,6 +298,11 @@ public class InvocationMetricLogger {
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
         PURE_DEVICE_IMAGE_UNCHANGED("pure_device_image_unchanged", true),
         TEST_ARTIFACT_CHANGE_ONLY("test_artifact_change_only", true),
+        XTS_DIFFS_IN_COMMON("xts_diffs_in_common", true),
+        XTS_MODULE_WITH_DIFFS("xts_module_with_diffs", true),
+        XTS_UNCHANGED_MODULES("xts_unchanged_modules", true),
+        FILE_WITH_DIFFS("file_with_diffs", true),
+        UNCHANGED_FILE("unchanged_file", true),
 
         POWERWASH_TIME("powerwash_time_ms", true),
         POWERWASH_SUCCESS_COUNT("powerwash_success_count", true),
@@ -309,6 +319,10 @@ public class InvocationMetricLogger {
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
+        CONTENT_BASED_ANALYSIS_ATTEMPT("content_based_analysis_attempt", true),
+        SKIP_NO_TESTS_DISCOVERED("skip_no_tests_discovered", true),
+        SKIP_NO_CHANGES("skip_no_changes", true),
+        NO_CHANGES_POSTSUBMIT("no_changes_postsubmit", true),
         SILENT_INVOCATION_SKIP_COUNT("silent_invocation_skip_count", true),
         DEMOTION_FILTERS_RECEIVED_COUNT("demotion_filters_received_count", true),
         DEMOTION_ERROR_RESPONSE("demotion_error_response", true),
@@ -369,6 +383,7 @@ public class InvocationMetricLogger {
 
         INCREMENTAL_FLASHING_PATCHES_SIZE("incremental-flashing-patches-size", true),
         INCREMENTAL_FLASHING_TARGET_SIZE("incremental-flashing-target-size", true);
+
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.

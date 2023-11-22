@@ -105,7 +105,27 @@ public class OxygenUtil {
                                             Pattern.compile("^launcher\\.log.*"),
                                             Pair.create(
                                                     "failed to read from socket, retry",
-                                                    "rootcanal_socket_error")))
+                                                    "rootcanal_socket_error")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    "VIRTUAL_DEVICE_BOOT_PENDING: Bluetooth",
+                                                    "bluetooth_pending")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    "another cuttlefish device already running",
+                                                    "another_device_running")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    "Setup failed for cuttlefish::ConfigServer",
+                                                    "config_server_failed")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^logcat.*"),
+                                            Pair.create(
+                                                    "System zygote died with fatal exception",
+                                                    "zygote_fatal_exception")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /** Default constructor of OxygenUtil */
