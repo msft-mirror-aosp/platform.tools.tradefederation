@@ -546,17 +546,11 @@ public class AdbSshConnectionTest {
         String snapshotId = "snapshot_user1";
         OptionSetter setter = new OptionSetter(mOptions);
         setter.setOptionValue("instance-user", instanceUser);
-        String suspendCommand = String.format("/home/%s/bin/cvd suspend", instanceUser);
-        String snapshotCommand =
-                String.format(
-                        "/home/%s/bin/cvd snapshot_take" + " --snapshot_path=/tmp/%s/snapshots/%s",
-                        instanceUser, instanceUser, snapshotId);
-        String resumeCommand = String.format("/home/%s/bin/cvd resume", instanceUser);
-        String stopCommand = String.format("/home/%s/bin/cvd stop", instanceUser);
-        String restoreSnapshotCommand =
-                String.format(
-                        "/home/%s/bin/cvd start --snapshot_path=/tmp/%s/snapshots/%s",
-                        instanceUser, instanceUser, snapshotId);
+        String cvdBin = String.format("/home/%s/bin/cvd", instanceUser);
+        String snapshotCommandPath =
+                String.format("--snapshot_path=/tmp/%s/snapshots/%s", instanceUser, snapshotId);
+        String restoreSnapshotCommandPath =
+                String.format("--snapshot_path=/tmp/%s/snapshots/%s", instanceUser, snapshotId);
         String avdConnectHost = String.format("%s@127.0.0.1", instanceUser);
         GceAvdInfo gceAvd =
                 new GceAvdInfo(
@@ -596,7 +590,8 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-i"),
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
-                        Mockito.eq(suspendCommand)))
+                        Mockito.eq(cvdBin),
+                        Mockito.eq("suspend")))
                 .thenReturn(suspendCmdResult);
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
@@ -614,7 +609,9 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-i"),
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
-                        Mockito.eq(snapshotCommand)))
+                        Mockito.eq(cvdBin),
+                        Mockito.eq("snapshot_take"),
+                        Mockito.eq(snapshotCommandPath)))
                 .thenReturn(snapshotCmdResult);
         // Make sure the instance resumes
         when(mMockRunUtil.runTimedCmd(
@@ -633,7 +630,8 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-i"),
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
-                        Mockito.eq(resumeCommand)))
+                        Mockito.eq(cvdBin),
+                        Mockito.eq("resume")))
                 .thenReturn(resumeCmdResult);
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
@@ -651,7 +649,8 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-i"),
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
-                        Mockito.eq(stopCommand)))
+                        Mockito.eq(cvdBin),
+                        Mockito.eq("stop")))
                 .thenReturn(stopCmdResult);
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
@@ -669,7 +668,9 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-i"),
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
-                        Mockito.eq(restoreSnapshotCommand)))
+                        Mockito.eq(cvdBin),
+                        Mockito.eq("start"),
+                        Mockito.eq(restoreSnapshotCommandPath)))
                 .thenReturn(restoreSnapshotCmdResult);
         when(mMockMonitor.waitForDeviceAvailable(Mockito.anyLong())).thenReturn(mMockIDevice);
         when(mMockIDevice.getState()).thenReturn(DeviceState.ONLINE);

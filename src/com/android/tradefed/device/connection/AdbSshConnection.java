@@ -618,7 +618,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 CLog.e("Failed to locate %s: %s", bin, result.getStderr());
                 return "";
             }
-            String commandPath = result.getStdout();
+            String commandPath = result.getStdout().trim();
             // Remove tailing `/bin/COMMAND`
             String tmpDir = commandPath.substring(0, commandPath.length() - (bin.length() + 5));
             builtCommand = String.format("HOME=%s %s %s", tmpDir, commandPath, args);
@@ -673,7 +673,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getRunUtil(),
                         // TODO(khei): explore shorter timeouts.
                         Math.max(30000L, getDevice().getOptions().getGceCmdTimeout()),
-                        snapshotCommand);
+                        snapshotCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(snapshotRes.getStatus())) {
             // Time taken for snapshot this invocation
@@ -688,7 +688,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     InvocationMetricKey.DEVICE_SNAPSHOT_FAILURE_COUNT, 1);
             CLog.e("%s", snapshotRes.getStderr());
             throw new TargetSetupError(
-                    "failed to snapshot device",
+                    String.format("failed to snapshot device: %s", snapshotRes.getStderr()),
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_SNAPSHOT);
         }
@@ -728,7 +728,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getRunUtil(),
                         // TODO(khei): explore shorter timeouts.
                         Math.max(30000L, getDevice().getOptions().getGceCmdTimeout()),
-                        suspendCommand);
+                        suspendCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(suspendRes.getStatus())) {
             // Time taken for suspend this invocation
@@ -743,7 +743,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     InvocationMetricKey.DEVICE_SUSPEND_FAILURE_COUNT, 1);
             CLog.e("%s", suspendRes.getStderr());
             throw new TargetSetupError(
-                    "failed to suspend device",
+                    String.format("failed to suspend device: %s", suspendRes.getStderr()),
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_SUSPEND);
         }
@@ -782,7 +782,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getOptions(),
                         getRunUtil(),
                         Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        resumeCommand);
+                        resumeCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(resumeRes.getStatus())) {
             // Time taken for resume this invocation
@@ -797,7 +797,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     InvocationMetricKey.DEVICE_RESUME_FAILURE_COUNT, 1);
             CLog.e("%s", resumeRes.getStderr());
             throw new TargetSetupError(
-                    "failed to resume device",
+                    String.format("failed to resume device: %s", resumeRes.getStderr()),
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_RESUME);
         }
@@ -844,7 +844,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getOptions(),
                         getRunUtil(),
                         Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        restoreCommand);
+                        restoreCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
             // Time taken for restore this invocation
@@ -859,7 +859,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT, 1);
             CLog.e("%s", restoreRes.getStderr());
             throw new TargetSetupError(
-                    "failed to restore device",
+                    String.format("failed to restore device: %s", restoreRes.getStderr()),
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
         }
@@ -898,7 +898,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getOptions(),
                         getRunUtil(),
                         Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        stopCommand);
+                        stopCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(stopRes.getStatus())) {
             // Time taken for stop this invocation

@@ -2178,9 +2178,9 @@ public class NativeDeviceTest {
             doReturn(fakeCreationTime)
                     .when(spy)
                     .executeShellCommand(
-                            "date -d \"$(date +%Y:%m:%e):"
+                            "date -d \"$(date +%Y:%m:%d):"
                                     + "12:07:32"
-                                    + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+                                    + "\" +%s -D \"%Y:%m:%d:%H:%M:%S\"");
         } else {
             doReturn(fakeCreationTime).when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         }
