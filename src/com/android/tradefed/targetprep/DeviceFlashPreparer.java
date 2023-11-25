@@ -349,8 +349,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                             flashingTime, status);
                 }
             }
-            // only want logcat captured for current build, delete any accumulated log data
-            device.clearLogcat();
+            if (mIncrementalImageUtil == null) {
+                // only want logcat captured for current build, delete any accumulated log data
+                device.clearLogcat();
+            }
             if (mSkipPostFlashingSetup) {
                 return;
             }
