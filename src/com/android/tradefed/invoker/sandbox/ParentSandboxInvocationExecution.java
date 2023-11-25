@@ -115,7 +115,7 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                         InfraErrorIdentifier.SANDBOX_SETUP_ERROR);
             }
             if (res && e == null) {
-                getSandbox(config).discoverTests(testInfo.getContext(), config);
+                getSandbox(config).discoverTests(testInfo.getContext(), config, listener);
             }
         }
         return res;
