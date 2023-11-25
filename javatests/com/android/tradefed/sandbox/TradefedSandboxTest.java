@@ -307,7 +307,10 @@ public class TradefedSandboxTest {
 
             File res =
                     mSandbox.getTradefedSandboxEnvironment(
-                            mMockContext, mMockConfig, new String[] {"empty", "--arg", "1"});
+                            mMockContext,
+                            mMockConfig,
+                            mMockListener,
+                            new String[] {"empty", "--arg", "1"});
             assertEquals(tmpDir, res);
         } finally {
             FileUtil.recursiveDelete(tmpDir);
@@ -332,7 +335,10 @@ public class TradefedSandboxTest {
 
             try {
                 mSandbox.getTradefedSandboxEnvironment(
-                        mMockContext, mMockConfig, new String[] {"empty", "--arg", "1"});
+                        mMockContext,
+                        mMockConfig,
+                        mMockListener,
+                        new String[] {"empty", "--arg", "1"});
                 fail("Should have thrown an exception.");
             } catch (ConfigurationException expected) {
                 assertEquals(
