@@ -36,6 +36,7 @@ import org.junit.runners.JUnit4;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 
 /** Unit tests for {@link TestContentAnalyzer}. */
 @RunWith(JUnit4.class)
@@ -71,7 +72,7 @@ public class TestContentAnalyzerTest {
                             "mydevice-tests-P8888.zip", contentInfo, AnalysisMethod.FILE);
 
             TestContentAnalyzer analyzer =
-                    new TestContentAnalyzer(mTestInformation, analysisContext);
+                    new TestContentAnalyzer(mTestInformation, Arrays.asList(analysisContext));
             ContentAnalysisResults results = analyzer.evaluate();
             assertNotNull(results);
             assertTrue(results.hasAnyTestsChange());
@@ -96,7 +97,7 @@ public class TestContentAnalyzerTest {
                             "mydevice-tests-P8888.zip", contentInfo, AnalysisMethod.FILE);
 
             TestContentAnalyzer analyzer =
-                    new TestContentAnalyzer(mTestInformation, analysisContext);
+                    new TestContentAnalyzer(mTestInformation, Arrays.asList(analysisContext));
             ContentAnalysisResults results = analyzer.evaluate();
             assertNotNull(results);
             assertFalse(results.hasAnyTestsChange());
@@ -127,7 +128,7 @@ public class TestContentAnalyzerTest {
                             "android-cts.zip", contentInfo, AnalysisMethod.MODULE_XTS);
 
             TestContentAnalyzer analyzer =
-                    new TestContentAnalyzer(mTestInformation, analysisContext);
+                    new TestContentAnalyzer(mTestInformation, Arrays.asList(analysisContext));
             ContentAnalysisResults results = analyzer.evaluate();
             assertNotNull(results);
             assertTrue(results.hasAnyTestsChange());
@@ -156,7 +157,7 @@ public class TestContentAnalyzerTest {
                             "android-cts.zip", contentInfo, AnalysisMethod.MODULE_XTS);
 
             TestContentAnalyzer analyzer =
-                    new TestContentAnalyzer(mTestInformation, analysisContext);
+                    new TestContentAnalyzer(mTestInformation, Arrays.asList(analysisContext));
             ContentAnalysisResults results = analyzer.evaluate();
             assertNotNull(results);
             assertFalse(results.hasAnyTestsChange());
