@@ -18,6 +18,7 @@ package com.android.tradefed.util.testmapping;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.observatory.TestDiscoveryInvoker;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -612,7 +613,7 @@ public class TestMapping {
      */
     public static File extractTestMappingsZip(File testMappingsZip) {
         File testMappingsDir = null;
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("extractTestMappingsZip")) {
             testMappingsDir = ZipUtil2.extractZipToTemp(testMappingsZip, TEST_MAPPINGS_ZIP);
         } catch (IOException e) {
             throw new RuntimeException(
