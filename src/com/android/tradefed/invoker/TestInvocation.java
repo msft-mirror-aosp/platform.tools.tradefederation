@@ -1123,6 +1123,7 @@ public class TestInvocation implements ITestInvocation {
             if (decision instanceof ITestInformationReceiver) {
                 ((ITestInformationReceiver) decision).setTestInformation(info);
             }
+            config.getLogSaver().init(context);
             // We don't need the aggregator in the subprocess because the parent will take care of
             // it.
             if (!config.getCommandOptions()
