@@ -35,8 +35,10 @@ import com.android.tradefed.util.IDisableable;
 import com.proto.tradefed.feature.FeatureResponse;
 import com.proto.tradefed.feature.PartResponse;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -71,7 +73,7 @@ public class SkipManager implements IDisableable {
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
 
     private boolean mNoTestsDiscovered = false;
-    private ContentAnalysisContext mTestArtifactsAnalysisContent;
+    private List<ContentAnalysisContext> mTestArtifactsAnalysisContent = new ArrayList<>();
 
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
@@ -94,7 +96,7 @@ public class SkipManager implements IDisableable {
 
     public void setTestArtifactsAnalysis(ContentAnalysisContext analysisContext) {
         CLog.d("Received test artifact analysis.");
-        mTestArtifactsAnalysisContent = analysisContext;
+        mTestArtifactsAnalysisContent.add(analysisContext);
     }
 
     /**
@@ -163,7 +165,7 @@ public class SkipManager implements IDisableable {
         }
         // Do the analysis regardless
         if (results.hasTestsArtifacts()) {
-            if (mTestArtifactsAnalysisContent == null) {
+            if (mTestArtifactsAnalysisContent.isEmpty()) {
                 return false;
             } else {
                 try (CloseableTraceScope ignored = new CloseableTraceScope("TestContentAnalyzer")) {
@@ -208,9 +210,10 @@ public class SkipManager implements IDisableable {
     public void clearManager() {
         mDemotionFilters.clear();
         mDemotionFilterOption.clear();
-        if (mTestArtifactsAnalysisContent != null
-                && mTestArtifactsAnalysisContent.contentInformation() != null) {
-            mTestArtifactsAnalysisContent.contentInformation().clean();
+        for (ContentAnalysisContext request : mTestArtifactsAnalysisContent) {
+            if (request.contentInformation() != null) {
+                request.contentInformation().clean();
+            }
         }
     }
 
