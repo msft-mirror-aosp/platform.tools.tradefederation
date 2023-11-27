@@ -1123,6 +1123,8 @@ public class TestInvocation implements ITestInvocation {
             if (decision instanceof ITestInformationReceiver) {
                 ((ITestInformationReceiver) decision).setTestInformation(info);
             }
+            updateInvocationContext(context, config);
+            CurrentInvocation.setInvocationContext(context);
             config.getLogSaver().init(context);
             // We don't need the aggregator in the subprocess because the parent will take care of
             // it.
@@ -1178,8 +1180,6 @@ public class TestInvocation implements ITestInvocation {
             }
         }
         IInvocationExecution invocationPath = createInvocationExec(mode);
-        updateInvocationContext(context, config);
-        CurrentInvocation.setInvocationContext(context);
 
         boolean sharding = false;
         try {
