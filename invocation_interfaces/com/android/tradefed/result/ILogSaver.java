@@ -33,6 +33,16 @@ import java.io.InputStream;
 public interface ILogSaver {
 
     /**
+     * Early notification of initialization, before any build information are available. This allows
+     * to setup any requirements to receive logs.
+     *
+     * @param context information about the invocation.
+     */
+    public default void init(IInvocationContext context) {
+        // Empty by default
+    }
+
+    /**
      * Reports the start of the test invocation.
      * <p>
      * Will be automatically called by the TradeFederation framework before

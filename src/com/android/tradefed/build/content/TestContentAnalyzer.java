@@ -25,14 +25,19 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetr
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 
+import com.google.common.collect.ImmutableMap;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -40,12 +45,19 @@ import java.util.stream.Stream;
 /** The analyzer takes context for the analysis and determine what is interesting. */
 public class TestContentAnalyzer {
 
-    private final TestInformation information;
-    private final ContentAnalysisContext context;
+    private static final Map<String, List<String>> WORKDIR_COMMON_DIR =
+            ImmutableMap.of(
+                    "host-unit-tests.zip",
+                    Arrays.asList("host/testcases/lib/", "host/testcases/lib64/"),
+                    "robolectric-tests.zip",
+                    Arrays.asList("host/testcases/android-all/"));
 
-    public TestContentAnalyzer(TestInformation information, ContentAnalysisContext context) {
+    private final TestInformation information;
+    private final List<ContentAnalysisContext> contexts;
+
+    public TestContentAnalyzer(TestInformation information, List<ContentAnalysisContext> contexts) {
         this.information = information;
-        this.context = context;
+        this.contexts = contexts;
     }
 
     public ContentAnalysisResults evaluate() {
@@ -55,12 +67,14 @@ public class TestContentAnalyzer {
         }
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.CONTENT_BASED_ANALYSIS_ATTEMPT, 1);
-        AnalysisMethod method = context.analysisMethod();
+        AnalysisMethod method = contexts.get(0).analysisMethod();
         switch (method) {
             case MODULE_XTS:
-                return xtsAnalysis(information.getBuildInfo(), context);
+                return xtsAnalysis(information.getBuildInfo(), contexts.get(0));
             case FILE:
-                return fileAnalysis(information.getBuildInfo(), context);
+                return fileAnalysis(information.getBuildInfo(), contexts.get(0));
+            case SANDBOX_WORKDIR:
+                return workdirAnalysis(information.getBuildInfo(), contexts);
             default:
                 // do nothing for the rest for now.
                 return null;
@@ -189,6 +203,100 @@ public class TestContentAnalyzer {
                 InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.FILE_WITH_DIFFS, 1);
                 results.addModifiedFile();
             }
+        }
+        return results;
+    }
+
+    private ContentAnalysisResults workdirAnalysis(
+            IBuildInfo build, List<ContentAnalysisContext> contexts) {
+        if (build.getFile(BuildInfoFileKey.TESTDIR_IMAGE) == null) {
+            CLog.w("Mismatch: we would expect a testsdir directory for workdir analysis");
+            return null;
+        }
+        File testsDirRoot = build.getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        ContentAnalysisResults results = new ContentAnalysisResults();
+        List<ArtifactFileDescriptor> diffs = new ArrayList<>();
+        List<String> entryNames = new ArrayList<>();
+        for (ContentAnalysisContext context : contexts) {
+            List<ArtifactFileDescriptor> diff =
+                    analyzeContentDiff(context.contentInformation(), context.contentEntry());
+            if (diff == null) {
+                CLog.w("Analysis failed.");
+                return null;
+            }
+            entryNames.add(context.contentEntry());
+            diffs.addAll(diff);
+        }
+        List<String> AllCommonDirs = new ArrayList<>();
+        // Obtain common dirs for situation
+        for (String entry : entryNames) {
+            List<String> commonDirs = WORKDIR_COMMON_DIR.get(entry);
+            if (commonDirs == null) {
+                CLog.w(
+                        "Did not find a common dir for %s, we might not support this analysis yet.",
+                        entry);
+                return null;
+            }
+            AllCommonDirs.addAll(commonDirs);
+        }
+        Set<String> diffPaths = diffs.parallelStream().map(d -> d.path).collect(Collectors.toSet());
+        // Check common dirs
+        Set<String> commonDiff =
+                diffPaths.parallelStream()
+                        .filter(
+                                p -> {
+                                    for (String common : AllCommonDirs) {
+                                        if (p.startsWith(common)) {
+                                            return true;
+                                        }
+                                    }
+                                    return false;
+                                })
+                        .collect(Collectors.toSet());
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.WORKDIR_DIFFS_IN_COMMON, commonDiff.size());
+        results.addModifiedSharedFolder(commonDiff.size());
+        if (!commonDiff.isEmpty()) {
+            CLog.d("Common folder has diffs: %s", commonDiff);
+        }
+        // check diffs against modules
+        try {
+            Set<File> testCasesDirs = FileUtil.findFilesObject(testsDirRoot, "testcases");
+            for (File testCasesDir : testCasesDirs) {
+                if (!testCasesDir.isDirectory()) {
+                    CLog.w("Found a non directory testcases directory: %s", testCasesDir);
+                    continue;
+                }
+                Path relativeRootFilePath = testsDirRoot.toPath().relativize(testCasesDir.toPath());
+                for (File moduleDir : testCasesDir.listFiles()) {
+                    String relativeModulePath =
+                            String.format(
+                                    "%s/%s/", relativeRootFilePath.toString(), moduleDir.getName());
+                    if (AllCommonDirs.contains(relativeModulePath)) {
+                        continue;
+                    }
+                    Set<String> moduleDiff =
+                            diffPaths.parallelStream()
+                                    .filter(p -> p.startsWith(relativeModulePath))
+                                    .collect(Collectors.toSet());
+                    if (moduleDiff.isEmpty()) {
+                        CLog.d("Module %s directory is unchanged.", moduleDir.getName());
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.WORKDIR_UNCHANGED_MODULES, 1);
+                        results.addUnchangedModule(moduleDir.getName());
+                    } else {
+                        CLog.d(
+                                "Module %s directory has changed: %s",
+                                moduleDir.getName(), moduleDiff);
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.WOKRDIR_MODULE_WITH_DIFFS, 1);
+                        results.addModifiedModule();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            CLog.e(e);
+            return null;
         }
         return results;
     }
