@@ -121,6 +121,23 @@ public abstract class ExecutableBaseTest
         return mTimeoutPerBinaryMs;
     }
 
+    protected String getModuleId(IInvocationContext context) {
+        return context != null
+                ? context.getAttributes().getUniqueMap().get(ModuleDefinition.MODULE_ID)
+                : getClass().getName();
+    }
+
+    protected TestDescription[] getFilterDescriptions(Map<String, String> testCommands) {
+        return testCommands.keySet().stream()
+                .map(testName -> new TestDescription(testName, testName))
+                .filter(description -> !shouldSkipCurrentTest(description))
+                .toArray(TestDescription[]::new);
+    }
+
+    protected boolean doesRunBinaryGenerateTestResults() {
+        return false;
+    }
+
     /** {@inheritDoc} */
     @Override
     public void addIncludeFilter(String filter) {
@@ -172,57 +189,60 @@ public abstract class ExecutableBaseTest
     @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        mTestInfo = testInfo;
+        setTestInfo(testInfo);
+        String moduleId = getModuleId(testInfo.getContext());
         Map<String, String> testCommands = getAllTestCommands();
-        IInvocationContext context = testInfo.getContext();
-        String moduleId =
-                context != null
-                        ? context.getAttributes().getUniqueMap().get(ModuleDefinition.MODULE_ID)
-                        : getClass().getName();
+        TestDescription[] testDescriptions = getFilterDescriptions(testCommands);
 
-        TestDescription[] nonSkippedTestDescriptions =
-                testCommands.keySet().stream()
-                        .map(testName -> new TestDescription(testName, testName))
-                        .filter(description -> !shouldSkipCurrentTest(description))
-                        .toArray(TestDescription[]::new);
-
-        if (nonSkippedTestDescriptions.length == 0) {
+        if (testDescriptions.length == 0) {
             return;
         }
 
         String testRunName =
-                nonSkippedTestDescriptions.length == 1
-                        ? nonSkippedTestDescriptions[0].getTestName()
-                        : moduleId;
+                testDescriptions.length == 1 ? testDescriptions[0].getTestName() : moduleId;
         long startTimeMs = System.currentTimeMillis();
 
         try {
-            listener.testRunStarted(testRunName, nonSkippedTestDescriptions.length);
+            listener.testRunStarted(testRunName, testDescriptions.length);
 
-            for (TestDescription description : nonSkippedTestDescriptions) {
+            for (TestDescription description : testDescriptions) {
                 String testName = description.getTestName();
                 String cmd = testCommands.get(testName);
                 String path = findBinary(cmd);
-                if (path == null) {
-                    listener.testFailed(
-                            description,
-                            FailureDescription.create(
-                                            String.format(NO_BINARY_ERROR, cmd),
-                                            FailureStatus.TEST_FAILURE)
-                                    .setErrorIdentifier(
-                                            InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND));
-                } else {
-                    try {
-                        listener.testStarted(description);
-                        if (!mCollectTestsOnly) {
-                            // Do not actually run the test if we are dry running it.
-                            runBinary(path, listener, description);
-                        }
-                    } catch (IOException e) {
+                try {
+                    if (path == null) {
                         listener.testFailed(
                                 description,
-                                FailureDescription.create(StreamUtil.getStackTrace(e)));
-                    } finally {
+                                FailureDescription.create(
+                                                String.format(NO_BINARY_ERROR, cmd),
+                                                FailureStatus.TEST_FAILURE)
+                                        .setErrorIdentifier(
+                                                InfraErrorIdentifier
+                                                        .CONFIGURED_ARTIFACT_NOT_FOUND));
+                    } else {
+                        try {
+                            if (!doesRunBinaryGenerateTestResults()) {
+                                listener.testStarted(description);
+                            }
+
+                            if (!getCollectTestsOnly()) {
+                                // Do not actually run the test if we are dry running it.
+                                runBinary(path, listener, description);
+                            }
+                        } catch (IOException e) {
+                            listener.testFailed(
+                                    description,
+                                    FailureDescription.create(StreamUtil.getStackTrace(e)));
+                            if (doesRunBinaryGenerateTestResults()) {
+                                // We can't rely on the `testEnded()` call in the finally
+                                // clause if `runBinary()` is responsible for generating test
+                                // results, therefore we call it here.
+                                listener.testEnded(description, new HashMap<String, Metric>());
+                            }
+                        }
+                    }
+                } finally {
+                    if (!doesRunBinaryGenerateTestResults()) {
                         listener.testEnded(description, new HashMap<String, Metric>());
                     }
                 }
@@ -279,6 +299,10 @@ public abstract class ExecutableBaseTest
         mCollectTestsOnly = shouldCollectTest;
     }
 
+    public boolean getCollectTestsOnly() {
+        return mCollectTestsOnly;
+    }
+
     /** {@inheritDoc} */
     @Override
     public final long getRuntimeHint() {
@@ -299,6 +323,10 @@ public abstract class ExecutableBaseTest
 
     TestInformation getTestInfo() {
         return mTestInfo;
+    }
+
+    void setTestInfo(TestInformation testInfo) {
+        mTestInfo = testInfo;
     }
 
     /** {@inheritDoc} */

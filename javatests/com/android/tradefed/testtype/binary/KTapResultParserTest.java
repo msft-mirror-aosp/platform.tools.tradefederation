@@ -25,9 +25,11 @@ import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.TestDescription;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -73,6 +75,194 @@ public class KTapResultParserTest {
         };
 
         checkKTap(ktapResults, expectedResults);
+    }
+
+    @Test
+    public void test_partial_tap() {
+        String[] ktapResultsByLine = {
+            "KTAP version 1\n",
+            "1..1\n",
+            "  KTAP version 1\n",
+            "  1..3\n",
+            "    KTAP version 1\n",
+            "    1..1\n",
+            "    # test_1: initializing test_1\n",
+            "    ok 1 test_1\n",
+            "  ok 1 example_test_1\n",
+            "    KTAP version 1\n",
+            "    1..2\n",
+            "    ok 1 test_1 # SKIP test_1 skipped\n",
+            "    ok 2 test_2\n",
+            "  ok 2 example_test_2\n",
+            "    KTAP version 1\n",
+            "    1..3\n",
+            "    ok 1 test_1\n",
+            "    # test_2: FAIL\n",
+            "    not ok 2 test_2\n",
+            "    ok 3 test_3 # SKIP test_3 skipped\n",
+            "  not ok 3 example_test_3\n",
+            "not ok 1 main_test\n"
+        };
+
+        String[][] expectedResults = {
+            {"main_test.example_test_1.test_1", "PASSED", null},
+            {"main_test.example_test_2.test_1", "IGNORED", null},
+            {"main_test.example_test_2.test_2", "PASSED", null},
+            {"main_test.example_test_3.test_1", "PASSED", null},
+            {"main_test.example_test_3.test_2", "FAILURE", "# test_2: FAIL"},
+            {"main_test.example_test_3.test_3", "IGNORED", null}
+        };
+
+        // The full KTAP should pass with no error.
+        Optional<String> ktapResults =
+                Arrays.stream(ktapResultsByLine).reduce((str1, str2) -> str1 + str2);
+        checkKTap(ktapResults.get(), expectedResults);
+
+        // Loop through the good KTAP with an additional line removed for each iteration.
+        // An exception should be thrown for each partial result.
+        for (int i = ktapResultsByLine.length - 2; i > 0; --i) {
+            Optional<String> ktapResults2 =
+                    Arrays.stream(ktapResultsByLine).limit(i).reduce((str1, str2) -> str1 + str2);
+
+            assertThrows(
+                    String.format(
+                            "The following partial ktap results with the last '%d' lines omitted"
+                                    + " didn't report an error as expected: %s",
+                            ktapResultsByLine.length - i - 1, ktapResults2.get()),
+                    RuntimeException.class,
+                    () -> checkKTap(ktapResults2.get(), expectedResults));
+        }
+    }
+
+    @Test
+    public void test_too_many_results() {
+        String ktapResults =
+                "KTAP version 1\n"
+                        + "1..1\n"
+                        + "  KTAP version 1\n"
+                        + "  1..3\n"
+                        + "    KTAP version 1\n"
+                        + "    1..1\n"
+                        + "    # test_1: initializing test_1\n"
+                        + "    ok 1 test_1\n"
+                        + "  ok 1 example_test_1\n"
+                        + "    KTAP version 1\n"
+                        + "    1..2\n"
+                        + "    ok 1 test_1 # SKIP test_1 skipped\n"
+                        + "    ok 2 test_2\n"
+                        + "    ok 3 test_2\n" // <-- This is the error
+                        + "  ok 2 example_test_2\n"
+                        + "    KTAP version 1\n"
+                        + "    1..3\n"
+                        + "    ok 1 test_1\n"
+                        + "    # test_2: FAIL\n"
+                        + "    not ok 2 test_2\n"
+                        + "    ok 3 test_3 # SKIP test_3 skipped\n"
+                        + "  not ok 3 example_test_3\n"
+                        + "not ok 1 main_test\n";
+
+        assertThrows(RuntimeException.class, () -> checkKTap(ktapResults, null));
+    }
+
+    @Test
+    public void test_duplicate_test_num() {
+        String ktapResults =
+                "KTAP version 1\n"
+                        + "1..1\n"
+                        + "  KTAP version 1\n"
+                        + "  1..3\n"
+                        + "    KTAP version 1\n"
+                        + "    1..1\n"
+                        + "    # test_1: initializing test_1\n"
+                        + "    ok 1 test_1\n"
+                        + "  ok 1 example_test_1\n"
+                        + "    KTAP version 1\n"
+                        + "    1..2\n"
+                        + "    ok 1 test_1 # SKIP test_1 skipped\n"
+                        + "    ok 1 test_2\n" // <-- This is the error
+                        + "  ok 2 example_test_2\n"
+                        + "    KTAP version 1\n"
+                        + "    1..3\n"
+                        + "    ok 1 test_1\n"
+                        + "    # test_2: FAIL\n"
+                        + "    not ok 2 test_2\n"
+                        + "    ok 3 test_3 # SKIP test_3 skipped\n"
+                        + "  not ok 3 example_test_3\n"
+                        + "not ok 1 main_test\n";
+
+        assertThrows(RuntimeException.class, () -> checkKTap(ktapResults, null));
+    }
+
+    @Test
+    public void test_skipped_test_num() {
+        String ktapResults =
+                "KTAP version 1\n"
+                        + "1..1\n"
+                        + "  KTAP version 1\n"
+                        + "  1..3\n"
+                        + "    KTAP version 1\n"
+                        + "    1..1\n"
+                        + "    # test_1: initializing test_1\n"
+                        + "    ok 1 test_1\n"
+                        + "  ok 1 example_test_1\n"
+                        + "    KTAP version 1\n"
+                        + "    1..2\n"
+                        + "    ok 1 test_1 # SKIP test_1 skipped\n"
+                        + "    ok 2 test_2\n"
+                        + "  ok 2 example_test_2\n"
+                        + "    KTAP version 1\n"
+                        + "    1..3\n"
+                        + "    ok 1 test_1\n"
+                        + "    # test_2: FAIL\n"
+                        + "    # not ok 2 test_2\n" // <-- This is the error.
+                        + "    ok 3 test_3 # SKIP test_3 skipped\n"
+                        + "  not ok 3 example_test_3\n"
+                        + "not ok 1 main_test\n";
+
+        assertThrows(RuntimeException.class, () -> checkKTap(ktapResults, null));
+    }
+
+    @Test
+    public void test_toStringWithSubtests() {
+        String ktapResults =
+                "KTAP version 1\n"
+                        + "1..1\n"
+                        + "  KTAP version 1\n"
+                        + "  1..3\n"
+                        + "    KTAP version 1\n"
+                        + "    1..1\n"
+                        + "    # test_1: initializing test_1\n"
+                        + "    ok 1 test_1\n"
+                        + "  ok 1 example_test_1\n"
+                        + "    KTAP version 1\n"
+                        + "    1..2\n"
+                        + "    ok 1 test_1 # SKIP test_1 skipped\n"
+                        + "    ok 2 test_2\n"
+                        + "  ok 2 example_test_2\n"
+                        + "    KTAP version 1\n"
+                        + "    1..3\n"
+                        + "    ok 1 test_1\n"
+                        + "    # test_2: FAIL\n"
+                        + "    not ok 2 test_2\n"
+                        + "    ok 3 test_3 # SKIP test_3 skipped\n"
+                        + "  not ok 3 example_test_3\n"
+                        + "not ok 1 main_test\n";
+
+        KTapResultParser parser = new KTapResultParser();
+        String actual = parser.processResultsFileContent(ktapResults).toStringWithSubtests("");
+        String expected =
+                "null\n"
+                        + "   main_test\n"
+                        + "      example_test_1\n"
+                        + "         test_1\n"
+                        + "      example_test_2\n"
+                        + "         test_1\n"
+                        + "         test_2\n"
+                        + "      example_test_3\n"
+                        + "         test_1\n"
+                        + "         test_2\n"
+                        + "         test_3\n";
+        assertEquals(expected, actual);
     }
 
     @Test
