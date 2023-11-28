@@ -210,49 +210,52 @@ public class TestDiscoveryInvoker {
                         null,
                         exitCode);
             }
-            String stdout = res.getStdout();
-            CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
+            try (CloseableTraceScope discoResults =
+                    new CloseableTraceScope("parse_discovery_results")) {
+                String stdout = res.getStdout();
+                CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
 
-            String result = FileUtil.readStringFromFile(outputFile);
-            CLog.i("output file content: %s", result);
+                String result = FileUtil.readStringFromFile(outputFile);
+                CLog.i("output file content: %s", result);
 
-            // For backward compatibility
-            try {
-                new JSONObject(result);
-            } catch (JSONException e) {
-                CLog.w("Output file was incorrect. Try falling back stdout");
-                result = stdout;
-            }
-
-            boolean noDiscovery = hasNoPossibleDiscovery(result);
-            if (noDiscovery) {
-                dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
-            }
-            List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
-            if (!noDiscovery) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
-            }
-            if (!testModules.isEmpty()) {
-                dependencies.put(TEST_MODULES_LIST_KEY, testModules);
-            } else {
-                // Only report no finding if discovery actually took effect
-                if (!noDiscovery) {
-                    mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                // For backward compatibility
+                try {
+                    new JSONObject(result);
+                } catch (JSONException e) {
+                    CLog.w("Output file was incorrect. Try falling back stdout");
+                    result = stdout;
                 }
-            }
 
-            List<String> testDependencies =
-                    parseTestDiscoveryOutput(result, TEST_DEPENDENCIES_LIST_KEY);
-            if (!testDependencies.isEmpty()) {
-                dependencies.put(TEST_DEPENDENCIES_LIST_KEY, testDependencies);
-            }
+                boolean noDiscovery = hasNoPossibleDiscovery(result);
+                if (noDiscovery) {
+                    dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
+                }
+                List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+                if (!noDiscovery) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
+                }
+                if (!testModules.isEmpty()) {
+                    dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+                } else {
+                    // Only report no finding if discovery actually took effect
+                    if (!noDiscovery) {
+                        mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                    }
+                }
 
-            String partialFallback = parsePartialFallback(result);
-            if (partialFallback != null) {
-                dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+                List<String> testDependencies =
+                        parseTestDiscoveryOutput(result, TEST_DEPENDENCIES_LIST_KEY);
+                if (!testDependencies.isEmpty()) {
+                    dependencies.put(TEST_DEPENDENCIES_LIST_KEY, testDependencies);
+                }
+
+                String partialFallback = parsePartialFallback(result);
+                if (partialFallback != null) {
+                    dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+                }
+                return dependencies;
             }
-            return dependencies;
         } finally {
             FileUtil.deleteFile(outputFile);
             try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
