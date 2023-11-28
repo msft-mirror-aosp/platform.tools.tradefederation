@@ -195,6 +195,13 @@ public class NativeDevice
 
     private static final long PROPERTY_GET_TIMEOUT = 45 * 1000L;
 
+    public static final String DEBUGFS_PATH = "/sys/kernel/debug";
+    private static final String CHECK_DEBUGFS_MNT_COMMAND =
+            String.format("mountpoint -q %s", DEBUGFS_PATH);
+    private static final String MOUNT_DEBUGFS_COMMAND =
+            String.format("mount -t debugfs debugfs %s", DEBUGFS_PATH);
+    private static final String UNMOUNT_DEBUGFS_COMMAND = String.format("umount %s", DEBUGFS_PATH);
+
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
@@ -6044,6 +6051,47 @@ public class NativeDevice
                             new ConnectionBuilder(getRunUtil(), this, null, getLogger()));
         }
         return mConnection;
+    }
+
+    /** Check if debugfs is mounted. */
+    @Override
+    public boolean isDebugfsMounted() throws DeviceNotAvailableException {
+        return CommandStatus.SUCCESS.equals(
+                executeShellV2Command(CHECK_DEBUGFS_MNT_COMMAND).getStatus());
+    }
+
+    /** Mount debugfs. */
+    @Override
+    public void mountDebugfs() throws DeviceNotAvailableException {
+        if (isDebugfsMounted()) {
+            CLog.w("debugfs already mounted.");
+            return;
+        }
+
+        CommandResult result = executeShellV2Command(MOUNT_DEBUGFS_COMMAND);
+        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+            CLog.e("Failed to mount debugfs. %s", result);
+            throw new DeviceRuntimeException(
+                    "'" + MOUNT_DEBUGFS_COMMAND + "' has failed: " + result,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+    }
+
+    /** Unmount debugfs. */
+    @Override
+    public void unmountDebugfs() throws DeviceNotAvailableException {
+        if (!isDebugfsMounted()) {
+            CLog.w("debugfs not mounted to unmount.");
+            return;
+        }
+
+        CommandResult result = executeShellV2Command(UNMOUNT_DEBUGFS_COMMAND);
+        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+            CLog.e("Failed to unmount debugfs. %s", result);
+            throw new DeviceRuntimeException(
+                    "'" + UNMOUNT_DEBUGFS_COMMAND + "' has failed: " + result,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
     }
 
     /**
