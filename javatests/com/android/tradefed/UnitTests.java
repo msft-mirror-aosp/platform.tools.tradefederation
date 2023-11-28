@@ -347,6 +347,7 @@ import com.android.tradefed.testtype.binary.ExecutableHostTestTest;
 import com.android.tradefed.testtype.binary.ExecutableTargetTestTest;
 import com.android.tradefed.testtype.binary.KTapResultParserTest;
 import com.android.tradefed.testtype.binary.KernelTargetTestTest;
+import com.android.tradefed.testtype.binary.KUnitModuleTestTest;
 import com.android.tradefed.testtype.host.CoverageMeasurementForwarderTest;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4TestTest;
 import com.android.tradefed.testtype.junit4.DeviceParameterizedRunnerTest;
@@ -934,6 +935,7 @@ import org.junit.runners.Suite.SuiteClasses;
     ExecutableTargetTestTest.class,
     KernelTargetTestTest.class,
     KTapResultParserTest.class,
+    KUnitModuleTestTest.class,
 
     // testtype/junit4
     BaseHostJUnit4TestTest.class,
