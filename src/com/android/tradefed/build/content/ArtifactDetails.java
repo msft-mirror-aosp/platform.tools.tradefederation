@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.build.content;
 
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 
@@ -43,27 +44,14 @@ public class ArtifactDetails {
 
     /** Parses cas_content_details.json and extract information for the entry considered. */
     public static ArtifactDetails parseFile(File input, String targetArtifact) throws IOException {
-        Gson gson = new Gson();
-        JsonArray mainArray = gson.fromJson(FileUtil.readStringFromFile(input), JsonArray.class);
-        for (JsonElement e : mainArray) {
-            JsonObject o = e.getAsJsonObject();
-            JsonElement name = o.asMap().get("artifact");
-            if (name.getAsString().equals(targetArtifact)) {
-                ArtifactDetails d = gson.fromJson(e, ArtifactDetails.class);
-                if (d == null) {
-                    throw new RuntimeException("Failed to parse for content.");
-                }
-                return d;
-            }
-        }
-        // TODO: Use build-id instead to clean up
-        if (targetArtifact.contains("-tests-")) {
-            String prefix = targetArtifact.substring(0, targetArtifact.indexOf("-tests-") + 7);
-            // approximate for artifact that contains a build id
+        try (CloseableTraceScope ignored = new CloseableTraceScope("parse_artifacts_details")) {
+            Gson gson = new Gson();
+            JsonArray mainArray =
+                    gson.fromJson(FileUtil.readStringFromFile(input), JsonArray.class);
             for (JsonElement e : mainArray) {
                 JsonObject o = e.getAsJsonObject();
                 JsonElement name = o.asMap().get("artifact");
-                if (name.getAsString().startsWith(prefix)) {
+                if (name.getAsString().equals(targetArtifact)) {
                     ArtifactDetails d = gson.fromJson(e, ArtifactDetails.class);
                     if (d == null) {
                         throw new RuntimeException("Failed to parse for content.");
@@ -71,53 +59,75 @@ public class ArtifactDetails {
                     return d;
                 }
             }
+            // TODO: Use build-id instead to clean up
+            if (targetArtifact.contains("-tests-")) {
+                String prefix = targetArtifact.substring(0, targetArtifact.indexOf("-tests-") + 7);
+                // approximate for artifact that contains a build id
+                for (JsonElement e : mainArray) {
+                    JsonObject o = e.getAsJsonObject();
+                    JsonElement name = o.asMap().get("artifact");
+                    if (name.getAsString().startsWith(prefix)) {
+                        ArtifactDetails d = gson.fromJson(e, ArtifactDetails.class);
+                        if (d == null) {
+                            throw new RuntimeException("Failed to parse for content.");
+                        }
+                        return d;
+                    }
+                }
+            }
+            throw new RuntimeException(targetArtifact + " entry was not found.");
         }
-        throw new RuntimeException(targetArtifact + " entry was not found.");
     }
 
     /** Obtain the list of modification between a base and the current build contents. */
     public static List<ArtifactFileDescriptor> diffContents(
             ArtifactDetails base, ArtifactDetails current) {
-        if (!base.artifact.equals(current.artifact)) {
-            CLog.w(
-                    "Not comparing the same artifact entries ! %s != %s",
-                    base.artifact, current.artifact);
-        }
-        Map<String, ArtifactFileDescriptor> mappingBase =
-                base.details.stream().map(e -> e).collect(Collectors.toMap(e -> e.path, e -> e));
-        Map<String, ArtifactFileDescriptor> mappingCurrent =
-                current.details.stream().map(e -> e).collect(Collectors.toMap(e -> e.path, e -> e));
-        List<ArtifactFileDescriptor> affected = new ArrayList<>();
-        int modified = 0;
-        int deleted = 0;
-        int added = 0;
-        int unchanged = 0;
-        for (ArtifactFileDescriptor be : base.details) {
-            if (mappingCurrent.containsKey(be.path)) {
-                ArtifactFileDescriptor pe = mappingCurrent.get(be.path);
-                if (!be.digest.equals(pe.digest)) {
-                    CLog.d("diff: %s", be.path);
-                    modified++;
-                    affected.add(pe);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("diff_contents")) {
+            if (!base.artifact.equals(current.artifact)) {
+                CLog.w(
+                        "Not comparing the same artifact entries ! %s != %s",
+                        base.artifact, current.artifact);
+            }
+            Map<String, ArtifactFileDescriptor> mappingBase =
+                    base.details.stream()
+                            .map(e -> e)
+                            .collect(Collectors.toMap(e -> e.path, e -> e));
+            Map<String, ArtifactFileDescriptor> mappingCurrent =
+                    current.details.stream()
+                            .map(e -> e)
+                            .collect(Collectors.toMap(e -> e.path, e -> e));
+            List<ArtifactFileDescriptor> affected = new ArrayList<>();
+            int modified = 0;
+            int deleted = 0;
+            int added = 0;
+            int unchanged = 0;
+            for (ArtifactFileDescriptor be : base.details) {
+                if (mappingCurrent.containsKey(be.path)) {
+                    ArtifactFileDescriptor pe = mappingCurrent.get(be.path);
+                    if (!be.digest.equals(pe.digest)) {
+                        CLog.d("diff: %s", be.path);
+                        modified++;
+                        affected.add(pe);
+                    } else {
+                        unchanged++;
+                    }
                 } else {
-                    unchanged++;
+                    affected.add(be);
+                    CLog.d("deleted: %s", be.path);
+                    deleted++;
                 }
-            } else {
-                affected.add(be);
-                CLog.d("deleted: %s", be.path);
-                deleted++;
             }
-        }
-        for (ArtifactFileDescriptor pe : current.details) {
-            if (!mappingBase.containsKey(pe.path)) {
-                CLog.d("added: %s", pe.path);
-                added++;
-                affected.add(pe);
+            for (ArtifactFileDescriptor pe : current.details) {
+                if (!mappingBase.containsKey(pe.path)) {
+                    CLog.d("added: %s", pe.path);
+                    added++;
+                    affected.add(pe);
+                }
             }
+            CLog.d(
+                    "Summary: unchanged:%s, modified:%s, deleted:%s, added:%s",
+                    unchanged, modified, deleted, added);
+            return affected;
         }
-        CLog.d(
-                "Summary: unchanged:%s, modified:%s, deleted:%s, added:%s",
-                unchanged, modified, deleted, added);
-        return affected;
     }
 }
