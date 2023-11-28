@@ -22,6 +22,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
@@ -176,99 +177,107 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     }
 
     public Set<TestInfo> loadTestInfos() {
-        Set<String> includeFilter = getIncludeFilter();
-        // Name of the tests
-        Set<String> testNames = new LinkedHashSet<>();
-        Set<TestInfo> testInfosToRun = new LinkedHashSet<>();
-        mBuildInfo = getBuildInfo();
-        if (mTestGroup == null && includeFilter.isEmpty()) {
-            throw new HarnessRuntimeException(
-                    "At least one of the options, --test-mapping-test-group or --include-filter, "
-                            + "should be set.",
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-        if (mTestGroup == null && !mKeywords.isEmpty()) {
-            throw new HarnessRuntimeException(
-                    "Must specify --test-mapping-test-group when applying --test-mapping-keyword.",
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-        if (!mIgnoreKeywords.isEmpty() && !mKeywords.isEmpty()) {
-            for (String keyword : mKeywords) {
-                if (mIgnoreKeywords.contains(keyword)) {
-                    throw new HarnessRuntimeException(
-                            "Keyword cannot be in both required and ignored.",
-                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-                }
-            }
-        }
-        if (mTestGroup == null && !mTestModulesForced.isEmpty()) {
-            throw new HarnessRuntimeException(
-                    "Must specify --test-mapping-test-group when applying "
-                            + "--force-test-mapping-module.",
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-        if (mTestGroup != null && !includeFilter.isEmpty()) {
-            throw new HarnessRuntimeException(
-                    "If options --test-mapping-test-group is set, option --include-filter should "
-                            + "not be set.",
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-        if (!includeFilter.isEmpty() && !mTestMappingPaths.isEmpty()) {
-            throw new HarnessRuntimeException(
-                    "If option --include-filter is set, option --test-mapping-path should "
-                            + "not be set.",
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-        if (mReportImportPaths && !mIgnoreTestMappingImports) {
-            CLog.i(
-                    "Option \"no-ignore-test-mapping-imports\" and \"report-import-paths\" are"
-                        + " enabled, TestMapping will report tests with sources and import paths to"
-                        + " AnTS");
-        }
-
-        if (mTestGroup != null) {
-            if (mForceFullRun) {
-                CLog.d("--force-full-run is specified, all tests in test group %s will be ran.",
-                        mTestGroup);
-                mTestMappingPaths.clear();
-            }
-            TestMapping testMapping = new TestMapping(mTestMappingPaths, mIgnoreTestMappingImports);
-            testInfosToRun =
-                    testMapping.getTests(
-                            mBuildInfo,
-                            mTestGroup,
-                            getPrioritizeHostConfig(),
-                            mKeywords,
-                            mIgnoreKeywords,
-                            mAdditionalTestMappingZips,
-                            mMatchedPatternPaths);
-            if (!mTestModulesForced.isEmpty()) {
-                CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
-                testInfosToRun =
-                        testInfosToRun.stream()
-                                .filter(testInfo -> mTestModulesForced.contains(testInfo.getName()))
-                                .collect(Collectors.toSet());
-            }
-            if (!mAllowedTestLists.isEmpty()) {
-                CLog.i("Filtering tests from allowed test lists: %s", mAllowedTestLists);
-                testInfosToRun = filterByAllowedTestLists(mBuildInfo, testInfosToRun);
-            }
-            if (testInfosToRun.isEmpty() && !mAllowEmptyTests) {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("loadTestInfos")) {
+            Set<String> includeFilter = getIncludeFilter();
+            // Name of the tests
+            Set<String> testNames = new LinkedHashSet<>();
+            Set<TestInfo> testInfosToRun = new LinkedHashSet<>();
+            mBuildInfo = getBuildInfo();
+            if (mTestGroup == null && includeFilter.isEmpty()) {
                 throw new HarnessRuntimeException(
-                        String.format("No test found for the given group: %s.", mTestGroup),
+                        "At least one of the options, --test-mapping-test-group or"
+                                + " --include-filter, should be set.",
                         InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
-            for (TestInfo testInfo : testInfosToRun) {
-                testNames.add(testInfo.getName());
+            if (mTestGroup == null && !mKeywords.isEmpty()) {
+                throw new HarnessRuntimeException(
+                        "Must specify --test-mapping-test-group when applying"
+                                + " --test-mapping-keyword.",
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
-            setIncludeFilter(testNames);
-            // With include filters being set, the test no longer needs group and path settings.
-            // Clear the settings to avoid conflict when the test is running in a shard.
-            mTestGroup = null;
-            mTestMappingPaths.clear();
-            mUseTestMappingPath = false;
+            if (!mIgnoreKeywords.isEmpty() && !mKeywords.isEmpty()) {
+                for (String keyword : mKeywords) {
+                    if (mIgnoreKeywords.contains(keyword)) {
+                        throw new HarnessRuntimeException(
+                                "Keyword cannot be in both required and ignored.",
+                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                    }
+                }
+            }
+            if (mTestGroup == null && !mTestModulesForced.isEmpty()) {
+                throw new HarnessRuntimeException(
+                        "Must specify --test-mapping-test-group when applying "
+                                + "--force-test-mapping-module.",
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+            }
+            if (mTestGroup != null && !includeFilter.isEmpty()) {
+                throw new HarnessRuntimeException(
+                        "If options --test-mapping-test-group is set, option --include-filter"
+                                + " should not be set.",
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+            }
+            if (!includeFilter.isEmpty() && !mTestMappingPaths.isEmpty()) {
+                throw new HarnessRuntimeException(
+                        "If option --include-filter is set, option --test-mapping-path should "
+                                + "not be set.",
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+            }
+            if (mReportImportPaths && !mIgnoreTestMappingImports) {
+                CLog.i(
+                        "Option \"no-ignore-test-mapping-imports\" and \"report-import-paths\" are"
+                                + " enabled, TestMapping will report tests with sources and import"
+                                + " paths to AnTS");
+            }
+
+            if (mTestGroup != null) {
+                if (mForceFullRun) {
+                    CLog.d(
+                            "--force-full-run is specified, all tests in test group %s will be"
+                                    + " ran.",
+                            mTestGroup);
+                    mTestMappingPaths.clear();
+                }
+                TestMapping testMapping =
+                        new TestMapping(mTestMappingPaths, mIgnoreTestMappingImports);
+                testInfosToRun =
+                        testMapping.getTests(
+                                mBuildInfo,
+                                mTestGroup,
+                                getPrioritizeHostConfig(),
+                                mKeywords,
+                                mIgnoreKeywords,
+                                mAdditionalTestMappingZips,
+                                mMatchedPatternPaths);
+                if (!mTestModulesForced.isEmpty()) {
+                    CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
+                    testInfosToRun =
+                            testInfosToRun.stream()
+                                    .filter(
+                                            testInfo ->
+                                                    mTestModulesForced.contains(testInfo.getName()))
+                                    .collect(Collectors.toSet());
+                }
+                if (!mAllowedTestLists.isEmpty()) {
+                    CLog.i("Filtering tests from allowed test lists: %s", mAllowedTestLists);
+                    testInfosToRun = filterByAllowedTestLists(mBuildInfo, testInfosToRun);
+                }
+                if (testInfosToRun.isEmpty() && !mAllowEmptyTests) {
+                    throw new HarnessRuntimeException(
+                            String.format("No test found for the given group: %s.", mTestGroup),
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                }
+                for (TestInfo testInfo : testInfosToRun) {
+                    testNames.add(testInfo.getName());
+                }
+                setIncludeFilter(testNames);
+                // With include filters being set, the test no longer needs group and path settings.
+                // Clear the settings to avoid conflict when the test is running in a shard.
+                mTestGroup = null;
+                mTestMappingPaths.clear();
+                mUseTestMappingPath = false;
+            }
+            return testInfosToRun;
         }
-        return testInfosToRun;
     }
 
     /**
