@@ -34,6 +34,8 @@ public class ContentAnalysisContext {
     // This tracks path to ignore from analysis because known to always change but do not cause
     // functional changes.
     private Set<String> ignoredChange = new HashSet<>();
+    // Report what is considered a common locations which if modified invalidate the results.
+    private Set<String> commonLocations = new HashSet<>();
 
     public ContentAnalysisContext(
             String contentEntry, ContentInformation information, AnalysisMethod method) {
@@ -58,6 +60,10 @@ public class ContentAnalysisContext {
         return ignoredChange;
     }
 
+    public Set<String> commonLocations() {
+        return commonLocations;
+    }
+
     public ContentAnalysisContext addIgnoreChange(String path) {
         ignoredChange.add(path);
         return this;
@@ -65,6 +71,16 @@ public class ContentAnalysisContext {
 
     public ContentAnalysisContext addIgnoreChanges(Set<String> paths) {
         ignoredChange.addAll(paths);
+        return this;
+    }
+
+    public ContentAnalysisContext addCommonLocation(String path) {
+        commonLocations.add(path);
+        return this;
+    }
+
+    public ContentAnalysisContext addCommonLocations(Set<String> paths) {
+        commonLocations.addAll(paths);
         return this;
     }
 }
