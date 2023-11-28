@@ -230,6 +230,7 @@ public class TestContentAnalyzer {
         ContentAnalysisResults results = new ContentAnalysisResults();
         List<ArtifactFileDescriptor> diffs = new ArrayList<>();
         List<String> entryNames = new ArrayList<>();
+        Set<String> AllCommonDirs = new HashSet<>();
         for (ContentAnalysisContext context : contexts) {
             List<ArtifactFileDescriptor> diff =
                     analyzeContentDiff(context.contentInformation(), context.contentEntry());
@@ -240,8 +241,8 @@ public class TestContentAnalyzer {
             entryNames.add(context.contentEntry());
             diffs.addAll(diff);
             diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
+            AllCommonDirs.addAll(context.commonLocations());
         }
-        List<String> AllCommonDirs = new ArrayList<>();
         // Obtain common dirs for situation
         for (String entry : entryNames) {
             List<String> commonDirs = WORKDIR_COMMON_DIR.get(entry);
@@ -317,7 +318,7 @@ public class TestContentAnalyzer {
 
     private List<ArtifactFileDescriptor> analyzeContentDiff(
             ContentInformation information, String entry) {
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("analyze_content_diff")) {
             ArtifactDetails base = ArtifactDetails.parseFile(information.baseContent, entry);
             ArtifactDetails presubmit =
                     ArtifactDetails.parseFile(information.currentContent, entry);
