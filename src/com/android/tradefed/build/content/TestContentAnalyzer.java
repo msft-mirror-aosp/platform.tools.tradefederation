@@ -22,6 +22,7 @@ import com.android.tradefed.build.content.ContentAnalysisContext.AnalysisMethod;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 
@@ -47,10 +48,18 @@ public class TestContentAnalyzer {
 
     private static final Map<String, List<String>> WORKDIR_COMMON_DIR =
             ImmutableMap.of(
+                    "tradefed.zip",
+                    new ArrayList<>(),
+                    "google-tradefed.zip",
+                    new ArrayList<>(),
                     "host-unit-tests.zip",
                     Arrays.asList("host/testcases/lib/", "host/testcases/lib64/"),
                     "robolectric-tests.zip",
-                    Arrays.asList("host/testcases/android-all/"));
+                    Arrays.asList("host/testcases/android-all/"),
+                    "device-tests.zip",
+                    Arrays.asList("host/testcases/lib/", "host/testcases/lib64/"),
+                    "general-tests.zip",
+                    Arrays.asList("host/testcases/lib/", "host/testcases/lib64/"));
 
     private final TestInformation information;
     private final List<ContentAnalysisContext> contexts;
@@ -65,19 +74,21 @@ public class TestContentAnalyzer {
             CLog.d("Analysis doesn't currently support multi-builds.");
             return null;
         }
-        InvocationMetricLogger.addInvocationMetrics(
-                InvocationMetricKey.CONTENT_BASED_ANALYSIS_ATTEMPT, 1);
-        AnalysisMethod method = contexts.get(0).analysisMethod();
-        switch (method) {
-            case MODULE_XTS:
-                return xtsAnalysis(information.getBuildInfo(), contexts.get(0));
-            case FILE:
-                return fileAnalysis(information.getBuildInfo(), contexts.get(0));
-            case SANDBOX_WORKDIR:
-                return workdirAnalysis(information.getBuildInfo(), contexts);
-            default:
-                // do nothing for the rest for now.
-                return null;
+        try (CloseableTraceScope ignored = new CloseableTraceScope("content_analysis")) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CONTENT_BASED_ANALYSIS_ATTEMPT, 1);
+            AnalysisMethod method = contexts.get(0).analysisMethod();
+            switch (method) {
+                case MODULE_XTS:
+                    return xtsAnalysis(information.getBuildInfo(), contexts.get(0));
+                case FILE:
+                    return fileAnalysis(information.getBuildInfo(), contexts.get(0));
+                case SANDBOX_WORKDIR:
+                    return workdirAnalysis(information.getBuildInfo(), contexts);
+                default:
+                    // do nothing for the rest for now.
+                    return null;
+            }
         }
     }
 
@@ -92,6 +103,7 @@ public class TestContentAnalyzer {
             CLog.d("Analysis failed.");
             return null;
         }
+        diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
         return mapDiffsToModule(
                 context.contentEntry(), diffs, build.getFile(BuildInfoFileKey.ROOT_DIRECTORY));
     }
@@ -174,6 +186,7 @@ public class TestContentAnalyzer {
             CLog.w("Analysis failed.");
             return null;
         }
+        diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
         Set<String> diffPaths = diffs.parallelStream().map(d -> d.path).collect(Collectors.toSet());
         File rootDir = build.getFile(BuildInfoFileKey.TESTDIR_IMAGE);
         Set<Path> files = new HashSet<>();
@@ -226,6 +239,7 @@ public class TestContentAnalyzer {
             }
             entryNames.add(context.contentEntry());
             diffs.addAll(diff);
+            diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
         }
         List<String> AllCommonDirs = new ArrayList<>();
         // Obtain common dirs for situation
