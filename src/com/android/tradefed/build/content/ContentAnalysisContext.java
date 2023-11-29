@@ -36,6 +36,8 @@ public class ContentAnalysisContext {
     private Set<String> ignoredChange = new HashSet<>();
     // Report what is considered a common locations which if modified invalidate the results.
     private Set<String> commonLocations = new HashSet<>();
+    // Set this flag if somehow we need to invalidate the full analysis.
+    private boolean invalidateAnalysis = false;
 
     public ContentAnalysisContext(
             String contentEntry, ContentInformation information, AnalysisMethod method) {
@@ -64,6 +66,10 @@ public class ContentAnalysisContext {
         return commonLocations;
     }
 
+    public boolean abortAnalysis() {
+        return invalidateAnalysis;
+    }
+
     public ContentAnalysisContext addIgnoreChange(String path) {
         ignoredChange.add(path);
         return this;
@@ -82,5 +88,9 @@ public class ContentAnalysisContext {
     public ContentAnalysisContext addCommonLocations(Set<String> paths) {
         commonLocations.addAll(paths);
         return this;
+    }
+
+    public void invalidateAnalysis() {
+        invalidateAnalysis = true;
     }
 }
