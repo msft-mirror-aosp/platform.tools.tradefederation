@@ -191,8 +191,11 @@ public class TestDiscoveryExecutor {
      * @return A {@link IConfiguration} which constructed based on command line args.
      */
     private IConfiguration getConfiguration(String[] args) throws ConfigurationException {
-        IConfigurationFactory configurationFactory = getConfigurationFactory();
-        return configurationFactory.createConfigurationFromArgs(args, null, new DryRunKeyStore());
+        try (CloseableTraceScope ignored = new CloseableTraceScope("create_configuration")) {
+            IConfigurationFactory configurationFactory = getConfigurationFactory();
+            return configurationFactory.createConfigurationFromArgs(
+                    args, null, new DryRunKeyStore());
+        }
     }
 
     /**
