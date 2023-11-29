@@ -235,8 +235,8 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
 
     @Override
     public void reportLogs(ITestDevice device, ITestLogger logger, Stage stage) {
-        // If it's not a major error we do not report it if no setup or teardown ran.
-        if (!Stage.ERROR.equals(stage)) {
+        // If it's a test logcat do not report it, the subprocess will take care of it.
+        if (Stage.TEST.equals(stage)) {
             return;
         }
         super.reportLogs(device, logger, stage);
