@@ -347,32 +347,35 @@ public class TestDiscoveryInvoker {
                                 Joiner.on(" ").join(subprocessArgs), res.getStderr()),
                         null);
             }
-            String stdout = res.getStdout();
-            CLog.i(String.format("Tradefed Observatory returned in stdout:\n %s", stdout));
+            try (CloseableTraceScope discoResults =
+                    new CloseableTraceScope("parse_discovery_results")) {
+                String stdout = res.getStdout();
+                CLog.i(String.format("Tradefed Observatory returned in stdout:\n %s", stdout));
 
-            String result = FileUtil.readStringFromFile(outputFile);
+                String result = FileUtil.readStringFromFile(outputFile);
 
-            boolean noDiscovery = hasNoPossibleDiscovery(result);
-            if (noDiscovery) {
-                dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
-            }
-            List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
-            if (!noDiscovery) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
-            }
-            if (!testModules.isEmpty()) {
-                dependencies.put(TEST_MODULES_LIST_KEY, testModules);
-            } else {
-                if (!noDiscovery) {
-                    mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                boolean noDiscovery = hasNoPossibleDiscovery(result);
+                if (noDiscovery) {
+                    dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
                 }
+                List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+                if (!noDiscovery) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
+                }
+                if (!testModules.isEmpty()) {
+                    dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+                } else {
+                    if (!noDiscovery) {
+                        mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                    }
+                }
+                String partialFallback = parsePartialFallback(result);
+                if (partialFallback != null) {
+                    dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+                }
+                return dependencies;
             }
-            String partialFallback = parsePartialFallback(result);
-            if (partialFallback != null) {
-                dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
-            }
-            return dependencies;
         } finally {
             FileUtil.deleteFile(outputFile);
             try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
