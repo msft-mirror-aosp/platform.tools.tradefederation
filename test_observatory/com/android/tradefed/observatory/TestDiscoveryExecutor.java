@@ -164,19 +164,24 @@ public class TestDiscoveryExecutor {
             Collections.sort(testModules);
             Collections.sort(testDependencies);
 
-            JsonObject jsonObject = new JsonObject();
-            Gson gson = new Gson();
-            JsonArray testModulesArray = gson.toJsonTree(testModules).getAsJsonArray();
-            JsonArray testDependenciesArray = gson.toJsonTree(testDependencies).getAsJsonArray();
-            jsonObject.add(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, testModulesArray);
-            jsonObject.add(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
-            if (mReportPartialFallback) {
-                jsonObject.addProperty(TestDiscoveryInvoker.PARTIAL_FALLBACK_KEY, "true");
+            try (CloseableTraceScope ignored = new CloseableTraceScope("format_results")) {
+                JsonObject jsonObject = new JsonObject();
+                Gson gson = new Gson();
+                JsonArray testModulesArray = gson.toJsonTree(testModules).getAsJsonArray();
+                JsonArray testDependenciesArray =
+                        gson.toJsonTree(testDependencies).getAsJsonArray();
+                jsonObject.add(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, testModulesArray);
+                jsonObject.add(
+                        TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
+                if (mReportPartialFallback) {
+                    jsonObject.addProperty(TestDiscoveryInvoker.PARTIAL_FALLBACK_KEY, "true");
+                }
+                if (mReportNoPossibleDiscovery) {
+                    jsonObject.addProperty(
+                            TestDiscoveryInvoker.NO_POSSIBLE_TEST_DISCOVERY_KEY, "true");
+                }
+                return jsonObject.toString();
             }
-            if (mReportNoPossibleDiscovery) {
-                jsonObject.addProperty(TestDiscoveryInvoker.NO_POSSIBLE_TEST_DISCOVERY_KEY, "true");
-            }
-            return jsonObject.toString();
         } finally {
             if (hasOutputResultFile()) {
                 LogRegistry.getLogRegistry().unregisterLogger();
@@ -191,8 +196,11 @@ public class TestDiscoveryExecutor {
      * @return A {@link IConfiguration} which constructed based on command line args.
      */
     private IConfiguration getConfiguration(String[] args) throws ConfigurationException {
-        IConfigurationFactory configurationFactory = getConfigurationFactory();
-        return configurationFactory.createConfigurationFromArgs(args, null, new DryRunKeyStore());
+        try (CloseableTraceScope ignored = new CloseableTraceScope("create_configuration")) {
+            IConfigurationFactory configurationFactory = getConfigurationFactory();
+            return configurationFactory.createConfigurationFromArgs(
+                    args, null, new DryRunKeyStore());
+        }
     }
 
     /**

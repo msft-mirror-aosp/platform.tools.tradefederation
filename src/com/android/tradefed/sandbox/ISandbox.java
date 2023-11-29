@@ -81,6 +81,11 @@ public interface ISandbox {
         return null;
     }
 
+    public default Map<String, List<String>> discoverTests(
+            IInvocationContext context, IConfiguration configuration, ITestLogger logger) {
+        return discoverTests(context, configuration);
+    }
+
     /**
      * Run the sandbox with the environment that was set.
      *
@@ -100,12 +105,24 @@ public interface ISandbox {
      *
      * @param context the {@link IInvocationContext} of the parent.
      * @param nonVersionedConfig the {@link IConfiguration} representing the non versioned objects.
+     * @param logger the {@link ITestLogger} to log additional files.
      * @param args the command line arguments.
      * @return a {@link File} directory containing the TF sandbox environment jars.
      */
-    public File getTradefedSandboxEnvironment(
+    public default File getTradefedSandboxEnvironment(
             IInvocationContext context, IConfiguration nonVersionedConfig, String[] args)
-            throws Exception;
+            throws Exception {
+        return null;
+    }
+
+    public default File getTradefedSandboxEnvironment(
+            IInvocationContext context,
+            IConfiguration nonVersionedConfig,
+            ITestLogger logger,
+            String[] args)
+            throws Exception {
+        return getTradefedSandboxEnvironment(context, nonVersionedConfig, args);
+    }
 
     /**
      * Create a classpath based on the environment and the working directory returned by {@link

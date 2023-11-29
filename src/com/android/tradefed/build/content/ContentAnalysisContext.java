@@ -15,6 +15,9 @@
  */
 package com.android.tradefed.build.content;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /** Provide the context surrounding a content to analyze it properly. */
 public class ContentAnalysisContext {
 
@@ -28,6 +31,11 @@ public class ContentAnalysisContext {
     private final String contentEntry;
     private final ContentInformation information;
     private final AnalysisMethod analysisMethod;
+    // This tracks path to ignore from analysis because known to always change but do not cause
+    // functional changes.
+    private Set<String> ignoredChange = new HashSet<>();
+    // Report what is considered a common locations which if modified invalidate the results.
+    private Set<String> commonLocations = new HashSet<>();
 
     public ContentAnalysisContext(
             String contentEntry, ContentInformation information, AnalysisMethod method) {
@@ -46,5 +54,33 @@ public class ContentAnalysisContext {
 
     public AnalysisMethod analysisMethod() {
         return analysisMethod;
+    }
+
+    public Set<String> ignoredChanges() {
+        return ignoredChange;
+    }
+
+    public Set<String> commonLocations() {
+        return commonLocations;
+    }
+
+    public ContentAnalysisContext addIgnoreChange(String path) {
+        ignoredChange.add(path);
+        return this;
+    }
+
+    public ContentAnalysisContext addIgnoreChanges(Set<String> paths) {
+        ignoredChange.addAll(paths);
+        return this;
+    }
+
+    public ContentAnalysisContext addCommonLocation(String path) {
+        commonLocations.add(path);
+        return this;
+    }
+
+    public ContentAnalysisContext addCommonLocations(Set<String> paths) {
+        commonLocations.addAll(paths);
+        return this;
     }
 }
