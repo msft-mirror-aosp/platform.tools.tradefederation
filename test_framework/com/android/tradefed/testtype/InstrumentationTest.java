@@ -312,6 +312,18 @@ public class InstrumentationTest
                             + "instrument command. Only works for S or later.")
     private boolean mRestart = true;
 
+    @Option(
+            name = "instrument-sdk-sandbox",
+            description = "If set to true, the test will run exclusively in an SDK sandbox.")
+    protected boolean mInstrumentSdkSandbox = false;
+
+    @Option(
+            name = "instrument-sdk-in-sandbox",
+            description =
+                    "If set to true, will exclusively run the test as an SDK in an SDK sandbox with"
+                            + "an SDK context instead of the sandbox context.")
+    protected boolean mInstrumentSdkInSandbox = false;
+
     private IAbi mAbi = null;
 
     private Collection<String> mInstallArgs = new ArrayList<>();
@@ -633,13 +645,17 @@ public class InstrumentationTest
             if (!mRestart && getDevice().checkApiLevelAgainstNextRelease(31)) {
                 runOptions += "--no-restart ";
             }
-            if (getDevice().checkApiLevelAgainstNextRelease(33)
-                    && Optional.ofNullable(testInformation)
-                            .map(TestInformation::properties)
-                            .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
-                            .map(value -> Boolean.TRUE.toString().equals(value))
-                            .orElse(false)) {
+            if (mInstrumentSdkInSandbox
+                    || (getDevice().checkApiLevelAgainstNextRelease(33)
+                            && Optional.ofNullable(testInformation)
+                                    .map(TestInformation::properties)
+                                    .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
+                                    .map(value -> Boolean.TRUE.toString().equals(value))
+                                    .orElse(false))) {
                 runOptions += "--instrument-sdk-in-sandbox ";
+            }
+            if (mInstrumentSdkSandbox) {
+                runOptions += "--instrument-sdk-sandbox ";
             }
 
             if (abiName != null && getDevice().getApiLevel() > 20) {
