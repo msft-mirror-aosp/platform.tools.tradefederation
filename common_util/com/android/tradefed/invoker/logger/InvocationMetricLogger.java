@@ -301,6 +301,7 @@ public class InvocationMetricLogger {
         WORKDIR_DIFFS_IN_COMMON("workdir_diffs_in_common", true),
         WOKRDIR_MODULE_WITH_DIFFS("workdir_module_with_diffs", true),
         WORKDIR_UNCHANGED_MODULES("workdir_unchanged_modules", true),
+        ABORT_CONTENT_ANALYSIS("abort_content_analysis", true),
         XTS_DIFFS_IN_COMMON("xts_diffs_in_common", true),
         XTS_MODULE_WITH_DIFFS("xts_module_with_diffs", true),
         XTS_UNCHANGED_MODULES("xts_unchanged_modules", true),
