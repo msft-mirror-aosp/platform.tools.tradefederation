@@ -232,6 +232,12 @@ public class TestContentAnalyzer {
         List<String> entryNames = new ArrayList<>();
         Set<String> AllCommonDirs = new HashSet<>();
         for (ContentAnalysisContext context : contexts) {
+            if (context.abortAnalysis()) {
+                CLog.w("Analysis was aborted.");
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
+                return null;
+            }
             List<ArtifactFileDescriptor> diff =
                     analyzeContentDiff(context.contentInformation(), context.contentEntry());
             if (diff == null) {
