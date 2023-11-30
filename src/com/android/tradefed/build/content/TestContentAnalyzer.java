@@ -119,7 +119,7 @@ public class TestContentAnalyzer {
                         .filter(p -> p.startsWith(rootPackage + "/tools/"))
                         .collect(Collectors.toSet());
         // Exclude version.txt has it always change
-        commonDiff.remove(rootPackage + "tools/version.txt");
+        commonDiff.remove(rootPackage + "/tools/version.txt");
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.XTS_DIFFS_IN_COMMON, commonDiff.size());
         results.addModifiedSharedFolder(commonDiff.size());
