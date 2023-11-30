@@ -210,6 +210,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         mUserDataFlashOption = flashOption;
     }
 
+    /** Wrap the getBuildInfo so we have a change to override it for specific scenarios. */
+    public IBuildInfo getBuild(TestInformation testInfo) {
+        return testInfo.getBuildInfo();
+    }
+
     /** {@inheritDoc} */
     @Override
     public void setUp(TestInformation testInfo)
@@ -219,7 +224,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             return;
         }
         ITestDevice device = testInfo.getDevice();
-        IBuildInfo buildInfo = testInfo.getBuildInfo();
+        IBuildInfo buildInfo = getBuild(testInfo);
         CLog.i("Performing setup on %s", device.getSerialNumber());
         if (!(buildInfo instanceof IDeviceBuildInfo)) {
             throw new IllegalArgumentException("Provided buildInfo is not a IDeviceBuildInfo");

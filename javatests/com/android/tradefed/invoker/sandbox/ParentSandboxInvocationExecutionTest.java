@@ -115,7 +115,7 @@ public class ParentSandboxInvocationExecutionTest {
         mParentSandbox.doCleanUp(mContext, mConfig, null);
 
         verify(mMockFactory, times(0)).createConfigurationFromArgs(Mockito.any());
-        verify(mMockDevice, times(1)).getIDevice();
+        verify(mMockDevice, times(2)).getIDevice();
     }
 
     /**
@@ -166,6 +166,6 @@ public class ParentSandboxInvocationExecutionTest {
 
         verify(mMockLabPreparer, times(1)).setUp(Mockito.any());
         verify(mMockLabPreparer, times(1)).tearDown(Mockito.any(), Mockito.any());
-        verify(mMockDevice, times(1)).getIDevice();
+        verify(mMockDevice, times(2)).getIDevice();
     }
 }
