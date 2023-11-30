@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.presubmit;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import static java.lang.String.format;
@@ -90,7 +91,7 @@ public class TestMappingsValidation implements IBuildReceiver {
     private static final Pattern CLASS_OR_METHOD_REGEX =
             Pattern.compile(
                     "^([\\p{L}_$][\\p{L}\\p{N}_$]*\\.)*[\\p{Lu}_$][\\p{L}\\p{N}_$]*"
-                            + "(#[\\p{L}_$][\\p{L}\\p{N}_$]*)?$");
+                            + "(#[\\p{L}_$][\\p{L}\\p{N}_$]*)?(\\[.*\\])?$");
     // pattern used to identify if this is regular expression with at least 1 '*' or '?'.
     private static final Pattern REGULAR_EXPRESSION = Pattern.compile("(\\?+)|(\\*+)");
     private static final String MODULE_INFO = "module-info.json";
@@ -552,6 +553,18 @@ public class TestMappingsValidation implements IBuildReceiver {
             return Filters.CLASS_OR_METHOD;
         }
         return Filters.PACKAGE;
+    }
+
+    /** Test {@link TestMappingsValidation#getOptionType(String)} */
+    @Test
+    public void testGetOptionType() throws Exception {
+        assertEquals(Filters.PACKAGE, getOptionType("a.b"));
+        assertEquals(Filters.CLASS_OR_METHOD, getOptionType("a.b.Class#someMethod"));
+        assertEquals(Filters.CLASS_OR_METHOD, getOptionType("a.b.Class#someMethod[some_param]"));
+        assertEquals(Filters.CLASS_OR_METHOD, getOptionType("a.b.Class"));
+        assertEquals(Filters.REGEX, getOptionType("a.b.c\\.*"));
+        assertEquals(Filters.REGEX, getOptionType("a.b.Class.\\.*"));
+        assertEquals(Filters.REGEX, getOptionType("a.b.Class#method.*"));
     }
 
     /**
