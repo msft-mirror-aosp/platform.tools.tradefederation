@@ -23,7 +23,6 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
@@ -79,7 +78,7 @@ public class SkipManager implements IDisableable {
 
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
-        if (TestInvocation.isSubprocess(config)) {
+        if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
             // Information is going to flow through GlobalFilters mechanism
             return;
         }
@@ -141,20 +140,19 @@ public class SkipManager implements IDisableable {
         if (isDisabled()) {
             return;
         }
-        if (!"WORK_NODE".equals(context.getAttribute("trigger"))) {
-            CLog.d("Skip fetching demotion information in non-presubmit.");
-            return;
-        }
-        try (TradefedFeatureClient client = new TradefedFeatureClient()) {
-            Map<String, String> args = new HashMap<>();
-            FeatureResponse response = client.triggerFeature("FetchDemotionInformation", args);
-            if (response.hasErrorInfo()) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.DEMOTION_ERROR_RESPONSE, 1);
-            } else {
-                for (PartResponse part : response.getMultiPartResponse().getResponsePartList()) {
-                    String filter = part.getKey();
-                    mDemotionFilters.put(filter, SkipReason.fromString(part.getValue()));
+        if ("WORK_NODE".equals(context.getAttribute("trigger"))) {
+            try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+                Map<String, String> args = new HashMap<>();
+                FeatureResponse response = client.triggerFeature("FetchDemotionInformation", args);
+                if (response.hasErrorInfo()) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.DEMOTION_ERROR_RESPONSE, 1);
+                } else {
+                    for (PartResponse part :
+                            response.getMultiPartResponse().getResponsePartList()) {
+                        String filter = part.getKey();
+                        mDemotionFilters.put(filter, SkipReason.fromString(part.getValue()));
+                    }
                 }
             }
         }

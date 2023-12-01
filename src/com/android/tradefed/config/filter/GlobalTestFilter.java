@@ -123,7 +123,10 @@ public final class GlobalTestFilter {
         if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
             populateGlobalFilters();
         } else {
-            mExcludeFilters.addAll(demotedList);
+            if (!demotedList.isEmpty()) {
+                CLog.d("Adding demoted list to global filters: %s", demotedList);
+                mExcludeFilters.addAll(demotedList);
+            }
         }
         // Apply filters
         if (mStrictIncludeFilters.isEmpty()) {
