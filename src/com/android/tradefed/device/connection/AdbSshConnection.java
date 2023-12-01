@@ -637,6 +637,7 @@ public class AdbSshConnection extends AdbTcpConnection {
      */
     public CommandResult snapshotGce(String user, Integer offset, String snapshotId)
             throws TargetSetupError {
+        cleanupSnapshotGce(user, snapshotId);
         suspendGce(user, offset);
         long startTime = System.currentTimeMillis();
 
@@ -912,6 +913,44 @@ public class AdbSshConnection extends AdbTcpConnection {
                     "failed to stop device",
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_STOP);
+        }
+    }
+
+    /**
+     * Delete snapshot folder
+     *
+     * @param user the host running use of AVD, <code>null</code> if not applicable.
+     * @param snapshotId the id of the snapshot to delete.
+     */
+    private void cleanupSnapshotGce(String user, String snapshotId) {
+        long startTime = System.currentTimeMillis();
+
+        // Get the user from options instance-user if user is null.
+        if (user == null) {
+            user = getDevice().getOptions().getInstanceUser();
+        }
+
+        String cleanupSnapshotCommand =
+                String.format("rm -rf /tmp/%s/snapshots/%s", user, snapshotId);
+
+        CommandResult deleteRes =
+                GceManager.remoteSshCommandExecution(
+                        mGceAvd,
+                        getDevice().getOptions(),
+                        getRunUtil(),
+                        Math.max(3000L, getDevice().getOptions().getGceCmdTimeout()),
+                        cleanupSnapshotCommand.split(" "));
+
+        if (CommandStatus.SUCCESS.equals(deleteRes.getStatus())) {
+            // Time taken for stop this invocation
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DELETE_SNAPSHOT_FILES,
+                    Long.toString(System.currentTimeMillis() - startTime));
+
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DELETE_SNAPSHOT_FILES_COUNT, 1);
+        } else {
+            CLog.e("failed to delete snapshot with ID: %s. Does the snapshot exist?", snapshotId);
         }
     }
 
