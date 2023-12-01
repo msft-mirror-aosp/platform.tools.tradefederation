@@ -119,7 +119,7 @@ public class TestContentAnalyzer {
                         .filter(p -> p.startsWith(rootPackage + "/tools/"))
                         .collect(Collectors.toSet());
         // Exclude version.txt has it always change
-        commonDiff.remove(rootPackage + "tools/version.txt");
+        commonDiff.remove(rootPackage + "/tools/version.txt");
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.XTS_DIFFS_IN_COMMON, commonDiff.size());
         results.addModifiedSharedFolder(commonDiff.size());
@@ -134,6 +134,10 @@ public class TestContentAnalyzer {
         // Then check changes in modules
         for (File rootFile : testcasesRoot.listFiles()) {
             if (rootFile.isDirectory()) {
+                if (rootFile.list().length == 0) {
+                    // Skip empty directories
+                    continue;
+                }
                 File moduleDir = rootFile;
                 String relativeModulePath =
                         String.format("%s/testcases/%s/", rootPackage, moduleDir.getName());
@@ -232,6 +236,12 @@ public class TestContentAnalyzer {
         List<String> entryNames = new ArrayList<>();
         Set<String> AllCommonDirs = new HashSet<>();
         for (ContentAnalysisContext context : contexts) {
+            if (context.abortAnalysis()) {
+                CLog.w("Analysis was aborted.");
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
+                return null;
+            }
             List<ArtifactFileDescriptor> diff =
                     analyzeContentDiff(context.contentInformation(), context.contentEntry());
             if (diff == null) {
@@ -280,6 +290,10 @@ public class TestContentAnalyzer {
             for (File testCasesDir : testCasesDirs) {
                 if (!testCasesDir.isDirectory()) {
                     CLog.w("Found a non directory testcases directory: %s", testCasesDir);
+                    continue;
+                }
+                if (testCasesDir.list().length == 0) {
+                    // Skip empty directories
                     continue;
                 }
                 Path relativeRootFilePath = testsDirRoot.toPath().relativize(testCasesDir.toPath());
