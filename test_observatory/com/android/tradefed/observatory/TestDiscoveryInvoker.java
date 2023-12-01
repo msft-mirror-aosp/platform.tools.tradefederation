@@ -254,6 +254,11 @@ public class TestDiscoveryInvoker {
                 if (partialFallback != null) {
                     dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
                 }
+                if (!noDiscovery) {
+                    mConfiguration
+                            .getSkipManager()
+                            .reportDiscoveryDependencies(testModules, testDependencies);
+                }
                 return dependencies;
             }
         } finally {
@@ -373,6 +378,13 @@ public class TestDiscoveryInvoker {
                 String partialFallback = parsePartialFallback(result);
                 if (partialFallback != null) {
                     dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+                }
+                if (!noDiscovery) {
+                    if (!noDiscovery) {
+                        mConfiguration
+                                .getSkipManager()
+                                .reportDiscoveryDependencies(testModules, new ArrayList<String>());
+                    }
                 }
                 return dependencies;
             }
