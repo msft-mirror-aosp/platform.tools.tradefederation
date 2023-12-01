@@ -17,6 +17,7 @@
 package com.android.tradefed.config;
 
 import com.android.tradefed.device.metric.IMetricCollector;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.ILabPreparer;
@@ -201,170 +202,176 @@ public class ConfigurationDef {
      */
     public IConfiguration createConfiguration(Set<String> allowedObjects)
             throws ConfigurationException {
-        mFilteredObjects = false;
-        IConfiguration config = new Configuration(getName(), getDescription());
-        List<IDeviceConfiguration> deviceObjectList = new ArrayList<IDeviceConfiguration>();
-        IDeviceConfiguration defaultDeviceConfig =
-                new DeviceConfigurationHolder(DEFAULT_DEVICE_NAME);
-        boolean hybridMultiDeviceHandling = false;
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("configdef.createConfiguration")) {
+            mFilteredObjects = false;
+            IConfiguration config = new Configuration(getName(), getDescription());
+            List<IDeviceConfiguration> deviceObjectList = new ArrayList<IDeviceConfiguration>();
+            IDeviceConfiguration defaultDeviceConfig =
+                    new DeviceConfigurationHolder(DEFAULT_DEVICE_NAME);
+            boolean hybridMultiDeviceHandling = false;
 
-        if (!mMultiDeviceMode) {
-            // We still populate a default device config to avoid special logic in the rest of the
-            // harness.
-            deviceObjectList.add(defaultDeviceConfig);
-        } else {
-            // FIXME: handle this in a more generic way.
-            // Get the number of real device (non build-only) device
-            Long numDut =
-                    mExpectedDevices
-                            .values()
-                            .stream()
-                            .filter(value -> (value == false))
-                            .collect(Collectors.counting());
-            Long numNonDut =
-                    mExpectedDevices
-                            .values()
-                            .stream()
-                            .filter(value -> (value == true))
-                            .collect(Collectors.counting());
-            if (numDut == 0 && numNonDut == 0) {
-                throw new ConfigurationException("No device detected. Should not happen.");
-            }
-            if (numNonDut > 0 && numDut == 0) {
-                // if we only have fake devices, use the default device as real device, and add it
-                // first.
-                Map<String, Boolean> copy = new LinkedHashMap<>();
-                copy.put(DEFAULT_DEVICE_NAME, false);
-                copy.putAll(mExpectedDevices);
-                mExpectedDevices = copy;
-                numDut++;
-            }
-            if (numNonDut > 0 && numDut == 1) {
-                // If we have fake device but only a single real device, is the only use case to
-                // handle very differently: object at the root of the xml needs to be associated
-                // with the only DuT.
-                // All the other use cases can be handled the regular way.
-                CLog.d(
-                        "One device is under tests while config '%s' requires some fake=true "
-                                + "devices. Using hybrid parsing of config.",
-                        getName());
-                hybridMultiDeviceHandling = true;
-            }
-            for (String name : mExpectedDevices.keySet()) {
-                deviceObjectList.add(
-                        new DeviceConfigurationHolder(name, mExpectedDevices.get(name)));
-            }
-        }
-
-        Map<String, String> rejectedObjects = new HashMap<>();
-        Throwable cause = null;
-
-        for (Map.Entry<String, List<ConfigObjectDef>> objClassEntry : mObjectClassMap.entrySet()) {
-            List<Object> objectList = new ArrayList<Object>(objClassEntry.getValue().size());
-            String entryName = objClassEntry.getKey();
-            boolean shouldAddToFlatConfig = true;
-
-            for (ConfigObjectDef configDef : objClassEntry.getValue()) {
-                if (allowedObjects != null && !allowedObjects.contains(objClassEntry.getKey())) {
-                    CLog.d("Skipping creation of %s", objClassEntry.getKey());
-                    mFilteredObjects = true;
-                    continue;
+            if (!mMultiDeviceMode) {
+                // We still populate a default device config to avoid special logic in the rest of
+                // the
+                // harness.
+                deviceObjectList.add(defaultDeviceConfig);
+            } else {
+                // FIXME: handle this in a more generic way.
+                // Get the number of real device (non build-only) device
+                Long numDut =
+                        mExpectedDevices.values().stream()
+                                .filter(value -> (value == false))
+                                .collect(Collectors.counting());
+                Long numNonDut =
+                        mExpectedDevices.values().stream()
+                                .filter(value -> (value == true))
+                                .collect(Collectors.counting());
+                if (numDut == 0 && numNonDut == 0) {
+                    throw new ConfigurationException("No device detected. Should not happen.");
                 }
-                Object configObject = null;
-                try {
-                    configObject = createObject(objClassEntry.getKey(), configDef.mClassName);
-                } catch (ClassNotFoundConfigurationException e) {
-                    // Store all the loading failure
-                    cause = e.getCause();
-                    rejectedObjects.putAll(e.getRejectedObjects());
-                    CLog.e(e);
-                    // Don't add in case of issue
-                    shouldAddToFlatConfig = false;
-                    continue;
+                if (numNonDut > 0 && numDut == 0) {
+                    // if we only have fake devices, use the default device as real device, and add
+                    // it
+                    // first.
+                    Map<String, Boolean> copy = new LinkedHashMap<>();
+                    copy.put(DEFAULT_DEVICE_NAME, false);
+                    copy.putAll(mExpectedDevices);
+                    mExpectedDevices = copy;
+                    numDut++;
                 }
-                Matcher matcher = null;
-                if (mMultiDeviceMode) {
-                    matcher = MULTI_PATTERN.matcher(entryName);
+                if (numNonDut > 0 && numDut == 1) {
+                    // If we have fake device but only a single real device, is the only use case to
+                    // handle very differently: object at the root of the xml needs to be associated
+                    // with the only DuT.
+                    // All the other use cases can be handled the regular way.
+                    CLog.d(
+                            "One device is under tests while config '%s' requires some fake=true "
+                                    + "devices. Using hybrid parsing of config.",
+                            getName());
+                    hybridMultiDeviceHandling = true;
                 }
-                if (mMultiDeviceMode && matcher.find()) {
-                    // If we find the device namespace, fetch the matching device or create it if
-                    // it doesn't exists.
-                    IDeviceConfiguration multiDev = null;
-                    shouldAddToFlatConfig = false;
-                    for (IDeviceConfiguration iDevConfig : deviceObjectList) {
-                        if (matcher.group(1).equals(iDevConfig.getDeviceName())) {
-                            multiDev = iDevConfig;
-                            break;
-                        }
+                for (String name : mExpectedDevices.keySet()) {
+                    deviceObjectList.add(
+                            new DeviceConfigurationHolder(name, mExpectedDevices.get(name)));
+                }
+            }
+
+            Map<String, String> rejectedObjects = new HashMap<>();
+            Throwable cause = null;
+
+            for (Map.Entry<String, List<ConfigObjectDef>> objClassEntry :
+                    mObjectClassMap.entrySet()) {
+                List<Object> objectList = new ArrayList<Object>(objClassEntry.getValue().size());
+                String entryName = objClassEntry.getKey();
+                boolean shouldAddToFlatConfig = true;
+
+                for (ConfigObjectDef configDef : objClassEntry.getValue()) {
+                    if (allowedObjects != null
+                            && !allowedObjects.contains(objClassEntry.getKey())) {
+                        CLog.d("Skipping creation of %s", objClassEntry.getKey());
+                        mFilteredObjects = true;
+                        continue;
                     }
-                    if (multiDev == null) {
-                        multiDev = new DeviceConfigurationHolder(matcher.group(1));
-                        deviceObjectList.add(multiDev);
+                    Object configObject = null;
+                    try {
+                        configObject = createObject(objClassEntry.getKey(), configDef.mClassName);
+                    } catch (ClassNotFoundConfigurationException e) {
+                        // Store all the loading failure
+                        cause = e.getCause();
+                        rejectedObjects.putAll(e.getRejectedObjects());
+                        CLog.e(e);
+                        // Don't add in case of issue
+                        shouldAddToFlatConfig = false;
+                        continue;
                     }
-                    // We reference the original object to the device and not to the flat list.
-                    multiDev.addSpecificConfig(configObject, matcher.group(2));
-                    multiDev.addFrequency(configObject, configDef.mAppearanceNum);
-                } else {
-                    if (Configuration.doesBuiltInObjSupportMultiDevice(entryName)) {
-                        if (hybridMultiDeviceHandling) {
-                            // Special handling for a multi-device with one Dut and the rest are
-                            // non-dut devices.
-                            // At this point we are ensured to have only one Dut device. Object at
-                            // the root should are associated with the only device under test (Dut).
-                            List<IDeviceConfiguration> realDevice =
-                                    deviceObjectList
-                                            .stream()
-                                            .filter(object -> (object.isFake() == false))
-                                            .collect(Collectors.toList());
-                            if (realDevice.size() != 1) {
-                                throw new ConfigurationException(
-                                        String.format(
-                                                "Something went very bad, we found '%s' Dut "
-                                                        + "device while expecting one only.",
-                                                realDevice.size()));
+                    Matcher matcher = null;
+                    if (mMultiDeviceMode) {
+                        matcher = MULTI_PATTERN.matcher(entryName);
+                    }
+                    if (mMultiDeviceMode && matcher.find()) {
+                        // If we find the device namespace, fetch the matching device or create it
+                        // if it doesn't exist.
+                        IDeviceConfiguration multiDev = null;
+                        shouldAddToFlatConfig = false;
+                        for (IDeviceConfiguration iDevConfig : deviceObjectList) {
+                            if (matcher.group(1).equals(iDevConfig.getDeviceName())) {
+                                multiDev = iDevConfig;
+                                break;
                             }
-                            realDevice.get(0).addSpecificConfig(configObject, entryName);
-                            realDevice.get(0).addFrequency(configObject, configDef.mAppearanceNum);
-                        } else {
-                            // Regular handling of object for single device situation.
-                            defaultDeviceConfig.addSpecificConfig(configObject, entryName);
-                            defaultDeviceConfig.addFrequency(
-                                    configObject, configDef.mAppearanceNum);
                         }
+                        if (multiDev == null) {
+                            multiDev = new DeviceConfigurationHolder(matcher.group(1));
+                            deviceObjectList.add(multiDev);
+                        }
+                        // We reference the original object to the device and not to the flat list.
+                        multiDev.addSpecificConfig(configObject, matcher.group(2));
+                        multiDev.addFrequency(configObject, configDef.mAppearanceNum);
                     } else {
-                        // Only add to flat list if they are not part of multi device config.
-                        objectList.add(configObject);
+                        if (Configuration.doesBuiltInObjSupportMultiDevice(entryName)) {
+                            if (hybridMultiDeviceHandling) {
+                                // Special handling for a multi-device with one Dut and the rest are
+                                // non-dut devices.
+                                // At this point we are ensured to have only one Dut device. Object
+                                // at
+                                // the root should are associated with the only device under test
+                                // (Dut).
+                                List<IDeviceConfiguration> realDevice =
+                                        deviceObjectList.stream()
+                                                .filter(object -> (object.isFake() == false))
+                                                .collect(Collectors.toList());
+                                if (realDevice.size() != 1) {
+                                    throw new ConfigurationException(
+                                            String.format(
+                                                    "Something went very bad, we found '%s' Dut "
+                                                            + "device while expecting one only.",
+                                                    realDevice.size()));
+                                }
+                                realDevice.get(0).addSpecificConfig(configObject, entryName);
+                                realDevice
+                                        .get(0)
+                                        .addFrequency(configObject, configDef.mAppearanceNum);
+                            } else {
+                                // Regular handling of object for single device situation.
+                                defaultDeviceConfig.addSpecificConfig(configObject, entryName);
+                                defaultDeviceConfig.addFrequency(
+                                        configObject, configDef.mAppearanceNum);
+                            }
+                        } else {
+                            // Only add to flat list if they are not part of multi device config.
+                            objectList.add(configObject);
+                        }
+                    }
+                }
+                if (shouldAddToFlatConfig) {
+                    config.setConfigurationObjectList(entryName, objectList);
+                }
+            }
+
+            checkRejectedObjects(rejectedObjects, cause);
+
+            // We always add the device configuration list so we can rely on it everywhere
+            config.setConfigurationObjectList(Configuration.DEVICE_NAME, deviceObjectList);
+            injectOptions(config, mOptionList);
+
+            List<ITargetPreparer> notILab = new ArrayList<>();
+            for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
+                for (ITargetPreparer labPreparer : deviceConfig.getLabPreparers()) {
+                    if (!(labPreparer instanceof ILabPreparer)) {
+                        notILab.add(labPreparer);
                     }
                 }
             }
-            if (shouldAddToFlatConfig) {
-                config.setConfigurationObjectList(entryName, objectList);
+            if (!notILab.isEmpty()) {
+                throw new ConfigurationException(
+                        String.format(
+                                "The following were specified as lab_preparer "
+                                        + "but aren't ILabPreparer: %s",
+                                notILab),
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
+            return config;
         }
-
-        checkRejectedObjects(rejectedObjects, cause);
-
-        // We always add the device configuration list so we can rely on it everywhere
-        config.setConfigurationObjectList(Configuration.DEVICE_NAME, deviceObjectList);
-        injectOptions(config, mOptionList);
-
-        List<ITargetPreparer> notILab = new ArrayList<>();
-        for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
-            for (ITargetPreparer labPreparer : deviceConfig.getLabPreparers()) {
-                if (!(labPreparer instanceof ILabPreparer)) {
-                    notILab.add(labPreparer);
-                }
-            }
-        }
-        if (!notILab.isEmpty()) {
-            throw new ConfigurationException(
-                    String.format(
-                            "The following were specified as lab_preparer "
-                                    + "but aren't ILabPreparer: %s",
-                            notILab),
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-        return config;
     }
 
     /** Evaluate rejected objects map, if any throw an exception. */
