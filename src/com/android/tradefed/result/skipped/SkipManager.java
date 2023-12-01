@@ -74,6 +74,8 @@ public class SkipManager implements IDisableable {
 
     private boolean mNoTestsDiscovered = false;
     private List<ContentAnalysisContext> mTestArtifactsAnalysisContent = new ArrayList<>();
+    private List<String> mModulesDiscovered = new ArrayList<String>();
+    private List<String> mDependencyFiles = new ArrayList<String>();
 
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
@@ -106,6 +108,11 @@ public class SkipManager implements IDisableable {
     public void reportDiscoveryWithNoTests() {
         CLog.d("Test discovery reported that no tests were found.");
         mNoTestsDiscovered = true;
+    }
+
+    public void reportDiscoveryDependencies(List<String> modules, List<String> depFiles) {
+        mModulesDiscovered.addAll(modules);
+        mDependencyFiles.addAll(depFiles);
     }
 
     /** Reports whether we should skip the current invocation. */
@@ -170,7 +177,11 @@ public class SkipManager implements IDisableable {
             } else {
                 try (CloseableTraceScope ignored = new CloseableTraceScope("TestContentAnalyzer")) {
                     TestContentAnalyzer analyzer =
-                            new TestContentAnalyzer(information, mTestArtifactsAnalysisContent);
+                            new TestContentAnalyzer(
+                                    information,
+                                    mTestArtifactsAnalysisContent,
+                                    mModulesDiscovered,
+                                    mDependencyFiles);
                     ContentAnalysisResults analysisResults = analyzer.evaluate();
                     if (analysisResults == null) {
                         return false;
@@ -210,11 +221,14 @@ public class SkipManager implements IDisableable {
     public void clearManager() {
         mDemotionFilters.clear();
         mDemotionFilterOption.clear();
+        mModulesDiscovered.clear();
+        mDependencyFiles.clear();
         for (ContentAnalysisContext request : mTestArtifactsAnalysisContent) {
             if (request.contentInformation() != null) {
                 request.contentInformation().clean();
             }
         }
+        mTestArtifactsAnalysisContent.clear();
     }
 
     @Override
