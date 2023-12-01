@@ -22,6 +22,7 @@ import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.config.remote.ExtendedFile;
 import com.android.tradefed.config.remote.IRemoteFileResolver.ResolvedFile;
 import com.android.tradefed.config.yaml.ConfigurationYamlParser;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.ClassPathScanner;
@@ -508,7 +509,9 @@ public class ConfigurationFactory implements IConfigurationFactory {
     protected ConfigurationDef getConfigurationDef(
             String name, boolean isGlobal, Map<String, String> templateMap)
             throws ConfigurationException {
-        return new ConfigLoader(isGlobal).getConfigurationDef(name, templateMap);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("getConfigurationDef")) {
+            return new ConfigLoader(isGlobal).getConfigurationDef(name, templateMap);
+        }
     }
 
     /**
@@ -553,24 +556,27 @@ public class ConfigurationFactory implements IConfigurationFactory {
             CLog.w("dry-run detected, we are using a dryrun keystore");
             keyStoreClient = new DryRunKeyStore();
         }
-        final List<String> tmpUnconsumedArgs = config.setOptionsFromCommandLineArgs(
-                listArgs, keyStoreClient);
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("setOptionsFromCommandLineArgs")) {
+            final List<String> tmpUnconsumedArgs =
+                    config.setOptionsFromCommandLineArgs(listArgs, keyStoreClient);
 
-        if (unconsumedArgs == null && tmpUnconsumedArgs.size() > 0) {
-            // (unconsumedArgs == null) is taken as a signal that the caller
-            // expects all args to
-            // be processed.
-            throw new ConfigurationException(
-                    String.format(
-                            "Invalid arguments provided. Unprocessed arguments: %s",
-                            tmpUnconsumedArgs),
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        } else if (unconsumedArgs != null) {
-            // Return the unprocessed args
-            unconsumedArgs.addAll(tmpUnconsumedArgs);
+            if (unconsumedArgs == null && tmpUnconsumedArgs.size() > 0) {
+                // (unconsumedArgs == null) is taken as a signal that the caller
+                // expects all args to
+                // be processed.
+                throw new ConfigurationException(
+                        String.format(
+                                "Invalid arguments provided. Unprocessed arguments: %s",
+                                tmpUnconsumedArgs),
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+            } else if (unconsumedArgs != null) {
+                // Return the unprocessed args
+                unconsumedArgs.addAll(tmpUnconsumedArgs);
+            }
+
+            return config;
         }
-
-        return config;
     }
 
     /** {@inheritDoc} */
