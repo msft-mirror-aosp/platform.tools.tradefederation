@@ -16,6 +16,8 @@
 
 package com.android.tradefed.config;
 
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+
 import org.xml.sax.Attributes;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
@@ -400,7 +402,8 @@ class ConfigurationXmlParser {
             Map<String, String> templateMap,
             Set<String> templateSeen)
             throws ConfigurationException {
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("ConfigurationXmlParser#parse")) {
             SAXParserFactory parserFactory = SAXParserFactory.newInstance();
             parserFactory.setNamespaceAware(true);
             SAXParser parser = parserFactory.newSAXParser();
