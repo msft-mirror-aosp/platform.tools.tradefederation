@@ -556,27 +556,24 @@ public class ConfigurationFactory implements IConfigurationFactory {
             CLog.w("dry-run detected, we are using a dryrun keystore");
             keyStoreClient = new DryRunKeyStore();
         }
-        try (CloseableTraceScope ignored =
-                new CloseableTraceScope("setOptionsFromCommandLineArgs")) {
-            final List<String> tmpUnconsumedArgs =
-                    config.setOptionsFromCommandLineArgs(listArgs, keyStoreClient);
+        final List<String> tmpUnconsumedArgs =
+                config.setOptionsFromCommandLineArgs(listArgs, keyStoreClient);
 
-            if (unconsumedArgs == null && tmpUnconsumedArgs.size() > 0) {
-                // (unconsumedArgs == null) is taken as a signal that the caller
-                // expects all args to
-                // be processed.
-                throw new ConfigurationException(
-                        String.format(
-                                "Invalid arguments provided. Unprocessed arguments: %s",
-                                tmpUnconsumedArgs),
-                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-            } else if (unconsumedArgs != null) {
-                // Return the unprocessed args
-                unconsumedArgs.addAll(tmpUnconsumedArgs);
-            }
-
-            return config;
+        if (unconsumedArgs == null && tmpUnconsumedArgs.size() > 0) {
+            // (unconsumedArgs == null) is taken as a signal that the caller
+            // expects all args to
+            // be processed.
+            throw new ConfigurationException(
+                    String.format(
+                            "Invalid arguments provided. Unprocessed arguments: %s",
+                            tmpUnconsumedArgs),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        } else if (unconsumedArgs != null) {
+            // Return the unprocessed args
+            unconsumedArgs.addAll(tmpUnconsumedArgs);
         }
+
+        return config;
     }
 
     /** {@inheritDoc} */

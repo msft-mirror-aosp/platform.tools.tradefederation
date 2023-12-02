@@ -408,21 +408,26 @@ public class ConfigurationDef {
      * @throws ConfigurationException if configuration could not be created
      */
     IGlobalConfiguration createGlobalConfiguration() throws ConfigurationException {
-        IGlobalConfiguration config = new GlobalConfiguration(getName(), getDescription());
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("createGlobalConfigurationObjects")) {
+            IGlobalConfiguration config = new GlobalConfiguration(getName(), getDescription());
 
-        for (Map.Entry<String, List<ConfigObjectDef>> objClassEntry : mObjectClassMap.entrySet()) {
-            List<Object> objectList = new ArrayList<Object>(objClassEntry.getValue().size());
-            for (ConfigObjectDef configDef : objClassEntry.getValue()) {
-                Object configObject = createObject(objClassEntry.getKey(), configDef.mClassName);
-                objectList.add(configObject);
+            for (Map.Entry<String, List<ConfigObjectDef>> objClassEntry :
+                    mObjectClassMap.entrySet()) {
+                List<Object> objectList = new ArrayList<Object>(objClassEntry.getValue().size());
+                for (ConfigObjectDef configDef : objClassEntry.getValue()) {
+                    Object configObject =
+                            createObject(objClassEntry.getKey(), configDef.mClassName);
+                    objectList.add(configObject);
+                }
+                config.setConfigurationObjectList(objClassEntry.getKey(), objectList);
             }
-            config.setConfigurationObjectList(objClassEntry.getKey(), objectList);
-        }
-        for (OptionDef optionEntry : mOptionList) {
-            config.injectOptionValue(optionEntry.name, optionEntry.key, optionEntry.value);
-        }
+            for (OptionDef optionEntry : mOptionList) {
+                config.injectOptionValue(optionEntry.name, optionEntry.key, optionEntry.value);
+            }
 
-        return config;
+            return config;
+        }
     }
 
     /**
