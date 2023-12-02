@@ -27,6 +27,7 @@ import com.android.tradefed.device.IDeviceRecovery;
 import com.android.tradefed.device.IDeviceSelection;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.metric.IMetricCollector;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ILeveledLogOutput;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.log.StdoutLogger;
@@ -1181,38 +1182,43 @@ public class Configuration implements IConfiguration {
     public List<String> setOptionsFromCommandLineArgs(List<String> listArgs,
             IKeyStoreClient keyStoreClient)
             throws ConfigurationException {
-        // We get all the objects except the one describing the Configuration itself which does not
-        // allow passing its option via command line.
-        ArgsOptionParser parser =
-                new ArgsOptionParser(
-                        getAllConfigurationObjects(CONFIGURATION_DESCRIPTION_TYPE_NAME, true));
-        if (keyStoreClient != null) {
-            parser.setKeyStore(keyStoreClient);
-        }
-        try {
-            List<String> leftOver = parser.parse(listArgs);
-            mInopOptions.addAll(parser.getInopOptions());
-            return leftOver;
-        } catch (ConfigurationException e) {
-            Matcher m = CONFIG_EXCEPTION_PATTERN.matcher(e.getMessage());
-            if (!m.matches()) {
-                throw e;
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("setOptionsFromCommandLineArgs")) {
+            // We get all the objects except the one describing the Configuration itself which does
+            // not
+            // allow passing its option via command line.
+            ArgsOptionParser parser =
+                    new ArgsOptionParser(
+                            getAllConfigurationObjects(CONFIGURATION_DESCRIPTION_TYPE_NAME, true));
+            if (keyStoreClient != null) {
+                parser.setKeyStore(keyStoreClient);
             }
-            String optionName = m.group(1);
             try {
-                // In case the option exists in the config descriptor, we change the error message
-                // to be more specific about why the option is rejected.
-                OptionSetter setter = new OptionSetter(getConfigurationDescription());
-                setter.getTypeForOption(optionName);
-            } catch (ConfigurationException stillThrowing) {
-                // Throw the original exception since it cannot be found at all.
-                throw e;
+                List<String> leftOver = parser.parse(listArgs);
+                mInopOptions.addAll(parser.getInopOptions());
+                return leftOver;
+            } catch (ConfigurationException e) {
+                Matcher m = CONFIG_EXCEPTION_PATTERN.matcher(e.getMessage());
+                if (!m.matches()) {
+                    throw e;
+                }
+                String optionName = m.group(1);
+                try {
+                    // In case the option exists in the config descriptor, we change the error
+                    // message
+                    // to be more specific about why the option is rejected.
+                    OptionSetter setter = new OptionSetter(getConfigurationDescription());
+                    setter.getTypeForOption(optionName);
+                } catch (ConfigurationException stillThrowing) {
+                    // Throw the original exception since it cannot be found at all.
+                    throw e;
+                }
+                throw new OptionNotAllowedException(
+                        String.format(
+                                "Option '%s' cannot be specified via "
+                                        + "command line. Only in the configuration xml.",
+                                optionName));
             }
-            throw new OptionNotAllowedException(
-                    String.format(
-                            "Option '%s' cannot be specified via "
-                                    + "command line. Only in the configuration xml.",
-                            optionName));
         }
     }
 
