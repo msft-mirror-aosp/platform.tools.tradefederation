@@ -680,37 +680,40 @@ public class ConfigurationFactory implements IConfigurationFactory {
             List<String> optionArgsRef,
             IKeyStoreClient keyStoreClient)
             throws ConfigurationException {
-        final String extension = FileUtil.getExtension(configName);
-        switch (extension) {
-            case ".xml":
-            case ".config":
-            case "":
-                final ConfigurationXmlParserSettings parserSettings =
-                        new ConfigurationXmlParserSettings();
-                final ArgsOptionParser templateArgParser = new ArgsOptionParser(parserSettings);
-                if (keyStoreClient != null) {
-                    templateArgParser.setKeyStore(keyStoreClient);
-                }
-                optionArgsRef.addAll(templateArgParser.parseBestEffort(listArgs));
-                // Check that the same template is not attempted to be loaded twice.
-                for (String key : parserSettings.templateMap.keySet()) {
-                    if (parserSettings.templateMap.get(key).size() > 1) {
-                        throw new ConfigurationException(
-                                String.format("More than one template specified for key '%s'", key),
-                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("extractTemplates")) {
+            final String extension = FileUtil.getExtension(configName);
+            switch (extension) {
+                case ".xml":
+                case ".config":
+                case "":
+                    final ConfigurationXmlParserSettings parserSettings =
+                            new ConfigurationXmlParserSettings();
+                    final ArgsOptionParser templateArgParser = new ArgsOptionParser(parserSettings);
+                    if (keyStoreClient != null) {
+                        templateArgParser.setKeyStore(keyStoreClient);
                     }
-                }
-                return parserSettings.templateMap.getUniqueMap();
-            case ".tf_yaml":
-                // We parse the arguments but don't support template for YAML
-                final ArgsOptionParser allArgsParser = new ArgsOptionParser();
-                if (keyStoreClient != null) {
-                    allArgsParser.setKeyStore(keyStoreClient);
-                }
-                optionArgsRef.addAll(allArgsParser.parseBestEffort(listArgs));
-                return new HashMap<>();
-            default:
-                return new HashMap<>();
+                    optionArgsRef.addAll(templateArgParser.parseBestEffort(listArgs));
+                    // Check that the same template is not attempted to be loaded twice.
+                    for (String key : parserSettings.templateMap.keySet()) {
+                        if (parserSettings.templateMap.get(key).size() > 1) {
+                            throw new ConfigurationException(
+                                    String.format(
+                                            "More than one template specified for key '%s'", key),
+                                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                        }
+                    }
+                    return parserSettings.templateMap.getUniqueMap();
+                case ".tf_yaml":
+                    // We parse the arguments but don't support template for YAML
+                    final ArgsOptionParser allArgsParser = new ArgsOptionParser();
+                    if (keyStoreClient != null) {
+                        allArgsParser.setKeyStore(keyStoreClient);
+                    }
+                    optionArgsRef.addAll(allArgsParser.parseBestEffort(listArgs));
+                    return new HashMap<>();
+                default:
+                    return new HashMap<>();
+            }
         }
     }
 
