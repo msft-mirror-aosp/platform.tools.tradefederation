@@ -23,7 +23,6 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
@@ -74,10 +73,12 @@ public class SkipManager implements IDisableable {
 
     private boolean mNoTestsDiscovered = false;
     private List<ContentAnalysisContext> mTestArtifactsAnalysisContent = new ArrayList<>();
+    private List<String> mModulesDiscovered = new ArrayList<String>();
+    private List<String> mDependencyFiles = new ArrayList<String>();
 
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
-        if (TestInvocation.isSubprocess(config)) {
+        if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
             // Information is going to flow through GlobalFilters mechanism
             return;
         }
@@ -108,6 +109,11 @@ public class SkipManager implements IDisableable {
         mNoTestsDiscovered = true;
     }
 
+    public void reportDiscoveryDependencies(List<String> modules, List<String> depFiles) {
+        mModulesDiscovered.addAll(modules);
+        mDependencyFiles.addAll(depFiles);
+    }
+
     /** Reports whether we should skip the current invocation. */
     public boolean shouldSkipInvocation(TestInformation information) {
         // Build heuristic for skipping invocation
@@ -134,20 +140,19 @@ public class SkipManager implements IDisableable {
         if (isDisabled()) {
             return;
         }
-        if (!"WORK_NODE".equals(context.getAttribute("trigger"))) {
-            CLog.d("Skip fetching demotion information in non-presubmit.");
-            return;
-        }
-        try (TradefedFeatureClient client = new TradefedFeatureClient()) {
-            Map<String, String> args = new HashMap<>();
-            FeatureResponse response = client.triggerFeature("FetchDemotionInformation", args);
-            if (response.hasErrorInfo()) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.DEMOTION_ERROR_RESPONSE, 1);
-            } else {
-                for (PartResponse part : response.getMultiPartResponse().getResponsePartList()) {
-                    String filter = part.getKey();
-                    mDemotionFilters.put(filter, SkipReason.fromString(part.getValue()));
+        if ("WORK_NODE".equals(context.getAttribute("trigger"))) {
+            try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+                Map<String, String> args = new HashMap<>();
+                FeatureResponse response = client.triggerFeature("FetchDemotionInformation", args);
+                if (response.hasErrorInfo()) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.DEMOTION_ERROR_RESPONSE, 1);
+                } else {
+                    for (PartResponse part :
+                            response.getMultiPartResponse().getResponsePartList()) {
+                        String filter = part.getKey();
+                        mDemotionFilters.put(filter, SkipReason.fromString(part.getValue()));
+                    }
                 }
             }
         }
@@ -170,7 +175,11 @@ public class SkipManager implements IDisableable {
             } else {
                 try (CloseableTraceScope ignored = new CloseableTraceScope("TestContentAnalyzer")) {
                     TestContentAnalyzer analyzer =
-                            new TestContentAnalyzer(information, mTestArtifactsAnalysisContent);
+                            new TestContentAnalyzer(
+                                    information,
+                                    mTestArtifactsAnalysisContent,
+                                    mModulesDiscovered,
+                                    mDependencyFiles);
                     ContentAnalysisResults analysisResults = analyzer.evaluate();
                     if (analysisResults == null) {
                         return false;
@@ -210,11 +219,14 @@ public class SkipManager implements IDisableable {
     public void clearManager() {
         mDemotionFilters.clear();
         mDemotionFilterOption.clear();
+        mModulesDiscovered.clear();
+        mDependencyFiles.clear();
         for (ContentAnalysisContext request : mTestArtifactsAnalysisContent) {
             if (request.contentInformation() != null) {
                 request.contentInformation().clean();
             }
         }
+        mTestArtifactsAnalysisContent.clear();
     }
 
     @Override
