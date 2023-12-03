@@ -41,9 +41,10 @@ import com.android.tradefed.util.keystore.DryRunKeyStore;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
@@ -135,7 +136,7 @@ public class TestDiscoveryExecutor {
      * @return A JSON string with one test module names array and one other test dependency array.
      */
     public String discoverDependencies(String[] args)
-            throws TestDiscoveryException, ConfigurationException {
+            throws TestDiscoveryException, ConfigurationException, JSONException {
         // Create IConfiguration base on command line args.
         IConfiguration config = getConfiguration(args);
 
@@ -165,22 +166,18 @@ public class TestDiscoveryExecutor {
             Collections.sort(testDependencies);
 
             try (CloseableTraceScope ignored = new CloseableTraceScope("format_results")) {
-                JsonObject jsonObject = new JsonObject();
-                Gson gson = new Gson();
-                JsonArray testModulesArray = gson.toJsonTree(testModules).getAsJsonArray();
-                JsonArray testDependenciesArray =
-                        gson.toJsonTree(testDependencies).getAsJsonArray();
-                jsonObject.add(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, testModulesArray);
-                jsonObject.add(
-                        TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
+                JSONObject j = new JSONObject();
+                j.put(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, new JSONArray(testModules));
+                j.put(
+                        TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY,
+                        new JSONArray(testDependencies));
                 if (mReportPartialFallback) {
-                    jsonObject.addProperty(TestDiscoveryInvoker.PARTIAL_FALLBACK_KEY, "true");
+                    j.put(TestDiscoveryInvoker.PARTIAL_FALLBACK_KEY, "true");
                 }
                 if (mReportNoPossibleDiscovery) {
-                    jsonObject.addProperty(
-                            TestDiscoveryInvoker.NO_POSSIBLE_TEST_DISCOVERY_KEY, "true");
+                    j.put(TestDiscoveryInvoker.NO_POSSIBLE_TEST_DISCOVERY_KEY, "true");
                 }
-                return jsonObject.toString();
+                return j.toString();
             }
         } finally {
             if (hasOutputResultFile()) {
