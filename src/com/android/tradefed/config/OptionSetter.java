@@ -17,6 +17,7 @@
 package com.android.tradefed.config;
 
 import com.android.tradefed.build.BuildRetrievalError;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.ArrayUtil;
@@ -579,38 +580,42 @@ public class OptionSetter {
      * @throws ConfigurationException if any {@link Option} are incorrectly specified
      */
     private Map<String, OptionFieldsForName> makeOptionMap() throws ConfigurationException {
-        final Map<String, Integer> freqMap = new HashMap<String, Integer>(mOptionSources.size());
-        final Map<String, OptionFieldsForName> optionMap =
-                new LinkedHashMap<String, OptionFieldsForName>();
-        for (Object objectSource : mOptionSources) {
-            final String className = objectSource.getClass().getName();
+        try (CloseableTraceScope m = new CloseableTraceScope("makeOptionMap")) {
+            final Map<String, Integer> freqMap = new HashMap<String, Integer>(mOptionSources.size());
+            final Map<String, OptionFieldsForName> optionMap =
+                    new LinkedHashMap<String, OptionFieldsForName>();
+            for (Object objectSource : mOptionSources) {
+                final String className = objectSource.getClass().getName();
 
-            // Keep track of how many times we've seen this className.  This assumes that we
-            // maintain the optionSources in a universally-knowable order internally (which we do --
-            // they remain in the order in which they were passed to the constructor).  Thus, the
-            // index can serve as a unique identifier for each instance of className as long as
-            // other upstream classes use the same 1-based ordered numbering scheme.
-            Integer index = freqMap.get(className);
-            index = index == null ? 1 : index + 1;
-            freqMap.put(className, index);
-            addOptionsForObject(objectSource, optionMap, index, null);
+                // Keep track of how many times we've seen this className.  This assumes that
+                // we maintain the optionSources in a universally-knowable order internally
+                // (which we do, they remain in the order in which they were passed to the
+                // constructor).  Thus, the index can serve as a unique identifier for each
+                // instance of className as long as other upstream classes use the same
+                // 1-based ordered numbering scheme.
+                Integer index = freqMap.get(className);
+                index = index == null ? 1 : index + 1;
+                freqMap.put(className, index);
+                addOptionsForObject(objectSource, optionMap, index, null);
 
-            if (objectSource instanceof IDeviceConfiguration) {
-                for (Object deviceObject : ((IDeviceConfiguration)objectSource).getAllObjects()) {
-                    index = freqMap.get(deviceObject.getClass().getName());
-                    index = index == null ? 1 : index + 1;
-                    freqMap.put(deviceObject.getClass().getName(), index);
-                    Integer tracked =
-                            ((IDeviceConfiguration) objectSource).getFrequency(deviceObject);
-                    if (tracked != null && !index.equals(tracked)) {
-                        index = tracked;
+                if (objectSource instanceof IDeviceConfiguration) {
+                    for (Object deviceObject :
+                                ((IDeviceConfiguration)objectSource).getAllObjects()) {
+                        index = freqMap.get(deviceObject.getClass().getName());
+                        index = index == null ? 1 : index + 1;
+                        freqMap.put(deviceObject.getClass().getName(), index);
+                        Integer tracked = ((IDeviceConfiguration) objectSource)
+                                 .getFrequency(deviceObject);
+                        if (tracked != null && !index.equals(tracked)) {
+                            index = tracked;
+                        }
+                        addOptionsForObject(deviceObject, optionMap, index,
+                                ((IDeviceConfiguration)objectSource).getDeviceName());
                     }
-                    addOptionsForObject(deviceObject, optionMap, index,
-                            ((IDeviceConfiguration)objectSource).getDeviceName());
                 }
             }
+            return optionMap;
         }
-        return optionMap;
     }
 
     /**
