@@ -36,6 +36,7 @@ import com.android.tradefed.testtype.suite.ITestSuite.MultiDeviceModuleStrategy;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IDisableable;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.keystore.DryRunKeyStore;
 
@@ -351,6 +352,11 @@ public class TestDiscoveryExecutor {
         Set<String> dependencies = new HashSet<>();
         for (Object o :
                 config.getAllConfigurationObjectsOfType(Configuration.TARGET_PREPARER_TYPE_NAME)) {
+            if (o instanceof IDisableable) {
+                if (((IDisableable) o).isDisabled()) {
+                    continue;
+                }
+            }
             if (o instanceof IDiscoverDependencies) {
                 dependencies.addAll(((IDiscoverDependencies) o).reportDependencies());
             }
