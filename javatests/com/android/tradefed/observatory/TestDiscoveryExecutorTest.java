@@ -28,14 +28,17 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
-import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 import com.android.tradefed.testtype.suite.ITestSuite.MultiDeviceModuleStrategy;
+import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.keystore.DryRunKeyStore;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.common.truth.Truth;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -123,16 +126,27 @@ public class TestDiscoveryExecutorTest {
         // We don't test with real command line input here. Because for a real command line input,
         // the test module names will be different with respect to those test config resource files
         // can be changed in different builds.
-        try {
-            String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
-            String expected =
-                    "{\"TestModules\":[\"TestModule1\",\"TestModule2\",\"TestModule3\","
-                            + "\"TestModule4\",\"TestModule5\",\"TestModule6\"],"
-                            + "\"TestDependencies\":[\"someapk.apk\"]}";
-            assertEquals(expected, output);
-        } catch (Exception e) {
-            fail(String.format("Should not throw exception %s", e.getMessage()));
+        String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
+        JSONObject outputJson = new JSONObject(output);
+        JSONArray moduleObject = outputJson.getJSONArray("TestModules");
+        List<String> moduleArray = new ArrayList<String>();
+        for (int i = 0; i < moduleObject.length(); i++) {
+            moduleArray.add(moduleObject.getString(i));
         }
+        Truth.assertThat(moduleArray)
+                .containsExactly(
+                        "TestModule1",
+                        "TestModule2",
+                        "TestModule3",
+                        "TestModule4",
+                        "TestModule5",
+                        "TestModule6");
+        JSONArray depObject = outputJson.getJSONArray("TestDependencies");
+        List<String> depArray = new ArrayList<String>();
+        for (int i = 0; i < depObject.length(); i++) {
+            depArray.add(depObject.getString(i));
+        }
+        Truth.assertThat(depArray).containsExactly("someapk.apk");
     }
 
     /** Test the executor to discover parameterized test modules. */
@@ -154,15 +168,20 @@ public class TestDiscoveryExecutorTest {
                         Configuration.TARGET_PREPARER_TYPE_NAME))
                 .thenReturn(preparers);
 
-        try {
-            String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
-            String expected =
-                    "{\"TestModules\":[\"TestModule1\",\"TestModule2\"],"
-                            + "\"TestDependencies\":[\"someapk.apk\"]}";
-            assertEquals(expected, output);
-        } catch (Exception e) {
-            fail(String.format("Should not throw exception %s", e.getMessage()));
+        String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
+        JSONObject outputJson = new JSONObject(output);
+        JSONArray moduleObject = outputJson.getJSONArray("TestModules");
+        List<String> moduleArray = new ArrayList<String>();
+        for (int i = 0; i < moduleObject.length(); i++) {
+            moduleArray.add(moduleObject.getString(i));
         }
+        Truth.assertThat(moduleArray).containsExactly("TestModule1", "TestModule2");
+        JSONArray depObject = outputJson.getJSONArray("TestDependencies");
+        List<String> depArray = new ArrayList<String>();
+        for (int i = 0; i < depObject.length(); i++) {
+            depArray.add(depObject.getString(i));
+        }
+        Truth.assertThat(depArray).containsExactly("someapk.apk");
     }
 
     /** Test the executor to handle where there is no tests from the config. */
@@ -254,9 +273,15 @@ public class TestDiscoveryExecutorTest {
             when(mMockedConfiguration.getTests()).thenReturn(testList);
 
             String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
-            String expected =
-                    "{\"TestModules\":[\"CtsMedia\"],\"TestDependencies\":[],\"PartialFallback\":\"true\"}";
-            assertEquals(expected, output);
+            JSONObject outputJson = new JSONObject(output);
+            JSONArray moduleObject = outputJson.getJSONArray("TestModules");
+            List<String> moduleArray = new ArrayList<String>();
+            for (int i = 0; i < moduleObject.length(); i++) {
+                moduleArray.add(moduleObject.getString(i));
+            }
+            Truth.assertThat(moduleArray).containsExactly("CtsMedia");
+            boolean fallback = outputJson.getBoolean("PartialFallback");
+            assertTrue(fallback);
         } finally {
             FileUtil.recursiveDelete(rootDir);
         }
@@ -301,9 +326,15 @@ public class TestDiscoveryExecutorTest {
             when(mMockedConfiguration.getTests()).thenReturn(testList);
 
             String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
-            String expected =
-                    "{\"TestModules\":[\"CtsMulti\"],\"TestDependencies\":[],\"PartialFallback\":\"true\"}";
-            assertEquals(expected, output);
+            JSONObject outputJson = new JSONObject(output);
+            JSONArray moduleObject = outputJson.getJSONArray("TestModules");
+            List<String> moduleArray = new ArrayList<String>();
+            for (int i = 0; i < moduleObject.length(); i++) {
+                moduleArray.add(moduleObject.getString(i));
+            }
+            Truth.assertThat(moduleArray).containsExactly("CtsMulti");
+            boolean fallback = outputJson.getBoolean("PartialFallback");
+            assertTrue(fallback);
         } finally {
             FileUtil.recursiveDelete(rootDir);
         }
@@ -334,10 +365,19 @@ public class TestDiscoveryExecutorTest {
                 .thenReturn(preparers);
 
         String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
-        String expected =
-                "{\"TestModules\":[\"TestModule1\",\"TestModule2\",\"TestModule3\"],"
-                        + "\"TestDependencies\":[\"someapk.apk\"]}";
-        assertEquals(expected, output);
+        JSONObject outputJson = new JSONObject(output);
+        JSONArray moduleObject = outputJson.getJSONArray("TestModules");
+        List<String> moduleArray = new ArrayList<String>();
+        for (int i = 0; i < moduleObject.length(); i++) {
+            moduleArray.add(moduleObject.getString(i));
+        }
+        Truth.assertThat(moduleArray).containsExactly("TestModule1", "TestModule2", "TestModule3");
+        JSONArray depObject = outputJson.getJSONArray("TestDependencies");
+        List<String> depArray = new ArrayList<String>();
+        for (int i = 0; i < depObject.length(); i++) {
+            depArray.add(depObject.getString(i));
+        }
+        Truth.assertThat(depArray).containsExactly("someapk.apk");
     }
 
     /** Test the executor to discover test modules from tests. */
@@ -373,9 +413,19 @@ public class TestDiscoveryExecutorTest {
         when(mMockedConfiguration.getTests()).thenReturn(testList);
 
         String output = mTestDiscoveryExecutor.discoverDependencies(new String[0]);
-        String expected =
-                "{\"TestModules\":[\"TestModule1\",\"TestModule2\"],\"TestDependencies\":[]}";
-        assertEquals(expected, output);
+        JSONObject outputJson = new JSONObject(output);
+        JSONArray moduleObject = outputJson.getJSONArray("TestModules");
+        List<String> moduleArray = new ArrayList<String>();
+        for (int i = 0; i < moduleObject.length(); i++) {
+            moduleArray.add(moduleObject.getString(i));
+        }
+        Truth.assertThat(moduleArray).containsExactly("TestModule1", "TestModule2");
+        JSONArray depObject = outputJson.getJSONArray("TestDependencies");
+        List<String> depArray = new ArrayList<String>();
+        for (int i = 0; i < depObject.length(); i++) {
+            depArray.add(depObject.getString(i));
+        }
+        Truth.assertThat(depArray).isEmpty();
 
         // In test discovery, the loadTest() should have been called exactly once
         Mockito.verify(test1, Mockito.times(1)).loadTestInfos();
