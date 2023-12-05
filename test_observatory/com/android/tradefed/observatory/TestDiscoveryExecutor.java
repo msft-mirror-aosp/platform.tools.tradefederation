@@ -196,8 +196,11 @@ public class TestDiscoveryExecutor {
     private IConfiguration getConfiguration(String[] args) throws ConfigurationException {
         try (CloseableTraceScope ignored = new CloseableTraceScope("create_configuration")) {
             IConfigurationFactory configurationFactory = getConfigurationFactory();
-            return configurationFactory.createConfigurationFromArgs(
-                    args, null, new DryRunKeyStore());
+            return configurationFactory.createPartialConfigurationFromArgs(
+                    args,
+                    new DryRunKeyStore(),
+                    Set.of(Configuration.TEST_TYPE_NAME, Configuration.TARGET_PREPARER_TYPE_NAME),
+                    null);
         }
     }
 
