@@ -212,117 +212,120 @@ public class TestDiscoveryExecutor {
      */
     private Set<String> discoverTestModulesFromTests(List<IRemoteTest> testList)
             throws IllegalStateException, TestDiscoveryException {
-        Set<String> testModules = new LinkedHashSet<String>();
-        Set<String> includeFilters = new LinkedHashSet<String>();
-        Set<String> excludeFilters = new LinkedHashSet<String>();
-        // Collect include filters from every test.
-        boolean discoveredLogic = true;
-        for (IRemoteTest test : testList) {
-            if (!(test instanceof BaseTestSuite)) {
-                throw new TestDiscoveryException(
-                        "Tradefed Observatory can't do test discovery on non suite-based test"
-                                + " runner.",
-                        null,
-                        DiscoveryExitCode.ERROR);
-            }
-            if (test instanceof TestMappingSuiteRunner) {
-                ((TestMappingSuiteRunner) test).loadTestInfos();
-            }
-            Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
-            excludeFilters.addAll(((BaseTestSuite) test).getExcludeFilter());
-            MultiMap<String, String> moduleMetadataIncludeFilters =
-                    ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
-            // Include/Exclude filters in suites are evaluated first,
-            // then metadata are applied on top, so having metadata filters
-            // and include-filters can actually be resolved to a super-set
-            // which is better than falling back.
-            if (!suiteIncludeFilters.isEmpty()) {
-                includeFilters.addAll(suiteIncludeFilters);
-            } else if (!moduleMetadataIncludeFilters.isEmpty()) {
-                String rootDirPath =
-                        getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
-                boolean throwException = true;
-                if (rootDirPath != null) {
-                    File rootDir = new File(rootDirPath);
-                    if (rootDir.exists() && rootDir.isDirectory()) {
-                        Set<String> configs =
-                                searchConfigsForMetadata(rootDir, moduleMetadataIncludeFilters);
-                        if (configs != null) {
-                            testModules.addAll(configs);
-                            throwException = false;
-                            mReportPartialFallback = true;
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("discoverTestModulesFromTests")) {
+            Set<String> testModules = new LinkedHashSet<String>();
+            Set<String> includeFilters = new LinkedHashSet<String>();
+            Set<String> excludeFilters = new LinkedHashSet<String>();
+            // Collect include filters from every test.
+            boolean discoveredLogic = true;
+            for (IRemoteTest test : testList) {
+                if (!(test instanceof BaseTestSuite)) {
+                    throw new TestDiscoveryException(
+                            "Tradefed Observatory can't do test discovery on non suite-based test"
+                                    + " runner.",
+                            null,
+                            DiscoveryExitCode.ERROR);
+                }
+                if (test instanceof TestMappingSuiteRunner) {
+                    ((TestMappingSuiteRunner) test).loadTestInfos();
+                }
+                Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
+                excludeFilters.addAll(((BaseTestSuite) test).getExcludeFilter());
+                MultiMap<String, String> moduleMetadataIncludeFilters =
+                        ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
+                // Include/Exclude filters in suites are evaluated first,
+                // then metadata are applied on top, so having metadata filters
+                // and include-filters can actually be resolved to a super-set
+                // which is better than falling back.
+                if (!suiteIncludeFilters.isEmpty()) {
+                    includeFilters.addAll(suiteIncludeFilters);
+                } else if (!moduleMetadataIncludeFilters.isEmpty()) {
+                    String rootDirPath =
+                            getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                    boolean throwException = true;
+                    if (rootDirPath != null) {
+                        File rootDir = new File(rootDirPath);
+                        if (rootDir.exists() && rootDir.isDirectory()) {
+                            Set<String> configs =
+                                    searchConfigsForMetadata(rootDir, moduleMetadataIncludeFilters);
+                            if (configs != null) {
+                                testModules.addAll(configs);
+                                throwException = false;
+                                mReportPartialFallback = true;
+                            }
                         }
                     }
-                }
-                if (throwException) {
-                    throw new TestDiscoveryException(
-                            "Tradefed Observatory can't do test discovery because the existence of"
-                                    + " metadata include filter option.",
-                            null,
-                            DiscoveryExitCode.COMPONENT_METADATA);
-                }
-            } else if (MultiDeviceModuleStrategy.ONLY_MULTI_DEVICES.equals(
-                    ((BaseTestSuite) test).getMultiDeviceStrategy())) {
-                String rootDirPath =
-                        getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
-                boolean throwException = true;
-                if (rootDirPath != null) {
-                    File rootDir = new File(rootDirPath);
-                    if (rootDir.exists() && rootDir.isDirectory()) {
-                        Set<String> configs = searchForMultiDevicesConfig(rootDir);
-                        if (configs != null) {
-                            testModules.addAll(configs);
-                            throwException = false;
-                            mReportPartialFallback = true;
+                    if (throwException) {
+                        throw new TestDiscoveryException(
+                                "Tradefed Observatory can't do test discovery because the existence"
+                                        + " of metadata include filter option.",
+                                null,
+                                DiscoveryExitCode.COMPONENT_METADATA);
+                    }
+                } else if (MultiDeviceModuleStrategy.ONLY_MULTI_DEVICES.equals(
+                        ((BaseTestSuite) test).getMultiDeviceStrategy())) {
+                    String rootDirPath =
+                            getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                    boolean throwException = true;
+                    if (rootDirPath != null) {
+                        File rootDir = new File(rootDirPath);
+                        if (rootDir.exists() && rootDir.isDirectory()) {
+                            Set<String> configs = searchForMultiDevicesConfig(rootDir);
+                            if (configs != null) {
+                                testModules.addAll(configs);
+                                throwException = false;
+                                mReportPartialFallback = true;
+                            }
                         }
                     }
-                }
-                if (throwException) {
-                    throw new TestDiscoveryException(
-                            "Tradefed Observatory can't do test discovery because the existence of"
-                                    + " multi-devices option.",
-                            null,
-                            DiscoveryExitCode.COMPONENT_METADATA);
-                }
-            } else if (!Strings.isNullOrEmpty(((BaseTestSuite) test).getRunSuiteTag())) {
-                String rootDirPath =
-                        getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
-                boolean throwException = true;
-                if (rootDirPath != null) {
-                    File rootDir = new File(rootDirPath);
-                    if (rootDir.exists() && rootDir.isDirectory()) {
-                        Set<String> configs =
-                                searchConfigsForSuiteTag(
-                                        rootDir, ((BaseTestSuite) test).getRunSuiteTag());
-                        if (configs != null) {
-                            testModules.addAll(configs);
-                            throwException = false;
-                            mReportPartialFallback = true;
+                    if (throwException) {
+                        throw new TestDiscoveryException(
+                                "Tradefed Observatory can't do test discovery because the existence"
+                                        + " of multi-devices option.",
+                                null,
+                                DiscoveryExitCode.COMPONENT_METADATA);
+                    }
+                } else if (!Strings.isNullOrEmpty(((BaseTestSuite) test).getRunSuiteTag())) {
+                    String rootDirPath =
+                            getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                    boolean throwException = true;
+                    if (rootDirPath != null) {
+                        File rootDir = new File(rootDirPath);
+                        if (rootDir.exists() && rootDir.isDirectory()) {
+                            Set<String> configs =
+                                    searchConfigsForSuiteTag(
+                                            rootDir, ((BaseTestSuite) test).getRunSuiteTag());
+                            if (configs != null) {
+                                testModules.addAll(configs);
+                                throwException = false;
+                                mReportPartialFallback = true;
+                            }
                         }
                     }
+                    if (throwException) {
+                        throw new TestDiscoveryException(
+                                "Tradefed Observatory can't do test discovery because the existence"
+                                        + " of run-suite-tag option.",
+                                null,
+                                DiscoveryExitCode.COMPONENT_METADATA);
+                    }
+                } else {
+                    discoveredLogic = false;
                 }
-                if (throwException) {
-                    throw new TestDiscoveryException(
-                            "Tradefed Observatory can't do test discovery because the existence of"
-                                    + " run-suite-tag option.",
-                            null,
-                            DiscoveryExitCode.COMPONENT_METADATA);
-                }
-            } else {
-                discoveredLogic = false;
             }
+            if (!discoveredLogic) {
+                mReportNoPossibleDiscovery = true;
+            }
+            // Extract test module names from included filters.
+            if (hasOutputResultFile()) {
+                System.out.println(String.format("include filters: %s", includeFilters));
+            }
+            testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
+            // Any directly excluded won't be discovered since it shouldn't run
+            testModules.removeAll(excludeFilters);
+            return testModules;
         }
-        if (!discoveredLogic) {
-            mReportNoPossibleDiscovery = true;
-        }
-        // Extract test module names from included filters.
-        if (hasOutputResultFile()) {
-            System.out.println(String.format("include filters: %s", includeFilters));
-        }
-        testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
-        // Any directly excluded won't be discovered since it shouldn't run
-        testModules.removeAll(excludeFilters);
-        return testModules;
     }
 
     /**
@@ -353,18 +356,21 @@ public class TestDiscoveryExecutor {
 
     private Set<String> discoverDependencies(IConfiguration config) {
         Set<String> dependencies = new HashSet<>();
-        for (Object o :
-                config.getAllConfigurationObjectsOfType(Configuration.TARGET_PREPARER_TYPE_NAME)) {
-            if (o instanceof IDisableable) {
-                if (((IDisableable) o).isDisabled()) {
-                    continue;
+        try (CloseableTraceScope ignored = new CloseableTraceScope("discoverDependencies")) {
+            for (Object o :
+                    config.getAllConfigurationObjectsOfType(
+                            Configuration.TARGET_PREPARER_TYPE_NAME)) {
+                if (o instanceof IDisableable) {
+                    if (((IDisableable) o).isDisabled()) {
+                        continue;
+                    }
+                }
+                if (o instanceof IDiscoverDependencies) {
+                    dependencies.addAll(((IDiscoverDependencies) o).reportDependencies());
                 }
             }
-            if (o instanceof IDiscoverDependencies) {
-                dependencies.addAll(((IDiscoverDependencies) o).reportDependencies());
-            }
+            return dependencies;
         }
-        return dependencies;
     }
 
     private Set<String> searchForMultiDevicesConfig(File rootDir) {
